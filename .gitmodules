@@ -1,0 +1,3 @@
+[submodule "AccessibilitySnapshot"]
+	path = AccessibilitySnapshot
+	url = https://github.com/cashapp/AccessibilitySnapshot.git
