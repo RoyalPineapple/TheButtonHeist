@@ -2,15 +2,15 @@
 import UIKit
 import Network
 import AccessibilitySnapshotParser
-import AccessibilityBridgeProtocol
+import AccraCore
 
 /// Server that exposes accessibility hierarchy over WebSocket
 @MainActor
-public final class AccessibilityBridgeServer {
+public final class AccraHost {
 
     // MARK: - Singleton
 
-    public static let shared = AccessibilityBridgeServer()
+    public static let shared = AccraHost()
 
     // MARK: - Properties
 
@@ -73,7 +73,7 @@ public final class AccessibilityBridgeServer {
         // Start observing accessibility changes
         startAccessibilityObservation()
 
-        print("[AccessibilityBridge] Server starting...")
+        print("[AccraHost] Server starting...")
     }
 
     /// Stop the server
@@ -93,7 +93,7 @@ public final class AccessibilityBridgeServer {
 
         stopAccessibilityObservation()
 
-        print("[AccessibilityBridge] Server stopped")
+        print("[AccraHost] Server stopped")
     }
 
     /// Notify the bridge that the UI has changed and subscribers should receive an update.
@@ -110,7 +110,7 @@ public final class AccessibilityBridgeServer {
         pollingInterval = UInt64(clampedInterval * 1_000_000_000)
         isPollingEnabled = true
         startPollingLoop()
-        print("[AccessibilityBridge] Polling enabled (interval: \(clampedInterval)s)")
+        print("[AccraHost] Polling enabled (interval: \(clampedInterval)s)")
     }
 
     /// Disable polling for automatic updates
@@ -126,13 +126,13 @@ public final class AccessibilityBridgeServer {
         switch state {
         case .ready:
             if let port = listener?.port {
-                print("[AccessibilityBridge] Listening on port \(port.rawValue)")
+                print("[AccraHost] Listening on port \(port.rawValue)")
                 advertiseService(port: port.rawValue)
             }
         case .failed(let error):
-            print("[AccessibilityBridge] Listener failed: \(error)")
+            print("[AccraHost] Listener failed: \(error)")
         case .cancelled:
-            print("[AccessibilityBridge] Listener cancelled")
+            print("[AccraHost] Listener cancelled")
         default:
             break
         }
@@ -144,12 +144,12 @@ public final class AccessibilityBridgeServer {
 
         netService = NetService(
             domain: "local.",
-            type: accessibilityBridgeServiceType,
+            type: accraServiceType,
             name: serviceName,
             port: Int32(port)
         )
         netService?.publish()
-        print("[AccessibilityBridge] Advertising as '\(serviceName)' on port \(port)")
+        print("[AccraHost] Advertising as '\(serviceName)' on port \(port)")
     }
 
     // MARK: - Private Methods - Connections
@@ -174,12 +174,12 @@ public final class AccessibilityBridgeServer {
     private func handleConnectionState(_ state: NWConnection.State, for connection: NWConnection) {
         switch state {
         case .ready:
-            print("[AccessibilityBridge] Client connected")
+            print("[AccraHost] Client connected")
         case .failed(let error):
-            print("[AccessibilityBridge] Connection failed: \(error)")
+            print("[AccraHost] Connection failed: \(error)")
             removeConnection(connection)
         case .cancelled:
-            print("[AccessibilityBridge] Client disconnected")
+            print("[AccraHost] Client disconnected")
             removeConnection(connection)
         default:
             break
@@ -228,13 +228,13 @@ public final class AccessibilityBridgeServer {
     private func handleClientMessage(_ message: ClientMessage, from connection: NWConnection) {
         switch message {
         case .requestHierarchy:
-            print("[AccessibilityBridge] Hierarchy requested")
+            print("[AccraHost] Hierarchy requested")
             sendHierarchy(to: connection)
         case .subscribe:
-            print("[AccessibilityBridge] Client subscribed to updates")
+            print("[AccraHost] Client subscribed to updates")
             subscribedConnections.insert(ObjectIdentifier(connection))
         case .unsubscribe:
-            print("[AccessibilityBridge] Client unsubscribed from updates")
+            print("[AccraHost] Client unsubscribed from updates")
             subscribedConnections.remove(ObjectIdentifier(connection))
         case .ping:
             send(.pong, to: connection)
@@ -328,7 +328,7 @@ public final class AccessibilityBridgeServer {
             send(message, to: connection)
         }
 
-        print("[AccessibilityBridge] Broadcast hierarchy update to \(subscribedConnections.count) client(s)")
+        print("[AccraHost] Broadcast hierarchy update to \(subscribedConnections.count) client(s)")
     }
 
     // MARK: - Polling
@@ -364,7 +364,7 @@ public final class AccessibilityBridgeServer {
             for connection in connections where subscribedConnections.contains(ObjectIdentifier(connection)) {
                 send(message, to: connection)
             }
-            print("[AccessibilityBridge] Polling detected change, broadcast to \(subscribedConnections.count) client(s)")
+            print("[AccraHost] Polling detected change, broadcast to \(subscribedConnections.count) client(s)")
         }
     }
 

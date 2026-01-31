@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 /// Bonjour service type for discovery
-public let accessibilityBridgeServiceType = "_a11ybridge._tcp"
+public let accraServiceType = "_a11ybridge._tcp"
 
 /// Protocol version for compatibility checking
 public let protocolVersion = "1.0"

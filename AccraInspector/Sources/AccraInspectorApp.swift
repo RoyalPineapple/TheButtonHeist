@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct AccessibilityInspectorApp: App {
+struct AccraInspectorApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

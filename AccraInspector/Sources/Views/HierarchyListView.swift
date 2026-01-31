@@ -1,5 +1,5 @@
 import SwiftUI
-import AccessibilityBridgeProtocol
+import AccraCore
 
 struct HierarchyListView: View {
     let elements: [AccessibilityElementData]

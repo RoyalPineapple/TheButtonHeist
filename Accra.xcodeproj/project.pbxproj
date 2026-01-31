@@ -7,52 +7,71 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		103486AEC8ECE227458EE751 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF0D927335A400DACA13046 /* Colors.swift */; };
-		13CD5A61BFAC0F4C02A54D3E /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5AF0FDA0F0B5FD28EB81F9B /* Messages.swift */; };
-		205461E277FB113F8305FB4D /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = D83FA020A30EE9BAE7F2D618 /* Typography.swift */; };
-		22B740F7AA980F7872205A3C /* AccessibilityBridgeProtocol.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */; };
-		2FAB737DC622007B96A560C8 /* BonjourBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0FBEA7176CB354E691B37F8 /* BonjourBrowser.swift */; };
-		3FC02BA0EE5730D233460EC2 /* HierarchyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 115F456D100ECD87A4E9FD66 /* HierarchyListView.swift */; };
-		4E4F208C94A138BF3A83C6F4 /* AccessibilityBridgeServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F7C2BEDEB5E34029A31A51 /* AccessibilityBridgeServer.swift */; };
-		53D3B9A2B7C9E9EED6C823CA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B982236D1882345C6189B33 /* ContentView.swift */; };
-		A52D52C3815883C22B631CF8 /* WebSocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 300BC9363921A2000941516D /* WebSocketClient.swift */; };
-		A8A0F80F471F111B7FBA4D64 /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD024CE2F2368C50282B42A /* Spacing.swift */; };
-		BCD2CDAD0FFB874458928720 /* AccessibilityBridgeProtocol.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		DE7C9F054AC02DD43E67BBE2 /* AccessibilityBridgeProtocol.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */; };
-		E798412DDB89119960A006D5 /* AccessibilityInspectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F88716921347B72529EC45 /* AccessibilityInspectorApp.swift */; };
-		FC22D6AFF5A0297EA8231053 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012AF16A20FC8DEF7B324626 /* AccessibilitySnapshotParser.framework */; };
+		01DA5884DC6137D8434254EE /* AccraHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 922D80C47B5EE6BBF24BDC3C /* AccraHost.swift */; };
+		071DA27CFEB432B15B72D7E1 /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
+		08D576036E226F37602D7A72 /* AccraCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		0DF01716F52B5C9DB52D6515 /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0675351FC55A487F5F5A8001 /* Spacing.swift */; };
+		0E4EB2D6B18BD0166DCAF1DE /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */; };
+		1650D477528A10BED2A10000 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730D418D450811891958C26A /* Messages.swift */; };
+		1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD98E01107CB9098131511E /* HierarchyListView.swift */; };
+		377264D30E0EB73E72D58C50 /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
+		38C093CD56AB8AE96D9FB770 /* AccraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9AC3C16E6B3203367F6A6C /* AccraClient.swift */; };
+		42AA9E1DE88B931A820AE7BC /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
+		740E4F117E3F1F91F9779739 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373C97078255C2069EDC5593 /* ContentView.swift */; };
+		91A06032B18B5C39E7AD7F60 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBD55D878CD719DBF9BB763 /* Typography.swift */; };
+		B96617D47A795D1CD29668C9 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */; };
+		C0F064B0B6EF6F7B8D1857E3 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2DE31421A8C05275742CC0C /* Colors.swift */; };
+		C1C9CC8F16F7D29C2C70A907 /* AccraClient.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DE29511145CE3D24F1218566 /* AccraClient.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		CC5D6F06CADA2FD86F6017A8 /* AccraInspectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B346481AC2A10BDF8A76F090 /* AccraInspectorApp.swift */; };
+		EB5F2C7BD05A8A3F2CF8CA3A /* AccraClient.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE29511145CE3D24F1218566 /* AccraClient.framework */; };
+		F9A81CDDF75F2A1E66020AE0 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 012AF16A20FC8DEF7B324626 /* AccessibilitySnapshotParser.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		5D23620B4DF4BD4606E35ED4 /* PBXContainerItemProxy */ = {
+		119193B81EA3AD0AF44718D4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 48A241E03A2415BDF2EA6C20 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0858BF8FB88D59C9FE182A0F;
-			remoteInfo = AccessibilityBridgeProtocol;
+			remoteGlobalIDString = D8E275234B49999C52D5B5FF;
+			remoteInfo = AccraCore;
 		};
-		81FDF085A1F5A9EBC18B6CA8 /* PBXContainerItemProxy */ = {
+		99281FB1FC502F9823B0822F /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 48A241E03A2415BDF2EA6C20 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0858BF8FB88D59C9FE182A0F;
-			remoteInfo = AccessibilityBridgeProtocol;
+			remoteGlobalIDString = AC4DB168F871C1E23AE93A27;
+			remoteInfo = AccraClient;
+		};
+		B02CADFC5EC571F32FA3774B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 48A241E03A2415BDF2EA6C20 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D8E275234B49999C52D5B5FF;
+			remoteInfo = AccraCore;
+		};
+		BC514391836DE3D4D6449EAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 48A241E03A2415BDF2EA6C20 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D8E275234B49999C52D5B5FF;
+			remoteInfo = AccraCore;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		92408005684AD34320F31369 /* Embed Frameworks */ = {
+		2E55A173B8B1406DA9D90DEF /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				BCD2CDAD0FFB874458928720 /* AccessibilityBridgeProtocol.framework in Embed Frameworks */,
+				C1C9CC8F16F7D29C2C70A907 /* AccraClient.framework in Embed Frameworks */,
+				08D576036E226F37602D7A72 /* AccraCore.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D2C177699E7891231FE973DF /* Embed Frameworks */ = {
+		AB5A257848CE57AE5966B224 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -62,7 +81,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F26EB58C67A2B9CA0D39657B /* Embed Frameworks */ = {
+		E7CB52D85C281F537FB1234A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F3C6F810858E358892EFFB57 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -76,83 +105,89 @@
 
 /* Begin PBXFileReference section */
 		012AF16A20FC8DEF7B324626 /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		115F456D100ECD87A4E9FD66 /* HierarchyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyListView.swift; sourceTree = "<group>"; };
-		300BC9363921A2000941516D /* WebSocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketClient.swift; sourceTree = "<group>"; };
-		3BC5881ECECBF3DCC4901D3E /* AccessibilityInspector-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccessibilityInspector-Info.plist"; sourceTree = "<group>"; };
-		4B982236D1882345C6189B33 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		53F88716921347B72529EC45 /* AccessibilityInspectorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityInspectorApp.swift; sourceTree = "<group>"; };
-		66B48D232443B385F82E2944 /* AccessibilityInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccessibilityInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		7826FF763A0FD4852C8E69C2 /* AccessibilityBridgeServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilityBridgeServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		7CF0D927335A400DACA13046 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
-		917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilityBridgeProtocol.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		92F7C2BEDEB5E34029A31A51 /* AccessibilityBridgeServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityBridgeServer.swift; sourceTree = "<group>"; };
-		B28FB5D8EF2E97A78AFC0C38 /* AccessibilityBridgeServer-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccessibilityBridgeServer-Info.plist"; sourceTree = "<group>"; };
-		B6D9C4B8D2732232EE10946A /* AccessibilityBridgeProtocol-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccessibilityBridgeProtocol-Info.plist"; sourceTree = "<group>"; };
-		CAD024CE2F2368C50282B42A /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
-		D83FA020A30EE9BAE7F2D618 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
-		F0FBEA7176CB354E691B37F8 /* BonjourBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourBrowser.swift; sourceTree = "<group>"; };
-		F5AF0FDA0F0B5FD28EB81F9B /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
+		0675351FC55A487F5F5A8001 /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
+		164550D21FCAC09C416850E9 /* AccraCore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraCore-Info.plist"; sourceTree = "<group>"; };
+		3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
+		373C97078255C2069EDC5593 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
+		4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccraInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		64C251CCEAD2E90A54A23983 /* AccraInspector-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraInspector-Info.plist"; sourceTree = "<group>"; };
+		6DD98E01107CB9098131511E /* HierarchyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyListView.swift; sourceTree = "<group>"; };
+		730D418D450811891958C26A /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
+		79DC5C4CA7890AF2BE2750E3 /* AccraHost.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraHost.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		922D80C47B5EE6BBF24BDC3C /* AccraHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraHost.swift; sourceTree = "<group>"; };
+		9BBD55D878CD719DBF9BB763 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		AC9AC3C16E6B3203367F6A6C /* AccraClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraClient.swift; sourceTree = "<group>"; };
+		B346481AC2A10BDF8A76F090 /* AccraInspectorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraInspectorApp.swift; sourceTree = "<group>"; };
+		C2DE31421A8C05275742CC0C /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		CD8830CB0B325B9B4A442DE6 /* AccraHost-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraHost-Info.plist"; sourceTree = "<group>"; };
+		DE29511145CE3D24F1218566 /* AccraClient.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraClient.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		FE73C4F17D7571EA7F319463 /* AccraClient-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraClient-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		7185C274AD85C559E12ACB5F /* Frameworks */ = {
+		218DFF16273C4DD8BF92B0B0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DE7C9F054AC02DD43E67BBE2 /* AccessibilityBridgeProtocol.framework in Frameworks */,
+				EB5F2C7BD05A8A3F2CF8CA3A /* AccraClient.framework in Frameworks */,
+				42AA9E1DE88B931A820AE7BC /* AccraCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		74598A7DEBDD6AE744C32BDE /* Frameworks */ = {
+		21F041001507A3A344C4E37A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				071DA27CFEB432B15B72D7E1 /* AccraCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6CE8A1EA630DA7FA3771A92E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		EA14DEBD5D2B881E84829DD0 /* Frameworks */ = {
+		B34126C52751B588BDC905EB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				22B740F7AA980F7872205A3C /* AccessibilityBridgeProtocol.framework in Frameworks */,
-				FC22D6AFF5A0297EA8231053 /* AccessibilitySnapshotParser.framework in Frameworks */,
+				F9A81CDDF75F2A1E66020AE0 /* AccessibilitySnapshotParser.framework in Frameworks */,
+				377264D30E0EB73E72D58C50 /* AccraCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		02F5BCDDBADE3CF2EA3155E4 /* AccessibilityInspector */ = {
+		0962139B5850B17DC3CCD992 /* Design */ = {
 			isa = PBXGroup;
 			children = (
-				73A137C06045F6F1364DF30C /* AccessibilityInspector */,
-			);
-			path = AccessibilityInspector;
-			sourceTree = "<group>";
-		};
-		088EC0A7608A6807420E3B6F /* AccessibilityBridgeProtocol */ = {
-			isa = PBXGroup;
-			children = (
-				F5AF0FDA0F0B5FD28EB81F9B /* Messages.swift */,
-			);
-			path = AccessibilityBridgeProtocol;
-			sourceTree = "<group>";
-		};
-		2FEACDE8F79750184A5BF986 /* Design */ = {
-			isa = PBXGroup;
-			children = (
-				7CF0D927335A400DACA13046 /* Colors.swift */,
-				CAD024CE2F2368C50282B42A /* Spacing.swift */,
-				D83FA020A30EE9BAE7F2D618 /* Typography.swift */,
+				C2DE31421A8C05275742CC0C /* Colors.swift */,
+				0675351FC55A487F5F5A8001 /* Spacing.swift */,
+				9BBD55D878CD719DBF9BB763 /* Typography.swift */,
 			);
 			path = Design;
+			sourceTree = "<group>";
+		};
+		17DB7DE887C7242BDD43B005 /* AccraClient */ = {
+			isa = PBXGroup;
+			children = (
+				AC9AC3C16E6B3203367F6A6C /* AccraClient.swift */,
+				39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */,
+				3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */,
+			);
+			path = AccraClient;
 			sourceTree = "<group>";
 		};
 		3C728D6059E1E57EB8AF7A07 /* Project */ = {
 			isa = PBXGroup;
 			children = (
-				FC5BC66F42FE49CF0C1BB329 /* AccessibilityBridgeProtocol */,
-				02F5BCDDBADE3CF2EA3155E4 /* AccessibilityInspector */,
+				E25FF065D0ED638C95C48253 /* AccraCore */,
+				FB08C3781E17E133BB6BE38C /* AccraInspector */,
 				3E713F3FE74F98C93C5511FE /* Derived */,
 			);
 			name = Project;
@@ -166,71 +201,80 @@
 			path = Derived;
 			sourceTree = "<group>";
 		};
-		3FC9EC45577C9357EF5ED656 /* AccessibilityBridgeServer */ = {
-			isa = PBXGroup;
-			children = (
-				92F7C2BEDEB5E34029A31A51 /* AccessibilityBridgeServer.swift */,
-			);
-			path = AccessibilityBridgeServer;
-			sourceTree = "<group>";
-		};
-		6FF18B5753DDAFE19CD2B728 /* Sources */ = {
-			isa = PBXGroup;
-			children = (
-				088EC0A7608A6807420E3B6F /* AccessibilityBridgeProtocol */,
-				3FC9EC45577C9357EF5ED656 /* AccessibilityBridgeServer */,
-			);
-			path = Sources;
-			sourceTree = "<group>";
-		};
-		73A137C06045F6F1364DF30C /* AccessibilityInspector */ = {
-			isa = PBXGroup;
-			children = (
-				2FEACDE8F79750184A5BF986 /* Design */,
-				75D9D83BBA93BC96FF5286F4 /* Services */,
-				B19B1539F12CAFE80F22E3AA /* Views */,
-				53F88716921347B72529EC45 /* AccessibilityInspectorApp.swift */,
-			);
-			path = AccessibilityInspector;
-			sourceTree = "<group>";
-		};
-		75D9D83BBA93BC96FF5286F4 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				F0FBEA7176CB354E691B37F8 /* BonjourBrowser.swift */,
-				300BC9363921A2000941516D /* WebSocketClient.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
 		76D03C1DCADE5A50B68201DA /* InfoPlists */ = {
 			isa = PBXGroup;
 			children = (
-				B6D9C4B8D2732232EE10946A /* AccessibilityBridgeProtocol-Info.plist */,
-				B28FB5D8EF2E97A78AFC0C38 /* AccessibilityBridgeServer-Info.plist */,
-				3BC5881ECECBF3DCC4901D3E /* AccessibilityInspector-Info.plist */,
+				FE73C4F17D7571EA7F319463 /* AccraClient-Info.plist */,
+				164550D21FCAC09C416850E9 /* AccraCore-Info.plist */,
+				CD8830CB0B325B9B4A442DE6 /* AccraHost-Info.plist */,
+				64C251CCEAD2E90A54A23983 /* AccraInspector-Info.plist */,
 			);
 			path = InfoPlists;
+			sourceTree = "<group>";
+		};
+		7B8D43EA4E4B24105FEF7B4B /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				17DB7DE887C7242BDD43B005 /* AccraClient */,
+				E9AC9DD870F8B8829D9B50F0 /* AccraCore */,
+				F3F5AB0781CE2FDF7AD4B422 /* AccraHost */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		AB4A8EF09CC8A2FE438E3B49 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */,
-				7826FF763A0FD4852C8E69C2 /* AccessibilityBridgeServer.framework */,
-				66B48D232443B385F82E2944 /* AccessibilityInspector.app */,
 				012AF16A20FC8DEF7B324626 /* AccessibilitySnapshotParser.framework */,
+				DE29511145CE3D24F1218566 /* AccraClient.framework */,
+				F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */,
+				79DC5C4CA7890AF2BE2750E3 /* AccraHost.framework */,
+				4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		B19B1539F12CAFE80F22E3AA /* Views */ = {
+		E25FF065D0ED638C95C48253 /* AccraCore */ = {
 			isa = PBXGroup;
 			children = (
-				4B982236D1882345C6189B33 /* ContentView.swift */,
-				115F456D100ECD87A4E9FD66 /* HierarchyListView.swift */,
+				7B8D43EA4E4B24105FEF7B4B /* Sources */,
+			);
+			path = AccraCore;
+			sourceTree = "<group>";
+		};
+		E9AC9DD870F8B8829D9B50F0 /* AccraCore */ = {
+			isa = PBXGroup;
+			children = (
+				730D418D450811891958C26A /* Messages.swift */,
+			);
+			path = AccraCore;
+			sourceTree = "<group>";
+		};
+		EBD85D335EA34C9F25B53074 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				373C97078255C2069EDC5593 /* ContentView.swift */,
+				6DD98E01107CB9098131511E /* HierarchyListView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		F3F5AB0781CE2FDF7AD4B422 /* AccraHost */ = {
+			isa = PBXGroup;
+			children = (
+				922D80C47B5EE6BBF24BDC3C /* AccraHost.swift */,
+			);
+			path = AccraHost;
+			sourceTree = "<group>";
+		};
+		F720AB25EAC4F6C8F0A58490 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				0962139B5850B17DC3CCD992 /* Design */,
+				EBD85D335EA34C9F25B53074 /* Views */,
+				B346481AC2A10BDF8A76F090 /* AccraInspectorApp.swift */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		F86AB838A1FC4876D5184DE1 = {
@@ -241,78 +285,100 @@
 			);
 			sourceTree = "<group>";
 		};
-		FC5BC66F42FE49CF0C1BB329 /* AccessibilityBridgeProtocol */ = {
+		FB08C3781E17E133BB6BE38C /* AccraInspector */ = {
 			isa = PBXGroup;
 			children = (
-				6FF18B5753DDAFE19CD2B728 /* Sources */,
+				F720AB25EAC4F6C8F0A58490 /* Sources */,
 			);
-			path = AccessibilityBridgeProtocol;
+			path = AccraInspector;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0858BF8FB88D59C9FE182A0F /* AccessibilityBridgeProtocol */ = {
+		4FD71A4753FA4D2CAB9EC219 /* AccraInspector */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8FF7A6D3982F4536651A4AEB /* Build configuration list for PBXNativeTarget "AccessibilityBridgeProtocol" */;
+			buildConfigurationList = 15D60898A460F508628A7975 /* Build configuration list for PBXNativeTarget "AccraInspector" */;
 			buildPhases = (
-				5A3EB99A8D8E72E5D67D8705 /* Sources */,
-				BD6BDFDC8C24E8649A86E809 /* Resources */,
-				74598A7DEBDD6AE744C32BDE /* Frameworks */,
-				D2C177699E7891231FE973DF /* Embed Frameworks */,
+				6D39A77927432C00B1BCC6DD /* Sources */,
+				CD0A6A4C2E8F6CC7CD12D651 /* Resources */,
+				218DFF16273C4DD8BF92B0B0 /* Frameworks */,
+				2E55A173B8B1406DA9D90DEF /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A2A8F005239DA374C799BCD7 /* PBXTargetDependency */,
+				A1C64E2B97399CA8A5239D4F /* PBXTargetDependency */,
 			);
-			name = AccessibilityBridgeProtocol;
+			name = AccraInspector;
 			packageProductDependencies = (
 			);
-			productName = AccessibilityBridgeProtocol;
-			productReference = 917FC6A4566B3E54193684B1 /* AccessibilityBridgeProtocol.framework */;
-			productType = "com.apple.product-type.framework";
-		};
-		2B64E418C264DAC6C66A0438 /* AccessibilityBridgeServer */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = A577E37A8ED3D389E7C0DFD6 /* Build configuration list for PBXNativeTarget "AccessibilityBridgeServer" */;
-			buildPhases = (
-				5E2E442430155C114E964E41 /* Sources */,
-				E04C15B768E548FA6A416F3D /* Resources */,
-				EA14DEBD5D2B881E84829DD0 /* Frameworks */,
-				F26EB58C67A2B9CA0D39657B /* Embed Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				68FFE156211C5F807D52127D /* PBXTargetDependency */,
-			);
-			name = AccessibilityBridgeServer;
-			packageProductDependencies = (
-			);
-			productName = AccessibilityBridgeServer;
-			productReference = 7826FF763A0FD4852C8E69C2 /* AccessibilityBridgeServer.framework */;
-			productType = "com.apple.product-type.framework";
-		};
-		98945CBC05447155A0563E39 /* AccessibilityInspector */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = B3EE4498C3A464144816E8C5 /* Build configuration list for PBXNativeTarget "AccessibilityInspector" */;
-			buildPhases = (
-				80FE7E251E8C51900E7D3DEF /* Sources */,
-				C3E924A8464EBE09236BFB69 /* Resources */,
-				7185C274AD85C559E12ACB5F /* Frameworks */,
-				92408005684AD34320F31369 /* Embed Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				DF5EADFFEBACB343261DB8F4 /* PBXTargetDependency */,
-			);
-			name = AccessibilityInspector;
-			packageProductDependencies = (
-			);
-			productName = AccessibilityInspector;
-			productReference = 66B48D232443B385F82E2944 /* AccessibilityInspector.app */;
+			productName = AccraInspector;
+			productReference = 4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */;
 			productType = "com.apple.product-type.application";
+		};
+		AC4DB168F871C1E23AE93A27 /* AccraClient */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 31E9B660002BB1C0237ED8C8 /* Build configuration list for PBXNativeTarget "AccraClient" */;
+			buildPhases = (
+				33F26E76941E192D0510E827 /* Sources */,
+				6332A93404971E49C6B3BF88 /* Resources */,
+				21F041001507A3A344C4E37A /* Frameworks */,
+				AB5A257848CE57AE5966B224 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				57867637F0B1B31DBFA517B8 /* PBXTargetDependency */,
+			);
+			name = AccraClient;
+			packageProductDependencies = (
+			);
+			productName = AccraClient;
+			productReference = DE29511145CE3D24F1218566 /* AccraClient.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		CCF26D94B54D376801DB95F9 /* AccraHost */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D3BF6029B217D757D20ED078 /* Build configuration list for PBXNativeTarget "AccraHost" */;
+			buildPhases = (
+				D77E0AE164C35FDB65DB9BFE /* Sources */,
+				826BFAB0AE6F6300D49D874C /* Resources */,
+				B34126C52751B588BDC905EB /* Frameworks */,
+				E7CB52D85C281F537FB1234A /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				11F8E7ED3C395AAE1E460787 /* PBXTargetDependency */,
+			);
+			name = AccraHost;
+			packageProductDependencies = (
+			);
+			productName = AccraHost;
+			productReference = 79DC5C4CA7890AF2BE2750E3 /* AccraHost.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		D8E275234B49999C52D5B5FF /* AccraCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9969828686D50B1753B64EC5 /* Build configuration list for PBXNativeTarget "AccraCore" */;
+			buildPhases = (
+				2C98A8E7C733D836840D0D19 /* Sources */,
+				0705A913890A13BDD91B657A /* Resources */,
+				6CE8A1EA630DA7FA3771A92E /* Frameworks */,
+				F3C6F810858E358892EFFB57 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AccraCore;
+			packageProductDependencies = (
+			);
+			productName = AccraCore;
+			productReference = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
 
@@ -335,29 +401,37 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0858BF8FB88D59C9FE182A0F /* AccessibilityBridgeProtocol */,
-				2B64E418C264DAC6C66A0438 /* AccessibilityBridgeServer */,
-				98945CBC05447155A0563E39 /* AccessibilityInspector */,
+				AC4DB168F871C1E23AE93A27 /* AccraClient */,
+				D8E275234B49999C52D5B5FF /* AccraCore */,
+				CCF26D94B54D376801DB95F9 /* AccraHost */,
+				4FD71A4753FA4D2CAB9EC219 /* AccraInspector */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		BD6BDFDC8C24E8649A86E809 /* Resources */ = {
+		0705A913890A13BDD91B657A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		C3E924A8464EBE09236BFB69 /* Resources */ = {
+		6332A93404971E49C6B3BF88 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E04C15B768E548FA6A416F3D /* Resources */ = {
+		826BFAB0AE6F6300D49D874C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CD0A6A4C2E8F6CC7CD12D651 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -367,55 +441,144 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		5A3EB99A8D8E72E5D67D8705 /* Sources */ = {
+		2C98A8E7C733D836840D0D19 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				13CD5A61BFAC0F4C02A54D3E /* Messages.swift in Sources */,
+				1650D477528A10BED2A10000 /* Messages.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		5E2E442430155C114E964E41 /* Sources */ = {
+		33F26E76941E192D0510E827 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4E4F208C94A138BF3A83C6F4 /* AccessibilityBridgeServer.swift in Sources */,
+				38C093CD56AB8AE96D9FB770 /* AccraClient.swift in Sources */,
+				B96617D47A795D1CD29668C9 /* DeviceConnection.swift in Sources */,
+				0E4EB2D6B18BD0166DCAF1DE /* DeviceDiscovery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		80FE7E251E8C51900E7D3DEF /* Sources */ = {
+		6D39A77927432C00B1BCC6DD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E798412DDB89119960A006D5 /* AccessibilityInspectorApp.swift in Sources */,
-				103486AEC8ECE227458EE751 /* Colors.swift in Sources */,
-				A8A0F80F471F111B7FBA4D64 /* Spacing.swift in Sources */,
-				205461E277FB113F8305FB4D /* Typography.swift in Sources */,
-				2FAB737DC622007B96A560C8 /* BonjourBrowser.swift in Sources */,
-				A52D52C3815883C22B631CF8 /* WebSocketClient.swift in Sources */,
-				53D3B9A2B7C9E9EED6C823CA /* ContentView.swift in Sources */,
-				3FC02BA0EE5730D233460EC2 /* HierarchyListView.swift in Sources */,
+				CC5D6F06CADA2FD86F6017A8 /* AccraInspectorApp.swift in Sources */,
+				C0F064B0B6EF6F7B8D1857E3 /* Colors.swift in Sources */,
+				0DF01716F52B5C9DB52D6515 /* Spacing.swift in Sources */,
+				91A06032B18B5C39E7AD7F60 /* Typography.swift in Sources */,
+				740E4F117E3F1F91F9779739 /* ContentView.swift in Sources */,
+				1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D77E0AE164C35FDB65DB9BFE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				01DA5884DC6137D8434254EE /* AccraHost.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		68FFE156211C5F807D52127D /* PBXTargetDependency */ = {
+		11F8E7ED3C395AAE1E460787 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = AccessibilityBridgeProtocol;
-			target = 0858BF8FB88D59C9FE182A0F /* AccessibilityBridgeProtocol */;
-			targetProxy = 81FDF085A1F5A9EBC18B6CA8 /* PBXContainerItemProxy */;
+			name = AccraCore;
+			target = D8E275234B49999C52D5B5FF /* AccraCore */;
+			targetProxy = BC514391836DE3D4D6449EAE /* PBXContainerItemProxy */;
 		};
-		DF5EADFFEBACB343261DB8F4 /* PBXTargetDependency */ = {
+		57867637F0B1B31DBFA517B8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = AccessibilityBridgeProtocol;
-			target = 0858BF8FB88D59C9FE182A0F /* AccessibilityBridgeProtocol */;
-			targetProxy = 5D23620B4DF4BD4606E35ED4 /* PBXContainerItemProxy */;
+			name = AccraCore;
+			target = D8E275234B49999C52D5B5FF /* AccraCore */;
+			targetProxy = 119193B81EA3AD0AF44718D4 /* PBXContainerItemProxy */;
+		};
+		A1C64E2B97399CA8A5239D4F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = AccraCore;
+			target = D8E275234B49999C52D5B5FF /* AccraCore */;
+			targetProxy = B02CADFC5EC571F32FA3774B /* PBXContainerItemProxy */;
+		};
+		A2A8F005239DA374C799BCD7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = AccraClient;
+			target = AC4DB168F871C1E23AE93A27 /* AccraClient */;
+			targetProxy = 99281FB1FC502F9823B0822F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0F204706A6F96A3B124BEC53 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraInspector-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.inspector;
+				PRODUCT_NAME = AccraInspector;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		2837148C60AF21E232350B64 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+				);
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraHost-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.host;
+				PRODUCT_NAME = AccraHost;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
 		307A7787C478E5DB4E05A547 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -475,183 +638,7 @@
 			};
 			name = Debug;
 		};
-		388E0188C8F94590449E90E6 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityBridgeProtocol-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilitybridgeprotocol;
-				PRODUCT_NAME = AccessibilityBridgeProtocol;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
-			};
-			name = Release;
-		};
-		755567CDE355668995BA489A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "-";
-				COMBINE_HIDPI_IMAGES = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityInspector-Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilityinspector;
-				PRODUCT_NAME = AccessibilityInspector;
-				SDKROOT = macosx;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		9E1DFC297BC2E8A1FEDA4421 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityBridgeProtocol-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilitybridgeprotocol;
-				PRODUCT_NAME = AccessibilityBridgeProtocol;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
-			};
-			name = Debug;
-		};
-		9F61C3BDA9344C8AB5465D9E /* Release */ = {
+		57CEF7C1281DDDF05F7142B1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
@@ -665,7 +652,7 @@
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityBridgeServer-Info.plist";
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraHost-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -682,17 +669,78 @@
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilitybridgeserver;
-				PRODUCT_NAME = AccessibilityBridgeServer;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.host;
+				PRODUCT_NAME = AccraHost;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		90C946659F27C440EA8BE954 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_PREVIEWS = YES;
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraInspector-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.inspector;
+				PRODUCT_NAME = AccraInspector;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		95EDE66C3AF68697446CE769 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraClient-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.client;
+				PRODUCT_NAME = AccraClient;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -751,73 +799,183 @@
 			};
 			name = Release;
 		};
-		B151A37E7A22CEB5E7054AE7 /* Debug */ = {
+		C8CBA382F6592F1C7B6901AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraCore-Info.plist";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.core;
+				PRODUCT_NAME = AccraCore;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
+				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
+				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+			};
+			name = Release;
+		};
+		D1A831088595A20B3432CF25 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraCore-Info.plist";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.core;
+				PRODUCT_NAME = AccraCore;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
+				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
+				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+			};
+			name = Debug;
+		};
+		DBA49EBC2C2FA627D8342CD7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-				);
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityBridgeServer-Info.plist";
+				FRAMEWORK_VERSION = A;
+				INFOPLIST_FILE = "Derived/InfoPlists/AccraClient-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilitybridgeserver;
-				PRODUCT_NAME = AccessibilityBridgeServer;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
-				SWIFT_COMPILATION_MODE = singlefile;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Debug;
-		};
-		C8254A2EDA6E569BD43E4842 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "-";
-				COMBINE_HIDPI_IMAGES = YES;
-				ENABLE_PREVIEWS = YES;
-				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityInspector-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.accra.accessibilityinspector;
-				PRODUCT_NAME = AccessibilityInspector;
+				PRODUCT_BUNDLE_IDENTIFIER = com.accra.client;
+				PRODUCT_NAME = AccraClient;
 				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
 					DEBUG,
@@ -825,35 +983,46 @@
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		8FF7A6D3982F4536651A4AEB /* Build configuration list for PBXNativeTarget "AccessibilityBridgeProtocol" */ = {
+		15D60898A460F508628A7975 /* Build configuration list for PBXNativeTarget "AccraInspector" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				9E1DFC297BC2E8A1FEDA4421 /* Debug */,
-				388E0188C8F94590449E90E6 /* Release */,
+				90C946659F27C440EA8BE954 /* Debug */,
+				0F204706A6F96A3B124BEC53 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A577E37A8ED3D389E7C0DFD6 /* Build configuration list for PBXNativeTarget "AccessibilityBridgeServer" */ = {
+		31E9B660002BB1C0237ED8C8 /* Build configuration list for PBXNativeTarget "AccraClient" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B151A37E7A22CEB5E7054AE7 /* Debug */,
-				9F61C3BDA9344C8AB5465D9E /* Release */,
+				DBA49EBC2C2FA627D8342CD7 /* Debug */,
+				95EDE66C3AF68697446CE769 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B3EE4498C3A464144816E8C5 /* Build configuration list for PBXNativeTarget "AccessibilityInspector" */ = {
+		9969828686D50B1753B64EC5 /* Build configuration list for PBXNativeTarget "AccraCore" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				C8254A2EDA6E569BD43E4842 /* Debug */,
-				755567CDE355668995BA489A /* Release */,
+				D1A831088595A20B3432CF25 /* Debug */,
+				C8CBA382F6592F1C7B6901AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D3BF6029B217D757D20ED078 /* Build configuration list for PBXNativeTarget "AccraHost" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57CEF7C1281DDDF05F7142B1 /* Debug */,
+				2837148C60AF21E232350B64 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
