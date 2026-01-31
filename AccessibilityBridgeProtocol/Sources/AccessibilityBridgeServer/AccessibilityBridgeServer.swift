@@ -28,6 +28,12 @@ public final class AccessibilityBridgeServer {
     private var updateDebounceTask: Task<Void, Never>?
     private let updateDebounceInterval: UInt64 = 300_000_000 // 300ms in nanoseconds
 
+    // Polling for automatic updates (disabled by default)
+    private var pollingTask: Task<Void, Never>?
+    private var pollingInterval: UInt64 = 1_000_000_000 // 1 second in nanoseconds
+    private var isPollingEnabled = false
+    private var lastHierarchyHash: Int = 0
+
     // MARK: - Initialization
 
     public init(port: UInt16 = 0) {
@@ -73,6 +79,7 @@ public final class AccessibilityBridgeServer {
     /// Stop the server
     public func stop() {
         isRunning = false
+        stopPolling()
         listener?.cancel()
         listener = nil
 
@@ -87,6 +94,30 @@ public final class AccessibilityBridgeServer {
         stopAccessibilityObservation()
 
         print("[AccessibilityBridge] Server stopped")
+    }
+
+    /// Notify the bridge that the UI has changed and subscribers should receive an update.
+    /// Call this from your app whenever state changes that affect the accessibility hierarchy.
+    public func notifyChange() {
+        guard isRunning else { return }
+        scheduleHierarchyUpdate()
+    }
+
+    /// Enable polling for automatic hierarchy updates.
+    /// - Parameter interval: Polling interval in seconds (default 1.0, minimum 0.5)
+    public func startPolling(interval: TimeInterval = 1.0) {
+        let clampedInterval = max(0.5, interval)
+        pollingInterval = UInt64(clampedInterval * 1_000_000_000)
+        isPollingEnabled = true
+        startPollingLoop()
+        print("[AccessibilityBridge] Polling enabled (interval: \(clampedInterval)s)")
+    }
+
+    /// Disable polling for automatic updates
+    public func stopPolling() {
+        isPollingEnabled = false
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     // MARK: - Private Methods - Listener
@@ -290,11 +321,51 @@ public final class AccessibilityBridgeServer {
         let payload = HierarchyPayload(timestamp: Date(), elements: elements)
         let message = ServerMessage.hierarchy(payload)
 
+        // Update hash for polling comparison
+        lastHierarchyHash = elements.hashValue
+
         for connection in connections where subscribedConnections.contains(ObjectIdentifier(connection)) {
             send(message, to: connection)
         }
 
         print("[AccessibilityBridge] Broadcast hierarchy update to \(subscribedConnections.count) client(s)")
+    }
+
+    // MARK: - Polling
+
+    private func startPollingLoop() {
+        pollingTask?.cancel()
+        pollingTask = Task { @MainActor in
+            while isPollingEnabled && !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: pollingInterval)
+                if !Task.isCancelled && isPollingEnabled {
+                    checkForChanges()
+                }
+            }
+        }
+    }
+
+    private func checkForChanges() {
+        guard !subscribedConnections.isEmpty else { return }
+        guard let rootView = getRootView() else { return }
+
+        let markers = parser.parseAccessibilityElements(in: rootView)
+        let elements = markers.enumerated().map { convertMarker($0.element, index: $0.offset) }
+
+        // Compute hash of current hierarchy
+        let currentHash = elements.hashValue
+
+        // Only broadcast if hierarchy changed
+        if currentHash != lastHierarchyHash {
+            lastHierarchyHash = currentHash
+            let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+            let message = ServerMessage.hierarchy(payload)
+
+            for connection in connections where subscribedConnections.contains(ObjectIdentifier(connection)) {
+                send(message, to: connection)
+            }
+            print("[AccessibilityBridge] Polling detected change, broadcast to \(subscribedConnections.count) client(s)")
+        }
     }
 
     // MARK: - Conversion

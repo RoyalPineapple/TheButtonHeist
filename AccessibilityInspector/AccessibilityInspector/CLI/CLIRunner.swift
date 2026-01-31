@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Darwin
 import AccessibilityBridgeProtocol
 
 /// Print with immediate flush
@@ -14,6 +15,8 @@ final class CLIRunner {
     private var connection: NWConnection?
     private var isRunning = true
     private var isSubscribed = false
+    private var previousElements: [AccessibilityElementData] = []
+    private var oldTermios = termios()
 
     func run() async {
         output("🔍 Accessibility Inspector CLI")
@@ -94,7 +97,10 @@ final class CLIRunner {
         case .ready:
             output("✅ Connected!")
             output("")
+            output("Commands: [r]efresh  [q]uit")
+            output("")
             receiveMessages()
+            startKeyboardMonitoring()
         case .failed(let error):
             output("❌ Connection failed: \(error)")
             connection = nil
@@ -163,25 +169,50 @@ final class CLIRunner {
         if payload.elements.isEmpty {
             output("   (no elements)")
         } else {
+            let previousSet = Set(previousElements)
+            let currentSet = Set(payload.elements)
+            let added = currentSet.subtracting(previousSet)
+
             for element in payload.elements {
-                printElement(element)
+                let indicator: String
+                if previousElements.isEmpty {
+                    indicator = "  "
+                } else if added.contains(element) {
+                    indicator = "🔄"
+                } else {
+                    indicator = "  "
+                }
+                printElement(element, indicator: indicator)
             }
         }
 
         output(String(repeating: "─", count: 60))
         output("Total: \(payload.elements.count) elements")
+
+        // Show change indicator
+        if !previousElements.isEmpty {
+            let prevCount = previousElements.count
+            let currCount = payload.elements.count
+            if prevCount != currCount {
+                output("Change: \(prevCount) → \(currCount) elements")
+            }
+        }
+
+        // Store for next comparison
+        previousElements = payload.elements
+
         output("")
-        output("💡 Tip: Navigate in the iOS app to see updates")
+        output("💡 Press [r] to refresh, [q] to quit")
         output("")
     }
 
-    private func printElement(_ element: AccessibilityElementData) {
+    private func printElement(_ element: AccessibilityElementData, indicator: String = "  ") {
         let index = String(format: "[%2d]", element.traversalIndex)
         let traits = element.traits.isEmpty ? "" : " (\(element.traits.joined(separator: ", ")))"
 
         // Main line
         let label = element.label ?? element.description
-        output("\(index) \(label)\(traits)")
+        output("\(indicator) \(index) \(label)\(traits)")
 
         // Details (indented)
         if let value = element.value, !value.isEmpty {
@@ -214,7 +245,49 @@ final class CLIRunner {
 
     func stop() {
         isRunning = false
+        // Restore terminal settings
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldTermios)
         connection?.cancel()
         browser?.cancel()
+    }
+
+    // MARK: - Keyboard Input
+
+    private func startKeyboardMonitoring() {
+        // Set terminal to raw mode for immediate key reading
+        tcgetattr(STDIN_FILENO, &oldTermios)
+        var newTermios = oldTermios
+        newTermios.c_lflag &= ~UInt(ICANON | ECHO)
+        newTermios.c_cc.16 = 1  // VMIN - minimum chars to read
+        newTermios.c_cc.17 = 0  // VTIME - timeout
+        tcsetattr(STDIN_FILENO, TCSANOW, &newTermios)
+
+        Task.detached {
+            let stdin = FileHandle.standardInput
+            while await self.isRunning {
+                let data = stdin.availableData
+                if data.isEmpty { continue }
+                if let str = String(data: data, encoding: .utf8) {
+                    for char in str {
+                        await MainActor.run {
+                            self.handleKeypress(char)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleKeypress(_ char: Character) {
+        switch char.lowercased() {
+        case "r", "\n", "\r":
+            output("🔄 Refreshing...")
+            send(.requestHierarchy)
+        case "q":
+            output("👋 Exiting...")
+            stop()
+        default:
+            break
+        }
     }
 }

@@ -6,127 +6,405 @@
 //
 
 import SwiftUI
-import AccessibilitySnapshotParser
+import AccessibilityBridgeServer
 
 struct ContentView: View {
-    @State private var accessibilityInfo: String = "Tap a button to inspect accessibility"
+    var autoStartDemo: Bool = false
+
+    @State private var selectedTab = 0
+    @State private var isAutoDemoRunning = false
+    @State private var demoStep = 0
+    @State private var demoTimer: Timer?
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Sample UI elements with accessibility
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-                .accessibilityLabel("Globe icon")
-
-            Text("Hello, world!")
-                .accessibilityLabel("Greeting")
-                .accessibilityHint("A friendly greeting message")
-
-            // Inspection buttons
-            HStack(spacing: 12) {
-                Button("Parser") {
-                    inspectWithParser()
+        TabView(selection: $selectedTab) {
+            HomeTab(isAutoDemoRunning: $isAutoDemoRunning, startDemo: startAutoDemo, stopDemo: stopAutoDemo)
+                .tabItem {
+                    Label("Home", systemImage: "house")
                 }
-                .buttonStyle(.borderedProminent)
-                .accessibilityLabel("Inspect with parser")
+                .tag(0)
 
-                Button("Private API") {
-                    explorePrivateAPIs()
+            FormsTab()
+                .tabItem {
+                    Label("Forms", systemImage: "list.bullet.rectangle")
+                }
+                .tag(1)
+
+            ListTab()
+                .tabItem {
+                    Label("List", systemImage: "list.dash")
+                }
+                .tag(2)
+
+            SettingsTab()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(3)
+        }
+        .onChange(of: selectedTab) { _, _ in
+            AccessibilityBridgeServer.shared.notifyChange()
+        }
+        .onAppear {
+            if autoStartDemo {
+                // Delay slightly to let the UI settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    startAutoDemo()
+                }
+            }
+        }
+    }
+
+    private func startAutoDemo() {
+        guard !isAutoDemoRunning else { return }
+        isAutoDemoRunning = true
+        demoStep = 0
+
+        demoTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            Task { @MainActor in
+                runDemoStep()
+            }
+        }
+    }
+
+    private func stopAutoDemo() {
+        isAutoDemoRunning = false
+        demoTimer?.invalidate()
+        demoTimer = nil
+    }
+
+    private func runDemoStep() {
+        let steps = [0, 1, 2, 3, 0] // Cycle through tabs
+        selectedTab = steps[demoStep % steps.count]
+        demoStep += 1
+
+        if demoStep >= 10 {
+            stopAutoDemo()
+        }
+    }
+}
+
+// MARK: - Home Tab
+
+struct HomeTab: View {
+    @Binding var isAutoDemoRunning: Bool
+    var startDemo: () -> Void
+    var stopDemo: () -> Void
+
+    @State private var counter = 0
+    @State private var message = "Welcome to the accessibility demo!"
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "accessibility")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.blue)
+                    .accessibilityLabel("Accessibility icon")
+
+                Text(message)
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .accessibilityLabel(message)
+
+                Text("Counter: \(counter)")
+                    .font(.title2)
+                    .accessibilityLabel("Counter value is \(counter)")
+
+                HStack(spacing: 16) {
+                    Button("Decrement") {
+                        counter -= 1
+                        message = "Counter decreased to \(counter)"
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Decrement counter")
+
+                    Button("Increment") {
+                        counter += 1
+                        message = "Counter increased to \(counter)"
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityLabel("Increment counter")
+                }
+
+                Divider()
+
+                Button(isAutoDemoRunning ? "Stop Auto Demo" : "Start Auto Demo") {
+                    if isAutoDemoRunning {
+                        stopDemo()
+                    } else {
+                        startDemo()
+                    }
                 }
                 .buttonStyle(.bordered)
-                .accessibilityLabel("Explore private APIs")
-            }
+                .tint(isAutoDemoRunning ? .red : .green)
+                .accessibilityLabel(isAutoDemoRunning ? "Stop automatic demonstration" : "Start automatic demonstration")
+                .accessibilityHint("Cycles through all tabs automatically")
 
-            // Results
-            ScrollView {
-                Text(accessibilityInfo)
-                    .font(.system(.caption, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
+                if isAutoDemoRunning {
+                    ProgressView()
+                        .accessibilityLabel("Demo in progress")
+                }
+
+                Spacer()
             }
-            .frame(maxHeight: 400)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
+            .padding()
+            .navigationTitle("Home")
+        }
+        .onChange(of: counter) { _, _ in
+            AccessibilityBridgeServer.shared.notifyChange()
+        }
+        .onChange(of: message) { _, _ in
+            AccessibilityBridgeServer.shared.notifyChange()
+        }
+    }
+}
+
+// MARK: - Forms Tab
+
+struct FormsTab: View {
+    @State private var name = ""
+    @State private var email = ""
+    @State private var isSubscribed = false
+    @State private var volume: Double = 50
+    @State private var selectedColor = 0
+    let colors = ["Red", "Green", "Blue", "Yellow"]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Personal Info") {
+                    TextField("Name", text: $name)
+                        .accessibilityLabel("Name input field")
+                        .accessibilityValue(name.isEmpty ? "Empty" : name)
+
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
+                        .accessibilityLabel("Email input field")
+                        .accessibilityValue(email.isEmpty ? "Empty" : email)
+                }
+
+                Section("Preferences") {
+                    Toggle("Subscribe to newsletter", isOn: $isSubscribed)
+                        .accessibilityLabel("Newsletter subscription toggle")
+                        .accessibilityValue(isSubscribed ? "Subscribed" : "Not subscribed")
+
+                    VStack(alignment: .leading) {
+                        Text("Volume: \(Int(volume))%")
+                            .accessibilityHidden(true)
+                        Slider(value: $volume, in: 0...100, step: 1)
+                            .accessibilityLabel("Volume slider")
+                            .accessibilityValue("\(Int(volume)) percent")
+                    }
+
+                    Picker("Favorite Color", selection: $selectedColor) {
+                        ForEach(0..<colors.count, id: \.self) { index in
+                            Text(colors[index]).tag(index)
+                        }
+                    }
+                    .accessibilityLabel("Favorite color picker")
+                    .accessibilityValue(colors[selectedColor])
+                }
+
+                Section("Actions") {
+                    Button("Submit Form") {
+                        // Simulate form submission
+                        name = ""
+                        email = ""
+                    }
+                    .accessibilityLabel("Submit form button")
+                    .accessibilityHint("Clears all form fields")
+
+                    Button("Fill Sample Data") {
+                        name = "John Doe"
+                        email = "john@example.com"
+                        isSubscribed = true
+                        volume = 75
+                        selectedColor = 2
+                    }
+                    .accessibilityLabel("Fill sample data button")
+                    .accessibilityHint("Populates form with example values")
+                }
+            }
+            .navigationTitle("Forms")
+        }
+        .onChange(of: name) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: email) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: isSubscribed) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: volume) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: selectedColor) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+    }
+}
+
+// MARK: - List Tab
+
+struct ListTab: View {
+    @State private var items = ["Apple", "Banana", "Cherry", "Date", "Elderberry"]
+    @State private var selectedItem: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(items, id: \.self) { item in
+                    HStack {
+                        Image(systemName: "leaf.fill")
+                            .foregroundStyle(.green)
+                            .accessibilityHidden(true)
+
+                        Text(item)
+
+                        Spacer()
+
+                        if selectedItem == item {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.blue)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selectedItem = item
+                    }
+                    .accessibilityLabel(item)
+                    .accessibilityValue(selectedItem == item ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(selectedItem == item ? .isSelected : [])
+                }
+                .onDelete { indexSet in
+                    items.remove(atOffsets: indexSet)
+                }
+                .onMove { from, to in
+                    items.move(fromOffsets: from, toOffset: to)
+                }
+            }
+            .navigationTitle("Fruits")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                        .accessibilityLabel("Edit list")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        let newFruits = ["Fig", "Grape", "Honeydew", "Kiwi", "Lemon"]
+                        if let newFruit = newFruits.first(where: { !items.contains($0) }) {
+                            items.append(newFruit)
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add fruit")
+                    .accessibilityHint("Adds a new fruit to the list")
+                }
+            }
+        }
+        .onChange(of: items) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: selectedItem) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+    }
+}
+
+// MARK: - Settings Tab
+
+struct SettingsTab: View {
+    @State private var isDarkMode = false
+    @State private var notificationsEnabled = true
+    @State private var fontSize: Double = 16
+    @State private var language = "English"
+    let languages = ["English", "Spanish", "French", "German", "Japanese"]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Appearance") {
+                    Toggle("Dark Mode", isOn: $isDarkMode)
+                        .accessibilityLabel("Dark mode toggle")
+                        .accessibilityValue(isDarkMode ? "Enabled" : "Disabled")
+
+                    VStack(alignment: .leading) {
+                        Text("Font Size: \(Int(fontSize))pt")
+                            .accessibilityHidden(true)
+                        Slider(value: $fontSize, in: 12...24, step: 1)
+                            .accessibilityLabel("Font size slider")
+                            .accessibilityValue("\(Int(fontSize)) points")
+                    }
+                }
+
+                Section("Notifications") {
+                    Toggle("Enable Notifications", isOn: $notificationsEnabled)
+                        .accessibilityLabel("Notifications toggle")
+                        .accessibilityValue(notificationsEnabled ? "Enabled" : "Disabled")
+                }
+
+                Section("Language") {
+                    Picker("Language", selection: $language) {
+                        ForEach(languages, id: \.self) { lang in
+                            Text(lang).tag(lang)
+                        }
+                    }
+                    .accessibilityLabel("Language picker")
+                    .accessibilityValue(language)
+                }
+
+                Section("About") {
+                    LabeledContent("Version", value: "1.0.0")
+                        .accessibilityLabel("App version")
+                        .accessibilityValue("1.0.0")
+
+                    LabeledContent("Build", value: "2026.01.31")
+                        .accessibilityLabel("Build date")
+                        .accessibilityValue("January 31, 2026")
+
+                    NavigationLink {
+                        AboutDetailView()
+                    } label: {
+                        Text("More Info")
+                    }
+                    .accessibilityLabel("More information")
+                    .accessibilityHint("Opens detailed app information")
+                }
+
+                Section("Debug") {
+                    Button("Trigger Manual Update") {
+                        AccessibilityBridgeServer.shared.notifyChange()
+                    }
+                    .accessibilityLabel("Trigger manual accessibility update")
+                    .accessibilityHint("Forces an immediate hierarchy refresh")
+                }
+            }
+            .navigationTitle("Settings")
+        }
+        .onChange(of: isDarkMode) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: notificationsEnabled) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: fontSize) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+        .onChange(of: language) { _, _ in AccessibilityBridgeServer.shared.notifyChange() }
+    }
+}
+
+// MARK: - About Detail View
+
+struct AboutDetailView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "info.circle.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.blue)
+                .accessibilityLabel("Information icon")
+
+            Text("Accessibility Test App")
+                .font(.title)
+                .accessibilityAddTraits(.isHeader)
+
+            Text("This app demonstrates SwiftUI accessibility features and the accessibility bridge for remote inspection.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .accessibilityLabel("App description: This app demonstrates SwiftUI accessibility features and the accessibility bridge for remote inspection.")
+
+            Spacer()
         }
         .padding()
-    }
-
-    // MARK: - Parser Approach (Phase 1)
-
-    private func inspectWithParser() {
-        // Phase 1 approach: Access UIWindow from SwiftUI app via connectedScenes
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else {
-            let msg = "ERROR: Could not access window"
-            print(msg)
-            accessibilityInfo = msg
-            return
+        .navigationTitle("About")
+        .onAppear {
+            AccessibilityBridgeServer.shared.notifyChange()
         }
-
-        guard let rootView = window.rootViewController?.view else {
-            let msg = "ERROR: Could not access root view"
-            print(msg)
-            accessibilityInfo = msg
-            return
-        }
-
-        var output = "=== AccessibilitySnapshotParser Results ===\n\n"
-        output += "Window: \(window)\n"
-        output += "Root VC: \(String(describing: window.rootViewController))\n"
-        output += "Root View: \(type(of: rootView))\n\n"
-
-        // Use the AccessibilitySnapshotParser to traverse the hierarchy
-        let parser = AccessibilityHierarchyParser()
-        let markers = parser.parseAccessibilityElements(in: rootView)
-
-        output += "Found \(markers.count) accessibility elements:\n\n"
-        for (index, marker) in markers.enumerated() {
-            output += "[\(index + 1)] \(marker.description)\n"
-            if let label = marker.label {
-                output += "    Label: \(label)\n"
-            }
-            if let value = marker.value {
-                output += "    Value: \(value)\n"
-            }
-            if let hint = marker.hint {
-                output += "    Hint: \(hint)\n"
-            }
-            if let identifier = marker.identifier {
-                output += "    ID: \(identifier)\n"
-            }
-            output += "    Traits: \(formatTraits(marker.traits))\n"
-            output += "\n"
-        }
-
-        // Print to console
-        print("\n>>> PARSER BUTTON PRESSED <<<")
-        print(output)
-
-        accessibilityInfo = output
-    }
-
-    // MARK: - Private API Exploration (Phase 2)
-
-    private func explorePrivateAPIs() {
-        print("\n>>> PRIVATE API BUTTON PRESSED <<<")
-        let explorer = PrivateAccessibilityExplorer.shared
-        let output = explorer.runFullExploration()
-        print(output)
-        accessibilityInfo = output
-    }
-
-    private func formatTraits(_ traits: UIAccessibilityTraits) -> String {
-        var result: [String] = []
-        if traits.contains(.button) { result.append("button") }
-        if traits.contains(.link) { result.append("link") }
-        if traits.contains(.header) { result.append("header") }
-        if traits.contains(.image) { result.append("image") }
-        if traits.contains(.staticText) { result.append("staticText") }
-        if traits.contains(.selected) { result.append("selected") }
-        if traits.contains(.adjustable) { result.append("adjustable") }
-        if result.isEmpty { return "none" }
-        return result.joined(separator: ", ")
     }
 }
 
