@@ -1,3 +1,209 @@
+# CLI Unix Standards Implementation Plan
+
+## Overview
+
+Update the `a11y-inspect` CLI tool to follow Unix/Linux conventions and Swift best practices using Apple's Swift ArgumentParser library.
+
+## Current State Analysis
+
+- All output goes to stderr via `fputs()`
+- No command-line argument parsing
+- No machine-readable output formats
+- Uses emojis (problematic for piping)
+- Only continuous watch mode
+- No proper exit codes
+
+### Key Files:
+- `AccessibilityInspector/Package.swift` - needs ArgumentParser dependency
+- `AccessibilityInspector/AccessibilityInspector/CLI/main.swift` - entry point
+- `AccessibilityInspector/AccessibilityInspector/CLI/CLIRunner.swift` - core logic
+
+## Desired End State
+
+A Unix-standard CLI tool that:
+```bash
+# One-shot JSON output for scripting
+a11y-inspect --once --format json | jq '.elements[] | .label'
+
+# Quiet mode - just data, no status
+a11y-inspect -q --once > hierarchy.json
+
+# Watch mode with timeout
+a11y-inspect --watch --timeout 30
+
+# Human-readable (default)
+a11y-inspect
+
+# Show help
+a11y-inspect --help
+```
+
+### Verification:
+- `a11y-inspect --help` shows proper usage
+- `a11y-inspect --once --format json` outputs valid JSON to stdout
+- Exit code 0 on success, non-zero on errors
+- Status messages go to stderr, data to stdout
+
+## What We're NOT Doing
+
+- Subcommands (keeping it simple with options)
+- Color output configuration (can add later)
+- Config file support
+- Shell completion generation (ArgumentParser supports this, can add later)
+
+## Implementation Approach
+
+Use Swift ArgumentParser's `AsyncParsableCommand` for async support with Network framework.
+
+---
+
+## Phase 1: Add ArgumentParser Dependency
+
+### Overview
+Add Swift ArgumentParser to the package dependencies.
+
+### Changes Required:
+
+#### 1. Package.swift
+**File**: `AccessibilityInspector/Package.swift`
+
+```swift
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "AccessibilityInspector",
+    platforms: [
+        .macOS(.v14)
+    ],
+    dependencies: [
+        .package(path: "../AccessibilityBridgeProtocol"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
+    ],
+    targets: [
+        .executableTarget(
+            name: "AccessibilityInspector",
+            dependencies: [
+                .product(name: "AccessibilityBridgeProtocol", package: "AccessibilityBridgeProtocol")
+            ],
+            path: "AccessibilityInspector",
+            exclude: ["CLI"]
+        ),
+        .executableTarget(
+            name: "a11y-inspect",
+            dependencies: [
+                .product(name: "AccessibilityBridgeProtocol", package: "AccessibilityBridgeProtocol"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "AccessibilityInspector/CLI"
+        )
+    ]
+)
+```
+
+### Success Criteria:
+
+#### Automated Verification:
+- [x] Package resolves: `cd AccessibilityInspector && swift package resolve`
+- [x] Package builds: `cd AccessibilityInspector && swift build --product a11y-inspect`
+
+---
+
+## Phase 2: Create Command Structure
+
+### Overview
+Replace main.swift with ArgumentParser-based command structure.
+
+### Changes Required:
+
+#### 1. New main.swift with ArgumentParser
+**File**: `AccessibilityInspector/AccessibilityInspector/CLI/main.swift`
+
+```swift
+import ArgumentParser
+import Foundation
+
+@main
+struct A11yInspect: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "a11y-inspect",
+        abstract: "Inspect iOS app accessibility hierarchy over the network.",
+        discussion: """
+            Connects to an iOS app running the AccessibilityBridge server and displays
+            the accessibility element hierarchy. Useful for accessibility testing and
+            debugging SwiftUI/UIKit apps.
+
+            Examples:
+              a11y-inspect                     # Interactive watch mode
+              a11y-inspect --once              # Single snapshot, then exit
+              a11y-inspect --format json       # JSON output for scripting
+              a11y-inspect -q --once | jq .    # Quiet mode, pipe to jq
+            """,
+        version: "1.0.0"
+    )
+
+    @Option(name: .shortAndLong, help: "Output format: human, json")
+    var format: OutputFormat = .human
+
+    @Flag(name: .shortAndLong, help: "Single snapshot then exit (default: watch mode)")
+    var once: Bool = false
+
+    @Flag(name: .shortAndLong, help: "Suppress status messages (only output data)")
+    var quiet: Bool = false
+
+    @Option(name: .shortAndLong, help: "Timeout in seconds waiting for device (0 = no timeout)")
+    var timeout: Int = 0
+
+    @Flag(name: .shortAndLong, help: "Show verbose output")
+    var verbose: Bool = false
+
+    mutating func run() async throws {
+        let options = CLIOptions(
+            format: format,
+            once: once,
+            quiet: quiet,
+            timeout: timeout,
+            verbose: verbose
+        )
+
+        let runner = CLIRunner(options: options)
+        try await runner.run()
+    }
+}
+
+enum OutputFormat: String, ExpressibleByArgument, CaseIterable {
+    case human
+    case json
+}
+
+struct CLIOptions {
+    let format: OutputFormat
+    let once: Bool
+    let quiet: Bool
+    let timeout: Int
+    let verbose: Bool
+}
+```
+
+### Success Criteria:
+
+#### Automated Verification:
+- [x] `a11y-inspect --help` shows usage
+- [x] `a11y-inspect --version` shows 1.0.0
+
+---
+
+## Phase 3: Update CLIRunner for Options
+
+### Overview
+Refactor CLIRunner to support the new options, proper stdout/stderr separation, and JSON output.
+
+### Changes Required:
+
+#### 1. CLIRunner.swift - Full Refactor
+**File**: `AccessibilityInspector/AccessibilityInspector/CLI/CLIRunner.swift`
+
+```swift
 import Foundation
 import Network
 import Darwin
@@ -378,3 +584,50 @@ final class CLIRunner {
         }
     }
 }
+```
+
+### Success Criteria:
+
+#### Automated Verification:
+- [x] Build succeeds: `swift build --product a11y-inspect`
+- [x] Help works: `a11y-inspect --help`
+- [x] Version works: `a11y-inspect --version`
+
+#### Manual Verification:
+- [x] `a11y-inspect --once --format json` outputs valid JSON to stdout
+- [x] `a11y-inspect -q --once` shows no status messages
+- [x] `a11y-inspect` in watch mode shows keyboard hints
+- [x] Ctrl+C exits cleanly
+- [x] Exit codes are correct (test with `echo $?`)
+
+---
+
+## Testing Strategy
+
+### Automated Tests:
+```bash
+# Build
+swift build --product a11y-inspect
+
+# Help output
+.build/debug/a11y-inspect --help | grep -q "Output format"
+
+# Version
+.build/debug/a11y-inspect --version | grep -q "1.0.0"
+```
+
+### Manual Testing:
+1. Run app in simulator
+2. Test each mode:
+   - `a11y-inspect` - interactive watch
+   - `a11y-inspect --once` - single shot
+   - `a11y-inspect --format json --once` - JSON output
+   - `a11y-inspect -q --once` - quiet mode
+   - `a11y-inspect --timeout 5 --once` - with timeout
+3. Verify stdout/stderr separation: `a11y-inspect --once 2>/dev/null | jq .`
+4. Verify exit codes after failures
+
+## References
+
+- Swift ArgumentParser: https://github.com/apple/swift-argument-parser
+- Current CLI: `AccessibilityInspector/AccessibilityInspector/CLI/`
