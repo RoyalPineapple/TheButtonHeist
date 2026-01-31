@@ -1,0 +1,15 @@
+# Build directories
+.build/
+build/
+DerivedData/
+
+# Package resolved files (regenerated on build)
+Package.resolved
+
+# Xcode user-specific files
+*.xcuserstate
+xcuserdata/
+xcshareddata/
+
+# macOS
+.DS_Store
