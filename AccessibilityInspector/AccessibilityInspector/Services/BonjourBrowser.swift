@@ -7,16 +7,16 @@ import AccessibilityBridgeProtocol
 final class BonjourBrowser {
 
     struct DiscoveredDevice: Identifiable, Hashable {
-        let id = UUID()
+        var id: String { name }
         let name: String
         let endpoint: NWEndpoint
 
         func hash(into hasher: inout Hasher) {
-            hasher.combine(id)
+            hasher.combine(name)
         }
 
         static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
-            lhs.id == rhs.id
+            lhs.name == rhs.name
         }
     }
 
