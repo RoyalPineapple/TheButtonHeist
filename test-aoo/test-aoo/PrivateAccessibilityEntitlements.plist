@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Core accessibility entitlements for external client access -->
+    <key>com.apple.private.accessibility.send</key>
+    <true/>
+    <key>com.apple.private.accessibility.receive</key>
+    <true/>
+    <key>com.apple.private.accessibility.observe</key>
+    <true/>
+
+    <!-- Platform application - grants elevated privileges -->
+    <key>platform-application</key>
+    <true/>
+
+    <!-- Escape sandbox to access other apps -->
+    <key>com.apple.private.security.no-sandbox</key>
+    <true/>
+
+    <!-- Storage access (required with platform-application) -->
+    <key>com.apple.private.security.storage.AppDataContainers</key>
+    <true/>
+
+    <!-- Allow loading of unsigned libraries -->
+    <key>com.apple.private.skip-library-validation</key>
+    <true/>
+
+    <!-- Enable debugger attachment -->
+    <key>get-task-allow</key>
+    <true/>
+
+    <!-- Additional accessibility-related entitlements found in AccessibilityUIServer -->
+    <key>com.apple.private.tcc.allow</key>
+    <array>
+        <string>kTCCServiceAccessibility</string>
+    </array>
+
+    <!-- Inter-process communication -->
+    <key>com.apple.private.xpc.launchd.app-server</key>
+    <true/>
+</dict>
+</plist>
