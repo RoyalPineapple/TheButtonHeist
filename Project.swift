@@ -6,47 +6,60 @@ let project = Project(
     targets: [
         // MARK: - Shared Protocol Types (cross-platform)
         .target(
-            name: "AccessibilityBridgeProtocol",
+            name: "AccraCore",
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
-            bundleId: "com.accra.accessibilitybridgeprotocol",
+            bundleId: "com.accra.core",
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
-            sources: ["AccessibilityBridgeProtocol/Sources/AccessibilityBridgeProtocol/**"]
+            sources: ["AccraCore/Sources/AccraCore/**"]
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
         .target(
-            name: "AccessibilityBridgeServer",
+            name: "AccraHost",
             destinations: [.iPhone, .iPad],
             product: .framework,
-            bundleId: "com.accra.accessibilitybridgeserver",
+            bundleId: "com.accra.host",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
-            sources: ["AccessibilityBridgeProtocol/Sources/AccessibilityBridgeServer/**"],
+            sources: ["AccraCore/Sources/AccraHost/**"],
             dependencies: [
-                .target(name: "AccessibilityBridgeProtocol"),
+                .target(name: "AccraCore"),
                 .external(name: "AccessibilitySnapshotParser"),
+            ]
+        ),
+
+        // MARK: - macOS Client Library
+        .target(
+            name: "AccraClient",
+            destinations: .macOS,
+            product: .framework,
+            bundleId: "com.accra.client",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["AccraCore/Sources/AccraClient/**"],
+            dependencies: [
+                .target(name: "AccraCore"),
             ]
         ),
 
         // MARK: - macOS Inspector App
         .target(
-            name: "AccessibilityInspector",
+            name: "AccraInspector",
             destinations: .macOS,
             product: .app,
-            bundleId: "com.accra.accessibilityinspector",
+            bundleId: "com.accra.inspector",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .extendingDefault(with: [
                 "NSPrincipalClass": "NSApplication",
-                "CFBundleDisplayName": "Accessibility Inspector",
+                "CFBundleDisplayName": "Accra Inspector",
             ]),
-            sources: .sourceFilesList(globs: [
-                .glob("AccessibilityInspector/AccessibilityInspector/**", excluding: ["AccessibilityInspector/AccessibilityInspector/CLI/**"])
-            ]),
+            sources: ["AccraInspector/Sources/**"],
             resources: [],
             dependencies: [
-                .target(name: "AccessibilityBridgeProtocol"),
+                .target(name: "AccraCore"),
+                .target(name: "AccraClient"),
             ]
         ),
     ]

@@ -2,20 +2,20 @@ import ArgumentParser
 import Foundation
 
 @main
-struct A11yInspect: AsyncParsableCommand {
+struct Accra: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "a11y-inspect",
+        commandName: "accra",
         abstract: "Inspect iOS app accessibility hierarchy over the network.",
         discussion: """
-            Connects to an iOS app running the AccessibilityBridge server and displays
-            the accessibility element hierarchy. Useful for accessibility testing and
-            debugging SwiftUI/UIKit apps.
+            Connects to an iOS app running AccraHost and displays the accessibility
+            element hierarchy. Useful for accessibility testing and debugging
+            SwiftUI/UIKit apps.
 
             Examples:
-              a11y-inspect                     # Interactive watch mode
-              a11y-inspect --once              # Single snapshot, then exit
-              a11y-inspect --format json       # JSON output for scripting
-              a11y-inspect -q --once | jq .    # Quiet mode, pipe to jq
+              accra                     # Interactive watch mode
+              accra --once              # Single snapshot, then exit
+              accra --format json       # JSON output for scripting
+              accra -q --once | jq .    # Quiet mode, pipe to jq
             """,
         version: "1.0.0"
     )

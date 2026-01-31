@@ -1,7 +1,7 @@
 import Foundation
-import Network
 import Darwin
-import AccessibilityBridgeProtocol
+import AccraCore
+import AccraClient
 
 // MARK: - Output Helpers
 
@@ -31,8 +31,7 @@ enum ExitCode: Int32 {
 @MainActor
 final class CLIRunner {
     private let options: CLIOptions
-    private var browser: NWBrowser?
-    private var connection: NWConnection?
+    private let client = AccraClient()
     private var isRunning = true
     private var previousElements: [AccessibilityElementData] = []
     private var oldTermios = termios()
@@ -45,53 +44,20 @@ final class CLIRunner {
 
     func run() async throws {
         setupSignalHandlers()
+        setupClientCallbacks()
 
         if !options.quiet {
             logStatus("Searching for iOS devices...")
         }
 
-        await browseForDevices()
-
-        if exitCode != .success {
-            Darwin.exit(exitCode.rawValue)
-        }
-    }
-
-    private func setupSignalHandlers() {
-        signal(SIGINT) { _ in
-            Darwin.exit(0)
-        }
-    }
-
-    private func browseForDevices() async {
-        let parameters = NWParameters()
-        parameters.includePeerToPeer = true
-
-        browser = NWBrowser(
-            for: .bonjour(type: accessibilityBridgeServiceType, domain: "local."),
-            using: parameters
-        )
-
-        browser?.browseResultsChangedHandler = { [weak self] results, changes in
-            Task { @MainActor in
-                await self?.handleBrowseResults(results)
-            }
-        }
-
-        browser?.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                self?.handleBrowserState(state)
-            }
-        }
-
-        browser?.start(queue: .main)
+        client.startDiscovery()
 
         // Handle timeout
         if options.timeout > 0 {
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(options.timeout) * 1_000_000_000)
-                if await self.connection == nil {
-                    await MainActor.run {
+                await MainActor.run {
+                    if self.client.connectedDevice == nil {
                         if !self.options.quiet {
                             logStatus("Timeout: No device found within \(self.options.timeout) seconds")
                         }
@@ -106,136 +72,72 @@ final class CLIRunner {
         while isRunning {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
-    }
 
-    private func handleBrowserState(_ state: NWBrowser.State) {
-        switch state {
-        case .failed(let error):
-            if !options.quiet {
-                logStatus("Error: Browser failed - \(error.localizedDescription)")
-            }
-            exitCode = .connectionFailed
-            isRunning = false
-        case .cancelled:
-            if options.verbose {
-                logStatus("Browser cancelled")
-            }
-        default:
-            break
+        if exitCode != .success {
+            Darwin.exit(exitCode.rawValue)
         }
     }
 
-    private func handleBrowseResults(_ results: Set<NWBrowser.Result>) async {
-        guard connection == nil else { return }
+    private func setupSignalHandlers() {
+        signal(SIGINT) { _ in
+            Darwin.exit(0)
+        }
+    }
 
-        for result in results {
-            if case let .service(name, _, _, _) = result.endpoint {
-                if !options.quiet {
-                    logStatus("Found device: \(name)")
+    private func setupClientCallbacks() {
+        // Handle device discovery
+        client.onDeviceDiscovered = { [weak self] device in
+            guard let self = self else { return }
+            if self.client.connectedDevice == nil {
+                if !self.options.quiet {
+                    logStatus("Found device: \(device.name)")
                     logStatus("Connecting...")
                 }
-                await connect(to: result.endpoint)
-                return
-            }
-        }
-    }
-
-    private func connect(to endpoint: NWEndpoint) async {
-        let parameters = NWParameters.tcp
-        let wsOptions = NWProtocolWebSocket.Options()
-        parameters.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
-
-        connection = NWConnection(to: endpoint, using: parameters)
-
-        connection?.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                self?.handleConnectionState(state)
+                self.client.connect(to: device)
             }
         }
 
-        connection?.start(queue: .main)
-    }
-
-    private func handleConnectionState(_ state: NWConnection.State) {
-        switch state {
-        case .ready:
-            if !options.quiet {
+        // Handle connection success
+        client.onConnected = { [weak self] info in
+            guard let self = self else { return }
+            if !self.options.quiet {
                 logStatus("Connected")
             }
-            receiveMessages()
-
-            // In watch mode with human format, enable keyboard
-            if !options.once && options.format == .human {
-                if !options.quiet {
-                    logStatus("Commands: [r]efresh  [q]uit")
-                }
-                startKeyboardMonitoring()
-            }
-
-        case .failed(let error):
-            if !options.quiet {
-                logStatus("Error: Connection failed - \(error.localizedDescription)")
-            }
-            exitCode = .connectionFailed
-            connection = nil
-            isRunning = false
-
-        case .cancelled:
-            if options.verbose {
-                logStatus("Connection cancelled")
-            }
-            connection = nil
-
-        default:
-            break
-        }
-    }
-
-    private func receiveMessages() {
-        connection?.receiveMessage { [weak self] data, context, isComplete, error in
-            Task { @MainActor in
-                if let data = data {
-                    self?.handleReceivedData(data)
-                }
-                if error == nil {
-                    self?.receiveMessages()
-                }
-            }
-        }
-    }
-
-    private func handleReceivedData(_ data: Data) {
-        guard let message = try? JSONDecoder().decode(ServerMessage.self, from: data) else {
-            if !options.quiet {
-                logStatus("Warning: Failed to decode message")
-            }
-            return
-        }
-
-        switch message {
-        case .info(let info):
-            if options.verbose {
+            if self.options.verbose {
                 logStatus("App: \(info.appName) (\(info.bundleIdentifier))")
                 logStatus("Device: \(info.deviceName) - iOS \(info.systemVersion)")
             }
-            send(.subscribe)
-            send(.requestHierarchy)
 
-        case .hierarchy(let payload):
-            outputHierarchy(payload)
-            hasReceivedHierarchy = true
+            // In watch mode with human format, enable keyboard
+            if !self.options.once && self.options.format == .human {
+                if !self.options.quiet {
+                    logStatus("Commands: [r]efresh  [q]uit")
+                }
+                self.startKeyboardMonitoring()
+            }
+        }
+
+        // Handle disconnection
+        client.onDisconnected = { [weak self] error in
+            guard let self = self else { return }
+            if let error = error {
+                if !self.options.quiet {
+                    logStatus("Error: Connection failed - \(error.localizedDescription)")
+                }
+                self.exitCode = .connectionFailed
+            }
+            self.isRunning = false
+        }
+
+        // Handle hierarchy updates
+        client.onHierarchyUpdate = { [weak self] payload in
+            guard let self = self else { return }
+            self.outputHierarchy(payload)
+            self.hasReceivedHierarchy = true
 
             // In once mode, exit after first hierarchy
-            if options.once {
-                isRunning = false
-            }
-
-        case .pong:
-            break
-
-        case .error(let errorMessage):
-            if !options.quiet {
-                logStatus("Error: \(errorMessage)")
+            if self.options.once {
+                self.isRunning = false
             }
         }
     }
@@ -324,18 +226,11 @@ final class CLIRunner {
         return output
     }
 
-    private func send(_ message: ClientMessage) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
-        let context = NWConnection.ContentContext(identifier: "message", metadata: [metadata])
-        connection?.send(content: data, contentContext: context, isComplete: true, completion: .idempotent)
-    }
-
     func stop() {
         isRunning = false
         tcsetattr(STDIN_FILENO, TCSANOW, &oldTermios)
-        connection?.cancel()
-        browser?.cancel()
+        client.disconnect()
+        client.stopDiscovery()
     }
 
     // MARK: - Keyboard Input (watch mode only)
@@ -370,7 +265,7 @@ final class CLIRunner {
             if !options.quiet {
                 logStatus("Refreshing...")
             }
-            send(.requestHierarchy)
+            client.requestHierarchy()
         case "q":
             stop()
         default:
