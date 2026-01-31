@@ -4,12 +4,34 @@ import AccessibilityBridgeProtocol
 struct HierarchyListView: View {
     let elements: [AccessibilityElementData]
     @State private var selectedElement: AccessibilityElementData?
+    @State private var searchQuery = ""
+
+    private var filteredElements: [AccessibilityElementData] {
+        guard !searchQuery.isEmpty else { return elements }
+        let query = searchQuery.lowercased()
+        return elements.filter { element in
+            element.label?.lowercased().contains(query) == true ||
+            element.description.lowercased().contains(query) ||
+            element.traits.contains { $0.lowercased().contains(query) }
+        }
+    }
 
     var body: some View {
         HSplitView {
-            // Element list
-            List(elements, id: \.traversalIndex, selection: $selectedElement) { element in
-                ElementRowView(element: element)
+            // Element list with search
+            VStack(spacing: 0) {
+                SearchBar(query: $searchQuery)
+                    .padding(TreeSpacing.unit)
+
+                Divider()
+
+                if filteredElements.isEmpty && !searchQuery.isEmpty {
+                    emptySearchView
+                } else {
+                    List(filteredElements, id: \.traversalIndex, selection: $selectedElement) { element in
+                        ElementRowView(element: element)
+                    }
+                }
             }
             .frame(minWidth: 300)
 
@@ -24,50 +46,85 @@ struct HierarchyListView: View {
             }
         }
     }
+
+    private var emptySearchView: some View {
+        VStack(spacing: 8) {
+            Text("No matches for \"\(searchQuery)\"")
+                .font(.Tree.elementLabel)
+                .foregroundColor(Color.Tree.textPrimary)
+            Text("Try a different search term")
+                .font(.Tree.elementTrait)
+                .foregroundColor(Color.Tree.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct SearchBar: View {
+    @Binding var query: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color.Tree.textSecondary)
+
+            TextField("Filter elements...", text: $query)
+                .font(.Tree.searchInput)
+                .textFieldStyle(.plain)
+
+            if !query.isEmpty {
+                Button(action: { query = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color.Tree.textTertiary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("⌘F")
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundColor(Color.Tree.textTertiary)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.Tree.textTertiary.opacity(0.2))
+                .cornerRadius(3)
+        }
+        .padding(.horizontal, TreeSpacing.searchHorizontalPadding)
+        .frame(height: TreeSpacing.searchHeight)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(6)
+    }
 }
 
 struct ElementRowView: View {
     let element: AccessibilityElementData
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text("[\(element.traversalIndex)]")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 32, alignment: .trailing)
+        HStack(spacing: 4) {
+            // Primary trait (monospace, secondary)
+            Text(primaryTrait)
+                .font(.Tree.elementTrait)
+                .foregroundColor(Color.Tree.textSecondary)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(element.label ?? element.description)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-
-                if !element.traits.isEmpty {
-                    Text(element.traits.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            // Label or description (quoted, primary)
+            Text("\"\(displayLabel)\"")
+                .font(.Tree.elementLabel)
+                .foregroundColor(Color.Tree.textPrimary)
+                .lineLimit(1)
 
             Spacer()
-
-            // Show icon for primary trait
-            if let icon = primaryTraitIcon {
-                Image(systemName: icon)
-                    .foregroundStyle(.blue)
-            }
         }
-        .padding(.vertical, 2)
+        .frame(height: TreeSpacing.rowHeight)
+        .padding(.horizontal, TreeSpacing.rowHorizontalPadding)
     }
 
-    private var primaryTraitIcon: String? {
-        if element.traits.contains("button") { return "hand.tap" }
-        if element.traits.contains("link") { return "link" }
-        if element.traits.contains("image") { return "photo" }
-        if element.traits.contains("header") { return "textformat.size.larger" }
-        if element.traits.contains("adjustable") { return "slider.horizontal.3" }
-        if element.traits.contains("searchField") { return "magnifyingglass" }
-        if element.traits.contains("staticText") { return "text.alignleft" }
-        return nil
+    private var primaryTrait: String {
+        element.traits.first ?? "element"
+    }
+
+    private var displayLabel: String {
+        element.label ?? element.description
     }
 }
 
@@ -110,17 +167,9 @@ struct ElementDetailView: View {
                 // Traits
                 if !element.traits.isEmpty {
                     DetailSection(title: "Traits") {
-                        FlowLayout(spacing: 4) {
-                            ForEach(element.traits, id: \.self) { trait in
-                                Text(trait)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(.blue.opacity(0.1))
-                                    .foregroundStyle(.blue)
-                                    .clipShape(Capsule())
-                            }
-                        }
+                        Text(element.traits.joined(separator: ", "))
+                            .font(.Tree.elementTrait)
+                            .foregroundColor(Color.Tree.textSecondary)
                     }
                 }
 
@@ -148,9 +197,9 @@ struct ElementDetailView: View {
                 // Custom Actions
                 if !element.customActions.isEmpty {
                     DetailSection(title: "Custom Actions") {
-                        ForEach(element.customActions, id: \.self) { action in
-                            Label(action, systemImage: "hand.tap")
-                        }
+                        Text(element.customActions.joined(separator: ", "))
+                            .font(.Tree.elementTrait)
+                            .foregroundColor(Color.Tree.textSecondary)
                     }
                 }
             }
@@ -166,54 +215,11 @@ struct DetailSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.Tree.detailSectionTitle)
+                .foregroundStyle(Color.Tree.textTertiary)
                 .textCase(.uppercase)
             content()
         }
-    }
-}
-
-// Simple flow layout for traits
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = layout(proposal: proposal, subviews: subviews)
-        return result.size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = layout(proposal: proposal, subviews: subviews)
-        for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
-        }
-    }
-
-    private func layout(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
-        var positions: [CGPoint] = []
-        var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
-        var lineHeight: CGFloat = 0
-        var maxX: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-
-            if currentX + size.width > maxWidth && currentX > 0 {
-                currentX = 0
-                currentY += lineHeight + spacing
-                lineHeight = 0
-            }
-
-            positions.append(CGPoint(x: currentX, y: currentY))
-            lineHeight = max(lineHeight, size.height)
-            currentX += size.width + spacing
-            maxX = max(maxX, currentX)
-        }
-
-        return (CGSize(width: maxX, height: currentY + lineHeight), positions)
     }
 }
 
