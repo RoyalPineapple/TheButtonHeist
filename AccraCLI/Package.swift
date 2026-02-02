@@ -22,6 +22,13 @@ let package = Package(
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"])
             ]
+        ),
+        .testTarget(
+            name: "AccraCLITests",
+            dependencies: [
+                .product(name: "AccraCore", package: "AccraCore")
+            ],
+            path: "Tests"
         )
     ]
 )
