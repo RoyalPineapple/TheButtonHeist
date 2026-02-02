@@ -9,7 +9,7 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(client.discoveredDevices, selection: $selectedDevice) { device in
-                Label(device.name, systemImage: "iphone")
+                Label(client.displayName(for: device), systemImage: "iphone")
                     .tag(device)
             }
             .navigationTitle("Devices")
