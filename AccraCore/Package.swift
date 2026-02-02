@@ -9,7 +9,10 @@ let package = Package(
     ],
     products: [
         .library(name: "AccraCore", targets: ["AccraCore"]),
-        .library(name: "AccraHost", targets: ["AccraHost"]),
+        // AccraHost with auto-start: includes both Swift implementation and ObjC loader
+        .library(name: "AccraHost", targets: ["AccraHost", "AccraHostLoader"]),
+        // AccraHostCore: Swift implementation only, manual start required
+        .library(name: "AccraHostCore", targets: ["AccraHost"]),
         .library(name: "AccraClient", targets: ["AccraClient"])
     ],
     dependencies: [
@@ -20,6 +23,7 @@ let package = Package(
             name: "AccraCore",
             path: "Sources/AccraCore"
         ),
+        // Swift implementation of AccraHost
         .target(
             name: "AccraHost",
             dependencies: [
@@ -27,6 +31,13 @@ let package = Package(
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
             path: "Sources/AccraHost"
+        ),
+        // Objective-C loader that triggers auto-start via +load
+        .target(
+            name: "AccraHostLoader",
+            dependencies: ["AccraHost"],
+            path: "Sources/AccraHostLoader",
+            publicHeadersPath: "include"
         ),
         .target(
             name: "AccraClient",
