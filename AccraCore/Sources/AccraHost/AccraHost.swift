@@ -783,4 +783,45 @@ private extension AccessibilityMarker {
         }
     }
 }
+
+// MARK: - Auto-Start Entry Point
+
+/// Called from Objective-C +load method to auto-start the server.
+/// Configuration via environment variables (highest priority) or Info.plist:
+/// - ACCRA_HOST_DISABLE / AccraHostDisableAutoStart: Set to true to disable
+/// - ACCRA_HOST_POLLING_INTERVAL / AccraHostPollingInterval: Polling interval in seconds
+@_cdecl("AccraHost_autoStartFromLoad")
+public func accraHostAutoStartFromLoad() {
+    // Check ACCRA_HOST_DISABLE environment variable
+    if let envValue = ProcessInfo.processInfo.environment["ACCRA_HOST_DISABLE"],
+       ["true", "1", "yes"].contains(envValue.lowercased()) {
+        serverLog("Auto-start disabled via ACCRA_HOST_DISABLE")
+        return
+    }
+
+    // Check Info.plist AccraHostDisableAutoStart
+    if let disable = Bundle.main.object(forInfoDictionaryKey: "AccraHostDisableAutoStart") as? Bool, disable {
+        serverLog("Auto-start disabled via Info.plist")
+        return
+    }
+
+    // Get polling interval (default 1.0, minimum 0.5)
+    var interval: TimeInterval = 1.0
+    if let envInterval = ProcessInfo.processInfo.environment["ACCRA_HOST_POLLING_INTERVAL"],
+       let parsed = TimeInterval(envInterval) {
+        interval = max(0.5, parsed)
+    } else if let plistInterval = Bundle.main.object(forInfoDictionaryKey: "AccraHostPollingInterval") as? Double {
+        interval = max(0.5, plistInterval)
+    }
+
+    Task { @MainActor in
+        do {
+            try AccraHost.shared.start()
+            AccraHost.shared.startPolling(interval: interval)
+            serverLog("Auto-start completed (polling: \(interval)s)")
+        } catch {
+            serverLog("Auto-start failed: \(error)")
+        }
+    }
+}
 #endif
