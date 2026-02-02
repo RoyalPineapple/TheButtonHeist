@@ -16,6 +16,7 @@ let project = Project(
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
+        // Includes AccraHostLoader for automatic initialization via ObjC +load
         .target(
             name: "AccraHost",
             destinations: [.iPhone, .iPad],
@@ -23,7 +24,13 @@ let project = Project(
             bundleId: "com.accra.host",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
-            sources: ["AccraCore/Sources/AccraHost/**"],
+            sources: [
+                "AccraCore/Sources/AccraHost/**",
+                "AccraCore/Sources/AccraHostLoader/**",
+            ],
+            headers: .headers(
+                public: ["AccraCore/Sources/AccraHostLoader/include/**"]
+            ),
             dependencies: [
                 .target(name: "AccraCore"),
                 .external(name: "AccessibilitySnapshotParser"),
