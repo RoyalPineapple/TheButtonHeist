@@ -5,7 +5,7 @@ import CoreGraphics
 public let accraServiceType = "_a11ybridge._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "1.0"
+public let protocolVersion = "2.0"
 
 // MARK: - Client -> Server Messages
 
@@ -21,6 +21,72 @@ public enum ClientMessage: Codable {
 
     /// Ping for keepalive
     case ping
+
+    // MARK: - Action Commands
+
+    /// Activate an element (equivalent to VoiceOver double-tap)
+    case activate(ActionTarget)
+
+    /// Increment an adjustable element (e.g., slider)
+    case increment(ActionTarget)
+
+    /// Decrement an adjustable element
+    case decrement(ActionTarget)
+
+    /// Tap at a specific point or element's activation point
+    case tap(TapTarget)
+
+    /// Perform a custom action on an element
+    case performCustomAction(CustomActionTarget)
+
+    /// Request a screenshot of the current screen
+    case requestScreenshot
+}
+
+// MARK: - Action Targets
+
+/// Target for accessibility actions
+public struct ActionTarget: Codable, Sendable {
+    /// Element identifier (accessibilityIdentifier)
+    public let identifier: String?
+    /// Traversal index (alternative to identifier)
+    public let traversalIndex: Int?
+
+    public init(identifier: String? = nil, traversalIndex: Int? = nil) {
+        self.identifier = identifier
+        self.traversalIndex = traversalIndex
+    }
+}
+
+/// Target for tap actions
+public struct TapTarget: Codable, Sendable {
+    /// Use element's activation point
+    public let elementTarget: ActionTarget?
+    /// Or specify exact screen coordinates
+    public let pointX: Double?
+    public let pointY: Double?
+
+    public init(elementTarget: ActionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
+        self.elementTarget = elementTarget
+        self.pointX = pointX
+        self.pointY = pointY
+    }
+
+    public var point: CGPoint? {
+        guard let x = pointX, let y = pointY else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+}
+
+/// Target for custom actions
+public struct CustomActionTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget
+    public let actionName: String
+
+    public init(elementTarget: ActionTarget, actionName: String) {
+        self.elementTarget = elementTarget
+        self.actionName = actionName
+    }
 }
 
 // MARK: - Server -> Client Messages
@@ -37,6 +103,55 @@ public enum ServerMessage: Codable {
 
     /// Error message
     case error(String)
+
+    /// Result of an action command
+    case actionResult(ActionResult)
+
+    /// Screenshot response with PNG data
+    case screenshot(ScreenshotPayload)
+}
+
+// MARK: - Action Results
+
+public struct ActionResult: Codable, Sendable {
+    public let success: Bool
+    public let method: ActionMethod
+    public let message: String?
+
+    public init(success: Bool, method: ActionMethod, message: String? = nil) {
+        self.success = success
+        self.method = method
+        self.message = message
+    }
+}
+
+/// Payload containing screenshot data
+public struct ScreenshotPayload: Codable, Sendable {
+    /// Base64-encoded PNG data
+    public let pngData: String
+    /// Screen width in points
+    public let width: Double
+    /// Screen height in points
+    public let height: Double
+    /// Timestamp when screenshot was taken
+    public let timestamp: Date
+
+    public init(pngData: String, width: Double, height: Double, timestamp: Date = Date()) {
+        self.pngData = pngData
+        self.width = width
+        self.height = height
+        self.timestamp = timestamp
+    }
+}
+
+public enum ActionMethod: String, Codable, Sendable {
+    case accessibilityActivate
+    case accessibilityIncrement
+    case accessibilityDecrement
+    case syntheticTap
+    case customAction
+    case elementNotFound
+    case elementDeallocated
 }
 
 public struct ServerInfo: Codable, Sendable {
