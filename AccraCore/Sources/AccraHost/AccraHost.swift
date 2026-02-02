@@ -188,6 +188,8 @@ public final class AccraHost {
             handleTap(target, respond: respond)
         case .performCustomAction(let target):
             handleCustomAction(target, respond: respond)
+        case .requestScreenshot:
+            handleScreenshot(respond: respond)
         }
     }
 
@@ -228,12 +230,17 @@ public final class AccraHost {
 
     private func getRootView() -> UIView? {
         guard let windowScene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-              let window = windowScene.windows.first(where: { $0.isKeyWindow }),
-              let rootView = window.rootViewController?.view else {
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
             return nil
         }
-        return rootView
+
+        // Find the main app window, skipping overlay windows (high windowLevel)
+        // Overlay windows like TapVisualizerView use windowLevel > statusBar
+        let appWindow = windowScene.windows.first { window in
+            window.windowLevel <= .statusBar && window.rootViewController?.view != nil
+        }
+
+        return appWindow?.rootViewController?.view
     }
 
     // MARK: - Accessibility Observation
@@ -528,6 +535,42 @@ public final class AccraHost {
                 message: "Element no longer available"
             )), respond: respond)
         }
+    }
+
+    private func handleScreenshot(respond: @escaping (Data) -> Void) {
+        serverLog("Screenshot requested")
+
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+              let window = windowScene.windows.first(where: {
+                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
+              }) else {
+            sendMessage(.error("Could not access app window"), respond: respond)
+            return
+        }
+
+        // Use UIGraphicsImageRenderer with drawHierarchy - same as AccessibilitySnapshot library
+        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+        let image = renderer.image { _ in
+            // drawHierarchy captures the full visual appearance including SwiftUI content
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+
+        guard let pngData = image.pngData() else {
+            sendMessage(.error("Failed to encode screenshot as PNG"), respond: respond)
+            return
+        }
+
+        let base64String = pngData.base64EncodedString()
+        let payload = ScreenshotPayload(
+            pngData: base64String,
+            width: window.bounds.width,
+            height: window.bounds.height
+        )
+
+        sendMessage(.screenshot(payload), respond: respond)
+        serverLog("Screenshot sent: \(pngData.count) bytes")
     }
 
     // MARK: - Conversion

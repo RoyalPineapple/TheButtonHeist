@@ -38,6 +38,9 @@ public enum ClientMessage: Codable {
 
     /// Perform a custom action on an element
     case performCustomAction(CustomActionTarget)
+
+    /// Request a screenshot of the current screen
+    case requestScreenshot
 }
 
 // MARK: - Action Targets
@@ -103,6 +106,9 @@ public enum ServerMessage: Codable {
 
     /// Result of an action command
     case actionResult(ActionResult)
+
+    /// Screenshot response with PNG data
+    case screenshot(ScreenshotPayload)
 }
 
 // MARK: - Action Results
@@ -116,6 +122,25 @@ public struct ActionResult: Codable, Sendable {
         self.success = success
         self.method = method
         self.message = message
+    }
+}
+
+/// Payload containing screenshot data
+public struct ScreenshotPayload: Codable, Sendable {
+    /// Base64-encoded PNG data
+    public let pngData: String
+    /// Screen width in points
+    public let width: Double
+    /// Screen height in points
+    public let height: Double
+    /// Timestamp when screenshot was taken
+    public let timestamp: Date
+
+    public init(pngData: String, width: Double, height: Double, timestamp: Date = Date()) {
+        self.pngData = pngData
+        self.width = width
+        self.height = height
+        self.timestamp = timestamp
     }
 }
 
