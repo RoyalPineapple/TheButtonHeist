@@ -3,7 +3,7 @@ import AccraCore
 
 struct HierarchyListView: View {
     let elements: [AccessibilityElementData]
-    @State private var selectedElement: AccessibilityElementData?
+    @Binding var selectedElement: AccessibilityElementData?
     @State private var searchQuery = ""
 
     private var filteredElements: [AccessibilityElementData] {
@@ -17,32 +17,19 @@ struct HierarchyListView: View {
     }
 
     var body: some View {
-        HSplitView {
-            // Element list with search
-            VStack(spacing: 0) {
-                SearchBar(query: $searchQuery)
-                    .padding(TreeSpacing.unit)
+        VStack(spacing: 0) {
+            SearchBar(query: $searchQuery)
+                .padding(TreeSpacing.unit)
 
-                Divider()
+            Divider()
 
-                if filteredElements.isEmpty && !searchQuery.isEmpty {
-                    emptySearchView
-                } else {
-                    List(filteredElements, id: \.traversalIndex, selection: $selectedElement) { element in
-                        ElementRowView(element: element)
-                    }
-                }
-            }
-            .frame(minWidth: 300)
-
-            // Detail pane
-            if let element = selectedElement {
-                ElementDetailView(element: element)
-                    .frame(minWidth: 250)
+            if filteredElements.isEmpty && !searchQuery.isEmpty {
+                emptySearchView
             } else {
-                Text("Select an element")
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 250, maxWidth: .infinity, maxHeight: .infinity)
+                List(filteredElements, id: \.traversalIndex, selection: $selectedElement) { element in
+                    ElementRowView(element: element)
+                        .tag(element)
+                }
             }
         }
     }
@@ -224,38 +211,42 @@ struct DetailSection<Content: View>: View {
 }
 
 #Preview {
-    HierarchyListView(elements: [
-        AccessibilityElementData(
-            traversalIndex: 0,
-            description: "Hello, World!",
-            label: "Hello, World!",
-            value: nil,
-            traits: ["staticText"],
-            identifier: nil,
-            hint: nil,
-            frameX: 0,
-            frameY: 100,
-            frameWidth: 393,
-            frameHeight: 44,
-            activationPointX: 196.5,
-            activationPointY: 122,
-            customActions: []
-        ),
-        AccessibilityElementData(
-            traversalIndex: 1,
-            description: "Button",
-            label: "Tap me",
-            value: nil,
-            traits: ["button"],
-            identifier: "tapButton",
-            hint: "Double tap to activate",
-            frameX: 100,
-            frameY: 200,
-            frameWidth: 100,
-            frameHeight: 44,
-            activationPointX: 150,
-            activationPointY: 222,
-            customActions: ["Delete", "Edit"]
-        )
-    ])
+    @Previewable @State var selectedElement: AccessibilityElementData? = nil
+    HierarchyListView(
+        elements: [
+            AccessibilityElementData(
+                traversalIndex: 0,
+                description: "Hello, World!",
+                label: "Hello, World!",
+                value: nil,
+                traits: ["staticText"],
+                identifier: nil,
+                hint: nil,
+                frameX: 0,
+                frameY: 100,
+                frameWidth: 393,
+                frameHeight: 44,
+                activationPointX: 196.5,
+                activationPointY: 122,
+                customActions: []
+            ),
+            AccessibilityElementData(
+                traversalIndex: 1,
+                description: "Button",
+                label: "Tap me",
+                value: nil,
+                traits: ["button"],
+                identifier: "tapButton",
+                hint: "Double tap to activate",
+                frameX: 100,
+                frameY: 200,
+                frameWidth: 100,
+                frameHeight: 44,
+                activationPointX: 150,
+                activationPointY: 222,
+                customActions: ["Delete", "Edit"]
+            )
+        ],
+        selectedElement: $selectedElement
+    )
 }

@@ -5,8 +5,10 @@ struct AccraInspectorApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .frame(minWidth: 700, minHeight: 400)
         }
         .windowStyle(.automatic)
-        .defaultSize(width: 800, height: 600)
+        .windowResizability(.contentSize)
+        .defaultSize(width: 1000, height: 700)
     }
 }

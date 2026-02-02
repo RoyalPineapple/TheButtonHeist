@@ -14,6 +14,7 @@
 		0E4EB2D6B18BD0166DCAF1DE /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */; };
 		1650D477528A10BED2A10000 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730D418D450811891958C26A /* Messages.swift */; };
 		1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD98E01107CB9098131511E /* HierarchyListView.swift */; };
+		1DCA3AE4006D746570F9A840 /* ElementInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A300C4D5934A6959B84BF4 /* ElementInspectorView.swift */; };
 		29A7ED730AFD9987AF995384 /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C7256E3E6FE7156DE628154 /* TapVisualizerView.swift */; };
 		2C4B8CE2E57129345AD170E3 /* AccraClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F6C4308845B0F7F4ACE383 /* AccraClientTests.swift */; };
 		3274E3C8BF7E2DE7732EC41B /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
@@ -27,6 +28,8 @@
 		87724833B39CD07ED6E332E9 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF47470BD8C50843F41CF63 /* ConstantsTests.swift */; };
 		8ACCBDA516B8DCE5D55ABAAB /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 995843591B59CC2C9D139F61 /* HierarchyPayloadTests.swift */; };
 		91A06032B18B5C39E7AD7F60 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBD55D878CD719DBF9BB763 /* Typography.swift */; };
+		99C15EAC1A54340A9F912D99 /* ScreenshotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459913B7FBBDF6E4BEB51AC1 /* ScreenshotView.swift */; };
+		ACE23E8490EA1E8B6F008D4F /* ElementOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5BB9B6812F154CAD3DA5D38 /* ElementOverlayView.swift */; };
 		AF40CFDC9C60795FE1B143DC /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB73B8ABC01333DEAF4B384 /* ServerInfoTests.swift */; };
 		B0AA4CBE3F667668208EDB66 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E4E6771046B4EFBAAF423B /* ConnectionStateTests.swift */; };
 		B96617D47A795D1CD29668C9 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */; };
@@ -174,6 +177,7 @@
 		3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		373C97078255C2069EDC5593 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
+		459913B7FBBDF6E4BEB51AC1 /* ScreenshotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotView.swift; sourceTree = "<group>"; };
 		4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccraInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C8B750DAEDE8BB5353165FE /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		637411E075F2D94CBBC9810D /* AccraClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AccraClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -194,7 +198,10 @@
 		AF41A8690D5C0BF7592EBEE4 /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
 		B346481AC2A10BDF8A76F090 /* AccraInspectorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraInspectorApp.swift; sourceTree = "<group>"; };
 		B3F6C4308845B0F7F4ACE383 /* AccraClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraClientTests.swift; sourceTree = "<group>"; };
+		B8A300C4D5934A6959B84BF4 /* ElementInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementInspectorView.swift; sourceTree = "<group>"; };
+		C079A2C498745FCC29937EE1 /* AccraInspector.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AccraInspector.entitlements; sourceTree = "<group>"; };
 		C2DE31421A8C05275742CC0C /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		C5BB9B6812F154CAD3DA5D38 /* ElementOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementOverlayView.swift; sourceTree = "<group>"; };
 		CD8830CB0B325B9B4A442DE6 /* AccraHost-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraHost-Info.plist"; sourceTree = "<group>"; };
 		D55F99765F1D887713C0FA2A /* AccraCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraCoreTests.swift; sourceTree = "<group>"; };
 		DCCA1EA3637BF6382BAC2546 /* AccraCoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraCoreTests-Info.plist"; sourceTree = "<group>"; };
@@ -374,7 +381,10 @@
 			isa = PBXGroup;
 			children = (
 				373C97078255C2069EDC5593 /* ContentView.swift */,
+				B8A300C4D5934A6959B84BF4 /* ElementInspectorView.swift */,
+				C5BB9B6812F154CAD3DA5D38 /* ElementOverlayView.swift */,
 				6DD98E01107CB9098131511E /* HierarchyListView.swift */,
+				459913B7FBBDF6E4BEB51AC1 /* ScreenshotView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -427,6 +437,7 @@
 			isa = PBXGroup;
 			children = (
 				F720AB25EAC4F6C8F0A58490 /* Sources */,
+				C079A2C498745FCC29937EE1 /* AccraInspector.entitlements */,
 			);
 			path = AccraInspector;
 			sourceTree = "<group>";
@@ -665,7 +676,10 @@
 				0DF01716F52B5C9DB52D6515 /* Spacing.swift in Sources */,
 				91A06032B18B5C39E7AD7F60 /* Typography.swift in Sources */,
 				740E4F117E3F1F91F9779739 /* ContentView.swift in Sources */,
+				1DCA3AE4006D746570F9A840 /* ElementInspectorView.swift in Sources */,
+				ACE23E8490EA1E8B6F008D4F /* ElementOverlayView.swift in Sources */,
 				1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */,
+				99C15EAC1A54340A9F912D99 /* ScreenshotView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -758,6 +772,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AccraInspector/AccraInspector.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_PREVIEWS = YES;
@@ -1025,6 +1040,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = AccraInspector/AccraInspector.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_PREVIEWS = YES;
