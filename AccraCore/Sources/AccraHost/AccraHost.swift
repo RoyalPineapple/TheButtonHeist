@@ -28,7 +28,7 @@ public final class AccraHost {
     private let port: UInt16
     private let parser = AccessibilityHierarchyParser()
     private let touchInjector = TouchInjector()
-    private var cachedElements: [AccessibilityElement] = []
+    private var cachedElements: [AccessibilityMarker] = []
 
     private var isRunning = false
 
@@ -217,6 +217,9 @@ public final class AccraHost {
         let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let payload = HierarchyPayload(timestamp: Date(), elements: elements)
         sendMessage(.hierarchy(payload), respond: respond)
+
+        // Also send screenshot with initial hierarchy
+        broadcastScreenshot()
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
@@ -260,9 +263,6 @@ public final class AccraHost {
             name: UIAccessibility.voiceOverStatusDidChangeNotification,
             object: nil
         )
-        // Note: layoutChangedNotification and screenChangedNotification are for
-        // POSTING accessibility notifications, not observing them.
-        // Additional change detection would require app-level integration.
     }
 
     private func stopAccessibilityObservation() {
@@ -327,19 +327,49 @@ public final class AccraHost {
         // Only broadcast if hierarchy changed
         if currentHash != lastHierarchyHash {
             lastHierarchyHash = currentHash
-            let payload = HierarchyPayload(timestamp: Date(), elements: elements)
-            let message = ServerMessage.hierarchy(payload)
 
-            if let data = try? JSONEncoder().encode(message) {
+            // Broadcast hierarchy
+            let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+            if let data = try? JSONEncoder().encode(ServerMessage.hierarchy(payload)) {
                 socketServer?.broadcastToAll(data)
             }
-            serverLog("Polling detected change, broadcast to clients")
+
+            // Also broadcast screenshot when hierarchy changes
+            broadcastScreenshot()
+
+            serverLog("Polling detected change, broadcast hierarchy + screenshot")
+        }
+    }
+
+    private func broadcastScreenshot() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+              let window = windowScene.windows.first(where: {
+                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
+              }) else { return }
+
+        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+        let image = renderer.image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
+
+        guard let pngData = image.pngData() else { return }
+
+        let screenshotPayload = ScreenshotPayload(
+            pngData: pngData.base64EncodedString(),
+            width: window.bounds.width,
+            height: window.bounds.height
+        )
+
+        if let data = try? JSONEncoder().encode(ServerMessage.screenshot(screenshotPayload)) {
+            socketServer?.broadcastToAll(data)
         }
     }
 
     // MARK: - Action Handlers
 
-    private func findElement(for target: ActionTarget) -> AccessibilityElement? {
+    private func findElement(for target: ActionTarget) -> AccessibilityMarker? {
         if let identifier = target.identifier {
             return cachedElements.first { $0.identifier == identifier }
         }
@@ -492,10 +522,10 @@ public final class AccraHost {
         )), respond: respond)
     }
 
-    private func findElementAtPoint(_ point: CGPoint) -> AccessibilityElement? {
+    private func findElementAtPoint(_ point: CGPoint) -> AccessibilityMarker? {
         // Find the smallest element whose frame contains the point
         // Smaller elements are more specific (e.g., button vs container)
-        var bestMatch: AccessibilityElement?
+        var bestMatch: AccessibilityMarker?
         var bestArea: CGFloat = .greatestFiniteMagnitude
 
         for element in cachedElements {
@@ -625,6 +655,131 @@ private extension AccessibilityMarker.Shape {
         switch self {
         case let .frame(rect): return rect
         case let .path(path): return path.bounds
+        }
+    }
+}
+
+// MARK: - Action Closures Extension
+
+/// Extension providing action closures by finding the underlying view at runtime
+private extension AccessibilityMarker {
+    /// Find the view that corresponds to this marker by hit-testing at the activation point
+    private func findView() -> UIView? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let window = windowScene.windows.first(where: {
+                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
+              }) else {
+            return nil
+        }
+        return window.hitTest(activationPoint, with: nil)
+    }
+
+    /// Closure to activate the element (returns Bool indicating success)
+    var activate: (() -> Bool)? {
+        return {
+            guard let view = self.findView() else { return false }
+
+            // For UIControls, try sendActions first (most reliable)
+            if let control = view as? UIControl {
+                control.sendActions(for: .touchUpInside)
+                return true
+            }
+
+            // Walk up the view hierarchy looking for UIControl
+            var current: UIView? = view.superview
+            while let v = current {
+                if let control = v as? UIControl {
+                    control.sendActions(for: .touchUpInside)
+                    return true
+                }
+                current = v.superview
+            }
+
+            // Try accessibilityActivate on the hit view
+            if view.accessibilityActivate() {
+                return true
+            }
+
+            // For SwiftUI, try sending touch events directly
+            if self.simulateTouchOnView(view) {
+                return true
+            }
+
+            return false
+        }
+    }
+
+    /// Simulate a touch on a view by sending touchesBegan/Ended
+    private func simulateTouchOnView(_ view: UIView) -> Bool {
+        guard let window = view.window else { return false }
+
+        let point = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: window)
+
+        // Create a touch event using the private API
+        guard let touchClass = NSClassFromString("UITouch") as? NSObject.Type,
+              let touch = touchClass.init() as? UITouch else {
+            return false
+        }
+
+        // Set touch properties using KVC
+        touch.setValue(point, forKey: "locationInWindow")
+        touch.setValue(window, forKey: "window")
+        touch.setValue(view, forKey: "view")
+        touch.setValue(UITouch.Phase.began.rawValue, forKey: "phase")
+        touch.setValue(Date().timeIntervalSince1970, forKey: "timestamp")
+
+        let touches = Set([touch])
+        let event = UIEvent()
+
+        // Send touchesBegan
+        view.touchesBegan(touches, with: event)
+
+        // Update phase and send touchesEnded
+        touch.setValue(UITouch.Phase.ended.rawValue, forKey: "phase")
+        view.touchesEnded(touches, with: event)
+
+        return true
+    }
+
+    /// Closure to increment adjustable elements
+    var increment: (() -> Void)? {
+        guard traits.contains(.adjustable) else { return nil }
+        return {
+            guard let view = self.findView() else { return }
+            view.accessibilityIncrement()
+        }
+    }
+
+    /// Closure to decrement adjustable elements
+    var decrement: (() -> Void)? {
+        guard traits.contains(.adjustable) else { return nil }
+        return {
+            guard let view = self.findView() else { return }
+            view.accessibilityDecrement()
+        }
+    }
+
+    /// Closure to perform a custom action by name (returns Bool indicating success)
+    var performCustomAction: ((String) -> Bool)? {
+        guard !customActions.isEmpty else { return nil }
+        return { actionName in
+            guard let view = self.findView() else { return false }
+            // Get custom actions from the view
+            guard let actions = view.accessibilityCustomActions else { return false }
+            // Find the matching action
+            if let action = actions.first(where: { $0.name == actionName }) {
+                // Invoke the action via actionHandler (modern API)
+                if let handler = action.actionHandler {
+                    return handler(action)
+                }
+                // Legacy target-action approach
+                if let target = action.target {
+                    _ = (target as AnyObject).perform(action.selector, with: action)
+                    return true
+                }
+            }
+            return false
         }
     }
 }

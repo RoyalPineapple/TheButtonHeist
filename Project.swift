@@ -61,9 +61,12 @@ let project = Project(
             infoPlist: .extendingDefault(with: [
                 "NSPrincipalClass": "NSApplication",
                 "CFBundleDisplayName": "Accra Inspector",
+                "NSLocalNetworkUsageDescription": "Accra Inspector needs local network access to discover and connect to iOS apps running AccraHost.",
+                "NSBonjourServices": ["_a11ybridge._tcp"],
             ]),
             sources: ["AccraInspector/Sources/**"],
             resources: [],
+            entitlements: .file(path: "AccraInspector/AccraInspector.entitlements"),
             dependencies: [
                 .target(name: "AccraCore"),
                 .target(name: "AccraClient"),
