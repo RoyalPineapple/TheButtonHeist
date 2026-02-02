@@ -62,5 +62,57 @@ let project = Project(
                 .target(name: "AccraClient"),
             ]
         ),
+
+        // MARK: - AccraCore Tests
+        .target(
+            name: "AccraCoreTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.accra.core.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["AccraCore/Tests/AccraCoreTests/**"],
+            dependencies: [
+                .target(name: "AccraCore"),
+            ]
+        ),
+
+        // MARK: - AccraClient Tests
+        .target(
+            name: "AccraClientTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.accra.client.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["AccraCore/Tests/AccraClientTests/**"],
+            dependencies: [
+                .target(name: "AccraClient"),
+                .target(name: "AccraCore"),
+            ]
+        ),
+    ],
+    schemes: [
+        .scheme(
+            name: "AccraCoreTests",
+            buildAction: .buildAction(targets: [
+                .target("AccraCoreTests"),
+                .target("AccraCore"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("AccraCoreTests")),
+            ])
+        ),
+        .scheme(
+            name: "AccraClientTests",
+            buildAction: .buildAction(targets: [
+                .target("AccraClientTests"),
+                .target("AccraClient"),
+                .target("AccraCore"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("AccraClientTests")),
+            ])
+        ),
     ]
 )

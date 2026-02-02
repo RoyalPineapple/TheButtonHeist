@@ -1,10 +1,16 @@
 #if canImport(UIKit)
 import UIKit
-import Network
 import AccessibilitySnapshotParser
 import AccraCore
+import os.log
 
-/// Server that exposes accessibility hierarchy over WebSocket
+/// Debug logging helper - uses NSLog for maximum visibility
+private func serverLog(_ message: String) {
+    NSLog("[AccraHost] %@", message)
+}
+
+/// Server that exposes accessibility hierarchy over TCP
+/// Note: All access should be from the main thread
 @MainActor
 public final class AccraHost {
 
@@ -14,13 +20,15 @@ public final class AccraHost {
 
     // MARK: - Properties
 
-    private var listener: NWListener?
-    private var connections: [NWConnection] = []
+    private var socketServer: SimpleSocketServer?
     private var netService: NetService?
-    private var subscribedConnections: Set<ObjectIdentifier> = []
+    private var subscribedClients: Set<Int> = []
+    private var clientFileDescriptors: [Int: Int32] = [:]
 
     private let port: UInt16
     private let parser = AccessibilityHierarchyParser()
+    private let touchInjector = TouchInjector()
+    private var cachedElements: [AccessibilityElement] = []
 
     private var isRunning = false
 
@@ -46,54 +54,55 @@ public final class AccraHost {
     public func start() throws {
         guard !isRunning else { return }
 
-        // Create WebSocket listener
-        let parameters = NWParameters.tcp
-        let wsOptions = NWProtocolWebSocket.Options()
-        parameters.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
+        serverLog("Starting AccraHost with SimpleSocketServer...")
 
-        let listenerPort: NWEndpoint.Port = port == 0 ? .any : NWEndpoint.Port(rawValue: port)!
-        let listener = try NWListener(using: parameters, on: listenerPort)
+        let server = SimpleSocketServer()
 
-        listener.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                self?.handleListenerState(state)
-            }
+        server.onClientConnected = { [weak self] clientId in
+            serverLog("Client \(clientId) connected")
+            self?.handleClientConnected(clientId)
         }
 
-        listener.newConnectionHandler = { [weak self] connection in
-            Task { @MainActor in
-                self?.handleNewConnection(connection)
-            }
+        server.onClientDisconnected = { [weak self] clientId in
+            serverLog("Client \(clientId) disconnected")
+            self?.subscribedClients.remove(clientId)
+            self?.clientFileDescriptors.removeValue(forKey: clientId)
         }
 
-        listener.start(queue: .main)
-        self.listener = listener
+        server.onDataReceived = { [weak self] data, respond in
+            self?.handleClientMessage(data, respond: respond)
+        }
+
+        let actualPort = try server.start(port: port)
+        self.socketServer = server
         isRunning = true
+
+        serverLog("Server listening on port \(actualPort)")
+        advertiseService(port: actualPort)
 
         // Start observing accessibility changes
         startAccessibilityObservation()
 
-        print("[AccraHost] Server starting...")
+        serverLog("Server started successfully")
     }
 
     /// Stop the server
     public func stop() {
         isRunning = false
         stopPolling()
-        listener?.cancel()
-        listener = nil
 
-        for connection in connections {
-            connection.cancel()
-        }
-        connections.removeAll()
+        socketServer?.stop()
+        socketServer = nil
 
         netService?.stop()
         netService = nil
 
+        subscribedClients.removeAll()
+        clientFileDescriptors.removeAll()
+
         stopAccessibilityObservation()
 
-        print("[AccraHost] Server stopped")
+        serverLog("Server stopped")
     }
 
     /// Notify the bridge that the UI has changed and subscribers should receive an update.
@@ -110,7 +119,7 @@ public final class AccraHost {
         pollingInterval = UInt64(clampedInterval * 1_000_000_000)
         isPollingEnabled = true
         startPollingLoop()
-        print("[AccraHost] Polling enabled (interval: \(clampedInterval)s)")
+        serverLog(" Polling enabled (interval: \(clampedInterval)s)")
     }
 
     /// Disable polling for automatic updates
@@ -120,23 +129,7 @@ public final class AccraHost {
         pollingTask = nil
     }
 
-    // MARK: - Private Methods - Listener
-
-    private func handleListenerState(_ state: NWListener.State) {
-        switch state {
-        case .ready:
-            if let port = listener?.port {
-                print("[AccraHost] Listening on port \(port.rawValue)")
-                advertiseService(port: port.rawValue)
-            }
-        case .failed(let error):
-            print("[AccraHost] Listener failed: \(error)")
-        case .cancelled:
-            print("[AccraHost] Listener cancelled")
-        default:
-            break
-        }
-    }
+    // MARK: - Private Methods - Service Advertisement
 
     private func advertiseService(port: UInt16) {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
@@ -149,49 +142,56 @@ public final class AccraHost {
             port: Int32(port)
         )
         netService?.publish()
-        print("[AccraHost] Advertising as '\(serviceName)' on port \(port)")
+        serverLog("Advertising as '\(serviceName)' on port \(port)")
     }
 
-    // MARK: - Private Methods - Connections
+    // MARK: - Private Methods - Client Handling
 
-    private func handleNewConnection(_ connection: NWConnection) {
-        connections.append(connection)
-
-        connection.stateUpdateHandler = { [weak self, weak connection] state in
-            guard let connection = connection else { return }
-            Task { @MainActor in
-                self?.handleConnectionState(state, for: connection)
-            }
-        }
-
-        connection.start(queue: .main)
-        receiveMessage(on: connection)
-
+    private func handleClientConnected(_ clientId: Int) {
         // Send server info immediately
-        sendServerInfo(to: connection)
+        sendServerInfo(respond: { [weak self] data in
+            self?.socketServer?.broadcastToAll(data)
+        })
     }
 
-    private func handleConnectionState(_ state: NWConnection.State, for connection: NWConnection) {
-        switch state {
-        case .ready:
-            print("[AccraHost] Client connected")
-        case .failed(let error):
-            print("[AccraHost] Connection failed: \(error)")
-            removeConnection(connection)
-        case .cancelled:
-            print("[AccraHost] Client disconnected")
-            removeConnection(connection)
-        default:
-            break
+    private func handleClientMessage(_ data: Data, respond: @escaping (Data) -> Void) {
+        guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
+            serverLog("Failed to decode client message")
+            if let str = String(data: data, encoding: .utf8) {
+                serverLog("Raw message: \(str.prefix(200))")
+            }
+            return
+        }
+
+        serverLog("Received message: \(message)")
+
+        switch message {
+        case .requestHierarchy:
+            serverLog("Hierarchy requested")
+            sendHierarchy(respond: respond)
+        case .subscribe:
+            serverLog("Client subscribed to updates")
+            // Note: with socket server we broadcast to all, so subscribed is implicit
+        case .unsubscribe:
+            serverLog("Client unsubscribed from updates")
+        case .ping:
+            sendMessage(.pong, respond: respond)
+
+        // Action handling
+        case .activate(let target):
+            handleActivate(target, respond: respond)
+        case .increment(let target):
+            handleIncrement(target, respond: respond)
+        case .decrement(let target):
+            handleDecrement(target, respond: respond)
+        case .tap(let target):
+            handleTap(target, respond: respond)
+        case .performCustomAction(let target):
+            handleCustomAction(target, respond: respond)
         }
     }
 
-    private func removeConnection(_ connection: NWConnection) {
-        connections.removeAll { $0 === connection }
-        subscribedConnections.remove(ObjectIdentifier(connection))
-    }
-
-    private func sendServerInfo(to connection: NWConnection) {
+    private func sendServerInfo(respond: @escaping (Data) -> Void) {
         let screenBounds = UIScreen.main.bounds
         let info = ServerInfo(
             protocolVersion: protocolVersion,
@@ -202,64 +202,28 @@ public final class AccraHost {
             screenWidth: screenBounds.width,
             screenHeight: screenBounds.height
         )
-        send(.info(info), to: connection)
+        sendMessage(.info(info), respond: respond)
     }
 
-    // MARK: - Private Methods - Message Handling
-
-    private func receiveMessage(on connection: NWConnection) {
-        connection.receiveMessage { [weak self, weak connection] data, context, isComplete, error in
-            guard let self = self, let connection = connection else { return }
-
-            if let data = data, let message = try? JSONDecoder().decode(ClientMessage.self, from: data) {
-                Task { @MainActor in
-                    self.handleClientMessage(message, from: connection)
-                }
-            }
-
-            if error == nil {
-                Task { @MainActor in
-                    self.receiveMessage(on: connection)
-                }
-            }
-        }
-    }
-
-    private func handleClientMessage(_ message: ClientMessage, from connection: NWConnection) {
-        switch message {
-        case .requestHierarchy:
-            print("[AccraHost] Hierarchy requested")
-            sendHierarchy(to: connection)
-        case .subscribe:
-            print("[AccraHost] Client subscribed to updates")
-            subscribedConnections.insert(ObjectIdentifier(connection))
-        case .unsubscribe:
-            print("[AccraHost] Client unsubscribed from updates")
-            subscribedConnections.remove(ObjectIdentifier(connection))
-        case .ping:
-            send(.pong, to: connection)
-        }
-    }
-
-    private func sendHierarchy(to connection: NWConnection) {
+    private func sendHierarchy(respond: @escaping (Data) -> Void) {
         guard let rootView = getRootView() else {
-            send(.error("Could not access root view"), to: connection)
+            sendMessage(.error("Could not access root view"), respond: respond)
             return
         }
 
-        let markers = parser.parseAccessibilityElements(in: rootView)
-        let elements = markers.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        cachedElements = parser.parseAccessibilityElements(in: rootView)
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let payload = HierarchyPayload(timestamp: Date(), elements: elements)
-        send(.hierarchy(payload), to: connection)
+        sendMessage(.hierarchy(payload), respond: respond)
     }
 
-    private func send(_ message: ServerMessage, to connection: NWConnection) {
-        guard let data = try? JSONEncoder().encode(message) else { return }
-
-        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
-        let context = NWConnection.ContentContext(identifier: "message", metadata: [metadata])
-
-        connection.send(content: data, contentContext: context, isComplete: true, completion: .idempotent)
+    private func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
+        guard let data = try? JSONEncoder().encode(message) else {
+            serverLog("Failed to encode message")
+            return
+        }
+        serverLog("Sending \(data.count) bytes")
+        respond(data)
     }
 
     private func getRootView() -> UIView? {
@@ -313,22 +277,21 @@ public final class AccraHost {
     }
 
     private func broadcastHierarchyUpdate() {
-        guard !subscribedConnections.isEmpty else { return }
         guard let rootView = getRootView() else { return }
 
-        let markers = parser.parseAccessibilityElements(in: rootView)
-        let elements = markers.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        cachedElements = parser.parseAccessibilityElements(in: rootView)
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let payload = HierarchyPayload(timestamp: Date(), elements: elements)
         let message = ServerMessage.hierarchy(payload)
 
         // Update hash for polling comparison
         lastHierarchyHash = elements.hashValue
 
-        for connection in connections where subscribedConnections.contains(ObjectIdentifier(connection)) {
-            send(message, to: connection)
+        if let data = try? JSONEncoder().encode(message) {
+            socketServer?.broadcastToAll(data)
         }
 
-        print("[AccraHost] Broadcast hierarchy update to \(subscribedConnections.count) client(s)")
+        serverLog("Broadcast hierarchy update")
     }
 
     // MARK: - Polling
@@ -346,11 +309,10 @@ public final class AccraHost {
     }
 
     private func checkForChanges() {
-        guard !subscribedConnections.isEmpty else { return }
         guard let rootView = getRootView() else { return }
 
-        let markers = parser.parseAccessibilityElements(in: rootView)
-        let elements = markers.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        cachedElements = parser.parseAccessibilityElements(in: rootView)
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
 
         // Compute hash of current hierarchy
         let currentHash = elements.hashValue
@@ -361,10 +323,210 @@ public final class AccraHost {
             let payload = HierarchyPayload(timestamp: Date(), elements: elements)
             let message = ServerMessage.hierarchy(payload)
 
-            for connection in connections where subscribedConnections.contains(ObjectIdentifier(connection)) {
-                send(message, to: connection)
+            if let data = try? JSONEncoder().encode(message) {
+                socketServer?.broadcastToAll(data)
             }
-            print("[AccraHost] Polling detected change, broadcast to \(subscribedConnections.count) client(s)")
+            serverLog("Polling detected change, broadcast to clients")
+        }
+    }
+
+    // MARK: - Action Handlers
+
+    private func findElement(for target: ActionTarget) -> AccessibilityElement? {
+        if let identifier = target.identifier {
+            return cachedElements.first { $0.identifier == identifier }
+        }
+        if let index = target.traversalIndex, index >= 0, index < cachedElements.count {
+            return cachedElements[index]
+        }
+        return nil
+    }
+
+    private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+        // Refresh hierarchy to get fresh closures
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+
+        guard let element = findElement(for: target) else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .elementNotFound,
+                message: "Element not found for target"
+            )), respond: respond)
+            return
+        }
+
+        // Try accessibility activate first
+        if let activate = element.activate {
+            if activate() {
+                TapVisualizerView.showTap(at: element.activationPoint)
+                sendMessage(.actionResult(ActionResult(
+                    success: true,
+                    method: .accessibilityActivate
+                )), respond: respond)
+                return
+            }
+        }
+
+        // Fallback to synthetic tap at activation point
+        if touchInjector.tap(at: element.activationPoint) {
+            TapVisualizerView.showTap(at: element.activationPoint)
+            sendMessage(.actionResult(ActionResult(
+                success: true,
+                method: .syntheticTap
+            )), respond: respond)
+            return
+        }
+
+        sendMessage(.actionResult(ActionResult(
+            success: false,
+            method: .accessibilityActivate,
+            message: "Both accessibilityActivate and synthetic tap failed"
+        )), respond: respond)
+    }
+
+    private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+
+        guard let element = findElement(for: target) else {
+            sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
+            return
+        }
+
+        if let increment = element.increment {
+            increment()
+            TapVisualizerView.showTap(at: element.activationPoint)
+            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityIncrement)), respond: respond)
+        } else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .elementDeallocated,
+                message: "Element no longer available"
+            )), respond: respond)
+        }
+    }
+
+    private func handleDecrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+
+        guard let element = findElement(for: target) else {
+            sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
+            return
+        }
+
+        if let decrement = element.decrement {
+            decrement()
+            TapVisualizerView.showTap(at: element.activationPoint)
+            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityDecrement)), respond: respond)
+        } else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .elementDeallocated,
+                message: "Element no longer available"
+            )), respond: respond)
+        }
+    }
+
+    private func handleTap(_ target: TapTarget, respond: @escaping (Data) -> Void) {
+        // Refresh hierarchy for fresh closures
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+
+        if let elementTarget = target.elementTarget {
+            guard let element = findElement(for: elementTarget) else {
+                sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
+                return
+            }
+            // Use activate closure if available
+            if let activate = element.activate, activate() {
+                TapVisualizerView.showTap(at: element.activationPoint)
+                sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+                return
+            }
+            // Fall back to synthetic tap at activation point
+            let success = touchInjector.tap(at: element.activationPoint)
+            if success {
+                TapVisualizerView.showTap(at: element.activationPoint)
+            }
+            sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTap)), respond: respond)
+            return
+        }
+
+        if let point = target.point {
+            // Find accessibility element containing this point
+            if let element = findElementAtPoint(point) {
+                serverLog("Found element at point: \(element.identifier ?? "no-id")")
+                // Use activate closure if available
+                if let activate = element.activate, activate() {
+                    TapVisualizerView.showTap(at: point)
+                    sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+                    return
+                }
+            }
+            // Fall back to TouchInjector
+            let success = touchInjector.tap(at: point)
+            if success {
+                TapVisualizerView.showTap(at: point)
+            }
+            sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTap)), respond: respond)
+            return
+        }
+
+        sendMessage(.actionResult(ActionResult(
+            success: false,
+            method: .elementNotFound,
+            message: "No target specified"
+        )), respond: respond)
+    }
+
+    private func findElementAtPoint(_ point: CGPoint) -> AccessibilityElement? {
+        // Find the smallest element whose frame contains the point
+        // Smaller elements are more specific (e.g., button vs container)
+        var bestMatch: AccessibilityElement?
+        var bestArea: CGFloat = .greatestFiniteMagnitude
+
+        for element in cachedElements {
+            let frame = element.shape.frame
+            if frame.contains(point) {
+                let area = frame.width * frame.height
+                if area < bestArea {
+                    bestArea = area
+                    bestMatch = element
+                }
+            }
+        }
+        return bestMatch
+    }
+
+    private func handleCustomAction(_ target: CustomActionTarget, respond: @escaping (Data) -> Void) {
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+
+        guard let element = findElement(for: target.elementTarget) else {
+            sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
+            return
+        }
+
+        if let performAction = element.performCustomAction {
+            let success = performAction(target.actionName)
+            sendMessage(.actionResult(ActionResult(
+                success: success,
+                method: .customAction,
+                message: success ? nil : "Action '\(target.actionName)' not found or failed"
+            )), respond: respond)
+        } else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .elementDeallocated,
+                message: "Element no longer available"
+            )), respond: respond)
         }
     }
 
