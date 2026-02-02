@@ -21,6 +21,26 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
         lhs.id == rhs.id
     }
+
+    /// Parse the service name to extract app name and device name
+    /// Service name format: "AppName-DeviceName"
+    public var parsedName: (appName: String, deviceName: String)? {
+        guard let lastDashIndex = name.lastIndex(of: "-") else { return nil }
+        let appName = String(name[..<lastDashIndex])
+        let deviceName = String(name[name.index(after: lastDashIndex)...])
+        guard !appName.isEmpty && !deviceName.isEmpty else { return nil }
+        return (appName, deviceName)
+    }
+
+    /// App name extracted from service name
+    public var appName: String {
+        parsedName?.appName ?? name
+    }
+
+    /// Device name extracted from service name
+    public var deviceName: String {
+        parsedName?.deviceName ?? ""
+    }
 }
 
 /// Client for discovering and connecting to iOS apps running AccraHost
@@ -217,5 +237,28 @@ public final class AccraClient: ObservableObject {
                 return "Not connected to device"
             }
         }
+    }
+
+    // MARK: - Display Names
+
+    /// Compute display name for a device, with disambiguation if multiple devices have the same app
+    /// Prefers app name, appends device name in parentheses only when needed
+    public func displayName(for device: DiscoveredDevice) -> String {
+        let appName = device.appName
+
+        // Check if disambiguation is needed (multiple devices with same app name)
+        let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
+
+        if sameAppDevices.count > 1 {
+            return "\(appName) (\(device.deviceName))"
+        } else {
+            return appName
+        }
+    }
+
+    /// Display name for the currently connected device
+    public var connectedDeviceDisplayName: String? {
+        guard let device = connectedDevice else { return nil }
+        return displayName(for: device)
     }
 }
