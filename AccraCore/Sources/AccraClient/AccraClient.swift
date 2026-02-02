@@ -1,6 +1,9 @@
 import Foundation
 import Network
 import AccraCore
+import os.log
+
+private let logger = Logger(subsystem: "com.accra.client", category: "client")
 
 /// A discovered iOS device running AccraHost
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
@@ -33,6 +36,7 @@ public final class AccraClient: ObservableObject {
     @Published public private(set) var connectedDevice: DiscoveredDevice?
     @Published public private(set) var serverInfo: ServerInfo?
     @Published public private(set) var currentHierarchy: HierarchyPayload?
+    @Published public private(set) var currentScreenshot: ScreenshotPayload?
     @Published public private(set) var isDiscovering: Bool = false
     @Published public private(set) var connectionState: ConnectionState = .disconnected
 
@@ -65,22 +69,30 @@ public final class AccraClient: ObservableObject {
     // MARK: - Discovery
 
     public func startDiscovery() {
-        guard !isDiscovering else { return }
+        logger.info("startDiscovery called, isDiscovering=\(self.isDiscovering)")
+        guard !isDiscovering else {
+            logger.info("Already discovering, skipping")
+            return
+        }
 
         discoveredDevices.removeAll()
         discovery = DeviceDiscovery()
         discovery?.onDeviceFound = { [weak self] device in
+            logger.info("Device found callback: \(device.name)")
             self?.discoveredDevices.append(device)
             self?.onDeviceDiscovered?(device)
         }
         discovery?.onDeviceLost = { [weak self] device in
+            logger.info("Device lost callback: \(device.name)")
             self?.discoveredDevices.removeAll { $0.id == device.id }
             self?.onDeviceLost?(device)
         }
         discovery?.onStateChange = { [weak self] isReady in
+            logger.info("Discovery state changed: isReady=\(isReady)")
             self?.isDiscovering = isReady
         }
         discovery?.start()
+        logger.info("Discovery started")
     }
 
     public func stopDiscovery() {
@@ -109,6 +121,7 @@ public final class AccraClient: ObservableObject {
             self?.connectedDevice = nil
             self?.serverInfo = nil
             self?.currentHierarchy = nil
+            self?.currentScreenshot = nil
             self?.onDisconnected?(error)
         }
 
@@ -127,6 +140,7 @@ public final class AccraClient: ObservableObject {
         }
 
         connection?.onScreenshot = { [weak self] payload in
+            self?.currentScreenshot = payload
             self?.onScreenshot?(payload)
         }
 
@@ -144,6 +158,7 @@ public final class AccraClient: ObservableObject {
         connectedDevice = nil
         serverInfo = nil
         currentHierarchy = nil
+        currentScreenshot = nil
     }
 
     // MARK: - Commands
