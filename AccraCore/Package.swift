@@ -32,6 +32,11 @@ let package = Package(
             name: "AccraClient",
             dependencies: ["AccraCore"],
             path: "Sources/AccraClient"
+        ),
+        .testTarget(
+            name: "AccraCoreTests",
+            dependencies: ["AccraCore"],
+            path: "Tests/AccraCoreTests"
         )
     ]
 )

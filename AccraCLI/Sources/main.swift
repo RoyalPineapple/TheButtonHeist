@@ -5,19 +5,30 @@ import Foundation
 struct Accra: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "accra",
-        abstract: "Inspect iOS app accessibility hierarchy over the network.",
+        abstract: "Inspect and interact with iOS app accessibility hierarchy.",
         discussion: """
             Connects to an iOS app running AccraHost and displays the accessibility
-            element hierarchy. Useful for accessibility testing and debugging
-            SwiftUI/UIKit apps.
+            element hierarchy. Useful for accessibility testing, debugging, and
+            automation of SwiftUI/UIKit apps.
 
             Examples:
               accra                     # Interactive watch mode
-              accra --once              # Single snapshot, then exit
-              accra --format json       # JSON output for scripting
-              accra -q --once | jq .    # Quiet mode, pipe to jq
+              accra watch --once        # Single snapshot, then exit
+              accra action --identifier "myButton"   # Activate an element
+              accra action --type tap --x 100 --y 200  # Tap coordinates
             """,
-        version: "1.0.0"
+        version: "2.0.0",
+        subcommands: [WatchCommand.self, ActionCommand.self],
+        defaultSubcommand: WatchCommand.self
+    )
+}
+
+// MARK: - Watch Command
+
+struct WatchCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "watch",
+        abstract: "Watch accessibility hierarchy in real-time"
     )
 
     @Option(name: .shortAndLong, help: "Output format: human, json")
