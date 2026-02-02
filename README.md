@@ -336,6 +336,15 @@ Bonjour service type: `_a11ybridge._tcp`
 - Check that `startPolling()` is called
 - The root view must be accessible to UIAccessibility
 
+## Documentation
+
+- [Contributing Guide](CONTRIBUTING.md) — How to contribute to Accra
+- [Changelog](CHANGELOG.md) — Version history
+- [Architecture](docs/ARCHITECTURE.md) — System design and data flow
+- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Complete protocol specification
+- [API Reference](docs/API.md) — Detailed API documentation
+- [Design System](docs/DESIGN-SYSTEM.md) — Inspector UI guidelines
+
 ## License
 
 MIT
