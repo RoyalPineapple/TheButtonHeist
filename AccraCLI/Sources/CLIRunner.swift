@@ -90,7 +90,7 @@ final class CLIRunner {
             guard let self = self else { return }
             if self.client.connectedDevice == nil {
                 if !self.options.quiet {
-                    logStatus("Found device: \(device.name)")
+                    logStatus("Found: \(self.client.displayName(for: device))")
                     logStatus("Connecting...")
                 }
                 self.client.connect(to: device)
@@ -101,11 +101,12 @@ final class CLIRunner {
         client.onConnected = { [weak self] info in
             guard let self = self else { return }
             if !self.options.quiet {
-                logStatus("Connected")
+                let displayName = self.client.connectedDeviceDisplayName ?? info.appName
+                logStatus("Connected to \(displayName)")
             }
             if self.options.verbose {
-                logStatus("App: \(info.appName) (\(info.bundleIdentifier))")
-                logStatus("Device: \(info.deviceName) - iOS \(info.systemVersion)")
+                logStatus("  Bundle: \(info.bundleIdentifier)")
+                logStatus("  Device: \(info.deviceName) - iOS \(info.systemVersion)")
             }
 
             // In watch mode with human format, enable keyboard
