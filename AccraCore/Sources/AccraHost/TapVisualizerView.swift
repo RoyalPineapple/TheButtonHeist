@@ -1,64 +1,99 @@
 #if canImport(UIKit)
 import UIKit
 
-/// Visual indicator for tap actions, styled like iOS Simulator's touch indicators.
-/// Shows a white circle that scales up and fades out.
+/// Passthrough view controller for tap overlay
 @MainActor
-final class TapVisualizerView: UIView {
+private class TapOverlayViewController: UIViewController {
+    override func loadView() {
+        let v = PassthroughView()
+        v.backgroundColor = .clear
+        self.view = v
+    }
+}
 
-    // Simulator-style constants
-    private static let diameter: CGFloat = 44.0
-    private static let borderWidth: CGFloat = 2.0
-    private static let fillColor = UIColor.white.withAlphaComponent(0.3)
-    private static let borderColor = UIColor.white.withAlphaComponent(0.8)
-    private static let animationDuration: TimeInterval = 0.4
+/// View that passes through all touches
+@MainActor
+private class PassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        return nil
+    }
+}
 
-    init(center point: CGPoint) {
-        let radius = Self.diameter / 2.0
-        let frame = CGRect(
-            x: point.x - radius,
-            y: point.y - radius,
-            width: Self.diameter,
-            height: Self.diameter
-        )
-        super.init(frame: frame)
+/// Passthrough window for tap overlay
+@MainActor
+private class TapOverlayWindow: UIWindow {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        return nil
+    }
+}
 
-        backgroundColor = Self.fillColor
-        layer.borderWidth = Self.borderWidth
-        layer.borderColor = Self.borderColor.cgColor
+/// Circle view for tap visualization
+@MainActor
+private class TapCircleView: UIView {
+    init(at point: CGPoint, diameter: CGFloat) {
+        let radius = diameter / 2
+        super.init(frame: CGRect(x: point.x - radius, y: point.y - radius,
+                                 width: diameter, height: diameter))
+        backgroundColor = UIColor.white.withAlphaComponent(0.5)
         layer.cornerRadius = radius
+        layer.borderWidth = 2
+        layer.borderColor = UIColor.white.withAlphaComponent(0.9).cgColor
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOffset = .zero
+        layer.shadowRadius = 4
+        layer.shadowOpacity = 0.4
         isUserInteractionEnabled = false
     }
 
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    required init?(coder: NSCoder) { fatalError() }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return nil
     }
+}
 
-    /// Show the tap animation at the given point, then remove from view hierarchy.
-    static func showTap(at point: CGPoint) {
-        guard let window = getKeyWindow() else { return }
+/// Visual indicator for tap actions. Shows a white 40x40 circle that scales up and fades out.
+@MainActor
+public enum TapVisualizerView {
 
-        let visualizer = TapVisualizerView(center: point)
-        window.addSubview(visualizer)
+    private static var overlayWindow: TapOverlayWindow?
+    private static let diameter: CGFloat = 40.0
+    private static let animationDuration: TimeInterval = 0.8
 
-        // Scale up and fade out
-        UIView.animate(withDuration: animationDuration, delay: 0, options: .curveEaseOut) {
-            visualizer.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
-            visualizer.alpha = 0
-        } completion: { _ in
-            visualizer.removeFromSuperview()
+    /// Show the tap animation at the given point
+    public static func showTap(at point: CGPoint) {
+        // Get active window scene
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) else {
+            return
         }
-    }
 
-    private static func getKeyWindow() -> UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }
+        // Create overlay window if needed
+        if overlayWindow == nil || overlayWindow?.windowScene !== windowScene {
+            let window = TapOverlayWindow(windowScene: windowScene)
+            window.frame = windowScene.screen.bounds
+            window.backgroundColor = .clear
+            window.windowLevel = .statusBar + 100
+            window.rootViewController = TapOverlayViewController()
+            window.isUserInteractionEnabled = false
+            window.makeKeyAndVisible()
+            overlayWindow = window
+        }
+
+        guard let rootView = overlayWindow?.rootViewController?.view else { return }
+
+        // Create and add circle
+        let circle = TapCircleView(at: point, diameter: diameter)
+        rootView.addSubview(circle)
+
+        // Animate: scale up and fade out
+        UIView.animate(withDuration: animationDuration, delay: 0, options: .curveEaseOut) {
+            circle.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            circle.alpha = 0
+        } completion: { _ in
+            circle.removeFromSuperview()
+        }
     }
 }
 #endif

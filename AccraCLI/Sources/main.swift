@@ -18,7 +18,7 @@ struct Accra: AsyncParsableCommand {
               accra action --type tap --x 100 --y 200  # Tap coordinates
             """,
         version: "2.0.0",
-        subcommands: [WatchCommand.self, ActionCommand.self],
+        subcommands: [WatchCommand.self, ActionCommand.self, ScreenshotCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }

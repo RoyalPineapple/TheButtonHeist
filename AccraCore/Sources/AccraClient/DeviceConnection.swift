@@ -23,6 +23,7 @@ final class DeviceConnection {
     var onServerInfo: ((ServerInfo) -> Void)?
     var onHierarchy: ((HierarchyPayload) -> Void)?
     var onActionResult: ((ActionResult) -> Void)?
+    var onScreenshot: ((ScreenshotPayload) -> Void)?
     var onError: ((String) -> Void)?
 
     init(device: DiscoveredDevice) {
@@ -223,6 +224,9 @@ final class DeviceConnection {
             onError?(errorMessage)
         case .pong:
             debug("Received pong")
+        case .screenshot(let payload):
+            debug("Received screenshot: \(payload.pngData.count) chars base64")
+            onScreenshot?(payload)
         }
     }
 }

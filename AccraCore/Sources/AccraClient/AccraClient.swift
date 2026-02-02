@@ -51,6 +51,7 @@ public final class AccraClient: ObservableObject {
     public var onDisconnected: ((Error?) -> Void)?
     public var onHierarchyUpdate: ((HierarchyPayload) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
+    public var onScreenshot: ((ScreenshotPayload) -> Void)?
 
     // MARK: - Private
 
@@ -125,6 +126,10 @@ public final class AccraClient: ObservableObject {
             self?.onActionResult?(result)
         }
 
+        connection?.onScreenshot = { [weak self] payload in
+            self?.onScreenshot?(payload)
+        }
+
         connection?.onError = { [weak self] message in
             self?.connectionState = .failed(message)
         }
@@ -172,6 +177,29 @@ public final class AccraClient: ObservableObject {
                     didResume = true
                     timeoutTask.cancel()
                     continuation.resume(returning: result)
+                }
+            }
+        }
+    }
+
+    /// Wait for a screenshot response with timeout
+    public func waitForScreenshot(timeout: TimeInterval = 30.0) async throws -> ScreenshotPayload {
+        try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                if !didResume {
+                    didResume = true
+                    continuation.resume(throwing: ActionError.timeout)
+                }
+            }
+
+            onScreenshot = { payload in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(returning: payload)
                 }
             }
         }

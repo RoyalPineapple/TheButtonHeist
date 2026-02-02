@@ -26,6 +26,9 @@ final class SimpleSocketServer {
     func start(port: UInt16 = 0) throws -> UInt16 {
         NSLog("[SimpleSocketServer] Starting server...")
 
+        // Ignore SIGPIPE globally - prevents crash when writing to closed socket
+        signal(SIGPIPE, SIG_IGN)
+
         // Create socket
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -37,6 +40,8 @@ final class SimpleSocketServer {
         // Set socket options
         var yes: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        // Prevent SIGPIPE on this socket
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
 
         // Bind to port
         var addr = sockaddr_in()
@@ -120,6 +125,10 @@ final class SimpleSocketServer {
     }
 
     private func handleNewClient(_ fd: Int32) {
+        // Prevent SIGPIPE on client socket
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
+
         clientCounter += 1
         let clientId = clientCounter
         clientFileDescriptors[clientId] = fd
