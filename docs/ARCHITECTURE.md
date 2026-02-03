@@ -14,8 +14,8 @@ Accra is a distributed system with two main components:
 │                              macOS                                   │
 │                                                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │   Inspector  │  │     CLI      │  │  Your Tool   │              │
-│  │     (GUI)    │  │              │  │              │              │
+│  │   Inspector  │  │     CLI      │  │ Python/Shell │              │
+│  │     (GUI)    │  │              │  │   Scripts    │              │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
 │         │                 │                 │                       │
 │         └─────────────────┼─────────────────┘                       │
@@ -28,13 +28,13 @@ Accra is a distributed system with two main components:
 │            ┌──────────────┼──────────────┐                          │
 │            │              │              │                          │
 │      ┌─────┴─────┐  ┌─────┴─────┐  ┌─────┴─────┐                   │
-│      │  Device   │  │  Device   │  │ WebSocket │                   │
+│      │  Device   │  │  Device   │  │    TCP    │                   │
 │      │ Discovery │  │Connection │  │  Client   │                   │
 │      │(NWBrowser)│  │   Mgmt    │  │           │                   │
 │      └───────────┘  └───────────┘  └─────┬─────┘                   │
 └──────────────────────────────────────────┼──────────────────────────┘
                                            │
-                              Local Network (Bonjour + TCP)
+                    WiFi (Bonjour + TCP) or USB (IPv6 + TCP)
                                            │
 ┌──────────────────────────────────────────┼──────────────────────────┐
 │                           ┌──────────────┴──────────────┐           │
@@ -45,8 +45,8 @@ Accra is a distributed system with two main components:
 │                  ┌───────────────────────┼───────────────────────┐  │
 │                  │                       │                       │  │
 │           ┌──────┴──────┐         ┌──────┴──────┐         ┌──────┴──────┐
-│           │  NetService │         │ NWListener  │         │   A11y      │
-│           │  (Bonjour)  │         │ (WebSocket) │         │   Parser    │
+│           │  NetService │         │SimpleSocket │         │   A11y      │
+│           │  (Bonjour)  │         │Server (TCP) │         │   Parser    │
 │           └─────────────┘         └─────────────┘         └─────────────┘
 │                                                                      │
 │                              iOS Device                              │
@@ -78,25 +78,41 @@ Accra is a distributed system with two main components:
 **Architecture**:
 ```
 AccraHost (singleton)
-├── NWListener (WebSocket server)
-│   └── NWConnection[] (connected clients)
+├── SimpleSocketServer (TCP server, IPv6 dual-stack)
+│   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot)
+├── TouchInjector (tap synthesis)
 └── Polling Timer (hierarchy change detection)
 ```
+
+**Auto-Start Mechanism**:
+
+AccraHost uses ObjC `+load` for automatic initialization:
+
+```
+AccraHostLoader/
+├── AccraHostAutoStart.h  (public header)
+└── AccraHostAutoStart.m  (+load implementation)
+```
+
+When the framework loads:
+1. `+load` is called automatically by the runtime
+2. Reads port from `AccraHostPort` in Info.plist (or env var)
+3. Configures and starts AccraHost singleton
+4. Begins polling for hierarchy changes
 
 **Threading Model**:
 - Entire class marked `@MainActor`
 - All UIKit operations on main thread
 - Network callbacks dispatch to main actor
+- Socket I/O on dedicated GCD queues
 
-**Lifecycle**:
-1. `start()` - Create listener, begin advertising
-2. `startPolling()` - Enable automatic updates
-3. Client connects → send `ServerInfo`
-4. Client subscribes → add to broadcast list
-5. Poll timer fires → compare hierarchy hash → broadcast if changed
-6. `stop()` - Cancel connections, stop advertising
+**TCP Server (SimpleSocketServer)**:
+- IPv6 dual-stack socket (accepts both IPv4 and IPv6)
+- Fixed port from configuration (default: 1455)
+- Newline-delimited JSON protocol
+- Multiple concurrent client support
 
 ### AccraClient
 
@@ -108,7 +124,7 @@ AccraClient (ObservableObject)
 ├── DeviceDiscovery
 │   └── NWBrowser (Bonjour browsing)
 ├── DeviceConnection
-│   └── NWConnection (WebSocket client)
+│   └── NWConnection (TCP client)
 └── Published Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectionState: ConnectionState
@@ -134,7 +150,8 @@ disconnected ──connect()──► connecting ──success──► connecte
 ### Discovery Flow
 
 ```
-1. AccraHost.start()
+1. AccraHost loads (ObjC +load)
+   └── SimpleSocketServer.start(port: 1455)
    └── NetService.publish("_a11ybridge._tcp")
 
 2. AccraClient.startDiscovery()
@@ -148,24 +165,23 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 ```
 1. AccraClient.connect(to: device)
-   └── NWConnection(to: endpoint, using: websocket)
+   └── NWConnection(to: endpoint)
 
-2. Connection established
-   └── AccraHost sends ServerMessage.info(serverInfo)
+2. TCP connection established
+   └── AccraHost sends ServerMessage.info
 
 3. AccraClient receives info
    └── serverInfo = info
    └── connectionState = .connected
-   └── send(ClientMessage.subscribe)
 
-4. AccraHost adds to subscribers
-   └── subscribedConnections.insert(connection)
+4. AccraClient sends requestHierarchy
+   └── AccraHost responds with hierarchy
 ```
 
 ### Hierarchy Update Flow
 
 ```
-1. Polling timer fires (or notifyChange() called)
+1. Polling timer fires (1.0 second interval)
 
 2. AccraHost.checkForChanges()
    └── parser.parseAccessibilityElements(in: rootView)
@@ -174,52 +190,54 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 3. If hash changed:
    └── Create HierarchyPayload(timestamp, elements)
-   └── For each subscribed connection:
-       └── send(ServerMessage.hierarchy(payload))
-
-4. AccraClient receives hierarchy
-   └── currentHierarchy = payload
-   └── onHierarchyUpdate?(payload)
+   └── Broadcast to all connected clients
 ```
 
-## Accessibility Parsing
+### Action Flow (tap/activate)
 
-AccraHost uses [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot) to parse the UIKit accessibility tree.
+```
+1. Client sends activate/tap message
 
-**Process**:
-1. Get root view from key window
-2. Parser traverses view hierarchy
-3. Each `AccessibilityMarker` converted to `AccessibilityElementData`
-4. Traits converted from `UIAccessibilityTraits` to string array
+2. AccraHost receives message
+   └── Find target element (by identifier or index)
+   └── Try accessibilityActivate() first
+   └── Fall back to tap gesture if needed
 
-**Trait Mapping**:
-| UIAccessibilityTraits | String |
-|----------------------|--------|
-| `.button` | "button" |
-| `.link` | "link" |
-| `.image` | "image" |
-| `.staticText` | "staticText" |
-| `.header` | "header" |
-| `.adjustable` | "adjustable" |
-| `.selected` | "selected" |
-| ... | ... |
+3. AccraHost sends actionResult
+   └── success: true/false
+   └── method: "accessibilityActivate" or "tapGesture"
+```
 
 ## Network Protocol
 
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Transport: WebSocket over TCP
-- Discovery: Bonjour/mDNS (`_a11ybridge._tcp`)
-- Encoding: JSON
-- Port: Dynamic (advertised via Bonjour)
+- Transport: TCP socket (not WebSocket)
+- Discovery: Bonjour/mDNS (`_a11ybridge._tcp`) or USB IPv6 tunnel
+- Encoding: Newline-delimited JSON
+- Port: 1455 (configurable via Info.plist)
+
+## Connection Methods
+
+### WiFi (Bonjour)
+- Service advertised via mDNS
+- Client discovers via NWBrowser
+- TCP connection to advertised endpoint
+
+### USB (CoreDevice IPv6 Tunnel)
+- macOS creates IPv6 tunnel for USB-connected devices
+- Device address: `fd{prefix}::1` (e.g., `fd9a:6190:eed7::1`)
+- Direct TCP connection to port 1455
+- Bypasses WiFi/VPN issues
 
 ## Threading Considerations
 
 ### AccraHost (iOS)
 - `@MainActor` for UIKit compatibility
 - Parser must run on main thread
-- Network callbacks dispatched to main
+- Socket accept/read on GCD queues
+- Message handling dispatched to main
 
 ### AccraClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
@@ -238,9 +256,28 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Unknown message type → Logged, message dropped
 - Missing required field → Error response sent
 
+## Configuration
+
+### Port Configuration Priority
+1. `ACCRA_HOST_PORT` environment variable
+2. `AccraHostPort` key in Info.plist
+3. Default: 1455
+
+### Required Info.plist Keys
+```xml
+<key>AccraHostPort</key>
+<integer>1455</integer>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Accessibility inspector connection.</string>
+<key>NSBonjourServices</key>
+<array>
+    <string>_a11ybridge._tcp</string>
+</array>
+```
+
 ## Future Considerations
 
 1. **Multiple Device Connections**: AccraClient currently supports one connection
 2. **Connection Recovery**: No automatic reconnection on network change
 3. **Binary Protocol**: JSON adds overhead for large hierarchies
-4. **Simulator Detection**: Different behavior for simulator vs device
+4. **Screenshot Capture**: Add screenshot-with-overlay capability

@@ -8,7 +8,32 @@ Complete API documentation for AccraHost (iOS) and AccraClient (macOS).
 **Platform**: iOS 17.0+
 **Location**: `AccraCore/Sources/AccraHost/AccraHost.swift`
 
-### AccraHost
+### Overview
+
+AccraHost automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
+
+### Auto-Start Behavior
+
+When the AccraHost framework loads:
+1. Reads port from `AccraHostPort` Info.plist key (or `ACCRA_HOST_PORT` env var)
+2. Creates a TCP server on the configured port (default: 1455)
+3. Begins Bonjour advertisement
+4. Starts polling for accessibility hierarchy changes
+
+### Configuration
+
+**Info.plist (recommended):**
+```xml
+<key>AccraHostPort</key>
+<integer>1455</integer>
+```
+
+**Environment variable:**
+```bash
+ACCRA_HOST_PORT=1455
+```
+
+### AccraHost Class
 
 Main server class. Use the shared singleton instance.
 
@@ -22,10 +47,10 @@ public final class AccraHost
 ##### shared
 
 ```swift
-public static let shared: AccraHost
+public static var shared: AccraHost
 ```
 
-Singleton instance. All operations should go through this instance.
+Singleton instance. Automatically initialized on framework load.
 
 ##### isRunning
 
@@ -37,23 +62,30 @@ Whether the server is currently running.
 
 #### Methods
 
+##### configure(port:)
+
+```swift
+public static func configure(port: UInt16)
+```
+
+Configure the shared instance with a specific port. Must be called before `start()` if not using Info.plist.
+
+**Note**: Normally not needed - use Info.plist configuration instead.
+
 ##### start()
 
 ```swift
 public func start(port: UInt16 = 0) throws
 ```
 
-Start the WebSocket server and begin Bonjour advertisement.
+Start the TCP server and begin Bonjour advertisement.
+
+**Note**: Called automatically on framework load. Manual calls are rarely needed.
 
 **Parameters**:
-- `port`: Port to listen on. Use `0` for automatic port selection (recommended).
+- `port`: Port to listen on. Use `0` for automatic port selection.
 
 **Throws**: Network errors if the listener fails to start.
-
-**Example**:
-```swift
-try AccraHost.shared.start()
-```
 
 ##### stop()
 
@@ -63,11 +95,6 @@ public func stop()
 
 Stop the server, disconnect all clients, and stop Bonjour advertisement.
 
-**Example**:
-```swift
-AccraHost.shared.stop()
-```
-
 ##### startPolling(interval:)
 
 ```swift
@@ -76,13 +103,10 @@ public func startPolling(interval: TimeInterval = 1.0)
 
 Enable automatic polling for accessibility changes.
 
+**Note**: Called automatically on framework load with 1.0 second interval.
+
 **Parameters**:
 - `interval`: Polling interval in seconds. Minimum 0.5 seconds.
-
-**Example**:
-```swift
-AccraHost.shared.startPolling(interval: 0.5)
-```
 
 ##### stopPolling()
 
@@ -98,13 +122,7 @@ Stop automatic polling.
 public func notifyChange()
 ```
 
-Manually trigger a hierarchy broadcast to subscribed clients. Useful for notifying clients of changes outside the normal polling cycle.
-
-**Example**:
-```swift
-// After a significant UI change
-AccraHost.shared.notifyChange()
-```
+Manually trigger a hierarchy broadcast to connected clients.
 
 ---
 
@@ -219,12 +237,6 @@ public func startDiscovery()
 
 Begin discovering devices via Bonjour.
 
-**Example**:
-```swift
-let client = AccraClient()
-client.startDiscovery()
-```
-
 ##### stopDiscovery()
 
 ```swift
@@ -244,13 +256,6 @@ Connect to a discovered device.
 **Parameters**:
 - `device`: Device to connect to (from `discoveredDevices`).
 
-**Example**:
-```swift
-if let device = client.discoveredDevices.first {
-    client.connect(to: device)
-}
-```
-
 ##### disconnect()
 
 ```swift
@@ -265,7 +270,7 @@ Disconnect from the current device.
 public func requestHierarchy()
 ```
 
-Request a single hierarchy snapshot. Useful when not subscribed to automatic updates.
+Request a single hierarchy snapshot.
 
 ---
 
@@ -385,7 +390,39 @@ Activation point as CGPoint.
 
 ## Usage Examples
 
-### SwiftUI Integration
+### Minimal iOS Integration
+
+Just import the framework - it auto-starts:
+
+```swift
+import SwiftUI
+import AccraHost
+
+@main
+struct MyApp: App {
+    // AccraHost auto-starts via ObjC +load
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+**Info.plist:**
+```xml
+<key>AccraHostPort</key>
+<integer>1455</integer>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Accessibility inspector connection.</string>
+<key>NSBonjourServices</key>
+<array>
+    <string>_a11ybridge._tcp</string>
+</array>
+```
+
+### SwiftUI Client Integration
 
 ```swift
 import SwiftUI
@@ -397,12 +434,10 @@ struct InspectorView: View {
 
     var body: some View {
         NavigationSplitView {
-            // Device list
             List(client.discoveredDevices, selection: $selectedDevice) { device in
                 Text(device.name)
             }
         } detail: {
-            // Hierarchy display
             if let hierarchy = client.currentHierarchy {
                 List(hierarchy.elements) { element in
                     VStack(alignment: .leading) {
@@ -468,26 +503,21 @@ class Inspector {
 }
 ```
 
-### iOS App Integration
+### Direct TCP Connection (Python)
 
-```swift
-import SwiftUI
-import AccraHost
+```python
+from scripts.accra_usb import AccraUSBConnection
 
-@main
-struct MyApp: App {
-    init() {
-        #if DEBUG
-        // Only enable in debug builds
-        try? AccraHost.shared.start()
-        AccraHost.shared.startPolling(interval: 1.0)
-        #endif
-    }
+with AccraUSBConnection() as conn:
+    # Get hierarchy
+    hierarchy = conn.get_hierarchy()
+    for element in hierarchy['elements']:
+        print(f"{element['traversalIndex']}: {element['label']}")
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
+    # Activate element
+    result = conn.activate(identifier="loginButton")
+    print(f"Success: {result['success']}")
+
+    # Tap at coordinates
+    result = conn.tap(x=196.5, y=659)
 ```

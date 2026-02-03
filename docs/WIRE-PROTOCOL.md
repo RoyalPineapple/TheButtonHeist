@@ -1,178 +1,201 @@
 # Accra Wire Protocol Specification
 
-**Version**: 1.0
+**Version**: 1.1
 
-This document specifies the communication protocol between AccraHost (iOS) and AccraClient (macOS).
+This document specifies the communication protocol between AccraHost (iOS) and clients (AccraClient, CLI, Python scripts).
 
 ## Transport
 
-- **Layer**: WebSocket over TCP
-- **Discovery**: Bonjour/mDNS
+- **Layer**: TCP socket
+- **Discovery**: Bonjour/mDNS (WiFi) or CoreDevice IPv6 tunnel (USB)
 - **Service Type**: `_a11ybridge._tcp`
-- **Port**: Dynamic (assigned by OS, advertised via Bonjour)
-- **Encoding**: JSON (UTF-8)
+- **Port**: 1455 (configurable via Info.plist `AccraHostPort` key)
+- **Encoding**: Newline-delimited JSON (UTF-8)
+- **Socket**: IPv6 dual-stack (accepts both IPv4 and IPv6)
 
-## Discovery
+## Discovery Methods
 
-AccraHost advertises itself using Bonjour with:
+### WiFi (Bonjour)
+AccraHost advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_a11ybridge._tcp`
-- **Name**: `{AppName}-{DeviceName}`
+- **Name**: `{AppName}`
 
-Example: `MyApp-iPhone 15 Pro`
+### USB (CoreDevice IPv6 Tunnel)
+When connected via USB, macOS creates an IPv6 tunnel:
+- **Device address**: `fd{prefix}::1` (e.g., `fd9a:6190:eed7::1`)
+- **Port**: 1455
+- **Discovery**: `lsof -i -P -n | grep CoreDev`
 
 ## Connection Lifecycle
 
 ```
 Client                                    Server
    │                                         │
-   │──────── WebSocket Connect ─────────────►│
+   │──────── TCP Connect ────────────────────►│
    │                                         │
-   │◄─────── ServerMessage.info ────────────│
+   │◄─────── info ───────────────────────────│
    │                                         │
-   │──────── ClientMessage.subscribe ───────►│
+   │──────── requestHierarchy ───────────────►│
+   │◄─────── hierarchy ──────────────────────│
    │                                         │
-   │◄─────── ServerMessage.hierarchy ────────│
-   │              (repeated)                 │
+   │──────── activate/tap ───────────────────►│
+   │◄─────── actionResult ───────────────────│
    │                                         │
-   │──────── ClientMessage.ping ────────────►│
-   │◄─────── ServerMessage.pong ─────────────│
+   │──────── ping ───────────────────────────►│
+   │◄─────── pong ───────────────────────────│
    │                                         │
-   │──────── WebSocket Close ───────────────►│
+   │──────── TCP Close ──────────────────────►│
    │                                         │
 ```
 
-## Message Types
+## Message Format
 
-### Client → Server
+All messages are JSON objects terminated by a newline (`\n`). Swift enums with associated values encode with `_0` wrapper.
 
-#### requestHierarchy
+## Client → Server Messages
 
-Request a single hierarchy snapshot.
+### requestHierarchy
+
+Request current accessibility hierarchy.
 
 ```json
-{
-  "type": "requestHierarchy"
-}
+{"requestHierarchy":{}}
 ```
 
-#### subscribe
+### activate
 
-Subscribe to automatic hierarchy updates. Server will send `hierarchy` messages when changes are detected.
+Activate an element (equivalent to VoiceOver double-tap).
+
+**By identifier:**
+```json
+{"activate":{"_0":{"identifier":"loginButton"}}}
+```
+
+**By traversal index:**
+```json
+{"activate":{"_0":{"traversalIndex":5}}}
+```
+
+### tap
+
+Tap at coordinates or on an element.
+
+**At coordinates:**
+```json
+{"tap":{"_0":{"pointX":196.5,"pointY":659.0}}}
+```
+
+**On element by identifier:**
+```json
+{"tap":{"_0":{"elementTarget":{"identifier":"submitButton"}}}}
+```
+
+**On element by index:**
+```json
+{"tap":{"_0":{"elementTarget":{"traversalIndex":3}}}}
+```
+
+### ping
+
+Keepalive ping.
 
 ```json
-{
-  "type": "subscribe"
-}
+{"ping":{}}
 ```
 
-#### unsubscribe
+## Server → Client Messages
 
-Stop receiving automatic updates.
-
-```json
-{
-  "type": "unsubscribe"
-}
-```
-
-#### ping
-
-Keepalive ping. Server responds with `pong`.
-
-```json
-{
-  "type": "ping"
-}
-```
-
-### Server → Client
-
-#### info
+### info
 
 Sent immediately after connection. Contains device and app metadata.
 
 ```json
-{
-  "type": "info",
-  "payload": {
-    "protocolVersion": "1.0",
-    "appName": "MyApp",
-    "bundleIdentifier": "com.example.myapp",
-    "deviceName": "iPhone 15 Pro",
-    "systemVersion": "17.0",
-    "screenWidth": 393.0,
-    "screenHeight": 852.0
-  }
-}
+{"info":{"_0":{
+  "protocolVersion":"1.0",
+  "appName":"MyApp",
+  "bundleIdentifier":"com.example.myapp",
+  "deviceName":"iPhone 15 Pro",
+  "systemVersion":"17.0",
+  "screenWidth":393.0,
+  "screenHeight":852.0
+}}}
 ```
 
-#### hierarchy
+### hierarchy
 
 Accessibility hierarchy snapshot.
 
 ```json
-{
-  "type": "hierarchy",
-  "payload": {
-    "timestamp": "2026-02-01T10:30:45.123Z",
-    "elements": [
-      {
-        "traversalIndex": 0,
-        "description": "Welcome",
-        "label": "Welcome",
-        "value": null,
-        "traits": ["staticText"],
-        "identifier": "welcomeLabel",
-        "hint": null,
-        "frameX": 16.0,
-        "frameY": 100.0,
-        "frameWidth": 361.0,
-        "frameHeight": 24.0,
-        "activationPointX": 196.5,
-        "activationPointY": 112.0,
-        "customActions": []
-      },
-      {
-        "traversalIndex": 1,
-        "description": "Sign In",
-        "label": "Sign In",
-        "value": null,
-        "traits": ["button"],
-        "identifier": "signInButton",
-        "hint": "Double tap to sign in",
-        "frameX": 16.0,
-        "frameY": 140.0,
-        "frameWidth": 361.0,
-        "frameHeight": 44.0,
-        "activationPointX": 196.5,
-        "activationPointY": 162.0,
-        "customActions": []
-      }
-    ]
-  }
-}
+{"hierarchy":{"_0":{
+  "timestamp":"2026-02-03T10:30:45.123Z",
+  "elements":[
+    {
+      "traversalIndex":0,
+      "description":"Welcome",
+      "label":"Welcome",
+      "value":null,
+      "traits":["staticText"],
+      "identifier":"welcomeLabel",
+      "hint":null,
+      "frameX":16.0,
+      "frameY":100.0,
+      "frameWidth":361.0,
+      "frameHeight":24.0,
+      "activationPointX":196.5,
+      "activationPointY":112.0,
+      "customActions":[]
+    },
+    {
+      "traversalIndex":1,
+      "description":"Sign In",
+      "label":"Sign In",
+      "value":null,
+      "traits":["button"],
+      "identifier":"signInButton",
+      "hint":"Double tap to sign in",
+      "frameX":16.0,
+      "frameY":140.0,
+      "frameWidth":361.0,
+      "frameHeight":44.0,
+      "activationPointX":196.5,
+      "activationPointY":162.0,
+      "customActions":[]
+    }
+  ]
+}}}
 ```
 
-#### pong
+### actionResult
+
+Response to `activate` or `tap` commands.
+
+```json
+{"actionResult":{"_0":{
+  "success":true,
+  "method":"accessibilityActivate"
+}}}
+```
+
+Possible methods:
+- `accessibilityActivate` - Element's `accessibilityActivate()` returned true
+- `tapGesture` - Tap gesture synthesized at activation point
+- `coordinateTap` - Tap at specified coordinates
+
+### pong
 
 Response to `ping`.
 
 ```json
-{
-  "type": "pong"
-}
+{"pong":{}}
 ```
 
-#### error
+### error
 
 Error message.
 
 ```json
-{
-  "type": "error",
-  "message": "Root view not available"
-}
+{"error":{"_0":"Root view not available"}}
 ```
 
 ## Data Types
@@ -215,6 +238,13 @@ Error message.
 | `activationPointY` | `Double` | Touch target Y in points |
 | `customActions` | `[String]` | Custom action names |
 
+### ActionResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | `Bool` | Whether action succeeded |
+| `method` | `String` | How action was performed |
+
 ### Traits
 
 Traits are human-readable strings converted from `UIAccessibilityTraits`:
@@ -239,131 +269,59 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 | `"allowsDirectInteraction"` | `.allowsDirectInteraction` |
 | `"causesPageTurn"` | `.causesPageTurn` |
 
-## JSON Schemas
+## Example Session
 
-### ClientMessage Schema
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "required": ["type"],
-  "properties": {
-    "type": {
-      "type": "string",
-      "enum": ["requestHierarchy", "subscribe", "unsubscribe", "ping"]
-    }
-  }
-}
 ```
+# Client connects to fd9a:6190:eed7::1:1455
 
-### ServerMessage Schema
+# Server sends info
+{"info":{"_0":{"protocolVersion":"1.0","appName":"TestApp","bundleIdentifier":"com.accra.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "oneOf": [
-    {
-      "type": "object",
-      "required": ["type", "payload"],
-      "properties": {
-        "type": { "const": "info" },
-        "payload": { "$ref": "#/definitions/ServerInfo" }
-      }
-    },
-    {
-      "type": "object",
-      "required": ["type", "payload"],
-      "properties": {
-        "type": { "const": "hierarchy" },
-        "payload": { "$ref": "#/definitions/HierarchyPayload" }
-      }
-    },
-    {
-      "type": "object",
-      "required": ["type"],
-      "properties": {
-        "type": { "const": "pong" }
-      }
-    },
-    {
-      "type": "object",
-      "required": ["type", "message"],
-      "properties": {
-        "type": { "const": "error" },
-        "message": { "type": "string" }
-      }
-    }
-  ],
-  "definitions": {
-    "ServerInfo": {
-      "type": "object",
-      "required": ["protocolVersion", "appName", "deviceName", "systemVersion", "screenWidth", "screenHeight"],
-      "properties": {
-        "protocolVersion": { "type": "string" },
-        "appName": { "type": "string" },
-        "bundleIdentifier": { "type": ["string", "null"] },
-        "deviceName": { "type": "string" },
-        "systemVersion": { "type": "string" },
-        "screenWidth": { "type": "number" },
-        "screenHeight": { "type": "number" }
-      }
-    },
-    "HierarchyPayload": {
-      "type": "object",
-      "required": ["timestamp", "elements"],
-      "properties": {
-        "timestamp": { "type": "string", "format": "date-time" },
-        "elements": {
-          "type": "array",
-          "items": { "$ref": "#/definitions/AccessibilityElementData" }
-        }
-      }
-    },
-    "AccessibilityElementData": {
-      "type": "object",
-      "required": ["traversalIndex", "description", "traits", "frameX", "frameY", "frameWidth", "frameHeight", "activationPointX", "activationPointY", "customActions"],
-      "properties": {
-        "traversalIndex": { "type": "integer" },
-        "description": { "type": "string" },
-        "label": { "type": ["string", "null"] },
-        "value": { "type": ["string", "null"] },
-        "traits": { "type": "array", "items": { "type": "string" } },
-        "identifier": { "type": ["string", "null"] },
-        "hint": { "type": ["string", "null"] },
-        "frameX": { "type": "number" },
-        "frameY": { "type": "number" },
-        "frameWidth": { "type": "number" },
-        "frameHeight": { "type": "number" },
-        "activationPointX": { "type": "number" },
-        "activationPointY": { "type": "number" },
-        "customActions": { "type": "array", "items": { "type": "string" } }
-      }
-    }
-  }
-}
+# Client requests hierarchy
+{"requestHierarchy":{}}
+
+# Server responds with hierarchy
+{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...]}}}
+
+# Client taps a button
+{"activate":{"_0":{"identifier":"loginButton"}}}
+
+# Server confirms action
+{"actionResult":{"_0":{"success":true,"method":"accessibilityActivate"}}}
+
+# Client sends keepalive
+{"ping":{}}
+
+# Server responds
+{"pong":{}}
 ```
 
 ## Implementation Notes
+
+### Port Configuration
+
+The port is configured via Info.plist:
+
+```xml
+<key>AccraHostPort</key>
+<integer>1455</integer>
+```
+
+Or via environment variable `ACCRA_HOST_PORT`.
+
+### IPv6 Dual-Stack
+
+The server binds to `::` (IPv6 any) with `IPV6_V6ONLY=0`, accepting:
+- IPv4 connections (mapped to `::ffff:x.x.x.x`)
+- IPv6 connections (USB tunnel, WiFi)
 
 ### Keepalive
 
 Clients should send `ping` messages periodically (recommended: every 30 seconds) to detect connection loss.
 
-### Polling Interval
-
-AccraHost polls for changes at a configurable interval (default: 1.0 second). Changes are only broadcast when the hierarchy hash differs from the previous snapshot.
-
 ### Error Recovery
 
-If the WebSocket connection is lost, clients should:
-1. Update connection state to `.disconnected`
+If the TCP connection is lost, clients should:
+1. Close the socket
 2. Optionally attempt reconnection
-3. Re-subscribe after reconnecting
-
-### Large Hierarchies
-
-For apps with many accessibility elements, the JSON payload can be large. Consider:
-- Filtering elements client-side
-- Using `--once` mode in CLI for one-time snapshots
-- Increasing polling interval to reduce bandwidth
+3. Re-request hierarchy after reconnecting
