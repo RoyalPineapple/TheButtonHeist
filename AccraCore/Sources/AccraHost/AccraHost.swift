@@ -219,9 +219,17 @@ public final class AccraHost {
             return
         }
 
-        cachedElements = parser.parseAccessibilityElements(in: rootView)
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+        // Parse full tree structure
+        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
+
+        // Flatten for backwards compatibility and action handling
+        let flatElements = hierarchyTree.flattenToElements()
+        cachedElements = flatElements
+
+        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+
+        let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
         sendMessage(.hierarchy(payload), respond: respond)
 
         // Also send screenshot with initial hierarchy
@@ -292,9 +300,15 @@ public final class AccraHost {
     private func broadcastHierarchyUpdate() {
         guard let rootView = getRootView() else { return }
 
-        cachedElements = parser.parseAccessibilityElements(in: rootView)
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+        // Parse full tree structure
+        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
+        let flatElements = hierarchyTree.flattenToElements()
+        cachedElements = flatElements
+
+        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+
+        let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
         let message = ServerMessage.hierarchy(payload)
 
         // Update hash for polling comparison
@@ -324,8 +338,13 @@ public final class AccraHost {
     private func checkForChanges() {
         guard let rootView = getRootView() else { return }
 
-        cachedElements = parser.parseAccessibilityElements(in: rootView)
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        // Parse full tree structure
+        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
+        let flatElements = hierarchyTree.flattenToElements()
+        cachedElements = flatElements
+
+        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
         let currentHash = elements.hashValue
@@ -334,8 +353,8 @@ public final class AccraHost {
         if currentHash != lastHierarchyHash {
             lastHierarchyHash = currentHash
 
-            // Broadcast hierarchy
-            let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+            // Broadcast hierarchy with tree
+            let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
             if let data = try? JSONEncoder().encode(ServerMessage.hierarchy(payload)) {
                 socketServer?.broadcastToAll(data)
             }
@@ -665,6 +684,44 @@ public final class AccraHost {
         if traits.contains(.allowsDirectInteraction) { result.append("allowsDirectInteraction") }
         if traits.contains(.causesPageTurn) { result.append("causesPageTurn") }
         return result
+    }
+
+    // MARK: - Tree Conversion
+
+    private func convertHierarchyNode(_ node: AccessibilityHierarchy) -> AccessibilityHierarchyNode {
+        switch node {
+        case let .element(_, traversalIndex):
+            return .element(traversalIndex: traversalIndex)
+        case let .container(container, children):
+            let containerData = convertContainer(container)
+            let childNodes = children.map { convertHierarchyNode($0) }
+            return .container(containerData, children: childNodes)
+        }
+    }
+
+    private func convertContainer(_ container: AccessibilityContainer) -> AccessibilityContainerData {
+        return AccessibilityContainerData(
+            containerType: formatContainerType(container.type),
+            label: container.label,
+            value: container.value,
+            identifier: container.identifier,
+            frameX: container.frame.origin.x,
+            frameY: container.frame.origin.y,
+            frameWidth: container.frame.size.width,
+            frameHeight: container.frame.size.height,
+            traits: formatTraits(container.traits)
+        )
+    }
+
+    private func formatContainerType(_ type: UIAccessibilityContainerType) -> String {
+        switch type {
+        case .none: return "none"
+        case .dataTable: return "dataTable"
+        case .list: return "list"
+        case .landmark: return "landmark"
+        case .semanticGroup: return "semanticGroup"
+        @unknown default: return "unknown"
+        }
     }
 }
 

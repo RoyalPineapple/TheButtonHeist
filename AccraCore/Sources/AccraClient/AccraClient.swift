@@ -134,6 +134,7 @@ public final class AccraClient: ObservableObject {
             self?.connectedDevice = device
             self?.connection?.send(.subscribe)
             self?.connection?.send(.requestHierarchy)
+            self?.connection?.send(.requestScreenshot)
         }
 
         connection?.onDisconnected = { [weak self] error in

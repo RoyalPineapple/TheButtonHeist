@@ -18,7 +18,7 @@ struct ElementOverlayView: View {
             for element in elements {
                 let isSelected = selectedElement?.traversalIndex == element.traversalIndex
                 let rect = scaledRect(for: element)
-                let color = colorFor(element: element, isSelected: isSelected)
+                let color = ElementStyling.color(for: element)
 
                 // Fill
                 context.fill(
@@ -73,16 +73,4 @@ struct ElementOverlayView: View {
         return nil
     }
 
-    private func colorFor(element: AccessibilityElementData, isSelected: Bool) -> Color {
-        if isSelected { return .yellow }
-        let traits = element.traits
-        if traits.contains("button") { return .blue }
-        if traits.contains("link") { return .purple }
-        if traits.contains("textField") || traits.contains("searchField") { return .green }
-        if traits.contains("adjustable") { return .orange }
-        if traits.contains("staticText") { return .gray }
-        if traits.contains("image") { return .pink }
-        if traits.contains("header") { return .red }
-        return .cyan
-    }
 }

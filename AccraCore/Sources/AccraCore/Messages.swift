@@ -185,11 +185,65 @@ public struct ServerInfo: Codable, Sendable {
 public struct HierarchyPayload: Codable, Sendable {
     public let timestamp: Date
     public let elements: [AccessibilityElementData]
+    /// Optional tree structure for hierarchy display (nil for backwards compatibility)
+    public let tree: [AccessibilityHierarchyNode]?
 
-    public init(timestamp: Date, elements: [AccessibilityElementData]) {
+    public init(timestamp: Date, elements: [AccessibilityElementData], tree: [AccessibilityHierarchyNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
+        self.tree = tree
     }
+}
+
+// MARK: - Hierarchy Tree Types
+
+/// Cross-platform container data for accessibility containers
+public struct AccessibilityContainerData: Codable, Equatable, Hashable, Sendable {
+    /// Container type: "none", "dataTable", "list", "landmark", "semanticGroup"
+    public let containerType: String
+    /// Container's accessibility label (if any)
+    public let label: String?
+    /// Container's accessibility value (if any)
+    public let value: String?
+    /// Container's accessibility identifier (if any)
+    public let identifier: String?
+    /// Frame coordinates
+    public let frameX: Double
+    public let frameY: Double
+    public let frameWidth: Double
+    public let frameHeight: Double
+    /// Trait names (e.g., ["tabBar"])
+    public let traits: [String]
+
+    public init(
+        containerType: String,
+        label: String?,
+        value: String?,
+        identifier: String?,
+        frameX: Double,
+        frameY: Double,
+        frameWidth: Double,
+        frameHeight: Double,
+        traits: [String]
+    ) {
+        self.containerType = containerType
+        self.label = label
+        self.value = value
+        self.identifier = identifier
+        self.frameX = frameX
+        self.frameY = frameY
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
+        self.traits = traits
+    }
+}
+
+/// A node in the accessibility hierarchy tree (cross-platform)
+public indirect enum AccessibilityHierarchyNode: Codable, Equatable, Sendable {
+    /// A leaf node representing an accessibility element by its traversal index
+    case element(traversalIndex: Int)
+    /// A container node grouping children
+    case container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])
 }
 
 // MARK: - Cross-Platform Element Type
