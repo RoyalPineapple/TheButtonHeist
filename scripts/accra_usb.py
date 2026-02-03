@@ -49,7 +49,7 @@ class AccraUSBConnection:
     Args:
         device_name: Name of the device (default: auto-detect first connected)
         bundle_id: App bundle ID (default: com.accra.testapp)
-        port: Fixed port (default: 9274, 0 to scan)
+        port: Fixed port (default: 1455, 0 to scan)
         auto_launch: Launch app if not running (default: True)
         timeout: Socket timeout in seconds (default: 5)
 
@@ -59,7 +59,7 @@ class AccraUSBConnection:
             print(f"Found {len(hierarchy['elements'])} elements")
     """
 
-    DEFAULT_PORT = 9274
+    DEFAULT_PORT = 1455
     DEFAULT_BUNDLE_ID = "com.accra.testapp"
 
     def __init__(
