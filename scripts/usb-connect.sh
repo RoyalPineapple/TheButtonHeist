@@ -6,7 +6,7 @@ set -e
 
 DEVICE_NAME="${1:-Test Phone 15 Pro}"
 BUNDLE_ID="${2:-com.accra.testapp}"
-PORT="${3:-9274}"  # Fixed port configured in AccraHost
+PORT="${3:-1455}"  # Fixed port configured in AccraHost
 
 echo "=== Accra USB Connection ==="
 

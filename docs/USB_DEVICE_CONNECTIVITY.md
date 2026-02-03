@@ -6,6 +6,16 @@ This document describes how to connect to iOS devices over USB using the CoreDev
 
 When WiFi connectivity is unreliable (VPN interference, network segmentation, mDNS issues), you can connect to AccraHost on a physical iOS device over USB. Apple's CoreDevice framework creates an IPv6 tunnel over USB that we can use for TCP connections.
 
+## Quick Start
+
+```bash
+# Connect to device (launches app, connects on port 1455)
+./scripts/usb-connect.sh "Your Device Name"
+
+# Or use Python
+python3 scripts/accra_usb.py
+```
+
 ## How It Works
 
 ### The CoreDevice IPv6 Tunnel
@@ -18,11 +28,55 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
    - Device: `fd9a:6190:eed7::1`
 3. **TCP connections can be made** directly to the device's IPv6 address
 
+### Fixed Port Configuration
+
+AccraHost uses a fixed port configured in `Info.plist`:
+
+```xml
+<key>AccraHostPort</key>
+<integer>1455</integer>
+```
+
+This eliminates the need for port scanning and enables instant connections.
+
 ### Requirements
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
-2. **AccraHost must use IPv6 dual-stack** (enabled by default since commit `7c3f07a`)
+2. **AccraHost must use IPv6 dual-stack** (enabled by default)
 3. **App must be running** on the device with AccraHost started
+
+## Building and Deploying
+
+### Command Line Build
+
+```bash
+# Build for device with automatic signing
+xcodebuild -workspace Accra.xcworkspace \
+  -scheme AccessibilityTestApp \
+  -destination 'platform=iOS,name=Your Device Name' \
+  -allowProvisioningUpdates \
+  CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM=YOUR_TEAM_ID \
+  build
+
+# Find your team ID from provisioning profile
+cat path/to/app/embedded.mobileprovision | security cms -D | grep -A1 TeamIdentifier
+```
+
+### Install to Device
+
+```bash
+# Install the built app
+xcrun devicectl device install app \
+  --device "Your Device Name" \
+  ~/Library/Developer/Xcode/DerivedData/Accra-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
+
+# Launch the app
+xcrun devicectl device process launch \
+  --device "Your Device Name" \
+  --terminate-existing --activate \
+  com.accra.testapp
+```
 
 ## Discovering the Tunnel
 
@@ -37,70 +91,64 @@ Look for `connected` status:
 Test Phone 15 Pro     Test-Phone-15-Pro.coredevice.local    ...   connected   iPhone 15 Pro
 ```
 
-### Find the IPv6 Tunnel Addresses
+### Find the IPv6 Tunnel Address
 
 ```bash
-lsof -i -P -n | grep CoreDev
+lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 ```
 
-Output shows the tunnel prefix (e.g., `fd9a:6190:eed7::`):
-```
-CoreDevic  6391 aodawa   9u  IPv6 ...  TCP [fd9a:6190:eed7::2]:49241->[fd9a:6190:eed7::1]:52826 (ESTABLISHED)
-```
-
-- **Mac address**: `fd9a:6190:eed7::2`
-- **Device address**: `fd9a:6190:eed7::1`
-
-### Verify Routing
-
-```bash
-netstat -rn -f inet6 | grep fd9a
-```
-
-Should show route via `utun5` (or similar):
-```
-fd9a:6190:eed7::/64     fe80::...%utun5     Uc      utun5
-```
+Output shows the tunnel prefix (e.g., `fd9a:6190:eed7::1`).
 
 ## Connecting to AccraHost
 
-### Step 1: Launch the App
+### Using the Helper Script
 
 ```bash
-xcrun devicectl device process launch --device "Test Phone 15 Pro" com.accra.testapp
+./scripts/usb-connect.sh "Test Phone 15 Pro"
 ```
 
-### Step 2: Find the Server Port
+Output:
+```
+=== Accra USB Connection ===
 
-The port changes each launch. Scan for it:
+Connected to AccessibilityTestApp on fd9a:6190:eed7::1:1455
+Device: iPhone (iOS 26.2.1)
+Elements: 15
+
+Quick connect:
+  nc -6 fd9a:6190:eed7::1 1455
+
+Python:
+  sock.connect(('fd9a:6190:eed7::1', 1455))
+```
+
+### Using Python
+
+```python
+from scripts.accra_usb import AccraUSBConnection
+
+with AccraUSBConnection() as conn:
+    print(f"Connected to: {conn.info['appName']}")
+    hierarchy = conn.get_hierarchy()
+    print(f"Elements: {len(hierarchy['elements'])}")
+
+    # Activate a button
+    conn.activate(identifier="myButton")
+```
+
+### Manual Connection
 
 ```bash
-for port in $(seq 52900 52999); do
-  timeout 0.5 nc -6 -z "fd9a:6190:eed7::1" $port 2>/dev/null && echo "Port $port open"
-done
+# Using netcat
+echo '{"requestHierarchy":{}}' | nc -6 "fd9a:6190:eed7::1" 1455
 ```
 
-Or launch with `--console` to see the port in logs:
-```bash
-timeout 5 xcrun devicectl device process launch --device "Test Phone 15 Pro" --console --terminate-existing com.accra.testapp
-```
-
-Look for: `[SimpleSocketServer] Listening on port 52XXX`
-
-### Step 3: Connect and Communicate
-
-**Using netcat:**
-```bash
-echo '{"requestHierarchy":{}}' | nc -6 "fd9a:6190:eed7::1" 52XXX
-```
-
-**Using Python:**
 ```python
 import socket
 import json
 
 sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-sock.connect(("fd9a:6190:eed7::1", 52XXX))
+sock.connect(("fd9a:6190:eed7::1", 1455))
 sock.settimeout(5)
 
 # Read initial info message
@@ -150,6 +198,30 @@ Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for as
 {"ping":{}}
 ```
 
+## Configuration
+
+### Changing the Port
+
+The port is configured in three places:
+
+1. **Info.plist** (app reads this on launch):
+   ```xml
+   <key>AccraHostPort</key>
+   <integer>1455</integer>
+   ```
+
+2. **scripts/usb-connect.sh** (default port):
+   ```bash
+   PORT="${3:-1455}"
+   ```
+
+3. **scripts/accra_usb.py** (Python default):
+   ```python
+   DEFAULT_PORT = 1455
+   ```
+
+After changing, rebuild and reinstall the app.
+
 ## Implementation Details
 
 ### IPv6 Dual-Stack Server
@@ -188,7 +260,7 @@ Common issues that USB bypasses:
 
 ### "Connection refused"
 - App not running or AccraHost not started
-- Wrong port (rescan after relaunching app)
+- Wrong port (verify Info.plist has correct port)
 - Device went to sleep/background
 
 ### "No route to host"
@@ -200,14 +272,6 @@ Common issues that USB bypasses:
 - Wrong IPv6 prefix (check `lsof -i -P -n | grep CoreDev`)
 - Tunnel interface not up (reconnect USB cable)
 
-### Port Scanning Finds Nothing
-- App may have crashed - check with `--console` flag
-- AccraHost may have failed to start - check device logs
-- Rebuild and reinstall app
-
-## Future Improvements
-
-1. **Fixed port option**: Allow configuring a known port to avoid scanning
-2. **CLI integration**: Add `--usb` flag to accra CLI for direct IPv6 connection
-3. **Auto-discovery**: Query devicectl for tunnel prefix automatically
-4. **Connection pooling**: Reuse connections across multiple operations
+### Connection Works But Port Wrong
+- App was built with old Info.plist - rebuild and reinstall
+- Verify with: `plutil -p /path/to/AccessibilityTestApp.app/Info.plist | grep AccraHostPort`
