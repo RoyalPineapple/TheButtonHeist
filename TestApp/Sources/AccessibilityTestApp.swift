@@ -3,11 +3,7 @@ import AccraHost
 
 @main
 struct AccessibilityTestApp: App {
-    init() {
-        // Start the Accra host server
-        try? AccraHost.shared.start()
-        AccraHost.shared.startPolling(interval: 1.0)
-    }
+    // AccraHost auto-starts via ObjC +load with port from Info.plist
 
     var body: some Scene {
         WindowGroup {
