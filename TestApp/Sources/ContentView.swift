@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @State private var name = ""
@@ -9,6 +10,7 @@ struct ContentView: View {
     @State private var stepperValue = 0
     @State private var tapCount = 0
     @State private var lastAction = "None"
+    @State private var isButtonPressed = false
 
     var body: some View {
         NavigationStack {
@@ -44,11 +46,24 @@ struct ContentView: View {
                     Text("Last action: \(lastAction)")
                         .accessibilityIdentifier("accra.action.lastActionLabel")
 
-                    Button("Test Button") {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.1)) {
+                            isButtonPressed = true
+                        }
                         tapCount += 1
                         lastAction = "Button tapped"
                         NSLog("[ContentView] 🔘 Test Button TAPPED! Count: %d", tapCount)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            withAnimation(.easeIn(duration: 0.2)) {
+                                isButtonPressed = false
+                            }
+                        }
+                    } label: {
+                        Text("Test Button")
                     }
+                    .font(.headline)
+                    .foregroundStyle(isButtonPressed ? .green : .blue)
+                    .scaleEffect(isButtonPressed ? 1.1 : 1.0)
                     .accessibilityIdentifier("accra.action.testButton")
 
                     Slider(value: $sliderValue, in: 0...100, step: 10) {
@@ -80,6 +95,36 @@ struct ContentView: View {
                         lastAction = "Cancel tapped"
                     }
                     .accessibilityIdentifier("accra.buttons.cancelButton")
+                }
+
+                Section("Accessibility Notifications") {
+                    Button("Post Layout Changed") {
+                        UIAccessibility.post(notification: .layoutChanged, argument: nil)
+                        lastAction = "Posted layoutChanged"
+                        NSLog("[ContentView] 📢 Posted layoutChanged notification")
+                    }
+                    .accessibilityIdentifier("accra.notifications.layoutChanged")
+
+                    Button("Post Screen Changed") {
+                        UIAccessibility.post(notification: .screenChanged, argument: nil)
+                        lastAction = "Posted screenChanged"
+                        NSLog("[ContentView] 📢 Posted screenChanged notification")
+                    }
+                    .accessibilityIdentifier("accra.notifications.screenChanged")
+
+                    Button("Post Announcement") {
+                        UIAccessibility.post(notification: .announcement, argument: "Hello from Accra!")
+                        lastAction = "Posted announcement"
+                        NSLog("[ContentView] 📢 Posted announcement notification")
+                    }
+                    .accessibilityIdentifier("accra.notifications.announcement")
+
+                    Button("Post Page Scrolled") {
+                        UIAccessibility.post(notification: .pageScrolled, argument: "Page 1 of 3")
+                        lastAction = "Posted pageScrolled"
+                        NSLog("[ContentView] 📢 Posted pageScrolled notification")
+                    }
+                    .accessibilityIdentifier("accra.notifications.pageScrolled")
                 }
 
                 Section("Information") {
