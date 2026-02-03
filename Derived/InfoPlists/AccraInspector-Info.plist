@@ -24,8 +24,14 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_a11ybridge._tcp</string>
+	</array>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright ©. All rights reserved.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Accra Inspector needs local network access to discover and connect to iOS apps running AccraHost.</string>
 	<key>NSMainStoryboardFile</key>
 	<string>Main</string>
 	<key>NSPrincipalClass</key>
