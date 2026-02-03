@@ -5,9 +5,7 @@ import AccraHost
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Start the Accra host server
-        try? AccraHost.shared.start()
-        AccraHost.shared.startPolling(interval: 1.0)
+        // AccraHost auto-starts via ObjC +load with port from Info.plist
         return true
     }
 
