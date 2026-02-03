@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var client = AccraClient()
     @State private var selectedDevice: DiscoveredDevice?
     @State private var selectedElement: AccessibilityElementData?
+    @State private var showTreeView = true
 
     var body: some View {
         NavigationSplitView {
@@ -42,11 +43,40 @@ struct ContentView: View {
         case .connected:
             if let hierarchy = client.currentHierarchy {
                 HStack(spacing: 0) {
-                    // Left: Element list
-                    HierarchyListView(
-                        elements: hierarchy.elements,
-                        selectedElement: $selectedElement
-                    )
+                    // Left: Element list (tree or flat)
+                    VStack(spacing: 0) {
+                        // View mode toggle
+                        HStack {
+                            Picker("View", selection: $showTreeView) {
+                                Image(systemName: "list.bullet.indent")
+                                    .tag(true)
+                                Image(systemName: "list.bullet")
+                                    .tag(false)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 80)
+                            .help(showTreeView ? "Tree View" : "Flat List")
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(nsColor: .windowBackgroundColor))
+
+                        Divider()
+
+                        if showTreeView, let tree = hierarchy.tree {
+                            HierarchyTreeView(
+                                tree: tree,
+                                elements: hierarchy.elements,
+                                selectedElement: $selectedElement
+                            )
+                        } else {
+                            HierarchyListView(
+                                elements: hierarchy.elements,
+                                selectedElement: $selectedElement
+                            )
+                        }
+                    }
                     .frame(width: 280)
 
                     Divider()
