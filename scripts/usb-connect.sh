@@ -6,6 +6,7 @@ set -e
 
 DEVICE_NAME="${1:-Test Phone 15 Pro}"
 BUNDLE_ID="${2:-com.accra.testapp}"
+FIXED_PORT="${3:-9274}"  # Default fixed port configured in AccraHost
 
 echo "=== Accra USB Connection Helper ==="
 echo ""
@@ -56,8 +57,8 @@ xcrun devicectl device process launch --device "$DEVICE_NAME" --terminate-existi
 }
 sleep 3
 
-# Find AccraHost port using Python for faster scanning
-echo "Finding AccraHost port..."
+# Try fixed port first, then scan if needed
+echo "Connecting to AccraHost..."
 FOUND_PORT=$(python3 << PYEOF
 import socket
 import concurrent.futures
@@ -65,7 +66,7 @@ import concurrent.futures
 def test_port(port):
     try:
         s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        s.settimeout(0.3)
+        s.settimeout(0.5)
         s.connect(("$DEVICE_IPV6", port))
         data = s.recv(256)
         s.close()
@@ -75,17 +76,24 @@ def test_port(port):
         pass
     return None
 
-# Test ports in parallel
-with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-    futures = {executor.submit(test_port, p): p for p in range(52500, 53500)}
-    for future in concurrent.futures.as_completed(futures):
-        result = future.result()
-        if result:
-            print(result)
-            # Cancel remaining futures
-            for f in futures:
-                f.cancel()
-            break
+# Try fixed port first (instant connection)
+fixed_port = $FIXED_PORT
+result = test_port(fixed_port)
+if result:
+    print(result)
+else:
+    # Fall back to scanning
+    import sys
+    print("Scanning...", file=sys.stderr)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        futures = {executor.submit(test_port, p): p for p in range(52500, 53500)}
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
+            if result:
+                print(result)
+                for f in futures:
+                    f.cancel()
+                break
 PYEOF
 )
 

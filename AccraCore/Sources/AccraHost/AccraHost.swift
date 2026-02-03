@@ -16,7 +16,13 @@ public final class AccraHost {
 
     // MARK: - Singleton
 
-    public static let shared = AccraHost()
+    /// Shared instance - use `configure(port:)` before first access if custom port needed
+    public static var shared: AccraHost = AccraHost()
+
+    /// Configure the shared instance with a specific port. Must be called before start().
+    public static func configure(port: UInt16) {
+        shared = AccraHost(port: port)
+    }
 
     // MARK: - Properties
 
@@ -349,8 +355,20 @@ public final class AccraHost {
         return nil
     }
 
+    /// Find the UIView at a given point using hit testing
+    private func findViewAtPoint(_ point: CGPoint) -> UIView? {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else {
+            return nil
+        }
+        let windowPoint = window.convert(point, from: nil)
+        return window.hitTest(windowPoint, with: nil)
+    }
+
     private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
-        // Refresh hierarchy to get fresh closures
+        // Refresh hierarchy
         if let rootView = getRootView() {
             cachedElements = parser.parseAccessibilityElements(in: rootView)
         }
@@ -364,19 +382,7 @@ public final class AccraHost {
             return
         }
 
-        // Try accessibility activate first
-        if let activate = element.activate {
-            if activate() {
-                TapVisualizerView.showTap(at: element.activationPoint)
-                sendMessage(.actionResult(ActionResult(
-                    success: true,
-                    method: .accessibilityActivate
-                )), respond: respond)
-                return
-            }
-        }
-
-        // Fallback to synthetic tap at activation point
+        // Use TouchInjector which handles accessibilityActivate and fallbacks
         if touchInjector.tap(at: element.activationPoint) {
             TapVisualizerView.showTap(at: element.activationPoint)
             sendMessage(.actionResult(ActionResult(
@@ -389,7 +395,7 @@ public final class AccraHost {
         sendMessage(.actionResult(ActionResult(
             success: false,
             method: .accessibilityActivate,
-            message: "Both accessibilityActivate and synthetic tap failed"
+            message: "Activation failed"
         )), respond: respond)
     }
 
@@ -403,15 +409,16 @@ public final class AccraHost {
             return
         }
 
-        if let increment = element.increment {
-            increment()
+        // Find the view at the element's activation point and call accessibilityIncrement
+        if let view = findViewAtPoint(element.activationPoint) {
+            view.accessibilityIncrement()
             TapVisualizerView.showTap(at: element.activationPoint)
             sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityIncrement)), respond: respond)
         } else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementDeallocated,
-                message: "Element no longer available"
+                method: .elementNotFound,
+                message: "Could not find view for increment"
             )), respond: respond)
         }
     }
@@ -426,21 +433,22 @@ public final class AccraHost {
             return
         }
 
-        if let decrement = element.decrement {
-            decrement()
+        // Find the view at the element's activation point and call accessibilityDecrement
+        if let view = findViewAtPoint(element.activationPoint) {
+            view.accessibilityDecrement()
             TapVisualizerView.showTap(at: element.activationPoint)
             sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityDecrement)), respond: respond)
         } else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementDeallocated,
-                message: "Element no longer available"
+                method: .elementNotFound,
+                message: "Could not find view for decrement"
             )), respond: respond)
         }
     }
 
     private func handleTap(_ target: TapTarget, respond: @escaping (Data) -> Void) {
-        // Refresh hierarchy for fresh closures
+        // Refresh hierarchy
         if let rootView = getRootView() {
             cachedElements = parser.parseAccessibilityElements(in: rootView)
         }
@@ -450,13 +458,7 @@ public final class AccraHost {
                 sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
                 return
             }
-            // Use activate closure if available
-            if let activate = element.activate, activate() {
-                TapVisualizerView.showTap(at: element.activationPoint)
-                sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
-                return
-            }
-            // Fall back to synthetic tap at activation point
+            // Use TouchInjector for tap
             let success = touchInjector.tap(at: element.activationPoint)
             if success {
                 TapVisualizerView.showTap(at: element.activationPoint)
@@ -466,17 +468,7 @@ public final class AccraHost {
         }
 
         if let point = target.point {
-            // Find accessibility element containing this point
-            if let element = findElementAtPoint(point) {
-                serverLog("Found element at point: \(element.identifier ?? "no-id")")
-                // Use activate closure if available
-                if let activate = element.activate, activate() {
-                    TapVisualizerView.showTap(at: point)
-                    sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
-                    return
-                }
-            }
-            // Fall back to TouchInjector
+            // Use TouchInjector for tap at point
             let success = touchInjector.tap(at: point)
             if success {
                 TapVisualizerView.showTap(at: point)
@@ -521,20 +513,48 @@ public final class AccraHost {
             return
         }
 
-        if let performAction = element.performCustomAction {
-            let success = performAction(target.actionName)
-            sendMessage(.actionResult(ActionResult(
-                success: success,
-                method: .customAction,
-                message: success ? nil : "Action '\(target.actionName)' not found or failed"
-            )), respond: respond)
-        } else {
+        // Find the view and perform the custom action
+        guard let view = findViewAtPoint(element.activationPoint) else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementDeallocated,
-                message: "Element no longer available"
+                method: .elementNotFound,
+                message: "Could not find view for custom action"
             )), respond: respond)
+            return
         }
+
+        // Find the custom action by name and perform it
+        if let customActions = view.accessibilityCustomActions {
+            for action in customActions {
+                if action.name == target.actionName {
+                    // UIAccessibilityCustomAction's handler returns Bool indicating success
+                    if let handler = action.actionHandler {
+                        let success = handler(action)
+                        sendMessage(.actionResult(ActionResult(
+                            success: success,
+                            method: .customAction,
+                            message: success ? nil : "Custom action failed"
+                        )), respond: respond)
+                        return
+                    }
+                    // For target/selector based actions
+                    if let actionTarget = action.target {
+                        _ = (actionTarget as AnyObject).perform(action.selector, with: action)
+                        sendMessage(.actionResult(ActionResult(
+                            success: true,
+                            method: .customAction
+                        )), respond: respond)
+                        return
+                    }
+                }
+            }
+        }
+
+        sendMessage(.actionResult(ActionResult(
+            success: false,
+            method: .customAction,
+            message: "Action '\(target.actionName)' not found"
+        )), respond: respond)
     }
 
     private func handleScreenshot(respond: @escaping (Data) -> Void) {
@@ -634,20 +654,35 @@ private extension AccessibilityMarker.Shape {
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
 /// - ACCRA_HOST_DISABLE / AccraHostDisableAutoStart: Set to true to disable
+/// - ACCRA_HOST_PORT / AccraHostPort: Fixed port number (0 = auto, default)
 /// - ACCRA_HOST_POLLING_INTERVAL / AccraHostPollingInterval: Polling interval in seconds
 @_cdecl("AccraHost_autoStartFromLoad")
 public func accraHostAutoStartFromLoad() {
+    NSLog("[AccraHost] ========== AUTO-START BEGIN ==========")
+    NSLog("[AccraHost] Bundle ID: %@", Bundle.main.bundleIdentifier ?? "unknown")
+    NSLog("[AccraHost] Device: %@", UIDevice.current.name)
+    NSLog("[AccraHost] System: %@ %@", UIDevice.current.systemName, UIDevice.current.systemVersion)
+
     // Check ACCRA_HOST_DISABLE environment variable
     if let envValue = ProcessInfo.processInfo.environment["ACCRA_HOST_DISABLE"],
        ["true", "1", "yes"].contains(envValue.lowercased()) {
-        serverLog("Auto-start disabled via ACCRA_HOST_DISABLE")
+        NSLog("[AccraHost] Auto-start disabled via ACCRA_HOST_DISABLE")
         return
     }
 
     // Check Info.plist AccraHostDisableAutoStart
     if let disable = Bundle.main.object(forInfoDictionaryKey: "AccraHostDisableAutoStart") as? Bool, disable {
-        serverLog("Auto-start disabled via Info.plist")
+        NSLog("[AccraHost] Auto-start disabled via Info.plist")
         return
+    }
+
+    // Get fixed port (0 = auto-assign)
+    var port: UInt16 = 0
+    if let envPort = ProcessInfo.processInfo.environment["ACCRA_HOST_PORT"],
+       let parsed = UInt16(envPort) {
+        port = parsed
+    } else if let plistPort = Bundle.main.object(forInfoDictionaryKey: "AccraHostPort") as? Int {
+        port = UInt16(clamping: plistPort)
     }
 
     // Get polling interval (default 1.0, minimum 0.5)
@@ -659,13 +694,20 @@ public func accraHostAutoStartFromLoad() {
         interval = max(0.5, plistInterval)
     }
 
+    NSLog("[AccraHost] Starting with port: %d, polling interval: %f", port, interval)
+
     Task { @MainActor in
+        NSLog("[AccraHost] MainActor task executing...")
         do {
+            // Configure shared instance with port if specified
+            if port != 0 {
+                AccraHost.configure(port: port)
+            }
             try AccraHost.shared.start()
             AccraHost.shared.startPolling(interval: interval)
-            serverLog("Auto-start completed (polling: \(interval)s)")
+            NSLog("[AccraHost] ========== AUTO-START SUCCESS ==========")
         } catch {
-            serverLog("Auto-start failed: \(error)")
+            NSLog("[AccraHost] ========== AUTO-START FAILED: %@ ==========", String(describing: error))
         }
     }
 }
