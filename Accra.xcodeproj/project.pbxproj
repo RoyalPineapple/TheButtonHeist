@@ -19,7 +19,9 @@
 		3274E3C8BF7E2DE7732EC41B /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
 		377264D30E0EB73E72D58C50 /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
 		38C093CD56AB8AE96D9FB770 /* AccraClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9AC3C16E6B3203367F6A6C /* AccraClient.swift */; };
+		38CDF73165BE79444783F52D /* AccraHostAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = DCBC0FF9FFE60414EB6444BE /* AccraHostAutoStart.m */; };
 		42AA9E1DE88B931A820AE7BC /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
+		55BDFE87B9A24463E7ACC8E6 /* AccraHostAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 45E485C71A169153C8678EDB /* AccraHostAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		6A4F00FB99A38A5A05ACA6B4 /* AccraClientStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8588CD671E859F4658FB3764 /* AccraClientStateTests.swift */; };
 		6CBD27D8253F73CF93EE714E /* TouchInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF6269C0DD5F3D81A63E19A /* TouchInjector.swift */; };
 		71A150E7324EB6C5C7844142 /* AccraClient.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE29511145CE3D24F1218566 /* AccraClient.framework */; };
@@ -174,6 +176,7 @@
 		3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		373C97078255C2069EDC5593 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
+		45E485C71A169153C8678EDB /* AccraHostAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AccraHostAutoStart.h; sourceTree = "<group>"; };
 		4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccraInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C8B750DAEDE8BB5353165FE /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		637411E075F2D94CBBC9810D /* AccraClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AccraClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -197,6 +200,7 @@
 		C2DE31421A8C05275742CC0C /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		CD8830CB0B325B9B4A442DE6 /* AccraHost-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraHost-Info.plist"; sourceTree = "<group>"; };
 		D55F99765F1D887713C0FA2A /* AccraCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccraCoreTests.swift; sourceTree = "<group>"; };
+		DCBC0FF9FFE60414EB6444BE /* AccraHostAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AccraHostAutoStart.m; sourceTree = "<group>"; };
 		DCCA1EA3637BF6382BAC2546 /* AccraCoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraCoreTests-Info.plist"; sourceTree = "<group>"; };
 		DE29511145CE3D24F1218566 /* AccraClient.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraClient.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F562F7886A12FECBEF775129 /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
@@ -289,6 +293,14 @@
 			path = AccraClientTests;
 			sourceTree = "<group>";
 		};
+		3B1568780F8AFE7B52C60ECA /* include */ = {
+			isa = PBXGroup;
+			children = (
+				45E485C71A169153C8678EDB /* AccraHostAutoStart.h */,
+			);
+			path = include;
+			sourceTree = "<group>";
+		};
 		3C728D6059E1E57EB8AF7A07 /* Project */ = {
 			isa = PBXGroup;
 			children = (
@@ -335,8 +347,18 @@
 				17DB7DE887C7242BDD43B005 /* AccraClient */,
 				E9AC9DD870F8B8829D9B50F0 /* AccraCore */,
 				F3F5AB0781CE2FDF7AD4B422 /* AccraHost */,
+				A76F9896E29BA701D3F7B678 /* AccraHostLoader */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		A76F9896E29BA701D3F7B678 /* AccraHostLoader */ = {
+			isa = PBXGroup;
+			children = (
+				3B1568780F8AFE7B52C60ECA /* include */,
+				DCBC0FF9FFE60414EB6444BE /* AccraHostAutoStart.m */,
+			);
+			path = AccraHostLoader;
 			sourceTree = "<group>";
 		};
 		AB4A8EF09CC8A2FE438E3B49 /* Products */ = {
@@ -433,6 +455,17 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXHeadersBuildPhase section */
+		50B0F34C838FC191E71327B6 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55BDFE87B9A24463E7ACC8E6 /* AccraHostAutoStart.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
 /* Begin PBXNativeTarget section */
 		4FD71A4753FA4D2CAB9EC219 /* AccraInspector */ = {
 			isa = PBXNativeTarget;
@@ -524,6 +557,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = D3BF6029B217D757D20ED078 /* Build configuration list for PBXNativeTarget "AccraHost" */;
 			buildPhases = (
+				50B0F34C838FC191E71327B6 /* Headers */,
 				D77E0AE164C35FDB65DB9BFE /* Sources */,
 				826BFAB0AE6F6300D49D874C /* Resources */,
 				B34126C52751B588BDC905EB /* Frameworks */,
@@ -688,6 +722,7 @@
 				FCEE3248D564FFEDB6E4B0B5 /* SimpleSocketServer.swift in Sources */,
 				29A7ED730AFD9987AF995384 /* TapVisualizerView.swift in Sources */,
 				6CBD27D8253F73CF93EE714E /* TouchInjector.swift in Sources */,
+				38CDF73165BE79444783F52D /* AccraHostAutoStart.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
