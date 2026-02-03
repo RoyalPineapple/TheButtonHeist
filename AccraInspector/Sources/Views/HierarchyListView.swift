@@ -88,14 +88,20 @@ struct ElementRowView: View {
     let element: AccessibilityElementData
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Primary trait (monospace, secondary)
-            Text(primaryTrait)
-                .font(.Tree.elementTrait)
-                .foregroundColor(Color.Tree.textSecondary)
+        HStack(spacing: 6) {
+            // Colored indicator dot
+            Circle()
+                .fill(ElementStyling.color(for: element))
+                .frame(width: 8, height: 8)
 
-            // Label or description (quoted, primary)
-            Text("\"\(displayLabel)\"")
+            // Element type icon
+            Image(systemName: ElementStyling.iconName(for: element))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(ElementStyling.color(for: element))
+                .frame(width: 16)
+
+            // Label or description
+            Text(displayLabel)
                 .font(.Tree.elementLabel)
                 .foregroundColor(Color.Tree.textPrimary)
                 .lineLimit(1)
@@ -104,10 +110,6 @@ struct ElementRowView: View {
         }
         .frame(height: TreeSpacing.rowHeight)
         .padding(.horizontal, TreeSpacing.rowHorizontalPadding)
-    }
-
-    private var primaryTrait: String {
-        element.traits.first ?? "element"
     }
 
     private var displayLabel: String {
