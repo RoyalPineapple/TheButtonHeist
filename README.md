@@ -1,16 +1,17 @@
 # Accra
 
-**Accessibility inspection toolkit for iOS apps**
+**Accessibility inspection and automation toolkit for iOS apps**
 
-Accra lets you inspect the accessibility hierarchy of iOS apps in real-time from your Mac. Connect to any iOS app running AccraHost over your local network to see how VoiceOver and other assistive technologies perceive your UI.
+Accra lets you inspect and interact with the accessibility hierarchy of iOS apps in real-time from your Mac. Connect to any iOS app running AccraHost over local network or USB to see how VoiceOver perceives your UI, and automate accessibility testing.
 
 ## Features
 
-- **Real-time inspection** — See accessibility elements update as your app's UI changes
-- **Bonjour discovery** — Automatically find iOS devices running AccraHost on your network
-- **Multiple interfaces** — GUI app for visual inspection, CLI for scripting and CI
-- **Clean API** — AccraClient provides an `ObservableObject` for easy SwiftUI integration
-- **Cross-platform types** — Shared data models work on both iOS and macOS
+- **Real-time inspection** - See accessibility elements update as your app's UI changes
+- **Remote actions** - Tap elements and trigger actions programmatically
+- **USB connectivity** - Connect to devices over USB when WiFi is unavailable
+- **Auto-start** - AccraHost starts automatically when your app launches
+- **Fixed port** - Predictable port (1455) for reliable scripted connections
+- **Multiple interfaces** - GUI app, CLI, Python, or custom tools
 
 ## Architecture
 
@@ -18,22 +19,22 @@ Accra lets you inspect the accessibility hierarchy of iOS apps in real-time from
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Your Mac                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │  AccraInspector  │  │    accra CLI     │  │   Your Tool      │  │
+│  │  AccraInspector  │  │    accra CLI     │  │  Python/Scripts  │  │
 │  │    (GUI app)     │  │                  │  │                  │  │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
 │           │                     │                     │            │
 │           └─────────────────────┼─────────────────────┘            │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
-│                        │   AccraClient   │  ← Bonjour + WebSocket  │
-│                        │   (framework)   │                         │
+│                        │   AccraClient   │  ← Bonjour discovery    │
+│                        │   (framework)   │    or direct TCP        │
 │                        └────────┬────────┘                         │
 └─────────────────────────────────┼───────────────────────────────────┘
-                                  │ Local Network
+                                  │ Local Network / USB (IPv6)
 ┌─────────────────────────────────┼───────────────────────────────────┐
 │                        ┌────────┴────────┐                         │
-│                        │   AccraHost     │  ← Embedded in your app │
-│                        │   (framework)   │                         │
+│                        │   AccraHost     │  ← Auto-starts on load  │
+│                        │   (framework)   │    Port 1455            │
 │                        └────────┬────────┘                         │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
@@ -48,7 +49,7 @@ Accra lets you inspect the accessibility hierarchy of iOS apps in real-time from
 | Module | Platform | Description |
 |--------|----------|-------------|
 | **AccraCore** | iOS + macOS | Shared types, messages, and constants |
-| **AccraHost** | iOS | Server that exposes accessibility hierarchy over WebSocket |
+| **AccraHost** | iOS | Server that exposes accessibility hierarchy over TCP |
 | **AccraClient** | macOS | Client library for discovery and connection |
 | **AccraInspector** | macOS | GUI app for visual inspection |
 | **accra** | macOS | CLI tool for scripting and automation |
@@ -57,18 +58,16 @@ Accra lets you inspect the accessibility hierarchy of iOS apps in real-time from
 
 ### 1. Add AccraHost to Your iOS App
 
-Add the AccraCore package to your project and import AccraHost:
+Add the AccraCore package to your project and import AccraHost. **AccraHost auto-starts via ObjC +load** - no code changes needed beyond importing the framework.
 
+**SwiftUI:**
 ```swift
+import SwiftUI
 import AccraHost
 
 @main
 struct MyApp: App {
-    init() {
-        // Start the Accra host server
-        try? AccraHost.shared.start()
-        AccraHost.shared.startPolling(interval: 1.0)
-    }
+    // AccraHost auto-starts via ObjC +load with port from Info.plist
 
     var body: some Scene {
         WindowGroup {
@@ -78,25 +77,29 @@ struct MyApp: App {
 }
 ```
 
-For UIKit apps:
-
+**UIKit:**
 ```swift
+import UIKit
 import AccraHost
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        try? AccraHost.shared.start()
-        AccraHost.shared.startPolling(interval: 1.0)
+        // AccraHost auto-starts via ObjC +load with port from Info.plist
         return true
     }
 }
 ```
 
-Add the required Info.plist entries for local network access:
+Add the required Info.plist entries:
 
 ```xml
+<!-- Fixed port for AccraHost (required) -->
+<key>AccraHostPort</key>
+<integer>1455</integer>
+
+<!-- Network permissions -->
 <key>NSLocalNetworkUsageDescription</key>
 <string>This app uses local network to communicate with the accessibility inspector.</string>
 <key>NSBonjourServices</key>
@@ -105,30 +108,30 @@ Add the required Info.plist entries for local network access:
 </array>
 ```
 
-### 2. Run the Inspector
+### 2. Connect
 
-**GUI App:**
+**Over USB (recommended):**
 ```bash
-# Build and run the inspector app
-tuist generate
-open Accra.xcworkspace
-# Run the AccraInspector scheme
+# Quick connection script
+./scripts/usb-connect.sh "Your Device Name"
+
+# Python
+python3 scripts/accra_usb.py
 ```
 
-**CLI:**
+**Over WiFi:**
 ```bash
 cd AccraCLI
 swift run accra --once    # Single snapshot
 swift run accra           # Watch mode (live updates)
-swift run accra --format json --once | jq .  # JSON for scripting
 ```
 
-### 3. Connect
-
-1. Run your iOS app on a device or simulator
-2. Launch AccraInspector or the CLI on your Mac
-3. Your device will appear automatically via Bonjour
-4. Select it to connect and view the accessibility hierarchy
+**GUI App:**
+```bash
+tuist generate
+open Accra.xcworkspace
+# Run the AccraInspector scheme
+```
 
 ## CLI Usage
 
@@ -158,71 +161,40 @@ accra --format json --once
 
 # Quiet mode - only data, no status messages
 accra -q --once
-
-# With timeout
-accra --timeout 10 --once
 ```
 
-## Using AccraClient in Your Own Tools
+## USB Connectivity
 
-AccraClient provides a clean API for building custom accessibility tools:
+When WiFi is unreliable (VPN, network segmentation), connect over USB using the CoreDevice IPv6 tunnel.
 
-```swift
-import AccraClient
-import AccraCore
-
-@MainActor
-class MyInspector: ObservableObject {
-    let client = AccraClient()
-
-    init() {
-        // Start discovering devices
-        client.startDiscovery()
-    }
-
-    func connect(to device: DiscoveredDevice) {
-        client.connect(to: device)
-    }
-}
+**Quick connect:**
+```bash
+./scripts/usb-connect.sh "iPhone 15 Pro"
 ```
 
-**SwiftUI Integration:**
+**Python:**
+```python
+from scripts.accra_usb import AccraUSBConnection
 
-```swift
-struct InspectorView: View {
-    @StateObject private var client = AccraClient()
+with AccraUSBConnection() as conn:
+    print(f"Connected to: {conn.info['appName']}")
+    hierarchy = conn.get_hierarchy()
 
-    var body: some View {
-        List(client.discoveredDevices) { device in
-            Button(device.name) {
-                client.connect(to: device)
-            }
-        }
-        .onAppear {
-            client.startDiscovery()
-        }
-    }
-}
+    # Interact with elements
+    conn.activate(identifier="loginButton")
+    conn.tap(x=196.5, y=659)
 ```
 
-**Callback-based usage (for non-SwiftUI):**
+**Manual:**
+```bash
+# Find device IPv6
+lsof -i -P -n | grep CoreDev
 
-```swift
-let client = AccraClient()
-
-client.onDeviceDiscovered = { device in
-    print("Found: \(device.name)")
-    client.connect(to: device)
-}
-
-client.onHierarchyUpdate = { payload in
-    for element in payload.elements {
-        print("\(element.label ?? element.description)")
-    }
-}
-
-client.startDiscovery()
+# Connect directly
+nc -6 fd9a:6190:eed7::1 1455
 ```
+
+See [docs/USB_DEVICE_CONNECTIVITY.md](docs/USB_DEVICE_CONNECTIVITY.md) for details.
 
 ## Data Model
 
@@ -264,6 +236,24 @@ tuist generate
 open Accra.xcworkspace
 ```
 
+### Building for Device (Command Line)
+
+```bash
+# Build with signing
+xcodebuild -workspace Accra.xcworkspace \
+  -scheme AccessibilityTestApp \
+  -destination 'platform=iOS,name=Your Device' \
+  -allowProvisioningUpdates \
+  CODE_SIGN_STYLE=Automatic \
+  DEVELOPMENT_TEAM=YOUR_TEAM_ID \
+  build
+
+# Install
+xcrun devicectl device install app \
+  --device "Your Device" \
+  ~/Library/Developer/Xcode/DerivedData/Accra-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
+```
+
 ### Project Structure
 
 ```
@@ -272,6 +262,7 @@ accra/
 │   └── Sources/
 │       ├── AccraCore/       # Shared types (Messages.swift)
 │       ├── AccraHost/       # iOS server
+│       ├── AccraHostLoader/ # ObjC auto-start
 │       └── AccraClient/     # macOS client library
 ├── AccraInspector/
 │   └── Sources/             # macOS GUI app
@@ -280,70 +271,63 @@ accra/
 ├── TestApp/
 │   ├── Sources/             # SwiftUI test app
 │   └── UIKitSources/        # UIKit test app
+├── scripts/
+│   ├── usb-connect.sh       # USB connection helper
+│   └── accra_usb.py         # Python USB module
+├── docs/
+│   └── USB_DEVICE_CONNECTIVITY.md
 ├── Project.swift            # Tuist configuration
 └── Workspace.swift
 ```
 
-### Running Tests
-
-```bash
-# Build all targets
-xcodebuild -workspace Accra.xcworkspace -scheme AccraCore build
-xcodebuild -workspace Accra.xcworkspace -scheme AccraHost -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-xcodebuild -workspace Accra.xcworkspace -scheme AccraClient build
-xcodebuild -workspace Accra.xcworkspace -scheme AccraInspector build
-
-# Run CLI
-cd AccraCLI && swift run accra --help
-```
-
 ## Wire Protocol
 
-Communication uses JSON over WebSocket:
+Communication uses newline-delimited JSON over TCP:
 
 **Client → Server:**
-- `requestHierarchy` — Request current hierarchy
-- `subscribe` — Subscribe to automatic updates
-- `unsubscribe` — Stop receiving updates
-- `ping` — Keepalive
+- `requestHierarchy` - Request current hierarchy
+- `activate` - Activate element (VoiceOver double-tap)
+- `tap` - Tap at coordinates or element
+- `ping` - Keepalive
 
 **Server → Client:**
-- `info` — Server info on connection
-- `hierarchy` — Accessibility hierarchy data
-- `pong` — Ping response
-- `error` — Error message
+- `info` - Server info on connection
+- `hierarchy` - Accessibility hierarchy data
+- `actionResult` - Result of activate/tap
+- `pong` - Ping response
 
-Bonjour service type: `_a11ybridge._tcp`
+**Port:** 1455 (configurable via Info.plist)
+**Bonjour service:** `_a11ybridge._tcp`
 
 ## Troubleshooting
 
-### Device not appearing
+### Device not appearing (WiFi)
 
 1. Ensure both devices are on the same network
-2. Check that AccraHost is started in your app
+2. Check that AccraHost framework is linked
 3. Verify Info.plist has the Bonjour service entry
 4. On iOS, accept the local network permission prompt
 
-### Connection fails immediately
+### USB connection refused
 
-- Check that no firewall is blocking the connection
-- The iOS app must be in the foreground initially
-- Try restarting the app
+1. Check device is connected: `xcrun devicectl list devices`
+2. Verify app is running on device
+3. Check port in Info.plist matches (default: 1455)
+4. Find IPv6 tunnel: `lsof -i -P -n | grep CoreDev`
 
 ### Empty hierarchy
 
 - Ensure the app has visible UI
-- Check that `startPolling()` is called
 - The root view must be accessible to UIAccessibility
 
 ## Documentation
 
-- [Contributing Guide](CONTRIBUTING.md) — How to contribute to Accra
-- [Changelog](CHANGELOG.md) — Version history
-- [Architecture](docs/ARCHITECTURE.md) — System design and data flow
-- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Complete protocol specification
-- [API Reference](docs/API.md) — Detailed API documentation
-- [Design System](docs/DESIGN-SYSTEM.md) — Inspector UI guidelines
+- [USB Device Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) - USB connection guide
+- [Architecture](docs/ARCHITECTURE.md) - System design and data flow
+- [Wire Protocol](docs/WIRE-PROTOCOL.md) - Complete protocol specification
+- [API Reference](docs/API.md) - Detailed API documentation
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+- [Changelog](CHANGELOG.md) - Version history
 
 ## License
 

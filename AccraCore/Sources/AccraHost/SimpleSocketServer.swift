@@ -23,14 +23,15 @@ final class SimpleSocketServer {
     }
 
     /// Start the server on the specified port (0 = any available port)
+    /// Uses IPv6 dual-stack socket to accept both IPv4 and IPv6 connections
     func start(port: UInt16 = 0) throws -> UInt16 {
-        NSLog("[SimpleSocketServer] Starting server...")
+        NSLog("[SimpleSocketServer] Starting server (IPv6 dual-stack)...")
 
         // Ignore SIGPIPE globally - prevents crash when writing to closed socket
         signal(SIGPIPE, SIG_IGN)
 
-        // Create socket
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        // Create IPv6 socket (dual-stack will handle IPv4 too)
+        let fd = socket(AF_INET6, SOCK_STREAM, 0)
         guard fd >= 0 else {
             throw NSError(domain: "SimpleSocketServer", code: Int(errno), userInfo: [
                 NSLocalizedDescriptionKey: "Failed to create socket: \(String(cString: strerror(errno)))"
@@ -43,15 +44,19 @@ final class SimpleSocketServer {
         // Prevent SIGPIPE on this socket
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
 
-        // Bind to port
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = port.bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY.bigEndian
+        // Enable dual-stack: accept both IPv4 and IPv6 connections
+        var no: Int32 = 0
+        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, socklen_t(MemoryLayout<Int32>.size))
+
+        // Bind to port on all interfaces (IPv6 any = ::)
+        var addr = sockaddr_in6()
+        addr.sin6_family = sa_family_t(AF_INET6)
+        addr.sin6_port = port.bigEndian
+        addr.sin6_addr = in6addr_any
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in6>.size))
             }
         }
 
@@ -71,14 +76,14 @@ final class SimpleSocketServer {
         }
 
         // Get actual port
-        var boundAddr = sockaddr_in()
-        var addrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+        var boundAddr = sockaddr_in6()
+        var addrLen = socklen_t(MemoryLayout<sockaddr_in6>.size)
         withUnsafeMutablePointer(to: &boundAddr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                 getsockname(fd, sockaddrPtr, &addrLen)
             }
         }
-        listeningPort = UInt16(bigEndian: boundAddr.sin_port)
+        listeningPort = UInt16(bigEndian: boundAddr.sin6_port)
 
         NSLog("[SimpleSocketServer] Listening on port \(listeningPort)")
 
@@ -90,8 +95,8 @@ final class SimpleSocketServer {
             while true {
                 guard let self = self else { break }
 
-                var clientAddr = sockaddr_in()
-                var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
+                var clientAddr = sockaddr_in6()
+                var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in6>.size)
 
                 let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
                     ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
@@ -105,7 +110,11 @@ final class SimpleSocketServer {
                     break
                 }
 
-                NSLog("[SimpleSocketServer] Accepted connection on fd \(clientFD)")
+                // Log the client address for debugging
+                var addrString = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                inet_ntop(AF_INET6, &clientAddr.sin6_addr, &addrString, socklen_t(INET6_ADDRSTRLEN))
+                let addrStr = String(cString: addrString)
+                NSLog("[SimpleSocketServer] Accepted connection from \(addrStr) on fd \(clientFD)")
                 self.handleNewClient(clientFD)
             }
         }

@@ -1,5 +1,50 @@
 # CLAUDE.md
 
+## Pre-Commit Checklist
+
+Before pushing any commit, verify the following:
+
+### 1. Build Verification
+- **All targets must build successfully.** Run the full build:
+  ```bash
+  xcodebuild -workspace Accra.xcworkspace -scheme AccraCore build
+  xcodebuild -workspace Accra.xcworkspace -scheme AccraHost -destination 'generic/platform=iOS' build
+  xcodebuild -workspace Accra.xcworkspace -scheme AccraClient build
+  ```
+- For device builds, include signing:
+  ```bash
+  xcodebuild -workspace Accra.xcworkspace -scheme AccessibilityTestApp \
+    -destination 'platform=iOS,name=Device' -allowProvisioningUpdates \
+    CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID build
+  ```
+
+### 2. Tests Pass
+- **All existing tests must pass.** Run the test suite:
+  ```bash
+  xcodebuild -workspace Accra.xcworkspace -scheme AccraCoreTests test
+  xcodebuild -workspace Accra.xcworkspace -scheme AccraClientTests test
+  ```
+- If tests fail, fix the code or update tests to reflect intentional changes.
+
+### 3. Documentation Up to Date
+- **Documentation must reflect the current implementation.** Check these files:
+  - `README.md` - Quick start, features, usage examples
+  - `docs/API.md` - Public API documentation
+  - `docs/ARCHITECTURE.md` - System design and component interaction
+  - `docs/WIRE-PROTOCOL.md` - Message format and protocol details
+  - `docs/USB_DEVICE_CONNECTIVITY.md` - USB connection guide
+- When changing behavior, ports, message formats, or configuration:
+  - Update all affected documentation
+  - Ensure code examples are correct and runnable
+  - Verify Info.plist keys and default values are accurate
+
+### 4. Test Coverage for New Systems
+- **Major new features require tests.** When introducing:
+  - New message types → Add protocol tests
+  - New API methods → Add unit tests
+  - New connection paths → Add integration tests
+- Tests should be automatable (no manual verification required).
+
 ## Commit Hygiene
 
 - **Always ensure code builds before committing.** Never commit code that doesn't compile or pass basic build checks.
