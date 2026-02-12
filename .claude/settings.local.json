@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__buttonheist__get_screenshot",
+      "mcp__buttonheist__get_snapshot",
+      "mcp__buttonheist__tap"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "buttonheist"
+  ]
+}
