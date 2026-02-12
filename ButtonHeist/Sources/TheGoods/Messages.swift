@@ -59,6 +59,12 @@ public enum ClientMessage: Codable {
     /// Two-finger tap
     case touchTwoFingerTap(TwoFingerTapTarget)
 
+    /// Draw along a path (sequence of points)
+    case touchDrawPath(DrawPathTarget)
+
+    /// Draw along a bezier curve (sampled to polyline server-side)
+    case touchDrawBezier(DrawBezierTarget)
+
     /// Request a screenshot of the current screen
     case requestScreenshot
 }
@@ -267,6 +273,89 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     }
 }
 
+/// A point in a draw path
+public struct PathPoint: Codable, Sendable, Equatable {
+    public let x: Double
+    public let y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+}
+
+/// Target for draw-path gesture (polyline trace)
+public struct DrawPathTarget: Codable, Sendable {
+    /// Ordered array of waypoints to trace through
+    public let points: [PathPoint]
+    /// Total duration in seconds (mutually exclusive with velocity)
+    public let duration: Double?
+    /// Speed in points-per-second (mutually exclusive with duration)
+    public let velocity: Double?
+
+    public init(points: [PathPoint], duration: Double? = nil, velocity: Double? = nil) {
+        self.points = points
+        self.duration = duration
+        self.velocity = velocity
+    }
+}
+
+/// A cubic bezier segment: two control points and an endpoint.
+/// The start point is implicit (the end of the previous segment, or the path's startPoint).
+public struct BezierSegment: Codable, Sendable {
+    public let cp1X: Double
+    public let cp1Y: Double
+    public let cp2X: Double
+    public let cp2Y: Double
+    public let endX: Double
+    public let endY: Double
+
+    public init(cp1X: Double, cp1Y: Double, cp2X: Double, cp2Y: Double, endX: Double, endY: Double) {
+        self.cp1X = cp1X; self.cp1Y = cp1Y
+        self.cp2X = cp2X; self.cp2Y = cp2Y
+        self.endX = endX; self.endY = endY
+    }
+
+    public var cp1: CGPoint { CGPoint(x: cp1X, y: cp1Y) }
+    public var cp2: CGPoint { CGPoint(x: cp2X, y: cp2Y) }
+    public var end: CGPoint { CGPoint(x: endX, y: endY) }
+}
+
+/// Target for draw-bezier gesture (cubic bezier curves sampled to polyline)
+public struct DrawBezierTarget: Codable, Sendable {
+    /// Starting point of the bezier path
+    public let startX: Double
+    public let startY: Double
+    /// Array of cubic bezier segments
+    public let segments: [BezierSegment]
+    /// Samples per bezier segment (default 20)
+    public let samplesPerSegment: Int?
+    /// Total duration in seconds (mutually exclusive with velocity)
+    public let duration: Double?
+    /// Speed in points-per-second (mutually exclusive with duration)
+    public let velocity: Double?
+
+    public init(
+        startX: Double, startY: Double,
+        segments: [BezierSegment],
+        samplesPerSegment: Int? = nil,
+        duration: Double? = nil, velocity: Double? = nil
+    ) {
+        self.startX = startX; self.startY = startY
+        self.segments = segments
+        self.samplesPerSegment = samplesPerSegment
+        self.duration = duration; self.velocity = velocity
+    }
+
+    public var startPoint: CGPoint {
+        CGPoint(x: startX, y: startY)
+    }
+}
+
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
@@ -338,6 +427,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticPinch
     case syntheticRotate
     case syntheticTwoFingerTap
+    case syntheticDrawPath
     case customAction
     case elementNotFound
     case elementDeallocated
