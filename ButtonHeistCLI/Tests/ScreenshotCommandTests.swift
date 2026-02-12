@@ -7,19 +7,19 @@ final class ScreenshotCommandTests: XCTestCase {
     // MARK: - Message Encoding Tests
 
     func testRequestScreenshotMessageEncoding() throws {
-        let message = ClientMessage.requestScreenshot
+        let message = ClientMessage.requestScreen
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .requestScreenshot = decoded {
+        if case .requestScreen = decoded {
             // Success
         } else {
-            XCTFail("Expected requestScreenshot, got \(decoded)")
+            XCTFail("Expected requestScreen, got \(decoded)")
         }
     }
 
     func testScreenshotPayloadEncoding() throws {
-        let payload = ScreenshotPayload(
+        let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 390,
             height: 844
@@ -31,7 +31,7 @@ final class ScreenshotCommandTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(ScreenshotPayload.self, from: data)
+        let decoded = try decoder.decode(ScreenPayload.self, from: data)
 
         XCTAssertEqual(decoded.pngData, payload.pngData)
         XCTAssertEqual(decoded.width, 390)
@@ -39,12 +39,12 @@ final class ScreenshotCommandTests: XCTestCase {
     }
 
     func testServerMessageScreenshotEncoding() throws {
-        let payload = ScreenshotPayload(
+        let payload = ScreenPayload(
             pngData: "base64data",
             width: 1206,
             height: 2622
         )
-        let message = ServerMessage.screenshot(payload)
+        let message = ServerMessage.screen(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -54,12 +54,12 @@ final class ScreenshotCommandTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .screenshot(let decodedPayload) = decoded {
+        if case .screen(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.pngData, "base64data")
             XCTAssertEqual(decodedPayload.width, 1206)
             XCTAssertEqual(decodedPayload.height, 2622)
         } else {
-            XCTFail("Expected screenshot message, got \(decoded)")
+            XCTFail("Expected screen message, got \(decoded)")
         }
     }
 
@@ -67,7 +67,7 @@ final class ScreenshotCommandTests: XCTestCase {
         // 1x1 red pixel PNG in base64
         let base64PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
 
-        let payload = ScreenshotPayload(
+        let payload = ScreenPayload(
             pngData: base64PNG,
             width: 1,
             height: 1
@@ -86,7 +86,7 @@ final class ScreenshotCommandTests: XCTestCase {
 
     func testScreenshotPayloadTimestamp() throws {
         let fixedDate = Date(timeIntervalSince1970: 1706900000)
-        let payload = ScreenshotPayload(
+        let payload = ScreenPayload(
             pngData: "data",
             width: 100,
             height: 200,
@@ -99,7 +99,7 @@ final class ScreenshotCommandTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(ScreenshotPayload.self, from: data)
+        let decoded = try decoder.decode(ScreenPayload.self, from: data)
 
         // ISO8601 may lose sub-second precision, so compare within 1 second
         XCTAssertEqual(decoded.timestamp.timeIntervalSince1970, fixedDate.timeIntervalSince1970, accuracy: 1.0)

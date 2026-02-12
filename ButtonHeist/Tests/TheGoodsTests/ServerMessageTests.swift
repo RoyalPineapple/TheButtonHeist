@@ -26,7 +26,7 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testSnapshotEncodeDecode() throws {
+    func testInterfaceEncodeDecode() throws {
         let element = UIElement(
             order: 0,
             description: "Button",
@@ -36,8 +36,8 @@ final class ServerMessageTests: XCTestCase {
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
             actions: ["activate"]
         )
-        let payload = Snapshot(timestamp: Date(), elements: [element])
-        let message = ServerMessage.snapshot(payload)
+        let payload = Interface(timestamp: Date(), elements: [element])
+        let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -47,11 +47,11 @@ final class ServerMessageTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .snapshot(let decodedPayload) = decoded {
+        if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 1)
             XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
         } else {
-            XCTFail("Expected snapshot, got \(decoded)")
+            XCTFail("Expected interface, got \(decoded)")
         }
     }
 
@@ -79,13 +79,13 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testScreenshotEncodeDecode() throws {
-        let payload = ScreenshotPayload(
+    func testScreenEncodeDecode() throws {
+        let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
             width: 390,
             height: 844
         )
-        let message = ServerMessage.screenshot(payload)
+        let message = ServerMessage.screen(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -95,12 +95,12 @@ final class ServerMessageTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .screenshot(let decodedPayload) = decoded {
+        if case .screen(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.pngData, payload.pngData)
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
         } else {
-            XCTFail("Expected screenshot, got \(decoded)")
+            XCTFail("Expected screen, got \(decoded)")
         }
     }
 }

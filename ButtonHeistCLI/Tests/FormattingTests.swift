@@ -69,9 +69,9 @@ final class FormattingTests: XCTestCase {
 
     func testFormatSnapshotJSON() {
         let element = makeElement(label: "Test", index: 0, actions: [])
-        let payload = Snapshot(timestamp: Date(), elements: [element])
+        let payload = Interface(timestamp: Date(), elements: [element])
 
-        let json = formatSnapshotJSON(payload)
+        let json = formatInterfaceJSON(payload)
 
         XCTAssertNotNil(json)
         XCTAssertTrue(json!.contains("\"elements\""))
@@ -165,7 +165,7 @@ func formatElement(_ element: UIElement, changed: Bool) -> String {
     return output
 }
 
-func formatSnapshotJSON(_ payload: Snapshot) -> String? {
+func formatInterfaceJSON(_ payload: Interface) -> String? {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     encoder.dateEncodingStrategy = .iso8601

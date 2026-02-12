@@ -62,9 +62,9 @@ struct ScreenshotCommand: AsyncParsableCommand {
         }
 
         // Request screenshot
-        client.send(.requestScreenshot)
+        client.send(.requestScreen)
 
-        let payload = try await client.waitForScreenshot(timeout: timeout)
+        let payload = try await client.waitForScreen(timeout: timeout)
 
         guard let pngData = Data(base64Encoded: payload.pngData) else {
             throw ValidationError("Failed to decode screenshot data")

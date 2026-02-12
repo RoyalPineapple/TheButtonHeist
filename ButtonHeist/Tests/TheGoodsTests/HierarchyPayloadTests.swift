@@ -4,7 +4,7 @@ import XCTest
 final class SnapshotTests: XCTestCase {
 
     func testEmptyPayload() throws {
-        let payload = Snapshot(timestamp: Date(), elements: [])
+        let payload = Interface(timestamp: Date(), elements: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -12,7 +12,7 @@ final class SnapshotTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(Snapshot.self, from: data)
+        let decoded = try decoder.decode(Interface.self, from: data)
 
         XCTAssertTrue(decoded.elements.isEmpty)
     }
@@ -31,7 +31,7 @@ final class SnapshotTests: XCTestCase {
             )
         }
 
-        let payload = Snapshot(timestamp: Date(), elements: elements)
+        let payload = Interface(timestamp: Date(), elements: elements)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -39,7 +39,7 @@ final class SnapshotTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(Snapshot.self, from: data)
+        let decoded = try decoder.decode(Interface.self, from: data)
 
         XCTAssertEqual(decoded.elements.count, 10)
         for i in 0..<10 {
@@ -50,7 +50,7 @@ final class SnapshotTests: XCTestCase {
 
     func testTimestampPreservation() throws {
         let timestamp = Date(timeIntervalSince1970: 1700000000)
-        let payload = Snapshot(timestamp: timestamp, elements: [])
+        let payload = Interface(timestamp: timestamp, elements: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -58,7 +58,7 @@ final class SnapshotTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(Snapshot.self, from: data)
+        let decoded = try decoder.decode(Interface.self, from: data)
 
         // ISO8601 preserves to second precision
         XCTAssertEqual(

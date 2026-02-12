@@ -10,8 +10,8 @@ func log(_ message: String) {
 
 // MARK: - Tool Definitions
 
-let snapshotTool = Tool(
-    name: "get_snapshot",
+let interfaceTool = Tool(
+    name: "get_interface",
     // swiftlint:disable:next line_length
     description: "Get the current UI element hierarchy from the connected iOS app. Returns a list of all accessibility elements with their labels, values, identifiers, frames, and available actions.",
     inputSchema: .object([
@@ -21,8 +21,8 @@ let snapshotTool = Tool(
     annotations: .init(readOnlyHint: true, openWorldHint: false)
 )
 
-let screenshotTool = Tool(
-    name: "get_screenshot",
+let screenTool = Tool(
+    name: "get_screen",
     description: "Capture a PNG screenshot of the connected iOS app's current screen.",
     inputSchema: .object([
         "type": .string("object"),
@@ -38,7 +38,7 @@ let tapTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "x": .object(["type": .string("number"), "description": .string("Screen X coordinate in points")]),
             "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate in points")]),
         ]),
@@ -53,7 +53,7 @@ let longPressTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "x": .object(["type": .string("number"), "description": .string("Screen X coordinate")]),
             "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate")]),
             "duration": .object(["type": .string("number"), "description": .string("Press duration in seconds (default 0.5)")]),
@@ -224,7 +224,7 @@ let activateTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -237,7 +237,7 @@ let incrementTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -250,7 +250,7 @@ let decrementTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -259,12 +259,12 @@ let decrementTool = Tool(
 let customActionTool = Tool(
     name: "perform_custom_action",
     // swiftlint:disable:next line_length
-    description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_snapshot.",
+    description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_interface.",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "actionName": .object(["type": .string("string"), "description": .string("Name of the custom action to perform (required)")]),
         ]),
         "required": .array([.string("actionName")]),
@@ -273,7 +273,7 @@ let customActionTool = Tool(
 )
 
 let allTools: [Tool] = [
-    snapshotTool, screenshotTool,
+    interfaceTool, screenTool,
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
@@ -317,10 +317,10 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
 
     // MARK: Read Tools
 
-    case "get_snapshot":
-        client.send(.requestSnapshot)
-        // Wait for the snapshot callback to fire
-        let snapshot: Snapshot = try await withCheckedThrowingContinuation { continuation in
+    case "get_interface":
+        client.send(.requestInterface)
+        // Wait for the interface callback to fire
+        let iface: Interface = try await withCheckedThrowingContinuation { continuation in
             var didResume = false
             let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: 10_000_000_000)
@@ -329,7 +329,7 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
                     continuation.resume(throwing: HeistClient.ActionError.timeout)
                 }
             }
-            client.onSnapshotUpdate = { payload in
+            client.onInterfaceUpdate = { payload in
                 if !didResume {
                     didResume = true
                     timeoutTask.cancel()
@@ -341,14 +341,14 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let json = try encoder.encode(snapshot)
+        let json = try encoder.encode(iface)
         return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "{}")])
 
-    case "get_screenshot":
-        client.send(.requestScreenshot)
-        let screenshot = try await client.waitForScreenshot(timeout: 30)
+    case "get_screen":
+        client.send(.requestScreen)
+        let screen = try await client.waitForScreen(timeout: 30)
         return CallTool.Result(content: [
-            .image(data: screenshot.pngData, mimeType: "image/png", metadata: nil),
+            .image(data: screen.pngData, mimeType: "image/png", metadata: nil),
         ])
 
     // MARK: Touch Gesture Tools
@@ -631,10 +631,10 @@ struct ButtonHeistMCP {
             version: "1.0.0",
             instructions: """
                 ButtonHeist MCP server for iOS app automation. \
-                Use get_snapshot to read the UI element hierarchy, \
-                get_screenshot to see the screen, \
+                Use get_interface to read the UI element hierarchy, \
+                get_screen to see the screen, \
                 and interaction tools (tap, swipe, etc.) to drive the app. \
-                Elements can be targeted by accessibility identifier or order index from the snapshot.
+                Elements can be targeted by accessibility identifier or order index from the interface.
                 """,
             capabilities: .init(tools: .init(listChanged: false))
         )

@@ -10,7 +10,7 @@ final class HeistClientTests: XCTestCase {
         XCTAssertTrue(client.discoveredDevices.isEmpty)
         XCTAssertNil(client.connectedDevice)
         XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentSnapshot)
+        XCTAssertNil(client.currentInterface)
         XCTAssertFalse(client.isDiscovering)
         XCTAssertEqual(client.connectionState, .disconnected)
     }
@@ -23,7 +23,7 @@ final class HeistClientTests: XCTestCase {
 
         XCTAssertNil(client.connectedDevice)
         XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentSnapshot)
+        XCTAssertNil(client.currentInterface)
         XCTAssertEqual(client.connectionState, .disconnected)
     }
 

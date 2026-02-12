@@ -55,7 +55,7 @@ The persistent TCP connection means there's no per-call overhead. Tool calls com
 
 ### Tools
 
-#### get_snapshot
+#### get_interface
 
 Read the current UI element hierarchy. Returns all accessibility elements with labels, values, identifiers, frames, and available actions.
 
@@ -63,7 +63,7 @@ Read the current UI element hierarchy. Returns all accessibility elements with l
 
 **Returns**: JSON with `elements` array and optional `tree` structure.
 
-#### get_screenshot
+#### get_screen
 
 Capture a PNG screenshot of the current screen.
 
@@ -415,18 +415,18 @@ Currently connected device, or nil if disconnected.
 
 Current connection state. See `ConnectionState` enum.
 
-##### currentSnapshot
+##### currentInterface
 
 ```swift
-@Published public private(set) var currentSnapshot: Snapshot?
+@Published public private(set) var currentInterface: Interface?
 ```
 
 Most recent UI element snapshot received from the connected device.
 
-##### currentScreenshot
+##### currentScreen
 
 ```swift
-@Published public private(set) var currentScreenshot: ScreenshotPayload?
+@Published public private(set) var currentScreen: ScreenPayload?
 ```
 
 Most recent screenshot received from the connected device.
@@ -475,10 +475,10 @@ public var onConnected: ((ServerInfo) -> Void)?
 
 Called when connection is established and server info received.
 
-##### onSnapshotUpdate
+##### onInterfaceUpdate
 
 ```swift
-public var onSnapshotUpdate: ((Snapshot) -> Void)?
+public var onInterfaceUpdate: ((Interface) -> Void)?
 ```
 
 Called when a new hierarchy is received.
@@ -491,10 +491,10 @@ public var onActionResult: ((ActionResult) -> Void)?
 
 Called when an action result is received.
 
-##### onScreenshot
+##### onScreen
 
 ```swift
-public var onScreenshot: ((ScreenshotPayload) -> Void)?
+public var onScreen: ((ScreenPayload) -> Void)?
 ```
 
 Called when a screenshot is received.
@@ -539,7 +539,7 @@ Stop device discovery.
 public func connect(to device: DiscoveredDevice)
 ```
 
-Connect to a discovered device. Automatically sends `subscribe`, `requestSnapshot`, and `requestScreenshot` on connection.
+Connect to a discovered device. Automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connection.
 
 **Parameters**:
 - `device`: Device to connect to (from `discoveredDevices`).
@@ -552,10 +552,10 @@ public func disconnect()
 
 Disconnect from the current device and clear all state.
 
-##### requestSnapshot()
+##### requestInterface()
 
 ```swift
-public func requestSnapshot()
+public func requestInterface()
 ```
 
 Request a single hierarchy snapshot.
@@ -581,10 +581,10 @@ Wait asynchronously for an action result with timeout.
 
 **Throws**: `ActionError.timeout` if no result received within timeout.
 
-##### waitForScreenshot(timeout:)
+##### waitForScreen(timeout:)
 
 ```swift
-public func waitForScreenshot(timeout: TimeInterval = 30.0) async throws -> ScreenshotPayload
+public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload
 ```
 
 Wait asynchronously for a screenshot with timeout.
@@ -665,7 +665,7 @@ Messages sent from client to server.
 
 #### Cases
 
-- `requestSnapshot` - Request current hierarchy
+- `requestInterface` - Request current hierarchy
 - `subscribe` - Subscribe to automatic updates
 - `unsubscribe` - Unsubscribe from updates
 - `ping` - Keepalive
@@ -682,7 +682,7 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `requestScreenshot` - Request PNG screenshot
+- `requestScreen` - Request PNG screenshot
 
 ### ServerMessage
 
@@ -695,11 +695,11 @@ Messages sent from server to client.
 #### Cases
 
 - `info(ServerInfo)` - Device/app metadata on connection
-- `hierarchy(Snapshot)` - UI element snapshot
+- `interface(Interface)` - UI element snapshot
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome
-- `screenshot(ScreenshotPayload)` - Base64-encoded PNG
+- `screen(ScreenPayload)` - Base64-encoded PNG
 
 ### ActionTarget
 
@@ -755,13 +755,13 @@ Device and app metadata received after connecting.
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
 
-### Snapshot
+### Interface
 
 ```swift
-public struct Snapshot: Codable, Sendable
+public struct Interface: Codable, Sendable
 ```
 
-Container for UI element snapshot snapshot.
+Container for UI element interface data.
 
 #### Properties
 
@@ -865,11 +865,13 @@ public enum ActionMethod: String, Codable, Sendable
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
-### ScreenshotPayload
+### ScreenPayload
 
 ```swift
-public struct ScreenshotPayload: Codable, Sendable
+public struct ScreenPayload: Codable, Sendable
 ```
+
+Screen capture payload.
 
 #### Properties
 
@@ -1013,7 +1015,7 @@ struct InspectorView: View {
                 Text(client.displayName(for: device))
             }
         } detail: {
-            if let hierarchy = client.currentSnapshot {
+            if let hierarchy = client.currentInterface {
                 List(hierarchy.elements) { element in
                     VStack(alignment: .leading) {
                         Text(element.description)
@@ -1056,7 +1058,7 @@ class Inspector {
             print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
-        client.onSnapshotUpdate = { payload in
+        client.onInterfaceUpdate = { payload in
             print("Received \(payload.elements.count) elements")
             for element in payload.elements {
                 print("  \(element.order): \(element.description)")
@@ -1067,7 +1069,7 @@ class Inspector {
             print("Action: \(result.success ? "success" : "failed") via \(result.method)")
         }
 
-        client.onScreenshot = { screenshot in
+        client.onScreen = { screenshot in
             print("Screenshot: \(screenshot.width)x\(screenshot.height)")
         }
 

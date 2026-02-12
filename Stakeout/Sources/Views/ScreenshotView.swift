@@ -3,7 +3,7 @@ import AppKit
 import ButtonHeist
 
 struct ScreenshotView: View {
-    let screenshotPayload: ScreenshotPayload?
+    let screenPayload: ScreenPayload?
     let elements: [UIElement]
     @Binding var selectedElement: UIElement?
     let onActivate: (UIElement) -> Void
@@ -11,8 +11,8 @@ struct ScreenshotView: View {
     @State private var showingActionFeedback = false
 
     var body: some View {
-        if let payload = screenshotPayload,
-           let image = decodeScreenshot(payload) {
+        if let payload = screenPayload,
+           let image = decodeScreen(payload) {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -56,7 +56,7 @@ struct ScreenshotView: View {
         }
     }
 
-    private func decodeScreenshot(_ payload: ScreenshotPayload) -> NSImage? {
+    private func decodeScreen(_ payload: ScreenPayload) -> NSImage? {
         guard let data = Data(base64Encoded: payload.pngData) else { return nil }
         return NSImage(data: data)
     }
@@ -65,7 +65,7 @@ struct ScreenshotView: View {
 #Preview {
     @Previewable @State var selectedElement: UIElement?
     ScreenshotView(
-        screenshotPayload: nil,
+        screenPayload: nil,
         elements: [],
         selectedElement: $selectedElement,
         onActivate: { _ in }

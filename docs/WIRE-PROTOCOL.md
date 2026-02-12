@@ -37,16 +37,16 @@ Client                                    Server
    │◄─────── info ───────────────────────────│  (automatic on connect)
    │                                         │
    │──────── subscribe ──────────────────────►│  (enable auto-updates)
-   │──────── requestSnapshot ───────────────►│
-   │──────── requestScreenshot ──────────────►│
-   │◄─────── hierarchy ──────────────────────│
-   │◄─────── screenshot ────────────────────│
+   │──────── requestInterface ──────────────►│
+   │──────── requestScreen ──────────────────►│
+   │◄─────── interface ─────────────────────│
+   │◄─────── screen ────────────────────────│
    │                                         │
    │──────── activate/touchTap/touchDrag... ──►│
    │◄─────── actionResult ───────────────────│
    │                                         │
-   │◄─────── hierarchy ──────────────────────│  (auto-pushed on change)
-   │◄─────── screenshot ────────────────────│  (auto-pushed on change)
+   │◄─────── interface ─────────────────────│  (auto-pushed on change)
+   │◄─────── screen ────────────────────────│  (auto-pushed on change)
    │                                         │
    │──────── ping ───────────────────────────►│
    │◄─────── pong ───────────────────────────│
@@ -61,17 +61,17 @@ All messages are JSON objects terminated by a newline (`\n`). Swift enums with a
 
 ## Client → Server Messages
 
-### requestSnapshot
+### requestInterface
 
-Request current UI element snapshot.
+Request current UI element interface.
 
 ```json
-{"requestSnapshot":{}}
+{"requestInterface":{}}
 ```
 
 ### subscribe
 
-Subscribe to automatic hierarchy and screenshot updates.
+Subscribe to automatic interface and screen updates.
 
 ```json
 {"subscribe":{}}
@@ -240,12 +240,12 @@ Invoke a named custom action on an element. The action name must match one of th
 {"performCustomAction":{"_0":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}}
 ```
 
-### requestScreenshot
+### requestScreen
 
-Request a PNG screenshot of the current screen.
+Request a PNG capture of the current screen.
 
 ```json
-{"requestScreenshot":{}}
+{"requestScreen":{}}
 ```
 
 ### ping
@@ -274,12 +274,12 @@ Sent immediately after connection. Contains device and app metadata.
 }}}
 ```
 
-### hierarchy
+### interface
 
-UI element snapshot snapshot. Contains a flat element list and an optional tree structure.
+UI element interface. Contains a flat element list and an optional tree structure.
 
 ```json
-{"hierarchy":{"_0":{
+{"interface":{"_0":{
   "timestamp":"2026-02-03T10:30:45.123Z",
   "elements":[
     {
@@ -318,7 +318,7 @@ UI element snapshot snapshot. Contains a flat element list and an optional tree 
 }}}
 ```
 
-The `tree` field is optional for backwards compatibility. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
+The `tree` field is optional. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
 
 ### actionResult
 
@@ -357,12 +357,12 @@ The optional `message` field provides additional context, especially for failure
 }}}
 ```
 
-### screenshot
+### screen
 
-PNG screenshot of the current screen.
+PNG capture of the current screen.
 
 ```json
-{"screenshot":{"_0":{
+{"screen":{"_0":{
   "pngData":"iVBORw0KGgo...",
   "width":393.0,
   "height":852.0,
@@ -402,11 +402,11 @@ Error message.
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
 
-### Snapshot
+### Interface
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `timestamp` | `ISO8601 Date` | When hierarchy was captured |
+| `timestamp` | `ISO8601 Date` | When interface was captured |
 | `elements` | `[UIElement]` | Flat list of all UI elements |
 | `tree` | `[ElementNode]?` | Optional tree structure with containers |
 
@@ -584,14 +584,14 @@ At least one field should be provided. When both are provided, identifier is tri
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
 
-### ScreenshotPayload
+### ScreenPayload
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `pngData` | `String` | Base64-encoded PNG image data |
 | `width` | `Double` | Screen width in points |
 | `height` | `Double` | Screen height in points |
-| `timestamp` | `ISO8601 Date` | When screenshot was captured |
+| `timestamp` | `ISO8601 Date` | When screen was captured |
 
 ## Example Session
 
@@ -604,17 +604,17 @@ At least one field should be provided. When both are provided, identifier is tri
 # Client subscribes to updates
 {"subscribe":{}}
 
-# Client requests hierarchy
-{"requestSnapshot":{}}
+# Client requests interface
+{"requestInterface":{}}
 
-# Server responds with hierarchy (flat + tree)
-{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
+# Server responds with interface (flat + tree)
+{"interface":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
 
-# Client requests screenshot
-{"requestScreenshot":{}}
+# Client requests screen capture
+{"requestScreen":{}}
 
-# Server responds with screenshot
-{"screenshot":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
+# Server responds with screen capture
+{"screen":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
 
 # Client activates a button
 {"activate":{"_0":{"identifier":"loginButton"}}}
@@ -640,9 +640,9 @@ At least one field should be provided. When both are provided, identifier is tri
 # Server responds
 {"pong":{}}
 
-# Server auto-pushes hierarchy change
-{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
-{"screenshot":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
+# Server auto-pushes interface change
+{"interface":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
+{"screen":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
 ```
 
 ## Implementation Notes
@@ -673,7 +673,7 @@ Clients should send `ping` messages periodically (recommended: every 30 seconds)
 If the TCP connection is lost, clients should:
 1. Close the socket
 2. Optionally attempt reconnection
-3. Re-request hierarchy after reconnecting
+3. Re-request interface after reconnecting
 
 ### Hierarchy Change Detection
 
@@ -681,4 +681,4 @@ InsideMan uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast
-4. Screenshots are automatically captured and broadcast alongside hierarchy changes
+4. Screen captures are automatically captured and broadcast alongside interface changes
