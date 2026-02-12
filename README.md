@@ -1,11 +1,12 @@
 # ButtonHeist
 
-**UI inspection and automation toolkit for iOS apps**
+**Let AI agents drive iOS apps**
 
-ButtonHeist lets you inspect and interact with the UI element snapshot of iOS apps in real-time from your Mac. Connect to any iOS app running InsideMan over local network or USB to see explore and automate your UI.
+ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed InsideMan in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
 
 ## Features
 
+- **MCP server** - Model Context Protocol server lets AI agents like Claude drive any iOS app
 - **Real-time inspection** - See UI elements update as your app's UI changes
 - **Remote actions** - Tap elements and trigger actions programmatically
 - **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap
@@ -13,14 +14,25 @@ ButtonHeist lets you inspect and interact with the UI element snapshot of iOS ap
 - **USB connectivity** - Connect to devices over USB when WiFi is unavailable
 - **Auto-start** - InsideMan starts automatically when your app launches
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
-- **Multiple interfaces** - GUI app, CLI, Python, or custom tools
+- **Multiple interfaces** - MCP server, GUI app, CLI, Python, or custom tools
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Your Mac                                   │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
+│                                                                      │
+│  ┌──────────────────┐                                               │
+│  │  AI Agent        │  (Claude, or any MCP client)                  │
+│  │  (e.g. Claude)   │                                               │
+│  └────────┬─────────┘                                               │
+│           │ MCP (JSON-RPC over stdio)                                │
+│  ┌────────┴─────────┐                                               │
+│  │ buttonheist-mcp  │  ← Persistent connection, no per-call overhead│
+│  │  (MCP server)    │                                               │
+│  └────────┬─────────┘                                               │
+│           │                                                          │
+│  ┌────────┴─────────┐  ┌──────────────────┐  ┌──────────────────┐  │
 │  │     Stakeout     │  │  buttonheist CLI │  │  Python/Scripts  │  │
 │  │    (GUI app)     │  │                  │  │                  │  │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
@@ -54,6 +66,7 @@ ButtonHeist lets you inspect and interact with the UI element snapshot of iOS ap
 | **InsideMan** | iOS | Server that exposes UI element snapshot over TCP, with synthetic touch injection |
 | **Wheelman** | iOS + macOS | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
+| **ButtonHeistMCP** | macOS | MCP server — lets AI agents drive iOS apps via Model Context Protocol |
 | **Stakeout** | macOS | GUI app for visual inspection with screenshots and element overlays |
 | **buttonheist** | macOS | CLI tool with watch, action, touch, and screenshot commands |
 
@@ -111,7 +124,49 @@ Add the required Info.plist entries:
 </array>
 ```
 
-### 2. Connect
+### 2. Connect with an AI Agent (MCP)
+
+The MCP server gives AI agents like Claude persistent access to your app. Build once, then point your MCP client at the binary:
+
+```bash
+# Build the MCP server
+cd ButtonHeistMCP
+swift build -c release
+```
+
+Add to your Claude Code `.mcp.json` (or any MCP client config):
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "/path/to/ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+The MCP server automatically discovers your iOS app via Bonjour and connects. It exposes 13 tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_snapshot` | Read the full UI element hierarchy |
+| `get_screenshot` | Capture a PNG screenshot |
+| `tap` | Tap an element or coordinate |
+| `long_press` | Long press with configurable duration |
+| `swipe` | Swipe by direction or between coordinates |
+| `drag` | Drag between two points |
+| `pinch` | Pinch/zoom gesture |
+| `rotate` | Two-finger rotation |
+| `two_finger_tap` | Simultaneous two-finger tap |
+| `activate` | Accessibility activate (VoiceOver double-tap) |
+| `increment` / `decrement` | Adjust sliders, steppers, pickers |
+| `perform_custom_action` | Invoke named custom accessibility actions |
+
+The MCP server maintains a persistent TCP connection to the device, so there's no connection overhead between tool calls — AI agents can chain dozens of interactions without delay.
+
+### 3. Connect Manually
 
 **Over USB (recommended):**
 ```bash
@@ -349,6 +404,10 @@ buttonheist/
 │   └── Sources/                   # macOS GUI app
 │       ├── Views/                 # SwiftUI views
 │       └── Design/                # Design tokens (colors, typography)
+├── ButtonHeistMCP/
+│   ├── Package.swift              # Swift 6.0 package (depends on ButtonHeist + MCP SDK)
+│   └── Sources/
+│       └── main.swift             # MCP server with 13 tools for AI agent automation
 ├── ButtonHeistCLI/
 │   └── Sources/                   # CLI tool
 │       ├── main.swift             # Entry point with watch/action/touch/screenshot commands
