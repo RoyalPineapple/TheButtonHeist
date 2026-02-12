@@ -18,7 +18,7 @@ When the InsideMan framework loads:
 1. Reads configuration from environment variables or Info.plist
 2. Creates a TCP server on the configured port (default: auto-assign, recommended: 1455)
 3. Begins Bonjour advertisement as `_buttonheist._tcp`
-4. Starts polling for accessibility hierarchy changes
+4. Starts polling for UI element snapshot changes
 
 ### Configuration
 
@@ -107,7 +107,7 @@ Stop the server, disconnect all clients, and stop Bonjour advertisement.
 public func startPolling(interval: TimeInterval = 1.0)
 ```
 
-Enable automatic polling for accessibility changes.
+Enable automatic polling for UI changes.
 
 **Note**: Called automatically on framework load with 1.0 second interval.
 
@@ -161,19 +161,19 @@ On successful tap, a `TapVisualizerView` overlay shows a 40pt white circle at th
 
 ---
 
-## Wheelman
+## ButtonHeist (macOS Client)
 
-**Import**: `import Wheelman`
+**Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/Wheelman/Wheelman.swift`
+**Location**: `ButtonHeist/Sources/ButtonHeist/HeistClient.swift`
 
-### Wheelman
+### HeistClient
 
 Main client class. Conforms to `ObservableObject` for SwiftUI integration.
 
 ```swift
 @MainActor
-public final class Wheelman: ObservableObject
+public final class HeistClient: ObservableObject
 ```
 
 #### Published Properties
@@ -202,13 +202,13 @@ Currently connected device, or nil if disconnected.
 
 Current connection state. See `ConnectionState` enum.
 
-##### currentHierarchy
+##### currentSnapshot
 
 ```swift
-@Published public private(set) var currentHierarchy: HierarchyPayload?
+@Published public private(set) var currentSnapshot: Snapshot?
 ```
 
-Most recent accessibility hierarchy received from the connected device.
+Most recent UI element snapshot received from the connected device.
 
 ##### currentScreenshot
 
@@ -262,10 +262,10 @@ public var onConnected: ((ServerInfo) -> Void)?
 
 Called when connection is established and server info received.
 
-##### onHierarchyUpdate
+##### onSnapshotUpdate
 
 ```swift
-public var onHierarchyUpdate: ((HierarchyPayload) -> Void)?
+public var onSnapshotUpdate: ((Snapshot) -> Void)?
 ```
 
 Called when a new hierarchy is received.
@@ -326,7 +326,7 @@ Stop device discovery.
 public func connect(to device: DiscoveredDevice)
 ```
 
-Connect to a discovered device. Automatically sends `subscribe`, `requestHierarchy`, and `requestScreenshot` on connection.
+Connect to a discovered device. Automatically sends `subscribe`, `requestSnapshot`, and `requestScreenshot` on connection.
 
 **Parameters**:
 - `device`: Device to connect to (from `discoveredDevices`).
@@ -339,10 +339,10 @@ public func disconnect()
 
 Disconnect from the current device and clear all state.
 
-##### requestHierarchy()
+##### requestSnapshot()
 
 ```swift
-public func requestHierarchy()
+public func requestSnapshot()
 ```
 
 Request a single hierarchy snapshot.
@@ -452,7 +452,7 @@ Messages sent from client to server.
 
 #### Cases
 
-- `requestHierarchy` - Request current hierarchy
+- `requestSnapshot` - Request current hierarchy
 - `subscribe` - Subscribe to automatic updates
 - `unsubscribe` - Unsubscribe from updates
 - `ping` - Keepalive
@@ -480,7 +480,7 @@ Messages sent from server to client.
 #### Cases
 
 - `info(ServerInfo)` - Device/app metadata on connection
-- `hierarchy(HierarchyPayload)` - Accessibility hierarchy
+- `hierarchy(Snapshot)` - UI element snapshot
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome
@@ -494,8 +494,8 @@ public struct ActionTarget: Codable, Sendable
 
 #### Properties
 
-- `identifier: String?` - Element's accessibility identifier
-- `traversalIndex: Int?` - Element's traversal index
+- `identifier: String?` - Element's identifier
+- `order: Int?` - Element's traversal index
 
 ### TouchTapTarget
 
@@ -540,85 +540,79 @@ Device and app metadata received after connecting.
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
 
-### HierarchyPayload
+### Snapshot
 
 ```swift
-public struct HierarchyPayload: Codable, Sendable
+public struct Snapshot: Codable, Sendable
 ```
 
-Container for accessibility hierarchy snapshot.
+Container for UI element snapshot snapshot.
 
 #### Properties
 
 - `timestamp: Date` - When the hierarchy was captured
-- `elements: [AccessibilityElementData]` - Flat list of accessibility elements
-- `tree: [AccessibilityHierarchyNode]?` - Optional tree structure with containers
+- `elements: [UIElement]` - Flat list of UI elements
+- `tree: [ElementNode]?` - Optional tree structure with containers
 
-### AccessibilityHierarchyNode
+### ElementNode
 
 ```swift
-public indirect enum AccessibilityHierarchyNode: Codable, Equatable, Sendable
+public indirect enum ElementNode: Codable, Equatable, Sendable
 ```
 
-Recursive tree structure for accessibility hierarchy.
+Recursive tree structure for UI element snapshot.
 
 #### Cases
 
-- `element(traversalIndex: Int)` - Leaf node referencing element by index
-- `container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])` - Container with children
+- `element(order: Int)` - Leaf node referencing element by index
+- `container(Group, children: [ElementNode])` - Container with children
 
-### AccessibilityContainerData
+### Group
 
 ```swift
-public struct AccessibilityContainerData: Codable, Equatable, Hashable, Sendable
+public struct Group: Codable, Equatable, Hashable, Sendable
 ```
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `containerType` | `String` | "semanticGroup", "list", "landmark", or "dataTable" |
-| `label` | `String?` | Container's accessibility label |
-| `value` | `String?` | Container's accessibility value |
-| `identifier` | `String?` | Container's accessibility identifier |
+| `type` | `String` | "semanticGroup", "list", "landmark", or "dataTable" |
+| `label` | `String?` | Container's label |
+| `value` | `String?` | Container's value |
+| `identifier` | `String?` | Container's identifier |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
-| `traits` | `[String]` | Trait names (e.g., `["tabBar"]`) |
 
-### AccessibilityElementData
+### UIElement
 
 ```swift
-public struct AccessibilityElementData: Codable, Equatable, Hashable, Sendable
+public struct UIElement: Codable, Equatable, Hashable, Sendable
 ```
 
-Represents a single accessibility element.
+Represents a single UI element.
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `traversalIndex` | `Int` | VoiceOver reading order |
+| `order` | `Int` | VoiceOver reading order |
 | `description` | `String` | VoiceOver description |
-| `label` | `String?` | Accessibility label |
+| `label` | `String?` | Label |
 | `value` | `String?` | Current value |
-| `traits` | `[String]` | Trait names |
-| `identifier` | `String?` | Accessibility identifier |
-| `hint` | `String?` | Accessibility hint |
+| `identifier` | `String?` | Identifier |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
-| `activationPointX` | `Double` | Touch target X |
-| `activationPointY` | `Double` | Touch target Y |
-| `customActions` | `[String]` | Custom action names |
+| `actions` | `[String]` | Custom action names |
 
 #### Computed Properties
 
 ```swift
 public var frame: CGRect       // Frame as CGRect
-public var activationPoint: CGPoint  // Activation point as CGPoint
 ```
 
 ### ActionResult
@@ -641,9 +635,9 @@ public enum ActionMethod: String, Codable, Sendable
 
 #### Cases
 
-- `accessibilityActivate` - Used accessibility activation
-- `accessibilityIncrement` - Used accessibility increment
-- `accessibilityDecrement` - Used accessibility decrement
+- `activate` - Used activation
+- `increment` - Used increment action
+- `decrement` - Used decrement action
 - `syntheticTap` - Tap via SafeCracker
 - `syntheticLongPress` - Long press via SafeCracker
 - `syntheticSwipe` - Swipe via SafeCracker
@@ -677,7 +671,7 @@ public struct ScreenshotPayload: Codable, Sendable
 
 ### buttonheist watch (default)
 
-Watch accessibility hierarchy in real-time.
+Watch UI element snapshot in real-time.
 
 ```
 USAGE: buttonheist watch [OPTIONS]
@@ -702,13 +696,13 @@ Exit codes:
 
 ### buttonheist action
 
-Perform actions on accessibility elements.
+Perform actions on UI elements.
 
 ```
 USAGE: buttonheist action [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element accessibility identifier
+  --identifier <id>       Element identifier
   --index <n>             Traversal index
   --type <type>           Action type: activate, increment, decrement, tap, custom
                           (default: activate)
@@ -780,7 +774,7 @@ struct MyApp: App {
 <key>InsideManPort</key>
 <integer>1455</integer>
 <key>NSLocalNetworkUsageDescription</key>
-<string>Accessibility inspector connection.</string>
+<string>element inspector connection.</string>
 <key>NSBonjourServices</key>
 <array>
     <string>_buttonheist._tcp</string>
@@ -791,11 +785,11 @@ struct MyApp: App {
 
 ```swift
 import SwiftUI
-import Wheelman
+import ButtonHeist
 import TheGoods
 
 struct InspectorView: View {
-    @StateObject private var client = Wheelman()
+    @StateObject private var client = HeistClient()
 
     var body: some View {
         NavigationSplitView {
@@ -803,11 +797,11 @@ struct InspectorView: View {
                 Text(client.displayName(for: device))
             }
         } detail: {
-            if let hierarchy = client.currentHierarchy {
+            if let hierarchy = client.currentSnapshot {
                 List(hierarchy.elements) { element in
                     VStack(alignment: .leading) {
                         Text(element.description)
-                        Text(element.traits.joined(separator: ", "))
+                        Text(element.identifier ?? "")
                             .font(.caption)
                     }
                 }
@@ -830,11 +824,11 @@ struct InspectorView: View {
 ### Callback-Based Usage
 
 ```swift
-import Wheelman
+import ButtonHeist
 import TheGoods
 
 class Inspector {
-    let client = Wheelman()
+    let client = HeistClient()
 
     init() {
         client.onDeviceDiscovered = { [weak self] device in
@@ -846,10 +840,10 @@ class Inspector {
             print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
-        client.onHierarchyUpdate = { payload in
+        client.onSnapshotUpdate = { payload in
             print("Received \(payload.elements.count) elements")
             for element in payload.elements {
-                print("  \(element.traversalIndex): \(element.description)")
+                print("  \(element.order): \(element.description)")
             }
         }
 
@@ -880,7 +874,7 @@ class Inspector {
 
 ```swift
 // Activate an element and wait for the result
-let target = ActionTarget(identifier: "loginButton", traversalIndex: nil)
+let target = ActionTarget(identifier: "loginButton", order: nil)
 client.send(.activate(target))
 
 do {
@@ -900,7 +894,7 @@ with ButtonHeistUSBConnection() as conn:
     # Get hierarchy
     hierarchy = conn.get_hierarchy()
     for element in hierarchy['elements']:
-        print(f"{element['traversalIndex']}: {element['label']}")
+        print(f"{element['order']}: {element['label']}")
 
     # Activate element
     result = conn.activate(identifier="loginButton")

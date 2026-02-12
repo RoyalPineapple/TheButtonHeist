@@ -6,16 +6,18 @@ import os.log
 private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "discovery")
 
 @MainActor
-final class DeviceDiscovery {
+public final class DeviceDiscovery {
 
     private var browser: NWBrowser?
     private var discoveredDevices: [String: DiscoveredDevice] = [:]
 
-    var onDeviceFound: ((DiscoveredDevice) -> Void)?
-    var onDeviceLost: ((DiscoveredDevice) -> Void)?
-    var onStateChange: ((Bool) -> Void)?
+    public var onDeviceFound: ((DiscoveredDevice) -> Void)?
+    public var onDeviceLost: ((DiscoveredDevice) -> Void)?
+    public var onStateChange: ((Bool) -> Void)?
 
-    func start() {
+    public init() {}
+
+    public func start() {
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
 
         let parameters = NWParameters()
@@ -44,7 +46,7 @@ final class DeviceDiscovery {
         logger.info("Browser started")
     }
 
-    func stop() {
+    public func stop() {
         browser?.cancel()
         browser = nil
         discoveredDevices.removeAll()

@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
- import TheGoods
+ import ButtonHeist
 
 final class ScreenshotCommandTests: XCTestCase {
 

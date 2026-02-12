@@ -1,8 +1,7 @@
 import ArgumentParser
 import Foundation
 import Darwin
-import TheGoods
-import Wheelman
+import ButtonHeist
 
 struct TouchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -42,7 +41,7 @@ struct TapSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "X coordinate")
@@ -65,7 +64,7 @@ struct TapSubcommand: AsyncParsableCommand {
 
         let message: ClientMessage
         if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, traversalIndex: index)
+            let target = ActionTarget(identifier: identifier, order: index)
             message = .touchTap(TouchTapTarget(elementTarget: target))
         } else {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
@@ -83,7 +82,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "X coordinate")
@@ -109,7 +108,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
 
         let message: ClientMessage
         if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, traversalIndex: index)
+            let target = ActionTarget(identifier: identifier, order: index)
             message = .touchLongPress(LongPressTarget(elementTarget: target, duration: duration))
         } else {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
@@ -127,7 +126,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier for start point")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index for start point")
+    @Option(name: .long, help: "Element index for start point")
     var index: Int?
 
     @Option(name: .customLong("from-x"), help: "Start X coordinate")
@@ -167,7 +166,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
         }
 
         let elementTarget: ActionTarget? = (identifier != nil || index != nil)
-            ? ActionTarget(identifier: identifier, traversalIndex: index) : nil
+            ? ActionTarget(identifier: identifier, order: index) : nil
 
         let swipeDirection: SwipeDirection?
         if let dir = direction {
@@ -199,7 +198,7 @@ struct DragSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier for start point")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index for start point")
+    @Option(name: .long, help: "Element index for start point")
     var index: Int?
 
     @Option(name: .customLong("from-x"), help: "Start X coordinate")
@@ -230,7 +229,7 @@ struct DragSubcommand: AsyncParsableCommand {
         }
 
         let elementTarget: ActionTarget? = (identifier != nil || index != nil)
-            ? ActionTarget(identifier: identifier, traversalIndex: index) : nil
+            ? ActionTarget(identifier: identifier, order: index) : nil
 
         let message = ClientMessage.touchDrag(DragTarget(
             elementTarget: elementTarget,
@@ -251,7 +250,7 @@ struct PinchSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "Center X coordinate")
@@ -283,7 +282,7 @@ struct PinchSubcommand: AsyncParsableCommand {
 
         let message: ClientMessage
         if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, traversalIndex: index)
+            let target = ActionTarget(identifier: identifier, order: index)
             message = .touchPinch(PinchTarget(elementTarget: target, scale: scale, spread: spread, duration: duration))
         } else {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
@@ -301,7 +300,7 @@ struct RotateSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "Center X coordinate")
@@ -333,7 +332,7 @@ struct RotateSubcommand: AsyncParsableCommand {
 
         let message: ClientMessage
         if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, traversalIndex: index)
+            let target = ActionTarget(identifier: identifier, order: index)
             message = .touchRotate(RotateTarget(elementTarget: target, angle: angle, radius: radius, duration: duration))
         } else {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
@@ -351,7 +350,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "Center X coordinate")
@@ -377,7 +376,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
         let message: ClientMessage
         if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, traversalIndex: index)
+            let target = ActionTarget(identifier: identifier, order: index)
             message = .touchTwoFingerTap(TwoFingerTapTarget(elementTarget: target, spread: spread))
         } else {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
@@ -391,7 +390,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
 @MainActor
 private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool) async throws {
-    let client = Wheelman()
+    let client = HeistClient()
 
     if !quiet {
         logStatus("Searching for iOS devices...")

@@ -39,26 +39,23 @@ final class MessageIntegrationTests: XCTestCase {
         }
     }
 
-    /// Test hierarchy payload with multiple elements
-    func testLargeHierarchyPayload() throws {
+    /// Test snapshot payload with multiple elements
+    func testLargeSnapshotPayload() throws {
         let elements = (0..<100).map { i in
-            AccessibilityElementData(
-                traversalIndex: i,
+            UIElement(
+                order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
                 value: i % 2 == 0 ? "Value" : nil,
-                traits: i % 3 == 0 ? ["button"] : [],
                 identifier: "element_\(i)",
-                hint: nil,
                 frameX: Double(i * 10), frameY: Double(i * 5),
                 frameWidth: 100, frameHeight: 44,
-                activationPointX: Double(i * 10 + 50), activationPointY: Double(i * 5 + 22),
-                customActions: []
+                actions: i % 3 == 0 ? ["activate"] : []
             )
         }
 
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements)
-        let message = ServerMessage.hierarchy(payload)
+        let payload = Snapshot(timestamp: Date(), elements: elements)
+        let message = ServerMessage.snapshot(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -68,11 +65,11 @@ final class MessageIntegrationTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .hierarchy(let decodedPayload) = decoded {
+        if case .snapshot(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 100)
-            XCTAssertEqual(decodedPayload.elements[50].traversalIndex, 50)
+            XCTAssertEqual(decodedPayload.elements[50].order, 50)
         } else {
-            XCTFail("Expected hierarchy message")
+            XCTFail("Expected snapshot message")
         }
     }
 
@@ -80,7 +77,7 @@ final class MessageIntegrationTests: XCTestCase {
     func testAllMessageTypesSequence() throws {
         let clientMessages: [ClientMessage] = [
             .subscribe,
-            .requestHierarchy,
+            .requestSnapshot,
             .ping,
             .unsubscribe,
             .requestScreenshot
@@ -96,7 +93,7 @@ final class MessageIntegrationTests: XCTestCase {
                 protocolVersion: "1.0", appName: "Test", bundleIdentifier: "com.test",
                 deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
             )),
-            .hierarchy(HierarchyPayload(timestamp: Date(), elements: [])),
+            .snapshot(Snapshot(timestamp: Date(), elements: [])),
             .pong,
             .error("Test error"),
             .screenshot(ScreenshotPayload(pngData: "base64data", width: 390, height: 844))
@@ -145,35 +142,32 @@ final class MessageIntegrationTests: XCTestCase {
             XCTFail("Expected subscribe message")
         }
 
-        // 2. Server sends hierarchy updates
+        // 2. Server sends snapshot updates
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
         for i in 0..<5 {
-            let element = AccessibilityElementData(
-                traversalIndex: 0,
+            let element = UIElement(
+                order: 0,
                 description: "Update \(i)",
                 label: "Label \(i)",
                 value: nil,
-                traits: [],
                 identifier: nil,
-                hint: nil,
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-                activationPointX: 50, activationPointY: 22,
-                customActions: []
+                actions: []
             )
-            let payload = HierarchyPayload(timestamp: Date(), elements: [element])
-            let msg = ServerMessage.hierarchy(payload)
+            let payload = Snapshot(timestamp: Date(), elements: [element])
+            let msg = ServerMessage.snapshot(payload)
 
             let data = try encoder.encode(msg)
             let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-            if case .hierarchy(let decodedPayload) = decoded {
+            if case .snapshot(let decodedPayload) = decoded {
                 XCTAssertEqual(decodedPayload.elements[0].label, "Label \(i)")
             } else {
-                XCTFail("Expected hierarchy update \(i)")
+                XCTFail("Expected snapshot update \(i)")
             }
         }
 

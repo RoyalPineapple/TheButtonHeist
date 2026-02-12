@@ -1,10 +1,10 @@
 import XCTest
  import TheGoods
 
-final class HierarchyPayloadTests: XCTestCase {
+final class SnapshotTests: XCTestCase {
 
     func testEmptyPayload() throws {
-        let payload = HierarchyPayload(timestamp: Date(), elements: [])
+        let payload = Snapshot(timestamp: Date(), elements: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -12,29 +12,26 @@ final class HierarchyPayloadTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(HierarchyPayload.self, from: data)
+        let decoded = try decoder.decode(Snapshot.self, from: data)
 
         XCTAssertTrue(decoded.elements.isEmpty)
     }
 
     func testPayloadWithMultipleElements() throws {
         let elements = (0..<10).map { i in
-            AccessibilityElementData(
-                traversalIndex: i,
+            UIElement(
+                order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
                 value: nil,
-                traits: [],
                 identifier: "id_\(i)",
-                hint: nil,
                 frameX: Double(i * 10), frameY: 0,
                 frameWidth: 100, frameHeight: 44,
-                activationPointX: Double(i * 10 + 50), activationPointY: 22,
-                customActions: []
+                actions: []
             )
         }
 
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements)
+        let payload = Snapshot(timestamp: Date(), elements: elements)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -42,18 +39,18 @@ final class HierarchyPayloadTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(HierarchyPayload.self, from: data)
+        let decoded = try decoder.decode(Snapshot.self, from: data)
 
         XCTAssertEqual(decoded.elements.count, 10)
         for i in 0..<10 {
-            XCTAssertEqual(decoded.elements[i].traversalIndex, i)
+            XCTAssertEqual(decoded.elements[i].order, i)
             XCTAssertEqual(decoded.elements[i].label, "Label \(i)")
         }
     }
 
     func testTimestampPreservation() throws {
         let timestamp = Date(timeIntervalSince1970: 1700000000)
-        let payload = HierarchyPayload(timestamp: timestamp, elements: [])
+        let payload = Snapshot(timestamp: timestamp, elements: [])
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -61,7 +58,7 @@ final class HierarchyPayloadTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(HierarchyPayload.self, from: data)
+        let decoded = try decoder.decode(Snapshot.self, from: data)
 
         // ISO8601 preserves to second precision
         XCTAssertEqual(

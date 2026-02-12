@@ -38,7 +38,7 @@ Colors are accessed via the `Color.Tree` namespace extension.
 Text(element.description)
     .foregroundStyle(Color.Tree.textPrimary)
 
-Text(element.traits.joined(separator: ", "))
+Text(element.actions.joined(separator: ", "))
     .foregroundStyle(Color.Tree.textSecondary)
 ```
 
@@ -105,22 +105,22 @@ List {
 
 ### Element Row
 
-Standard row for displaying accessibility elements:
+Standard row for displaying UI elements:
 
 ```swift
 struct ElementRow: View {
-    let element: AccessibilityElementData
+    let element: UIElement
 
     var body: some View {
         HStack(spacing: TreeSpacing.unit) {
             // Index badge
-            Text(String(format: "%02d", element.traversalIndex))
+            Text(String(format: "%02d", element.order))
                 .font(.Tree.elementTrait)
                 .foregroundStyle(Color.Tree.textTertiary)
 
             // Traits
             HStack(spacing: 4) {
-                ForEach(element.traits, id: \.self) { trait in
+                ForEach(element.actions, id: \.self) { action in
                     Text(trait)
                         .font(.Tree.elementTrait)
                         .foregroundStyle(Color.Tree.textSecondary)
@@ -195,11 +195,11 @@ struct DetailSection<Content: View>: View {
 - Use semantic color names that describe purpose, not appearance
 - Maintain consistent spacing using `TreeSpacing.unit` multiples
 
-### Accessibility
+### Elements
 
 - Ensure sufficient color contrast in both light and dark modes
 - Use Dynamic Type-compatible font sizes
-- Provide proper accessibility labels for all interactive elements
+- Provide proper labels for all interactive elements
 
 ### Adding New Tokens
 

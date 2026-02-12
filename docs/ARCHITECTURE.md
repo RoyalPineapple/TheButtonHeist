@@ -4,10 +4,12 @@ This document describes the internal architecture of ButtonHeist and how its com
 
 ## System Overview
 
-ButtonHeist is a distributed system with two main components:
+ButtonHeist is a distributed system with these main components:
 
-1. **InsideMan** - An iOS framework embedded in the app being inspected
-2. **Wheelman** - A macOS library that connects to and receives data from InsideMan
+1. **TheGoods** - Cross-platform shared types (messages, models)
+2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
+3. **InsideMan** - iOS framework embedded in the app being inspected
+4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -21,8 +23,8 @@ ButtonHeist is a distributed system with two main components:
 │         └─────────────────┼─────────────────┘                       │
 │                           │                                          │
 │                  ┌────────┴────────┐                                │
-│                  │    Wheelman    │                                │
-│                  │   (Framework)   │                                │
+│                  │   ButtonHeist   │ (import ButtonHeist)           │
+│                  │   HeistClient   │                                │
 │                  └────────┬────────┘                                │
 │                           │                                          │
 │            ┌──────────────┼──────────────┐                          │
@@ -32,6 +34,7 @@ ButtonHeist is a distributed system with two main components:
 │      │ Discovery │  │Connection │  │  Socket   │                   │
 │      │(NWBrowser)│  │   Mgmt    │  │  Client   │                   │
 │      └───────────┘  └───────────┘  └─────┬─────┘                   │
+│                  Wheelman (networking)     │                         │
 └──────────────────────────────────────────┼──────────────────────────┘
                                            │
                     WiFi (Bonjour + TCP) or USB (IPv6 + TCP)
@@ -48,7 +51,7 @@ ButtonHeist is a distributed system with two main components:
 │     │ NetService│  │SimpleSocket│  │   A11y    │  │SafeCracker│    │
 │     │ (Bonjour) │  │Server(TCP)│  │  Parser   │  │(Gestures) │    │
 │     └───────────┘  └───────────┘  └───────────┘  └───────────┘    │
-│                                                                      │
+│                  Wheelman (networking)                               │
 │                              iOS Device                              │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -62,10 +65,10 @@ ButtonHeist is a distributed system with two main components:
 **Key Types**:
 - `ClientMessage` - Messages from client to server (15 cases including 7 touch gestures)
 - `ServerMessage` - Messages from server to client (6 cases)
-- `AccessibilityElementData` - Flat accessibility element representation
-- `AccessibilityHierarchyNode` - Recursive tree structure with containers
-- `AccessibilityContainerData` - Container metadata (type, label, frame, traits)
-- `HierarchyPayload` - Container for hierarchy snapshots (flat list + optional tree)
+- `UIElement` - Flat UI element representation
+- `ElementNode` - Recursive tree structure with containers
+- `Group` - Container metadata (type, label, frame)
+- `Snapshot` - Container for hierarchy snapshots (flat list + optional tree)
 - `ServerInfo` - Device and app metadata
 - `ActionResult` - Action outcome with method and optional message
 - `ScreenshotPayload` - Base64-encoded PNG with dimensions
@@ -77,12 +80,12 @@ ButtonHeist is a distributed system with two main components:
 
 ### InsideMan
 
-**Purpose**: iOS server that captures and broadcasts accessibility hierarchy and handles remote interaction.
+**Purpose**: iOS server that captures and broadcasts UI element snapshot and handles remote interaction.
 
 **Architecture**:
 ```
 InsideMan (singleton, @MainActor)
-├── SimpleSocketServer (BSD socket TCP server, IPv6 dual-stack)
+├── SimpleSocketServer (from Wheelman; BSD socket TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
@@ -92,7 +95,7 @@ InsideMan (singleton, @MainActor)
 │   └── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 ├── TapVisualizerView (visual tap feedback overlay)
 ├── Polling Timer (hierarchy change detection via hash comparison)
-└── Debounce Timer (300ms debounce for accessibility notifications)
+└── Debounce Timer (300ms debounce for UI notifications)
 ```
 
 **Auto-Start Mechanism**:
@@ -181,21 +184,33 @@ InsideMan captures screenshots using `UIGraphicsImageRenderer`:
 
 ### Wheelman
 
-**Purpose**: macOS client for discovering and connecting to InsideMan instances.
+**Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
+
+**Key Types**:
+- `SimpleSocketServer` - BSD socket TCP server (IPv6 dual-stack), used by InsideMan on iOS
+- `DeviceConnection` - BSD socket TCP client with Bonjour service resolution
+- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint)
+
+### ButtonHeist (macOS Client Framework)
+
+**Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
+
+**Usage**: `import ButtonHeist` gives access to all types (HeistClient, UIElement, Snapshot, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
-Wheelman (ObservableObject, @MainActor)
-├── DeviceDiscovery
+HeistClient (ObservableObject, @MainActor)
+├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
-├── DeviceConnection
+├── DeviceConnection (from Wheelman)
 │   ├── NWConnection (service resolution only)
 │   └── BSD socket (actual data transport)
 └── Published Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
-    ├── currentHierarchy: HierarchyPayload?
+    ├── currentSnapshot: Snapshot?
     ├── currentScreenshot: ScreenshotPayload?
     └── serverInfo: ServerInfo?
 ```
@@ -206,7 +221,7 @@ Wheelman (ObservableObject, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreenshot(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, Wheelman automatically sends `subscribe`, `requestHierarchy`, and `requestScreenshot` messages.
+**Auto-Subscribe on Connect**: When a connection is established, HeistClient automatically sends `subscribe`, `requestSnapshot`, and `requestScreenshot` messages.
 
 **Connection State Machine**:
 ```
@@ -225,27 +240,27 @@ disconnected ──connect()──► connecting ──success──► connecte
    └── SimpleSocketServer.start(port: 1455)
    └── NetService.publish("_buttonheist._tcp")
 
-2. Wheelman.startDiscovery()
+2. HeistClient.startDiscovery()
    └── NWBrowser.start(for: "_buttonheist._tcp")
 
 3. NWBrowser finds service
-   └── Wheelman.discoveredDevices.append(device)
+   └── HeistClient.discoveredDevices.append(device)
 ```
 
 ### Connection Flow
 
 ```
-1. Wheelman.connect(to: device)
+1. HeistClient.connect(to: device)
    └── NWConnection resolves Bonjour service to host:port
    └── BSD socket connects to 127.0.0.1:port
 
 2. TCP connection established
    └── InsideMan sends ServerMessage.info
 
-3. Wheelman receives info
+3. HeistClient receives info
    └── serverInfo = info
    └── connectionState = .connected
-   └── Sends: subscribe, requestHierarchy, requestScreenshot
+   └── Sends: subscribe, requestSnapshot, requestScreenshot
 ```
 
 ### Hierarchy Update Flow
@@ -255,11 +270,11 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 2. InsideMan.checkForChanges()
    └── parser.parseAccessibilityHierarchy(in: rootView)
-   └── flattenToElements() → AccessibilityElementData[]
+   └── flattenToElements() → UIElement[]
    └── Compute hash of elements array
 
 3. If hash changed:
-   └── Create HierarchyPayload(timestamp, elements, tree)
+   └── Create Snapshot(timestamp, elements, tree)
    └── Broadcast hierarchy to all connected clients
    └── Capture and broadcast screenshot
 ```
@@ -318,7 +333,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Message handling dispatched to main
 - Hierarchy updates debounced by 300ms
 
-### Wheelman (macOS)
+### HeistClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
 - BSD socket read loop on background queue
@@ -360,7 +375,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 <key>InsideManDisableAutoStart</key>
 <false/>
 <key>NSLocalNetworkUsageDescription</key>
-<string>Accessibility inspector connection.</string>
+<string>element inspector connection.</string>
 <key>NSBonjourServices</key>
 <array>
     <string>_buttonheist._tcp</string>

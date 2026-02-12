@@ -10,8 +10,8 @@ public let protocolVersion = "2.0"
 // MARK: - Client -> Server Messages
 
 public enum ClientMessage: Codable {
-    /// Request current accessibility hierarchy
-    case requestHierarchy
+    /// Request current element snapshot
+    case requestSnapshot
 
     /// Subscribe to automatic updates
     case subscribe
@@ -24,7 +24,7 @@ public enum ClientMessage: Codable {
 
     // MARK: - Action Commands
 
-    /// Activate an element (equivalent to VoiceOver double-tap)
+    /// Activate an element
     case activate(ActionTarget)
 
     /// Increment an adjustable element (e.g., slider)
@@ -38,10 +38,10 @@ public enum ClientMessage: Codable {
 
     // MARK: - Touch Gesture Commands
 
-    /// Tap at a point or element's activation point
+    /// Tap at a point or element
     case touchTap(TouchTapTarget)
 
-    /// Long press at a point or element's activation point
+    /// Long press at a point or element
     case touchLongPress(LongPressTarget)
 
     /// Swipe from one point to another
@@ -65,16 +65,16 @@ public enum ClientMessage: Codable {
 
 // MARK: - Action Targets
 
-/// Target for accessibility actions
+/// Target for element actions
 public struct ActionTarget: Codable, Sendable {
-    /// Element identifier (accessibilityIdentifier)
+    /// Element identifier
     public let identifier: String?
-    /// Traversal index (alternative to identifier)
-    public let traversalIndex: Int?
+    /// Element order (alternative to identifier)
+    public let order: Int?
 
-    public init(identifier: String? = nil, traversalIndex: Int? = nil) {
+    public init(identifier: String? = nil, order: Int? = nil) {
         self.identifier = identifier
-        self.traversalIndex = traversalIndex
+        self.order = order
     }
 }
 
@@ -93,7 +93,7 @@ public struct CustomActionTarget: Codable, Sendable {
 
 /// Target for tap gesture
 public struct TouchTapTarget: Codable, Sendable {
-    /// Use element's activation point
+    /// Use element's interaction point
     public let elementTarget: ActionTarget?
     /// Or specify exact screen coordinates
     public let pointX: Double?
@@ -134,7 +134,7 @@ public struct LongPressTarget: Codable, Sendable {
 
 /// Target for swipe gesture
 public struct SwipeTarget: Codable, Sendable {
-    /// Start from element's activation point
+    /// Start from element's interaction point
     public let elementTarget: ActionTarget?
     /// Or start from explicit coordinates
     public let startX: Double?
@@ -278,8 +278,8 @@ public enum ServerMessage: Codable {
     /// Server info on connection
     case info(ServerInfo)
 
-    /// Accessibility hierarchy response/update
-    case hierarchy(HierarchyPayload)
+    /// Element snapshot response/update
+    case snapshot(Snapshot)
 
     /// Pong response
     case pong
@@ -328,9 +328,9 @@ public struct ScreenshotPayload: Codable, Sendable {
 }
 
 public enum ActionMethod: String, Codable, Sendable {
-    case accessibilityActivate
-    case accessibilityIncrement
-    case accessibilityDecrement
+    case activate
+    case increment
+    case decrement
     case syntheticTap
     case syntheticLongPress
     case syntheticSwipe
@@ -371,51 +371,44 @@ public struct ServerInfo: Codable, Sendable {
     }
 }
 
-public struct HierarchyPayload: Codable, Sendable {
+public struct Snapshot: Codable, Sendable {
     public let timestamp: Date
-    public let elements: [AccessibilityElementData]
-    /// Optional tree structure for hierarchy display (nil for backwards compatibility)
-    public let tree: [AccessibilityHierarchyNode]?
+    public let elements: [UIElement]
+    /// Optional tree structure for grouped display
+    public let tree: [ElementNode]?
 
-    public init(timestamp: Date, elements: [AccessibilityElementData], tree: [AccessibilityHierarchyNode]? = nil) {
+    public init(timestamp: Date, elements: [UIElement], tree: [ElementNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
         self.tree = tree
     }
 }
 
-// MARK: - Hierarchy Tree Types
+// MARK: - Tree Types
 
-/// Cross-platform container data for accessibility containers
-public struct AccessibilityContainerData: Codable, Equatable, Hashable, Sendable {
-    /// Container type: "none", "dataTable", "list", "landmark", "semanticGroup"
-    public let containerType: String
-    /// Container's accessibility label (if any)
+/// A container group in the element tree
+public struct Group: Codable, Equatable, Hashable, Sendable {
+    /// Group type: "semanticGroup", "list", "landmark", "dataTable", "tabBar"
+    public let type: String
     public let label: String?
-    /// Container's accessibility value (if any)
     public let value: String?
-    /// Container's accessibility identifier (if any)
     public let identifier: String?
-    /// Frame coordinates
     public let frameX: Double
     public let frameY: Double
     public let frameWidth: Double
     public let frameHeight: Double
-    /// Trait names (e.g., ["tabBar"])
-    public let traits: [String]
 
     public init(
-        containerType: String,
+        type: String,
         label: String?,
         value: String?,
         identifier: String?,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
-        frameHeight: Double,
-        traits: [String]
+        frameHeight: Double
     ) {
-        self.containerType = containerType
+        self.type = type
         self.label = label
         self.value = value
         self.identifier = identifier
@@ -423,83 +416,66 @@ public struct AccessibilityContainerData: Codable, Equatable, Hashable, Sendable
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
-        self.traits = traits
     }
 }
 
-/// A node in the accessibility hierarchy tree (cross-platform)
-public indirect enum AccessibilityHierarchyNode: Codable, Equatable, Sendable {
-    /// A leaf node representing an accessibility element by its traversal index
-    case element(traversalIndex: Int)
+/// A node in the element tree
+public indirect enum ElementNode: Codable, Equatable, Sendable {
+    /// A leaf node representing an element by its order
+    case element(order: Int)
     /// A container node grouping children
-    case container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])
+    case container(Group, children: [ElementNode])
 }
 
-// MARK: - Cross-Platform Element Type
+// MARK: - UI Element
 
-/// Platform-agnostic element data - represents an accessibility element in VoiceOver traversal order
-public struct AccessibilityElementData: Codable, Equatable, Hashable, Sendable {
-    /// VoiceOver traversal index (0-based)
-    public var traversalIndex: Int
-    /// The description that VoiceOver will read
+/// A UI element that can be inspected and interacted with
+public struct UIElement: Codable, Equatable, Hashable, Sendable {
+    /// Element order in the snapshot (0-based)
+    public var order: Int
+    /// Human-readable description of the element
     public var description: String
     public var label: String?
     public var value: String?
-    public var traits: [String]  // Human-readable trait names
     public var identifier: String?
-    public var hint: String?
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
     public var frameHeight: Double
-    public var activationPointX: Double
-    public var activationPointY: Double
-    public var customActions: [String]  // Action names
+    /// Available actions: "activate", "increment", "decrement", or custom action names
+    public var actions: [String]
 
     public init(
-        traversalIndex: Int,
+        order: Int,
         description: String,
         label: String?,
         value: String?,
-        traits: [String],
         identifier: String?,
-        hint: String?,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double,
-        activationPointX: Double,
-        activationPointY: Double,
-        customActions: [String]
+        actions: [String]
     ) {
-        self.traversalIndex = traversalIndex
+        self.order = order
         self.description = description
         self.label = label
         self.value = value
-        self.traits = traits
         self.identifier = identifier
-        self.hint = hint
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
-        self.activationPointX = activationPointX
-        self.activationPointY = activationPointY
-        self.customActions = customActions
+        self.actions = actions
     }
 }
 
 // MARK: - Convenience Extensions
 
-extension AccessibilityElementData {
-    /// Computed frame as CGRect (available on both platforms)
+extension UIElement {
+    /// Computed frame as CGRect
     public var frame: CGRect {
         CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
-    }
-
-    /// Computed activation point as CGPoint
-    public var activationPoint: CGPoint {
-        CGPoint(x: activationPointX, y: activationPointY)
     }
 }
 

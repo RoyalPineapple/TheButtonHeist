@@ -33,21 +33,37 @@ let project = Project(
             ),
             dependencies: [
                 .target(name: "TheGoods"),
+                .target(name: "Wheelman"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
         ),
 
-        // MARK: - macOS Client Library
+        // MARK: - Cross-Platform Networking Library
         .target(
             name: "Wheelman",
-            destinations: .macOS,
+            destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.wheelman",
-            deploymentTargets: .macOS("14.0"),
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/Wheelman/**"],
             dependencies: [
                 .target(name: "TheGoods"),
+            ]
+        ),
+
+        // MARK: - macOS Client Framework (single import for Mac consumers)
+        .target(
+            name: "ButtonHeist",
+            destinations: .macOS,
+            product: .framework,
+            bundleId: "com.buttonheist.buttonheist",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/ButtonHeist/**"],
+            dependencies: [
+                .target(name: "TheGoods"),
+                .target(name: "Wheelman"),
             ]
         ),
 
@@ -68,8 +84,7 @@ let project = Project(
             resources: [],
             entitlements: .file(path: "Stakeout/Stakeout.entitlements"),
             dependencies: [
-                .target(name: "TheGoods"),
-                .target(name: "Wheelman"),
+                .target(name: "ButtonHeist"),
             ]
         ),
 
@@ -101,6 +116,20 @@ let project = Project(
                 .target(name: "TheGoods"),
             ]
         ),
+
+        // MARK: - ButtonHeist Tests
+        .target(
+            name: "ButtonHeistTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.buttonheist.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
+            dependencies: [
+                .target(name: "ButtonHeist"),
+            ]
+        ),
     ],
     schemes: [
         .scheme(
@@ -122,6 +151,18 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("WheelmanTests")),
+            ])
+        ),
+        .scheme(
+            name: "ButtonHeistTests",
+            buildAction: .buildAction(targets: [
+                .target("ButtonHeistTests"),
+                .target("ButtonHeist"),
+                .target("Wheelman"),
+                .target("TheGoods"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("ButtonHeistTests")),
             ])
         ),
     ]

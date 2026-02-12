@@ -1,8 +1,8 @@
 import SwiftUI
-import TheGoods
+import ButtonHeist
 
 struct ElementInspectorView: View {
-    let element: AccessibilityElementData
+    let element: UIElement
     let onActivate: () -> Void
 
     var body: some View {
@@ -40,27 +40,8 @@ struct ElementInspectorView: View {
                     }
                 }
 
-                if let hint = element.hint, !hint.isEmpty {
-                    InspectorSection(title: "Hint") {
-                        Text(hint)
-                            .textSelection(.enabled)
-                    }
-                }
-
-                if !element.traits.isEmpty {
-                    InspectorSection(title: "Traits") {
-                        Text(element.traits.joined(separator: ", "))
-                            .font(.system(.body, design: .monospaced))
-                    }
-                }
-
                 InspectorSection(title: "Frame") {
                     Text("(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))×\(Int(element.frameHeight))")
-                        .font(.system(.body, design: .monospaced))
-                }
-
-                InspectorSection(title: "Activation Point") {
-                    Text("(\(Int(element.activationPointX)), \(Int(element.activationPointY)))")
                         .font(.system(.body, design: .monospaced))
                 }
 
@@ -72,9 +53,9 @@ struct ElementInspectorView: View {
                     }
                 }
 
-                if !element.customActions.isEmpty {
-                    InspectorSection(title: "Custom Actions") {
-                        Text(element.customActions.joined(separator: ", "))
+                if !element.actions.isEmpty {
+                    InspectorSection(title: "Actions") {
+                        Text(element.actions.joined(separator: ", "))
                     }
                 }
             }
