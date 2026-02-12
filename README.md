@@ -8,6 +8,8 @@ Accra lets you inspect and interact with the accessibility hierarchy of iOS apps
 
 - **Real-time inspection** - See accessibility elements update as your app's UI changes
 - **Remote actions** - Tap elements and trigger actions programmatically
+- **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap
+- **Multi-touch** - Simultaneous multi-finger gesture injection via IOKit HID events
 - **USB connectivity** - Connect to devices over USB when WiFi is unavailable
 - **Auto-start** - AccraHost starts automatically when your app launches
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
@@ -52,7 +54,7 @@ Accra lets you inspect and interact with the accessibility hierarchy of iOS apps
 | **AccraHost** | iOS | Server that exposes accessibility hierarchy over TCP, with synthetic touch injection |
 | **AccraClient** | macOS | Client library for discovery, connection, and async commands |
 | **AccraInspector** | macOS | GUI app for visual inspection with screenshots and element overlays |
-| **accra** | macOS | CLI tool with watch, action, and screenshot commands |
+| **accra** | macOS | CLI tool with watch, action, touch, and screenshot commands |
 
 ## Quick Start
 
@@ -135,7 +137,7 @@ open Accra.xcworkspace
 
 ## CLI Usage
 
-The CLI has three subcommands: `watch` (default), `action`, and `screenshot`.
+The CLI has four subcommands: `watch` (default), `action`, `touch`, and `screenshot`.
 
 ### watch (default)
 
@@ -163,6 +165,23 @@ OPTIONS:
   --x <x>, --y <y>       Tap coordinates (when type is 'tap')
   -t, --timeout <t>       Timeout in seconds (default: 10)
 ```
+
+### touch
+
+```
+USAGE: accra touch <subcommand>
+
+SUBCOMMANDS:
+  tap                     Tap at a point or element
+  longpress               Long press at a point or element
+  swipe                   Swipe between two points or in a direction
+  drag                    Drag from one point to another
+  pinch                   Pinch/zoom at a point or element
+  rotate                  Rotate at a point or element
+  two-finger-tap          Tap with two fingers at a point or element
+```
+
+All touch subcommands accept `--identifier`, `--index`, or coordinate options to specify the target.
 
 ### screenshot
 
@@ -200,6 +219,17 @@ accra screenshot --output screen.png
 
 # Pipe screenshot to another tool
 accra screenshot | imgcat
+
+# Touch gestures
+accra touch tap --identifier loginButton
+accra touch tap --x 100 --y 200
+accra touch longpress --identifier myButton --duration 1.0
+accra touch swipe --identifier list --direction up
+accra touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
+accra touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+accra touch pinch --identifier mapView --scale 2.0
+accra touch rotate --x 200 --y 300 --angle 1.57
+accra touch two-finger-tap --identifier zoomControl
 ```
 
 ## USB Connectivity
@@ -303,7 +333,7 @@ accra/
 │       ├── AccraHost/           # iOS server
 │       │   ├── AccraHost.swift          # Main server singleton
 │       │   ├── SimpleSocketServer.swift # BSD socket TCP server
-│       │   ├── TouchInjector.swift      # Synthetic touch injection
+│       │   ├── SimFinger.swift          # Multi-touch gesture simulation
 │       │   ├── SyntheticTouchFactory.swift  # UITouch creation via private APIs
 │       │   ├── SyntheticEventFactory.swift  # UIEvent manipulation
 │       │   ├── IOHIDEventBuilder.swift      # Low-level HID event creation
@@ -319,12 +349,16 @@ accra/
 │       └── Design/              # Design tokens (colors, typography)
 ├── AccraCLI/
 │   └── Sources/                 # CLI tool
-│       ├── main.swift           # Entry point with watch/action/screenshot commands
+│       ├── main.swift           # Entry point with watch/action/touch/screenshot commands
 │       ├── CLIRunner.swift      # Watch mode implementation
 │       ├── ActionCommand.swift  # Action command
+│       ├── TouchCommand.swift   # Touch gesture commands (7 subcommands)
 │       └── ScreenshotCommand.swift  # Screenshot command
 ├── TestApp/
 │   ├── Sources/                 # SwiftUI test app ("A11y SwiftUI")
+│   │   ├── RootView.swift           # Navigation menu
+│   │   ├── ContentView.swift        # Accessibility showcase
+│   │   └── TouchCanvasView.swift    # Multi-touch drawing canvas
 │   └── UIKitSources/            # UIKit test app ("A11y UIKit")
 ├── AccessibilitySnapshot/       # Git submodule (hierarchy parsing)
 ├── scripts/
@@ -347,9 +381,15 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 - `requestHierarchy` - Request current hierarchy
 - `subscribe` / `unsubscribe` - Automatic update subscription
 - `activate` - Activate element (VoiceOver double-tap)
-- `tap` - Tap at coordinates or element
 - `increment` / `decrement` - Adjust adjustable elements
 - `performCustomAction` - Invoke named custom action
+- `touchTap` - Tap at coordinates or element
+- `touchLongPress` - Long press with configurable duration
+- `touchSwipe` - Swipe by direction or coordinates
+- `touchDrag` - Drag between two points
+- `touchPinch` - Pinch/zoom gesture
+- `touchRotate` - Rotation gesture
+- `touchTwoFingerTap` - Two-finger tap
 - `requestScreenshot` - Request PNG screenshot
 - `ping` - Keepalive
 

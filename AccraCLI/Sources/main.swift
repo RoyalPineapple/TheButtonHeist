@@ -15,10 +15,14 @@ struct Accra: AsyncParsableCommand {
               accra                     # Interactive watch mode
               accra watch --once        # Single snapshot, then exit
               accra action --identifier "myButton"   # Activate an element
-              accra action --type tap --x 100 --y 200  # Tap coordinates
+              accra touch tap --x 100 --y 200          # Tap coordinates
+              accra touch swipe --direction up --x 200 --y 400  # Swipe up
+              accra touch pinch --identifier "mapView" --scale 2.0   # Zoom in
+              accra touch rotate --x 200 --y 300 --angle 1.57        # Rotate 90°
+              accra touch two-finger-tap --identifier "zoomControl"   # Two-finger tap
             """,
         version: "2.0.0",
-        subcommands: [WatchCommand.self, ActionCommand.self, ScreenshotCommand.self],
+        subcommands: [WatchCommand.self, ActionCommand.self, TouchCommand.self, ScreenshotCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }

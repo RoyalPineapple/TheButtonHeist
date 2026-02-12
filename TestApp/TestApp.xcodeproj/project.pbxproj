@@ -22,10 +22,12 @@
 		96F53B0AD589C22453C19AF8 /* TuistAssets+AccessibilityTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 229C794D786BCDA692A6A11C /* TuistAssets+AccessibilityTestApp.swift */; };
 		A239CC3711100EE9AFA82648 /* AccessibilitySnapshotParser.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A4E599B167A7213684D1D5B7 /* FormViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 695D9B596D045BB41F8C95A6 /* FormViewController.swift */; };
+		A7AFDDCAB62A9EDAB026F09D /* TouchCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */; };
 		AB3011D2BF16B7D0FDE11782 /* DemoTableViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08096B81FBB34A677903EC34 /* DemoTableViewController.swift */; };
 		B2F800A186488DE28AA76646 /* AccraCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 9583CB11D8654D416CFDF171 /* AccraCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B3C4B970F28D4E9F8349261E /* AccessibilityTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4917AB19CA54DDF7BFEB1849 /* AccessibilityTestApp.swift */; };
 		B72859EB3119D2493CA70B3A /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B3440EB87568A6CD7D69264 /* SceneDelegate.swift */; };
+		BA04B66749F873353950DA7A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB069D6039881E065A92F23 /* RootView.swift */; };
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
 		E3376FECA536A8AAA171C294 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */; };
 		E744E2F7C775FE201066432D /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9583CB11D8654D416CFDF171 /* AccraCore.framework */; };
@@ -74,11 +76,13 @@
 		4917AB19CA54DDF7BFEB1849 /* AccessibilityTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTestApp.swift; sourceTree = "<group>"; };
 		695D9B596D045BB41F8C95A6 /* FormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormViewController.swift; sourceTree = "<group>"; };
 		6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7EB069D6039881E065A92F23 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		877D35FA7E56356C3A73F9AC /* UIKitTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UIKitTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B3440EB87568A6CD7D69264 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		9583CB11D8654D416CFDF171 /* AccraCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5868358AC13ECA3E1BD91FB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCanvasView.swift; sourceTree = "<group>"; };
 		C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser_ObjC.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCollectionViewController.swift; sourceTree = "<group>"; };
 		D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+UIKitTestApp.swift"; sourceTree = "<group>"; };
@@ -116,6 +120,8 @@
 			children = (
 				4917AB19CA54DDF7BFEB1849 /* AccessibilityTestApp.swift */,
 				B5868358AC13ECA3E1BD91FB /* ContentView.swift */,
+				7EB069D6039881E065A92F23 /* RootView.swift */,
+				BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -322,6 +328,8 @@
 				F8653ABF476DECEF4671858E /* TuistBundle+AccessibilityTestApp.swift in Sources */,
 				B3C4B970F28D4E9F8349261E /* AccessibilityTestApp.swift in Sources */,
 				1C382F282463626A532EFD38 /* ContentView.swift in Sources */,
+				BA04B66749F873353950DA7A /* RootView.swift in Sources */,
+				A7AFDDCAB62A9EDAB026F09D /* TouchCanvasView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
