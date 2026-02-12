@@ -1,6 +1,19 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
 
+let swiftlintScript: TargetScript = .post(
+    script: """
+    if command -v swiftlint >/dev/null 2>&1; then
+        swiftlint --fix --quiet
+        swiftlint lint --quiet
+    else
+        echo "warning: SwiftLint not installed"
+    fi
+    """,
+    name: "SwiftLint",
+    basedOnDependencyAnalysis: false
+)
+
 let project = Project(
     name: "ButtonHeist",
     targets: [
@@ -12,7 +25,8 @@ let project = Project(
             bundleId: "com.buttonheist.thegoods",
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Sources/TheGoods/**"]
+            sources: ["ButtonHeist/Sources/TheGoods/**"],
+            scripts: [swiftlintScript]
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
@@ -35,7 +49,8 @@ let project = Project(
                 .target(name: "TheGoods"),
                 .target(name: "Wheelman"),
                 .external(name: "AccessibilitySnapshotParser"),
-            ]
+            ],
+            scripts: [swiftlintScript]
         ),
 
         // MARK: - Cross-Platform Networking Library
@@ -49,7 +64,8 @@ let project = Project(
             sources: ["ButtonHeist/Sources/Wheelman/**"],
             dependencies: [
                 .target(name: "TheGoods"),
-            ]
+            ],
+            scripts: [swiftlintScript]
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)
@@ -64,7 +80,8 @@ let project = Project(
             dependencies: [
                 .target(name: "TheGoods"),
                 .target(name: "Wheelman"),
-            ]
+            ],
+            scripts: [swiftlintScript]
         ),
 
         // MARK: - macOS Stakeout App
@@ -85,7 +102,8 @@ let project = Project(
             entitlements: .file(path: "Stakeout/Stakeout.entitlements"),
             dependencies: [
                 .target(name: "ButtonHeist"),
-            ]
+            ],
+            scripts: [swiftlintScript]
         ),
 
         // MARK: - TheGoods Tests
