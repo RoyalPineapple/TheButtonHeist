@@ -1,0 +1,324 @@
+#if canImport(UIKit)
+import UIKit
+
+/// Cracks open the app's touch system for remote gesture injection.
+///
+/// Supports tap, long press, swipe, drag, pinch, rotate, and two-finger tap
+/// gestures using synthetic UITouch/UIEvent injection via IOKit.
+/// Implementation based on KIF (Keep It Functional) testing framework.
+/// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
+/// instead of reusing the same event.
+///
+/// This is a last-resort mechanism — higher-level activation methods
+/// (accessibilityActivate) should be attempted first by the caller,
+/// since synthetic touch injection cannot confirm that the gesture was handled.
+@MainActor
+final class SafeCracker {
+
+    // MARK: - Internal Touch State
+
+    private var activeTouches: [UITouch] = []
+    private var activeWindow: UIWindow?
+
+    // MARK: - Public: Single-Finger Gestures
+
+    /// Simulate a tap at the given screen coordinates.
+    /// - Parameter point: Point in screen coordinates
+    /// - Returns: True if the touch events were dispatched (not necessarily handled)
+    func tap(at point: CGPoint) -> Bool {
+        guard touchDown(at: point) else { return false }
+        return touchUp()
+    }
+
+    /// Simulate a long press at the given screen coordinates.
+    /// - Parameters:
+    ///   - point: Point in screen coordinates
+    ///   - duration: How long to hold the press (seconds, default 0.5)
+    func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+        guard touchDown(at: point) else { return false }
+        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+        return touchUp()
+    }
+
+    /// Simulate a swipe gesture between two screen points.
+    /// - Parameters:
+    ///   - start: Starting point in screen coordinates
+    ///   - end: Ending point in screen coordinates
+    ///   - duration: Duration of the swipe (seconds, default 0.15)
+    func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
+        guard touchDown(at: start) else { return false }
+
+        let stepDelay: TimeInterval = 0.01 // 10ms between phases (matches KIF)
+        let steps = max(Int(duration / stepDelay), 3)
+
+        for i in 1...steps {
+            let progress = Double(i) / Double(steps)
+            let point = CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+            moveTo(point)
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+
+        return touchUp()
+    }
+
+    /// Simulate a drag gesture between two screen points.
+    /// Slower than swipe — used for reordering, slider adjustment, etc.
+    /// - Parameters:
+    ///   - start: Starting point in screen coordinates
+    ///   - end: Ending point in screen coordinates
+    ///   - duration: Duration of the drag (seconds, default 0.5)
+    func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+        guard touchDown(at: start) else { return false }
+
+        let stepDelay: TimeInterval = 0.01
+        let steps = max(Int(duration / stepDelay), 5)
+
+        for i in 1...steps {
+            let progress = Double(i) / Double(steps)
+            let point = CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+            moveTo(point)
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+
+        return touchUp()
+    }
+
+    // MARK: - Public: Multi-Touch Gestures
+
+    /// Simulate a pinch gesture centered at a screen point.
+    /// - Parameters:
+    ///   - center: Center point of the pinch in screen coordinates
+    ///   - scale: Scale factor (>1.0 = spread/zoom in, <1.0 = pinch/zoom out)
+    ///   - spread: Initial distance from center to each finger (default 100pt)
+    ///   - duration: Duration of the gesture (default 0.5s)
+    func pinch(center: CGPoint, scale: CGFloat, spread: CGFloat = 100, duration: TimeInterval = 0.5) async -> Bool {
+        let angle: CGFloat = .pi / 4 // 45° diagonal
+        let startSpread = spread
+        let endSpread = spread * scale
+
+        let finger1Start = CGPoint(
+            x: center.x + cos(angle) * startSpread,
+            y: center.y + sin(angle) * startSpread
+        )
+        let finger2Start = CGPoint(
+            x: center.x - cos(angle) * startSpread,
+            y: center.y - sin(angle) * startSpread
+        )
+
+        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
+
+        let stepDelay: TimeInterval = 0.01
+        let steps = max(Int(duration / stepDelay), 5)
+
+        for i in 1...steps {
+            let progress = CGFloat(i) / CGFloat(steps)
+            let currentSpread = startSpread + progress * (endSpread - startSpread)
+
+            let p1 = CGPoint(
+                x: center.x + cos(angle) * currentSpread,
+                y: center.y + sin(angle) * currentSpread
+            )
+            let p2 = CGPoint(
+                x: center.x - cos(angle) * currentSpread,
+                y: center.y - sin(angle) * currentSpread
+            )
+            moveTouches(to: [p1, p2])
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+
+        return touchesUp()
+    }
+
+    /// Simulate a rotation gesture centered at a screen point.
+    /// - Parameters:
+    ///   - center: Center point of the rotation in screen coordinates
+    ///   - angle: Rotation angle in radians (positive = counter-clockwise)
+    ///   - radius: Distance from center to each finger (default 100pt)
+    ///   - duration: Duration of the gesture (default 0.5s)
+    func rotate(center: CGPoint, angle: CGFloat, radius: CGFloat = 100, duration: TimeInterval = 0.5) async -> Bool {
+        let startAngle: CGFloat = 0
+
+        let finger1Start = CGPoint(
+            x: center.x + cos(startAngle) * radius,
+            y: center.y + sin(startAngle) * radius
+        )
+        let finger2Start = CGPoint(
+            x: center.x + cos(startAngle + .pi) * radius,
+            y: center.y + sin(startAngle + .pi) * radius
+        )
+
+        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
+
+        let stepDelay: TimeInterval = 0.01
+        let steps = max(Int(duration / stepDelay), 5)
+
+        for i in 1...steps {
+            let progress = CGFloat(i) / CGFloat(steps)
+            let currentAngle = startAngle + progress * angle
+
+            let p1 = CGPoint(
+                x: center.x + cos(currentAngle) * radius,
+                y: center.y + sin(currentAngle) * radius
+            )
+            let p2 = CGPoint(
+                x: center.x + cos(currentAngle + .pi) * radius,
+                y: center.y + sin(currentAngle + .pi) * radius
+            )
+            moveTouches(to: [p1, p2])
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+
+        return touchesUp()
+    }
+
+    /// Simulate a two-finger tap at a screen point.
+    /// - Parameters:
+    ///   - center: Center point between the two fingers
+    ///   - spread: Distance between the two fingers (default 40pt)
+    func twoFingerTap(at center: CGPoint, spread: CGFloat = 40) -> Bool {
+        let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
+        let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
+        guard touchesDown(at: [p1, p2]) else { return false }
+        return touchesUp()
+    }
+
+    // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
+
+    private func touchDown(at point: CGPoint) -> Bool {
+        return touchesDown(at: [point])
+    }
+
+    @discardableResult
+    private func moveTo(_ point: CGPoint) -> Bool {
+        return moveTouches(to: [point])
+    }
+
+    private func touchUp() -> Bool {
+        return touchesUp()
+    }
+
+    // MARK: - Internal: N-Finger Primitives
+
+    /// Begin touches at N screen points simultaneously.
+    private func touchesDown(at points: [CGPoint]) -> Bool {
+        guard !points.isEmpty else { return false }
+        guard let window = getKeyWindow() else {
+            print("[SafeCracker] No key window found")
+            return false
+        }
+
+        var touches: [UITouch] = []
+        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+
+        for point in points {
+            let windowPoint = window.convert(point, from: nil)
+            guard let hitView = window.hitTest(windowPoint, with: nil) else {
+                print("[SafeCracker] No view at point \(point)")
+                return false
+            }
+            guard let touch = SyntheticTouchFactory.createTouch(
+                at: windowPoint, in: window, view: hitView, phase: .began
+            ) else {
+                print("[SafeCracker] Failed to create touch")
+                return false
+            }
+            touches.append(touch)
+            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+                touch: touch, location: windowPoint, phase: .began
+            ))
+        }
+
+        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
+        for touch in touches {
+            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
+        }
+
+        guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
+            print("[SafeCracker] Failed to create began event")
+            return false
+        }
+
+        UIApplication.shared.sendEvent(event)
+        activeTouches = touches
+        activeWindow = window
+        return true
+    }
+
+    /// Move all active touches to new screen points.
+    /// points.count must equal activeTouches.count.
+    @discardableResult
+    private func moveTouches(to points: [CGPoint]) -> Bool {
+        guard !activeTouches.isEmpty, let window = activeWindow else { return false }
+        guard points.count == activeTouches.count else { return false }
+
+        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+
+        for (touch, point) in zip(activeTouches, points) {
+            let windowPoint = window.convert(point, from: nil)
+            SyntheticTouchFactory.setLocation(touch, point: windowPoint)
+            SyntheticTouchFactory.setPhase(touch, phase: .moved)
+            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+                touch: touch, location: windowPoint, phase: .moved
+            ))
+        }
+
+        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
+        for touch in activeTouches {
+            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
+        }
+
+        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
+            return false
+        }
+
+        UIApplication.shared.sendEvent(event)
+        return true
+    }
+
+    /// Lift all active touches.
+    private func touchesUp() -> Bool {
+        guard !activeTouches.isEmpty, let window = activeWindow else { return false }
+
+        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+
+        for touch in activeTouches {
+            SyntheticTouchFactory.setPhase(touch, phase: .ended)
+            let windowPoint = touch.location(in: window)
+            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+                touch: touch, location: windowPoint, phase: .ended
+            ))
+        }
+
+        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
+        for touch in activeTouches {
+            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
+        }
+
+        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
+            print("[SafeCracker] Failed to create ended event")
+            return false
+        }
+
+        UIApplication.shared.sendEvent(event)
+        activeTouches = []
+        activeWindow = nil
+        return true
+    }
+
+    // MARK: - Private
+
+    private func getKeyWindow() -> UIWindow? {
+        // Find the main app window, skipping overlay windows (high windowLevel)
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.windowLevel <= .normal && $0.rootViewController?.view != nil }
+    }
+}
+#endif

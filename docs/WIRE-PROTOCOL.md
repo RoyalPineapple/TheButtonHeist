@@ -1,24 +1,24 @@
-# Accra Wire Protocol Specification
+# ButtonHeist Wire Protocol Specification
 
 **Version**: 2.0
 
-This document specifies the communication protocol between AccraHost (iOS) and clients (AccraClient, CLI, Python scripts).
+This document specifies the communication protocol between InsideMan (iOS) and clients (Wheelman, CLI, Python scripts).
 
 ## Transport
 
 - **Layer**: TCP socket (BSD sockets)
 - **Discovery**: Bonjour/mDNS (WiFi) or CoreDevice IPv6 tunnel (USB)
-- **Service Type**: `_a11ybridge._tcp`
-- **Port**: 1455 (configurable via Info.plist `AccraHostPort` key)
+- **Service Type**: `_buttonheist._tcp`
+- **Port**: 1455 (configurable via Info.plist `InsideManPort` key)
 - **Encoding**: Newline-delimited JSON (UTF-8)
 - **Socket**: IPv6 dual-stack (accepts both IPv4 and IPv6)
 
 ## Discovery Methods
 
 ### WiFi (Bonjour)
-AccraHost advertises itself using Bonjour:
+InsideMan advertises itself using Bonjour:
 - **Domain**: `local.`
-- **Type**: `_a11ybridge._tcp`
+- **Type**: `_buttonheist._tcp`
 - **Name**: `{AppName}-{DeviceName}`
 
 ### USB (CoreDevice IPv6 Tunnel)
@@ -101,7 +101,7 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 ### touchTap
 
-Tap at coordinates or on an element using synthetic touch injection via SimFinger.
+Tap at coordinates or on an element using synthetic touch injection via SafeCracker.
 
 **At coordinates:**
 ```json
@@ -315,13 +315,13 @@ Response to `activate`, `tap`, `increment`, `decrement`, or `performCustomAction
 ```
 
 Possible methods:
-- `syntheticTap` - Tap synthesized via SimFinger
-- `syntheticLongPress` - Long press synthesized via SimFinger
-- `syntheticSwipe` - Swipe synthesized via SimFinger
-- `syntheticDrag` - Drag synthesized via SimFinger
-- `syntheticPinch` - Pinch gesture synthesized via SimFinger
-- `syntheticRotate` - Rotation gesture synthesized via SimFinger
-- `syntheticTwoFingerTap` - Two-finger tap synthesized via SimFinger
+- `syntheticTap` - Tap synthesized via SafeCracker
+- `syntheticLongPress` - Long press synthesized via SafeCracker
+- `syntheticSwipe` - Swipe synthesized via SafeCracker
+- `syntheticDrag` - Drag synthesized via SafeCracker
+- `syntheticPinch` - Pinch gesture synthesized via SafeCracker
+- `syntheticRotate` - Rotation gesture synthesized via SafeCracker
+- `syntheticTwoFingerTap` - Two-finger tap synthesized via SafeCracker
 - `accessibilityActivate` - Element's `accessibilityActivate()` was used
 - `accessibilityIncrement` - Element's `accessibilityIncrement()` was called
 - `accessibilityDecrement` - Element's `accessibilityDecrement()` was called
@@ -572,7 +572,7 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 # Client connects to fd9a:6190:eed7::1:1455
 
 # Server sends info
-{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.accra.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
+{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
@@ -625,11 +625,11 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 The port is configured via Info.plist:
 
 ```xml
-<key>AccraHostPort</key>
+<key>InsideManPort</key>
 <integer>1455</integer>
 ```
 
-Or via environment variable `ACCRA_HOST_PORT`.
+Or via environment variable `INSIDEMAN_PORT`.
 
 ### IPv6 Dual-Stack
 
@@ -650,7 +650,7 @@ If the TCP connection is lost, clients should:
 
 ### Hierarchy Change Detection
 
-AccraHost uses hash-based change detection during polling:
+InsideMan uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast

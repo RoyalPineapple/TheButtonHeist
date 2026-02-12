@@ -1,9 +1,9 @@
 import SwiftUI
-import AccraHost
+import InsideMan
 
 @main
 struct AccessibilityTestApp: App {
-    // AccraHost auto-starts via ObjC +load with port from Info.plist
+    // InsideMan auto-starts via ObjC +load with port from Info.plist
 
     var body: some Scene {
         WindowGroup {

@@ -162,7 +162,7 @@ struct TouchCanvasView: View {
 
     var body: some View {
         TouchCanvasRepresentable(clearAction: $shouldClear)
-            .accessibilityIdentifier("accra.touchCanvas.canvas")
+            .accessibilityIdentifier("buttonheist.touchCanvas.canvas")
             .ignoresSafeArea(edges: .bottom)
             .navigationTitle("Touch Canvas")
             .toolbar {
@@ -170,7 +170,7 @@ struct TouchCanvasView: View {
                     Button("Reset") {
                         shouldClear = true
                     }
-                    .accessibilityIdentifier("accra.touchCanvas.resetButton")
+                    .accessibilityIdentifier("buttonheist.touchCanvas.resetButton")
                 }
             }
     }

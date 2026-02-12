@@ -2,126 +2,126 @@ import ProjectDescription
 import ProjectDescriptionHelpers
 
 let project = Project(
-    name: "Accra",
+    name: "ButtonHeist",
     targets: [
         // MARK: - Shared Protocol Types (cross-platform)
         .target(
-            name: "AccraCore",
+            name: "TheGoods",
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
-            bundleId: "com.accra.core",
+            bundleId: "com.buttonheist.thegoods",
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
-            sources: ["AccraCore/Sources/AccraCore/**"]
+            sources: ["ButtonHeist/Sources/TheGoods/**"]
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
-        // Includes AccraHostLoader for automatic initialization via ObjC +load
+        // Includes InsideManLoader for automatic initialization via ObjC +load
         .target(
-            name: "AccraHost",
+            name: "InsideMan",
             destinations: [.iPhone, .iPad],
             product: .framework,
-            bundleId: "com.accra.host",
+            bundleId: "com.buttonheist.insideman",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
             sources: [
-                "AccraCore/Sources/AccraHost/**",
-                "AccraCore/Sources/AccraHostLoader/**",
+                "ButtonHeist/Sources/InsideMan/**",
+                "ButtonHeist/Sources/InsideManLoader/**",
             ],
             headers: .headers(
-                public: ["AccraCore/Sources/AccraHostLoader/include/**"]
+                public: ["ButtonHeist/Sources/InsideManLoader/include/**"]
             ),
             dependencies: [
-                .target(name: "AccraCore"),
+                .target(name: "TheGoods"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
         ),
 
         // MARK: - macOS Client Library
         .target(
-            name: "AccraClient",
+            name: "Wheelman",
             destinations: .macOS,
             product: .framework,
-            bundleId: "com.accra.client",
+            bundleId: "com.buttonheist.wheelman",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["AccraCore/Sources/AccraClient/**"],
+            sources: ["ButtonHeist/Sources/Wheelman/**"],
             dependencies: [
-                .target(name: "AccraCore"),
+                .target(name: "TheGoods"),
             ]
         ),
 
-        // MARK: - macOS Inspector App
+        // MARK: - macOS Stakeout App
         .target(
-            name: "AccraInspector",
+            name: "Stakeout",
             destinations: .macOS,
             product: .app,
-            bundleId: "com.accra.inspector",
+            bundleId: "com.buttonheist.stakeout",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .extendingDefault(with: [
                 "NSPrincipalClass": "NSApplication",
-                "CFBundleDisplayName": "Accra Inspector",
-                "NSLocalNetworkUsageDescription": "Accra Inspector needs local network access to discover and connect to iOS apps running AccraHost.",
-                "NSBonjourServices": ["_a11ybridge._tcp"],
+                "CFBundleDisplayName": "Stakeout",
+                "NSLocalNetworkUsageDescription": "Stakeout needs local network access to discover and connect to iOS apps running InsideMan.",
+                "NSBonjourServices": ["_buttonheist._tcp"],
             ]),
-            sources: ["AccraInspector/Sources/**"],
+            sources: ["Stakeout/Sources/**"],
             resources: [],
-            entitlements: .file(path: "AccraInspector/AccraInspector.entitlements"),
+            entitlements: .file(path: "Stakeout/Stakeout.entitlements"),
             dependencies: [
-                .target(name: "AccraCore"),
-                .target(name: "AccraClient"),
+                .target(name: "TheGoods"),
+                .target(name: "Wheelman"),
             ]
         ),
 
-        // MARK: - AccraCore Tests
+        // MARK: - TheGoods Tests
         .target(
-            name: "AccraCoreTests",
+            name: "TheGoodsTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "com.accra.core.tests",
+            bundleId: "com.buttonheist.thegoods.tests",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["AccraCore/Tests/AccraCoreTests/**"],
+            sources: ["ButtonHeist/Tests/TheGoodsTests/**"],
             dependencies: [
-                .target(name: "AccraCore"),
+                .target(name: "TheGoods"),
             ]
         ),
 
-        // MARK: - AccraClient Tests
+        // MARK: - Wheelman Tests
         .target(
-            name: "AccraClientTests",
+            name: "WheelmanTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "com.accra.client.tests",
+            bundleId: "com.buttonheist.wheelman.tests",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["AccraCore/Tests/AccraClientTests/**"],
+            sources: ["ButtonHeist/Tests/WheelmanTests/**"],
             dependencies: [
-                .target(name: "AccraClient"),
-                .target(name: "AccraCore"),
+                .target(name: "Wheelman"),
+                .target(name: "TheGoods"),
             ]
         ),
     ],
     schemes: [
         .scheme(
-            name: "AccraCoreTests",
+            name: "TheGoodsTests",
             buildAction: .buildAction(targets: [
-                .target("AccraCoreTests"),
-                .target("AccraCore"),
+                .target("TheGoodsTests"),
+                .target("TheGoods"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("AccraCoreTests")),
+                .testableTarget(target: .target("TheGoodsTests")),
             ])
         ),
         .scheme(
-            name: "AccraClientTests",
+            name: "WheelmanTests",
             buildAction: .buildAction(targets: [
-                .target("AccraClientTests"),
-                .target("AccraClient"),
-                .target("AccraCore"),
+                .target("WheelmanTests"),
+                .target("Wheelman"),
+                .target("TheGoods"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("AccraClientTests")),
+                .testableTarget(target: .target("WheelmanTests")),
             ])
         ),
     ]

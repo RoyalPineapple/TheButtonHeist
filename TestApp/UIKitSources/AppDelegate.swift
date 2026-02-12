@@ -1,11 +1,11 @@
 import UIKit
-import AccraHost
+import InsideMan
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // AccraHost auto-starts via ObjC +load with port from Info.plist
+        // InsideMan auto-starts via ObjC +load with port from Info.plist
         return true
     }
 

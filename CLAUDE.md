@@ -7,13 +7,13 @@ Before pushing any commit, verify the following:
 ### 1. Build Verification
 - **All targets must build successfully.** Run the full build:
   ```bash
-  xcodebuild -workspace Accra.xcworkspace -scheme AccraCore build
-  xcodebuild -workspace Accra.xcworkspace -scheme AccraHost -destination 'generic/platform=iOS' build
-  xcodebuild -workspace Accra.xcworkspace -scheme AccraClient build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan -destination 'generic/platform=iOS' build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
   ```
 - For device builds, include signing:
   ```bash
-  xcodebuild -workspace Accra.xcworkspace -scheme AccessibilityTestApp \
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
     -destination 'platform=iOS,name=Device' -allowProvisioningUpdates \
     CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID build
   ```
@@ -21,8 +21,8 @@ Before pushing any commit, verify the following:
 ### 2. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
-  xcodebuild -workspace Accra.xcworkspace -scheme AccraCoreTests test
-  xcodebuild -workspace Accra.xcworkspace -scheme AccraClientTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoodsTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 

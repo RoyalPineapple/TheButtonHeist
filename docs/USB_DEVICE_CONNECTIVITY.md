@@ -1,10 +1,10 @@
-# USB Device Connectivity for Accra
+# USB Device Connectivity for ButtonHeist
 
 This document describes how to connect to iOS devices over USB using the CoreDevice IPv6 tunnel, bypassing WiFi/mDNS discovery issues.
 
 ## Overview
 
-When WiFi connectivity is unreliable (VPN interference, network segmentation, mDNS issues), you can connect to AccraHost on a physical iOS device over USB. Apple's CoreDevice framework creates an IPv6 tunnel over USB that we can use for TCP connections.
+When WiFi connectivity is unreliable (VPN interference, network segmentation, mDNS issues), you can connect to InsideMan on a physical iOS device over USB. Apple's CoreDevice framework creates an IPv6 tunnel over USB that we can use for TCP connections.
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ When WiFi connectivity is unreliable (VPN interference, network segmentation, mD
 ./scripts/usb-connect.sh "Your Device Name"
 
 # Or use Python
-python3 scripts/accra_usb.py
+python3 scripts/buttonheist_usb.py
 ```
 
 ## How It Works
@@ -30,10 +30,10 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 ### Fixed Port Configuration
 
-AccraHost uses a fixed port configured in `Info.plist`:
+InsideMan uses a fixed port configured in `Info.plist`:
 
 ```xml
-<key>AccraHostPort</key>
+<key>InsideManPort</key>
 <integer>1455</integer>
 ```
 
@@ -42,8 +42,8 @@ This eliminates the need for port scanning and enables instant connections.
 ### Requirements
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
-2. **AccraHost must use IPv6 dual-stack** (enabled by default)
-3. **App must be running** on the device with AccraHost started
+2. **InsideMan must use IPv6 dual-stack** (enabled by default)
+3. **App must be running** on the device with InsideMan started
 
 ## Building and Deploying
 
@@ -51,7 +51,7 @@ This eliminates the need for port scanning and enables instant connections.
 
 ```bash
 # Build for device with automatic signing
-xcodebuild -workspace Accra.xcworkspace \
+xcodebuild -workspace ButtonHeist.xcworkspace \
   -scheme AccessibilityTestApp \
   -destination 'platform=iOS,name=Your Device Name' \
   -allowProvisioningUpdates \
@@ -69,13 +69,13 @@ cat path/to/app/embedded.mobileprovision | security cms -D | grep -A1 TeamIdenti
 # Install the built app
 xcrun devicectl device install app \
   --device "Your Device Name" \
-  ~/Library/Developer/Xcode/DerivedData/Accra-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
+  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
 
 # Launch the app
 xcrun devicectl device process launch \
   --device "Your Device Name" \
   --terminate-existing --activate \
-  com.accra.testapp
+  com.buttonheist.testapp
 ```
 
 ## Discovering the Tunnel
@@ -99,7 +99,7 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 
 Output shows the tunnel prefix (e.g., `fd9a:6190:eed7::1`).
 
-## Connecting to AccraHost
+## Connecting to InsideMan
 
 ### Using the Helper Script
 
@@ -109,7 +109,7 @@ Output shows the tunnel prefix (e.g., `fd9a:6190:eed7::1`).
 
 Output:
 ```
-=== Accra USB Connection ===
+=== ButtonHeist USB Connection ===
 
 Connected to AccessibilityTestApp on fd9a:6190:eed7::1:1455
 Device: iPhone (iOS 26.2.1)
@@ -125,9 +125,9 @@ Python:
 ### Using Python
 
 ```python
-from scripts.accra_usb import AccraUSBConnection
+from scripts.buttonheist_usb import ButtonHeistUSBConnection
 
-with AccraUSBConnection() as conn:
+with ButtonHeistUSBConnection() as conn:
     print(f"Connected to: {conn.info['appName']}")
     hierarchy = conn.get_hierarchy()
     print(f"Elements: {len(hierarchy['elements'])}")
@@ -185,7 +185,7 @@ Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for as
 
 ### Activate Element (by identifier)
 ```json
-{"activate":{"_0":{"identifier":"accra.action.testButton"}}}
+{"activate":{"_0":{"identifier":"buttonheist.action.testButton"}}}
 ```
 
 ### Tap at Coordinates
@@ -206,7 +206,7 @@ The port is configured in three places:
 
 1. **Info.plist** (app reads this on launch):
    ```xml
-   <key>AccraHostPort</key>
+   <key>InsideManPort</key>
    <integer>1455</integer>
    ```
 
@@ -215,7 +215,7 @@ The port is configured in three places:
    PORT="${3:-1455}"
    ```
 
-3. **scripts/accra_usb.py** (Python default):
+3. **scripts/buttonheist_usb.py** (Python default):
    ```python
    DEFAULT_PORT = 1455
    ```
@@ -259,7 +259,7 @@ Common issues that USB bypasses:
 ## Troubleshooting
 
 ### "Connection refused"
-- App not running or AccraHost not started
+- App not running or InsideMan not started
 - Wrong port (verify Info.plist has correct port)
 - Device went to sleep/background
 
@@ -274,4 +274,4 @@ Common issues that USB bypasses:
 
 ### Connection Works But Port Wrong
 - App was built with old Info.plist - rebuild and reinstall
-- Verify with: `plutil -p /path/to/AccessibilityTestApp.app/Info.plist | grep AccraHostPort`
+- Verify with: `plutil -p /path/to/AccessibilityTestApp.app/Info.plist | grep InsideManPort`

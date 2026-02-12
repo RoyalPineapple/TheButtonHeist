@@ -1,27 +1,27 @@
-# Accra Architecture
+# ButtonHeist Architecture
 
-This document describes the internal architecture of Accra and how its components interact.
+This document describes the internal architecture of ButtonHeist and how its components interact.
 
 ## System Overview
 
-Accra is a distributed system with two main components:
+ButtonHeist is a distributed system with two main components:
 
-1. **AccraHost** - An iOS framework embedded in the app being inspected
-2. **AccraClient** - A macOS library that connects to and receives data from AccraHost
+1. **InsideMan** - An iOS framework embedded in the app being inspected
+2. **Wheelman** - A macOS library that connects to and receives data from InsideMan
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                              macOS                                   │
 │                                                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │   Inspector  │  │     CLI      │  │ Python/Shell │              │
+│  │   Stakeout   │  │     CLI      │  │ Python/Shell │              │
 │  │     (GUI)    │  │              │  │   Scripts    │              │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
 │         │                 │                 │                       │
 │         └─────────────────┼─────────────────┘                       │
 │                           │                                          │
 │                  ┌────────┴────────┐                                │
-│                  │   AccraClient   │                                │
+│                  │    Wheelman    │                                │
 │                  │   (Framework)   │                                │
 │                  └────────┬────────┘                                │
 │                           │                                          │
@@ -38,14 +38,14 @@ Accra is a distributed system with two main components:
                                            │
 ┌──────────────────────────────────────────┼──────────────────────────┐
 │                           ┌──────────────┴──────────────┐           │
-│                           │         AccraHost           │           │
+│                           │         InsideMan           │           │
 │                           │        (Framework)          │           │
 │                           └──────────────┬──────────────┘           │
 │                                          │                          │
 │           ┌──────────────┬───────────────┼───────────────┐          │
 │           │              │               │               │          │
 │     ┌─────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐  ┌─────┴─────┐    │
-│     │ NetService│  │SimpleSocket│  │   A11y    │  │ SimFinger │    │
+│     │ NetService│  │SimpleSocket│  │   A11y    │  │SafeCracker│    │
 │     │ (Bonjour) │  │Server(TCP)│  │  Parser   │  │(Gestures) │    │
 │     └───────────┘  └───────────┘  └───────────┘  └───────────┘    │
 │                                                                      │
@@ -55,7 +55,7 @@ Accra is a distributed system with two main components:
 
 ## Component Details
 
-### AccraCore
+### TheGoods
 
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
@@ -75,18 +75,18 @@ Accra is a distributed system with two main components:
 - No platform-specific imports (UIKit/AppKit)
 - Protocol version 2.0 included for compatibility
 
-### AccraHost
+### InsideMan
 
 **Purpose**: iOS server that captures and broadcasts accessibility hierarchy and handles remote interaction.
 
 **Architecture**:
 ```
-AccraHost (singleton, @MainActor)
+InsideMan (singleton, @MainActor)
 ├── SimpleSocketServer (BSD socket TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
-├── SimFinger (multi-touch gesture simulation)
+├── SafeCracker (multi-touch gesture simulation)
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   └── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
@@ -97,21 +97,21 @@ AccraHost (singleton, @MainActor)
 
 **Auto-Start Mechanism**:
 
-AccraHost uses ObjC `+load` for automatic initialization:
+InsideMan uses ObjC `+load` for automatic initialization:
 
 ```
-AccraHostLoader/
-├── AccraHostAutoStart.h  (public header)
-└── AccraHostAutoStart.m  (+load implementation → AccraHost_autoStartFromLoad)
+InsideManLoader/
+├── InsideManAutoStart.h  (public header)
+└── InsideManAutoStart.m  (+load implementation → InsideMan_autoStartFromLoad)
 ```
 
 When the framework loads:
 1. `+load` is called automatically by the runtime
 2. Reads configuration from environment variables or Info.plist:
-   - `ACCRA_HOST_DISABLE` / `AccraHostDisableAutoStart` - skip startup
-   - `ACCRA_HOST_PORT` / `AccraHostPort` - server port (default: 0 = auto)
-   - `ACCRA_HOST_POLLING_INTERVAL` / `AccraHostPollingInterval` - update interval (default: 1.0s, min: 0.5s)
-3. Creates a Task on MainActor to configure and start AccraHost singleton
+   - `INSIDEMAN_DISABLE` / `InsideManDisableAutoStart` - skip startup
+   - `INSIDEMAN_PORT` / `InsideManPort` - server port (default: 0 = auto)
+   - `INSIDEMAN_POLLING_INTERVAL` / `InsideManPollingInterval` - update interval (default: 1.0s, min: 0.5s)
+3. Creates a Task on MainActor to configure and start InsideMan singleton
 4. Begins polling for hierarchy changes
 
 **Threading Model**:
@@ -128,13 +128,13 @@ When the framework loads:
 - Multiple concurrent client support
 - SIGPIPE handling to prevent crashes on closed connections
 
-### SimFinger (Touch Gesture System)
+### SafeCracker (Touch Gesture System)
 
 **Purpose**: Synthesize touch gestures on the iOS device to allow remote interaction. Supports single-finger gestures (tap, long press, swipe, drag) and multi-touch gestures (pinch, rotate, two-finger tap).
 
 **Architecture**:
 ```
-SimFinger (stateful, @MainActor)
+SafeCracker (stateful, @MainActor)
 │
 ├── Single-Finger Gestures
 │   ├── tap(at:)           → touchDown + touchUp
@@ -172,22 +172,22 @@ SimFinger (stateful, @MainActor)
 
 ### Screenshot Capture
 
-AccraHost captures screenshots using `UIGraphicsImageRenderer`:
+InsideMan captures screenshots using `UIGraphicsImageRenderer`:
 1. Finds the foreground window scene
 2. Uses `drawHierarchy(in:afterScreenUpdates:)` to capture the full visual hierarchy (including SwiftUI)
 3. Encodes as PNG, then base64
 4. Returns `ScreenshotPayload` with dimensions and timestamp
 5. Screenshots are automatically broadcast alongside hierarchy changes during polling
 
-### AccraClient
+### Wheelman
 
-**Purpose**: macOS client for discovering and connecting to AccraHost instances.
+**Purpose**: macOS client for discovering and connecting to InsideMan instances.
 
 **Architecture**:
 ```
-AccraClient (ObservableObject, @MainActor)
+Wheelman (ObservableObject, @MainActor)
 ├── DeviceDiscovery
-│   └── NWBrowser (Bonjour browsing for "_a11ybridge._tcp")
+│   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection
 │   ├── NWConnection (service resolution only)
 │   └── BSD socket (actual data transport)
@@ -206,7 +206,7 @@ AccraClient (ObservableObject, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreenshot(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, AccraClient automatically sends `subscribe`, `requestHierarchy`, and `requestScreenshot` messages.
+**Auto-Subscribe on Connect**: When a connection is established, Wheelman automatically sends `subscribe`, `requestHierarchy`, and `requestScreenshot` messages.
 
 **Connection State Machine**:
 ```
@@ -221,28 +221,28 @@ disconnected ──connect()──► connecting ──success──► connecte
 ### Discovery Flow
 
 ```
-1. AccraHost loads (ObjC +load)
+1. InsideMan loads (ObjC +load)
    └── SimpleSocketServer.start(port: 1455)
-   └── NetService.publish("_a11ybridge._tcp")
+   └── NetService.publish("_buttonheist._tcp")
 
-2. AccraClient.startDiscovery()
-   └── NWBrowser.start(for: "_a11ybridge._tcp")
+2. Wheelman.startDiscovery()
+   └── NWBrowser.start(for: "_buttonheist._tcp")
 
 3. NWBrowser finds service
-   └── AccraClient.discoveredDevices.append(device)
+   └── Wheelman.discoveredDevices.append(device)
 ```
 
 ### Connection Flow
 
 ```
-1. AccraClient.connect(to: device)
+1. Wheelman.connect(to: device)
    └── NWConnection resolves Bonjour service to host:port
    └── BSD socket connects to 127.0.0.1:port
 
 2. TCP connection established
-   └── AccraHost sends ServerMessage.info
+   └── InsideMan sends ServerMessage.info
 
-3. AccraClient receives info
+3. Wheelman receives info
    └── serverInfo = info
    └── connectionState = .connected
    └── Sends: subscribe, requestHierarchy, requestScreenshot
@@ -253,7 +253,7 @@ disconnected ──connect()──► connecting ──success──► connecte
 ```
 1. Polling timer fires (configurable interval, default 1.0s)
 
-2. AccraHost.checkForChanges()
+2. InsideMan.checkForChanges()
    └── parser.parseAccessibilityHierarchy(in: rootView)
    └── flattenToElements() → AccessibilityElementData[]
    └── Compute hash of elements array
@@ -269,16 +269,16 @@ disconnected ──connect()──► connecting ──success──► connecte
 ```
 1. Client sends touch gesture message (touchTap, touchDrag, touchPinch, etc.)
 
-2. AccraHost receives message
+2. InsideMan receives message
    └── Resolve target point (from element activation point or explicit coordinates)
    └── For element targets: refresh hierarchy, find element, get activation point
 
-3. SimFinger performs gesture
+3. SafeCracker performs gesture
    └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
    └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
    └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()
 
-4. AccraHost sends actionResult
+4. InsideMan sends actionResult
    └── success: true/false
    └── method: syntheticTap / syntheticDrag / syntheticPinch / etc.
    └── message: optional error description
@@ -292,7 +292,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 **Summary**:
 - Protocol version: 2.0
 - Transport: TCP socket (BSD sockets, not WebSocket)
-- Discovery: Bonjour/mDNS (`_a11ybridge._tcp`) or USB IPv6 tunnel
+- Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
 
@@ -311,14 +311,14 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 ## Threading Considerations
 
-### AccraHost (iOS)
+### InsideMan (iOS)
 - `@MainActor` for UIKit compatibility
 - Parser must run on main thread
 - Socket accept/read on GCD queues
 - Message handling dispatched to main
 - Hierarchy updates debounced by 300ms
 
-### AccraClient (macOS)
+### Wheelman (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
 - BSD socket read loop on background queue
@@ -347,22 +347,22 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 ### Environment Variables (highest priority)
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ACCRA_HOST_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
-| `ACCRA_HOST_PORT` | Fixed port number, 0 = auto | 0 |
-| `ACCRA_HOST_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
+| `INSIDEMAN_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
+| `INSIDEMAN_PORT` | Fixed port number, 0 = auto | 0 |
+| `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 
 ### Info.plist Keys (fallback)
 ```xml
-<key>AccraHostPort</key>
+<key>InsideManPort</key>
 <integer>1455</integer>
-<key>AccraHostPollingInterval</key>
+<key>InsideManPollingInterval</key>
 <real>1.0</real>
-<key>AccraHostDisableAutoStart</key>
+<key>InsideManDisableAutoStart</key>
 <false/>
 <key>NSLocalNetworkUsageDescription</key>
 <string>Accessibility inspector connection.</string>
 <key>NSBonjourServices</key>
 <array>
-    <string>_a11ybridge._tcp</string>
+    <string>_buttonheist._tcp</string>
 </array>
 ```

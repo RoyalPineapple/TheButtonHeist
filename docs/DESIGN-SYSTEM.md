@@ -1,15 +1,15 @@
-# Accra Inspector Design System
+# Stakeout Design System
 
-Design tokens and guidelines for the AccraInspector macOS application.
+Design tokens and guidelines for the Stakeout macOS application.
 
 ## Overview
 
-AccraInspector uses a typography-driven design system with semantic tokens for colors, fonts, and spacing. All design values are defined in the `Design/` directory.
+Stakeout uses a typography-driven design system with semantic tokens for colors, fonts, and spacing. All design values are defined in the `Design/` directory.
 
 ## File Structure
 
 ```
-AccraInspector/Sources/Design/
+Stakeout/Sources/Design/
 ├── Colors.swift      # Semantic color definitions
 ├── Typography.swift  # Font definitions
 └── Spacing.swift     # Layout constants
@@ -17,7 +17,7 @@ AccraInspector/Sources/Design/
 
 ## Colors
 
-**Location**: `AccraInspector/Sources/Design/Colors.swift`
+**Location**: `Stakeout/Sources/Design/Colors.swift`
 
 Colors are accessed via the `Color.Tree` namespace extension.
 
@@ -48,7 +48,7 @@ Colors adapt to light/dark mode using semantic system colors or custom asset cat
 
 ## Typography
 
-**Location**: `AccraInspector/Sources/Design/Typography.swift`
+**Location**: `Stakeout/Sources/Design/Typography.swift`
 
 Fonts are accessed via the `Font.Tree` namespace extension.
 
@@ -73,7 +73,7 @@ Text(trait)
 
 ## Spacing
 
-**Location**: `AccraInspector/Sources/Design/Spacing.swift`
+**Location**: `Stakeout/Sources/Design/Spacing.swift`
 
 Spacing constants are defined in the `TreeSpacing` enum.
 

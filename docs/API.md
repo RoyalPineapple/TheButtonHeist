@@ -1,51 +1,51 @@
-# Accra API Reference
+# ButtonHeist API Reference
 
-Complete API documentation for AccraHost (iOS), AccraClient (macOS), and the CLI.
+Complete API documentation for InsideMan (iOS), Wheelman (macOS), and the CLI.
 
-## AccraHost
+## InsideMan
 
-**Import**: `import AccraHost`
+**Import**: `import InsideMan`
 **Platform**: iOS 17.0+
-**Location**: `AccraCore/Sources/AccraHost/AccraHost.swift`
+**Location**: `ButtonHeist/Sources/InsideMan/InsideMan.swift`
 
 ### Overview
 
-AccraHost automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
+InsideMan automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
 
 ### Auto-Start Behavior
 
-When the AccraHost framework loads:
+When the InsideMan framework loads:
 1. Reads configuration from environment variables or Info.plist
 2. Creates a TCP server on the configured port (default: auto-assign, recommended: 1455)
-3. Begins Bonjour advertisement as `_a11ybridge._tcp`
+3. Begins Bonjour advertisement as `_buttonheist._tcp`
 4. Starts polling for accessibility hierarchy changes
 
 ### Configuration
 
 **Environment variables (highest priority):**
 ```bash
-ACCRA_HOST_PORT=1455                  # Server port (0 = auto-assign)
-ACCRA_HOST_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
-ACCRA_HOST_DISABLE=true               # Disable auto-start
+INSIDEMAN_PORT=1455                  # Server port (0 = auto-assign)
+INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
+INSIDEMAN_DISABLE=true               # Disable auto-start
 ```
 
 **Info.plist (fallback):**
 ```xml
-<key>AccraHostPort</key>
+<key>InsideManPort</key>
 <integer>1455</integer>
-<key>AccraHostPollingInterval</key>
+<key>InsideManPollingInterval</key>
 <real>1.0</real>
-<key>AccraHostDisableAutoStart</key>
+<key>InsideManDisableAutoStart</key>
 <false/>
 ```
 
-### AccraHost Class
+### InsideMan Class
 
 Main server class. Use the shared singleton instance.
 
 ```swift
 @MainActor
-public final class AccraHost
+public final class InsideMan
 ```
 
 #### Properties
@@ -53,7 +53,7 @@ public final class AccraHost
 ##### shared
 
 ```swift
-public static var shared: AccraHost
+public static var shared: InsideMan
 ```
 
 Singleton instance. Automatically initialized on framework load.
@@ -130,9 +130,9 @@ public func notifyChange()
 
 Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
 
-### Touch Gesture System (SimFinger)
+### Touch Gesture System (SafeCracker)
 
-AccraHost uses `SimFinger` internally for handling all touch gesture commands. SimFinger supports both single-finger and multi-touch gestures via synthetic UITouch/IOHIDEvent injection.
+InsideMan uses `SafeCracker` internally for handling all touch gesture commands. SafeCracker supports both single-finger and multi-touch gestures via synthetic UITouch/IOHIDEvent injection.
 
 **Supported gestures:**
 - `tap` - Single tap at a point
@@ -161,19 +161,19 @@ On successful tap, a `TapVisualizerView` overlay shows a 40pt white circle at th
 
 ---
 
-## AccraClient
+## Wheelman
 
-**Import**: `import AccraClient`
+**Import**: `import Wheelman`
 **Platform**: macOS 14.0+
-**Location**: `AccraCore/Sources/AccraClient/AccraClient.swift`
+**Location**: `ButtonHeist/Sources/Wheelman/Wheelman.swift`
 
-### AccraClient
+### Wheelman
 
 Main client class. Conforms to `ObservableObject` for SwiftUI integration.
 
 ```swift
 @MainActor
-public final class AccraClient: ObservableObject
+public final class Wheelman: ObservableObject
 ```
 
 #### Published Properties
@@ -400,16 +400,16 @@ public enum ActionError: Error, LocalizedError {
 
 ---
 
-## AccraCore Types
+## TheGoods Types
 
-**Import**: `import AccraCore`
+**Import**: `import TheGoods`
 **Platform**: iOS 17.0+ / macOS 14.0+
-**Location**: `AccraCore/Sources/AccraCore/Messages.swift`
+**Location**: `ButtonHeist/Sources/TheGoods/Messages.swift`
 
 ### Constants
 
 ```swift
-public let accraServiceType = "_a11ybridge._tcp"
+public let buttonHeistServiceType = "_buttonheist._tcp"
 public let protocolVersion = "2.0"
 ```
 
@@ -432,7 +432,7 @@ public enum ConnectionState: Equatable
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable
 ```
 
-Represents a discovered AccraHost device.
+Represents a discovered InsideMan device.
 
 #### Properties
 
@@ -644,13 +644,13 @@ public enum ActionMethod: String, Codable, Sendable
 - `accessibilityActivate` - Used accessibility activation
 - `accessibilityIncrement` - Used accessibility increment
 - `accessibilityDecrement` - Used accessibility decrement
-- `syntheticTap` - Tap via SimFinger
-- `syntheticLongPress` - Long press via SimFinger
-- `syntheticSwipe` - Swipe via SimFinger
-- `syntheticDrag` - Drag via SimFinger
-- `syntheticPinch` - Pinch via SimFinger
-- `syntheticRotate` - Rotation via SimFinger
-- `syntheticTwoFingerTap` - Two-finger tap via SimFinger
+- `syntheticTap` - Tap via SafeCracker
+- `syntheticLongPress` - Long press via SafeCracker
+- `syntheticSwipe` - Swipe via SafeCracker
+- `syntheticDrag` - Drag via SafeCracker
+- `syntheticPinch` - Pinch via SafeCracker
+- `syntheticRotate` - Rotation via SafeCracker
+- `syntheticTwoFingerTap` - Two-finger tap via SafeCracker
 - `customAction` - Used custom action
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
@@ -672,15 +672,15 @@ public struct ScreenshotPayload: Codable, Sendable
 
 ## CLI Reference
 
-**Location**: `AccraCLI/`
+**Location**: `ButtonHeistCLI/`
 **Version**: 2.0.0
 
-### accra watch (default)
+### buttonheist watch (default)
 
 Watch accessibility hierarchy in real-time.
 
 ```
-USAGE: accra watch [OPTIONS]
+USAGE: buttonheist watch [OPTIONS]
 
 OPTIONS:
   -f, --format <format>   Output format: human, json (default: human)
@@ -700,12 +700,12 @@ Exit codes:
 - `2` - No device found
 - `3` - Timeout
 
-### accra action
+### buttonheist action
 
 Perform actions on accessibility elements.
 
 ```
-USAGE: accra action [OPTIONS]
+USAGE: buttonheist action [OPTIONS]
 
 OPTIONS:
   --identifier <id>       Element accessibility identifier
@@ -719,12 +719,12 @@ OPTIONS:
   -q, --quiet             Suppress status messages
 ```
 
-### accra touch
+### buttonheist touch
 
 Simulate touch gestures on the connected iOS device.
 
 ```
-USAGE: accra touch <subcommand>
+USAGE: buttonheist touch <subcommand>
 
 SUBCOMMANDS:
   tap                     Tap at a point or element
@@ -738,12 +738,12 @@ SUBCOMMANDS:
 
 All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning.
 
-### accra screenshot
+### buttonheist screenshot
 
 Capture a screenshot from the connected device.
 
 ```
-USAGE: accra screenshot [OPTIONS]
+USAGE: buttonheist screenshot [OPTIONS]
 
 OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
@@ -761,11 +761,11 @@ Just import the framework - it auto-starts:
 
 ```swift
 import SwiftUI
-import AccraHost
+import InsideMan
 
 @main
 struct MyApp: App {
-    // AccraHost auto-starts via ObjC +load
+    // InsideMan auto-starts via ObjC +load
 
     var body: some Scene {
         WindowGroup {
@@ -777,13 +777,13 @@ struct MyApp: App {
 
 **Info.plist:**
 ```xml
-<key>AccraHostPort</key>
+<key>InsideManPort</key>
 <integer>1455</integer>
 <key>NSLocalNetworkUsageDescription</key>
 <string>Accessibility inspector connection.</string>
 <key>NSBonjourServices</key>
 <array>
-    <string>_a11ybridge._tcp</string>
+    <string>_buttonheist._tcp</string>
 </array>
 ```
 
@@ -791,11 +791,11 @@ struct MyApp: App {
 
 ```swift
 import SwiftUI
-import AccraClient
-import AccraCore
+import Wheelman
+import TheGoods
 
 struct InspectorView: View {
-    @StateObject private var client = AccraClient()
+    @StateObject private var client = Wheelman()
 
     var body: some View {
         NavigationSplitView {
@@ -830,11 +830,11 @@ struct InspectorView: View {
 ### Callback-Based Usage
 
 ```swift
-import AccraClient
-import AccraCore
+import Wheelman
+import TheGoods
 
 class Inspector {
-    let client = AccraClient()
+    let client = Wheelman()
 
     init() {
         client.onDeviceDiscovered = { [weak self] device in
@@ -894,9 +894,9 @@ do {
 ### Direct TCP Connection (Python)
 
 ```python
-from scripts.accra_usb import AccraUSBConnection
+from scripts.buttonheist_usb import ButtonHeistUSBConnection
 
-with AccraUSBConnection() as conn:
+with ButtonHeistUSBConnection() as conn:
     # Get hierarchy
     hierarchy = conn.get_hierarchy()
     for element in hierarchy['elements']:
@@ -914,30 +914,30 @@ with AccraUSBConnection() as conn:
 
 ```bash
 # Get hierarchy as JSON
-accra --format json --once > hierarchy.json
+buttonheist --format json --once > hierarchy.json
 
 # Activate a button
-accra action --identifier loginButton
+buttonheist action --identifier loginButton
 
 # Increment a slider
-accra action --type increment --identifier volumeSlider
+buttonheist action --type increment --identifier volumeSlider
 
 # Tap at coordinates
-accra action --type tap --x 196.5 --y 659
+buttonheist action --type tap --x 196.5 --y 659
 
 # Capture screenshot
-accra screenshot --output screen.png
+buttonheist screenshot --output screen.png
 
 # Perform custom action
-accra action --type custom --identifier myCell --custom-action "Delete"
+buttonheist action --type custom --identifier myCell --custom-action "Delete"
 
 # Touch gestures
-accra touch tap --x 100 --y 200
-accra touch tap --identifier loginButton
-accra touch longpress --identifier myButton --duration 1.0
-accra touch swipe --identifier list --direction up
-accra touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-accra touch pinch --identifier mapView --scale 2.0
-accra touch rotate --x 200 --y 300 --angle 1.57
-accra touch two-finger-tap --identifier zoomControl
+buttonheist touch tap --x 100 --y 200
+buttonheist touch tap --identifier loginButton
+buttonheist touch longpress --identifier myButton --duration 1.0
+buttonheist touch swipe --identifier list --direction up
+buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+buttonheist touch pinch --identifier mapView --scale 2.0
+buttonheist touch rotate --x 200 --y 300 --angle 1.57
+buttonheist touch two-finger-tap --identifier zoomControl
 ```
