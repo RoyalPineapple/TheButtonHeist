@@ -90,6 +90,61 @@ final class SafeCracker {
         return touchUp()
     }
 
+    /// Simulate drawing along a path of waypoints.
+    /// - Parameters:
+    ///   - points: Ordered array of screen coordinates to trace through
+    ///   - duration: Total duration of the gesture in seconds
+    func drawPath(points: [CGPoint], duration: TimeInterval) async -> Bool {
+        guard points.count >= 2 else { return false }
+
+        guard touchDown(at: points[0]) else { return false }
+
+        // Calculate total path length for even speed distribution
+        var totalLength: CGFloat = 0
+        var segmentLengths: [CGFloat] = []
+        for i in 1..<points.count {
+            let dx = points[i].x - points[i-1].x
+            let dy = points[i].y - points[i-1].y
+            let len = sqrt(dx * dx + dy * dy)
+            segmentLengths.append(len)
+            totalLength += len
+        }
+
+        guard totalLength > 0 else {
+            return touchUp()
+        }
+
+        let stepDelay: TimeInterval = 0.01
+        let totalSteps = max(Int(duration / stepDelay), points.count)
+
+        // Walk the polyline at uniform speed
+        for step in 1...totalSteps {
+            let progress = CGFloat(step) / CGFloat(totalSteps)
+            let targetDist = progress * totalLength
+
+            // Find which segment this distance falls on
+            var accumulated: CGFloat = 0
+            var point = points.last!
+            for i in 0..<segmentLengths.count {
+                let segLen = segmentLengths[i]
+                if accumulated + segLen >= targetDist {
+                    let segProgress = (targetDist - accumulated) / segLen
+                    point = CGPoint(
+                        x: points[i].x + segProgress * (points[i+1].x - points[i].x),
+                        y: points[i].y + segProgress * (points[i+1].y - points[i].y)
+                    )
+                    break
+                }
+                accumulated += segLen
+            }
+
+            moveTo(point)
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+        }
+
+        return touchUp()
+    }
+
     // MARK: - Public: Multi-Touch Gestures
 
     /// Simulate a pinch gesture centered at a screen point.

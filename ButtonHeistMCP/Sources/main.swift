@@ -155,6 +155,67 @@ let twoFingerTapTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let drawPathTool = Tool(
+    name: "draw_path",
+    // swiftlint:disable:next line_length
+    description: "Draw along a path by tracing through a sequence of points. Useful for drawing shapes, writing characters, or following complex paths on canvas views.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "points": .object([
+                "type": .string("array"),
+                "description": .string("Array of {x, y} coordinate objects to trace through (minimum 2)"),
+                "items": .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "x": .object(["type": .string("number"), "description": .string("X coordinate in screen points")]),
+                        "y": .object(["type": .string("number"), "description": .string("Y coordinate in screen points")]),
+                    ]),
+                    "required": .array([.string("x"), .string("y")]),
+                ]),
+            ]),
+            "duration": .object(["type": .string("number"), "description": .string("Total duration in seconds (mutually exclusive with velocity)")]),
+            "velocity": .object(["type": .string("number"), "description": .string("Speed in points per second (mutually exclusive with duration)")]),
+        ]),
+        "required": .array([.string("points")]),
+    ]),
+    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
+)
+
+let drawBezierTool = Tool(
+    name: "draw_bezier",
+    // swiftlint:disable:next line_length
+    description: "Draw along a cubic bezier curve path. Provide a start point and one or more bezier segments (each with two control points and an endpoint). The curve is sampled to a polyline and traced as a touch gesture. Useful for smooth curves, arcs, and organic shapes.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "startX": .object(["type": .string("number"), "description": .string("Start X coordinate")]),
+            "startY": .object(["type": .string("number"), "description": .string("Start Y coordinate")]),
+            "segments": .object([
+                "type": .string("array"),
+                "description": .string("Array of cubic bezier segments"),
+                "items": .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "cp1X": .object(["type": .string("number"), "description": .string("First control point X")]),
+                        "cp1Y": .object(["type": .string("number"), "description": .string("First control point Y")]),
+                        "cp2X": .object(["type": .string("number"), "description": .string("Second control point X")]),
+                        "cp2Y": .object(["type": .string("number"), "description": .string("Second control point Y")]),
+                        "endX": .object(["type": .string("number"), "description": .string("Endpoint X")]),
+                        "endY": .object(["type": .string("number"), "description": .string("Endpoint Y")]),
+                    ]),
+                    "required": .array([.string("cp1X"), .string("cp1Y"), .string("cp2X"), .string("cp2Y"), .string("endX"), .string("endY")]),
+                ]),
+            ]),
+            "samplesPerSegment": .object(["type": .string("integer"), "description": .string("Points to sample per bezier segment (default 20)")]),
+            "duration": .object(["type": .string("number"), "description": .string("Total duration in seconds (mutually exclusive with velocity)")]),
+            "velocity": .object(["type": .string("number"), "description": .string("Speed in points per second (mutually exclusive with duration)")]),
+        ]),
+        "required": .array([.string("startX"), .string("startY"), .string("segments")]),
+    ]),
+    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
+)
+
 let activateTool = Tool(
     name: "activate",
     // swiftlint:disable:next line_length
@@ -214,6 +275,7 @@ let customActionTool = Tool(
 let allTools: [Tool] = [
     snapshotTool, screenshotTool,
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
+    drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
 ]
 
@@ -406,6 +468,65 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
             spread: spread
         ))
         return try await sendAction(message, client: client)
+
+    case "draw_path":
+        guard let pointsValue = args?["points"]?.arrayValue else {
+            return errorResult("points array is required")
+        }
+        let pathPoints: [PathPoint] = try pointsValue.compactMap { value in
+            guard let obj = value.objectValue,
+                  let x = obj["x"]?.doubleValue ?? obj["x"]?.intValue.map(Double.init),
+                  let y = obj["y"]?.doubleValue ?? obj["y"]?.intValue.map(Double.init) else {
+                throw MCPError.invalidParams("Each point must have x and y numbers")
+            }
+            return PathPoint(x: x, y: y)
+        }
+        guard pathPoints.count >= 2 else {
+            return errorResult("Path requires at least 2 points")
+        }
+        let dpDuration = doubleArg(args, "duration")
+        let dpVelocity = doubleArg(args, "velocity")
+        let dpMessage = ClientMessage.touchDrawPath(DrawPathTarget(
+            points: pathPoints,
+            duration: dpDuration,
+            velocity: dpVelocity
+        ))
+        return try await sendAction(dpMessage, client: client)
+
+    case "draw_bezier":
+        guard let startX = doubleArg(args, "startX"),
+              let startY = doubleArg(args, "startY") else {
+            return errorResult("startX and startY are required")
+        }
+        guard let segmentsValue = args?["segments"]?.arrayValue else {
+            return errorResult("segments array is required")
+        }
+        let segments: [BezierSegment] = try segmentsValue.map { value in
+            guard let obj = value.objectValue,
+                  let cp1X = obj["cp1X"]?.doubleValue ?? obj["cp1X"]?.intValue.map(Double.init),
+                  let cp1Y = obj["cp1Y"]?.doubleValue ?? obj["cp1Y"]?.intValue.map(Double.init),
+                  let cp2X = obj["cp2X"]?.doubleValue ?? obj["cp2X"]?.intValue.map(Double.init),
+                  let cp2Y = obj["cp2Y"]?.doubleValue ?? obj["cp2Y"]?.intValue.map(Double.init),
+                  let endX = obj["endX"]?.doubleValue ?? obj["endX"]?.intValue.map(Double.init),
+                  let endY = obj["endY"]?.doubleValue ?? obj["endY"]?.intValue.map(Double.init) else {
+                throw MCPError.invalidParams("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
+            }
+            return BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY)
+        }
+        guard !segments.isEmpty else {
+            return errorResult("At least 1 bezier segment is required")
+        }
+        let dbSamples = intArg(args, "samplesPerSegment")
+        let dbDuration = doubleArg(args, "duration")
+        let dbVelocity = doubleArg(args, "velocity")
+        let dbMessage = ClientMessage.touchDrawBezier(DrawBezierTarget(
+            startX: startX, startY: startY,
+            segments: segments,
+            samplesPerSegment: dbSamples,
+            duration: dbDuration,
+            velocity: dbVelocity
+        ))
+        return try await sendAction(dbMessage, client: client)
 
     // MARK: Accessibility Action Tools
 

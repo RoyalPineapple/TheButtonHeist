@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-/// TCP server using Network framework with TLS encryption.
+/// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
 public final class SimpleSocketServer: @unchecked Sendable {
     public typealias DataHandler = @Sendable (Data, @escaping @Sendable (Data) -> Void) -> Void
@@ -25,13 +25,11 @@ public final class SimpleSocketServer: @unchecked Sendable {
         stop()
     }
 
-    /// Start the server on the specified port with TLS encryption.
+    /// Start the server on the specified port.
     /// - Parameter port: Port to listen on (0 = any available)
     /// - Returns: Actual port number bound
     public func start(port: UInt16 = 0) throws -> UInt16 {
-        let tlsOptions = NWProtocolTLS.Options()
-
-        let parameters = NWParameters(tls: tlsOptions, tcp: .init())
+        let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(
             host: .ipv6(.any),
             port: NWEndpoint.Port(rawValue: port) ?? .any
@@ -48,7 +46,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
                     self?.lock.lock()
                     self?._listeningPort = actualPort
                     self?.lock.unlock()
-                    NSLog("[SimpleSocketServer] Listening on port \(actualPort) (TLS)")
+                    NSLog("[SimpleSocketServer] Listening on port \(actualPort)")
                 }
                 readySemaphore.signal()
             case .failed(let error):
@@ -136,7 +134,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                NSLog("[SimpleSocketServer] Client \(clientId) connected (TLS)")
+                NSLog("[SimpleSocketServer] Client \(clientId) connected")
                 self?.onClientConnected?(clientId)
             case .failed(let error):
                 NSLog("[SimpleSocketServer] Client \(clientId) failed: \(error)")
