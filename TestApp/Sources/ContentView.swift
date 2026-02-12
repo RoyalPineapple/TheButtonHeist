@@ -16,16 +16,16 @@ struct ContentView: View {
         Form {
                 Section("Personal Information") {
                     TextField("Name", text: $name)
-                        .accessibilityIdentifier("accra.form.nameTextField")
+                        .accessibilityIdentifier("buttonheist.form.nameTextField")
 
                     TextField("Email", text: $email)
                         .keyboardType(.emailAddress)
-                        .accessibilityIdentifier("accra.form.emailTextField")
+                        .accessibilityIdentifier("buttonheist.form.emailTextField")
                 }
 
                 Section("Preferences") {
                     Toggle("Subscribe to newsletter", isOn: $isSubscribed)
-                        .accessibilityIdentifier("accra.prefs.subscribeToggle")
+                        .accessibilityIdentifier("buttonheist.prefs.subscribeToggle")
                         .onChange(of: isSubscribed) { _, newValue in
                             NSLog("[ContentView] 🔀 Toggle CHANGED to: %@", newValue ? "ON" : "OFF")
                         }
@@ -35,15 +35,15 @@ struct ContentView: View {
                         Text("Weekly").tag(1)
                         Text("Monthly").tag(2)
                     }
-                    .accessibilityIdentifier("accra.prefs.frequencyPicker")
+                    .accessibilityIdentifier("buttonheist.prefs.frequencyPicker")
                 }
 
                 Section("Action Testing") {
                     Text("Tap count: \(tapCount)")
-                        .accessibilityIdentifier("accra.action.tapCountLabel")
+                        .accessibilityIdentifier("buttonheist.action.tapCountLabel")
 
                     Text("Last action: \(lastAction)")
-                        .accessibilityIdentifier("accra.action.lastActionLabel")
+                        .accessibilityIdentifier("buttonheist.action.lastActionLabel")
 
                     Button {
                         withAnimation(.easeOut(duration: 0.1)) {
@@ -63,12 +63,12 @@ struct ContentView: View {
                     .font(.headline)
                     .foregroundStyle(isButtonPressed ? .green : .blue)
                     .scaleEffect(isButtonPressed ? 1.1 : 1.0)
-                    .accessibilityIdentifier("accra.action.testButton")
+                    .accessibilityIdentifier("buttonheist.action.testButton")
 
                     Slider(value: $sliderValue, in: 0...100, step: 10) {
                         Text("Volume")
                     }
-                    .accessibilityIdentifier("accra.action.volumeSlider")
+                    .accessibilityIdentifier("buttonheist.action.volumeSlider")
                     .accessibilityValue("\(Int(sliderValue))")
                     .onChange(of: sliderValue) { _, newValue in
                         lastAction = "Slider changed to \(Int(newValue))"
@@ -76,7 +76,7 @@ struct ContentView: View {
                     }
 
                     Stepper("Quantity: \(stepperValue)", value: $stepperValue, in: 0...10)
-                        .accessibilityIdentifier("accra.action.quantityStepper")
+                        .accessibilityIdentifier("buttonheist.action.quantityStepper")
                         .onChange(of: stepperValue) { _, newValue in
                             lastAction = "Stepper changed to \(newValue)"
                             NSLog("[ContentView] ➕ Stepper CHANGED to: %d", newValue)
@@ -88,12 +88,12 @@ struct ContentView: View {
                         lastAction = "Submit tapped"
                         NSLog("[ContentView] ✅ Submit Button TAPPED!")
                     }
-                    .accessibilityIdentifier("accra.buttons.submitButton")
+                    .accessibilityIdentifier("buttonheist.buttons.submitButton")
 
                     Button("Cancel", role: .destructive) {
                         lastAction = "Cancel tapped"
                     }
-                    .accessibilityIdentifier("accra.buttons.cancelButton")
+                    .accessibilityIdentifier("buttonheist.buttons.cancelButton")
                 }
 
                 Section("Accessibility Notifications") {
@@ -102,36 +102,36 @@ struct ContentView: View {
                         lastAction = "Posted layoutChanged"
                         NSLog("[ContentView] 📢 Posted layoutChanged notification")
                     }
-                    .accessibilityIdentifier("accra.notifications.layoutChanged")
+                    .accessibilityIdentifier("buttonheist.notifications.layoutChanged")
 
                     Button("Post Screen Changed") {
                         UIAccessibility.post(notification: .screenChanged, argument: nil)
                         lastAction = "Posted screenChanged"
                         NSLog("[ContentView] 📢 Posted screenChanged notification")
                     }
-                    .accessibilityIdentifier("accra.notifications.screenChanged")
+                    .accessibilityIdentifier("buttonheist.notifications.screenChanged")
 
                     Button("Post Announcement") {
-                        UIAccessibility.post(notification: .announcement, argument: "Hello from Accra!")
+                        UIAccessibility.post(notification: .announcement, argument: "Hello from ButtonHeist!")
                         lastAction = "Posted announcement"
                         NSLog("[ContentView] 📢 Posted announcement notification")
                     }
-                    .accessibilityIdentifier("accra.notifications.announcement")
+                    .accessibilityIdentifier("buttonheist.notifications.announcement")
 
                     Button("Post Page Scrolled") {
                         UIAccessibility.post(notification: .pageScrolled, argument: "Page 1 of 3")
                         lastAction = "Posted pageScrolled"
                         NSLog("[ContentView] 📢 Posted pageScrolled notification")
                     }
-                    .accessibilityIdentifier("accra.notifications.pageScrolled")
+                    .accessibilityIdentifier("buttonheist.notifications.pageScrolled")
                 }
 
                 Section("Information") {
                     Label("This is a demo app for testing accessibility inspection.", systemImage: "info.circle")
-                        .accessibilityIdentifier("accra.info.infoLabel")
+                        .accessibilityIdentifier("buttonheist.info.infoLabel")
 
                     Link("Learn more about accessibility", destination: URL(string: "https://developer.apple.com/accessibility/")!)
-                        .accessibilityIdentifier("accra.info.learnMoreLink")
+                        .accessibilityIdentifier("buttonheist.info.learnMoreLink")
                 }
             }
         .navigationTitle("Accessibility Demo")
