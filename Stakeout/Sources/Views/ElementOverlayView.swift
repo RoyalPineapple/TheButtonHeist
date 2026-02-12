@@ -1,13 +1,13 @@
 import SwiftUI
-import TheGoods
+import ButtonHeist
 
 struct ElementOverlayView: View {
-    let elements: [AccessibilityElementData]
-    let selectedElement: AccessibilityElementData?
+    let elements: [UIElement]
+    let selectedElement: UIElement?
     let imageSize: CGSize
     let viewSize: CGSize
-    let onElementTapped: (AccessibilityElementData) -> Void
-    let onElementDoubleTapped: (AccessibilityElementData) -> Void
+    let onElementTapped: (UIElement) -> Void
+    let onElementDoubleTapped: (UIElement) -> Void
 
     private var scale: CGFloat {
         viewSize.width / imageSize.width
@@ -16,7 +16,7 @@ struct ElementOverlayView: View {
     var body: some View {
         Canvas { context, size in
             for element in elements {
-                let isSelected = selectedElement?.traversalIndex == element.traversalIndex
+                let isSelected = selectedElement?.order == element.order
                 let rect = scaledRect(for: element)
                 let color = ElementStyling.color(for: element)
 
@@ -53,7 +53,7 @@ struct ElementOverlayView: View {
         }
     }
 
-    private func scaledRect(for element: AccessibilityElementData) -> CGRect {
+    private func scaledRect(for element: UIElement) -> CGRect {
         CGRect(
             x: element.frameX * scale,
             y: element.frameY * scale,
@@ -62,7 +62,7 @@ struct ElementOverlayView: View {
         )
     }
 
-    private func elementAt(_ point: CGPoint) -> AccessibilityElementData? {
+    private func elementAt(_ point: CGPoint) -> UIElement? {
         // Search in reverse order (topmost elements first)
         for element in elements.reversed() {
             let rect = scaledRect(for: element)

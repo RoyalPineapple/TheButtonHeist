@@ -1,7 +1,6 @@
 import Foundation
 import Darwin
-import TheGoods
-import Wheelman
+import ButtonHeist
 
 // MARK: - Output Helpers
 
@@ -31,11 +30,11 @@ enum ExitCode: Int32 {
 @MainActor
 final class CLIRunner {
     private let options: CLIOptions
-    private let client = Wheelman()
+    private let client = HeistClient()
     private var isRunning = true
-    private var previousElements: [AccessibilityElementData] = []
+    private var previousElements: [UIElement] = []
     private var oldTermios = termios()
-    private var hasReceivedHierarchy = false
+    private var hasReceivedSnapshot = false
     private var exitCode: ExitCode = .success
 
     init(options: CLIOptions) {
@@ -130,20 +129,20 @@ final class CLIRunner {
             self.isRunning = false
         }
 
-        // Handle hierarchy updates
-        client.onHierarchyUpdate = { [weak self] payload in
+        // Handle snapshot updates
+        client.onSnapshotUpdate = { [weak self] payload in
             guard let self = self else { return }
-            self.outputHierarchy(payload)
-            self.hasReceivedHierarchy = true
+            self.outputSnapshot(payload)
+            self.hasReceivedSnapshot = true
 
-            // In once mode, exit after first hierarchy
+            // In once mode, exit after first snapshot
             if self.options.once {
                 self.isRunning = false
             }
         }
     }
 
-    private func outputHierarchy(_ payload: HierarchyPayload) {
+    private func outputSnapshot(_ payload: Snapshot) {
         switch options.format {
         case .json:
             outputJSON(payload)
@@ -152,7 +151,7 @@ final class CLIRunner {
         }
     }
 
-    private func outputJSON(_ payload: HierarchyPayload) {
+    private func outputJSON(_ payload: Snapshot) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -163,12 +162,12 @@ final class CLIRunner {
         }
     }
 
-    private func outputHuman(_ payload: HierarchyPayload) {
+    private func outputHuman(_ payload: Snapshot) {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
         var output = ""
-        output += "Accessibility Hierarchy (\(formatter.string(from: payload.timestamp)))\n"
+        output += "Elements (\(formatter.string(from: payload.timestamp)))\n"
         output += String(repeating: "-", count: 60) + "\n"
 
         if payload.elements.isEmpty {
@@ -199,26 +198,22 @@ final class CLIRunner {
         writeOutput(output)
     }
 
-    private func formatElement(_ element: AccessibilityElementData, changed: Bool) -> String {
+    private func formatElement(_ element: UIElement, changed: Bool) -> String {
         var output = ""
         let prefix = changed ? "* " : "  "
-        let index = String(format: "[%2d]", element.traversalIndex)
-        let traits = element.traits.isEmpty ? "" : " (\(element.traits.joined(separator: ", ")))"
+        let index = String(format: "[%2d]", element.order)
         let label = element.label ?? element.description
 
-        output += "\(prefix)\(index) \(label)\(traits)\n"
+        output += "\(prefix)\(index) \(label)\n"
 
         if let value = element.value, !value.isEmpty {
             output += "       Value: \(value)\n"
         }
-        if let hint = element.hint, !hint.isEmpty {
-            output += "       Hint: \(hint)\n"
-        }
         if let id = element.identifier, !id.isEmpty {
             output += "       ID: \(id)\n"
         }
-        if !element.customActions.isEmpty {
-            output += "       Actions: \(element.customActions.joined(separator: ", "))\n"
+        if !element.actions.isEmpty {
+            output += "       Actions: \(element.actions.joined(separator: ", "))\n"
         }
 
         let frame = "(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))x\(Int(element.frameHeight))"
@@ -266,7 +261,7 @@ final class CLIRunner {
             if !options.quiet {
                 logStatus("Refreshing...")
             }
-            client.requestHierarchy()
+            client.requestSnapshot()
         case "q":
             stop()
         default:

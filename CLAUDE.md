@@ -8,8 +8,9 @@ Before pushing any commit, verify the following:
 - **All targets must build successfully.** Run the full build:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan -destination 'generic/platform=iOS' build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan -destination 'generic/platform=iOS' build
   ```
 - For device builds, include signing:
   ```bash
@@ -23,6 +24,7 @@ Before pushing any commit, verify the following:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoodsTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 

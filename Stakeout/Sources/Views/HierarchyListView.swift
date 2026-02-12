@@ -1,18 +1,18 @@
 import SwiftUI
-import TheGoods
+import ButtonHeist
 
 struct HierarchyListView: View {
-    let elements: [AccessibilityElementData]
-    @Binding var selectedElement: AccessibilityElementData?
+    let elements: [UIElement]
+    @Binding var selectedElement: UIElement?
     @State private var searchQuery = ""
 
-    private var filteredElements: [AccessibilityElementData] {
+    private var filteredElements: [UIElement] {
         guard !searchQuery.isEmpty else { return elements }
         let query = searchQuery.lowercased()
         return elements.filter { element in
             element.label?.lowercased().contains(query) == true ||
             element.description.lowercased().contains(query) ||
-            element.traits.contains { $0.lowercased().contains(query) }
+            element.identifier?.lowercased().contains(query) == true
         }
     }
 
@@ -26,7 +26,7 @@ struct HierarchyListView: View {
             if filteredElements.isEmpty && !searchQuery.isEmpty {
                 emptySearchView
             } else {
-                List(filteredElements, id: \.traversalIndex, selection: $selectedElement) { element in
+                List(filteredElements, id: \.order, selection: $selectedElement) { element in
                     ElementRowView(element: element)
                         .tag(element)
                 }
@@ -85,7 +85,7 @@ struct SearchBar: View {
 }
 
 struct ElementRowView: View {
-    let element: AccessibilityElementData
+    let element: UIElement
 
     var body: some View {
         HStack(spacing: 6) {
@@ -118,7 +118,7 @@ struct ElementRowView: View {
 }
 
 struct ElementDetailView: View {
-    let element: AccessibilityElementData
+    let element: UIElement
 
     var body: some View {
         ScrollView {
@@ -145,48 +145,25 @@ struct ElementDetailView: View {
                     }
                 }
 
-                // Hint
-                if let hint = element.hint {
-                    DetailSection(title: "Hint") {
-                        Text(hint)
-                            .textSelection(.enabled)
-                    }
-                }
-
-                // Traits
-                if !element.traits.isEmpty {
-                    DetailSection(title: "Traits") {
-                        Text(element.traits.joined(separator: ", "))
-                            .font(.Tree.elementTrait)
-                            .foregroundColor(Color.Tree.textSecondary)
-                    }
-                }
-
                 // Frame
                 DetailSection(title: "Frame") {
                     Text("(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))×\(Int(element.frameHeight))")
                         .font(.system(.body, design: .monospaced))
                 }
 
-                // Activation Point
-                DetailSection(title: "Activation Point") {
-                    Text("(\(Int(element.activationPointX)), \(Int(element.activationPointY)))")
-                        .font(.system(.body, design: .monospaced))
-                }
-
                 // Identifier
                 if let identifier = element.identifier, !identifier.isEmpty {
-                    DetailSection(title: "Accessibility Identifier") {
+                    DetailSection(title: "Identifier") {
                         Text(identifier)
                             .font(.system(.body, design: .monospaced))
                             .textSelection(.enabled)
                     }
                 }
 
-                // Custom Actions
-                if !element.customActions.isEmpty {
-                    DetailSection(title: "Custom Actions") {
-                        Text(element.customActions.joined(separator: ", "))
+                // Actions
+                if !element.actions.isEmpty {
+                    DetailSection(title: "Actions") {
+                        Text(element.actions.joined(separator: ", "))
                             .font(.Tree.elementTrait)
                             .foregroundColor(Color.Tree.textSecondary)
                     }
@@ -213,40 +190,32 @@ struct DetailSection<Content: View>: View {
 }
 
 #Preview {
-    @Previewable @State var selectedElement: AccessibilityElementData? = nil
+    @Previewable @State var selectedElement: UIElement? = nil
     HierarchyListView(
         elements: [
-            AccessibilityElementData(
-                traversalIndex: 0,
+            UIElement(
+                order: 0,
                 description: "Hello, World!",
                 label: "Hello, World!",
                 value: nil,
-                traits: ["staticText"],
                 identifier: nil,
-                hint: nil,
                 frameX: 0,
                 frameY: 100,
                 frameWidth: 393,
                 frameHeight: 44,
-                activationPointX: 196.5,
-                activationPointY: 122,
-                customActions: []
+                actions: []
             ),
-            AccessibilityElementData(
-                traversalIndex: 1,
+            UIElement(
+                order: 1,
                 description: "Button",
                 label: "Tap me",
                 value: nil,
-                traits: ["button"],
                 identifier: "tapButton",
-                hint: "Double tap to activate",
                 frameX: 100,
                 frameY: 200,
                 frameWidth: 100,
                 frameHeight: 44,
-                activationPointX: 150,
-                activationPointY: 222,
-                customActions: ["Delete", "Edit"]
+                actions: ["activate", "Delete", "Edit"]
             )
         ],
         selectedElement: $selectedElement

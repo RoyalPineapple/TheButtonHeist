@@ -14,8 +14,7 @@ let package = Package(
         .executableTarget(
             name: "buttonheist",
             dependencies: [
-                .product(name: "TheGoods", package: "ButtonHeist"),
-                .product(name: "Wheelman", package: "ButtonHeist"),
+                .product(name: "ButtonHeist", package: "ButtonHeist"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources",
@@ -26,7 +25,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistCLITests",
             dependencies: [
-                .product(name: "TheGoods", package: "ButtonHeist")
+                .product(name: "ButtonHeist", package: "ButtonHeist")
             ],
             path: "Tests"
         )

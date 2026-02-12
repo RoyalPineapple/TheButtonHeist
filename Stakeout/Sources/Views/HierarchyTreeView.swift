@@ -1,13 +1,13 @@
 import SwiftUI
-import TheGoods
+import ButtonHeist
 
 // MARK: - Tree Display Model
 
 struct TreeDisplayNode: Identifiable {
     let id: String
     let isContainer: Bool
-    let containerData: AccessibilityContainerData?
-    let element: AccessibilityElementData?
+    let containerData: TheGoods.Group?
+    let element: UIElement?
     var children: [TreeDisplayNode]
 
     var displayLabel: String {
@@ -18,7 +18,7 @@ struct TreeDisplayNode: Identifiable {
             if let label = container.label, !label.isEmpty {
                 return label
             }
-            return ElementStyling.displayName(forContainerType: container.containerType)
+            return ElementStyling.displayName(forContainerType: container.type)
         }
         return "Unknown"
     }
@@ -32,22 +32,22 @@ struct TreeDisplayNode: Identifiable {
 
 enum TreeBuilder {
     static func buildDisplayNodes(
-        from tree: [AccessibilityHierarchyNode],
-        elements: [AccessibilityElementData]
+        from tree: [ElementNode],
+        elements: [UIElement]
     ) -> [TreeDisplayNode] {
-        let elementMap = Dictionary(uniqueKeysWithValues: elements.map { ($0.traversalIndex, $0) })
+        let elementMap = Dictionary(uniqueKeysWithValues: elements.map { ($0.order, $0) })
         return tree.map { convertNode($0, elementMap: elementMap) }
     }
 
     private static func convertNode(
-        _ node: AccessibilityHierarchyNode,
-        elementMap: [Int: AccessibilityElementData]
+        _ node: ElementNode,
+        elementMap: [Int: UIElement]
     ) -> TreeDisplayNode {
         switch node {
-        case .element(let traversalIndex):
-            let element = elementMap[traversalIndex]
+        case .element(let order):
+            let element = elementMap[order]
             return TreeDisplayNode(
-                id: "element-\(traversalIndex)",
+                id: "element-\(order)",
                 isContainer: false,
                 containerData: nil,
                 element: element,
@@ -55,7 +55,7 @@ enum TreeBuilder {
             )
         case .container(let containerData, let children):
             let childNodes = children.map { convertNode($0, elementMap: elementMap) }
-            let id = "container-\(containerData.containerType)-\(containerData.frameX)-\(containerData.frameY)"
+            let id = "container-\(containerData.type)-\(containerData.frameX)-\(containerData.frameY)"
             return TreeDisplayNode(
                 id: id,
                 isContainer: true,
@@ -70,9 +70,9 @@ enum TreeBuilder {
 // MARK: - Tree View
 
 struct HierarchyTreeView: View {
-    let tree: [AccessibilityHierarchyNode]
-    let elements: [AccessibilityElementData]
-    @Binding var selectedElement: AccessibilityElementData?
+    let tree: [ElementNode]
+    let elements: [UIElement]
+    @Binding var selectedElement: UIElement?
 
     private var displayNodes: [TreeDisplayNode] {
         TreeBuilder.buildDisplayNodes(from: tree, elements: elements)
@@ -80,12 +80,12 @@ struct HierarchyTreeView: View {
 
     var body: some View {
         List(displayNodes, id: \.id, children: \.optionalChildren, selection: Binding(
-            get: { selectedElement.map { "element-\($0.traversalIndex)" } },
+            get: { selectedElement.map { "element-\($0.order)" } },
             set: { newValue in
                 if let id = newValue, id.hasPrefix("element-") {
                     let indexString = id.dropFirst("element-".count)
                     if let index = Int(indexString) {
-                        selectedElement = elements.first { $0.traversalIndex == index }
+                        selectedElement = elements.first { $0.order == index }
                     }
                 } else {
                     selectedElement = nil
@@ -118,9 +118,9 @@ struct TreeRowView: View {
     @ViewBuilder
     private var containerContent: some View {
         if let container = node.containerData {
-            Image(systemName: ElementStyling.iconName(forContainerType: container.containerType))
+            Image(systemName: ElementStyling.iconName(forContainerType: container.type))
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(ElementStyling.color(forContainerType: container.containerType))
+                .foregroundColor(ElementStyling.color(forContainerType: container.type))
                 .frame(width: 16)
 
             Text(node.displayLabel)
@@ -129,7 +129,7 @@ struct TreeRowView: View {
                 .foregroundColor(Color.Tree.textPrimary)
                 .lineLimit(1)
 
-            if container.traits.contains("tabBar") {
+            if container.type == "tabBar" {
                 Image(systemName: "menubar.rectangle")
                     .font(.system(size: 9))
                     .foregroundColor(.secondary)
@@ -160,71 +160,60 @@ struct TreeRowView: View {
 // MARK: - Preview
 
 #Preview {
-    @Previewable @State var selectedElement: AccessibilityElementData? = nil
+    @Previewable @State var selectedElement: UIElement? = nil
     let sampleElements = [
-        AccessibilityElementData(
-            traversalIndex: 0,
+        UIElement(
+            order: 0,
             description: "Home",
             label: "Home",
             value: nil,
-            traits: ["button", "selected"],
             identifier: nil,
-            hint: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            activationPointX: 50, activationPointY: 22,
-            customActions: []
+            actions: ["activate"]
         ),
-        AccessibilityElementData(
-            traversalIndex: 1,
+        UIElement(
+            order: 1,
             description: "Search",
             label: "Search",
             value: nil,
-            traits: ["button"],
             identifier: nil,
-            hint: nil,
             frameX: 100, frameY: 0, frameWidth: 100, frameHeight: 44,
-            activationPointX: 150, activationPointY: 22,
-            customActions: []
+            actions: ["activate"]
         ),
-        AccessibilityElementData(
-            traversalIndex: 2,
+        UIElement(
+            order: 2,
             description: "Welcome",
             label: "Welcome to the app",
             value: nil,
-            traits: ["header"],
             identifier: nil,
-            hint: nil,
             frameX: 0, frameY: 100, frameWidth: 300, frameHeight: 44,
-            activationPointX: 150, activationPointY: 122,
-            customActions: []
+            actions: []
         )
     ]
-    let sampleTree: [AccessibilityHierarchyNode] = [
+    let sampleTree: [ElementNode] = [
         .container(
-            AccessibilityContainerData(
-                containerType: "semanticGroup",
+            TheGoods.Group(
+                type: "tabBar",
                 label: "Tab Bar",
                 value: nil,
                 identifier: nil,
-                frameX: 0, frameY: 0, frameWidth: 400, frameHeight: 50,
-                traits: ["tabBar"]
+                frameX: 0, frameY: 0, frameWidth: 400, frameHeight: 50
             ),
             children: [
-                .element(traversalIndex: 0),
-                .element(traversalIndex: 1)
+                .element(order: 0),
+                .element(order: 1)
             ]
         ),
         .container(
-            AccessibilityContainerData(
-                containerType: "landmark",
+            TheGoods.Group(
+                type: "landmark",
                 label: "Main Content",
                 value: nil,
                 identifier: nil,
-                frameX: 0, frameY: 50, frameWidth: 400, frameHeight: 600,
-                traits: []
+                frameX: 0, frameY: 50, frameWidth: 400, frameHeight: 600
             ),
             children: [
-                .element(traversalIndex: 2)
+                .element(order: 2)
             ]
         )
     ]
