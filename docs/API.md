@@ -1,6 +1,177 @@
 # ButtonHeist API Reference
 
-Complete API documentation for InsideMan (iOS), Wheelman (macOS), and the CLI.
+Complete API documentation for the MCP server (AI agents), InsideMan (iOS), HeistClient (macOS), and the CLI.
+
+## MCP Server (AI Agent Interface)
+
+**Binary**: `ButtonHeistMCP/.build/release/buttonheist-mcp`
+**Protocol**: MCP (Model Context Protocol) — JSON-RPC 2.0 over stdio
+**Location**: `ButtonHeistMCP/Sources/main.swift`
+
+### Overview
+
+The MCP server is the primary interface for AI agents to drive iOS apps. It wraps HeistClient in an MCP-compliant server that any MCP client (Claude Code, Claude Desktop, etc.) can connect to.
+
+On startup, the server automatically discovers and connects to the first available iOS device running InsideMan. It then accepts MCP tool calls over stdin/stdout.
+
+### Configuration
+
+Add to `.mcp.json` in your project root (for Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "/path/to/ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Building
+
+```bash
+cd ButtonHeistMCP
+swift build -c release
+# Binary at .build/release/buttonheist-mcp
+```
+
+### Tools
+
+#### get_snapshot
+
+Read the current UI element hierarchy. Returns all accessibility elements with labels, values, identifiers, frames, and available actions.
+
+**Arguments**: None
+
+**Returns**: JSON with `elements` array and optional `tree` structure.
+
+#### get_screenshot
+
+Capture a PNG screenshot of the current screen.
+
+**Arguments**: None
+
+**Returns**: Base64-encoded PNG image.
+
+#### tap
+
+Tap an element or screen coordinate.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Element accessibility identifier |
+| `order` | integer | Element order index from snapshot (0-based) |
+| `x` | number | Screen X coordinate in points |
+| `y` | number | Screen Y coordinate in points |
+
+Specify either an element (`identifier` or `order`) or coordinates (`x`, `y`).
+
+#### long_press
+
+Long press at an element or screen coordinate.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Element accessibility identifier |
+| `order` | integer | Element order index |
+| `x` | number | Screen X coordinate |
+| `y` | number | Screen Y coordinate |
+| `duration` | number | Press duration in seconds (default 0.5) |
+
+#### swipe
+
+Swipe from a start point to an end point or in a direction.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Start from element's center |
+| `order` | integer | Start from element's center (order index) |
+| `startX`, `startY` | number | Start coordinates |
+| `endX`, `endY` | number | End coordinates |
+| `direction` | string | `up`, `down`, `left`, `right` |
+| `distance` | number | Swipe distance in points (default 200) |
+| `duration` | number | Duration in seconds (default 0.15) |
+
+#### drag
+
+Drag from a start point to an end point.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Start from element's center |
+| `order` | integer | Start from element's center (order index) |
+| `startX`, `startY` | number | Start coordinates |
+| `endX`, `endY` | number | End coordinates (required) |
+| `duration` | number | Duration in seconds (default 0.5) |
+
+#### pinch
+
+Pinch/zoom gesture. Scale > 1.0 zooms in, < 1.0 zooms out.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Center on element |
+| `order` | integer | Center on element (order index) |
+| `centerX`, `centerY` | number | Center coordinates |
+| `scale` | number | Scale factor (**required**) |
+| `spread` | number | Initial finger spread in points (default 100) |
+| `duration` | number | Duration in seconds (default 0.5) |
+
+#### rotate
+
+Two-finger rotation gesture.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Center on element |
+| `order` | integer | Center on element (order index) |
+| `centerX`, `centerY` | number | Center coordinates |
+| `angle` | number | Rotation angle in radians (**required**) |
+| `radius` | number | Finger distance from center (default 100) |
+| `duration` | number | Duration in seconds (default 0.5) |
+
+#### two_finger_tap
+
+Simultaneous two-finger tap.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Center on element |
+| `order` | integer | Center on element (order index) |
+| `centerX`, `centerY` | number | Center coordinates |
+| `spread` | number | Distance between fingers (default 40) |
+
+#### activate
+
+Activate an element using accessibility API (equivalent to VoiceOver double-tap). Falls back to synthetic tap if accessibility activation fails.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Element accessibility identifier |
+| `order` | integer | Element order index |
+
+#### increment / decrement
+
+Adjust an adjustable element (slider, stepper, picker).
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Element accessibility identifier |
+| `order` | integer | Element order index |
+
+#### perform_custom_action
+
+Perform a named custom accessibility action on an element.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `identifier` | string | Element accessibility identifier |
+| `order` | integer | Element order index |
+| `actionName` | string | Name of the custom action (**required**) |
+
+---
 
 ## InsideMan
 
