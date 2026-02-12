@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
 import TheGoods
@@ -30,8 +31,6 @@ public final class InsideMan {
     private var socketServer: SimpleSocketServer?
     private var netService: NetService?
     private var subscribedClients: Set<Int> = []
-    private var clientFileDescriptors: [Int: Int32] = [:]
-
     private let port: UInt16
     private let parser = AccessibilityHierarchyParser()
     private let safeCracker = SafeCracker()
@@ -66,18 +65,23 @@ public final class InsideMan {
         let server = SimpleSocketServer()
 
         server.onClientConnected = { [weak self] clientId in
-            serverLog("Client \(clientId) connected")
-            self?.handleClientConnected(clientId)
+            Task { @MainActor in
+                serverLog("Client \(clientId) connected")
+                self?.handleClientConnected(clientId)
+            }
         }
 
         server.onClientDisconnected = { [weak self] clientId in
-            serverLog("Client \(clientId) disconnected")
-            self?.subscribedClients.remove(clientId)
-            self?.clientFileDescriptors.removeValue(forKey: clientId)
+            Task { @MainActor in
+                serverLog("Client \(clientId) disconnected")
+                self?.subscribedClients.remove(clientId)
+            }
         }
 
         server.onDataReceived = { [weak self] data, respond in
-            self?.handleClientMessage(data, respond: respond)
+            Task { @MainActor in
+                self?.handleClientMessage(data, respond: respond)
+            }
         }
 
         let actualPort = try server.start(port: port)
@@ -105,7 +109,6 @@ public final class InsideMan {
         netService = nil
 
         subscribedClients.removeAll()
-        clientFileDescriptors.removeAll()
 
         stopAccessibilityObservation()
 
@@ -939,4 +942,5 @@ public func insideManAutoStartFromLoad() {
         }
     }
 }
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

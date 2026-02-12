@@ -1,3 +1,4 @@
+#ifdef DEBUG
 #import <Foundation/Foundation.h>
 
 extern void InsideMan_autoStartFromLoad(void);
@@ -14,3 +15,4 @@ extern void InsideMan_autoStartFromLoad(void);
 }
 
 @end
+#endif // DEBUG

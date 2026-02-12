@@ -1,20 +1,23 @@
 import Foundation
+import Network
 
-/// Simple TCP socket server using CFSocket - more reliable than NWListener on iOS Simulator
-public final class SimpleSocketServer {
-    public typealias DataHandler = (Data, @escaping (Data) -> Void) -> Void
+/// TCP server using Network framework with TLS encryption.
+/// Manages connections, newline-delimited message framing, and broadcasting.
+public final class SimpleSocketServer: @unchecked Sendable {
+    public typealias DataHandler = @Sendable (Data, @escaping @Sendable (Data) -> Void) -> Void
 
-    private var serverSocket: CFSocket?
-    private var listeningPort: UInt16 = 0
-    private var clientSockets: [CFSocket] = []
-    private var socketSources: [CFRunLoopSource] = []
+    // All mutable state protected by this lock
+    private let lock = NSLock()
+    private var listener: NWListener?
+    private var connections: [Int: NWConnection] = [:]
+    private var clientCounter = 0
+    private var _listeningPort: UInt16 = 0
 
-    public var onClientConnected: ((Int) -> Void)?
-    public var onClientDisconnected: ((Int) -> Void)?
+    public var onClientConnected: (@Sendable (Int) -> Void)?
+    public var onClientDisconnected: (@Sendable (Int) -> Void)?
     public var onDataReceived: DataHandler?
 
-    private var clientCounter = 0
-    private var clientFileDescriptors: [Int: Int32] = [:]
+    private let queue = DispatchQueue(label: "com.buttonheist.wheelman.server")
 
     public init() {}
 
@@ -22,158 +25,160 @@ public final class SimpleSocketServer {
         stop()
     }
 
-    /// Start the server on the specified port (0 = any available port)
-    /// Uses IPv6 dual-stack socket to accept both IPv4 and IPv6 connections
+    /// Start the server on the specified port with TLS encryption.
+    /// - Parameter port: Port to listen on (0 = any available)
+    /// - Returns: Actual port number bound
     public func start(port: UInt16 = 0) throws -> UInt16 {
-        NSLog("[SimpleSocketServer] Starting server (IPv6 dual-stack)...")
+        let tlsOptions = NWProtocolTLS.Options()
 
-        // Ignore SIGPIPE globally - prevents crash when writing to closed socket
-        signal(SIGPIPE, SIG_IGN)
+        let parameters = NWParameters(tls: tlsOptions, tcp: .init())
+        parameters.requiredLocalEndpoint = .hostPort(
+            host: .ipv6(.any),
+            port: NWEndpoint.Port(rawValue: port) ?? .any
+        )
 
-        // Create IPv6 socket (dual-stack will handle IPv4 too)
-        let fd = socket(AF_INET6, SOCK_STREAM, 0)
-        guard fd >= 0 else {
-            throw NSError(domain: "SimpleSocketServer", code: Int(errno), userInfo: [
-                NSLocalizedDescriptionKey: "Failed to create socket: \(String(cString: strerror(errno)))"
-            ])
-        }
+        let newListener = try NWListener(using: parameters)
 
-        // Set socket options
-        var yes: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
-        // Prevent SIGPIPE on this socket
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
+        let readySemaphore = DispatchSemaphore(value: 0)
 
-        // Enable dual-stack: accept both IPv4 and IPv6 connections
-        var no: Int32 = 0
-        setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, socklen_t(MemoryLayout<Int32>.size))
-
-        // Bind to port on all interfaces (IPv6 any = ::)
-        var addr = sockaddr_in6()
-        addr.sin6_family = sa_family_t(AF_INET6)
-        addr.sin6_port = port.bigEndian
-        addr.sin6_addr = in6addr_any
-
-        let bindResult = withUnsafePointer(to: &addr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                bind(fd, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in6>.size))
-            }
-        }
-
-        guard bindResult >= 0 else {
-            close(fd)
-            throw NSError(domain: "SimpleSocketServer", code: Int(errno), userInfo: [
-                NSLocalizedDescriptionKey: "Failed to bind: \(String(cString: strerror(errno)))"
-            ])
-        }
-
-        // Listen
-        guard listen(fd, 5) >= 0 else {
-            close(fd)
-            throw NSError(domain: "SimpleSocketServer", code: Int(errno), userInfo: [
-                NSLocalizedDescriptionKey: "Failed to listen: \(String(cString: strerror(errno)))"
-            ])
-        }
-
-        // Get actual port
-        var boundAddr = sockaddr_in6()
-        var addrLen = socklen_t(MemoryLayout<sockaddr_in6>.size)
-        withUnsafeMutablePointer(to: &boundAddr) { ptr in
-            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                getsockname(fd, sockaddrPtr, &addrLen)
-            }
-        }
-        listeningPort = UInt16(bigEndian: boundAddr.sin6_port)
-
-        NSLog("[SimpleSocketServer] Listening on port \(listeningPort)")
-
-        // Use GCD to handle incoming connections
-        let acceptQueue = DispatchQueue(label: "com.buttonheist.wheelman.accept")
-        let serverFD = fd
-
-        acceptQueue.async { [weak self] in
-            while true {
-                guard let self = self else { break }
-
-                var clientAddr = sockaddr_in6()
-                var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in6>.size)
-
-                let clientFD = withUnsafeMutablePointer(to: &clientAddr) { ptr in
-                    ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                        accept(serverFD, sockaddrPtr, &clientAddrLen)
-                    }
+        newListener.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                if let actualPort = self?.listener?.port?.rawValue {
+                    self?.lock.lock()
+                    self?._listeningPort = actualPort
+                    self?.lock.unlock()
+                    NSLog("[SimpleSocketServer] Listening on port \(actualPort) (TLS)")
                 }
-
-                if clientFD < 0 {
-                    if errno == EINTR { continue }
-                    NSLog("[SimpleSocketServer] Accept error: \(String(cString: strerror(errno)))")
-                    break
-                }
-
-                // Log the client address for debugging
-                var addrString = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
-                inet_ntop(AF_INET6, &clientAddr.sin6_addr, &addrString, socklen_t(INET6_ADDRSTRLEN))
-                let addrStr = String(cString: addrString)
-                NSLog("[SimpleSocketServer] Accepted connection from \(addrStr) on fd \(clientFD)")
-                self.handleNewClient(clientFD)
+                readySemaphore.signal()
+            case .failed(let error):
+                NSLog("[SimpleSocketServer] Listener failed: \(error)")
+                readySemaphore.signal()
+            default:
+                break
             }
         }
 
-        return listeningPort
+        newListener.newConnectionHandler = { [weak self] connection in
+            self?.handleNewConnection(connection)
+        }
+
+        self.listener = newListener
+        newListener.start(queue: queue)
+
+        // Wait for the listener to become ready (up to 5 seconds)
+        _ = readySemaphore.wait(timeout: .now() + 5)
+
+        lock.lock()
+        if let actualPort = newListener.port?.rawValue {
+            _listeningPort = actualPort
+        }
+        let result = _listeningPort
+        lock.unlock()
+
+        return result
     }
 
     public func stop() {
-        // Close all client sockets
-        for (_, fd) in clientFileDescriptors {
-            close(fd)
-        }
-        clientFileDescriptors.removeAll()
+        lock.lock()
+        let conns = connections
+        connections.removeAll()
+        let l = listener
+        listener = nil
+        lock.unlock()
 
-        // Note: Would need to track and close server FD
+        for (_, conn) in conns {
+            conn.cancel()
+        }
+        l?.cancel()
         NSLog("[SimpleSocketServer] Server stopped")
     }
 
-    private func handleNewClient(_ fd: Int32) {
-        // Prevent SIGPIPE on client socket
-        var yes: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, socklen_t(MemoryLayout<Int32>.size))
+    public func send(_ data: Data, to clientId: Int) {
+        lock.lock()
+        guard let connection = connections[clientId] else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
 
-        clientCounter += 1
-        let clientId = clientCounter
-        clientFileDescriptors[clientId] = fd
-
-        DispatchQueue.main.async { [weak self] in
-            self?.onClientConnected?(clientId)
+        var dataToSend = data
+        if !dataToSend.hasSuffix(Data([0x0A])) {
+            dataToSend.append(0x0A)
         }
 
-        // Start reading from client
-        let readQueue = DispatchQueue(label: "com.buttonheist.wheelman.\(clientId)")
-        readQueue.async { [weak self] in
-            self?.readLoop(clientId: clientId, fd: fd)
+        connection.send(content: dataToSend, completion: .contentProcessed { error in
+            if let error {
+                NSLog("[SimpleSocketServer] Send error to client \(clientId): \(error)")
+            }
+        })
+    }
+
+    public func broadcastToAll(_ data: Data) {
+        lock.lock()
+        let clientIds = Array(connections.keys)
+        lock.unlock()
+
+        for clientId in clientIds {
+            send(data, to: clientId)
         }
     }
 
-    private func readLoop(clientId: Int, fd: Int32) {
-        var buffer = [UInt8](repeating: 0, count: 8192)
-        var messageBuffer = Data()
+    // MARK: - Private
 
-        while true {
-            let bytesRead = recv(fd, &buffer, buffer.count, 0)
+    private func handleNewConnection(_ connection: NWConnection) {
+        lock.lock()
+        clientCounter += 1
+        let clientId = clientCounter
+        connections[clientId] = connection
+        lock.unlock()
 
-            if bytesRead <= 0 {
-                if bytesRead < 0 && errno == EINTR { continue }
-                NSLog("[SimpleSocketServer] Client \(clientId) disconnected (bytesRead=\(bytesRead))")
-                close(fd)
-                clientFileDescriptors.removeValue(forKey: clientId)
-                DispatchQueue.main.async { [weak self] in
-                    self?.onClientDisconnected?(clientId)
-                }
+        connection.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                NSLog("[SimpleSocketServer] Client \(clientId) connected (TLS)")
+                self?.onClientConnected?(clientId)
+            case .failed(let error):
+                NSLog("[SimpleSocketServer] Client \(clientId) failed: \(error)")
+                self?.removeClient(clientId)
+            case .cancelled:
+                self?.removeClient(clientId)
+            default:
                 break
             }
+        }
 
-            NSLog("[SimpleSocketServer] Received \(bytesRead) bytes from client \(clientId)")
+        connection.start(queue: queue)
+        startReceiving(clientId: clientId, connection: connection)
+    }
 
-            messageBuffer.append(contentsOf: buffer.prefix(bytesRead))
+    private func removeClient(_ clientId: Int) {
+        lock.lock()
+        let conn = connections.removeValue(forKey: clientId)
+        lock.unlock()
+
+        conn?.cancel()
+        self.onClientDisconnected?(clientId)
+    }
+
+    private func startReceiving(clientId: Int, connection: NWConnection) {
+        receiveNextChunk(clientId: clientId, connection: connection, buffer: Data())
+    }
+
+    private func receiveNextChunk(clientId: Int, connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
+            guard let self else { return }
+
+            if let error {
+                NSLog("[SimpleSocketServer] Receive error from client \(clientId): \(error)")
+                self.removeClient(clientId)
+                return
+            }
+
+            var messageBuffer = buffer
+            if let content {
+                messageBuffer.append(content)
+            }
 
             // Process newline-delimited messages
             while let newlineIndex = messageBuffer.firstIndex(of: 0x0A) {
@@ -181,39 +186,17 @@ public final class SimpleSocketServer {
                 messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
 
                 if !messageData.isEmpty {
-                    let clientFD = fd
-                    DispatchQueue.main.async { [weak self] in
-                        self?.onDataReceived?(messageData) { response in
-                            self?.send(response, to: clientFD)
-                        }
+                    self.onDataReceived?(messageData) { response in
+                        self.send(response, to: clientId)
                     }
                 }
             }
-        }
-    }
 
-    public func send(_ data: Data, to fd: Int32) {
-        var dataToSend = data
-        if !dataToSend.hasSuffix(Data([0x0A])) {
-            dataToSend.append(0x0A)
-        }
-
-        dataToSend.withUnsafeBytes { buffer in
-            var sent = 0
-            while sent < dataToSend.count {
-                let n = Darwin.send(fd, buffer.baseAddress!.advanced(by: sent), dataToSend.count - sent, 0)
-                if n < 0 {
-                    NSLog("[SimpleSocketServer] Send error: \(String(cString: strerror(errno)))")
-                    break
-                }
-                sent += n
+            if isComplete {
+                self.removeClient(clientId)
+            } else {
+                self.receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
             }
-        }
-    }
-
-    public func broadcastToAll(_ data: Data) {
-        for (_, fd) in clientFileDescriptors {
-            send(data, to: fd)
         }
     }
 }
