@@ -1,6 +1,6 @@
 # Accra API Reference
 
-Complete API documentation for AccraHost (iOS) and AccraClient (macOS).
+Complete API documentation for AccraHost (iOS), AccraClient (macOS), and the CLI.
 
 ## AccraHost
 
@@ -15,22 +15,28 @@ AccraHost automatically starts when your app loads via ObjC `+load`. No manual i
 ### Auto-Start Behavior
 
 When the AccraHost framework loads:
-1. Reads port from `AccraHostPort` Info.plist key (or `ACCRA_HOST_PORT` env var)
-2. Creates a TCP server on the configured port (default: 1455)
-3. Begins Bonjour advertisement
+1. Reads configuration from environment variables or Info.plist
+2. Creates a TCP server on the configured port (default: auto-assign, recommended: 1455)
+3. Begins Bonjour advertisement as `_a11ybridge._tcp`
 4. Starts polling for accessibility hierarchy changes
 
 ### Configuration
 
-**Info.plist (recommended):**
+**Environment variables (highest priority):**
+```bash
+ACCRA_HOST_PORT=1455                  # Server port (0 = auto-assign)
+ACCRA_HOST_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
+ACCRA_HOST_DISABLE=true               # Disable auto-start
+```
+
+**Info.plist (fallback):**
 ```xml
 <key>AccraHostPort</key>
 <integer>1455</integer>
-```
-
-**Environment variable:**
-```bash
-ACCRA_HOST_PORT=1455
+<key>AccraHostPollingInterval</key>
+<real>1.0</real>
+<key>AccraHostDisableAutoStart</key>
+<false/>
 ```
 
 ### AccraHost Class
@@ -122,7 +128,21 @@ Stop automatic polling.
 public func notifyChange()
 ```
 
-Manually trigger a hierarchy broadcast to connected clients.
+Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
+
+### Touch Injection
+
+AccraHost uses a `TouchInjector` internally for handling `activate` and `tap` commands. The injection system uses a three-level fallback chain:
+
+1. **Synthetic event injection** - Creates `UITouch` + `IOHIDEvent` via private APIs and sends through `UIApplication.sendEvent()`. Creates a fresh `UIEvent` per touch phase for iOS 26 compatibility.
+2. **accessibilityActivate()** - Calls the element's accessibility activation method.
+3. **UIControl.sendActions** - Walks the responder chain to find a `UIControl` and sends `.touchUpInside`.
+
+Before injection, both the accessibility element (trait-level) and the view (UIView-level) are checked for interactivity. Results are reported back to clients via `ActionResult` with detailed success/failure information.
+
+### Tap Visualization
+
+On successful tap, a `TapVisualizerView` overlay shows a 40pt white circle at the tap point that scales up and fades out over 0.8 seconds. The overlay is passthrough (does not intercept touches).
 
 ---
 
@@ -151,6 +171,14 @@ public final class AccraClient: ObservableObject
 
 Devices found via Bonjour discovery. Updated automatically when discovery is active.
 
+##### connectedDevice
+
+```swift
+@Published public private(set) var connectedDevice: DiscoveredDevice?
+```
+
+Currently connected device, or nil if disconnected.
+
 ##### connectionState
 
 ```swift
@@ -167,6 +195,14 @@ Current connection state. See `ConnectionState` enum.
 
 Most recent accessibility hierarchy received from the connected device.
 
+##### currentScreenshot
+
+```swift
+@Published public private(set) var currentScreenshot: ScreenshotPayload?
+```
+
+Most recent screenshot received from the connected device.
+
 ##### serverInfo
 
 ```swift
@@ -174,6 +210,14 @@ Most recent accessibility hierarchy received from the connected device.
 ```
 
 Server information received after connecting.
+
+##### isDiscovering
+
+```swift
+@Published public private(set) var isDiscovering: Bool
+```
+
+Whether Bonjour discovery is currently active.
 
 #### Callback Properties
 
@@ -211,6 +255,22 @@ public var onHierarchyUpdate: ((HierarchyPayload) -> Void)?
 
 Called when a new hierarchy is received.
 
+##### onActionResult
+
+```swift
+public var onActionResult: ((ActionResult) -> Void)?
+```
+
+Called when an action result is received.
+
+##### onScreenshot
+
+```swift
+public var onScreenshot: ((ScreenshotPayload) -> Void)?
+```
+
+Called when a screenshot is received.
+
 ##### onDisconnected
 
 ```swift
@@ -235,7 +295,7 @@ Create a new client instance.
 public func startDiscovery()
 ```
 
-Begin discovering devices via Bonjour.
+Begin discovering devices via Bonjour. Clears previous devices.
 
 ##### stopDiscovery()
 
@@ -251,7 +311,7 @@ Stop device discovery.
 public func connect(to device: DiscoveredDevice)
 ```
 
-Connect to a discovered device.
+Connect to a discovered device. Automatically sends `subscribe`, `requestHierarchy`, and `requestScreenshot` on connection.
 
 **Parameters**:
 - `device`: Device to connect to (from `discoveredDevices`).
@@ -262,7 +322,7 @@ Connect to a discovered device.
 public func disconnect()
 ```
 
-Disconnect from the current device.
+Disconnect from the current device and clear all state.
 
 ##### requestHierarchy()
 
@@ -272,6 +332,57 @@ public func requestHierarchy()
 
 Request a single hierarchy snapshot.
 
+##### send(_:)
+
+```swift
+public func send(_ message: ClientMessage)
+```
+
+Send any `ClientMessage` to the connected device.
+
+##### waitForActionResult(timeout:)
+
+```swift
+public func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult
+```
+
+Wait asynchronously for an action result with timeout.
+
+**Parameters**:
+- `timeout`: Maximum wait time in seconds.
+
+**Throws**: `ActionError.timeout` if no result received within timeout.
+
+##### waitForScreenshot(timeout:)
+
+```swift
+public func waitForScreenshot(timeout: TimeInterval = 30.0) async throws -> ScreenshotPayload
+```
+
+Wait asynchronously for a screenshot with timeout.
+
+**Parameters**:
+- `timeout`: Maximum wait time in seconds (default: 30).
+
+**Throws**: `ActionError.timeout` if no screenshot received within timeout.
+
+##### displayName(for:)
+
+```swift
+public func displayName(for device: DiscoveredDevice) -> String
+```
+
+Compute a display name for a device. Returns just the app name if unique among discovered devices, or "AppName (DeviceName)" if disambiguation is needed.
+
+#### ActionError
+
+```swift
+public enum ActionError: Error, LocalizedError {
+    case timeout
+    case notConnected
+}
+```
+
 ---
 
 ## AccraCore Types
@@ -280,13 +391,18 @@ Request a single hierarchy snapshot.
 **Platform**: iOS 17.0+ / macOS 14.0+
 **Location**: `AccraCore/Sources/AccraCore/Messages.swift`
 
+### Constants
+
+```swift
+public let accraServiceType = "_a11ybridge._tcp"
+public let protocolVersion = "2.0"
+```
+
 ### ConnectionState
 
 ```swift
 public enum ConnectionState: Equatable
 ```
-
-Connection state enumeration.
 
 #### Cases
 
@@ -298,7 +414,7 @@ Connection state enumeration.
 ### DiscoveredDevice
 
 ```swift
-public struct DiscoveredDevice: Identifiable, Hashable
+public struct DiscoveredDevice: Identifiable, Hashable, Sendable
 ```
 
 Represents a discovered AccraHost device.
@@ -306,31 +422,107 @@ Represents a discovered AccraHost device.
 #### Properties
 
 - `id: String` - Unique identifier
-- `name: String` - Device display name
+- `name: String` - Service name (format: "AppName-DeviceName")
 - `endpoint: NWEndpoint` - Network endpoint for connection
+- `appName: String` - Extracted app name
+- `deviceName: String` - Extracted device name
+
+### ClientMessage
+
+```swift
+public enum ClientMessage: Codable
+```
+
+Messages sent from client to server.
+
+#### Cases
+
+- `requestHierarchy` - Request current hierarchy
+- `subscribe` - Subscribe to automatic updates
+- `unsubscribe` - Unsubscribe from updates
+- `ping` - Keepalive
+- `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
+- `increment(ActionTarget)` - Increment adjustable element
+- `decrement(ActionTarget)` - Decrement adjustable element
+- `tap(TapTarget)` - Tap at coordinates or element
+- `performCustomAction(CustomActionTarget)` - Invoke named custom action
+- `requestScreenshot` - Request PNG screenshot
+
+### ServerMessage
+
+```swift
+public enum ServerMessage: Codable
+```
+
+Messages sent from server to client.
+
+#### Cases
+
+- `info(ServerInfo)` - Device/app metadata on connection
+- `hierarchy(HierarchyPayload)` - Accessibility hierarchy
+- `pong` - Ping response
+- `error(String)` - Error description
+- `actionResult(ActionResult)` - Action outcome
+- `screenshot(ScreenshotPayload)` - Base64-encoded PNG
+
+### ActionTarget
+
+```swift
+public struct ActionTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `identifier: String?` - Element's accessibility identifier
+- `traversalIndex: Int?` - Element's traversal index
+
+### TapTarget
+
+```swift
+public struct TapTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `elementTarget: ActionTarget?` - Target element (taps at activation point)
+- `pointX: Double?` - Explicit X coordinate
+- `pointY: Double?` - Explicit Y coordinate
+- `point: CGPoint?` - Computed CGPoint from pointX/pointY
+
+### CustomActionTarget
+
+```swift
+public struct CustomActionTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `elementTarget: ActionTarget` - Target element
+- `actionName: String` - Name of the custom action
 
 ### ServerInfo
 
 ```swift
-public struct ServerInfo: Codable, Equatable
+public struct ServerInfo: Codable, Sendable
 ```
 
 Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version
+- `protocolVersion: String` - Protocol version (e.g., "2.0")
 - `appName: String` - App display name
-- `bundleIdentifier: String?` - App bundle identifier
+- `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
 - `systemVersion: String` - iOS version
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
+- `screenSize: CGSize` - Computed from width/height
 
 ### HierarchyPayload
 
 ```swift
-public struct HierarchyPayload: Codable, Equatable
+public struct HierarchyPayload: Codable, Sendable
 ```
 
 Container for accessibility hierarchy snapshot.
@@ -338,12 +530,46 @@ Container for accessibility hierarchy snapshot.
 #### Properties
 
 - `timestamp: Date` - When the hierarchy was captured
-- `elements: [AccessibilityElementData]` - Accessibility elements
+- `elements: [AccessibilityElementData]` - Flat list of accessibility elements
+- `tree: [AccessibilityHierarchyNode]?` - Optional tree structure with containers
+
+### AccessibilityHierarchyNode
+
+```swift
+public indirect enum AccessibilityHierarchyNode: Codable, Equatable, Sendable
+```
+
+Recursive tree structure for accessibility hierarchy.
+
+#### Cases
+
+- `element(traversalIndex: Int)` - Leaf node referencing element by index
+- `container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])` - Container with children
+
+### AccessibilityContainerData
+
+```swift
+public struct AccessibilityContainerData: Codable, Equatable, Hashable, Sendable
+```
+
+#### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `containerType` | `String` | "semanticGroup", "list", "landmark", or "dataTable" |
+| `label` | `String?` | Container's accessibility label |
+| `value` | `String?` | Container's accessibility value |
+| `identifier` | `String?` | Container's accessibility identifier |
+| `frameX` | `Double` | Frame X origin |
+| `frameY` | `Double` | Frame Y origin |
+| `frameWidth` | `Double` | Frame width |
+| `frameHeight` | `Double` | Frame height |
+| `traits` | `[String]` | Trait names (e.g., `["tabBar"]`) |
 
 ### AccessibilityElementData
 
 ```swift
-public struct AccessibilityElementData: Codable, Equatable, Hashable, Identifiable
+public struct AccessibilityElementData: Codable, Equatable, Hashable, Sendable
 ```
 
 Represents a single accessibility element.
@@ -352,7 +578,6 @@ Represents a single accessibility element.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `id` | `Int` | Computed from `traversalIndex` |
 | `traversalIndex` | `Int` | VoiceOver reading order |
 | `description` | `String` | VoiceOver description |
 | `label` | `String?` | Accessibility label |
@@ -370,21 +595,115 @@ Represents a single accessibility element.
 
 #### Computed Properties
 
-##### frame
-
 ```swift
-public var frame: CGRect
+public var frame: CGRect       // Frame as CGRect
+public var activationPoint: CGPoint  // Activation point as CGPoint
 ```
 
-Frame as CGRect.
-
-##### activationPoint
+### ActionResult
 
 ```swift
-public var activationPoint: CGPoint
+public struct ActionResult: Codable, Sendable
 ```
 
-Activation point as CGPoint.
+#### Properties
+
+- `success: Bool` - Whether action succeeded
+- `method: ActionMethod` - How action was performed
+- `message: String?` - Additional context or error description
+
+### ActionMethod
+
+```swift
+public enum ActionMethod: String, Codable, Sendable
+```
+
+#### Cases
+
+- `accessibilityActivate` - Used accessibility activation
+- `accessibilityIncrement` - Used accessibility increment
+- `accessibilityDecrement` - Used accessibility decrement
+- `syntheticTap` - Used synthetic touch injection
+- `customAction` - Used custom action
+- `elementNotFound` - Element could not be found
+- `elementDeallocated` - Element's view was deallocated
+
+### ScreenshotPayload
+
+```swift
+public struct ScreenshotPayload: Codable, Sendable
+```
+
+#### Properties
+
+- `pngData: String` - Base64-encoded PNG data
+- `width: Double` - Screen width in points
+- `height: Double` - Screen height in points
+- `timestamp: Date` - When screenshot was captured
+
+---
+
+## CLI Reference
+
+**Location**: `AccraCLI/`
+**Version**: 2.0.0
+
+### accra watch (default)
+
+Watch accessibility hierarchy in real-time.
+
+```
+USAGE: accra watch [OPTIONS]
+
+OPTIONS:
+  -f, --format <format>   Output format: human, json (default: human)
+  -o, --once              Single snapshot then exit
+  -q, --quiet             Suppress status messages
+  -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
+  -v, --verbose           Show verbose output
+```
+
+In watch mode, keyboard commands are available:
+- `r` or Enter - Refresh hierarchy
+- `q` - Quit
+
+Exit codes:
+- `0` - Success
+- `1` - Connection failed
+- `2` - No device found
+- `3` - Timeout
+
+### accra action
+
+Perform actions on accessibility elements.
+
+```
+USAGE: accra action [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element accessibility identifier
+  --index <n>             Traversal index
+  --type <type>           Action type: activate, increment, decrement, tap, custom
+                          (default: activate)
+  --custom-action <name>  Custom action name (required when type is 'custom')
+  --x <x>                 X coordinate (for tap type)
+  --y <y>                 Y coordinate (for tap type)
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -q, --quiet             Suppress status messages
+```
+
+### accra screenshot
+
+Capture a screenshot from the connected device.
+
+```
+USAGE: accra screenshot [OPTIONS]
+
+OPTIONS:
+  -o, --output <path>     Output file path (default: stdout as raw PNG)
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -q, --quiet             Suppress status messages
+```
 
 ---
 
@@ -435,7 +754,7 @@ struct InspectorView: View {
     var body: some View {
         NavigationSplitView {
             List(client.discoveredDevices, selection: $selectedDevice) { device in
-                Text(device.name)
+                Text(client.displayName(for: device))
             }
         } detail: {
             if let hierarchy = client.currentHierarchy {
@@ -488,6 +807,14 @@ class Inspector {
             }
         }
 
+        client.onActionResult = { result in
+            print("Action: \(result.success ? "success" : "failed") via \(result.method)")
+        }
+
+        client.onScreenshot = { screenshot in
+            print("Screenshot: \(screenshot.width)x\(screenshot.height)")
+        }
+
         client.onDisconnected = { error in
             if let error {
                 print("Disconnected with error: \(error)")
@@ -500,6 +827,21 @@ class Inspector {
     func start() {
         client.startDiscovery()
     }
+}
+```
+
+### Async/Await Action with Result
+
+```swift
+// Activate an element and wait for the result
+let target = ActionTarget(identifier: "loginButton", traversalIndex: nil)
+client.send(.activate(target))
+
+do {
+    let result = try await client.waitForActionResult(timeout: 10)
+    print("Result: \(result.success), method: \(result.method)")
+} catch {
+    print("Timeout waiting for action result")
 }
 ```
 
@@ -520,4 +862,26 @@ with AccraUSBConnection() as conn:
 
     # Tap at coordinates
     result = conn.tap(x=196.5, y=659)
+```
+
+### CLI Scripting
+
+```bash
+# Get hierarchy as JSON
+accra --format json --once > hierarchy.json
+
+# Activate a button
+accra action --identifier loginButton
+
+# Increment a slider
+accra action --type increment --identifier volumeSlider
+
+# Tap at coordinates
+accra action --type tap --x 196.5 --y 659
+
+# Capture screenshot
+accra screenshot --output screen.png
+
+# Perform custom action
+accra action --type custom --identifier myCell --custom-action "Delete"
 ```

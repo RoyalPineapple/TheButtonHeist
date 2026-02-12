@@ -416,6 +416,32 @@ public final class AccraHost {
         return window.hitTest(windowPoint, with: nil)
     }
 
+    /// Check if an AccessibilityMarker element is interactive based on traits
+    /// - Returns: nil if interactive, or an error string if not interactive
+    private func checkElementInteractivity(_ element: AccessibilityMarker) -> String? {
+        // Check for notEnabled trait (disabled element)
+        if element.traits.contains(.notEnabled) {
+            return "Element is disabled (has 'notEnabled' trait)"
+        }
+
+        // Check for commonly non-interactive element types
+        // Note: We don't strictly block static traits because some views
+        // may have tap gestures without accessibility traits (e.g., SwiftUI .onTapGesture)
+        let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
+        let hasInteractiveTraits = element.traits.contains(.button) ||
+                                   element.traits.contains(.link) ||
+                                   element.traits.contains(.adjustable) ||
+                                   element.traits.contains(.searchField) ||
+                                   element.traits.contains(.keyboardKey)
+
+        // If element only has static traits and no interactive traits, warn but don't block
+        if staticTraitsOnly && !hasInteractiveTraits && element.customActions.isEmpty {
+            serverLog("Warning: Element '\(element.description)' has only static traits, tap may not work")
+        }
+
+        return nil  // Element is considered interactive
+    }
+
     private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
         // Refresh hierarchy
         if let rootView = getRootView() {
@@ -431,21 +457,38 @@ public final class AccraHost {
             return
         }
 
+        // Check if element is interactive based on traits
+        if let interactivityError = checkElementInteractivity(element) {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .elementNotFound,
+                message: interactivityError
+            )), respond: respond)
+            return
+        }
+
         // Use TouchInjector which handles accessibilityActivate and fallbacks
-        if touchInjector.tap(at: element.activationPoint) {
+        let result = touchInjector.tapWithResult(at: element.activationPoint)
+        switch result {
+        case .success:
             TapVisualizerView.showTap(at: element.activationPoint)
             sendMessage(.actionResult(ActionResult(
                 success: true,
                 method: .syntheticTap
             )), respond: respond)
-            return
+        case .viewNotInteractive(let reason):
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .accessibilityActivate,
+                message: "View not interactive: \(reason)"
+            )), respond: respond)
+        case .noViewAtPoint, .noKeyWindow, .injectionFailed:
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .accessibilityActivate,
+                message: "Activation failed"
+            )), respond: respond)
         }
-
-        sendMessage(.actionResult(ActionResult(
-            success: false,
-            method: .accessibilityActivate,
-            message: "Activation failed"
-        )), respond: respond)
     }
 
     private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
@@ -507,22 +550,51 @@ public final class AccraHost {
                 sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
                 return
             }
-            // Use TouchInjector for tap
-            let success = touchInjector.tap(at: element.activationPoint)
-            if success {
-                TapVisualizerView.showTap(at: element.activationPoint)
+
+            // Check if element is interactive based on traits
+            if let interactivityError = checkElementInteractivity(element) {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .elementNotFound,
+                    message: interactivityError
+                )), respond: respond)
+                return
             }
-            sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTap)), respond: respond)
+
+            // Use TouchInjector for tap
+            let result = touchInjector.tapWithResult(at: element.activationPoint)
+            switch result {
+            case .success:
+                TapVisualizerView.showTap(at: element.activationPoint)
+                sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            case .viewNotInteractive(let reason):
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .syntheticTap,
+                    message: "View not interactive: \(reason)"
+                )), respond: respond)
+            case .noViewAtPoint, .noKeyWindow, .injectionFailed:
+                sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
+            }
             return
         }
 
         if let point = target.point {
-            // Use TouchInjector for tap at point
-            let success = touchInjector.tap(at: point)
-            if success {
+            // Use TouchInjector for tap at point (no element trait check)
+            let result = touchInjector.tapWithResult(at: point)
+            switch result {
+            case .success:
                 TapVisualizerView.showTap(at: point)
+                sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            case .viewNotInteractive(let reason):
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .syntheticTap,
+                    message: "View not interactive: \(reason)"
+                )), respond: respond)
+            case .noViewAtPoint, .noKeyWindow, .injectionFailed:
+                sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
             }
-            sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTap)), respond: respond)
             return
         }
 
@@ -700,28 +772,35 @@ public final class AccraHost {
     }
 
     private func convertContainer(_ container: AccessibilityContainer) -> AccessibilityContainerData {
+        let (typeName, label, value, identifier, traits): (String, String?, String?, String?, [String])
+        switch container.type {
+        case let .semanticGroup(l, v, id):
+            typeName = "semanticGroup"
+            label = l; value = v; identifier = id; traits = []
+        case .list:
+            typeName = "list"
+            label = nil; value = nil; identifier = nil; traits = []
+        case .landmark:
+            typeName = "landmark"
+            label = nil; value = nil; identifier = nil; traits = []
+        case let .dataTable(rowCount: _, columnCount: _):
+            typeName = "dataTable"
+            label = nil; value = nil; identifier = nil; traits = []
+        case .tabBar:
+            typeName = "semanticGroup"
+            label = nil; value = nil; identifier = nil; traits = ["tabBar"]
+        }
         return AccessibilityContainerData(
-            containerType: formatContainerType(container.type),
-            label: container.label,
-            value: container.value,
-            identifier: container.identifier,
+            containerType: typeName,
+            label: label,
+            value: value,
+            identifier: identifier,
             frameX: container.frame.origin.x,
             frameY: container.frame.origin.y,
             frameWidth: container.frame.size.width,
             frameHeight: container.frame.size.height,
-            traits: formatTraits(container.traits)
+            traits: traits
         )
-    }
-
-    private func formatContainerType(_ type: UIAccessibilityContainerType) -> String {
-        switch type {
-        case .none: return "none"
-        case .dataTable: return "dataTable"
-        case .list: return "list"
-        case .landmark: return "landmark"
-        case .semanticGroup: return "semanticGroup"
-        @unknown default: return "unknown"
-        }
     }
 }
 
@@ -732,131 +811,6 @@ private extension AccessibilityMarker.Shape {
         switch self {
         case let .frame(rect): return rect
         case let .path(path): return path.bounds
-        }
-    }
-}
-
-// MARK: - Action Closures Extension
-
-/// Extension providing action closures by finding the underlying view at runtime
-private extension AccessibilityMarker {
-    /// Find the view that corresponds to this marker by hit-testing at the activation point
-    private func findView() -> UIView? {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-              let window = windowScene.windows.first(where: {
-                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
-              }) else {
-            return nil
-        }
-        return window.hitTest(activationPoint, with: nil)
-    }
-
-    /// Closure to activate the element (returns Bool indicating success)
-    var activate: (() -> Bool)? {
-        return {
-            guard let view = self.findView() else { return false }
-
-            // For UIControls, try sendActions first (most reliable)
-            if let control = view as? UIControl {
-                control.sendActions(for: .touchUpInside)
-                return true
-            }
-
-            // Walk up the view hierarchy looking for UIControl
-            var current: UIView? = view.superview
-            while let v = current {
-                if let control = v as? UIControl {
-                    control.sendActions(for: .touchUpInside)
-                    return true
-                }
-                current = v.superview
-            }
-
-            // Try accessibilityActivate on the hit view
-            if view.accessibilityActivate() {
-                return true
-            }
-
-            // For SwiftUI, try sending touch events directly
-            if self.simulateTouchOnView(view) {
-                return true
-            }
-
-            return false
-        }
-    }
-
-    /// Simulate a touch on a view by sending touchesBegan/Ended
-    private func simulateTouchOnView(_ view: UIView) -> Bool {
-        guard let window = view.window else { return false }
-
-        let point = view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: window)
-
-        // Create a touch event using the private API
-        guard let touchClass = NSClassFromString("UITouch") as? NSObject.Type,
-              let touch = touchClass.init() as? UITouch else {
-            return false
-        }
-
-        // Set touch properties using KVC
-        touch.setValue(point, forKey: "locationInWindow")
-        touch.setValue(window, forKey: "window")
-        touch.setValue(view, forKey: "view")
-        touch.setValue(UITouch.Phase.began.rawValue, forKey: "phase")
-        touch.setValue(Date().timeIntervalSince1970, forKey: "timestamp")
-
-        let touches = Set([touch])
-        let event = UIEvent()
-
-        // Send touchesBegan
-        view.touchesBegan(touches, with: event)
-
-        // Update phase and send touchesEnded
-        touch.setValue(UITouch.Phase.ended.rawValue, forKey: "phase")
-        view.touchesEnded(touches, with: event)
-
-        return true
-    }
-
-    /// Closure to increment adjustable elements
-    var increment: (() -> Void)? {
-        guard traits.contains(.adjustable) else { return nil }
-        return {
-            guard let view = self.findView() else { return }
-            view.accessibilityIncrement()
-        }
-    }
-
-    /// Closure to decrement adjustable elements
-    var decrement: (() -> Void)? {
-        guard traits.contains(.adjustable) else { return nil }
-        return {
-            guard let view = self.findView() else { return }
-            view.accessibilityDecrement()
-        }
-    }
-
-    /// Closure to perform a custom action by name (returns Bool indicating success)
-    var performCustomAction: ((String) -> Bool)? {
-        guard !customActions.isEmpty else { return nil }
-        return { actionName in
-            guard let view = self.findView() else { return false }
-            // Get custom actions from the view
-            guard let actions = view.accessibilityCustomActions else { return false }
-            // Find the matching action
-            if let action = actions.first(where: { $0.name == actionName }) {
-                // Invoke the action via actionHandler (modern API)
-                if let handler = action.actionHandler {
-                    return handler(action)
-                }
-                // Legacy target-action approach
-                if let target = action.target {
-                    _ = (target as AnyObject).perform(action.selector, with: action)
-                    return true
-                }
-            }
-            return false
         }
     }
 }
