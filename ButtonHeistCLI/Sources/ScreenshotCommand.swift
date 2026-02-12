@@ -1,7 +1,6 @@
 import ArgumentParser
 import Foundation
-import Wheelman
-import TheGoods
+import ButtonHeist
 
 struct ScreenshotCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -20,7 +19,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
 
     @MainActor
     func run() async throws {
-        let client = Wheelman()
+        let client = HeistClient()
 
         if !quiet {
             FileHandle.standardError.write("Searching for iOS devices...\n".data(using: .utf8)!)

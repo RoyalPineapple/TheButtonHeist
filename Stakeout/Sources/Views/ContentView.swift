@@ -1,11 +1,10 @@
 import SwiftUI
-import TheGoods
-import Wheelman
+import ButtonHeist
 
 struct ContentView: View {
-    @StateObject private var client = Wheelman()
+    @StateObject private var client = HeistClient()
     @State private var selectedDevice: DiscoveredDevice?
-    @State private var selectedElement: AccessibilityElementData?
+    @State private var selectedElement: UIElement?
     @State private var showTreeView = true
 
     var body: some View {
@@ -41,7 +40,7 @@ struct ContentView: View {
     private var detailView: some View {
         switch client.connectionState {
         case .connected:
-            if let hierarchy = client.currentHierarchy {
+            if let hierarchy = client.currentSnapshot {
                 HStack(spacing: 0) {
                     // Left: Element list (tree or flat)
                     VStack(spacing: 0) {
@@ -118,7 +117,7 @@ struct ContentView: View {
                     }
                 }
             } else {
-                ProgressView("Loading hierarchy...")
+                ProgressView("Loading...")
             }
         case .connecting:
             ProgressView("Connecting...")
@@ -156,10 +155,10 @@ struct ContentView: View {
         }
     }
 
-    private func activateElement(_ element: AccessibilityElementData) {
+    private func activateElement(_ element: UIElement) {
         let target = ActionTarget(
             identifier: element.identifier,
-            traversalIndex: element.traversalIndex
+            order: element.order
         )
         client.send(.activate(target))
     }

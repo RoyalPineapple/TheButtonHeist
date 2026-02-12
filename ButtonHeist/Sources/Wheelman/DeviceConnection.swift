@@ -10,7 +10,7 @@ private func debug(_ message: String) {
 /// Simple socket-based connection client
 /// Uses BSD sockets instead of NWConnection for reliability
 @MainActor
-final class DeviceConnection {
+public final class DeviceConnection {
 
     private var socketFD: Int32 = -1
     private var readQueue: DispatchQueue?
@@ -18,19 +18,19 @@ final class DeviceConnection {
     private var receiveBuffer = Data()
     private var isConnected = false
 
-    var onConnected: (() -> Void)?
-    var onDisconnected: ((Error?) -> Void)?
-    var onServerInfo: ((ServerInfo) -> Void)?
-    var onHierarchy: ((HierarchyPayload) -> Void)?
-    var onActionResult: ((ActionResult) -> Void)?
-    var onScreenshot: ((ScreenshotPayload) -> Void)?
-    var onError: ((String) -> Void)?
+    public var onConnected: (() -> Void)?
+    public var onDisconnected: ((Error?) -> Void)?
+    public var onServerInfo: ((ServerInfo) -> Void)?
+    public var onSnapshot: ((Snapshot) -> Void)?
+    public var onActionResult: ((ActionResult) -> Void)?
+    public var onScreenshot: ((ScreenshotPayload) -> Void)?
+    public var onError: ((String) -> Void)?
 
-    init(device: DiscoveredDevice) {
+    public init(device: DiscoveredDevice) {
         self.device = device
     }
 
-    func connect() {
+    public func connect() {
         // Resolve the Bonjour service to get port, then connect to localhost
         if case let .service(name, type, domain, _) = device.endpoint {
             debug("Resolving service: \(name).\(type)\(domain)")
@@ -134,7 +134,7 @@ final class DeviceConnection {
         }
     }
 
-    func disconnect() {
+    public func disconnect() {
         isConnected = false
         if socketFD >= 0 {
             close(socketFD)
@@ -143,7 +143,7 @@ final class DeviceConnection {
         readQueue = nil
     }
 
-    func send(_ message: ClientMessage) {
+    public func send(_ message: ClientMessage) {
         guard socketFD >= 0 else { return }
         guard var data = try? JSONEncoder().encode(message) else { return }
         data.append(0x0A)  // newline delimiter
@@ -213,9 +213,9 @@ final class DeviceConnection {
         case .info(let info):
             debug("Received server info: \(info.appName)")
             onServerInfo?(info)
-        case .hierarchy(let payload):
+        case .snapshot(let payload):
             debug("Received hierarchy: \(payload.elements.count) elements")
-            onHierarchy?(payload)
+            onSnapshot?(payload)
         case .actionResult(let result):
             debug("Received action result: \(result.success)")
             onActionResult?(result)

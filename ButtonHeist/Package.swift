@@ -13,7 +13,8 @@ let package = Package(
         .library(name: "InsideMan", targets: ["InsideMan", "InsideManLoader"]),
         // InsideManCore: Swift implementation only, manual start required
         .library(name: "InsideManCore", targets: ["InsideMan"]),
-        .library(name: "Wheelman", targets: ["Wheelman"])
+        .library(name: "Wheelman", targets: ["Wheelman"]),
+        .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
         .package(path: "../AccessibilitySnapshot")
@@ -28,6 +29,7 @@ let package = Package(
             name: "InsideMan",
             dependencies: [
                 "TheGoods",
+                "Wheelman",
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
             path: "Sources/InsideMan"
@@ -43,6 +45,11 @@ let package = Package(
             name: "Wheelman",
             dependencies: ["TheGoods"],
             path: "Sources/Wheelman"
+        ),
+        .target(
+            name: "ButtonHeist",
+            dependencies: ["TheGoods", "Wheelman"],
+            path: "Sources/ButtonHeist"
         ),
         .testTarget(
             name: "TheGoodsTests",

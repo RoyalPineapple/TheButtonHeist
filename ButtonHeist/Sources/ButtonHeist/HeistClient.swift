@@ -1,61 +1,20 @@
 import Foundation
-import Network
+import Wheelman
 import TheGoods
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "client")
-
-/// A discovered iOS device running InsideMan
-public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
-    public let id: String
-    public let name: String
-    public let endpoint: NWEndpoint
-
-    public init(id: String, name: String, endpoint: NWEndpoint) {
-        self.id = id
-        self.name = name
-        self.endpoint = endpoint
-    }
-
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    public static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
-        lhs.id == rhs.id
-    }
-
-    /// Parse the service name to extract app name and device name
-    /// Service name format: "AppName-DeviceName"
-    public var parsedName: (appName: String, deviceName: String)? {
-        guard let lastDashIndex = name.lastIndex(of: "-") else { return nil }
-        let appName = String(name[..<lastDashIndex])
-        let deviceName = String(name[name.index(after: lastDashIndex)...])
-        guard !appName.isEmpty && !deviceName.isEmpty else { return nil }
-        return (appName, deviceName)
-    }
-
-    /// App name extracted from service name
-    public var appName: String {
-        parsedName?.appName ?? name
-    }
-
-    /// Device name extracted from service name
-    public var deviceName: String {
-        parsedName?.deviceName ?? ""
-    }
-}
+private let logger = Logger(subsystem: "com.buttonheist", category: "client")
 
 /// Client for discovering and connecting to iOS apps running InsideMan
 @MainActor
-public final class Wheelman: ObservableObject {
+public final class HeistClient: ObservableObject {
 
     // MARK: - Published State
 
     @Published public private(set) var discoveredDevices: [DiscoveredDevice] = []
     @Published public private(set) var connectedDevice: DiscoveredDevice?
     @Published public private(set) var serverInfo: ServerInfo?
-    @Published public private(set) var currentHierarchy: HierarchyPayload?
+    @Published public private(set) var currentSnapshot: Snapshot?
     @Published public private(set) var currentScreenshot: ScreenshotPayload?
     @Published public private(set) var isDiscovering: Bool = false
     @Published public private(set) var connectionState: ConnectionState = .disconnected
@@ -73,7 +32,7 @@ public final class Wheelman: ObservableObject {
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
     public var onConnected: ((ServerInfo) -> Void)?
     public var onDisconnected: ((Error?) -> Void)?
-    public var onHierarchyUpdate: ((HierarchyPayload) -> Void)?
+    public var onSnapshotUpdate: ((Snapshot) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreenshot: ((ScreenshotPayload) -> Void)?
 
@@ -133,7 +92,7 @@ public final class Wheelman: ObservableObject {
             self?.connectionState = .connected
             self?.connectedDevice = device
             self?.connection?.send(.subscribe)
-            self?.connection?.send(.requestHierarchy)
+            self?.connection?.send(.requestSnapshot)
             self?.connection?.send(.requestScreenshot)
         }
 
@@ -141,7 +100,7 @@ public final class Wheelman: ObservableObject {
             self?.connectionState = .disconnected
             self?.connectedDevice = nil
             self?.serverInfo = nil
-            self?.currentHierarchy = nil
+            self?.currentSnapshot = nil
             self?.currentScreenshot = nil
             self?.onDisconnected?(error)
         }
@@ -151,9 +110,9 @@ public final class Wheelman: ObservableObject {
             self?.onConnected?(info)
         }
 
-        connection?.onHierarchy = { [weak self] payload in
-            self?.currentHierarchy = payload
-            self?.onHierarchyUpdate?(payload)
+        connection?.onSnapshot = { [weak self] payload in
+            self?.currentSnapshot = payload
+            self?.onSnapshotUpdate?(payload)
         }
 
         connection?.onActionResult = { [weak self] result in
@@ -178,14 +137,14 @@ public final class Wheelman: ObservableObject {
         connectionState = .disconnected
         connectedDevice = nil
         serverInfo = nil
-        currentHierarchy = nil
+        currentSnapshot = nil
         currentScreenshot = nil
     }
 
     // MARK: - Commands
 
-    public func requestHierarchy() {
-        connection?.send(.requestHierarchy)
+    public func requestSnapshot() {
+        connection?.send(.requestSnapshot)
     }
 
     /// Send a message to the connected device

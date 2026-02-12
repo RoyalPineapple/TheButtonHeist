@@ -12,7 +12,9 @@
 		019355FE5F0D5031EA060076 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0EC7167195DC97AB7126C94 /* Typography.swift */; };
 		06C17D8BDE42A8F0BBFBB631 /* StakeoutApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1ED4707CE88D3223E77A91 /* StakeoutApp.swift */; };
 		071AA9B18FA57C01D4A360C0 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
+		07BFA5FF9C20EA99328799EF /* HeistClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */; };
 		0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */; };
+		102B6535172112E839C24E08 /* ButtonHeist.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */; };
 		149F630810C6CBF1A9DDF3B4 /* TheGoods.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		16424CF2CB65470D60D52D5D /* HierarchyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27640F556235790CEDD81DC4 /* HierarchyListView.swift */; };
@@ -21,9 +23,11 @@
 		23108A509A72F68602CFCAC4 /* Wheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */; };
 		267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
-		28BAF57D2CF4BA25CAF40F06 /* WheelmanStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF33EE01EB518C49BB8332A6 /* WheelmanStateTests.swift */; };
+		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
 		319F0EE2BDDEAEA018814D63 /* TheGoodsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */; };
 		38B66D610D649E6F0A63A510 /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B71D54592688B9D702D11E /* ServerInfoTests.swift */; };
+		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
+		4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */; };
 		529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */; };
 		5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = F20BB761FA684C7D90336187 /* InsideManAutoStart.m */; };
 		679CA47F948203471BC84765 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */; };
@@ -32,45 +36,33 @@
 		739C806ACE0F65800CB24918 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
 		7AA7540D74C2A550ABD18739 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
+		812D56C0F322065CF4966D1B /* HeistClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1F25ADDEF86D35E12406EB /* HeistClient.swift */; };
+		8184581FABD6CE3C5A82A2B4 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		85E0D2FD6D83272BE6FDC367 /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 420E5455F1DE469688C4B450 /* Spacing.swift */; };
 		861D5E1B49C53414C4059C48 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */; };
 		8EA793CB9AC27195C48ED73F /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
-		911882B8061A4E3B90E84506 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
-		94DD1A6B82F305EB62FDAF3A /* Wheelman.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2BAA59ED503DF4682B4A0F4 /* Wheelman.swift */; };
+		91938587DB774C0C39F979EC /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
+		92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B993E5FA5DA80654F9CC03 /* Exports.swift */; };
 		9745D94ACC06E5D505C7449C /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8867E27A6EB46FCD2CC79E /* Colors.swift */; };
 		9786FBD1E5F2D76AEAC81662 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */; };
-		9C9A1BD12CACC4DC8FE52FCC /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FAEDBDF5847D5DE0A4EE961 /* ConnectionStateTests.swift */; };
 		9FB14CD02FAEC89B60EDCFD0 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C418BAB10F07C90015750A /* ContentView.swift */; };
 		AB25554A59FEFB3959631E8A /* ScreenshotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0BF6F634E4E2984853CFA6 /* ScreenshotView.swift */; };
 		AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */; };
 		B085BBEDC8ADB9C25E63DF45 /* ElementOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31388AD87136141C27386A27 /* ElementOverlayView.swift */; };
-		BB32C647BC98823BF8D141BE /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F83BC01B291A831157D3B9 /* SimpleSocketServer.swift */; };
 		BCE808EA3B411F92813C0389 /* InsideManAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CA44F5E8F22D9E1C90F6DEA0 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */; };
-		CAAC5C653167BD98CD449AE0 /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */; };
 		D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* TapVisualizerView.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
+		F244A5F8E6F4891F61B23682 /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
 		F50ABEFA2366711E39F45025 /* HierarchyTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A13447A6EB4C288F353646 /* HierarchyTreeView.swift */; };
+		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
 		F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0516039025C7D645A7C9F2 /* SafeCracker.swift */; };
+		FE4BF8C6D4DBC62E742EEDDA /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		11FAA6C23381C21FFD94634C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3319961F53E8E0656480630F;
-			remoteInfo = Wheelman;
-		};
 		18BAF31D9EC2190E8A22BF9C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = EA0A1CD8658C2AAEA7311B7E;
-			remoteInfo = TheGoods;
-		};
-		1A8A8CF0E289D60ADCBE0DAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
 			proxyType = 1;
@@ -91,6 +83,27 @@
 			remoteGlobalIDString = EA0A1CD8658C2AAEA7311B7E;
 			remoteInfo = TheGoods;
 		};
+		4A10DE2B1830D1023E7BD2FB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 01AB9D7BD988A7ADF961852B;
+			remoteInfo = ButtonHeist;
+		};
+		A31CE25A82547AAD6D034E95 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3319961F53E8E0656480630F;
+			remoteInfo = Wheelman;
+		};
+		A7D7B66CC2A9ED01D5B9BBD1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 01AB9D7BD988A7ADF961852B;
+			remoteInfo = ButtonHeist;
+		};
 		BEAA5A430F56486AEB62E33A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
@@ -98,12 +111,26 @@
 			remoteGlobalIDString = EA0A1CD8658C2AAEA7311B7E;
 			remoteInfo = TheGoods;
 		};
+		C08FEBFEF4FD7AFDA9F756B4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3319961F53E8E0656480630F;
+			remoteInfo = Wheelman;
+		};
 		C81CB836E3752A563B9796BF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3319961F53E8E0656480630F;
 			remoteInfo = Wheelman;
+		};
+		E657513EB1A1D9370C701A2A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EA0A1CD8658C2AAEA7311B7E;
+			remoteInfo = TheGoods;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -119,6 +146,16 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		75AB47F363D630A462617525 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B2CE408991E2A4542136805 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -148,12 +185,23 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B222EB8197BAD28885AF5B5A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B2ACAB22F51F479F958A5058 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				102B6535172112E839C24E08 /* ButtonHeist.framework in Embed Frameworks */,
 				149F630810C6CBF1A9DDF3B4 /* TheGoods.framework in Embed Frameworks */,
 				23108A509A72F68602CFCAC4 /* Wheelman.framework in Embed Frameworks */,
 			);
@@ -174,27 +222,32 @@
 
 /* Begin PBXFileReference section */
 		0A0516039025C7D645A7C9F2 /* SafeCracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeCracker.swift; sourceTree = "<group>"; };
+		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
 		113133946A9B7B0FDB7A1811 /* ElementStyling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementStyling.swift; sourceTree = "<group>"; };
 		1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
 		1C8867E27A6EB46FCD2CC79E /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		27640F556235790CEDD81DC4 /* HierarchyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyListView.swift; sourceTree = "<group>"; };
 		28E95C8E873AC2AE2A9E282E /* Stakeout.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Stakeout.entitlements; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
+		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		31388AD87136141C27386A27 /* ElementOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementOverlayView.swift; sourceTree = "<group>"; };
 		328234D9BE0B22B6996FF5D5 /* Stakeout.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Stakeout.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
+		3C1F25ADDEF86D35E12406EB /* HeistClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClient.swift; sourceTree = "<group>"; };
 		40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		420E5455F1DE469688C4B450 /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		42A13447A6EB4C288F353646 /* HierarchyTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyTreeView.swift; sourceTree = "<group>"; };
+		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		6FAEDBDF5847D5DE0A4EE961 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
+		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		75522D9885B156F5F719FDEA /* TapVisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapVisualizerView.swift; sourceTree = "<group>"; };
 		783E23C6F9978C0F33983C50 /* TheGoodsTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheGoodsTests-Info.plist"; sourceTree = "<group>"; };
 		7D1ED4707CE88D3223E77A91 /* StakeoutApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakeoutApp.swift; sourceTree = "<group>"; };
 		816E500336496E10A79B40CA /* InsideMan.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InsideMan.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		81A0B6E97DD609FEC142C359 /* TheGoods-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheGoods-Info.plist"; sourceTree = "<group>"; };
-		84F83BC01B291A831157D3B9 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
+		84B993E5FA5DA80654F9CC03 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		86CDDE2889D3D89BF1BB94A4 /* Wheelman-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Wheelman-Info.plist"; sourceTree = "<group>"; };
+		8B7BC6F50889828C130CFD1A /* ButtonHeist-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeist-Info.plist"; sourceTree = "<group>"; };
 		8BE7185BD37A782C3D7CCC0A /* InsideMan-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "InsideMan-Info.plist"; sourceTree = "<group>"; };
 		8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
 		8E28C5885B806613473337AE /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
@@ -208,13 +261,14 @@
 		A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InsideManAutoStart.h; sourceTree = "<group>"; };
 		AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGoodsTests.swift; sourceTree = "<group>"; };
-		BF33EE01EB518C49BB8332A6 /* WheelmanStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WheelmanStateTests.swift; sourceTree = "<group>"; };
-		C2BAA59ED503DF4682B4A0F4 /* Wheelman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wheelman.swift; sourceTree = "<group>"; };
+		AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClientTests.swift; sourceTree = "<group>"; };
 		C3B71D54592688B9D702D11E /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
 		C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideMan.swift; sourceTree = "<group>"; };
 		CEC7C890B3284BD4E27CD923 /* Stakeout-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Stakeout-Info.plist"; sourceTree = "<group>"; };
+		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
 		D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
+		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		E261F9D7DE48AEC7421C9692 /* ElementInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementInspectorView.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EF0BF6F634E4E2984853CFA6 /* ScreenshotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotView.swift; sourceTree = "<group>"; };
@@ -226,6 +280,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4575FEB3C776A49A5D61FC9A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		835AA722D98608F295DCCC62 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -247,8 +309,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				911882B8061A4E3B90E84506 /* TheGoods.framework in Frameworks */,
-				CAAC5C653167BD98CD449AE0 /* Wheelman.framework in Frameworks */,
+				F244A5F8E6F4891F61B23682 /* ButtonHeist.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -256,6 +317,15 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B602454E9D798E32F45D7C43 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8184581FABD6CE3C5A82A2B4 /* TheGoods.framework in Frameworks */,
+				91938587DB774C0C39F979EC /* Wheelman.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -273,12 +343,22 @@
 			files = (
 				00882646C6DD0E6E11E0BEC2 /* AccessibilitySnapshotParser.framework in Frameworks */,
 				267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */,
+				FE4BF8C6D4DBC62E742EEDDA /* Wheelman.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		00407D826337C530975FFF13 /* ButtonHeistTests */ = {
+			isa = PBXGroup;
+			children = (
+				0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */,
+				AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */,
+			);
+			path = ButtonHeistTests;
+			sourceTree = "<group>";
+		};
 		01E35AE9643E645624527EB0 /* include */ = {
 			isa = PBXGroup;
 			children = (
@@ -300,6 +380,8 @@
 			isa = PBXGroup;
 			children = (
 				A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */,
+				5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */,
+				2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */,
 				816E500336496E10A79B40CA /* InsideMan.framework */,
 				328234D9BE0B22B6996FF5D5 /* Stakeout.app */,
 				96B4860B52B50A1AF596A086 /* TheGoods.framework */,
@@ -319,6 +401,15 @@
 			path = ButtonHeist;
 			sourceTree = "<group>";
 		};
+		1F24FF40298DC33E9D6E0207 /* ButtonHeist */ = {
+			isa = PBXGroup;
+			children = (
+				84B993E5FA5DA80654F9CC03 /* Exports.swift */,
+				3C1F25ADDEF86D35E12406EB /* HeistClient.swift */,
+			);
+			path = ButtonHeist;
+			sourceTree = "<group>";
+		};
 		238B88E1575630CD53FC620D /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -332,6 +423,7 @@
 		2EC3724EF6BB15C5608AFA1A /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				1F24FF40298DC33E9D6E0207 /* ButtonHeist */,
 				56A7C6557715AACEDBA97AEC /* InsideMan */,
 				0927DEC464CCB1803FB989CB /* InsideManLoader */,
 				A8857E6D6E1A13B83DFAF6E9 /* TheGoods */,
@@ -355,7 +447,6 @@
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
 				0A0516039025C7D645A7C9F2 /* SafeCracker.swift */,
-				84F83BC01B291A831157D3B9 /* SimpleSocketServer.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
 				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
@@ -366,6 +457,7 @@
 		65F9437CA625EC19AE790A5C /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				00407D826337C530975FFF13 /* ButtonHeistTests */,
 				C56516F0D2A9B881E1939978 /* TheGoodsTests */,
 				F5A6CBAA90C77D981D32BACA /* WheelmanTests */,
 			);
@@ -385,7 +477,8 @@
 			children = (
 				9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */,
 				40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */,
-				C2BAA59ED503DF4682B4A0F4 /* Wheelman.swift */,
+				D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */,
+				E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */,
 			);
 			path = Wheelman;
 			sourceTree = "<group>";
@@ -429,6 +522,8 @@
 		DB0B66B8E13EAC7B83DF0273 /* InfoPlists */ = {
 			isa = PBXGroup;
 			children = (
+				8B7BC6F50889828C130CFD1A /* ButtonHeist-Info.plist */,
+				4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */,
 				8BE7185BD37A782C3D7CCC0A /* InsideMan-Info.plist */,
 				CEC7C890B3284BD4E27CD923 /* Stakeout-Info.plist */,
 				81A0B6E97DD609FEC142C359 /* TheGoods-Info.plist */,
@@ -450,9 +545,7 @@
 		F5A6CBAA90C77D981D32BACA /* WheelmanTests */ = {
 			isa = PBXGroup;
 			children = (
-				6FAEDBDF5847D5DE0A4EE961 /* ConnectionStateTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
-				BF33EE01EB518C49BB8332A6 /* WheelmanStateTests.swift */,
 				F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */,
 			);
 			path = WheelmanTests;
@@ -493,6 +586,28 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
+		01AB9D7BD988A7ADF961852B /* ButtonHeist */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6D046CCE0D445D1A153C0DDB /* Build configuration list for PBXNativeTarget "ButtonHeist" */;
+			buildPhases = (
+				A7F06C4DB34AF1E2673A3973 /* Sources */,
+				6F173592DBAF7EDA4853CDB4 /* Resources */,
+				B602454E9D798E32F45D7C43 /* Frameworks */,
+				B222EB8197BAD28885AF5B5A /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BC3A1484B714930A4DD64290 /* PBXTargetDependency */,
+				EFC08AE5F154BAB591313A74 /* PBXTargetDependency */,
+			);
+			name = ButtonHeist;
+			packageProductDependencies = (
+			);
+			productName = ButtonHeist;
+			productReference = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */;
+			productType = "com.apple.product-type.framework";
+		};
 		3319961F53E8E0656480630F /* Wheelman */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 99379F7A60255A417FF6BB94 /* Build configuration list for PBXNativeTarget "Wheelman" */;
@@ -571,6 +686,7 @@
 			);
 			dependencies = (
 				299E8D510DEEFC66ABA9DB7C /* PBXTargetDependency */,
+				186ABBA8DDE0347593950896 /* PBXTargetDependency */,
 			);
 			name = InsideMan;
 			packageProductDependencies = (
@@ -591,8 +707,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				09447C6D44ADF4F3D942B084 /* PBXTargetDependency */,
-				486A5597F58A588CF107D154 /* PBXTargetDependency */,
+				679EE51A1AEEAF8324A40FB5 /* PBXTargetDependency */,
 			);
 			name = Stakeout;
 			packageProductDependencies = (
@@ -600,6 +715,27 @@
 			productName = Stakeout;
 			productReference = 328234D9BE0B22B6996FF5D5 /* Stakeout.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E59AC4213C28C64460B66331 /* ButtonHeistTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E61912E614DD3484D53CF9AD /* Build configuration list for PBXNativeTarget "ButtonHeistTests" */;
+			buildPhases = (
+				BF598C5C3422D0DA30109829 /* Sources */,
+				F15818CE403B4B1AB9E18AF6 /* Resources */,
+				4575FEB3C776A49A5D61FC9A /* Frameworks */,
+				7B2CE408991E2A4542136805 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */,
+			);
+			name = ButtonHeistTests;
+			packageProductDependencies = (
+			);
+			productName = ButtonHeistTests;
+			productReference = 2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		EA0A1CD8658C2AAEA7311B7E /* TheGoods */ = {
 			isa = PBXNativeTarget;
@@ -642,6 +778,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				01AB9D7BD988A7ADF961852B /* ButtonHeist */,
+				E59AC4213C28C64460B66331 /* ButtonHeistTests */,
 				B83FD9906037A19C791E7323 /* InsideMan */,
 				CB54111B8A5C0FD3A9CB2DD0 /* Stakeout */,
 				EA0A1CD8658C2AAEA7311B7E /* TheGoods */,
@@ -653,6 +791,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		6F173592DBAF7EDA4853CDB4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A279D778E043F173D0DB6546 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -682,6 +827,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E73A2704206EFB3EC80F7BF7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F15818CE403B4B1AB9E18AF6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -720,9 +872,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9C9A1BD12CACC4DC8FE52FCC /* ConnectionStateTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
-				28BAF57D2CF4BA25CAF40F06 /* WheelmanStateTests.swift in Sources */,
 				13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -748,7 +898,8 @@
 			files = (
 				E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */,
 				0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */,
-				94DD1A6B82F305EB62FDAF3A /* Wheelman.swift in Sources */,
+				4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */,
+				F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -759,7 +910,6 @@
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
 				F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */,
-				BB32C647BC98823BF8D141BE /* SimpleSocketServer.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
 				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
@@ -775,20 +925,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A7F06C4DB34AF1E2673A3973 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */,
+				812D56C0F322065CF4966D1B /* HeistClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BF598C5C3422D0DA30109829 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */,
+				07BFA5FF9C20EA99328799EF /* HeistClientTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		09447C6D44ADF4F3D942B084 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = TheGoods;
-			target = EA0A1CD8658C2AAEA7311B7E /* TheGoods */;
-			targetProxy = 1A8A8CF0E289D60ADCBE0DAD /* PBXContainerItemProxy */;
-		};
 		185FD28FC62E2F950ACBC99A /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TheGoods;
 			target = EA0A1CD8658C2AAEA7311B7E /* TheGoods */;
 			targetProxy = 43A0079137942385E76421F2 /* PBXContainerItemProxy */;
+		};
+		186ABBA8DDE0347593950896 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Wheelman;
+			target = 3319961F53E8E0656480630F /* Wheelman */;
+			targetProxy = C08FEBFEF4FD7AFDA9F756B4 /* PBXContainerItemProxy */;
 		};
 		299E8D510DEEFC66ABA9DB7C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -796,11 +964,17 @@
 			target = EA0A1CD8658C2AAEA7311B7E /* TheGoods */;
 			targetProxy = 18BAF31D9EC2190E8A22BF9C /* PBXContainerItemProxy */;
 		};
-		486A5597F58A588CF107D154 /* PBXTargetDependency */ = {
+		4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = Wheelman;
-			target = 3319961F53E8E0656480630F /* Wheelman */;
-			targetProxy = 11FAA6C23381C21FFD94634C /* PBXContainerItemProxy */;
+			name = ButtonHeist;
+			target = 01AB9D7BD988A7ADF961852B /* ButtonHeist */;
+			targetProxy = A7D7B66CC2A9ED01D5B9BBD1 /* PBXContainerItemProxy */;
+		};
+		679EE51A1AEEAF8324A40FB5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = ButtonHeist;
+			target = 01AB9D7BD988A7ADF961852B /* ButtonHeist */;
+			targetProxy = 4A10DE2B1830D1023E7BD2FB /* PBXContainerItemProxy */;
 		};
 		864CE9CCEF3B0A8F84871CA7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -819,6 +993,18 @@
 			name = TheGoods;
 			target = EA0A1CD8658C2AAEA7311B7E /* TheGoods */;
 			targetProxy = BEAA5A430F56486AEB62E33A /* PBXContainerItemProxy */;
+		};
+		BC3A1484B714930A4DD64290 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TheGoods;
+			target = EA0A1CD8658C2AAEA7311B7E /* TheGoods */;
+			targetProxy = E657513EB1A1D9370C701A2A /* PBXContainerItemProxy */;
+		};
+		EFC08AE5F154BAB591313A74 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = Wheelman;
+			target = 3319961F53E8E0656480630F /* Wheelman */;
+			targetProxy = A31CE25A82547AAD6D034E95 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -839,6 +1025,65 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.stakeout;
 				PRODUCT_NAME = Stakeout;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		1D47A2BCA568CBC01EDB1872 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeist-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.buttonheist;
+				PRODUCT_NAME = ButtonHeist;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		2F7C6B8F46593EBC86F2E7E9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeistTests-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
+				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
@@ -894,7 +1139,7 @@
 			};
 			name = Release;
 		};
-		6ABCA99CE2546CACEFC7C1FE /* Release */ = {
+		5BB65043CE8E77CAAD416919 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
@@ -905,7 +1150,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_VERSION = A;
-				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
+				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeist-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -913,8 +1158,8 @@
 					"@loader_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
-				PRODUCT_NAME = Wheelman;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.buttonheist;
+				PRODUCT_NAME = ButtonHeist;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -922,6 +1167,77 @@
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		6ABCA99CE2546CACEFC7C1FE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
+				PRODUCT_NAME = Wheelman;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
+				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
+				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Release;
 		};
@@ -1185,17 +1501,37 @@
 		CDB420765D655E899C915F4C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_IDENTITY = "";
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				FRAMEWORK_VERSION = A;
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				LD_RUNPATH_SEARCH_PATHS = (
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
@@ -1203,17 +1539,45 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
-				SDKROOT = macosx;
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = auto;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					DEBUG,
 				);
-				SWIFT_COMPILATION_MODE = singlefile;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
+				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
+				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Debug;
 		};
@@ -1299,6 +1663,26 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		DDF7010B5CE23F85F3D06735 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				INFOPLIST_FILE = "Derived/InfoPlists/ButtonHeistTests-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
+				PRODUCT_NAME = ButtonHeistTests;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
 		};
 		E7425CD7B9C9A6218F4418E0 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1412,6 +1796,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		6D046CCE0D445D1A153C0DDB /* Build configuration list for PBXNativeTarget "ButtonHeist" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1D47A2BCA568CBC01EDB1872 /* Debug */,
+				5BB65043CE8E77CAAD416919 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		868A54EE0ECEC296C4F43BF7 /* Build configuration list for PBXNativeTarget "WheelmanTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1453,6 +1846,15 @@
 			buildConfigurations = (
 				AF59DDBB148017DFE61662AD /* Debug */,
 				C68A8E22CB29F90CB31F3A51 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E61912E614DD3484D53CF9AD /* Build configuration list for PBXNativeTarget "ButtonHeistTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F7C6B8F46593EBC86F2E7E9 /* Debug */,
+				DDF7010B5CE23F85F3D06735 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

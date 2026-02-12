@@ -37,7 +37,7 @@ Client                                    Server
    │◄─────── info ───────────────────────────│  (automatic on connect)
    │                                         │
    │──────── subscribe ──────────────────────►│  (enable auto-updates)
-   │──────── requestHierarchy ───────────────►│
+   │──────── requestSnapshot ───────────────►│
    │──────── requestScreenshot ──────────────►│
    │◄─────── hierarchy ──────────────────────│
    │◄─────── screenshot ────────────────────│
@@ -61,12 +61,12 @@ All messages are JSON objects terminated by a newline (`\n`). Swift enums with a
 
 ## Client → Server Messages
 
-### requestHierarchy
+### requestSnapshot
 
-Request current accessibility hierarchy.
+Request current UI element snapshot.
 
 ```json
-{"requestHierarchy":{}}
+{"requestSnapshot":{}}
 ```
 
 ### subscribe
@@ -96,7 +96,7 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 **By traversal index:**
 ```json
-{"activate":{"_0":{"traversalIndex":5}}}
+{"activate":{"_0":{"order":5}}}
 ```
 
 ### touchTap
@@ -185,7 +185,7 @@ Two-finger tap at a point or element.
 
 ### increment
 
-Increment an adjustable element (e.g., slider, stepper). Calls `accessibilityIncrement()` on the element's view.
+Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on the element's view.
 
 **By identifier:**
 ```json
@@ -194,12 +194,12 @@ Increment an adjustable element (e.g., slider, stepper). Calls `accessibilityInc
 
 **By traversal index:**
 ```json
-{"increment":{"_0":{"traversalIndex":8}}}
+{"increment":{"_0":{"order":8}}}
 ```
 
 ### decrement
 
-Decrement an adjustable element. Calls `accessibilityDecrement()` on the element's view.
+Decrement an adjustable element. Calls `decrement()` on the element's view.
 
 **By identifier:**
 ```json
@@ -208,7 +208,7 @@ Decrement an adjustable element. Calls `accessibilityDecrement()` on the element
 
 ### performCustomAction
 
-Invoke a named custom action on an element. The action name must match one of the element's `customActions`.
+Invoke a named custom action on an element. The action name must match one of the element's `actions`.
 
 ```json
 {"performCustomAction":{"_0":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}}
@@ -250,50 +250,42 @@ Sent immediately after connection. Contains device and app metadata.
 
 ### hierarchy
 
-Accessibility hierarchy snapshot. Contains a flat element list and an optional tree structure.
+UI element snapshot snapshot. Contains a flat element list and an optional tree structure.
 
 ```json
 {"hierarchy":{"_0":{
   "timestamp":"2026-02-03T10:30:45.123Z",
   "elements":[
     {
-      "traversalIndex":0,
+      "order":0,
       "description":"Welcome",
       "label":"Welcome",
       "value":null,
-      "traits":["staticText"],
       "identifier":"welcomeLabel",
-      "hint":null,
       "frameX":16.0,
       "frameY":100.0,
       "frameWidth":361.0,
       "frameHeight":24.0,
-      "activationPointX":196.5,
-      "activationPointY":112.0,
-      "customActions":[]
+      "actions":[]
     },
     {
-      "traversalIndex":1,
+      "order":1,
       "description":"Sign In",
       "label":"Sign In",
       "value":null,
-      "traits":["button"],
       "identifier":"signInButton",
-      "hint":"Double tap to sign in",
       "frameX":16.0,
       "frameY":140.0,
       "frameWidth":361.0,
       "frameHeight":44.0,
-      "activationPointX":196.5,
-      "activationPointY":162.0,
-      "customActions":[]
+      "actions":[]
     }
   ],
   "tree":[
     {"element":{"_0":0}},
     {"container":{"_0":[
-      {"containerType":"semanticGroup","label":"Form","value":null,"identifier":null,
-       "frameX":0.0,"frameY":88.0,"frameWidth":393.0,"frameHeight":600.0,"traits":[]},
+      {"type":"semanticGroup","label":"Form","value":null,"identifier":null,
+       "frameX":0.0,"frameY":88.0,"frameWidth":393.0,"frameHeight":600.0},
       [{"element":{"_0":1}}]
     ]}}
   ]
@@ -322,9 +314,9 @@ Possible methods:
 - `syntheticPinch` - Pinch gesture synthesized via SafeCracker
 - `syntheticRotate` - Rotation gesture synthesized via SafeCracker
 - `syntheticTwoFingerTap` - Two-finger tap synthesized via SafeCracker
-- `accessibilityActivate` - Element's `accessibilityActivate()` was used
-- `accessibilityIncrement` - Element's `accessibilityIncrement()` was called
-- `accessibilityDecrement` - Element's `accessibilityDecrement()` was called
+- `activate` - Element's `activate()` was used
+- `increment` - Element's `increment()` was called
+- `decrement` - Element's `decrement()` was called
 - `customAction` - Named custom action was invoked
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
@@ -383,53 +375,48 @@ Error message.
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
 
-### HierarchyPayload
+### Snapshot
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `ISO8601 Date` | When hierarchy was captured |
-| `elements` | `[AccessibilityElementData]` | Flat list of all accessibility elements |
-| `tree` | `[AccessibilityHierarchyNode]?` | Optional tree structure with containers |
+| `elements` | `[UIElement]` | Flat list of all UI elements |
+| `tree` | `[ElementNode]?` | Optional tree structure with containers |
 
-### AccessibilityElementData
+### UIElement
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `traversalIndex` | `Int` | VoiceOver reading order (0-based) |
+| `order` | `Int` | VoiceOver reading order (0-based) |
 | `description` | `String` | What VoiceOver reads |
-| `label` | `String?` | Accessibility label |
+| `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
-| `traits` | `[String]` | Trait names (see Traits section) |
-| `identifier` | `String?` | Accessibility identifier |
-| `hint` | `String?` | Accessibility hint |
+| `identifier` | `String?` | Identifier |
 | `frameX` | `Double` | Frame origin X in points |
 | `frameY` | `Double` | Frame origin Y in points |
 | `frameWidth` | `Double` | Frame width in points |
 | `frameHeight` | `Double` | Frame height in points |
-| `activationPointX` | `Double` | Touch target X in points |
-| `activationPointY` | `Double` | Touch target Y in points |
-| `customActions` | `[String]` | Custom action names |
+| `actions` | `[String]` | Custom action names |
 
-### AccessibilityHierarchyNode
+### ElementNode
 
 Recursive enum representing the tree structure:
 
-- `element(traversalIndex: Int)` - Leaf node referencing an element by its index in the flat `elements` array
-- `container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])` - Container node with metadata and children
+- `element(order: Int)` - Leaf node referencing an element by its index in the flat `elements` array
+- `container(Group, children: [ElementNode])` - Container node with metadata and children
 
-### AccessibilityContainerData
+### Group
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `containerType` | `String` | Container type (see below) |
-| `label` | `String?` | Container's accessibility label |
-| `value` | `String?` | Container's accessibility value |
-| `identifier` | `String?` | Container's accessibility identifier |
+| `type` | `String` | Container type (see below) |
+| `label` | `String?` | Container's label |
+| `value` | `String?` | Container's value |
+| `identifier` | `String?` | Container's identifier |
 | `frameX` | `Double` | Frame origin X in points |
 | `frameY` | `Double` | Frame origin Y in points |
 | `frameWidth` | `Double` | Frame width in points |
 | `frameHeight` | `Double` | Frame height in points |
-| `traits` | `[String]` | Trait names (e.g., `["tabBar"]`) |
 
 Container types:
 - `"semanticGroup"` - Semantic grouping (with optional label/value/identifier)
@@ -441,8 +428,8 @@ Container types:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `identifier` | `String?` | Element's accessibility identifier |
-| `traversalIndex` | `Int?` | Element's traversal index |
+| `identifier` | `String?` | Element's identifier |
+| `order` | `Int?` | Element's traversal index |
 
 At least one field should be provided. When both are provided, identifier is tried first.
 
@@ -542,30 +529,6 @@ At least one field should be provided. When both are provided, identifier is tri
 | `height` | `Double` | Screen height in points |
 | `timestamp` | `ISO8601 Date` | When screenshot was captured |
 
-### Traits
-
-Traits are human-readable strings converted from `UIAccessibilityTraits`:
-
-| Trait String | UIAccessibilityTraits |
-|--------------|----------------------|
-| `"button"` | `.button` |
-| `"link"` | `.link` |
-| `"image"` | `.image` |
-| `"staticText"` | `.staticText` |
-| `"header"` | `.header` |
-| `"adjustable"` | `.adjustable` |
-| `"selected"` | `.selected` |
-| `"tabBar"` | `.tabBar` |
-| `"searchField"` | `.searchField` |
-| `"playsSound"` | `.playsSound` |
-| `"keyboardKey"` | `.keyboardKey` |
-| `"summaryElement"` | `.summaryElement` |
-| `"notEnabled"` | `.notEnabled` |
-| `"updatesFrequently"` | `.updatesFrequently` |
-| `"startsMediaSession"` | `.startsMediaSession` |
-| `"allowsDirectInteraction"` | `.allowsDirectInteraction` |
-| `"causesPageTurn"` | `.causesPageTurn` |
-
 ## Example Session
 
 ```
@@ -578,7 +541,7 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 {"subscribe":{}}
 
 # Client requests hierarchy
-{"requestHierarchy":{}}
+{"requestSnapshot":{}}
 
 # Server responds with hierarchy (flat + tree)
 {"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
@@ -599,7 +562,7 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 {"increment":{"_0":{"identifier":"volumeSlider"}}}
 
 # Server confirms
-{"actionResult":{"_0":{"success":true,"method":"accessibilityIncrement","message":null}}}
+{"actionResult":{"_0":{"success":true,"method":"increment","message":null}}}
 
 # Client performs custom action
 {"performCustomAction":{"_0":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}}

@@ -5,11 +5,10 @@ import Foundation
 struct ButtonHeist: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "buttonheist",
-        abstract: "Inspect and interact with iOS app accessibility hierarchy.",
+        abstract: "Inspect and interact with iOS app UI elements.",
         discussion: """
-            Connects to an iOS app running InsideMan and displays the accessibility
-            element hierarchy. Useful for accessibility testing, debugging, and
-            automation of SwiftUI/UIKit apps.
+            Connects to an iOS app and displays the UI element hierarchy. Useful for
+            testing, debugging, and automation of SwiftUI/UIKit apps.
 
             Examples:
               buttonheist                     # Interactive watch mode
@@ -32,7 +31,7 @@ struct ButtonHeist: AsyncParsableCommand {
 struct WatchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "watch",
-        abstract: "Watch accessibility hierarchy in real-time"
+        abstract: "Watch UI elements in real-time"
     )
 
     @Option(name: .shortAndLong, help: "Output format: human, json")

@@ -2,6 +2,7 @@
 import UIKit
 import AccessibilitySnapshotParser
 import TheGoods
+import Wheelman
 import os.log
 
 /// Debug logging helper - uses NSLog for maximum visibility
@@ -172,9 +173,9 @@ public final class InsideMan {
         serverLog("Received message: \(message)")
 
         switch message {
-        case .requestHierarchy:
+        case .requestSnapshot:
             serverLog("Hierarchy requested")
-            sendHierarchy(respond: respond)
+            sendSnapshot(respond: respond)
         case .subscribe:
             serverLog("Client subscribed to updates")
             // Note: with socket server we broadcast to all, so subscribed is implicit
@@ -227,7 +228,7 @@ public final class InsideMan {
         sendMessage(.info(info), respond: respond)
     }
 
-    private func sendHierarchy(respond: @escaping (Data) -> Void) {
+    private func sendSnapshot(respond: @escaping (Data) -> Void) {
         guard let rootView = getRootView() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
@@ -243,8 +244,8 @@ public final class InsideMan {
         let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
-        sendMessage(.hierarchy(payload), respond: respond)
+        let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
+        sendMessage(.snapshot(payload), respond: respond)
 
         // Also send screenshot with initial hierarchy
         broadcastScreenshot()
@@ -322,8 +323,8 @@ public final class InsideMan {
         let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
-        let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
-        let message = ServerMessage.hierarchy(payload)
+        let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
+        let message = ServerMessage.snapshot(payload)
 
         // Update hash for polling comparison
         lastHierarchyHash = elements.hashValue
@@ -368,8 +369,8 @@ public final class InsideMan {
             lastHierarchyHash = currentHash
 
             // Broadcast hierarchy with tree
-            let payload = HierarchyPayload(timestamp: Date(), elements: elements, tree: tree)
-            if let data = try? JSONEncoder().encode(ServerMessage.hierarchy(payload)) {
+            let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
+            if let data = try? JSONEncoder().encode(ServerMessage.snapshot(payload)) {
                 socketServer?.broadcastToAll(data)
             }
 
@@ -412,7 +413,7 @@ public final class InsideMan {
         if let identifier = target.identifier {
             return cachedElements.first { $0.identifier == identifier }
         }
-        if let index = target.traversalIndex, index >= 0, index < cachedElements.count {
+        if let index = target.order, index >= 0, index < cachedElements.count {
             return cachedElements[index]
         }
         return nil
@@ -486,7 +487,7 @@ public final class InsideMan {
         // Try accessibilityActivate first
         if let view = findViewAtPoint(point), view.accessibilityActivate() {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+            sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
             return
         }
 
@@ -499,7 +500,7 @@ public final class InsideMan {
 
         sendMessage(.actionResult(ActionResult(
             success: false,
-            method: .accessibilityActivate,
+            method: .activate,
             message: "Activation failed"
         )), respond: respond)
     }
@@ -518,7 +519,7 @@ public final class InsideMan {
         if let view = findViewAtPoint(element.activationPoint) {
             view.accessibilityIncrement()
             TapVisualizerView.showTap(at: element.activationPoint)
-            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityIncrement)), respond: respond)
+            sendMessage(.actionResult(ActionResult(success: true, method: .increment)), respond: respond)
         } else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
@@ -542,7 +543,7 @@ public final class InsideMan {
         if let view = findViewAtPoint(element.activationPoint) {
             view.accessibilityDecrement()
             TapVisualizerView.showTap(at: element.activationPoint)
-            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityDecrement)), respond: respond)
+            sendMessage(.actionResult(ActionResult(success: true, method: .decrement)), respond: respond)
         } else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
@@ -560,7 +561,7 @@ public final class InsideMan {
         // Try accessibilityActivate first
         if let view = findViewAtPoint(point), view.accessibilityActivate() {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+            sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
             return
         }
 
@@ -791,54 +792,41 @@ public final class InsideMan {
 
     // MARK: - Conversion
 
-    private func convertMarker(_ marker: AccessibilityMarker, index: Int) -> AccessibilityElementData {
+    private func convertMarker(_ marker: AccessibilityMarker, index: Int) -> UIElement {
         let frame = marker.shape.frame
-        return AccessibilityElementData(
-            traversalIndex: index,
+        return UIElement(
+            order: index,
             description: marker.description,
             label: marker.label,
             value: marker.value,
-            traits: formatTraits(marker.traits),
             identifier: marker.identifier,
-            hint: marker.hint,
             frameX: frame.origin.x,
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
             frameHeight: frame.size.height,
-            activationPointX: marker.activationPoint.x,
-            activationPointY: marker.activationPoint.y,
-            customActions: marker.customActions.map { $0.name }
+            actions: buildActions(traits: marker.traits, customActions: marker.customActions)
         )
     }
 
-    private func formatTraits(_ traits: UIAccessibilityTraits) -> [String] {
-        var result: [String] = []
-        if traits.contains(.button) { result.append("button") }
-        if traits.contains(.link) { result.append("link") }
-        if traits.contains(.image) { result.append("image") }
-        if traits.contains(.staticText) { result.append("staticText") }
-        if traits.contains(.header) { result.append("header") }
-        if traits.contains(.adjustable) { result.append("adjustable") }
-        if traits.contains(.selected) { result.append("selected") }
-        if traits.contains(.tabBar) { result.append("tabBar") }
-        if traits.contains(.searchField) { result.append("searchField") }
-        if traits.contains(.playsSound) { result.append("playsSound") }
-        if traits.contains(.keyboardKey) { result.append("keyboardKey") }
-        if traits.contains(.summaryElement) { result.append("summaryElement") }
-        if traits.contains(.notEnabled) { result.append("notEnabled") }
-        if traits.contains(.updatesFrequently) { result.append("updatesFrequently") }
-        if traits.contains(.startsMediaSession) { result.append("startsMediaSession") }
-        if traits.contains(.allowsDirectInteraction) { result.append("allowsDirectInteraction") }
-        if traits.contains(.causesPageTurn) { result.append("causesPageTurn") }
-        return result
+    private func buildActions(traits: UIAccessibilityTraits, customActions: [AccessibilityMarker.CustomAction]) -> [String] {
+        var actions: [String] = []
+        if traits.contains(.button) || traits.contains(.link) {
+            actions.append("activate")
+        }
+        if traits.contains(.adjustable) {
+            actions.append("increment")
+            actions.append("decrement")
+        }
+        actions.append(contentsOf: customActions.map { $0.name })
+        return actions
     }
 
     // MARK: - Tree Conversion
 
-    private func convertHierarchyNode(_ node: AccessibilityHierarchy) -> AccessibilityHierarchyNode {
+    private func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
         switch node {
         case let .element(_, traversalIndex):
-            return .element(traversalIndex: traversalIndex)
+            return .element(order: traversalIndex)
         case let .container(container, children):
             let containerData = convertContainer(container)
             let childNodes = children.map { convertHierarchyNode($0) }
@@ -846,35 +834,34 @@ public final class InsideMan {
         }
     }
 
-    private func convertContainer(_ container: AccessibilityContainer) -> AccessibilityContainerData {
-        let (typeName, label, value, identifier, traits): (String, String?, String?, String?, [String])
+    private func convertContainer(_ container: AccessibilityContainer) -> Group {
+        let (typeName, label, value, identifier): (String, String?, String?, String?)
         switch container.type {
         case let .semanticGroup(l, v, id):
             typeName = "semanticGroup"
-            label = l; value = v; identifier = id; traits = []
+            label = l; value = v; identifier = id
         case .list:
             typeName = "list"
-            label = nil; value = nil; identifier = nil; traits = []
+            label = nil; value = nil; identifier = nil
         case .landmark:
             typeName = "landmark"
-            label = nil; value = nil; identifier = nil; traits = []
+            label = nil; value = nil; identifier = nil
         case let .dataTable(rowCount: _, columnCount: _):
             typeName = "dataTable"
-            label = nil; value = nil; identifier = nil; traits = []
+            label = nil; value = nil; identifier = nil
         case .tabBar:
-            typeName = "semanticGroup"
-            label = nil; value = nil; identifier = nil; traits = ["tabBar"]
+            typeName = "tabBar"
+            label = nil; value = nil; identifier = nil
         }
-        return AccessibilityContainerData(
-            containerType: typeName,
+        return Group(
+            type: typeName,
             label: label,
             value: value,
             identifier: identifier,
             frameX: container.frame.origin.x,
             frameY: container.frame.origin.y,
             frameWidth: container.frame.size.width,
-            frameHeight: container.frame.size.height,
-            traits: traits
+            frameHeight: container.frame.size.height
         )
     }
 }
