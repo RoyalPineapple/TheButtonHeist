@@ -183,6 +183,32 @@ Two-finger tap at a point or element.
 {"touchTwoFingerTap":{"_0":{"centerX":200,"centerY":300,"spread":40}}}
 ```
 
+### touchDrawPath
+
+Draw along a path by tracing through a sequence of waypoints. Supports duration (seconds) or velocity (points/second) for timing.
+
+```json
+{"touchDrawPath":{"_0":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}}
+```
+
+**With velocity:**
+```json
+{"touchDrawPath":{"_0":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}}
+```
+
+### touchDrawBezier
+
+Draw along cubic bezier curves. The server samples the curves to a polyline, then traces using the drawPath engine.
+
+```json
+{"touchDrawBezier":{"_0":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}}
+```
+
+**With samples and velocity:**
+```json
+{"touchDrawBezier":{"_0":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}}
+```
+
 ### increment
 
 Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on the element's view.
@@ -314,6 +340,7 @@ Possible methods:
 - `syntheticPinch` - Pinch gesture synthesized via SafeCracker
 - `syntheticRotate` - Rotation gesture synthesized via SafeCracker
 - `syntheticTwoFingerTap` - Two-finger tap synthesized via SafeCracker
+- `syntheticDrawPath` - Path drawing synthesized via SafeCracker
 - `activate` - Element's `activate()` was used
 - `increment` - Element's `increment()` was called
 - `decrement` - Element's `decrement()` was called
@@ -504,6 +531,43 @@ At least one field should be provided. When both are provided, identifier is tri
 | `centerX` | `Double?` | Center X coordinate |
 | `centerY` | `Double?` | Center Y coordinate |
 | `spread` | `Double?` | Distance between fingers (default: 40pt) |
+
+### DrawPathTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `points` | `[PathPoint]` | Array of waypoints to trace through (minimum 2) |
+| `duration` | `Double?` | Total duration in seconds (mutually exclusive with velocity) |
+| `velocity` | `Double?` | Speed in points per second (mutually exclusive with duration) |
+
+### PathPoint
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `x` | `Double` | X coordinate in screen points |
+| `y` | `Double` | Y coordinate in screen points |
+
+### DrawBezierTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `startX` | `Double` | Starting X coordinate |
+| `startY` | `Double` | Starting Y coordinate |
+| `segments` | `[BezierSegment]` | Array of cubic bezier segments |
+| `samplesPerSegment` | `Int?` | Points to sample per segment (default: 20) |
+| `duration` | `Double?` | Total duration in seconds (mutually exclusive with velocity) |
+| `velocity` | `Double?` | Speed in points per second (mutually exclusive with duration) |
+
+### BezierSegment
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cp1X` | `Double` | First control point X |
+| `cp1Y` | `Double` | First control point Y |
+| `cp2X` | `Double` | Second control point X |
+| `cp2Y` | `Double` | Second control point Y |
+| `endX` | `Double` | Endpoint X |
+| `endY` | `Double` | Endpoint Y |
 
 ### CustomActionTarget
 

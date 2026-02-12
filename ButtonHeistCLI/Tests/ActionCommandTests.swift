@@ -356,6 +356,135 @@ final class ActionCommandTests: XCTestCase {
         }
     }
 
+    // MARK: - Draw Path Target Tests
+
+    func testDrawPathTargetEncoding() throws {
+        let target = DrawPathTarget(
+            points: [PathPoint(x: 100, y: 200), PathPoint(x: 150, y: 250), PathPoint(x: 200, y: 300)],
+            duration: 1.0
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(DrawPathTarget.self, from: data)
+
+        XCTAssertEqual(decoded.points.count, 3)
+        XCTAssertEqual(decoded.points[0].x, 100)
+        XCTAssertEqual(decoded.points[0].y, 200)
+        XCTAssertEqual(decoded.points[2].x, 200)
+        XCTAssertEqual(decoded.duration, 1.0)
+        XCTAssertNil(decoded.velocity)
+    }
+
+    func testDrawPathTargetWithVelocityEncoding() throws {
+        let target = DrawPathTarget(
+            points: [PathPoint(x: 0, y: 0), PathPoint(x: 100, y: 0)],
+            velocity: 500
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(DrawPathTarget.self, from: data)
+
+        XCTAssertEqual(decoded.points.count, 2)
+        XCTAssertNil(decoded.duration)
+        XCTAssertEqual(decoded.velocity, 500)
+    }
+
+    func testClientMessageTouchDrawPathEncoding() throws {
+        let message = ClientMessage.touchDrawPath(DrawPathTarget(
+            points: [PathPoint(x: 10, y: 20), PathPoint(x: 30, y: 40)],
+            duration: 0.5
+        ))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .touchDrawPath(let target) = decoded {
+            XCTAssertEqual(target.points.count, 2)
+            XCTAssertEqual(target.points[0].x, 10)
+            XCTAssertEqual(target.duration, 0.5)
+        } else {
+            XCTFail("Expected touchDrawPath message")
+        }
+    }
+
+    func testPathPointCGPoint() throws {
+        let point = PathPoint(x: 42.5, y: 99.1)
+        XCTAssertEqual(point.cgPoint, CGPoint(x: 42.5, y: 99.1))
+    }
+
+    // MARK: - Draw Bezier Target Tests
+
+    func testBezierSegmentEncoding() throws {
+        let segment = BezierSegment(cp1X: 10, cp1Y: 20, cp2X: 30, cp2Y: 40, endX: 50, endY: 60)
+        let data = try JSONEncoder().encode(segment)
+        let decoded = try JSONDecoder().decode(BezierSegment.self, from: data)
+
+        XCTAssertEqual(decoded.cp1X, 10)
+        XCTAssertEqual(decoded.cp1Y, 20)
+        XCTAssertEqual(decoded.cp2X, 30)
+        XCTAssertEqual(decoded.cp2Y, 40)
+        XCTAssertEqual(decoded.endX, 50)
+        XCTAssertEqual(decoded.endY, 60)
+        XCTAssertEqual(decoded.cp1, CGPoint(x: 10, y: 20))
+        XCTAssertEqual(decoded.cp2, CGPoint(x: 30, y: 40))
+        XCTAssertEqual(decoded.end, CGPoint(x: 50, y: 60))
+    }
+
+    func testDrawBezierTargetEncoding() throws {
+        let target = DrawBezierTarget(
+            startX: 100, startY: 400,
+            segments: [
+                BezierSegment(cp1X: 100, cp1Y: 200, cp2X: 300, cp2Y: 200, endX: 300, endY: 400)
+            ],
+            samplesPerSegment: 30,
+            duration: 1.5
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(DrawBezierTarget.self, from: data)
+
+        XCTAssertEqual(decoded.startX, 100)
+        XCTAssertEqual(decoded.startY, 400)
+        XCTAssertEqual(decoded.startPoint, CGPoint(x: 100, y: 400))
+        XCTAssertEqual(decoded.segments.count, 1)
+        XCTAssertEqual(decoded.segments[0].endX, 300)
+        XCTAssertEqual(decoded.samplesPerSegment, 30)
+        XCTAssertEqual(decoded.duration, 1.5)
+        XCTAssertNil(decoded.velocity)
+    }
+
+    func testDrawBezierTargetWithVelocityEncoding() throws {
+        let target = DrawBezierTarget(
+            startX: 0, startY: 0,
+            segments: [
+                BezierSegment(cp1X: 33, cp1Y: 0, cp2X: 66, cp2Y: 0, endX: 100, endY: 0)
+            ],
+            velocity: 300
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(DrawBezierTarget.self, from: data)
+
+        XCTAssertNil(decoded.duration)
+        XCTAssertEqual(decoded.velocity, 300)
+        XCTAssertNil(decoded.samplesPerSegment)
+    }
+
+    func testClientMessageTouchDrawBezierEncoding() throws {
+        let message = ClientMessage.touchDrawBezier(DrawBezierTarget(
+            startX: 50, startY: 100,
+            segments: [
+                BezierSegment(cp1X: 50, cp1Y: 50, cp2X: 150, cp2Y: 50, endX: 150, endY: 100)
+            ],
+            duration: 0.8
+        ))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .touchDrawBezier(let target) = decoded {
+            XCTAssertEqual(target.startX, 50)
+            XCTAssertEqual(target.segments.count, 1)
+            XCTAssertEqual(target.duration, 0.8)
+        } else {
+            XCTFail("Expected touchDrawBezier message")
+        }
+    }
+
     func testAllActionMethods() throws {
         let methods: [ActionMethod] = [
             .activate,
@@ -368,6 +497,7 @@ final class ActionCommandTests: XCTestCase {
             .syntheticPinch,
             .syntheticRotate,
             .syntheticTwoFingerTap,
+            .syntheticDrawPath,
             .customAction,
             .elementNotFound,
             .elementDeallocated

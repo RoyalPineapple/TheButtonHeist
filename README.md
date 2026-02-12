@@ -9,7 +9,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **MCP server** - Model Context Protocol server lets AI agents like Claude drive any iOS app
 - **Real-time inspection** - See UI elements update as your app's UI changes
 - **Remote actions** - Tap elements and trigger actions programmatically
-- **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap
+- **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
 - **Multi-touch** - Simultaneous multi-finger gesture injection via IOKit HID events
 - **USB connectivity** - Connect to devices over USB when WiFi is unavailable
 - **Auto-start** - InsideMan starts automatically when your app launches
@@ -126,28 +126,60 @@ Add the required Info.plist entries:
 
 ### 2. Connect with an AI Agent (MCP)
 
-The MCP server gives AI agents like Claude persistent access to your app. Build once, then point your MCP client at the binary:
+ButtonHeist's MCP server gives AI agents like Claude **eyes and hands** for your iOS app. The agent can see the screen, read the UI hierarchy, and perform any gesture — tap, swipe, draw, type — all through native tool calls.
+
+**Build the MCP server:**
 
 ```bash
-# Build the MCP server
 cd ButtonHeistMCP
 swift build -c release
 ```
 
-Add to your Claude Code `.mcp.json` (or any MCP client config):
+**Add `.mcp.json` to your project root:**
 
 ```json
 {
   "mcpServers": {
     "buttonheist": {
-      "command": "/path/to/ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
       "args": []
     }
   }
 }
 ```
 
-The MCP server automatically discovers your iOS app via Bonjour and connects. It exposes 13 tools:
+That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any MCP client) opens a session in your project directory, it reads `.mcp.json` and spawns the `buttonheist-mcp` process. The server automatically discovers your running iOS app via Bonjour, establishes a persistent TCP connection, and exposes 15 tools that appear as native capabilities to the agent.
+
+**How it works end-to-end:**
+
+```
+1. AI agent starts a session in your project directory
+2. MCP client reads .mcp.json, spawns buttonheist-mcp
+3. buttonheist-mcp discovers your iOS app via Bonjour (< 2 seconds)
+4. Persistent TCP connection established — stays open for the entire session
+5. Agent sees 15 tools as native capabilities (get_screenshot, tap, draw_path, etc.)
+6. Agent calls tools directly — no shell commands, no scripts, no manual wiring
+```
+
+The agent can now look at your app and interact with it naturally:
+
+```
+Agent: "Let me see what's on screen"
+→ calls get_screenshot → sees your app's UI as an image
+→ calls get_snapshot  → reads the accessibility hierarchy as structured data
+
+Agent: "I'll tap the login button"
+→ calls tap(identifier: "loginButton")
+→ gets success/failure result
+
+Agent: "Let me draw a signature"
+→ calls draw_bezier(startX: 100, startY: 400, segments: [...])
+→ smooth curve traced on screen
+```
+
+Because the connection is persistent (no per-call Bonjour discovery or TCP handshake), tool calls complete in milliseconds. An agent can chain dozens of interactions — navigate through screens, fill forms, verify visual state — without delay.
+
+**Available tools:**
 
 | Tool | Description |
 |------|-------------|
@@ -160,11 +192,11 @@ The MCP server automatically discovers your iOS app via Bonjour and connects. It
 | `pinch` | Pinch/zoom gesture |
 | `rotate` | Two-finger rotation |
 | `two_finger_tap` | Simultaneous two-finger tap |
+| `draw_path` | Draw along a path of waypoints |
+| `draw_bezier` | Draw along cubic bezier curves |
 | `activate` | Accessibility activate (VoiceOver double-tap) |
 | `increment` / `decrement` | Adjust sliders, steppers, pickers |
 | `perform_custom_action` | Invoke named custom accessibility actions |
-
-The MCP server maintains a persistent TCP connection to the device, so there's no connection overhead between tool calls — AI agents can chain dozens of interactions without delay.
 
 ### 3. Connect Manually
 
@@ -235,6 +267,8 @@ SUBCOMMANDS:
   pinch                   Pinch/zoom at a point or element
   rotate                  Rotate at a point or element
   two-finger-tap          Tap with two fingers at a point or element
+  draw-path               Draw along a path of points
+  draw-bezier             Draw along cubic bezier curves
 ```
 
 All touch subcommands accept `--identifier`, `--index`, or coordinate options to specify the target.
@@ -286,6 +320,8 @@ buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
 buttonheist touch pinch --identifier mapView --scale 2.0
 buttonheist touch rotate --x 200 --y 300 --angle 1.57
 buttonheist touch two-finger-tap --identifier zoomControl
+buttonheist touch draw-path --points "100,400 200,300 300,400" --duration 1.0
+buttonheist touch draw-bezier --bezier-file curve.json --velocity 300
 ```
 
 ## USB Connectivity
@@ -407,13 +443,13 @@ buttonheist/
 ├── ButtonHeistMCP/
 │   ├── Package.swift              # Swift 6.0 package (depends on ButtonHeist + MCP SDK)
 │   └── Sources/
-│       └── main.swift             # MCP server with 13 tools for AI agent automation
+│       └── main.swift             # MCP server with 15 tools for AI agent automation
 ├── ButtonHeistCLI/
 │   └── Sources/                   # CLI tool
 │       ├── main.swift             # Entry point with watch/action/touch/screenshot commands
 │       ├── CLIRunner.swift        # Watch mode implementation
 │       ├── ActionCommand.swift    # Action command
-│       ├── TouchCommand.swift     # Touch gesture commands (7 subcommands)
+│       ├── TouchCommand.swift     # Touch gesture commands (9 subcommands)
 │       └── ScreenshotCommand.swift    # Screenshot command
 ├── TestApp/
 │   ├── Sources/                   # SwiftUI test app ("A11y SwiftUI")
@@ -451,6 +487,8 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 - `touchPinch` - Pinch/zoom gesture
 - `touchRotate` - Rotation gesture
 - `touchTwoFingerTap` - Two-finger tap
+- `touchDrawPath` - Draw along a path of waypoints
+- `touchDrawBezier` - Draw along bezier curves (sampled server-side)
 - `requestScreenshot` - Request PNG screenshot
 - `ping` - Keepalive
 

@@ -216,6 +216,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             handleTouchRotate(target, respond: respond)
         case .touchTwoFingerTap(let target):
             handleTouchTwoFingerTap(target, respond: respond)
+        case .touchDrawPath(let target):
+            handleTouchDrawPath(target, respond: respond)
+        case .touchDrawBezier(let target):
+            handleTouchDrawBezier(target, respond: respond)
         }
     }
 
@@ -659,6 +663,77 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let spread = target.spread ?? 40.0
         let success = safeCracker.twoFingerTap(at: center, spread: CGFloat(spread))
         sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTwoFingerTap)), respond: respond)
+    }
+
+    private func handleTouchDrawPath(_ target: DrawPathTarget, respond: @escaping (Data) -> Void) {
+        let cgPoints = target.points.map { $0.cgPoint }
+
+        guard cgPoints.count >= 2 else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .syntheticDrawPath,
+                message: "Path requires at least 2 points"
+            )), respond: respond)
+            return
+        }
+
+        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
+
+        Task { @MainActor in
+            let success = await self.safeCracker.drawPath(points: cgPoints, duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrawPath)), respond: respond)
+        }
+    }
+
+    private func handleTouchDrawBezier(_ target: DrawBezierTarget, respond: @escaping (Data) -> Void) {
+        guard !target.segments.isEmpty else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .syntheticDrawPath,
+                message: "Bezier path requires at least 1 segment"
+            )), respond: respond)
+            return
+        }
+
+        let samplesPerSegment = target.samplesPerSegment ?? 20
+        let pathPoints = BezierSampler.sampleBezierPath(
+            startPoint: target.startPoint,
+            segments: target.segments,
+            samplesPerSegment: samplesPerSegment
+        )
+        let cgPoints = pathPoints.map { $0.cgPoint }
+
+        guard cgPoints.count >= 2 else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .syntheticDrawPath,
+                message: "Sampled bezier produced fewer than 2 points"
+            )), respond: respond)
+            return
+        }
+
+        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
+
+        Task { @MainActor in
+            let success = await self.safeCracker.drawPath(points: cgPoints, duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrawPath)), respond: respond)
+        }
+    }
+
+    private func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
+        if let d = duration {
+            return d
+        } else if let velocity = velocity, velocity > 0 {
+            var totalLength: Double = 0
+            for i in 1..<points.count {
+                let dx = points[i].x - points[i-1].x
+                let dy = points[i].y - points[i-1].y
+                totalLength += sqrt(dx * dx + dy * dy)
+            }
+            return totalLength / velocity
+        } else {
+            return 0.5
+        }
     }
 
     /// Resolve a screen point from an element target or explicit coordinates.
