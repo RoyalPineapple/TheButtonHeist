@@ -4,8 +4,8 @@ struct RootView: View {
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink("Accessibility Demo") {
-                    ContentView()
+                NavigationLink("Controls Demo") {
+                    ControlsDemoView()
                 }
                 NavigationLink("Touch Canvas") {
                     TouchCanvasView()
