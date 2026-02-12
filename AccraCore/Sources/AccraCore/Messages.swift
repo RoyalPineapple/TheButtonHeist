@@ -33,11 +33,31 @@ public enum ClientMessage: Codable {
     /// Decrement an adjustable element
     case decrement(ActionTarget)
 
-    /// Tap at a specific point or element's activation point
-    case tap(TapTarget)
-
     /// Perform a custom action on an element
     case performCustomAction(CustomActionTarget)
+
+    // MARK: - Touch Gesture Commands
+
+    /// Tap at a point or element's activation point
+    case touchTap(TouchTapTarget)
+
+    /// Long press at a point or element's activation point
+    case touchLongPress(LongPressTarget)
+
+    /// Swipe from one point to another
+    case touchSwipe(SwipeTarget)
+
+    /// Drag from one point to another
+    case touchDrag(DragTarget)
+
+    /// Pinch/zoom gesture
+    case touchPinch(PinchTarget)
+
+    /// Rotation gesture
+    case touchRotate(RotateTarget)
+
+    /// Two-finger tap
+    case touchTwoFingerTap(TwoFingerTapTarget)
 
     /// Request a screenshot of the current screen
     case requestScreenshot
@@ -58,8 +78,21 @@ public struct ActionTarget: Codable, Sendable {
     }
 }
 
-/// Target for tap actions
-public struct TapTarget: Codable, Sendable {
+/// Target for custom actions
+public struct CustomActionTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget
+    public let actionName: String
+
+    public init(elementTarget: ActionTarget, actionName: String) {
+        self.elementTarget = elementTarget
+        self.actionName = actionName
+    }
+}
+
+// MARK: - Touch Gesture Targets
+
+/// Target for tap gesture
+public struct TouchTapTarget: Codable, Sendable {
     /// Use element's activation point
     public let elementTarget: ActionTarget?
     /// Or specify exact screen coordinates
@@ -78,15 +111,165 @@ public struct TapTarget: Codable, Sendable {
     }
 }
 
-/// Target for custom actions
-public struct CustomActionTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget
-    public let actionName: String
+/// Target for long press gesture
+public struct LongPressTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget?
+    public let pointX: Double?
+    public let pointY: Double?
+    /// Duration in seconds
+    public let duration: Double
 
-    public init(elementTarget: ActionTarget, actionName: String) {
+    public init(elementTarget: ActionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
         self.elementTarget = elementTarget
-        self.actionName = actionName
+        self.pointX = pointX
+        self.pointY = pointY
+        self.duration = duration
     }
+
+    public var point: CGPoint? {
+        guard let x = pointX, let y = pointY else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+}
+
+/// Target for swipe gesture
+public struct SwipeTarget: Codable, Sendable {
+    /// Start from element's activation point
+    public let elementTarget: ActionTarget?
+    /// Or start from explicit coordinates
+    public let startX: Double?
+    public let startY: Double?
+    /// End coordinates (required if not using direction)
+    public let endX: Double?
+    public let endY: Double?
+    /// Or use direction + distance from start point
+    public let direction: SwipeDirection?
+    public let distance: Double?
+    /// Duration in seconds (default 0.15)
+    public let duration: Double?
+
+    public init(
+        elementTarget: ActionTarget? = nil,
+        startX: Double? = nil, startY: Double? = nil,
+        endX: Double? = nil, endY: Double? = nil,
+        direction: SwipeDirection? = nil, distance: Double? = nil,
+        duration: Double? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.startX = startX; self.startY = startY
+        self.endX = endX; self.endY = endY
+        self.direction = direction; self.distance = distance
+        self.duration = duration
+    }
+
+    public var startPoint: CGPoint? {
+        guard let x = startX, let y = startY else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+}
+
+/// Target for drag gesture
+public struct DragTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget?
+    public let startX: Double?
+    public let startY: Double?
+    public let endX: Double
+    public let endY: Double
+    /// Duration in seconds (default 0.5)
+    public let duration: Double?
+
+    public init(
+        elementTarget: ActionTarget? = nil,
+        startX: Double? = nil, startY: Double? = nil,
+        endX: Double, endY: Double,
+        duration: Double? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.startX = startX; self.startY = startY
+        self.endX = endX; self.endY = endY
+        self.duration = duration
+    }
+
+    public var startPoint: CGPoint? {
+        guard let x = startX, let y = startY else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+
+    public var endPoint: CGPoint {
+        CGPoint(x: endX, y: endY)
+    }
+}
+
+/// Target for pinch/zoom gesture
+public struct PinchTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget?
+    public let centerX: Double?
+    public let centerY: Double?
+    /// Scale factor: >1.0 zooms in (spread), <1.0 zooms out (pinch)
+    public let scale: Double
+    /// Initial distance from center to each finger in points
+    public let spread: Double?
+    /// Duration in seconds (default 0.5)
+    public let duration: Double?
+
+    public init(
+        elementTarget: ActionTarget? = nil,
+        centerX: Double? = nil, centerY: Double? = nil,
+        scale: Double, spread: Double? = nil, duration: Double? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.centerX = centerX; self.centerY = centerY
+        self.scale = scale; self.spread = spread
+        self.duration = duration
+    }
+}
+
+/// Target for rotation gesture
+public struct RotateTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget?
+    public let centerX: Double?
+    public let centerY: Double?
+    /// Rotation angle in radians (positive = counter-clockwise)
+    public let angle: Double
+    /// Distance from center to each finger in points
+    public let radius: Double?
+    /// Duration in seconds (default 0.5)
+    public let duration: Double?
+
+    public init(
+        elementTarget: ActionTarget? = nil,
+        centerX: Double? = nil, centerY: Double? = nil,
+        angle: Double, radius: Double? = nil, duration: Double? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.centerX = centerX; self.centerY = centerY
+        self.angle = angle; self.radius = radius
+        self.duration = duration
+    }
+}
+
+/// Target for two-finger tap gesture
+public struct TwoFingerTapTarget: Codable, Sendable {
+    public let elementTarget: ActionTarget?
+    public let centerX: Double?
+    public let centerY: Double?
+    /// Distance between the two fingers in points
+    public let spread: Double?
+
+    public init(
+        elementTarget: ActionTarget? = nil,
+        centerX: Double? = nil, centerY: Double? = nil,
+        spread: Double? = nil
+    ) {
+        self.elementTarget = elementTarget
+        self.centerX = centerX; self.centerY = centerY
+        self.spread = spread
+    }
+}
+
+/// Direction for swipe gestures
+public enum SwipeDirection: String, Codable, Sendable {
+    case up, down, left, right
 }
 
 // MARK: - Server -> Client Messages
@@ -149,6 +332,12 @@ public enum ActionMethod: String, Codable, Sendable {
     case accessibilityIncrement
     case accessibilityDecrement
     case syntheticTap
+    case syntheticLongPress
+    case syntheticSwipe
+    case syntheticDrag
+    case syntheticPinch
+    case syntheticRotate
+    case syntheticTwoFingerTap
     case customAction
     case elementNotFound
     case elementDeallocated

@@ -33,7 +33,7 @@ public final class AccraHost {
 
     private let port: UInt16
     private let parser = AccessibilityHierarchyParser()
-    private let touchInjector = TouchInjector()
+    private let simFinger = SimFinger()
     private var cachedElements: [AccessibilityMarker] = []
 
     private var isRunning = false
@@ -190,12 +190,26 @@ public final class AccraHost {
             handleIncrement(target, respond: respond)
         case .decrement(let target):
             handleDecrement(target, respond: respond)
-        case .tap(let target):
-            handleTap(target, respond: respond)
         case .performCustomAction(let target):
             handleCustomAction(target, respond: respond)
         case .requestScreenshot:
             handleScreenshot(respond: respond)
+
+        // Touch gesture handling
+        case .touchTap(let target):
+            handleTouchTap(target, respond: respond)
+        case .touchLongPress(let target):
+            handleTouchLongPress(target, respond: respond)
+        case .touchSwipe(let target):
+            handleTouchSwipe(target, respond: respond)
+        case .touchDrag(let target):
+            handleTouchDrag(target, respond: respond)
+        case .touchPinch(let target):
+            handleTouchPinch(target, respond: respond)
+        case .touchRotate(let target):
+            handleTouchRotate(target, respond: respond)
+        case .touchTwoFingerTap(let target):
+            handleTouchTwoFingerTap(target, respond: respond)
         }
     }
 
@@ -467,28 +481,27 @@ public final class AccraHost {
             return
         }
 
-        // Use TouchInjector which handles accessibilityActivate and fallbacks
-        let result = touchInjector.tapWithResult(at: element.activationPoint)
-        switch result {
-        case .success:
-            TapVisualizerView.showTap(at: element.activationPoint)
-            sendMessage(.actionResult(ActionResult(
-                success: true,
-                method: .syntheticTap
-            )), respond: respond)
-        case .viewNotInteractive(let reason):
-            sendMessage(.actionResult(ActionResult(
-                success: false,
-                method: .accessibilityActivate,
-                message: "View not interactive: \(reason)"
-            )), respond: respond)
-        case .noViewAtPoint, .noKeyWindow, .injectionFailed:
-            sendMessage(.actionResult(ActionResult(
-                success: false,
-                method: .accessibilityActivate,
-                message: "Activation failed"
-            )), respond: respond)
+        let point = element.activationPoint
+
+        // Try accessibilityActivate first
+        if let view = findViewAtPoint(point), view.accessibilityActivate() {
+            TapVisualizerView.showTap(at: point)
+            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+            return
         }
+
+        // Fall back to synthetic touch injection
+        if simFinger.tap(at: point) {
+            TapVisualizerView.showTap(at: point)
+            sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            return
+        }
+
+        sendMessage(.actionResult(ActionResult(
+            success: false,
+            method: .accessibilityActivate,
+            message: "Activation failed"
+        )), respond: respond)
     }
 
     private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
@@ -539,70 +552,132 @@ public final class AccraHost {
         }
     }
 
-    private func handleTap(_ target: TapTarget, respond: @escaping (Data) -> Void) {
-        // Refresh hierarchy
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
+    // MARK: - Touch Gesture Handlers
+
+    private func handleTouchTap(_ target: TouchTapTarget, respond: @escaping (Data) -> Void) {
+        guard let point = resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY, respond: respond) else { return }
+
+        // Try accessibilityActivate first
+        if let view = findViewAtPoint(point), view.accessibilityActivate() {
+            TapVisualizerView.showTap(at: point)
+            sendMessage(.actionResult(ActionResult(success: true, method: .accessibilityActivate)), respond: respond)
+            return
         }
 
-        if let elementTarget = target.elementTarget {
+        // Fall back to synthetic tap
+        if simFinger.tap(at: point) {
+            TapVisualizerView.showTap(at: point)
+            sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            return
+        }
+
+        sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
+    }
+
+    private func handleTouchLongPress(_ target: LongPressTarget, respond: @escaping (Data) -> Void) {
+        guard let point = resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY, respond: respond) else { return }
+
+        Task { @MainActor in
+            let success = await self.simFinger.longPress(at: point, duration: target.duration)
+            if success { TapVisualizerView.showTap(at: point) }
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticLongPress)), respond: respond)
+        }
+    }
+
+    private func handleTouchSwipe(_ target: SwipeTarget, respond: @escaping (Data) -> Void) {
+        guard let startPoint = resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY, respond: respond) else { return }
+
+        // Resolve end point from explicit coordinates or direction
+        let endPoint: CGPoint
+        if let endX = target.endX, let endY = target.endY {
+            endPoint = CGPoint(x: endX, y: endY)
+        } else if let direction = target.direction {
+            let dist = target.distance ?? 200.0
+            switch direction {
+            case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
+            case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)
+            case .left:  endPoint = CGPoint(x: startPoint.x - dist, y: startPoint.y)
+            case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
+            }
+        } else {
+            sendMessage(.actionResult(ActionResult(success: false, method: .syntheticSwipe, message: "No end point or direction")), respond: respond)
+            return
+        }
+
+        let duration = target.duration ?? 0.15
+
+        Task { @MainActor in
+            let success = await self.simFinger.swipe(from: startPoint, to: endPoint, duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticSwipe)), respond: respond)
+        }
+    }
+
+    private func handleTouchDrag(_ target: DragTarget, respond: @escaping (Data) -> Void) {
+        guard let startPoint = resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY, respond: respond) else { return }
+
+        let duration = target.duration ?? 0.5
+
+        Task { @MainActor in
+            let success = await self.simFinger.drag(from: startPoint, to: target.endPoint, duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrag)), respond: respond)
+        }
+    }
+
+    private func handleTouchPinch(_ target: PinchTarget, respond: @escaping (Data) -> Void) {
+        guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+
+        let spread = target.spread ?? 100.0
+        let duration = target.duration ?? 0.5
+
+        Task { @MainActor in
+            let success = await self.simFinger.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticPinch)), respond: respond)
+        }
+    }
+
+    private func handleTouchRotate(_ target: RotateTarget, respond: @escaping (Data) -> Void) {
+        guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+
+        let radius = target.radius ?? 100.0
+        let duration = target.duration ?? 0.5
+
+        Task { @MainActor in
+            let success = await self.simFinger.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
+            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticRotate)), respond: respond)
+        }
+    }
+
+    private func handleTouchTwoFingerTap(_ target: TwoFingerTapTarget, respond: @escaping (Data) -> Void) {
+        guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+
+        let spread = target.spread ?? 40.0
+        let success = simFinger.twoFingerTap(at: center, spread: CGFloat(spread))
+        sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTwoFingerTap)), respond: respond)
+    }
+
+    /// Resolve a screen point from an element target or explicit coordinates.
+    /// Sends an error response and returns nil if resolution fails.
+    private func resolvePoint(
+        from elementTarget: ActionTarget?,
+        pointX: Double?,
+        pointY: Double?,
+        respond: @escaping (Data) -> Void
+    ) -> CGPoint? {
+        if let elementTarget {
+            if let rootView = getRootView() {
+                cachedElements = parser.parseAccessibilityElements(in: rootView)
+            }
             guard let element = findElement(for: elementTarget) else {
                 sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
-                return
+                return nil
             }
-
-            // Check if element is interactive based on traits
-            if let interactivityError = checkElementInteractivity(element) {
-                sendMessage(.actionResult(ActionResult(
-                    success: false,
-                    method: .elementNotFound,
-                    message: interactivityError
-                )), respond: respond)
-                return
-            }
-
-            // Use TouchInjector for tap
-            let result = touchInjector.tapWithResult(at: element.activationPoint)
-            switch result {
-            case .success:
-                TapVisualizerView.showTap(at: element.activationPoint)
-                sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
-            case .viewNotInteractive(let reason):
-                sendMessage(.actionResult(ActionResult(
-                    success: false,
-                    method: .syntheticTap,
-                    message: "View not interactive: \(reason)"
-                )), respond: respond)
-            case .noViewAtPoint, .noKeyWindow, .injectionFailed:
-                sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
-            }
-            return
+            return element.activationPoint
+        } else if let x = pointX, let y = pointY {
+            return CGPoint(x: x, y: y)
+        } else {
+            sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound, message: "No target specified")), respond: respond)
+            return nil
         }
-
-        if let point = target.point {
-            // Use TouchInjector for tap at point (no element trait check)
-            let result = touchInjector.tapWithResult(at: point)
-            switch result {
-            case .success:
-                TapVisualizerView.showTap(at: point)
-                sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
-            case .viewNotInteractive(let reason):
-                sendMessage(.actionResult(ActionResult(
-                    success: false,
-                    method: .syntheticTap,
-                    message: "View not interactive: \(reason)"
-                )), respond: respond)
-            case .noViewAtPoint, .noKeyWindow, .injectionFailed:
-                sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
-            }
-            return
-        }
-
-        sendMessage(.actionResult(ActionResult(
-            success: false,
-            method: .elementNotFound,
-            message: "No target specified"
-        )), respond: respond)
     }
 
     private func findElementAtPoint(_ point: CGPoint) -> AccessibilityMarker? {

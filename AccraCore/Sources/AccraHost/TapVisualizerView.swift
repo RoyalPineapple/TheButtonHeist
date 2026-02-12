@@ -77,7 +77,7 @@ public enum TapVisualizerView {
             window.windowLevel = .statusBar + 100
             window.rootViewController = TapOverlayViewController()
             window.isUserInteractionEnabled = false
-            window.makeKeyAndVisible()
+            window.isHidden = false
             overlayWindow = window
         }
 

@@ -13,8 +13,7 @@ struct ContentView: View {
     @State private var isButtonPressed = false
 
     var body: some View {
-        NavigationStack {
-            Form {
+        Form {
                 Section("Personal Information") {
                     TextField("Name", text: $name)
                         .accessibilityIdentifier("accra.form.nameTextField")
@@ -135,8 +134,7 @@ struct ContentView: View {
                         .accessibilityIdentifier("accra.info.learnMoreLink")
                 }
             }
-            .navigationTitle("Accessibility Demo")
-        }
+        .navigationTitle("Accessibility Demo")
     }
 }
 

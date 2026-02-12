@@ -45,8 +45,8 @@ Accra is a distributed system with two main components:
 │           ┌──────────────┬───────────────┼───────────────┐          │
 │           │              │               │               │          │
 │     ┌─────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐  ┌─────┴─────┐    │
-│     │ NetService│  │SimpleSocket│  │   A11y    │  │  Touch    │    │
-│     │ (Bonjour) │  │Server(TCP)│  │  Parser   │  │ Injector  │    │
+│     │ NetService│  │SimpleSocket│  │   A11y    │  │ SimFinger │    │
+│     │ (Bonjour) │  │Server(TCP)│  │  Parser   │  │(Gestures) │    │
 │     └───────────┘  └───────────┘  └───────────┘  └───────────┘    │
 │                                                                      │
 │                              iOS Device                              │
@@ -60,7 +60,7 @@ Accra is a distributed system with two main components:
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
 **Key Types**:
-- `ClientMessage` - Messages from client to server (11 cases)
+- `ClientMessage` - Messages from client to server (15 cases including 7 touch gestures)
 - `ServerMessage` - Messages from server to client (6 cases)
 - `AccessibilityElementData` - Flat accessibility element representation
 - `AccessibilityHierarchyNode` - Recursive tree structure with containers
@@ -86,10 +86,10 @@ AccraHost (singleton, @MainActor)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
-├── TouchInjector (synthetic tap system)
+├── SimFinger (multi-touch gesture simulation)
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
-│   └── IOHIDEventBuilder (low-level HID event creation via IOKit)
+│   └── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 ├── TapVisualizerView (visual tap feedback overlay)
 ├── Polling Timer (hierarchy change detection via hash comparison)
 └── Debounce Timer (300ms debounce for accessibility notifications)
@@ -128,40 +128,47 @@ When the framework loads:
 - Multiple concurrent client support
 - SIGPIPE handling to prevent crashes on closed connections
 
-### Touch Injection System
+### SimFinger (Touch Gesture System)
 
-**Purpose**: Synthesize tap events on the iOS device to allow remote interaction.
+**Purpose**: Synthesize touch gestures on the iOS device to allow remote interaction. Supports single-finger gestures (tap, long press, swipe, drag) and multi-touch gestures (pinch, rotate, two-finger tap).
 
 **Architecture**:
 ```
-TouchInjector.tapWithResult(at: CGPoint)
+SimFinger (stateful, @MainActor)
 │
-├── 1. checkViewInteractivity(view)
-│   ├── isUserInteractionEnabled
-│   ├── isHidden / alpha check
-│   ├── notEnabled accessibility trait
-│   └── parent hierarchy walk
+├── Single-Finger Gestures
+│   ├── tap(at:)           → touchDown + touchUp
+│   ├── longPress(at:)     → touchDown + delay + touchUp
+│   ├── swipe(from:to:)    → touchDown + interpolated moves + touchUp
+│   └── drag(from:to:)     → touchDown + interpolated moves + touchUp (slower)
 │
-├── 2. injectTap() [Low-level - preferred]
-│   ├── SyntheticTouchFactory.createTouch()    → UITouch via private APIs
-│   ├── IOHIDEventBuilder.createEvent()        → IOHIDEvent via dlopen(IOKit)
-│   ├── SyntheticEventFactory.createEventForTouch()  → Fresh UIEvent per phase
-│   └── UIApplication.shared.sendEvent()       → began, then ended
+├── Multi-Touch Gestures
+│   ├── pinch(center:scale:)    → 2-finger spread/squeeze
+│   ├── rotate(center:angle:)   → 2-finger rotation
+│   └── twoFingerTap(at:)       → 2-finger simultaneous tap
 │
-└── 3. fallbackTap() [High-level - if injection fails]
-    ├── accessibilityActivate()
-    ├── UIControl.sendActions(for: .touchUpInside)
-    └── Responder chain walk for UIControl
+├── N-Finger Primitives
+│   ├── touchesDown(at: [CGPoint])  → Create N touches + HID event + sendEvent
+│   ├── moveTouches(to: [CGPoint])  → Update all active touches
+│   └── touchesUp()                 → End all active touches
+│
+└── Touch Stack
+    ├── SyntheticTouchFactory     → UITouch creation via direct IMP invocation
+    │   ├── performIntSelector    → setPhase:, setTapCount: (raw Int)
+    │   ├── performBoolSelector   → _setIsFirstTouchForView:, setIsTap: (raw Bool)
+    │   ├── performDoubleSelector → setTimestamp: (raw Double)
+    │   └── setHIDEvent           → _setHidEvent: (raw pointer)
+    ├── IOHIDEventBuilder         → Hand event with per-finger child events
+    │   ├── @convention(c) typed function pointers via dlsym
+    │   └── Finger identity/index for multi-touch tracking
+    └── SyntheticEventFactory     → Fresh UIEvent per touch phase
 ```
 
-**TapResult enum** provides detailed failure information:
-- `.success` - Tap dispatched successfully
-- `.viewNotInteractive(reason:)` - View failed interactivity checks
-- `.noViewAtPoint` - No view at the given coordinates
-- `.noKeyWindow` - No key window available
-- `.injectionFailed` - All injection methods failed
-
-**iOS 26 Fix**: Creates a fresh `UIEvent` for each touch phase (began, ended) instead of reusing the same event object. iOS 26's stricter validation rejects reused events.
+**Key Design Decisions**:
+- **Direct IMP invocation**: `perform(_:with:)` boxes non-object types (Int, Bool, Double, UnsafeMutableRawPointer) as NSNumber objects, corrupting values passed to private ObjC methods. All private API calls use `method(for:)` + `unsafeBitCast` to `@convention(c)` typed function pointers.
+- **`@convention(c)` for dlsym**: C function pointers from `dlsym` are 8 bytes; Swift closures are 16 bytes. All IOKit function pointer variables use `@convention(c)` for `unsafeBitCast` compatibility.
+- **Fresh UIEvent per phase**: iOS 26's stricter validation rejects reused event objects. Each touch phase (began, moved, ended) creates a new UIEvent.
+- **Overlay window filtering**: `getKeyWindow()` filters by `windowLevel <= .normal` to skip the TapVisualizerView overlay window.
 
 ### Screenshot Capture
 
@@ -257,27 +264,25 @@ disconnected ──connect()──► connecting ──success──► connecte
    └── Capture and broadcast screenshot
 ```
 
-### Action Flow (tap/activate)
+### Action Flow (touch gestures)
 
 ```
-1. Client sends activate/tap message
+1. Client sends touch gesture message (touchTap, touchDrag, touchPinch, etc.)
 
 2. AccraHost receives message
-   └── Refresh hierarchy cache
-   └── Find target element (by identifier or traversalIndex)
-   └── Check element interactivity (traits-based)
+   └── Resolve target point (from element activation point or explicit coordinates)
+   └── For element targets: refresh hierarchy, find element, get activation point
 
-3. TouchInjector.tapWithResult(at: activationPoint)
-   └── Hit-test to find view at point
-   └── Check view interactivity (enabled, visible, parents)
-   └── Try synthetic event injection (UITouch + IOHIDEvent)
-   └── Fall back to accessibilityActivate / sendActions
+3. SimFinger performs gesture
+   └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
+   └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
+   └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()
 
 4. AccraHost sends actionResult
    └── success: true/false
-   └── method: syntheticTap / accessibilityActivate / elementNotFound
+   └── method: syntheticTap / syntheticDrag / syntheticPinch / etc.
    └── message: optional error description
-   └── Show TapVisualizerView overlay on success
+   └── Show TapVisualizerView overlay on successful taps
 ```
 
 ## Network Protocol
