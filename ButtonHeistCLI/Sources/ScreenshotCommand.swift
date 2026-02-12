@@ -22,7 +22,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
         let client = HeistClient()
 
         if !quiet {
-            FileHandle.standardError.write("Searching for iOS devices...\n".data(using: .utf8)!)
+            FileHandle.standardError.write(Data("Searching for iOS devices...\n".utf8))
         }
 
         client.startDiscovery()
@@ -39,8 +39,8 @@ struct ScreenshotCommand: AsyncParsableCommand {
         }
 
         if !quiet {
-            FileHandle.standardError.write("Found device: \(device.name)\n".data(using: .utf8)!)
-            FileHandle.standardError.write("Connecting...\n".data(using: .utf8)!)
+            FileHandle.standardError.write(Data("Found device: \(device.name)\n".utf8))
+            FileHandle.standardError.write(Data("Connecting...\n".utf8))
         }
 
         var connected = false
@@ -58,7 +58,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
         }
 
         if !quiet {
-            FileHandle.standardError.write("Connected. Requesting screenshot...\n".data(using: .utf8)!)
+            FileHandle.standardError.write(Data("Connected. Requesting screenshot...\n".utf8))
         }
 
         // Request screenshot
@@ -74,7 +74,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
             let url = URL(fileURLWithPath: outputPath)
             try pngData.write(to: url)
             if !quiet {
-                FileHandle.standardError.write("Screenshot saved to: \(outputPath)\n".data(using: .utf8)!)
+                FileHandle.standardError.write(Data("Screenshot saved to: \(outputPath)\n".utf8))
             }
         } else {
             // Write raw PNG to stdout for piping
