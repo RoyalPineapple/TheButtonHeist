@@ -12,6 +12,7 @@ func log(_ message: String) {
 
 let snapshotTool = Tool(
     name: "get_snapshot",
+    // swiftlint:disable:next line_length
     description: "Get the current UI element hierarchy from the connected iOS app. Returns a list of all accessibility elements with their labels, values, identifiers, frames, and available actions.",
     inputSchema: .object([
         "type": .string("object"),
@@ -63,6 +64,7 @@ let longPressTool = Tool(
 
 let swipeTool = Tool(
     name: "swipe",
+    // swiftlint:disable:next line_length
     description: "Swipe from a start point to an end point or in a direction. Start from an element or explicit coordinates. End with explicit coordinates, or use direction (up/down/left/right) with optional distance.",
     inputSchema: .object([
         "type": .string("object"),
@@ -155,6 +157,7 @@ let twoFingerTapTool = Tool(
 
 let activateTool = Tool(
     name: "activate",
+    // swiftlint:disable:next line_length
     description: "Activate an element using accessibility API (equivalent to VoiceOver double-tap). Falls back to synthetic tap if accessibility activation fails.",
     inputSchema: .object([
         "type": .string("object"),
@@ -194,6 +197,7 @@ let decrementTool = Tool(
 
 let customActionTool = Tool(
     name: "perform_custom_action",
+    // swiftlint:disable:next line_length
     description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_snapshot.",
     inputSchema: .object([
         "type": .string("object"),
@@ -243,6 +247,7 @@ func errorResult(_ message: String) -> CallTool.Result {
 // MARK: - Tool Call Handler
 
 @MainActor
+// swiftlint:disable:next cyclomatic_complexity function_body_length
 func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async throws -> CallTool.Result {
     let args = params.arguments
 

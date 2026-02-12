@@ -63,7 +63,7 @@ struct ScreenshotView: View {
 }
 
 #Preview {
-    @Previewable @State var selectedElement: UIElement? = nil
+    @Previewable @State var selectedElement: UIElement?
     ScreenshotView(
         screenshotPayload: nil,
         elements: [],

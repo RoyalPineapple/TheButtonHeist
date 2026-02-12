@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
@@ -14,7 +15,7 @@ private func serverLog(_ message: String) {
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor
-public final class InsideMan {
+public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Singleton
 
@@ -164,6 +165,7 @@ public final class InsideMan {
         })
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func handleClientMessage(_ data: Data, respond: @escaping (Data) -> Void) {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
             serverLog("Failed to decode client message")
@@ -725,27 +727,25 @@ public final class InsideMan {
 
         // Find the custom action by name and perform it
         if let customActions = view.accessibilityCustomActions {
-            for action in customActions {
-                if action.name == target.actionName {
-                    // UIAccessibilityCustomAction's handler returns Bool indicating success
-                    if let handler = action.actionHandler {
-                        let success = handler(action)
-                        sendMessage(.actionResult(ActionResult(
-                            success: success,
-                            method: .customAction,
-                            message: success ? nil : "Custom action failed"
-                        )), respond: respond)
-                        return
-                    }
-                    // For target/selector based actions
-                    if let actionTarget = action.target {
-                        _ = (actionTarget as AnyObject).perform(action.selector, with: action)
-                        sendMessage(.actionResult(ActionResult(
-                            success: true,
-                            method: .customAction
-                        )), respond: respond)
-                        return
-                    }
+            for action in customActions where action.name == target.actionName {
+                // UIAccessibilityCustomAction's handler returns Bool indicating success
+                if let handler = action.actionHandler {
+                    let success = handler(action)
+                    sendMessage(.actionResult(ActionResult(
+                        success: success,
+                        method: .customAction,
+                        message: success ? nil : "Custom action failed"
+                    )), respond: respond)
+                    return
+                }
+                // For target/selector based actions
+                if let actionTarget = action.target {
+                    _ = (actionTarget as AnyObject).perform(action.selector, with: action)
+                    sendMessage(.actionResult(ActionResult(
+                        success: true,
+                        method: .customAction
+                    )), respond: respond)
+                    return
                 }
             }
         }
