@@ -4,18 +4,28 @@ This document describes the internal architecture of ButtonHeist and how its com
 
 ## System Overview
 
-ButtonHeist is a distributed system with these main components:
+ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
 1. **TheGoods** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **InsideMan** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
+5. **ButtonHeistMCP** - MCP server that bridges AI agents to the iOS app
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                              macOS                                   │
 │                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  ┌──────────────┐                                                   │
+│  │  AI Agent    │ (Claude Code, or any MCP client)                  │
+│  └──────┬───────┘                                                   │
+│         │ MCP (JSON-RPC 2.0 over stdio)                             │
+│  ┌──────┴───────┐                                                   │
+│  │buttonheist-  │ Persistent connection — no per-call overhead      │
+│  │  mcp server  │                                                   │
+│  └──────┬───────┘                                                   │
+│         │                                                            │
+│  ┌──────┴───────┐  ┌──────────────┐  ┌──────────────┐              │
 │  │   Stakeout   │  │     CLI      │  │ Python/Shell │              │
 │  │     (GUI)    │  │              │  │   Scripts    │              │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
@@ -192,6 +202,30 @@ InsideMan captures screenshots using `UIGraphicsImageRenderer`:
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint)
 
+### ButtonHeistMCP (AI Agent Interface)
+
+**Purpose**: Model Context Protocol server that lets AI agents drive iOS apps. Wraps HeistClient in an MCP-compliant JSON-RPC 2.0 interface over stdio.
+
+**Architecture**:
+```
+buttonheist-mcp (executable)
+├── StdioTransport (MCP SDK)
+│   └── JSON-RPC 2.0 over stdin/stdout
+├── Server (MCP SDK, actor)
+│   ├── ListTools handler → 13 tool definitions
+│   └── CallTool handler → dispatches to HeistClient
+├── HeistClient (@MainActor)
+│   ├── DeviceDiscovery (auto-connect on startup)
+│   └── Persistent TCP connection to iOS device
+└── Logging (stderr, never stdout)
+```
+
+**Key Design Decisions**:
+- **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls.
+- **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
+- **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
+- **13 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `activate`, `increment`, `decrement`, `perform_custom_action`).
+
 ### ButtonHeist (macOS Client Framework)
 
 **Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
@@ -232,6 +266,33 @@ disconnected ──connect()──► connecting ──success──► connecte
 ```
 
 ## Data Flow
+
+### MCP Agent Flow
+
+```
+1. MCP client (e.g. Claude Code) starts buttonheist-mcp process
+   └── stdio transport: stdin/stdout for JSON-RPC 2.0
+
+2. buttonheist-mcp startup
+   └── HeistClient.startDiscovery() via Bonjour
+   └── Connects to first discovered device
+   └── MCP Server starts listening on stdin
+
+3. MCP client sends initialize handshake
+   └── Server responds with capabilities (13 tools)
+
+4. MCP client calls tools/call (e.g. get_snapshot)
+   └── Server actor → await → @MainActor handleToolCall()
+   └── HeistClient.send(.requestSnapshot)
+   └── Wait for onSnapshotUpdate callback
+   └── Return JSON result via MCP
+
+5. MCP client calls tools/call (e.g. tap)
+   └── Build ClientMessage from tool arguments
+   └── HeistClient.send(message)
+   └── Wait for ActionResult
+   └── Return success/failure via MCP
+```
 
 ### Discovery Flow
 
