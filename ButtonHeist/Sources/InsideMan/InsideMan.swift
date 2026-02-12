@@ -178,9 +178,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         serverLog("Received message: \(message)")
 
         switch message {
-        case .requestSnapshot:
-            serverLog("Hierarchy requested")
-            sendSnapshot(respond: respond)
+        case .requestInterface:
+            serverLog("Interface requested")
+            sendInterface(respond: respond)
         case .subscribe:
             serverLog("Client subscribed to updates")
             // Note: with socket server we broadcast to all, so subscribed is implicit
@@ -198,8 +198,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             handleDecrement(target, respond: respond)
         case .performCustomAction(let target):
             handleCustomAction(target, respond: respond)
-        case .requestScreenshot:
-            handleScreenshot(respond: respond)
+        case .requestScreen:
+            handleScreen(respond: respond)
 
         // Touch gesture handling
         case .touchTap(let target):
@@ -237,7 +237,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         sendMessage(.info(info), respond: respond)
     }
 
-    private func sendSnapshot(respond: @escaping (Data) -> Void) {
+    private func sendInterface(respond: @escaping (Data) -> Void) {
         guard let rootView = getRootView() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
@@ -253,11 +253,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
-        let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
-        sendMessage(.snapshot(payload), respond: respond)
+        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+        sendMessage(.interface(payload), respond: respond)
 
-        // Also send screenshot with initial hierarchy
-        broadcastScreenshot()
+        // Also send screen capture with initial interface
+        broadcastScreen()
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
@@ -332,8 +332,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
-        let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
-        let message = ServerMessage.snapshot(payload)
+        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+        let message = ServerMessage.interface(payload)
 
         // Update hash for polling comparison
         lastHierarchyHash = elements.hashValue
@@ -378,19 +378,19 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             lastHierarchyHash = currentHash
 
             // Broadcast hierarchy with tree
-            let payload = Snapshot(timestamp: Date(), elements: elements, tree: tree)
-            if let data = try? JSONEncoder().encode(ServerMessage.snapshot(payload)) {
+            let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+            if let data = try? JSONEncoder().encode(ServerMessage.interface(payload)) {
                 socketServer?.broadcastToAll(data)
             }
 
-            // Also broadcast screenshot when hierarchy changes
-            broadcastScreenshot()
+            // Also broadcast screen when hierarchy changes
+            broadcastScreen()
 
-            serverLog("Polling detected change, broadcast hierarchy + screenshot")
+            serverLog("Polling detected change, broadcast interface + screen")
         }
     }
 
-    private func broadcastScreenshot() {
+    private func broadcastScreen() {
         guard let windowScene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .first(where: { $0.activationState == .foregroundActive }),
@@ -405,13 +405,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         guard let pngData = image.pngData() else { return }
 
-        let screenshotPayload = ScreenshotPayload(
+        let screenPayload = ScreenPayload(
             pngData: pngData.base64EncodedString(),
             width: window.bounds.width,
             height: window.bounds.height
         )
 
-        if let data = try? JSONEncoder().encode(ServerMessage.screenshot(screenshotPayload)) {
+        if let data = try? JSONEncoder().encode(ServerMessage.screen(screenPayload)) {
             socketServer?.broadcastToAll(data)
         }
     }
@@ -832,8 +832,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         )), respond: respond)
     }
 
-    private func handleScreenshot(respond: @escaping (Data) -> Void) {
-        serverLog("Screenshot requested")
+    private func handleScreen(respond: @escaping (Data) -> Void) {
+        serverLog("Screen requested")
 
         guard let windowScene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
@@ -853,19 +853,19 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         guard let pngData = image.pngData() else {
-            sendMessage(.error("Failed to encode screenshot as PNG"), respond: respond)
+            sendMessage(.error("Failed to encode screen as PNG"), respond: respond)
             return
         }
 
         let base64String = pngData.base64EncodedString()
-        let payload = ScreenshotPayload(
+        let payload = ScreenPayload(
             pngData: base64String,
             width: window.bounds.width,
             height: window.bounds.height
         )
 
-        sendMessage(.screenshot(payload), respond: respond)
-        serverLog("Screenshot sent: \(pngData.count) bytes")
+        sendMessage(.screen(payload), respond: respond)
+        serverLog("Screen sent: \(pngData.count) bytes")
     }
 
     // MARK: - Conversion

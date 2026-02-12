@@ -14,8 +14,8 @@ public final class HeistClient: ObservableObject {
     @Published public private(set) var discoveredDevices: [DiscoveredDevice] = []
     @Published public private(set) var connectedDevice: DiscoveredDevice?
     @Published public private(set) var serverInfo: ServerInfo?
-    @Published public private(set) var currentSnapshot: Snapshot?
-    @Published public private(set) var currentScreenshot: ScreenshotPayload?
+    @Published public private(set) var currentInterface: Interface?
+    @Published public private(set) var currentScreen: ScreenPayload?
     @Published public private(set) var isDiscovering: Bool = false
     @Published public private(set) var connectionState: ConnectionState = .disconnected
 
@@ -32,9 +32,9 @@ public final class HeistClient: ObservableObject {
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
     public var onConnected: ((ServerInfo) -> Void)?
     public var onDisconnected: ((Error?) -> Void)?
-    public var onSnapshotUpdate: ((Snapshot) -> Void)?
+    public var onInterfaceUpdate: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
-    public var onScreenshot: ((ScreenshotPayload) -> Void)?
+    public var onScreen: ((ScreenPayload) -> Void)?
 
     // MARK: - Private
 
@@ -92,16 +92,16 @@ public final class HeistClient: ObservableObject {
             self?.connectionState = .connected
             self?.connectedDevice = device
             self?.connection?.send(.subscribe)
-            self?.connection?.send(.requestSnapshot)
-            self?.connection?.send(.requestScreenshot)
+            self?.connection?.send(.requestInterface)
+            self?.connection?.send(.requestScreen)
         }
 
         connection?.onDisconnected = { [weak self] error in
             self?.connectionState = .disconnected
             self?.connectedDevice = nil
             self?.serverInfo = nil
-            self?.currentSnapshot = nil
-            self?.currentScreenshot = nil
+            self?.currentInterface = nil
+            self?.currentScreen = nil
             self?.onDisconnected?(error)
         }
 
@@ -110,18 +110,18 @@ public final class HeistClient: ObservableObject {
             self?.onConnected?(info)
         }
 
-        connection?.onSnapshot = { [weak self] payload in
-            self?.currentSnapshot = payload
-            self?.onSnapshotUpdate?(payload)
+        connection?.onInterface = { [weak self] payload in
+            self?.currentInterface = payload
+            self?.onInterfaceUpdate?(payload)
         }
 
         connection?.onActionResult = { [weak self] result in
             self?.onActionResult?(result)
         }
 
-        connection?.onScreenshot = { [weak self] payload in
-            self?.currentScreenshot = payload
-            self?.onScreenshot?(payload)
+        connection?.onScreen = { [weak self] payload in
+            self?.currentScreen = payload
+            self?.onScreen?(payload)
         }
 
         connection?.onError = { [weak self] message in
@@ -137,14 +137,14 @@ public final class HeistClient: ObservableObject {
         connectionState = .disconnected
         connectedDevice = nil
         serverInfo = nil
-        currentSnapshot = nil
-        currentScreenshot = nil
+        currentInterface = nil
+        currentScreen = nil
     }
 
     // MARK: - Commands
 
-    public func requestSnapshot() {
-        connection?.send(.requestSnapshot)
+    public func requestInterface() {
+        connection?.send(.requestInterface)
     }
 
     /// Send a message to the connected device
@@ -177,8 +177,8 @@ public final class HeistClient: ObservableObject {
         }
     }
 
-    /// Wait for a screenshot response with timeout
-    public func waitForScreenshot(timeout: TimeInterval = 30.0) async throws -> ScreenshotPayload {
+    /// Wait for a screen capture response with timeout
+    public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
         try await withCheckedThrowingContinuation { continuation in
             var didResume = false
 
@@ -190,7 +190,7 @@ public final class HeistClient: ObservableObject {
                 }
             }
 
-            onScreenshot = { payload in
+            onScreen = { payload in
                 if !didResume {
                     didResume = true
                     timeoutTask.cancel()

@@ -63,7 +63,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 | Module | Platform | Description |
 |--------|----------|-------------|
 | **TheGoods** | iOS + macOS | Shared types, messages, and constants |
-| **InsideMan** | iOS | Server that exposes UI element snapshot over TCP, with synthetic touch injection |
+| **InsideMan** | iOS | Server that exposes UI element interface over TCP, with synthetic touch injection |
 | **Wheelman** | iOS + macOS | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
 | **ButtonHeistMCP** | macOS | MCP server — lets AI agents drive iOS apps via Model Context Protocol |
@@ -157,7 +157,7 @@ That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any 
 2. MCP client reads .mcp.json, spawns buttonheist-mcp
 3. buttonheist-mcp discovers your iOS app via Bonjour (< 2 seconds)
 4. Persistent TCP connection established — stays open for the entire session
-5. Agent sees 15 tools as native capabilities (get_screenshot, tap, draw_path, etc.)
+5. Agent sees 15 tools as native capabilities (get_screen, tap, draw_path, etc.)
 6. Agent calls tools directly — no shell commands, no scripts, no manual wiring
 ```
 
@@ -165,8 +165,8 @@ The agent can now look at your app and interact with it naturally:
 
 ```
 Agent: "Let me see what's on screen"
-→ calls get_screenshot → sees your app's UI as an image
-→ calls get_snapshot  → reads the accessibility hierarchy as structured data
+→ calls get_screen → sees your app's UI as an image
+→ calls get_interface  → reads the accessibility hierarchy as structured data
 
 Agent: "I'll tap the login button"
 → calls tap(identifier: "loginButton")
@@ -183,8 +183,8 @@ Because the connection is persistent (no per-call Bonjour discovery or TCP hands
 
 | Tool | Description |
 |------|-------------|
-| `get_snapshot` | Read the full UI element hierarchy |
-| `get_screenshot` | Capture a PNG screenshot |
+| `get_interface` | Read the full UI element hierarchy |
+| `get_screen` | Capture a PNG screen capture |
 | `tap` | Tap an element or coordinate |
 | `long_press` | Long press with configurable duration |
 | `swipe` | Swipe by direction or between coordinates |
@@ -475,7 +475,7 @@ buttonheist/
 Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 
 **Client → Server:**
-- `requestSnapshot` - Request current hierarchy
+- `requestInterface` - Request current hierarchy
 - `subscribe` / `unsubscribe` - Automatic update subscription
 - `activate` - Activate element (VoiceOver double-tap)
 - `increment` / `decrement` - Adjust adjustable elements
@@ -489,14 +489,14 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 - `touchTwoFingerTap` - Two-finger tap
 - `touchDrawPath` - Draw along a path of waypoints
 - `touchDrawBezier` - Draw along bezier curves (sampled server-side)
-- `requestScreenshot` - Request PNG screenshot
+- `requestScreen` - Request PNG screenshot
 - `ping` - Keepalive
 
 **Server → Client:**
 - `info` - Server info on connection
-- `hierarchy` - UI element snapshot (flat list + optional tree)
+- `interface` - UI element interface (flat list + optional tree)
 - `actionResult` - Result of action with method used
-- `screenshot` - Base64-encoded PNG with dimensions
+- `screen` - Base64-encoded PNG with dimensions
 - `error` - Error description
 - `pong` - Ping response
 

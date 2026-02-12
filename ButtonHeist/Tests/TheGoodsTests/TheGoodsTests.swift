@@ -54,8 +54,8 @@ final class MessageIntegrationTests: XCTestCase {
             )
         }
 
-        let payload = Snapshot(timestamp: Date(), elements: elements)
-        let message = ServerMessage.snapshot(payload)
+        let payload = Interface(timestamp: Date(), elements: elements)
+        let message = ServerMessage.interface(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -65,11 +65,11 @@ final class MessageIntegrationTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .snapshot(let decodedPayload) = decoded {
+        if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 100)
             XCTAssertEqual(decodedPayload.elements[50].order, 50)
         } else {
-            XCTFail("Expected snapshot message")
+            XCTFail("Expected interface message")
         }
     }
 
@@ -77,10 +77,10 @@ final class MessageIntegrationTests: XCTestCase {
     func testAllMessageTypesSequence() throws {
         let clientMessages: [ClientMessage] = [
             .subscribe,
-            .requestSnapshot,
+            .requestInterface,
             .ping,
             .unsubscribe,
-            .requestScreenshot
+            .requestScreen
         ]
 
         for msg in clientMessages {
@@ -93,10 +93,10 @@ final class MessageIntegrationTests: XCTestCase {
                 protocolVersion: "1.0", appName: "Test", bundleIdentifier: "com.test",
                 deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
             )),
-            .snapshot(Snapshot(timestamp: Date(), elements: [])),
+            .interface(Interface(timestamp: Date(), elements: [])),
             .pong,
             .error("Test error"),
-            .screenshot(ScreenshotPayload(pngData: "base64data", width: 390, height: 844))
+            .screen(ScreenPayload(pngData: "base64data", width: 390, height: 844))
         ]
 
         let encoder = JSONEncoder()
@@ -158,16 +158,16 @@ final class MessageIntegrationTests: XCTestCase {
                 frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
                 actions: []
             )
-            let payload = Snapshot(timestamp: Date(), elements: [element])
-            let msg = ServerMessage.snapshot(payload)
+            let payload = Interface(timestamp: Date(), elements: [element])
+            let msg = ServerMessage.interface(payload)
 
             let data = try encoder.encode(msg)
             let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-            if case .snapshot(let decodedPayload) = decoded {
+            if case .interface(let decodedPayload) = decoded {
                 XCTAssertEqual(decodedPayload.elements[0].label, "Label \(i)")
             } else {
-                XCTFail("Expected snapshot update \(i)")
+                XCTFail("Expected interface update \(i)")
             }
         }
 

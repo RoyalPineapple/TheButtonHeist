@@ -34,7 +34,7 @@ final class CLIRunner {
     private var isRunning = true
     private var previousElements: [UIElement] = []
     private var oldTermios = termios()
-    private var hasReceivedSnapshot = false
+    private var hasReceivedInterface = false
     private var exitCode: ExitCode = .success
 
     init(options: CLIOptions) {
@@ -129,11 +129,11 @@ final class CLIRunner {
             self.isRunning = false
         }
 
-        // Handle snapshot updates
-        client.onSnapshotUpdate = { [weak self] payload in
+        // Handle interface updates
+        client.onInterfaceUpdate = { [weak self] payload in
             guard let self = self else { return }
-            self.outputSnapshot(payload)
-            self.hasReceivedSnapshot = true
+            self.outputInterface(payload)
+            self.hasReceivedInterface = true
 
             // In once mode, exit after first snapshot
             if self.options.once {
@@ -142,7 +142,7 @@ final class CLIRunner {
         }
     }
 
-    private func outputSnapshot(_ payload: Snapshot) {
+    private func outputInterface(_ payload: Interface) {
         switch options.format {
         case .json:
             outputJSON(payload)
@@ -151,7 +151,7 @@ final class CLIRunner {
         }
     }
 
-    private func outputJSON(_ payload: Snapshot) {
+    private func outputJSON(_ payload: Interface) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -162,7 +162,7 @@ final class CLIRunner {
         }
     }
 
-    private func outputHuman(_ payload: Snapshot) {
+    private func outputHuman(_ payload: Interface) {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
@@ -261,7 +261,7 @@ final class CLIRunner {
             if !options.quiet {
                 logStatus("Refreshing...")
             }
-            client.requestSnapshot()
+            client.requestInterface()
         case "q":
             stop()
         default:

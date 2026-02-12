@@ -4,14 +4,14 @@ import XCTest
 final class ClientMessageTests: XCTestCase {
 
     func testRequestSnapshotEncodeDecode() throws {
-        let message = ClientMessage.requestSnapshot
+        let message = ClientMessage.requestInterface
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .requestSnapshot = decoded {
+        if case .requestInterface = decoded {
             // Success
         } else {
-            XCTFail("Expected requestSnapshot, got \(decoded)")
+            XCTFail("Expected requestInterface, got \(decoded)")
         }
     }
 
@@ -52,14 +52,14 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testRequestScreenshotEncodeDecode() throws {
-        let message = ClientMessage.requestScreenshot
+        let message = ClientMessage.requestScreen
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .requestScreenshot = decoded {
+        if case .requestScreen = decoded {
             // Success
         } else {
-            XCTFail("Expected requestScreenshot, got \(decoded)")
+            XCTFail("Expected requestScreen, got \(decoded)")
         }
     }
 }
