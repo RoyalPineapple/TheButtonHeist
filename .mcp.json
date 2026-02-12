@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
