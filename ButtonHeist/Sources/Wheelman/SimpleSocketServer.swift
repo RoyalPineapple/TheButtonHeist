@@ -1,22 +1,22 @@
-#if canImport(UIKit)
 import Foundation
-import UIKit
 
 /// Simple TCP socket server using CFSocket - more reliable than NWListener on iOS Simulator
-final class SimpleSocketServer {
-    typealias DataHandler = (Data, @escaping (Data) -> Void) -> Void
+public final class SimpleSocketServer {
+    public typealias DataHandler = (Data, @escaping (Data) -> Void) -> Void
 
     private var serverSocket: CFSocket?
     private var listeningPort: UInt16 = 0
     private var clientSockets: [CFSocket] = []
     private var socketSources: [CFRunLoopSource] = []
 
-    var onClientConnected: ((Int) -> Void)?
-    var onClientDisconnected: ((Int) -> Void)?
-    var onDataReceived: DataHandler?
+    public var onClientConnected: ((Int) -> Void)?
+    public var onClientDisconnected: ((Int) -> Void)?
+    public var onDataReceived: DataHandler?
 
     private var clientCounter = 0
     private var clientFileDescriptors: [Int: Int32] = [:]
+
+    public init() {}
 
     deinit {
         stop()
@@ -24,7 +24,7 @@ final class SimpleSocketServer {
 
     /// Start the server on the specified port (0 = any available port)
     /// Uses IPv6 dual-stack socket to accept both IPv4 and IPv6 connections
-    func start(port: UInt16 = 0) throws -> UInt16 {
+    public func start(port: UInt16 = 0) throws -> UInt16 {
         NSLog("[SimpleSocketServer] Starting server (IPv6 dual-stack)...")
 
         // Ignore SIGPIPE globally - prevents crash when writing to closed socket
@@ -88,7 +88,7 @@ final class SimpleSocketServer {
         NSLog("[SimpleSocketServer] Listening on port \(listeningPort)")
 
         // Use GCD to handle incoming connections
-        let acceptQueue = DispatchQueue(label: "com.buttonheist.insideman.accept")
+        let acceptQueue = DispatchQueue(label: "com.buttonheist.wheelman.accept")
         let serverFD = fd
 
         acceptQueue.async { [weak self] in
@@ -122,7 +122,7 @@ final class SimpleSocketServer {
         return listeningPort
     }
 
-    func stop() {
+    public func stop() {
         // Close all client sockets
         for (_, fd) in clientFileDescriptors {
             close(fd)
@@ -147,7 +147,7 @@ final class SimpleSocketServer {
         }
 
         // Start reading from client
-        let readQueue = DispatchQueue(label: "com.buttonheist.insideman.\(clientId)")
+        let readQueue = DispatchQueue(label: "com.buttonheist.wheelman.\(clientId)")
         readQueue.async { [weak self] in
             self?.readLoop(clientId: clientId, fd: fd)
         }
@@ -192,7 +192,7 @@ final class SimpleSocketServer {
         }
     }
 
-    func send(_ data: Data, to fd: Int32) {
+    public func send(_ data: Data, to fd: Int32) {
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
             dataToSend.append(0x0A)
@@ -211,7 +211,7 @@ final class SimpleSocketServer {
         }
     }
 
-    func broadcastToAll(_ data: Data) {
+    public func broadcastToAll(_ data: Data) {
         for (_, fd) in clientFileDescriptors {
             send(data, to: fd)
         }
@@ -224,4 +224,3 @@ extension Data {
         return self.suffix(suffixData.count) == suffixData
     }
 }
-#endif

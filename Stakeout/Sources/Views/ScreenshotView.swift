@@ -1,12 +1,12 @@
 import SwiftUI
 import AppKit
-import TheGoods
+import ButtonHeist
 
 struct ScreenshotView: View {
     let screenshotPayload: ScreenshotPayload?
-    let elements: [AccessibilityElementData]
-    @Binding var selectedElement: AccessibilityElementData?
-    let onActivate: (AccessibilityElementData) -> Void
+    let elements: [UIElement]
+    @Binding var selectedElement: UIElement?
+    let onActivate: (UIElement) -> Void
 
     @State private var showingActionFeedback = false
 
@@ -63,7 +63,7 @@ struct ScreenshotView: View {
 }
 
 #Preview {
-    @Previewable @State var selectedElement: AccessibilityElementData? = nil
+    @Previewable @State var selectedElement: UIElement? = nil
     ScreenshotView(
         screenshotPayload: nil,
         elements: [],

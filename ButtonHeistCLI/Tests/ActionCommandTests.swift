@@ -1,18 +1,18 @@
 import XCTest
 import Foundation
- import TheGoods
+ import ButtonHeist
 
 final class ActionCommandTests: XCTestCase {
 
     // MARK: - Message Encoding Tests
 
     func testActionTargetEncoding() throws {
-        let target = ActionTarget(identifier: "testButton", traversalIndex: 5)
+        let target = ActionTarget(identifier: "testButton", order: 5)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ActionTarget.self, from: data)
 
         XCTAssertEqual(decoded.identifier, "testButton")
-        XCTAssertEqual(decoded.traversalIndex, 5)
+        XCTAssertEqual(decoded.order, 5)
     }
 
     func testTouchTapTargetWithElementEncoding() throws {
@@ -148,14 +148,14 @@ final class ActionCommandTests: XCTestCase {
     func testActionResultEncoding() throws {
         let result = ActionResult(
             success: true,
-            method: .accessibilityActivate,
+            method: .activate,
             message: nil
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
         XCTAssertTrue(decoded.success)
-        XCTAssertEqual(decoded.method, .accessibilityActivate)
+        XCTAssertEqual(decoded.method, .activate)
         XCTAssertNil(decoded.message)
     }
 
@@ -358,9 +358,9 @@ final class ActionCommandTests: XCTestCase {
 
     func testAllActionMethods() throws {
         let methods: [ActionMethod] = [
-            .accessibilityActivate,
-            .accessibilityIncrement,
-            .accessibilityDecrement,
+            .activate,
+            .increment,
+            .decrement,
             .syntheticTap,
             .syntheticLongPress,
             .syntheticSwipe,

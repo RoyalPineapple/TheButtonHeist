@@ -1,34 +1,34 @@
 import XCTest
-@testable import Wheelman
+@testable import ButtonHeist
 
 @MainActor
-final class WheelmanStateTests: XCTestCase {
+final class HeistClientTests: XCTestCase {
 
     func testInitialState() {
-        let client = Wheelman()
+        let client = HeistClient()
 
         XCTAssertTrue(client.discoveredDevices.isEmpty)
         XCTAssertNil(client.connectedDevice)
         XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentHierarchy)
+        XCTAssertNil(client.currentSnapshot)
         XCTAssertFalse(client.isDiscovering)
         XCTAssertEqual(client.connectionState, .disconnected)
     }
 
     func testDisconnectClearsState() {
-        let client = Wheelman()
+        let client = HeistClient()
 
         // Call disconnect (even without connection should be safe)
         client.disconnect()
 
         XCTAssertNil(client.connectedDevice)
         XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentHierarchy)
+        XCTAssertNil(client.currentSnapshot)
         XCTAssertEqual(client.connectionState, .disconnected)
     }
 
     func testStopDiscoveryClearsFlag() {
-        let client = Wheelman()
+        let client = HeistClient()
 
         // Start and stop discovery
         client.startDiscovery()
@@ -38,7 +38,7 @@ final class WheelmanStateTests: XCTestCase {
     }
 
     func testMultipleDisconnectsSafe() {
-        let client = Wheelman()
+        let client = HeistClient()
 
         // Multiple disconnects should be safe
         client.disconnect()

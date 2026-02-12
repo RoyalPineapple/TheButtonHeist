@@ -3,15 +3,15 @@ import XCTest
 
 final class ClientMessageTests: XCTestCase {
 
-    func testRequestHierarchyEncodeDecode() throws {
-        let message = ClientMessage.requestHierarchy
+    func testRequestSnapshotEncodeDecode() throws {
+        let message = ClientMessage.requestSnapshot
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .requestHierarchy = decoded {
+        if case .requestSnapshot = decoded {
             // Success
         } else {
-            XCTFail("Expected requestHierarchy, got \(decoded)")
+            XCTFail("Expected requestSnapshot, got \(decoded)")
         }
     }
 

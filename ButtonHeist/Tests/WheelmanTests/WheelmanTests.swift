@@ -1,4 +1,3 @@
 // Tests are organized in separate files:
 // - DiscoveredDeviceTests.swift
-// - ConnectionStateTests.swift
-// - WheelmanStateTests.swift
+// HeistClient and ConnectionState tests moved to ButtonHeistTests

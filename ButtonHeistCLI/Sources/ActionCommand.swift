@@ -1,13 +1,12 @@
 import ArgumentParser
 import Foundation
 import Darwin
-import TheGoods
-import Wheelman
+import ButtonHeist
 
 struct ActionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "action",
-        abstract: "Perform an action on an accessibility element",
+        abstract: "Perform an action on a UI element",
         discussion: """
             Send action commands to elements in the connected iOS app.
 
@@ -18,10 +17,10 @@ struct ActionCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Element identifier (accessibilityIdentifier)")
+    @Option(name: .long, help: "Element identifier")
     var identifier: String?
 
-    @Option(name: .long, help: "Traversal index")
+    @Option(name: .long, help: "Element index")
     var index: Int?
 
     @Option(name: .long, help: "Action type: activate, increment, decrement, custom")
@@ -42,7 +41,7 @@ struct ActionCommand: AsyncParsableCommand {
             throw ValidationError("Must specify --identifier or --index")
         }
 
-        let client = Wheelman()
+        let client = HeistClient()
 
         if !quiet {
             logStatus("Searching for iOS devices...")
@@ -107,7 +106,7 @@ struct ActionCommand: AsyncParsableCommand {
         }
 
         // Build target
-        let target = ActionTarget(identifier: identifier, traversalIndex: index)
+        let target = ActionTarget(identifier: identifier, order: index)
 
         // Build and send message
         let message: ClientMessage

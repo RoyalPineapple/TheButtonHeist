@@ -1,12 +1,12 @@
 # ButtonHeist
 
-**Accessibility inspection and automation toolkit for iOS apps**
+**UI inspection and automation toolkit for iOS apps**
 
-ButtonHeist lets you inspect and interact with the accessibility hierarchy of iOS apps in real-time from your Mac. Connect to any iOS app running InsideMan over local network or USB to see how VoiceOver perceives your UI, and automate accessibility testing.
+ButtonHeist lets you inspect and interact with the UI element snapshot of iOS apps in real-time from your Mac. Connect to any iOS app running InsideMan over local network or USB to see explore and automate your UI.
 
 ## Features
 
-- **Real-time inspection** - See accessibility elements update as your app's UI changes
+- **Real-time inspection** - See UI elements update as your app's UI changes
 - **Remote actions** - Tap elements and trigger actions programmatically
 - **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap
 - **Multi-touch** - Simultaneous multi-finger gesture injection via IOKit HID events
@@ -28,8 +28,8 @@ ButtonHeist lets you inspect and interact with the accessibility hierarchy of iO
 │           └─────────────────────┼─────────────────────┘            │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
-│                        │    Wheelman    │  ← Bonjour discovery    │
-│                        │   (framework)   │    or direct TCP        │
+│                        │   ButtonHeist   │  ← Bonjour discovery    │
+│                        │  (HeistClient)  │    or direct TCP        │
 │                        └────────┬────────┘                         │
 └─────────────────────────────────┼───────────────────────────────────┘
                                   │ Local Network / USB (IPv6)
@@ -51,8 +51,9 @@ ButtonHeist lets you inspect and interact with the accessibility hierarchy of iO
 | Module | Platform | Description |
 |--------|----------|-------------|
 | **TheGoods** | iOS + macOS | Shared types, messages, and constants |
-| **InsideMan** | iOS | Server that exposes accessibility hierarchy over TCP, with synthetic touch injection |
-| **Wheelman** | macOS | Client library for discovery, connection, and async commands |
+| **InsideMan** | iOS | Server that exposes UI element snapshot over TCP, with synthetic touch injection |
+| **Wheelman** | iOS + macOS | Cross-platform networking (TCP server/client, Bonjour discovery) |
+| **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
 | **Stakeout** | macOS | GUI app for visual inspection with screenshots and element overlays |
 | **buttonheist** | macOS | CLI tool with watch, action, touch, and screenshot commands |
 
@@ -103,7 +104,7 @@ Add the required Info.plist entries:
 
 <!-- Network permissions -->
 <key>NSLocalNetworkUsageDescription</key>
-<string>This app uses local network to communicate with the accessibility inspector.</string>
+<string>This app uses local network to communicate with the element inspector.</string>
 <key>NSBonjourServices</key>
 <array>
     <string>_buttonheist._tcp</string>
@@ -158,7 +159,7 @@ OPTIONS:
 USAGE: buttonheist action [--identifier <id>] [--index <n>] [--type <type>] [--custom-action <name>] [--x <x>] [--y <y>] [--timeout <t>] [--quiet]
 
 OPTIONS:
-  --identifier <id>       Element accessibility identifier
+  --identifier <id>       Element identifier
   --index <n>             Traversal index
   --type <type>           Action: activate, increment, decrement, tap, custom (default: activate)
   --custom-action <name>  Custom action name (when type is 'custom')
@@ -267,22 +268,19 @@ See [docs/USB_DEVICE_CONNECTIVITY.md](docs/USB_DEVICE_CONNECTIVITY.md) for detai
 
 ## Data Model
 
-### AccessibilityElementData
+### UIElement
 
 Each element in the hierarchy contains:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `traversalIndex` | `Int` | VoiceOver reading order |
-| `description` | `String` | Accessibility description |
-| `label` | `String?` | Accessibility label |
+| `order` | `Int` | Element reading order |
+| `description` | `String` | Description |
+| `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
-| `traits` | `[String]` | Traits like "button", "header", etc. |
-| `identifier` | `String?` | Accessibility identifier |
-| `hint` | `String?` | Accessibility hint |
+| `identifier` | `String?` | Identifier |
 | `frameX/Y/Width/Height` | `Double` | Screen coordinates |
-| `activationPointX/Y` | `Double` | Touch target center |
-| `customActions` | `[String]` | Custom action names |
+| `actions` | `[String]` | Available actions (activate, increment, decrement, custom) |
 
 ## Development Setup
 
@@ -339,10 +337,14 @@ buttonheist/
 │       │   ├── IOHIDEventBuilder.swift        # Low-level HID event creation
 │       │   └── TapVisualizerView.swift        # Visual tap feedback overlay
 │       ├── InsideManLoader/       # ObjC auto-start (+load)
-│       └── Wheelman/              # macOS client library
-│           ├── Wheelman.swift             # Main client (ObservableObject)
-│           ├── DeviceDiscovery.swift       # Bonjour browsing
-│           └── DeviceConnection.swift     # BSD socket connection
+│       ├── Wheelman/                 # Cross-platform networking
+│       │   ├── DiscoveredDevice.swift       # Device model
+│       │   ├── DeviceDiscovery.swift        # Bonjour browsing
+│       │   ├── DeviceConnection.swift       # BSD socket connection
+│       │   └── SimpleSocketServer.swift     # TCP server
+│       └── ButtonHeist/              # macOS client framework
+│           ├── HeistClient.swift            # Main client (ObservableObject)
+│           └── Exports.swift                # Re-exports TheGoods + Wheelman
 ├── Stakeout/
 │   └── Sources/                   # macOS GUI app
 │       ├── Views/                 # SwiftUI views
@@ -357,7 +359,7 @@ buttonheist/
 ├── TestApp/
 │   ├── Sources/                   # SwiftUI test app ("A11y SwiftUI")
 │   │   ├── RootView.swift             # Navigation menu
-│   │   ├── ContentView.swift          # Accessibility showcase
+│   │   ├── ContentView.swift          # UI showcase
 │   │   └── TouchCanvasView.swift      # Multi-touch drawing canvas
 │   └── UIKitSources/              # UIKit test app ("A11y UIKit")
 ├── AccessibilitySnapshot/         # Git submodule (hierarchy parsing)
@@ -378,7 +380,7 @@ buttonheist/
 Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 
 **Client → Server:**
-- `requestHierarchy` - Request current hierarchy
+- `requestSnapshot` - Request current hierarchy
 - `subscribe` / `unsubscribe` - Automatic update subscription
 - `activate` - Activate element (VoiceOver double-tap)
 - `increment` / `decrement` - Adjust adjustable elements
@@ -395,7 +397,7 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 
 **Server → Client:**
 - `info` - Server info on connection
-- `hierarchy` - Accessibility hierarchy (flat list + optional tree)
+- `hierarchy` - UI element snapshot (flat list + optional tree)
 - `actionResult` - Result of action with method used
 - `screenshot` - Base64-encoded PNG with dimensions
 - `error` - Error description

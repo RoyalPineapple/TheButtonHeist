@@ -26,21 +26,18 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testHierarchyEncodeDecode() throws {
-        let element = AccessibilityElementData(
-            traversalIndex: 0,
+    func testSnapshotEncodeDecode() throws {
+        let element = UIElement(
+            order: 0,
             description: "Button",
             label: "Submit",
             value: nil,
-            traits: ["button"],
             identifier: "submit_btn",
-            hint: "Tap to submit",
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
-            activationPointX: 60, activationPointY: 42,
-            customActions: []
+            actions: ["activate"]
         )
-        let payload = HierarchyPayload(timestamp: Date(), elements: [element])
-        let message = ServerMessage.hierarchy(payload)
+        let payload = Snapshot(timestamp: Date(), elements: [element])
+        let message = ServerMessage.snapshot(payload)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -50,11 +47,11 @@ final class ServerMessageTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
-        if case .hierarchy(let decodedPayload) = decoded {
+        if case .snapshot(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 1)
             XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
         } else {
-            XCTFail("Expected hierarchy, got \(decoded)")
+            XCTFail("Expected snapshot, got \(decoded)")
         }
     }
 
