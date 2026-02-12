@@ -42,7 +42,7 @@ Client                                    Server
    │◄─────── hierarchy ──────────────────────│
    │◄─────── screenshot ────────────────────│
    │                                         │
-   │──────── activate/tap ───────────────────►│
+   │──────── activate/touchTap/touchDrag... ──►│
    │◄─────── actionResult ───────────────────│
    │                                         │
    │◄─────── hierarchy ──────────────────────│  (auto-pushed on change)
@@ -99,23 +99,88 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 {"activate":{"_0":{"traversalIndex":5}}}
 ```
 
-### tap
+### touchTap
 
-Tap at coordinates or on an element. Uses the same TouchInjector system as activate.
+Tap at coordinates or on an element using synthetic touch injection via SimFinger.
 
 **At coordinates:**
 ```json
-{"tap":{"_0":{"pointX":196.5,"pointY":659.0}}}
+{"touchTap":{"_0":{"pointX":196.5,"pointY":659.0}}}
 ```
 
 **On element by identifier:**
 ```json
-{"tap":{"_0":{"elementTarget":{"identifier":"submitButton"}}}}
+{"touchTap":{"_0":{"elementTarget":{"identifier":"submitButton"}}}}
 ```
 
-**On element by index:**
+### touchLongPress
+
+Long press at coordinates or on an element.
+
 ```json
-{"tap":{"_0":{"elementTarget":{"traversalIndex":3}}}}
+{"touchLongPress":{"_0":{"pointX":100,"pointY":200,"duration":1.0}}}
+```
+
+**On element (default 0.5s):**
+```json
+{"touchLongPress":{"_0":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}}
+```
+
+### touchSwipe
+
+Swipe between two points or in a direction from an element.
+
+**With explicit coordinates:**
+```json
+{"touchSwipe":{"_0":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}}
+```
+
+**From element in direction:**
+```json
+{"touchSwipe":{"_0":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}}
+```
+
+### touchDrag
+
+Drag from one point to another (slower than swipe, for sliders/reordering).
+
+**With explicit coordinates:**
+```json
+{"touchDrag":{"_0":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}}
+```
+
+**From element:**
+```json
+{"touchDrag":{"_0":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}}
+```
+
+### touchPinch
+
+Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
+
+```json
+{"touchPinch":{"_0":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}}
+```
+
+**On element:**
+```json
+{"touchPinch":{"_0":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}}
+```
+
+### touchRotate
+
+Rotation gesture centered at a point. Angle in radians.
+
+```json
+{"touchRotate":{"_0":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}}
+```
+
+### touchTwoFingerTap
+
+Two-finger tap at a point or element.
+
+```json
+{"touchTwoFingerTap":{"_0":{"centerX":200,"centerY":300,"spread":40}}}
 ```
 
 ### increment
@@ -250,7 +315,13 @@ Response to `activate`, `tap`, `increment`, `decrement`, or `performCustomAction
 ```
 
 Possible methods:
-- `syntheticTap` - Tap synthesized via low-level UITouch/IOHIDEvent injection
+- `syntheticTap` - Tap synthesized via SimFinger
+- `syntheticLongPress` - Long press synthesized via SimFinger
+- `syntheticSwipe` - Swipe synthesized via SimFinger
+- `syntheticDrag` - Drag synthesized via SimFinger
+- `syntheticPinch` - Pinch gesture synthesized via SimFinger
+- `syntheticRotate` - Rotation gesture synthesized via SimFinger
+- `syntheticTwoFingerTap` - Two-finger tap synthesized via SimFinger
 - `accessibilityActivate` - Element's `accessibilityActivate()` was used
 - `accessibilityIncrement` - Element's `accessibilityIncrement()` was called
 - `accessibilityDecrement` - Element's `accessibilityDecrement()` was called
@@ -375,7 +446,7 @@ Container types:
 
 At least one field should be provided. When both are provided, identifier is tried first.
 
-### TapTarget
+### TouchTapTarget
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -383,7 +454,69 @@ At least one field should be provided. When both are provided, identifier is tri
 | `pointX` | `Double?` | Explicit X coordinate |
 | `pointY` | `Double?` | Explicit Y coordinate |
 
-Either `elementTarget` or both `pointX`/`pointY` should be provided.
+### LongPressTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Target element |
+| `pointX` | `Double?` | Explicit X coordinate |
+| `pointY` | `Double?` | Explicit Y coordinate |
+| `duration` | `Double` | Press duration in seconds (default: 0.5) |
+
+### SwipeTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Start from element's activation point |
+| `startX` | `Double?` | Start X coordinate |
+| `startY` | `Double?` | Start Y coordinate |
+| `endX` | `Double?` | End X coordinate |
+| `endY` | `Double?` | End Y coordinate |
+| `direction` | `String?` | Swipe direction: "up", "down", "left", "right" |
+| `distance` | `Double?` | Swipe distance in points (with direction) |
+| `duration` | `Double?` | Duration in seconds (default: 0.15) |
+
+### DragTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Start from element's activation point |
+| `startX` | `Double?` | Start X coordinate |
+| `startY` | `Double?` | Start Y coordinate |
+| `endX` | `Double` | End X coordinate |
+| `endY` | `Double` | End Y coordinate |
+| `duration` | `Double?` | Duration in seconds (default: 0.5) |
+
+### PinchTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `centerX` | `Double?` | Center X coordinate |
+| `centerY` | `Double?` | Center Y coordinate |
+| `scale` | `Double` | Scale factor (>1.0 zoom in, <1.0 zoom out) |
+| `spread` | `Double?` | Initial finger spread from center (default: 100pt) |
+| `duration` | `Double?` | Duration in seconds (default: 0.5) |
+
+### RotateTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `centerX` | `Double?` | Center X coordinate |
+| `centerY` | `Double?` | Center Y coordinate |
+| `angle` | `Double` | Rotation angle in radians |
+| `radius` | `Double?` | Distance from center to each finger (default: 100pt) |
+| `duration` | `Double?` | Duration in seconds (default: 0.5) |
+
+### TwoFingerTapTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Center on element's activation point |
+| `centerX` | `Double?` | Center X coordinate |
+| `centerY` | `Double?` | Center Y coordinate |
+| `spread` | `Double?` | Distance between fingers (default: 40pt) |
 
 ### CustomActionTarget
 

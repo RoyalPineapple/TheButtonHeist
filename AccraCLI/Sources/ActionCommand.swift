@@ -14,7 +14,6 @@ struct ActionCommand: AsyncParsableCommand {
             Examples:
               accra action --identifier "myButton"
               accra action --index 5 --type increment
-              accra action --x 100 --y 200 --type tap
               accra action --identifier "item" --type custom --custom-action "Delete"
             """
     )
@@ -25,17 +24,11 @@ struct ActionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Traversal index")
     var index: Int?
 
-    @Option(name: .long, help: "Action type: activate, increment, decrement, tap, custom")
+    @Option(name: .long, help: "Action type: activate, increment, decrement, custom")
     var type: String = "activate"
 
     @Option(name: .long, help: "Custom action name (when type is 'custom')")
     var customAction: String?
-
-    @Option(name: .long, help: "X coordinate for tap (when type is 'tap' without element)")
-    var x: Double?
-
-    @Option(name: .long, help: "Y coordinate for tap")
-    var y: Double?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
@@ -45,8 +38,8 @@ struct ActionCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+        guard identifier != nil || index != nil else {
+            throw ValidationError("Must specify --identifier or --index")
         }
 
         let client = AccraClient()
@@ -125,14 +118,6 @@ struct ActionCommand: AsyncParsableCommand {
             message = .increment(target)
         case "decrement":
             message = .decrement(target)
-        case "tap":
-            if identifier != nil || index != nil {
-                message = .tap(TapTarget(elementTarget: target))
-            } else if let x = x, let y = y {
-                message = .tap(TapTarget(pointX: x, pointY: y))
-            } else {
-                throw ValidationError("Tap requires element target or x/y coordinates")
-            }
         case "custom":
             guard let actionName = customAction else {
                 throw ValidationError("--custom-action required for custom action type")
@@ -142,7 +127,7 @@ struct ActionCommand: AsyncParsableCommand {
                 actionName: actionName
             ))
         default:
-            throw ValidationError("Unknown action type: \(type). Valid types: activate, increment, decrement, tap, custom")
+            throw ValidationError("Unknown action type: \(type). Valid types: activate, increment, decrement, custom")
         }
 
         if !quiet {

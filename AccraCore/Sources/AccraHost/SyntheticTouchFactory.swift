@@ -3,6 +3,10 @@ import UIKit
 
 /// Factory for creating synthetic UITouch instances using private APIs.
 /// Based on KIF's UITouch-KIFAdditions.m implementation.
+///
+/// All private API methods are invoked via direct IMP calls with @convention(c)
+/// typed function pointers. Using perform(_:with:) for non-object parameters
+/// (Int, Bool, Double) would pass NSNumber object pointers instead of raw values.
 @MainActor
 final class SyntheticTouchFactory {
 
@@ -17,23 +21,23 @@ final class SyntheticTouchFactory {
         let touch = UITouch()
 
         // Must set window first as it resets other values
-        performSelector(on: touch, selector: "setWindow:", with: window)
-        performSelector(on: touch, selector: "setView:", with: view)
+        performObjSelector(on: touch, selector: "setWindow:", with: window)
+        performObjSelector(on: touch, selector: "setView:", with: view)
 
         // Set location using private method with resetPrevious parameter
         setTouchLocation(touch, point: point, resetPrevious: true)
 
         // Set phase
-        performSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
+        performIntSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
 
         // Set additional properties
-        performSelector(on: touch, selector: "setTapCount:", with: 1)
-        performSelector(on: touch, selector: "_setIsFirstTouchForView:", with: true)
-        performSelector(on: touch, selector: "setIsTap:", with: true)
+        performIntSelector(on: touch, selector: "setTapCount:", with: 1)
+        performBoolSelector(on: touch, selector: "_setIsFirstTouchForView:", with: true)
+        performBoolSelector(on: touch, selector: "setIsTap:", with: true)
 
         // Set timestamp
         let timestamp = ProcessInfo.processInfo.systemUptime
-        performSelector(on: touch, selector: "setTimestamp:", with: timestamp)
+        performDoubleSelector(on: touch, selector: "setTimestamp:", with: timestamp)
 
         return touch
     }
@@ -43,9 +47,9 @@ final class SyntheticTouchFactory {
     ///   - touch: The touch to update
     ///   - phase: New phase value
     static func setPhase(_ touch: UITouch, phase: UITouch.Phase) {
-        performSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
+        performIntSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
         let timestamp = ProcessInfo.processInfo.systemUptime
-        performSelector(on: touch, selector: "setTimestamp:", with: timestamp)
+        performDoubleSelector(on: touch, selector: "setTimestamp:", with: timestamp)
     }
 
     /// Set IOHIDEvent on the touch (required for iOS 9+)
@@ -58,34 +62,67 @@ final class SyntheticTouchFactory {
             print("[SyntheticTouchFactory] UITouch doesn't respond to _setHidEvent:")
             return
         }
-        _ = touch.perform(selector, with: event)
+        if let imp = touch.method(for: selector) {
+            typealias Fn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
+            unsafeBitCast(imp, to: Fn.self)(touch, selector, event)
+        }
     }
 
-    // MARK: - Private Helpers
+    /// Update touch location for move events.
+    /// Uses resetPrevious: false so the touch maintains previous location for velocity calculation.
+    static func setLocation(_ touch: UITouch, point: CGPoint) {
+        setTouchLocation(touch, point: point, resetPrevious: false)
+    }
 
-    private static func performSelector(on object: NSObject, selector: String, with value: Any?) {
+    // MARK: - Private: Direct IMP Invocation Helpers
+
+    /// Call a method that takes an object parameter (e.g., setWindow:, setView:)
+    private static func performObjSelector(on object: NSObject, selector: String, with value: AnyObject) {
         let sel = NSSelectorFromString(selector)
-        guard object.responds(to: sel) else {
-            print("[SyntheticTouchFactory] Object doesn't respond to \(selector)")
-            return
-        }
+        guard object.responds(to: sel) else { return }
         _ = object.perform(sel, with: value)
     }
 
+    /// Call a method that takes an Int/NSInteger parameter (e.g., setPhase:, setTapCount:)
+    private static func performIntSelector(on object: NSObject, selector: String, with value: Int) {
+        let sel = NSSelectorFromString(selector)
+        guard object.responds(to: sel) else { return }
+        if let imp = object.method(for: sel) {
+            typealias Fn = @convention(c) (AnyObject, Selector, Int) -> Void
+            unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+        }
+    }
+
+    /// Call a method that takes a Bool/BOOL parameter (e.g., _setIsFirstTouchForView:, setIsTap:)
+    private static func performBoolSelector(on object: NSObject, selector: String, with value: Bool) {
+        let sel = NSSelectorFromString(selector)
+        guard object.responds(to: sel) else { return }
+        if let imp = object.method(for: sel) {
+            typealias Fn = @convention(c) (AnyObject, Selector, Bool) -> Void
+            unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+        }
+    }
+
+    /// Call a method that takes a Double/TimeInterval parameter (e.g., setTimestamp:)
+    private static func performDoubleSelector(on object: NSObject, selector: String, with value: Double) {
+        let sel = NSSelectorFromString(selector)
+        guard object.responds(to: sel) else { return }
+        if let imp = object.method(for: sel) {
+            typealias Fn = @convention(c) (AnyObject, Selector, Double) -> Void
+            unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+        }
+    }
+
+    /// Set touch location via _setLocationInWindow:resetPrevious:
     private static func setTouchLocation(_ touch: UITouch, point: CGPoint, resetPrevious: Bool) {
-        // _setLocationInWindow:resetPrevious: takes CGPoint and BOOL
         let selector = NSSelectorFromString("_setLocationInWindow:resetPrevious:")
         guard touch.responds(to: selector) else {
-            // Fallback to simple setValue for older iOS versions
             touch.setValue(point, forKey: "locationInWindow")
             return
         }
-
-        // Direct call using unsafeBitCast for methods with non-object parameters
         if let imp = touch.method(for: selector) {
-            typealias SetLocationFunc = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
-            let function = unsafeBitCast(imp, to: SetLocationFunc.self)
-            function(touch, selector, point, resetPrevious)
+            typealias Fn = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
+            unsafeBitCast(imp, to: Fn.self)(touch, selector, point, resetPrevious)
         }
     }
 }
