@@ -11,7 +11,7 @@ struct RootView: View {
                     TouchCanvasView()
                 }
             }
-            .navigationTitle("Accra Test App")
+            .navigationTitle("ButtonHeist Test App")
         }
     }
 }

@@ -8,19 +8,19 @@ let project = Project(
             name: "AccessibilityTestApp",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.accra.testapp",
+            bundleId: "com.buttonheist.testapp",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
                 "CFBundleDisplayName": "A11y SwiftUI",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
-                "NSBonjourServices": ["_a11ybridge._tcp"],
+                "NSBonjourServices": ["_buttonheist._tcp"],
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
             dependencies: [
-                .project(target: "AccraCore", path: ".."),
-                .project(target: "AccraHost", path: ".."),
+                .project(target: "TheGoods", path: ".."),
+                .project(target: "InsideMan", path: ".."),
             ]
         ),
 
@@ -29,7 +29,7 @@ let project = Project(
             name: "UIKitTestApp",
             destinations: .iOS,
             product: .app,
-            bundleId: "com.accra.uikittestapp",
+            bundleId: "com.buttonheist.uikittestapp",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
@@ -46,13 +46,13 @@ let project = Project(
                     ]
                 ],
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
-                "NSBonjourServices": ["_a11ybridge._tcp"],
+                "NSBonjourServices": ["_buttonheist._tcp"],
             ]),
             sources: ["UIKitSources/**"],
             resources: ["UIKitResources/**"],
             dependencies: [
-                .project(target: "AccraCore", path: ".."),
-                .project(target: "AccraHost", path: ".."),
+                .project(target: "TheGoods", path: ".."),
+                .project(target: "InsideMan", path: ".."),
             ]
         ),
     ]

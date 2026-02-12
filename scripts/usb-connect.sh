@@ -1,14 +1,14 @@
 #!/bin/bash
-# USB Device Connection Helper for Accra
-# Connects to AccraHost on an iOS device over USB via CoreDevice IPv6 tunnel
+# USB Device Connection Helper for ButtonHeist
+# Connects to InsideMan on an iOS device over USB via CoreDevice IPv6 tunnel
 
 set -e
 
 DEVICE_NAME="${1:-Test Phone 15 Pro}"
-BUNDLE_ID="${2:-com.accra.testapp}"
-PORT="${3:-1455}"  # Fixed port configured in AccraHost
+BUNDLE_ID="${2:-com.buttonheist.testapp}"
+PORT="${3:-1455}"  # Fixed port configured in InsideMan
 
-echo "=== Accra USB Connection ==="
+echo "=== ButtonHeist USB Connection ==="
 
 # Check device status
 DEVICE_STATUS=$(xcrun devicectl list devices 2>&1 | grep -i "$DEVICE_NAME" || true)
