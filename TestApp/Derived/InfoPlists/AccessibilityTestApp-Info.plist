@@ -28,8 +28,6 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app uses local network to communicate with the accessibility inspector.</string>
-	<key>AccraHostPort</key>
-	<integer>1455</integer>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
