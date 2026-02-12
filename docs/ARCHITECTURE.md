@@ -212,7 +212,7 @@ buttonheist-mcp (executable)
 ├── StdioTransport (MCP SDK)
 │   └── JSON-RPC 2.0 over stdin/stdout
 ├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 13 tool definitions
+│   ├── ListTools handler → 15 tool definitions
 │   └── CallTool handler → dispatches to HeistClient
 ├── HeistClient (@MainActor)
 │   ├── DeviceDiscovery (auto-connect on startup)
@@ -220,11 +220,62 @@ buttonheist-mcp (executable)
 └── Logging (stderr, never stdout)
 ```
 
+**How MCP Clients Connect**:
+
+MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server automatically. The configuration is a `.mcp.json` file in the project root:
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+When the MCP client starts a session, it:
+1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
+2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
+3. Sends `initialize` → server responds with capabilities (15 tools)
+4. Sends `notifications/initialized` → server is ready
+5. Tool calls appear as **native capabilities** to the AI agent — they show up in the agent's tool palette alongside built-in tools like file reading and shell commands
+
+The AI agent can then call tools like `get_screenshot`, `tap`, or `draw_path` exactly as it would call any other tool. From the agent's perspective, it has direct access to the iOS app — there's no shell, no CLI, no intermediate scripting layer.
+
+**Connection lifecycle**:
+```
+MCP client starts session
+  └── spawns buttonheist-mcp process
+        └── HeistClient.startDiscovery() → Bonjour browse
+        └── Finds iOS device (< 2 seconds on local network)
+        └── HeistClient.connect() → TCP connection
+        └── MCP Server.start(transport: StdioTransport)
+        └── Ready for tool calls
+
+Tool call (e.g. tap)
+  └── MCP client sends JSON-RPC request on stdin
+  └── Server.handleToolCall() on MCP actor
+  └── await → hops to @MainActor
+  └── HeistClient.send(message) → TCP to iOS device
+  └── HeistClient.waitForActionResult() → async continuation
+  └── InsideMan processes gesture, sends result
+  └── Server returns JSON-RPC response on stdout
+  └── MCP client receives result
+
+Session ends
+  └── MCP client closes stdin
+  └── buttonheist-mcp process exits
+  └── TCP connection closed
+```
+
 **Key Design Decisions**:
-- **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls.
+- **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls. Tool calls complete in milliseconds.
 - **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
 - **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
-- **13 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `activate`, `increment`, `decrement`, `perform_custom_action`).
+- **15 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`).
+- **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
 
 ### ButtonHeist (macOS Client Framework)
 
@@ -269,30 +320,46 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 ### MCP Agent Flow
 
-```
-1. MCP client (e.g. Claude Code) starts buttonheist-mcp process
-   └── stdio transport: stdin/stdout for JSON-RPC 2.0
+The MCP server is the primary interface for AI agents. When an AI agent (Claude Code, Claude Desktop, or any MCP client) starts a session in a project containing `.mcp.json`, the full flow is:
 
-2. buttonheist-mcp startup
-   └── HeistClient.startDiscovery() via Bonjour
-   └── Connects to first discovered device
-   └── MCP Server starts listening on stdin
+```
+1. MCP client reads .mcp.json, spawns buttonheist-mcp
+   └── stdio transport: stdin for JSON-RPC requests, stdout for responses
+
+2. buttonheist-mcp startup (before accepting MCP calls)
+   └── HeistClient.startDiscovery() → NWBrowser for _buttonheist._tcp
+   └── Bonjour discovers iOS device within ~2 seconds
+   └── HeistClient.connect() → TCP connection to device
+   └── InsideMan sends ServerInfo, initial snapshot, and screenshot
+   └── MCP Server.start(transport: StdioTransport) → ready
 
 3. MCP client sends initialize handshake
-   └── Server responds with capabilities (13 tools)
+   └── Server responds with capabilities (15 tools)
+   └── Tools appear as native capabilities to the AI agent
+   └── Example: Claude sees get_screenshot, tap, draw_path as callable tools
 
-4. MCP client calls tools/call (e.g. get_snapshot)
-   └── Server actor → await → @MainActor handleToolCall()
-   └── HeistClient.send(.requestSnapshot)
-   └── Wait for onSnapshotUpdate callback
-   └── Return JSON result via MCP
+4. AI agent calls a read tool (e.g. get_screenshot)
+   └── JSON-RPC: {"method": "tools/call", "params": {"name": "get_screenshot"}}
+   └── Server requests screenshot from HeistClient
+   └── HeistClient.send(.requestScreenshot) → TCP to iOS device
+   └── InsideMan captures screen → base64 PNG → TCP back
+   └── Server returns image content via MCP
+   └── Agent sees the app's screen as an image
 
-5. MCP client calls tools/call (e.g. tap)
-   └── Build ClientMessage from tool arguments
-   └── HeistClient.send(message)
-   └── Wait for ActionResult
-   └── Return success/failure via MCP
+5. AI agent calls an interaction tool (e.g. tap, draw_path)
+   └── Server builds ClientMessage from tool arguments
+   └── HeistClient.send(message) → TCP to iOS device
+   └── InsideMan.SafeCracker performs the gesture
+   └── ActionResult sent back over TCP
+   └── Server returns success/failure to agent
+   └── Agent can immediately screenshot to verify the result
+
+6. Session ends
+   └── MCP client closes stdin pipe
+   └── buttonheist-mcp exits, TCP connection closes
 ```
+
+This architecture means the AI agent interacts with the iOS app as naturally as it reads files or runs commands. There is no shell scripting, no manual connection management, and no per-call discovery overhead. The persistent connection makes tool calls fast enough for real-time interaction loops.
 
 ### Discovery Flow
 

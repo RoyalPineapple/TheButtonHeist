@@ -6,7 +6,7 @@ private func debug(_ message: String) {
     fputs("[DeviceConnection] \(message)\n", stderr)
 }
 
-/// Connection client using Network framework with TLS encryption.
+/// Connection client using Network framework.
 @MainActor
 public final class DeviceConnection {
 
@@ -28,20 +28,9 @@ public final class DeviceConnection {
     }
 
     public func connect() {
-        debug("Connecting to \(device.name) with TLS...")
+        debug("Connecting to \(device.name)...")
 
-        let tlsOptions = NWProtocolTLS.Options()
-        sec_protocol_options_set_verify_block(
-            tlsOptions.securityProtocolOptions,
-            { _, _, completionHandler in
-                // Accept any server certificate — this is a local dev tool
-                completionHandler(true)
-            },
-            DispatchQueue.global()
-        )
-
-        let parameters = NWParameters(tls: tlsOptions, tcp: .init())
-        let conn = NWConnection(to: device.endpoint, using: parameters)
+        let conn = NWConnection(to: device.endpoint, using: .tcp)
 
         conn.stateUpdateHandler = { [weak self] state in
             Task { @MainActor in
@@ -77,7 +66,7 @@ public final class DeviceConnection {
     private func handleStateChange(_ state: NWConnection.State) {
         switch state {
         case .ready:
-            debug("Connected (TLS)")
+            debug("Connected")
             isConnected = true
             onConnected?()
             startReceiving()

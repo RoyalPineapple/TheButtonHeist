@@ -10,32 +10,48 @@ Complete API documentation for the MCP server (AI agents), InsideMan (iOS), Heis
 
 ### Overview
 
-The MCP server is the primary interface for AI agents to drive iOS apps. It wraps HeistClient in an MCP-compliant server that any MCP client (Claude Code, Claude Desktop, etc.) can connect to.
+The MCP server is the primary interface for AI agents to drive iOS apps. It gives the agent **eyes** (screenshots + accessibility hierarchy) and **hands** (tap, swipe, draw, and other gestures) for any iOS app running InsideMan.
 
-On startup, the server automatically discovers and connects to the first available iOS device running InsideMan. It then accepts MCP tool calls over stdin/stdout.
+When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server discovers the iOS app via Bonjour, connects over TCP, and exposes 15 tools as native agent capabilities. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
 
-### Configuration
+### Setup
 
-Add to `.mcp.json` in your project root (for Claude Code):
-
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "/path/to/ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-### Building
+**1. Build the MCP server:**
 
 ```bash
 cd ButtonHeistMCP
 swift build -c release
 # Binary at .build/release/buttonheist-mcp
 ```
+
+**2. Add `.mcp.json` to your project root:**
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+**3. Run your iOS app** (simulator or device with InsideMan embedded).
+
+**4. Start an AI agent session** in the project directory. The agent automatically gains access to all ButtonHeist tools — no manual connection steps required.
+
+### How it works
+
+```
+AI agent starts session → MCP client reads .mcp.json
+  → spawns buttonheist-mcp → Bonjour discovers iOS app (< 2s)
+  → persistent TCP connection established
+  → 15 tools appear in agent's tool palette
+  → agent can see and interact with the app
+```
+
+The persistent TCP connection means there's no per-call overhead. Tool calls complete in milliseconds, enabling real-time interaction loops where the agent can tap, verify the screen changed, and continue.
 
 ### Tools
 
@@ -142,6 +158,31 @@ Simultaneous two-finger tap.
 | `order` | integer | Center on element (order index) |
 | `centerX`, `centerY` | number | Center coordinates |
 | `spread` | number | Distance between fingers (default 40) |
+
+#### draw_path
+
+Draw along a path by tracing through a sequence of points.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `points` | array | Array of `{x, y}` objects to trace through (minimum 2, **required**) |
+| `duration` | number | Total duration in seconds (mutually exclusive with velocity) |
+| `velocity` | number | Speed in points per second (mutually exclusive with duration) |
+
+#### draw_bezier
+
+Draw along cubic bezier curves. The server samples curves to a polyline before tracing.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `startX` | number | Start X coordinate (**required**) |
+| `startY` | number | Start Y coordinate (**required**) |
+| `segments` | array | Array of bezier segments (**required**) |
+| `samplesPerSegment` | integer | Points per segment (default 20) |
+| `duration` | number | Total duration in seconds |
+| `velocity` | number | Speed in points per second |
+
+Each segment has: `cp1X`, `cp1Y`, `cp2X`, `cp2Y`, `endX`, `endY`.
 
 #### activate
 
@@ -313,6 +354,7 @@ InsideMan uses `SafeCracker` internally for handling all touch gesture commands.
 - `pinch` - Two-finger pinch/zoom
 - `rotate` - Two-finger rotation
 - `twoFingerTap` - Simultaneous two-finger tap
+- `drawPath` - Trace through a sequence of waypoints (polyline)
 
 **Injection stack:**
 1. `SyntheticTouchFactory` - Creates UITouch instances via private API IMP invocation
@@ -638,6 +680,8 @@ Messages sent from client to server.
 - `touchPinch(PinchTarget)` - Pinch/zoom gesture
 - `touchRotate(RotateTarget)` - Rotation gesture
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
+- `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
+- `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
 - `requestScreenshot` - Request PNG screenshot
 
 ### ServerMessage
@@ -816,6 +860,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `syntheticPinch` - Pinch via SafeCracker
 - `syntheticRotate` - Rotation via SafeCracker
 - `syntheticTwoFingerTap` - Two-finger tap via SafeCracker
+- `syntheticDrawPath` - Path drawing via SafeCracker
 - `customAction` - Used custom action
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
