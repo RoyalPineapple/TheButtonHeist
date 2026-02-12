@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 
 /// Passthrough view controller for tap overlay
@@ -96,4 +97,5 @@ public enum TapVisualizerView {
         }
     }
 }
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 
 /// Factory for creating and manipulating UIEvent instances for touch injection.
@@ -102,4 +103,5 @@ final class SyntheticEventFactory {
         return event
     }
 }
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

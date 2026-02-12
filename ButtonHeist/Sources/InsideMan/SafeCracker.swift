@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 
 /// Cracks open the app's touch system for remote gesture injection.
@@ -321,4 +322,5 @@ final class SafeCracker {
             .first { $0.windowLevel <= .normal && $0.rootViewController?.view != nil }
     }
 }
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)

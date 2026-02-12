@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 
 /// Creates IOHIDEvent structures for touch injection.
@@ -239,4 +240,5 @@ private func IOHIDEventSetFloatValue(_ event: UnsafeMutableRawPointer, _ field: 
     _IOHIDEventSetFloatValue(event, field, value)
 }
 
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)
