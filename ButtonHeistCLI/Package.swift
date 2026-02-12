@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -19,6 +19,7 @@ let package = Package(
             ],
             path: "Sources",
             swiftSettings: [
+                .swiftLanguageMode(.v6),
                 .unsafeFlags(["-parse-as-library"])
             ]
         ),
@@ -27,7 +28,8 @@ let package = Package(
             dependencies: [
                 .product(name: "ButtonHeist", package: "ButtonHeist")
             ],
-            path: "Tests"
+            path: "Tests",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )

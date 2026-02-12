@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -22,7 +22,8 @@ let package = Package(
     targets: [
         .target(
             name: "TheGoods",
-            path: "Sources/TheGoods"
+            path: "Sources/TheGoods",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Swift implementation of InsideMan
         .target(
@@ -32,7 +33,8 @@ let package = Package(
                 "Wheelman",
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
-            path: "Sources/InsideMan"
+            path: "Sources/InsideMan",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Objective-C loader that triggers auto-start via +load
         .target(
@@ -44,17 +46,20 @@ let package = Package(
         .target(
             name: "Wheelman",
             dependencies: ["TheGoods"],
-            path: "Sources/Wheelman"
+            path: "Sources/Wheelman",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
             name: "ButtonHeist",
             dependencies: ["TheGoods", "Wheelman"],
-            path: "Sources/ButtonHeist"
+            path: "Sources/ButtonHeist",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "TheGoodsTests",
             dependencies: ["TheGoods"],
-            path: "Tests/TheGoodsTests"
+            path: "Tests/TheGoodsTests",
+            swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]
 )

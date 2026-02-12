@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+#if DEBUG
 import UIKit
 
 /// Factory for creating synthetic UITouch instances using private APIs.
@@ -126,4 +127,5 @@ final class SyntheticTouchFactory {
         }
     }
 }
-#endif
+#endif // DEBUG
+#endif // canImport(UIKit)
