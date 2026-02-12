@@ -1,8 +1,8 @@
-# Accra
+# ButtonHeist
 
 **Accessibility inspection and automation toolkit for iOS apps**
 
-Accra lets you inspect and interact with the accessibility hierarchy of iOS apps in real-time from your Mac. Connect to any iOS app running AccraHost over local network or USB to see how VoiceOver perceives your UI, and automate accessibility testing.
+ButtonHeist lets you inspect and interact with the accessibility hierarchy of iOS apps in real-time from your Mac. Connect to any iOS app running InsideMan over local network or USB to see how VoiceOver perceives your UI, and automate accessibility testing.
 
 ## Features
 
@@ -11,7 +11,7 @@ Accra lets you inspect and interact with the accessibility hierarchy of iOS apps
 - **Touch gestures** - Full gesture simulation: tap, long press, swipe, drag, pinch, rotate, two-finger tap
 - **Multi-touch** - Simultaneous multi-finger gesture injection via IOKit HID events
 - **USB connectivity** - Connect to devices over USB when WiFi is unavailable
-- **Auto-start** - AccraHost starts automatically when your app launches
+- **Auto-start** - InsideMan starts automatically when your app launches
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
 - **Multiple interfaces** - GUI app, CLI, Python, or custom tools
 
@@ -21,21 +21,21 @@ Accra lets you inspect and interact with the accessibility hierarchy of iOS apps
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Your Mac                                   │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │  AccraInspector  │  │    accra CLI     │  │  Python/Scripts  │  │
+│  │     Stakeout     │  │  buttonheist CLI │  │  Python/Scripts  │  │
 │  │    (GUI app)     │  │                  │  │                  │  │
 │  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
 │           │                     │                     │            │
 │           └─────────────────────┼─────────────────────┘            │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
-│                        │   AccraClient   │  ← Bonjour discovery    │
+│                        │    Wheelman    │  ← Bonjour discovery    │
 │                        │   (framework)   │    or direct TCP        │
 │                        └────────┬────────┘                         │
 └─────────────────────────────────┼───────────────────────────────────┘
                                   │ Local Network / USB (IPv6)
 ┌─────────────────────────────────┼───────────────────────────────────┐
 │                        ┌────────┴────────┐                         │
-│                        │   AccraHost     │  ← Auto-starts on load  │
+│                        │    InsideMan    │  ← Auto-starts on load  │
 │                        │   (framework)   │    Port 1455            │
 │                        └────────┬────────┘                         │
 │                                 │                                   │
@@ -50,26 +50,26 @@ Accra lets you inspect and interact with the accessibility hierarchy of iOS apps
 
 | Module | Platform | Description |
 |--------|----------|-------------|
-| **AccraCore** | iOS + macOS | Shared types, messages, and constants |
-| **AccraHost** | iOS | Server that exposes accessibility hierarchy over TCP, with synthetic touch injection |
-| **AccraClient** | macOS | Client library for discovery, connection, and async commands |
-| **AccraInspector** | macOS | GUI app for visual inspection with screenshots and element overlays |
-| **accra** | macOS | CLI tool with watch, action, touch, and screenshot commands |
+| **TheGoods** | iOS + macOS | Shared types, messages, and constants |
+| **InsideMan** | iOS | Server that exposes accessibility hierarchy over TCP, with synthetic touch injection |
+| **Wheelman** | macOS | Client library for discovery, connection, and async commands |
+| **Stakeout** | macOS | GUI app for visual inspection with screenshots and element overlays |
+| **buttonheist** | macOS | CLI tool with watch, action, touch, and screenshot commands |
 
 ## Quick Start
 
-### 1. Add AccraHost to Your iOS App
+### 1. Add InsideMan to Your iOS App
 
-Add the AccraCore package to your project and import AccraHost. **AccraHost auto-starts via ObjC +load** - no code changes needed beyond importing the framework.
+Add the ButtonHeist package to your project and import InsideMan. **InsideMan auto-starts via ObjC +load** - no code changes needed beyond importing the framework.
 
 **SwiftUI:**
 ```swift
 import SwiftUI
-import AccraHost
+import InsideMan
 
 @main
 struct MyApp: App {
-    // AccraHost auto-starts via ObjC +load with port from Info.plist
+    // InsideMan auto-starts via ObjC +load with port from Info.plist
 
     var body: some Scene {
         WindowGroup {
@@ -82,13 +82,13 @@ struct MyApp: App {
 **UIKit:**
 ```swift
 import UIKit
-import AccraHost
+import InsideMan
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // AccraHost auto-starts via ObjC +load with port from Info.plist
+        // InsideMan auto-starts via ObjC +load with port from Info.plist
         return true
     }
 }
@@ -97,8 +97,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 Add the required Info.plist entries:
 
 ```xml
-<!-- Fixed port for AccraHost (required) -->
-<key>AccraHostPort</key>
+<!-- Fixed port for InsideMan (required) -->
+<key>InsideManPort</key>
 <integer>1455</integer>
 
 <!-- Network permissions -->
@@ -106,7 +106,7 @@ Add the required Info.plist entries:
 <string>This app uses local network to communicate with the accessibility inspector.</string>
 <key>NSBonjourServices</key>
 <array>
-    <string>_a11ybridge._tcp</string>
+    <string>_buttonheist._tcp</string>
 </array>
 ```
 
@@ -118,21 +118,21 @@ Add the required Info.plist entries:
 ./scripts/usb-connect.sh "Your Device Name"
 
 # Python
-python3 scripts/accra_usb.py
+python3 scripts/buttonheist_usb.py
 ```
 
 **Over WiFi:**
 ```bash
-cd AccraCLI
-swift run accra --once    # Single snapshot
-swift run accra           # Watch mode (live updates)
+cd ButtonHeistCLI
+swift run buttonheist --once    # Single snapshot
+swift run buttonheist           # Watch mode (live updates)
 ```
 
 **GUI App:**
 ```bash
 tuist generate
-open Accra.xcworkspace
-# Run the AccraInspector scheme
+open ButtonHeist.xcworkspace
+# Run the Stakeout scheme
 ```
 
 ## CLI Usage
@@ -142,7 +142,7 @@ The CLI has four subcommands: `watch` (default), `action`, `touch`, and `screens
 ### watch (default)
 
 ```
-USAGE: accra watch [--format <format>] [--once] [--quiet] [--timeout <timeout>] [--verbose]
+USAGE: buttonheist watch [--format <format>] [--once] [--quiet] [--timeout <timeout>] [--verbose]
 
 OPTIONS:
   -f, --format <format>   Output format: human, json (default: human)
@@ -155,7 +155,7 @@ OPTIONS:
 ### action
 
 ```
-USAGE: accra action [--identifier <id>] [--index <n>] [--type <type>] [--custom-action <name>] [--x <x>] [--y <y>] [--timeout <t>] [--quiet]
+USAGE: buttonheist action [--identifier <id>] [--index <n>] [--type <type>] [--custom-action <name>] [--x <x>] [--y <y>] [--timeout <t>] [--quiet]
 
 OPTIONS:
   --identifier <id>       Element accessibility identifier
@@ -169,7 +169,7 @@ OPTIONS:
 ### touch
 
 ```
-USAGE: accra touch <subcommand>
+USAGE: buttonheist touch <subcommand>
 
 SUBCOMMANDS:
   tap                     Tap at a point or element
@@ -186,7 +186,7 @@ All touch subcommands accept `--identifier`, `--index`, or coordinate options to
 ### screenshot
 
 ```
-USAGE: accra screenshot [--output <path>] [--timeout <t>] [--quiet]
+USAGE: buttonheist screenshot [--output <path>] [--timeout <t>] [--quiet]
 
 OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
@@ -197,39 +197,39 @@ OPTIONS:
 
 ```bash
 # Interactive watch mode - see live updates
-accra
+buttonheist
 
 # Single snapshot in human-readable format
-accra --once
+buttonheist --once
 
 # JSON output for scripting
-accra --format json --once
+buttonheist --format json --once
 
 # Activate a button by identifier
-accra action --identifier loginButton
+buttonheist action --identifier loginButton
 
 # Tap at coordinates
-accra action --type tap --x 196.5 --y 659
+buttonheist action --type tap --x 196.5 --y 659
 
 # Increment a slider
-accra action --type increment --identifier volumeSlider
+buttonheist action --type increment --identifier volumeSlider
 
 # Capture screenshot to file
-accra screenshot --output screen.png
+buttonheist screenshot --output screen.png
 
 # Pipe screenshot to another tool
-accra screenshot | imgcat
+buttonheist screenshot | imgcat
 
 # Touch gestures
-accra touch tap --identifier loginButton
-accra touch tap --x 100 --y 200
-accra touch longpress --identifier myButton --duration 1.0
-accra touch swipe --identifier list --direction up
-accra touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
-accra touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-accra touch pinch --identifier mapView --scale 2.0
-accra touch rotate --x 200 --y 300 --angle 1.57
-accra touch two-finger-tap --identifier zoomControl
+buttonheist touch tap --identifier loginButton
+buttonheist touch tap --x 100 --y 200
+buttonheist touch longpress --identifier myButton --duration 1.0
+buttonheist touch swipe --identifier list --direction up
+buttonheist touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
+buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+buttonheist touch pinch --identifier mapView --scale 2.0
+buttonheist touch rotate --x 200 --y 300 --angle 1.57
+buttonheist touch two-finger-tap --identifier zoomControl
 ```
 
 ## USB Connectivity
@@ -243,9 +243,9 @@ When WiFi is unreliable (VPN, network segmentation), connect over USB using the 
 
 **Python:**
 ```python
-from scripts.accra_usb import AccraUSBConnection
+from scripts.buttonheist_usb import ButtonHeistUSBConnection
 
-with AccraUSBConnection() as conn:
+with ButtonHeistUSBConnection() as conn:
     print(f"Connected to: {conn.info['appName']}")
     hierarchy = conn.get_hierarchy()
 
@@ -302,14 +302,14 @@ curl -Ls https://install.tuist.io | bash
 tuist generate
 
 # Open workspace
-open Accra.xcworkspace
+open ButtonHeist.xcworkspace
 ```
 
 ### Building for Device (Command Line)
 
 ```bash
 # Build with signing
-xcodebuild -workspace Accra.xcworkspace \
+xcodebuild -workspace ButtonHeist.xcworkspace \
   -scheme AccessibilityTestApp \
   -destination 'platform=iOS,name=Your Device' \
   -allowProvisioningUpdates \
@@ -320,56 +320,56 @@ xcodebuild -workspace Accra.xcworkspace \
 # Install
 xcrun devicectl device install app \
   --device "Your Device" \
-  ~/Library/Developer/Xcode/DerivedData/Accra-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
+  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
 ```
 
 ### Project Structure
 
 ```
-accra/
-├── AccraCore/
+buttonheist/
+├── ButtonHeist/
 │   └── Sources/
-│       ├── AccraCore/           # Shared types (Messages.swift)
-│       ├── AccraHost/           # iOS server
-│       │   ├── AccraHost.swift          # Main server singleton
-│       │   ├── SimpleSocketServer.swift # BSD socket TCP server
-│       │   ├── SimFinger.swift          # Multi-touch gesture simulation
-│       │   ├── SyntheticTouchFactory.swift  # UITouch creation via private APIs
-│       │   ├── SyntheticEventFactory.swift  # UIEvent manipulation
-│       │   ├── IOHIDEventBuilder.swift      # Low-level HID event creation
-│       │   └── TapVisualizerView.swift      # Visual tap feedback overlay
-│       ├── AccraHostLoader/     # ObjC auto-start (+load)
-│       └── AccraClient/         # macOS client library
-│           ├── AccraClient.swift        # Main client (ObservableObject)
-│           ├── DeviceDiscovery.swift     # Bonjour browsing
-│           └── DeviceConnection.swift   # BSD socket connection
-├── AccraInspector/
-│   └── Sources/                 # macOS GUI app
-│       ├── Views/               # SwiftUI views
-│       └── Design/              # Design tokens (colors, typography)
-├── AccraCLI/
-│   └── Sources/                 # CLI tool
-│       ├── main.swift           # Entry point with watch/action/touch/screenshot commands
-│       ├── CLIRunner.swift      # Watch mode implementation
-│       ├── ActionCommand.swift  # Action command
-│       ├── TouchCommand.swift   # Touch gesture commands (7 subcommands)
-│       └── ScreenshotCommand.swift  # Screenshot command
+│       ├── TheGoods/              # Shared types (Messages.swift)
+│       ├── InsideMan/             # iOS server
+│       │   ├── InsideMan.swift            # Main server singleton
+│       │   ├── SimpleSocketServer.swift   # BSD socket TCP server
+│       │   ├── SafeCracker.swift           # Multi-touch gesture simulation
+│       │   ├── SyntheticTouchFactory.swift    # UITouch creation via private APIs
+│       │   ├── SyntheticEventFactory.swift    # UIEvent manipulation
+│       │   ├── IOHIDEventBuilder.swift        # Low-level HID event creation
+│       │   └── TapVisualizerView.swift        # Visual tap feedback overlay
+│       ├── InsideManLoader/       # ObjC auto-start (+load)
+│       └── Wheelman/              # macOS client library
+│           ├── Wheelman.swift             # Main client (ObservableObject)
+│           ├── DeviceDiscovery.swift       # Bonjour browsing
+│           └── DeviceConnection.swift     # BSD socket connection
+├── Stakeout/
+│   └── Sources/                   # macOS GUI app
+│       ├── Views/                 # SwiftUI views
+│       └── Design/                # Design tokens (colors, typography)
+├── ButtonHeistCLI/
+│   └── Sources/                   # CLI tool
+│       ├── main.swift             # Entry point with watch/action/touch/screenshot commands
+│       ├── CLIRunner.swift        # Watch mode implementation
+│       ├── ActionCommand.swift    # Action command
+│       ├── TouchCommand.swift     # Touch gesture commands (7 subcommands)
+│       └── ScreenshotCommand.swift    # Screenshot command
 ├── TestApp/
-│   ├── Sources/                 # SwiftUI test app ("A11y SwiftUI")
-│   │   ├── RootView.swift           # Navigation menu
-│   │   ├── ContentView.swift        # Accessibility showcase
-│   │   └── TouchCanvasView.swift    # Multi-touch drawing canvas
-│   └── UIKitSources/            # UIKit test app ("A11y UIKit")
-├── AccessibilitySnapshot/       # Git submodule (hierarchy parsing)
+│   ├── Sources/                   # SwiftUI test app ("A11y SwiftUI")
+│   │   ├── RootView.swift             # Navigation menu
+│   │   ├── ContentView.swift          # Accessibility showcase
+│   │   └── TouchCanvasView.swift      # Multi-touch drawing canvas
+│   └── UIKitSources/              # UIKit test app ("A11y UIKit")
+├── AccessibilitySnapshot/         # Git submodule (hierarchy parsing)
 ├── scripts/
-│   ├── usb-connect.sh           # USB connection helper
-│   └── accra_usb.py             # Python USB module
+│   ├── usb-connect.sh             # USB connection helper
+│   └── buttonheist_usb.py         # Python USB module
 ├── docs/
-│   ├── ARCHITECTURE.md          # System design
-│   ├── WIRE-PROTOCOL.md         # Protocol specification
-│   ├── API.md                   # API reference
+│   ├── ARCHITECTURE.md            # System design
+│   ├── WIRE-PROTOCOL.md           # Protocol specification
+│   ├── API.md                     # API reference
 │   └── USB_DEVICE_CONNECTIVITY.md # USB guide
-├── Project.swift                # Tuist configuration
+├── Project.swift                  # Tuist configuration
 └── Workspace.swift
 ```
 
@@ -402,14 +402,14 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 - `pong` - Ping response
 
 **Port:** 1455 (configurable via Info.plist)
-**Bonjour service:** `_a11ybridge._tcp`
+**Bonjour service:** `_buttonheist._tcp`
 
 ## Troubleshooting
 
 ### Device not appearing (WiFi)
 
 1. Ensure both devices are on the same network
-2. Check that AccraHost framework is linked
+2. Check that InsideMan framework is linked
 3. Verify Info.plist has the Bonjour service entry
 4. On iOS, accept the local network permission prompt
 

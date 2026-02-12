@@ -1,6 +1,6 @@
-# Contributing to Accra
+# Contributing to ButtonHeist
 
-Thank you for your interest in contributing to Accra!
+Thank you for your interest in contributing to ButtonHeist!
 
 ## Development Setup
 
@@ -16,18 +16,18 @@ Thank you for your interest in contributing to Accra!
 1. Clone the repository
 2. Install Tuist: `curl -Ls https://install.tuist.io | bash`
 3. Generate the Xcode project: `tuist generate`
-4. Open `Accra.xcworkspace`
+4. Open `ButtonHeist.xcworkspace`
 
 ## Project Structure
 
 | Directory | Description |
 |-----------|-------------|
-| `AccraCore/Sources/AccraCore/` | Shared types and protocol messages |
-| `AccraCore/Sources/AccraHost/` | iOS server framework (server, touch injection, tap visualization) |
-| `AccraCore/Sources/AccraHostLoader/` | ObjC auto-start via +load |
-| `AccraCore/Sources/AccraClient/` | macOS client library (discovery, connection) |
-| `AccraInspector/Sources/` | macOS GUI application |
-| `AccraCLI/` | Command-line tool (watch, action, screenshot commands) |
+| `ButtonHeist/Sources/TheGoods/` | Shared types and protocol messages |
+| `ButtonHeist/Sources/InsideMan/` | iOS server framework (server, touch injection, tap visualization) |
+| `ButtonHeist/Sources/InsideManLoader/` | ObjC auto-start via +load |
+| `ButtonHeist/Sources/Wheelman/` | macOS client library (discovery, connection) |
+| `Stakeout/Sources/` | macOS GUI application |
+| `ButtonHeistCLI/` | Command-line tool (watch, action, screenshot commands) |
 | `TestApp/` | Sample SwiftUI and UIKit iOS applications |
 | `AccessibilitySnapshot/` | Hierarchy parsing submodule |
 
@@ -81,48 +81,48 @@ Write clear, concise commit messages:
 tuist generate
 
 # Build frameworks
-xcodebuild -workspace Accra.xcworkspace -scheme AccraCore build
-xcodebuild -workspace Accra.xcworkspace -scheme AccraHost \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
-xcodebuild -workspace Accra.xcworkspace -scheme AccraClient build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
 
 # Build apps
-xcodebuild -workspace Accra.xcworkspace -scheme AccraInspector build
-xcodebuild -workspace Accra.xcworkspace -scheme TestApp \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme Stakeout build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TestApp \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
 
 # CLI
-cd AccraCLI && swift build
+cd ButtonHeistCLI && swift build
 ```
 
 ### Manual Testing
 
 1. Run TestApp on iOS simulator
-2. Run AccraInspector on macOS
+2. Run Stakeout on macOS
 3. Verify device discovery works
 4. Verify hierarchy updates in real-time
 
 ## Module Guidelines
 
-### AccraCore
+### TheGoods
 
 - Keep types `Codable` and cross-platform compatible
 - Avoid UIKit/AppKit imports
 - Document all public types
 
-### AccraHost
+### InsideMan
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`
 - Uses BSD sockets for TCP server (not Network framework)
 
-### AccraClient
+### Wheelman
 
 - macOS-only
 - Provide both `@Published` properties and callbacks
 - Handle connection lifecycle gracefully
 
-### AccraInspector
+### Stakeout
 
 - Use semantic colors from `Design/ElementStyling.swift`
 - Keep views small and composable
