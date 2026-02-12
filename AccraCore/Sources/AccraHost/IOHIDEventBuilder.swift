@@ -6,18 +6,20 @@ import UIKit
 @MainActor
 final class IOHIDEventBuilder {
 
-    /// Create an IOHIDEvent for a set of touches
-    /// - Parameters:
-    ///   - touches: Array of (touch, location) tuples
-    ///   - isTouching: True for began phase, false for ended phase
+    /// Touch data for a single finger in a multi-touch event
+    struct FingerTouchData {
+        let touch: UITouch
+        let location: CGPoint
+        let phase: UITouch.Phase
+    }
+
+    /// Create an IOHIDEvent for a set of fingers with per-finger phase
+    /// - Parameter fingers: Array of finger touch data with individual phases
     /// - Returns: IOHIDEventRef or nil if creation failed
-    static func createEvent(for touches: [(touch: UITouch, location: CGPoint)], isTouching: Bool) -> UnsafeMutableRawPointer? {
+    static func createEvent(for fingers: [FingerTouchData]) -> UnsafeMutableRawPointer? {
         let timestamp = mach_absolute_time()
 
-        // Event mask depends on touch state
-        let eventMask: UInt32 = isTouching
-            ? (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch)
-            : kIOHIDDigitizerEventPosition
+        let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
 
         // Create hand (container) event
         guard let handEvent = IOHIDEventCreateDigitizerEvent(
@@ -26,14 +28,14 @@ final class IOHIDEventBuilder {
             UInt32(kIOHIDDigitizerTransducerTypeHand),
             0,      // index
             0,      // identity
-            eventMask,
+            anyTouching ? (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch) : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch),
             0,      // buttonMask
             0, 0,   // x, y (hand doesn't need position)
             0,      // z
             0, 0,   // tipPressure, barrelPressure
             0,      // twist
-            isTouching,
-            isTouching,
+            anyTouching,
+            anyTouching,
             0       // options
         ) else { return nil }
 
@@ -41,20 +43,25 @@ final class IOHIDEventBuilder {
         IOHIDEventSetFloatValue(handEvent, UInt32(kIOHIDEventFieldDigitizerIsDisplayIntegrated), 1.0)
 
         // Create finger events for each touch
-        for (index, touchData) in touches.enumerated() {
+        for (index, finger) in fingers.enumerated() {
+            let isTouching = (finger.phase == .began || finger.phase == .moved || finger.phase == .stationary)
+            let eventMask: UInt32 = (finger.phase == .moved || finger.phase == .stationary)
+                ? kIOHIDDigitizerEventPosition
+                : (kIOHIDDigitizerEventRange | kIOHIDDigitizerEventTouch)
+
             let fingerEvent = IOHIDEventCreateDigitizerFingerEventWithQuality(
                 kCFAllocatorDefault,
                 timestamp,
-                UInt32(index + 1),   // index
-                2,                    // identity
+                UInt32(index + 1),        // index (1-based position)
+                UInt32(index + 2),        // identity (unique per finger: 2, 3, 4...)
                 eventMask,
-                Float(touchData.location.x),
-                Float(touchData.location.y),
+                Float(finger.location.x),
+                Float(finger.location.y),
                 0,                    // z
-                0,                    // tipPressure
+                isTouching ? 1.0 : 0, // tipPressure (1.0 while touching)
                 0,                    // twist
-                5.0,                  // majorRadius
-                5.0,                  // minorRadius
+                15.0,                 // majorRadius (realistic finger size)
+                15.0,                 // minorRadius
                 1.0,                  // quality
                 1.0,                  // density
                 1.0,                  // irregularity
@@ -71,6 +78,12 @@ final class IOHIDEventBuilder {
 
         return handEvent
     }
+
+    /// Convenience for single-phase events (all fingers share the same phase)
+    static func createEvent(for touches: [(touch: UITouch, location: CGPoint)], phase: UITouch.Phase) -> UnsafeMutableRawPointer? {
+        let fingers = touches.map { FingerTouchData(touch: $0.touch, location: $0.location, phase: phase) }
+        return createEvent(for: fingers)
+    }
 }
 
 // MARK: - IOHIDEvent Constants
@@ -83,56 +96,56 @@ private let kIOHIDEventFieldDigitizerIsDisplayIntegrated: Int = 0x00050001
 
 // MARK: - Dynamic Loading of IOKit Functions
 
-private var _IOHIDEventCreateDigitizerEvent: (
-    _ allocator: CFAllocator?,
-    _ timestamp: UInt64,
-    _ transducerType: UInt32,
-    _ index: UInt32,
-    _ identity: UInt32,
-    _ eventMask: UInt32,
-    _ buttonMask: UInt32,
-    _ x: Float,
-    _ y: Float,
-    _ z: Float,
-    _ tipPressure: Float,
-    _ barrelPressure: Float,
-    _ twist: Float,
-    _ range: Bool,
-    _ touch: Bool,
-    _ options: UInt32
+private var _IOHIDEventCreateDigitizerEvent: @convention(c) (
+    CFAllocator?,
+    UInt64,
+    UInt32,
+    UInt32,
+    UInt32,
+    UInt32,
+    UInt32,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Bool,
+    Bool,
+    UInt32
 ) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-private var _IOHIDEventCreateDigitizerFingerEventWithQuality: (
-    _ allocator: CFAllocator?,
-    _ timestamp: UInt64,
-    _ index: UInt32,
-    _ identity: UInt32,
-    _ eventMask: UInt32,
-    _ x: Float,
-    _ y: Float,
-    _ z: Float,
-    _ tipPressure: Float,
-    _ twist: Float,
-    _ majorRadius: Float,
-    _ minorRadius: Float,
-    _ quality: Float,
-    _ density: Float,
-    _ irregularity: Float,
-    _ range: Bool,
-    _ touch: Bool,
-    _ options: UInt32
+private var _IOHIDEventCreateDigitizerFingerEventWithQuality: @convention(c) (
+    CFAllocator?,
+    UInt64,
+    UInt32,
+    UInt32,
+    UInt32,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Float,
+    Bool,
+    Bool,
+    UInt32
 ) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-private var _IOHIDEventAppendEvent: (
-    _ parent: UnsafeMutableRawPointer,
-    _ child: UnsafeMutableRawPointer,
-    _ options: UInt32
+private var _IOHIDEventAppendEvent: @convention(c) (
+    UnsafeMutableRawPointer,
+    UnsafeMutableRawPointer,
+    UInt32
 ) -> Void = { _, _, _ in }
 
-private var _IOHIDEventSetFloatValue: (
-    _ event: UnsafeMutableRawPointer,
-    _ field: UInt32,
-    _ value: Float
+private var _IOHIDEventSetFloatValue: @convention(c) (
+    UnsafeMutableRawPointer,
+    UInt32,
+    Float
 ) -> Void = { _, _, _ in }
 
 private var ioHIDFunctionsLoaded = false

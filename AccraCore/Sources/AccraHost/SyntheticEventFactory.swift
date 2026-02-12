@@ -59,7 +59,13 @@ final class SyntheticEventFactory {
             print("[SyntheticEventFactory] UIEvent doesn't respond to _setHIDEvent:")
             return
         }
-        _ = (event as NSObject).perform(selector, with: hidEvent)
+        // Must use direct IMP invocation — perform(_:with:) boxes the raw pointer
+        // incorrectly instead of passing it as a C pointer to the ObjC method.
+        if let imp = (event as NSObject).method(for: selector) {
+            typealias SetHIDFunc = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
+            let function = unsafeBitCast(imp, to: SetHIDFunc.self)
+            function(event, selector, hidEvent)
+        }
     }
 
     /// Create a fully configured event for a touch
@@ -78,6 +84,21 @@ final class SyntheticEventFactory {
 
         addTouch(touch, to: event, delayed: false)
 
+        return event
+    }
+
+    /// Create a fully configured event for multiple touches
+    /// - Parameters:
+    ///   - touches: The touches to add to the event
+    ///   - hidEvent: Optional IOHIDEvent to attach
+    /// - Returns: Configured UIEvent or nil if creation failed
+    static func createEventForTouches(_ touches: [UITouch], hidEvent: UnsafeMutableRawPointer?) -> UIEvent? {
+        guard let event = getTouchesEvent() else { return nil }
+        clearTouches(from: event)
+        if let hidEvent { setHIDEvent(hidEvent, on: event) }
+        for touch in touches {
+            addTouch(touch, to: event, delayed: false)
+        }
         return event
     }
 }

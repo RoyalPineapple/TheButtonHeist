@@ -130,15 +130,30 @@ public func notifyChange()
 
 Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
 
-### Touch Injection
+### Touch Gesture System (SimFinger)
 
-AccraHost uses a `TouchInjector` internally for handling `activate` and `tap` commands. The injection system uses a three-level fallback chain:
+AccraHost uses `SimFinger` internally for handling all touch gesture commands. SimFinger supports both single-finger and multi-touch gestures via synthetic UITouch/IOHIDEvent injection.
 
-1. **Synthetic event injection** - Creates `UITouch` + `IOHIDEvent` via private APIs and sends through `UIApplication.sendEvent()`. Creates a fresh `UIEvent` per touch phase for iOS 26 compatibility.
-2. **accessibilityActivate()** - Calls the element's accessibility activation method.
-3. **UIControl.sendActions** - Walks the responder chain to find a `UIControl` and sends `.touchUpInside`.
+**Supported gestures:**
+- `tap` - Single tap at a point
+- `longPress` - Long press with configurable duration
+- `swipe` - Quick swipe between two points
+- `drag` - Slow drag between two points (for sliders, reordering)
+- `pinch` - Two-finger pinch/zoom
+- `rotate` - Two-finger rotation
+- `twoFingerTap` - Simultaneous two-finger tap
 
-Before injection, both the accessibility element (trait-level) and the view (UIView-level) are checked for interactivity. Results are reported back to clients via `ActionResult` with detailed success/failure information.
+**Injection stack:**
+1. `SyntheticTouchFactory` - Creates UITouch instances via private API IMP invocation
+2. `IOHIDEventBuilder` - Creates IOHIDEvent hand events with per-finger child events
+3. `SyntheticEventFactory` - Creates fresh UIEvent per touch phase (iOS 26 compatible)
+4. `UIApplication.sendEvent()` - Dispatches the synthetic events
+
+**Key implementation notes:**
+- All private API calls use direct IMP invocation (`method(for:)` + `@convention(c)`) to avoid `perform(_:with:)` boxing non-object types
+- IOKit function pointers loaded via `dlsym` use `@convention(c)` types for correct 8-byte pointer size
+- Multi-touch events use unique finger identity/index per finger for proper tracking
+- `getKeyWindow()` filters overlay windows by `windowLevel <= .normal`
 
 ### Tap Visualization
 
@@ -444,8 +459,14 @@ Messages sent from client to server.
 - `activate(ActionTarget)` - Activate element (VoiceOver double-tap)
 - `increment(ActionTarget)` - Increment adjustable element
 - `decrement(ActionTarget)` - Decrement adjustable element
-- `tap(TapTarget)` - Tap at coordinates or element
 - `performCustomAction(CustomActionTarget)` - Invoke named custom action
+- `touchTap(TouchTapTarget)` - Tap at coordinates or element
+- `touchLongPress(LongPressTarget)` - Long press at coordinates or element
+- `touchSwipe(SwipeTarget)` - Swipe between two points or in a direction
+- `touchDrag(DragTarget)` - Drag from one point to another
+- `touchPinch(PinchTarget)` - Pinch/zoom gesture
+- `touchRotate(RotateTarget)` - Rotation gesture
+- `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `requestScreenshot` - Request PNG screenshot
 
 ### ServerMessage
@@ -476,10 +497,10 @@ public struct ActionTarget: Codable, Sendable
 - `identifier: String?` - Element's accessibility identifier
 - `traversalIndex: Int?` - Element's traversal index
 
-### TapTarget
+### TouchTapTarget
 
 ```swift
-public struct TapTarget: Codable, Sendable
+public struct TouchTapTarget: Codable, Sendable
 ```
 
 #### Properties
@@ -623,7 +644,13 @@ public enum ActionMethod: String, Codable, Sendable
 - `accessibilityActivate` - Used accessibility activation
 - `accessibilityIncrement` - Used accessibility increment
 - `accessibilityDecrement` - Used accessibility decrement
-- `syntheticTap` - Used synthetic touch injection
+- `syntheticTap` - Tap via SimFinger
+- `syntheticLongPress` - Long press via SimFinger
+- `syntheticSwipe` - Swipe via SimFinger
+- `syntheticDrag` - Drag via SimFinger
+- `syntheticPinch` - Pinch via SimFinger
+- `syntheticRotate` - Rotation via SimFinger
+- `syntheticTwoFingerTap` - Two-finger tap via SimFinger
 - `customAction` - Used custom action
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
@@ -691,6 +718,25 @@ OPTIONS:
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
 ```
+
+### accra touch
+
+Simulate touch gestures on the connected iOS device.
+
+```
+USAGE: accra touch <subcommand>
+
+SUBCOMMANDS:
+  tap                     Tap at a point or element
+  longpress               Long press at a point or element
+  swipe                   Swipe between two points or in a direction
+  drag                    Drag from one point to another
+  pinch                   Pinch/zoom at a point or element
+  rotate                  Rotate at a point or element
+  two-finger-tap          Tap with two fingers at a point or element
+```
+
+All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning.
 
 ### accra screenshot
 
@@ -884,4 +930,14 @@ accra screenshot --output screen.png
 
 # Perform custom action
 accra action --type custom --identifier myCell --custom-action "Delete"
+
+# Touch gestures
+accra touch tap --x 100 --y 200
+accra touch tap --identifier loginButton
+accra touch longpress --identifier myButton --duration 1.0
+accra touch swipe --identifier list --direction up
+accra touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
+accra touch pinch --identifier mapView --scale 2.0
+accra touch rotate --x 200 --y 300 --angle 1.57
+accra touch two-finger-tap --identifier zoomControl
 ```
