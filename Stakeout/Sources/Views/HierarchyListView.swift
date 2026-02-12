@@ -61,11 +61,11 @@ struct SearchBar: View {
                 .textFieldStyle(.plain)
 
             if !query.isEmpty {
-                Button(action: { query = "" }) {
+                Button(action: { query = "" }, label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 12))
                         .foregroundColor(Color.Tree.textTertiary)
-                }
+                })
                 .buttonStyle(.plain)
             }
 
@@ -190,7 +190,7 @@ struct DetailSection<Content: View>: View {
 }
 
 #Preview {
-    @Previewable @State var selectedElement: UIElement? = nil
+    @Previewable @State var selectedElement: UIElement?
     HierarchyListView(
         elements: [
             UIElement(

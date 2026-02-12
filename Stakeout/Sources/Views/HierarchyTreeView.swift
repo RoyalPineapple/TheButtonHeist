@@ -160,7 +160,7 @@ struct TreeRowView: View {
 // MARK: - Preview
 
 #Preview {
-    @Previewable @State var selectedElement: UIElement? = nil
+    @Previewable @State var selectedElement: UIElement?
     let sampleElements = [
         UIElement(
             order: 0,

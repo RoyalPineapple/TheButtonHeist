@@ -177,6 +177,7 @@ private func loadIOHIDFunctions() {
     }
 }
 
+// swiftlint:disable:next function_parameter_count
 private func IOHIDEventCreateDigitizerEvent(
     _ allocator: CFAllocator?,
     _ timestamp: UInt64,
@@ -202,6 +203,7 @@ private func IOHIDEventCreateDigitizerEvent(
     )
 }
 
+// swiftlint:disable:next function_parameter_count
 private func IOHIDEventCreateDigitizerFingerEventWithQuality(
     _ allocator: CFAllocator?,
     _ timestamp: UInt64,

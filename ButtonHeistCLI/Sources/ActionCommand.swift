@@ -36,6 +36,7 @@ struct ActionCommand: AsyncParsableCommand {
     var quiet: Bool = false
 
     @MainActor
+    // swiftlint:disable:next cyclomatic_complexity
     mutating func run() async throws {
         guard identifier != nil || index != nil else {
             throw ValidationError("Must specify --identifier or --index")

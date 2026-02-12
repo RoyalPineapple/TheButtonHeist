@@ -14,7 +14,7 @@ struct ElementOverlayView: View {
     }
 
     var body: some View {
-        Canvas { context, size in
+        Canvas { context, _ in
             for element in elements {
                 let isSelected = selectedElement?.order == element.order
                 let rect = scaledRect(for: element)

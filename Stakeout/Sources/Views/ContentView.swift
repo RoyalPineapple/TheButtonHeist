@@ -16,9 +16,9 @@ struct ContentView: View {
             .navigationTitle("Devices")
             .toolbar {
                 ToolbarItem {
-                    Button(action: { client.startDiscovery() }) {
+                    Button(action: { client.startDiscovery() }, label: {
                         Image(systemName: client.isDiscovering ? "antenna.radiowaves.left.and.right" : "arrow.clockwise")
-                    }
+                    })
                 }
             }
         } detail: {
