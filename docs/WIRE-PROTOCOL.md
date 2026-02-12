@@ -1,12 +1,12 @@
 # Accra Wire Protocol Specification
 
-**Version**: 1.1
+**Version**: 2.0
 
 This document specifies the communication protocol between AccraHost (iOS) and clients (AccraClient, CLI, Python scripts).
 
 ## Transport
 
-- **Layer**: TCP socket
+- **Layer**: TCP socket (BSD sockets)
 - **Discovery**: Bonjour/mDNS (WiFi) or CoreDevice IPv6 tunnel (USB)
 - **Service Type**: `_a11ybridge._tcp`
 - **Port**: 1455 (configurable via Info.plist `AccraHostPort` key)
@@ -19,7 +19,7 @@ This document specifies the communication protocol between AccraHost (iOS) and c
 AccraHost advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_a11ybridge._tcp`
-- **Name**: `{AppName}`
+- **Name**: `{AppName}-{DeviceName}`
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -34,13 +34,19 @@ Client                                    Server
    │                                         │
    │──────── TCP Connect ────────────────────►│
    │                                         │
-   │◄─────── info ───────────────────────────│
+   │◄─────── info ───────────────────────────│  (automatic on connect)
    │                                         │
+   │──────── subscribe ──────────────────────►│  (enable auto-updates)
    │──────── requestHierarchy ───────────────►│
+   │──────── requestScreenshot ──────────────►│
    │◄─────── hierarchy ──────────────────────│
+   │◄─────── screenshot ────────────────────│
    │                                         │
    │──────── activate/tap ───────────────────►│
    │◄─────── actionResult ───────────────────│
+   │                                         │
+   │◄─────── hierarchy ──────────────────────│  (auto-pushed on change)
+   │◄─────── screenshot ────────────────────│  (auto-pushed on change)
    │                                         │
    │──────── ping ───────────────────────────►│
    │◄─────── pong ───────────────────────────│
@@ -63,9 +69,25 @@ Request current accessibility hierarchy.
 {"requestHierarchy":{}}
 ```
 
+### subscribe
+
+Subscribe to automatic hierarchy and screenshot updates.
+
+```json
+{"subscribe":{}}
+```
+
+### unsubscribe
+
+Unsubscribe from automatic updates.
+
+```json
+{"unsubscribe":{}}
+```
+
 ### activate
 
-Activate an element (equivalent to VoiceOver double-tap).
+Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector system with synthetic event fallback chain.
 
 **By identifier:**
 ```json
@@ -79,7 +101,7 @@ Activate an element (equivalent to VoiceOver double-tap).
 
 ### tap
 
-Tap at coordinates or on an element.
+Tap at coordinates or on an element. Uses the same TouchInjector system as activate.
 
 **At coordinates:**
 ```json
@@ -94,6 +116,45 @@ Tap at coordinates or on an element.
 **On element by index:**
 ```json
 {"tap":{"_0":{"elementTarget":{"traversalIndex":3}}}}
+```
+
+### increment
+
+Increment an adjustable element (e.g., slider, stepper). Calls `accessibilityIncrement()` on the element's view.
+
+**By identifier:**
+```json
+{"increment":{"_0":{"identifier":"volumeSlider"}}}
+```
+
+**By traversal index:**
+```json
+{"increment":{"_0":{"traversalIndex":8}}}
+```
+
+### decrement
+
+Decrement an adjustable element. Calls `accessibilityDecrement()` on the element's view.
+
+**By identifier:**
+```json
+{"decrement":{"_0":{"identifier":"volumeSlider"}}}
+```
+
+### performCustomAction
+
+Invoke a named custom action on an element. The action name must match one of the element's `customActions`.
+
+```json
+{"performCustomAction":{"_0":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}}
+```
+
+### requestScreenshot
+
+Request a PNG screenshot of the current screen.
+
+```json
+{"requestScreenshot":{}}
 ```
 
 ### ping
@@ -112,7 +173,7 @@ Sent immediately after connection. Contains device and app metadata.
 
 ```json
 {"info":{"_0":{
-  "protocolVersion":"1.0",
+  "protocolVersion":"2.0",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -124,7 +185,7 @@ Sent immediately after connection. Contains device and app metadata.
 
 ### hierarchy
 
-Accessibility hierarchy snapshot.
+Accessibility hierarchy snapshot. Contains a flat element list and an optional tree structure.
 
 ```json
 {"hierarchy":{"_0":{
@@ -162,25 +223,64 @@ Accessibility hierarchy snapshot.
       "activationPointY":162.0,
       "customActions":[]
     }
+  ],
+  "tree":[
+    {"element":{"_0":0}},
+    {"container":{"_0":[
+      {"containerType":"semanticGroup","label":"Form","value":null,"identifier":null,
+       "frameX":0.0,"frameY":88.0,"frameWidth":393.0,"frameHeight":600.0,"traits":[]},
+      [{"element":{"_0":1}}]
+    ]}}
   ]
 }}}
 ```
 
+The `tree` field is optional for backwards compatibility. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
+
 ### actionResult
 
-Response to `activate` or `tap` commands.
+Response to `activate`, `tap`, `increment`, `decrement`, or `performCustomAction` commands.
 
 ```json
 {"actionResult":{"_0":{
   "success":true,
-  "method":"accessibilityActivate"
+  "method":"syntheticTap",
+  "message":null
 }}}
 ```
 
 Possible methods:
-- `accessibilityActivate` - Element's `accessibilityActivate()` returned true
-- `tapGesture` - Tap gesture synthesized at activation point
-- `coordinateTap` - Tap at specified coordinates
+- `syntheticTap` - Tap synthesized via low-level UITouch/IOHIDEvent injection
+- `accessibilityActivate` - Element's `accessibilityActivate()` was used
+- `accessibilityIncrement` - Element's `accessibilityIncrement()` was called
+- `accessibilityDecrement` - Element's `accessibilityDecrement()` was called
+- `customAction` - Named custom action was invoked
+- `elementNotFound` - Target element could not be found
+- `elementDeallocated` - Element's underlying view was deallocated
+
+The optional `message` field provides additional context, especially for failures:
+```json
+{"actionResult":{"_0":{
+  "success":false,
+  "method":"elementNotFound",
+  "message":"Element is disabled (has 'notEnabled' trait)"
+}}}
+```
+
+### screenshot
+
+PNG screenshot of the current screen.
+
+```json
+{"screenshot":{"_0":{
+  "pngData":"iVBORw0KGgo...",
+  "width":393.0,
+  "height":852.0,
+  "timestamp":"2026-02-03T10:30:45.123Z"
+}}}
+```
+
+The `pngData` field is base64-encoded PNG image data.
 
 ### pong
 
@@ -204,9 +304,9 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "1.0") |
+| `protocolVersion` | `String` | Protocol version (e.g., "2.0") |
 | `appName` | `String` | App display name |
-| `bundleIdentifier` | `String?` | App bundle identifier |
+| `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
 | `systemVersion` | `String` | iOS version (e.g., "17.0") |
 | `screenWidth` | `Double` | Screen width in points |
@@ -217,7 +317,8 @@ Error message.
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `ISO8601 Date` | When hierarchy was captured |
-| `elements` | `[AccessibilityElementData]` | All accessibility elements |
+| `elements` | `[AccessibilityElementData]` | Flat list of all accessibility elements |
+| `tree` | `[AccessibilityHierarchyNode]?` | Optional tree structure with containers |
 
 ### AccessibilityElementData
 
@@ -238,12 +339,75 @@ Error message.
 | `activationPointY` | `Double` | Touch target Y in points |
 | `customActions` | `[String]` | Custom action names |
 
+### AccessibilityHierarchyNode
+
+Recursive enum representing the tree structure:
+
+- `element(traversalIndex: Int)` - Leaf node referencing an element by its index in the flat `elements` array
+- `container(AccessibilityContainerData, children: [AccessibilityHierarchyNode])` - Container node with metadata and children
+
+### AccessibilityContainerData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `containerType` | `String` | Container type (see below) |
+| `label` | `String?` | Container's accessibility label |
+| `value` | `String?` | Container's accessibility value |
+| `identifier` | `String?` | Container's accessibility identifier |
+| `frameX` | `Double` | Frame origin X in points |
+| `frameY` | `Double` | Frame origin Y in points |
+| `frameWidth` | `Double` | Frame width in points |
+| `frameHeight` | `Double` | Frame height in points |
+| `traits` | `[String]` | Trait names (e.g., `["tabBar"]`) |
+
+Container types:
+- `"semanticGroup"` - Semantic grouping (with optional label/value/identifier)
+- `"list"` - List container (affects rotor navigation)
+- `"landmark"` - Landmark container (affects rotor navigation)
+- `"dataTable"` - Data table container
+
+### ActionTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `identifier` | `String?` | Element's accessibility identifier |
+| `traversalIndex` | `Int?` | Element's traversal index |
+
+At least one field should be provided. When both are provided, identifier is tried first.
+
+### TapTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Target element (taps at activation point) |
+| `pointX` | `Double?` | Explicit X coordinate |
+| `pointY` | `Double?` | Explicit Y coordinate |
+
+Either `elementTarget` or both `pointX`/`pointY` should be provided.
+
+### CustomActionTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget` | Target element |
+| `actionName` | `String` | Name of the custom action |
+
 ### ActionResult
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `success` | `Bool` | Whether action succeeded |
-| `method` | `String` | How action was performed |
+| `method` | `String` | How action was performed (see method values above) |
+| `message` | `String?` | Additional context or error description |
+
+### ScreenshotPayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pngData` | `String` | Base64-encoded PNG image data |
+| `width` | `Double` | Screen width in points |
+| `height` | `Double` | Screen height in points |
+| `timestamp` | `ISO8601 Date` | When screenshot was captured |
 
 ### Traits
 
@@ -275,25 +439,50 @@ Traits are human-readable strings converted from `UIAccessibilityTraits`:
 # Client connects to fd9a:6190:eed7::1:1455
 
 # Server sends info
-{"info":{"_0":{"protocolVersion":"1.0","appName":"TestApp","bundleIdentifier":"com.accra.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
+{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.accra.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
+
+# Client subscribes to updates
+{"subscribe":{}}
 
 # Client requests hierarchy
 {"requestHierarchy":{}}
 
-# Server responds with hierarchy
-{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...]}}}
+# Server responds with hierarchy (flat + tree)
+{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
 
-# Client taps a button
+# Client requests screenshot
+{"requestScreenshot":{}}
+
+# Server responds with screenshot
+{"screenshot":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
+
+# Client activates a button
 {"activate":{"_0":{"identifier":"loginButton"}}}
 
 # Server confirms action
-{"actionResult":{"_0":{"success":true,"method":"accessibilityActivate"}}}
+{"actionResult":{"_0":{"success":true,"method":"syntheticTap","message":null}}}
+
+# Client increments a slider
+{"increment":{"_0":{"identifier":"volumeSlider"}}}
+
+# Server confirms
+{"actionResult":{"_0":{"success":true,"method":"accessibilityIncrement","message":null}}}
+
+# Client performs custom action
+{"performCustomAction":{"_0":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}}
+
+# Server confirms
+{"actionResult":{"_0":{"success":true,"method":"customAction","message":null}}}
 
 # Client sends keepalive
 {"ping":{}}
 
 # Server responds
 {"pong":{}}
+
+# Server auto-pushes hierarchy change
+{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
+{"screenshot":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
 ```
 
 ## Implementation Notes
@@ -325,3 +514,11 @@ If the TCP connection is lost, clients should:
 1. Close the socket
 2. Optionally attempt reconnection
 3. Re-request hierarchy after reconnecting
+
+### Hierarchy Change Detection
+
+AccraHost uses hash-based change detection during polling:
+1. Parse hierarchy at configurable interval (default: 1.0s)
+2. Compute hash of the flat elements array
+3. Only broadcast if hash differs from last broadcast
+4. Screenshots are automatically captured and broadcast alongside hierarchy changes

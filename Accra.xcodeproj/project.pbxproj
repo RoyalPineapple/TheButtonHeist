@@ -12,9 +12,10 @@
 		08D576036E226F37602D7A72 /* AccraCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0DF01716F52B5C9DB52D6515 /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0675351FC55A487F5F5A8001 /* Spacing.swift */; };
 		0E4EB2D6B18BD0166DCAF1DE /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3379C28319EFC82644E76B55 /* DeviceDiscovery.swift */; };
+		0F4838E340F3A5557F690A72 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70C23C0C05F166F0BECAB6E3 /* SyntheticTouchFactory.swift */; };
+		1129F9125F942E821FA568BC /* SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56209722629B64F631987700 /* SyntheticEventFactory.swift */; };
 		1650D477528A10BED2A10000 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730D418D450811891958C26A /* Messages.swift */; };
 		1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD98E01107CB9098131511E /* HierarchyListView.swift */; };
-		A5E9D7B3C0F2814A6D3E9F72 /* HierarchyTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3B8E2D4F1C9AB87E56D0C3 /* HierarchyTreeView.swift */; };
 		1DCA3AE4006D746570F9A840 /* ElementInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A300C4D5934A6959B84BF4 /* ElementInspectorView.swift */; };
 		29A7ED730AFD9987AF995384 /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C7256E3E6FE7156DE628154 /* TapVisualizerView.swift */; };
 		2C4B8CE2E57129345AD170E3 /* AccraClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3F6C4308845B0F7F4ACE383 /* AccraClientTests.swift */; };
@@ -36,12 +37,14 @@
 		ACE23E8490EA1E8B6F008D4F /* ElementOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5BB9B6812F154CAD3DA5D38 /* ElementOverlayView.swift */; };
 		AF40CFDC9C60795FE1B143DC /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB73B8ABC01333DEAF4B384 /* ServerInfoTests.swift */; };
 		B0AA4CBE3F667668208EDB66 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E4E6771046B4EFBAAF423B /* ConnectionStateTests.swift */; };
+		B8D3C0775769DD1813C0FF96 /* HierarchyTreeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19973B629A435E05122A32EF /* HierarchyTreeView.swift */; };
 		B96617D47A795D1CD29668C9 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39749D2D685BA38C4F36AD61 /* DeviceConnection.swift */; };
 		B994E09EAFD41E0F167AF4C1 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E62B04F921C1CFBA5DA355 /* AccessibilityElementDataTests.swift */; };
 		BE670878B00CE2EEADE7ACF5 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD4517ACC9ACC44B64563CE /* ClientMessageTests.swift */; };
 		C0F064B0B6EF6F7B8D1857E3 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2DE31421A8C05275742CC0C /* Colors.swift */; };
 		C1C9CC8F16F7D29C2C70A907 /* AccraClient.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = DE29511145CE3D24F1218566 /* AccraClient.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		CC5D6F06CADA2FD86F6017A8 /* AccraInspectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B346481AC2A10BDF8A76F090 /* AccraInspectorApp.swift */; };
+		D864D9696ABB26E10A0E1516 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61112EB037931B72AA8224B1 /* IOHIDEventBuilder.swift */; };
 		DF07398238AD38400C28671F /* ServerMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF41A8690D5C0BF7592EBEE4 /* ServerMessageTests.swift */; };
 		E09B8B75337DB2AFC7AC5E08 /* AccraCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F97BDF31A6CE89926A7B3EB6 /* AccraCore.framework */; };
 		EB5F2C7BD05A8A3F2CF8CA3A /* AccraClient.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DE29511145CE3D24F1218566 /* AccraClient.framework */; };
@@ -175,6 +178,7 @@
 		0AB73B8ABC01333DEAF4B384 /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
 		0D55F8115A554A28C3EFBE42 /* AccraCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AccraCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		164550D21FCAC09C416850E9 /* AccraCore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraCore-Info.plist"; sourceTree = "<group>"; };
+		19973B629A435E05122A32EF /* HierarchyTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyTreeView.swift; sourceTree = "<group>"; };
 		23E4E6771046B4EFBAAF423B /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
 		2BF47470BD8C50843F41CF63 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		2CF6269C0DD5F3D81A63E19A /* TouchInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchInjector.swift; sourceTree = "<group>"; };
@@ -184,12 +188,14 @@
 		459913B7FBBDF6E4BEB51AC1 /* ScreenshotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotView.swift; sourceTree = "<group>"; };
 		45E485C71A169153C8678EDB /* AccraHostAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AccraHostAutoStart.h; sourceTree = "<group>"; };
 		4D45DB7C4A2CAB93BEE4495B /* AccraInspector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccraInspector.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		56209722629B64F631987700 /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
 		5C8B750DAEDE8BB5353165FE /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
+		61112EB037931B72AA8224B1 /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		637411E075F2D94CBBC9810D /* AccraClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AccraClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		64C251CCEAD2E90A54A23983 /* AccraInspector-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccraInspector-Info.plist"; sourceTree = "<group>"; };
 		6C7256E3E6FE7156DE628154 /* TapVisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapVisualizerView.swift; sourceTree = "<group>"; };
 		6DD98E01107CB9098131511E /* HierarchyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyListView.swift; sourceTree = "<group>"; };
-		7A3B8E2D4F1C9AB87E56D0C3 /* HierarchyTreeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyTreeView.swift; sourceTree = "<group>"; };
+		70C23C0C05F166F0BECAB6E3 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
 		730D418D450811891958C26A /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		769140DD974E888CBC469C48 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
 		79DC5C4CA7890AF2BE2750E3 /* AccraHost.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccraHost.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -411,7 +417,7 @@
 				B8A300C4D5934A6959B84BF4 /* ElementInspectorView.swift */,
 				C5BB9B6812F154CAD3DA5D38 /* ElementOverlayView.swift */,
 				6DD98E01107CB9098131511E /* HierarchyListView.swift */,
-				7A3B8E2D4F1C9AB87E56D0C3 /* HierarchyTreeView.swift */,
+				19973B629A435E05122A32EF /* HierarchyTreeView.swift */,
 				459913B7FBBDF6E4BEB51AC1 /* ScreenshotView.swift */,
 			);
 			path = Views;
@@ -436,7 +442,10 @@
 			isa = PBXGroup;
 			children = (
 				922D80C47B5EE6BBF24BDC3C /* AccraHost.swift */,
+				61112EB037931B72AA8224B1 /* IOHIDEventBuilder.swift */,
 				5C8B750DAEDE8BB5353165FE /* SimpleSocketServer.swift */,
+				56209722629B64F631987700 /* SyntheticEventFactory.swift */,
+				70C23C0C05F166F0BECAB6E3 /* SyntheticTouchFactory.swift */,
 				6C7256E3E6FE7156DE628154 /* TapVisualizerView.swift */,
 				2CF6269C0DD5F3D81A63E19A /* TouchInjector.swift */,
 			);
@@ -720,7 +729,7 @@
 				1DCA3AE4006D746570F9A840 /* ElementInspectorView.swift in Sources */,
 				ACE23E8490EA1E8B6F008D4F /* ElementOverlayView.swift in Sources */,
 				1D5C74A68BFF9483C7D5EF84 /* HierarchyListView.swift in Sources */,
-				A5E9D7B3C0F2814A6D3E9F72 /* HierarchyTreeView.swift in Sources */,
+				B8D3C0775769DD1813C0FF96 /* HierarchyTreeView.swift in Sources */,
 				99C15EAC1A54340A9F912D99 /* ScreenshotView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -741,7 +750,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				01DA5884DC6137D8434254EE /* AccraHost.swift in Sources */,
+				D864D9696ABB26E10A0E1516 /* IOHIDEventBuilder.swift in Sources */,
 				FCEE3248D564FFEDB6E4B0B5 /* SimpleSocketServer.swift in Sources */,
+				1129F9125F942E821FA568BC /* SyntheticEventFactory.swift in Sources */,
+				0F4838E340F3A5557F690A72 /* SyntheticTouchFactory.swift in Sources */,
 				29A7ED730AFD9987AF995384 /* TapVisualizerView.swift in Sources */,
 				6CBD27D8253F73CF93EE714E /* TouchInjector.swift in Sources */,
 				38CDF73165BE79444783F52D /* AccraHostAutoStart.m in Sources */,
