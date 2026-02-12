@@ -23,11 +23,13 @@ Thank you for your interest in contributing to Accra!
 | Directory | Description |
 |-----------|-------------|
 | `AccraCore/Sources/AccraCore/` | Shared types and protocol messages |
-| `AccraCore/Sources/AccraHost/` | iOS server framework |
-| `AccraCore/Sources/AccraClient/` | macOS client library |
+| `AccraCore/Sources/AccraHost/` | iOS server framework (server, touch injection, tap visualization) |
+| `AccraCore/Sources/AccraHostLoader/` | ObjC auto-start via +load |
+| `AccraCore/Sources/AccraClient/` | macOS client library (discovery, connection) |
 | `AccraInspector/Sources/` | macOS GUI application |
-| `AccraCLI/` | Command-line tool (SPM package) |
-| `TestApp/` | Sample iOS applications |
+| `AccraCLI/` | Command-line tool (watch, action, screenshot commands) |
+| `TestApp/` | Sample SwiftUI and UIKit iOS applications |
+| `AccessibilitySnapshot/` | Hierarchy parsing submodule |
 
 ## Code Style
 
@@ -112,7 +114,7 @@ cd AccraCLI && swift build
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`
-- Use Network framework for WebSocket
+- Uses BSD sockets for TCP server (not Network framework)
 
 ### AccraClient
 
@@ -122,8 +124,7 @@ cd AccraCLI && swift build
 
 ### AccraInspector
 
-- Follow the design system in `docs/DESIGN-SYSTEM.md`
-- Use semantic colors and typography tokens
+- Use semantic colors from `Design/ElementStyling.swift`
 - Keep views small and composable
 
 ## Questions?
