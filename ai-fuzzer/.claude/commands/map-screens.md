@@ -1,0 +1,121 @@
+---
+description: Build a navigation graph of all reachable screens in the app
+---
+
+# /map-screens — Screen Graph Builder
+
+You are going to systematically map every reachable screen in the connected iOS app and build a navigation graph showing how screens connect.
+
+## Step 1: Start Screen
+
+1. Call `get_screen` + `get_interface`
+2. Fingerprint the current screen:
+   - Extract all element identifiers (excluding nil)
+   - Extract all element labels
+   - Give the screen a human-readable name based on prominent elements (e.g., "Main Menu", "Settings", "Login Form")
+3. Initialize the graph:
+   - `screens`: dict mapping fingerprint → {name, element_count, elements_summary}
+   - `transitions`: list of {from, action, to}
+   - `exploration_stack`: stack of (screen_fingerprint, untried_elements)
+
+Push the current screen onto the exploration stack.
+
+## Step 2: Exploration Loop
+
+While the exploration stack is not empty:
+
+### 2a. Pick Next Element
+
+Pop the top of the stack. If all navigation-like elements have been tried on this screen, pop again.
+
+Navigation-like elements (in priority order):
+1. Elements in tab bars (container type `tabBar`)
+2. Elements in lists (container type `list`) — likely table/collection view cells
+3. Buttons with labels suggesting navigation ("Settings", "Profile", "More", "Details", ">" etc.)
+4. Any other tappable elements not yet tried
+
+### 2b. Try Navigation
+
+1. Record the current screen fingerprint
+2. `tap` the selected element
+3. `get_interface` — fingerprint the result
+4. Compare:
+   - **Same screen**: No transition. Mark element as "stays on screen". Continue to next element.
+   - **New screen (not in `screens` dict)**:
+     - Name it based on prominent elements
+     - Add to `screens` dict
+     - Record transition: `{from: current_screen, action: "tap [element]", to: new_screen}`
+     - Push new screen onto exploration stack
+     - **Explore it** (push current screen's remaining elements back on stack first)
+   - **Known screen (already in `screens` dict)**:
+     - Record transition (it's a new edge in the graph, even if the screen is known)
+     - Navigate back — don't re-explore
+
+### 2c. Navigate Back
+
+After recording a transition to a known screen, navigate back:
+1. Look for back/close/cancel/done elements
+2. Try swipe-right from left edge
+3. If back navigation works, verify you returned to the expected screen (fingerprint check)
+4. If back navigation fails, record as INFO finding and continue from wherever you are
+
+## Step 3: Build the Graph
+
+After exploration completes, generate the screen map:
+
+```
+## Screen Map
+
+### Screens Discovered: [count]
+
+| # | Screen Name | Elements | Fingerprint (abbreviated) |
+|---|-------------|----------|--------------------------|
+| 1 | Main Menu   | 8        | {home, settings, ...}    |
+| 2 | Settings    | 12       | {back, theme, ...}       |
+| ...
+
+### Navigation Graph
+
+Main Menu
+  ├── [tap "Settings"] → Settings
+  │   ├── [tap "Theme"] → Theme Picker
+  │   │   └── [tap "Back"] → Settings
+  │   └── [tap "Back"] → Main Menu
+  ├── [tap "Profile"] → Profile
+  │   └── [tap "Back"] → Main Menu
+  └── [tab "Search"] → Search
+      └── [tab "Home"] → Main Menu
+
+### Transitions: [count]
+
+| From | Action | To |
+|------|--------|----|
+| Main Menu | tap "Settings" | Settings |
+| Settings | tap "Back" | Main Menu |
+| ...
+
+### Findings
+
+#### Dead Ends (no back navigation)
+- [screen name] — reached via [path], no way back
+
+#### Orphan Screens (single entry point)
+- [screen name] — only reachable from [screen] via [element]
+
+#### Deep Paths
+- [path description] — [depth] levels deep
+```
+
+## Step 4: Save Report
+
+Write the full screen map to `reports/YYYY-MM-DD-HHMM-screen-map.md`.
+
+## Limits
+
+- **Max screens**: 50. If more exist, report how many were found and stop.
+- **Max depth**: 15 levels of navigation.
+- **Max total actions**: 200. Report partial map if limit reached.
+
+## Crash Handling
+
+If the app crashes during mapping, record the CRASH with the action that caused it, save the partial map, and stop.
