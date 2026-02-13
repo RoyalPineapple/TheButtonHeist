@@ -79,6 +79,57 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - ActionResult Tests
+
+    func testActionResultWithValue() throws {
+        let result = ActionResult(success: true, method: .typeText, value: "Hello World")
+        let message = ServerMessage.actionResult(result)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .actionResult(let decodedResult) = decoded {
+            XCTAssertTrue(decodedResult.success)
+            XCTAssertEqual(decodedResult.method, .typeText)
+            XCTAssertEqual(decodedResult.value, "Hello World")
+            XCTAssertNil(decodedResult.message)
+        } else {
+            XCTFail("Expected actionResult, got \(decoded)")
+        }
+    }
+
+    func testActionResultWithoutValue() throws {
+        let result = ActionResult(success: true, method: .syntheticTap)
+        let message = ServerMessage.actionResult(result)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .actionResult(let decodedResult) = decoded {
+            XCTAssertTrue(decodedResult.success)
+            XCTAssertEqual(decodedResult.method, .syntheticTap)
+            XCTAssertNil(decodedResult.value)
+        } else {
+            XCTFail("Expected actionResult, got \(decoded)")
+        }
+    }
+
+    func testActionResultBackwardCompatibility() throws {
+        // Simulate JSON from an older version that doesn't include "value" key
+        let json = """
+        {"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .actionResult(let result) = decoded {
+            XCTAssertTrue(result.success)
+            XCTAssertEqual(result.method, .syntheticTap)
+            XCTAssertNil(result.value)
+            XCTAssertNil(result.message)
+        } else {
+            XCTFail("Expected actionResult, got \(decoded)")
+        }
+    }
+
     func testScreenEncodeDecode() throws {
         let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",

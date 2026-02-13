@@ -145,6 +145,86 @@ final class SafeCracker {
         return touchUp()
     }
 
+    // MARK: - Public: Text Input (via UIKeyboardImpl)
+
+    /// Check if the software keyboard is currently visible.
+    func isKeyboardVisible() -> Bool {
+        findKeyboardFrame() != nil
+    }
+
+    /// Type text by injecting characters into the active keyboard.
+    /// Uses UIKeyboardImpl.addInputString: — the same approach KIF uses.
+    /// The keyboard must already be visible (a text field must be focused).
+    /// - Parameters:
+    ///   - text: The text to type, character by character
+    ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
+    func typeText(_ text: String, interKeyDelay: UInt64 = 30_000_000) async -> Bool {
+        guard let impl = getKeyboardImpl() else { return false }
+        let sel = NSSelectorFromString("addInputString:")
+        for char in text {
+            _ = impl.perform(sel, with: String(char))
+            try? await Task.sleep(nanoseconds: interKeyDelay)
+        }
+        return true
+    }
+
+    /// Delete characters by sending delete events to the active keyboard.
+    /// Uses UIKeyboardImpl.deleteFromInput — the same approach KIF uses.
+    /// - Parameters:
+    ///   - count: Number of characters to delete
+    ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
+    func deleteText(count: Int, interKeyDelay: UInt64 = 30_000_000) async -> Bool {
+        guard count > 0 else { return true }
+        guard let impl = getKeyboardImpl() else { return false }
+        let sel = NSSelectorFromString("deleteFromInput")
+        for _ in 0..<count {
+            _ = impl.perform(sel)
+            try? await Task.sleep(nanoseconds: interKeyDelay)
+        }
+        return true
+    }
+
+    // MARK: - Private: Keyboard Helpers
+
+    /// Get the UIKeyboardImpl active instance via ObjC runtime.
+    /// UIKeyboardImpl is a private class that manages the keyboard input system.
+    /// addInputString: injects text directly, bypassing the need to find and tap
+    /// individual key views (which aren't accessible since iOS renders the keyboard
+    /// in a remote process).
+    private func getKeyboardImpl() -> AnyObject? {
+        guard let kbClass = NSClassFromString("UIKeyboardImpl") else { return nil }
+        let sel = NSSelectorFromString("activeInstance")
+        guard (kbClass as AnyObject).responds(to: sel),
+              let result = (kbClass as AnyObject).perform(sel) else { return nil }
+        return result.takeUnretainedValue()
+    }
+
+    /// Find the keyboard frame by looking for UIInputSetHostView in the window hierarchy.
+    private func findKeyboardFrame() -> CGRect? {
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        for window in allWindows {
+            if let frame = findInputHostFrame(in: window) {
+                return frame
+            }
+        }
+        return nil
+    }
+
+    private func findInputHostFrame(in view: UIView) -> CGRect? {
+        let className = String(describing: type(of: view))
+        if className == "UIInputSetHostView" && view.frame.height > 100 && !view.isHidden {
+            return view.convert(view.bounds, to: nil)
+        }
+        for sub in view.subviews {
+            if let frame = findInputHostFrame(in: sub) {
+                return frame
+            }
+        }
+        return nil
+    }
+
     // MARK: - Public: Multi-Touch Gestures
 
     /// Simulate a pinch gesture centered at a screen point.
