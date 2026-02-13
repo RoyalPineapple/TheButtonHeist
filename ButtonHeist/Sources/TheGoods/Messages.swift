@@ -65,6 +65,9 @@ public enum ClientMessage: Codable {
     /// Draw along a bezier curve (sampled to polyline server-side)
     case touchDrawBezier(DrawBezierTarget)
 
+    /// Type text character-by-character by tapping keyboard keys
+    case typeText(TypeTextTarget)
+
     /// Request a screenshot of the current screen
     case requestScreenshot
 }
@@ -356,6 +359,23 @@ public struct DrawBezierTarget: Codable, Sendable {
     }
 }
 
+/// Target for typing text character-by-character via keyboard key taps
+public struct TypeTextTarget: Codable, Sendable {
+    /// Text to type (each character is tapped individually). Can be nil if only deleting.
+    public let text: String?
+    /// Number of times to tap the delete key before typing. Used for corrections.
+    public let deleteCount: Int?
+    /// Optional element to tap first to bring up keyboard (text field).
+    /// Also used to read back the current value after typing.
+    public let elementTarget: ActionTarget?
+
+    public init(text: String? = nil, deleteCount: Int? = nil, elementTarget: ActionTarget? = nil) {
+        self.text = text
+        self.deleteCount = deleteCount
+        self.elementTarget = elementTarget
+    }
+}
+
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
@@ -389,11 +409,14 @@ public struct ActionResult: Codable, Sendable {
     public let success: Bool
     public let method: ActionMethod
     public let message: String?
+    /// Current text field value after a typeText operation
+    public let value: String?
 
-    public init(success: Bool, method: ActionMethod, message: String? = nil) {
+    public init(success: Bool, method: ActionMethod, message: String? = nil, value: String? = nil) {
         self.success = success
         self.method = method
         self.message = message
+        self.value = value
     }
 }
 
@@ -428,6 +451,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticRotate
     case syntheticTwoFingerTap
     case syntheticDrawPath
+    case typeText
     case customAction
     case elementNotFound
     case elementDeallocated

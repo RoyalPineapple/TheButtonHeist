@@ -99,10 +99,11 @@ InsideMan (singleton, @MainActor)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
-├── SafeCracker (multi-touch gesture simulation)
+├── SafeCracker (gesture simulation + text input)
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
-│   └── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
+│   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
+│   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
 ├── TapVisualizerView (visual tap feedback overlay)
 ├── Polling Timer (hierarchy change detection via hash comparison)
 └── Debounce Timer (300ms debounce for UI notifications)
@@ -141,9 +142,9 @@ When the framework loads:
 - Multiple concurrent client support
 - SIGPIPE handling to prevent crashes on closed connections
 
-### SafeCracker (Touch Gesture System)
+### SafeCracker (Touch Gesture & Text Input System)
 
-**Purpose**: Synthesize touch gestures on the iOS device to allow remote interaction. Supports single-finger gestures (tap, long press, swipe, drag) and multi-touch gestures (pinch, rotate, two-finger tap).
+**Purpose**: Synthesize touch gestures and inject text on the iOS device to allow remote interaction. Supports single-finger gestures (tap, long press, swipe, drag), multi-touch gestures (pinch, rotate, two-finger tap), and text input via UIKeyboardImpl.
 
 **Architecture**:
 ```
@@ -159,6 +160,11 @@ SafeCracker (stateful, @MainActor)
 │   ├── pinch(center:scale:)    → 2-finger spread/squeeze
 │   ├── rotate(center:angle:)   → 2-finger rotation
 │   └── twoFingerTap(at:)       → 2-finger simultaneous tap
+│
+├── Text Input (via UIKeyboardImpl)
+│   ├── typeText(_:)             → addInputString: per character
+│   ├── deleteText(count:)       → deleteFromInput per character
+│   └── isKeyboardVisible()      → UIInputSetHostView detection
 │
 ├── N-Finger Primitives
 │   ├── touchesDown(at: [CGPoint])  → Create N touches + HID event + sendEvent
@@ -176,6 +182,11 @@ SafeCracker (stateful, @MainActor)
     │   └── Finger identity/index for multi-touch tracking
     └── SyntheticEventFactory     → Fresh UIEvent per touch phase
 ```
+
+**Text Input Design**:
+- The iOS software keyboard is rendered by a separate remote process. Individual key views are not in the app's view hierarchy — only a `_UIRemoteKeyboardPlaceholderView` placeholder exists.
+- SafeCracker uses `UIKeyboardImpl.activeInstance` (via ObjC runtime) to get the keyboard controller, then calls `addInputString:` to inject text and `deleteFromInput` to delete — the same approach used by KIF (Keep It Functional).
+- Keyboard visibility is detected by finding `UIInputSetHostView` (height > 100pt) in the window hierarchy.
 
 **Key Design Decisions**:
 - **Direct IMP invocation**: `perform(_:with:)` boxes non-object types (Int, Bool, Double, UnsafeMutableRawPointer) as NSNumber objects, corrupting values passed to private ObjC methods. All private API calls use `method(for:)` + `unsafeBitCast` to `@convention(c)` typed function pointers.
@@ -212,7 +223,7 @@ buttonheist-mcp (executable)
 ├── StdioTransport (MCP SDK)
 │   └── JSON-RPC 2.0 over stdin/stdout
 ├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 15 tool definitions
+│   ├── ListTools handler → 16 tool definitions
 │   └── CallTool handler → dispatches to HeistClient
 ├── HeistClient (@MainActor)
 │   ├── DeviceDiscovery (auto-connect on startup)
@@ -238,7 +249,7 @@ MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server a
 When the MCP client starts a session, it:
 1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
 2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
-3. Sends `initialize` → server responds with capabilities (15 tools)
+3. Sends `initialize` → server responds with capabilities (16 tools)
 4. Sends `notifications/initialized` → server is ready
 5. Tool calls appear as **native capabilities** to the AI agent — they show up in the agent's tool palette alongside built-in tools like file reading and shell commands
 
@@ -274,7 +285,7 @@ Session ends
 - **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls. Tool calls complete in milliseconds.
 - **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
 - **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
-- **15 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`).
+- **16 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`).
 - **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
 
 ### ButtonHeist (macOS Client Framework)
@@ -334,7 +345,7 @@ The MCP server is the primary interface for AI agents. When an AI agent (Claude 
    └── MCP Server.start(transport: StdioTransport) → ready
 
 3. MCP client sends initialize handshake
-   └── Server responds with capabilities (15 tools)
+   └── Server responds with capabilities (16 tools)
    └── Tools appear as native capabilities to the AI agent
    └── Example: Claude sees get_screenshot, tap, draw_path as callable tools
 

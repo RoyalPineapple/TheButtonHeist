@@ -21,7 +21,7 @@ struct ButtonHeist: AsyncParsableCommand {
               buttonheist touch two-finger-tap --identifier "zoomControl"   # Two-finger tap
             """,
         version: "2.0.0",
-        subcommands: [WatchCommand.self, ActionCommand.self, TouchCommand.self, ScreenshotCommand.self],
+        subcommands: [WatchCommand.self, ActionCommand.self, TouchCommand.self, TypeCommand.self, ScreenshotCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }
