@@ -272,8 +272,19 @@ let customActionTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let listDevicesTool = Tool(
+    name: "list_devices",
+    // swiftlint:disable:next line_length
+    description: "List all discovered iOS devices running InsideMan. Returns device names, app names, device names, and instance IDs for targeting specific simulators.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([:]),
+    ]),
+    annotations: .init(readOnlyHint: true, openWorldHint: false)
+)
+
 let allTools: [Tool] = [
-    interfaceTool, screenTool,
+    listDevicesTool, interfaceTool, screenTool,
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
@@ -314,6 +325,29 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
     let args = params.arguments
 
     switch params.name {
+
+    // MARK: Device Discovery
+
+    case "list_devices":
+        let devices = client.discoveredDevices
+        struct DeviceInfo: Encodable {
+            let name: String
+            let appName: String
+            let deviceName: String
+            let shortId: String?
+            let simulatorUDID: String?
+            let vendorIdentifier: String?
+        }
+        let infos = devices.map {
+            DeviceInfo(name: $0.name, appName: $0.appName,
+                       deviceName: $0.deviceName, shortId: $0.shortId,
+                       simulatorUDID: $0.simulatorUDID,
+                       vendorIdentifier: $0.vendorIdentifier)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let json = try encoder.encode(infos)
+        return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "[]")])
 
     // MARK: Read Tools
 
@@ -581,36 +615,60 @@ func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> C
 // MARK: - Device Connection
 
 @MainActor
-func discoverAndConnect(client: HeistClient) async throws {
+func discoverAndConnect(client: HeistClient, deviceFilter: String? = nil) async throws {
     log("Starting device discovery...")
+    if let filter = deviceFilter {
+        log("Device filter: \(filter)")
+    }
     client.startDiscovery()
 
-    // Wait for a device (up to 30 seconds)
+    // Wait for a matching device (up to 30 seconds)
     let deadline = Date().addingTimeInterval(30)
-    while client.discoveredDevices.isEmpty {
+    while true {
         if Date() > deadline {
-            throw MCPError.internalError("No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
+            if let filter = deviceFilter {
+                let available = client.discoveredDevices.map { $0.name }.joined(separator: ", ")
+                throw MCPError.internalError(
+                    "No device matching '\(filter)' found within 30 seconds. Available: \(available.isEmpty ? "(none)" : available)")
+            }
+            throw MCPError.internalError(
+                "No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
         }
-        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
-    }
 
-    let device = client.discoveredDevices[0]
-    log("Found device: \(device.name)")
+        if let device = matchDevice(from: client.discoveredDevices, filter: deviceFilter) {
+            log("Found device: \(device.name)")
 
-    // Connect and wait
-    client.connect(to: device)
-    let connectDeadline = Date().addingTimeInterval(10)
-    while client.connectionState != .connected {
-        if Date() > connectDeadline {
-            throw MCPError.internalError("Connection to device timed out")
+            client.connect(to: device)
+            let connectDeadline = Date().addingTimeInterval(10)
+            while client.connectionState != .connected {
+                if Date() > connectDeadline {
+                    throw MCPError.internalError("Connection to device timed out")
+                }
+                if case .failed(let msg) = client.connectionState {
+                    throw MCPError.internalError("Connection failed: \(msg)")
+                }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+
+            log("Connected to \(device.name)")
+            return
         }
-        if case .failed(let msg) = client.connectionState {
-            throw MCPError.internalError("Connection failed: \(msg)")
-        }
+
         try await Task.sleep(nanoseconds: 100_000_000)
     }
+}
 
-    log("Connected to \(device.name)")
+func matchDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
+    guard let filter else { return devices.first }
+    let low = filter.lowercased()
+    return devices.first { device in
+        device.name.lowercased().contains(low) ||
+        device.appName.lowercased().contains(low) ||
+        device.deviceName.lowercased().contains(low) ||
+        (device.shortId?.lowercased().hasPrefix(low) ?? false) ||
+        (device.simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
+        (device.vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
+    }
 }
 
 // MARK: - Entry Point
@@ -619,9 +677,18 @@ func discoverAndConnect(client: HeistClient) async throws {
 struct ButtonHeistMCP {
     @MainActor
     static func main() async throws {
+        // Read device filter from --device arg or BUTTONHEIST_DEVICE env var
+        let deviceFilter: String?
+        let args = CommandLine.arguments
+        if let idx = args.firstIndex(of: "--device"), idx + 1 < args.count {
+            deviceFilter = args[idx + 1]
+        } else {
+            deviceFilter = ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+        }
+
         let client = HeistClient()
 
-        try await discoverAndConnect(client: client)
+        try await discoverAndConnect(client: client, deviceFilter: deviceFilter)
 
         log("Starting MCP server...")
 
