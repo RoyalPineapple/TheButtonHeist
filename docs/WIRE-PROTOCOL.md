@@ -245,6 +245,25 @@ Invoke a named custom action on an element. The action name must match one of th
 {"performCustomAction":{"_0":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}}
 ```
 
+### typeText
+
+Type text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl), and/or delete characters. Returns the current text field value in the `actionResult`. The software keyboard must be visible.
+
+**Type text into a field (taps element to focus first):**
+```json
+{"typeText":{"_0":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}}
+```
+
+**Delete 3 characters:**
+```json
+{"typeText":{"_0":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}}
+```
+
+**Delete then retype (correction):**
+```json
+{"typeText":{"_0":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}}
+```
+
 ### requestScreen
 
 Request a PNG capture of the current screen.
@@ -331,13 +350,22 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `tap`, `increment`, `decrement`, or `performCustomAction` commands.
+Response to `activate`, `tap`, `increment`, `decrement`, `typeText`, or `performCustomAction` commands.
 
 ```json
 {"actionResult":{"_0":{
   "success":true,
   "method":"syntheticTap",
   "message":null
+}}}
+```
+
+For `typeText`, the response includes the current text field value:
+```json
+{"actionResult":{"_0":{
+  "success":true,
+  "method":"typeText",
+  "value":"Hello World"
 }}}
 ```
 
@@ -353,6 +381,7 @@ Possible methods:
 - `activate` - Element's `activate()` was used
 - `increment` - Element's `increment()` was called
 - `decrement` - Element's `decrement()` was called
+- `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Named custom action was invoked
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
@@ -582,6 +611,16 @@ At least one field should be provided. When both are provided, identifier is tri
 | `endX` | `Double` | Endpoint X |
 | `endY` | `Double` | Endpoint Y |
 
+### TypeTextTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String?` | Text to type character-by-character |
+| `deleteCount` | `Int?` | Number of delete key taps before typing |
+| `elementTarget` | `ActionTarget?` | Element to tap for focus and value readback |
+
+At least `text` or `deleteCount` must be provided. If `elementTarget` is provided, it is tapped first to bring up the keyboard, and its value is read back after the operation.
+
 ### CustomActionTarget
 
 | Field | Type | Description |
@@ -596,6 +635,7 @@ At least one field should be provided. When both are provided, identifier is tri
 | `success` | `Bool` | Whether action succeeded |
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
+| `value` | `String?` | Current text field value (populated by `typeText`) |
 
 ### ScreenPayload
 
@@ -646,6 +686,18 @@ At least one field should be provided. When both are provided, identifier is tri
 
 # Server confirms
 {"actionResult":{"_0":{"success":true,"method":"customAction","message":null}}}
+
+# Client types text into a field
+{"typeText":{"_0":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}}
+
+# Server confirms with current field value
+{"actionResult":{"_0":{"success":true,"method":"typeText","value":"Hello World"}}}
+
+# Client corrects a typo (delete 5 chars, retype)
+{"typeText":{"_0":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}}
+
+# Server confirms correction
+{"actionResult":{"_0":{"success":true,"method":"typeText","value":"Hello World"}}}
 
 # Client sends keepalive
 {"ping":{}}

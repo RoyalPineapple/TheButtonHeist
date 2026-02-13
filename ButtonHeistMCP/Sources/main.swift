@@ -272,6 +272,22 @@ let customActionTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let typeTextTool = Tool(
+    name: "type_text",
+    // swiftlint:disable:next line_length
+    description: "Type text into a text field by tapping individual keyboard keys, and/or delete characters. Returns the current text field value after the operation. Use deleteCount to backspace before typing for corrections. The software keyboard must be visible (disable 'Connect Hardware Keyboard' in Simulator). Specify an element to target — it will be tapped to focus, and its value read back after typing.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "text": .object(["type": .string("string"), "description": .string("Text to type character-by-character")]),
+            "deleteCount": .object(["type": .string("integer"), "description": .string("Number of delete key taps before typing (for corrections)")]),
+            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier (focuses field, reads value)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index (focuses field, reads value)")]),
+        ]),
+    ]),
+    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
+)
+
 let listDevicesTool = Tool(
     name: "list_devices",
     // swiftlint:disable:next line_length
@@ -288,6 +304,7 @@ let allTools: [Tool] = [
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
+    typeTextTool,
 ]
 
 // MARK: - Argument Helpers
@@ -591,6 +608,33 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
         }
         let customTarget = CustomActionTarget(elementTarget: target, actionName: actionName)
         return try await sendAction(.performCustomAction(customTarget), client: client)
+
+    case "type_text":
+        let text = stringArg(args, "text")
+        let deleteCount = intArg(args, "deleteCount")
+        guard text != nil || deleteCount != nil else {
+            return errorResult("Must specify text, deleteCount, or both")
+        }
+        let target = elementTarget(args)
+        let message = ClientMessage.typeText(TypeTextTarget(
+            text: text,
+            deleteCount: deleteCount,
+            elementTarget: target
+        ))
+        client.send(message)
+        let typeResult = try await client.waitForActionResult(timeout: 30)
+        if typeResult.success {
+            var content: [Tool.Content] = [
+                .text("Success (method: \(typeResult.method.rawValue))"),
+            ]
+            if let value = typeResult.value {
+                content.append(.text("Value: \(value)"))
+            }
+            return CallTool.Result(content: content)
+        } else {
+            let errorMsg = typeResult.message ?? typeResult.method.rawValue
+            return CallTool.Result(content: [.text("Failed: \(errorMsg)")], isError: true)
+        }
 
     default:
         throw MCPError.methodNotFound("Unknown tool: \(params.name)")
