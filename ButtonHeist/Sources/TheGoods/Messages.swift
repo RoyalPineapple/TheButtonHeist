@@ -441,6 +441,14 @@ public struct ServerInfo: Codable, Sendable {
     public let systemVersion: String
     public let screenWidth: Double
     public let screenHeight: Double
+    /// Per-launch session identifier (nil for servers < v2.1)
+    public let instanceId: String?
+    /// Port the server is listening on (nil for servers < v2.1)
+    public let listeningPort: UInt16?
+    /// Simulator UDID when running on iOS Simulator (nil on physical devices)
+    public let simulatorUDID: String?
+    /// Vendor identifier from UIDevice.identifierForVendor (stable per app install per device)
+    public let vendorIdentifier: String?
 
     public init(
         protocolVersion: String,
@@ -449,7 +457,11 @@ public struct ServerInfo: Codable, Sendable {
         deviceName: String,
         systemVersion: String,
         screenWidth: Double,
-        screenHeight: Double
+        screenHeight: Double,
+        instanceId: String? = nil,
+        listeningPort: UInt16? = nil,
+        simulatorUDID: String? = nil,
+        vendorIdentifier: String? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.appName = appName
@@ -458,6 +470,10 @@ public struct ServerInfo: Codable, Sendable {
         self.systemVersion = systemVersion
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
+        self.instanceId = instanceId
+        self.listeningPort = listeningPort
+        self.simulatorUDID = simulatorUDID
+        self.vendorIdentifier = vendorIdentifier
     }
 }
 
