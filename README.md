@@ -13,6 +13,8 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **Multi-touch** - Simultaneous multi-finger gesture injection via IOKit HID events
 - **USB connectivity** - Connect to devices over USB when WiFi is unavailable
 - **Auto-start** - InsideMan starts automatically when your app launches
+- **Multi-device** - Run many instances on many simulators with stable identifiers for each
+- **Device targeting** - Match devices by name, short ID, simulator UDID, or vendor identifier
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
 - **Multiple interfaces** - MCP server, GUI app, CLI, Python, or custom tools
 
@@ -48,7 +50,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 ┌─────────────────────────────────┼───────────────────────────────────┐
 │                        ┌────────┴────────┐                         │
 │                        │    InsideMan    │  ← Auto-starts on load  │
-│                        │   (framework)   │    Port 1455            │
+│                        │   (framework)   │    Port 1455 + Bonjour  │
 │                        └────────┬────────┘                         │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
@@ -68,7 +70,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 | **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
 | **ButtonHeistMCP** | macOS | MCP server — lets AI agents drive iOS apps via Model Context Protocol |
 | **Stakeout** | macOS | GUI app for visual inspection with screenshots and element overlays |
-| **buttonheist** | macOS | CLI tool with watch, action, touch, and screenshot commands |
+| **buttonheist** | macOS | CLI tool with list, watch, action, touch, and screenshot commands |
 
 ## Quick Start
 
@@ -148,7 +150,22 @@ swift build -c release
 }
 ```
 
-That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any MCP client) opens a session in your project directory, it reads `.mcp.json` and spawns the `buttonheist-mcp` process. The server automatically discovers your running iOS app via Bonjour, establishes a persistent TCP connection, and exposes 15 tools that appear as native capabilities to the agent.
+**Targeting a specific device** (when running multiple simulators):
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": ["--device", "DEADBEEF-1234-5678-9ABC-DEF012345678"]
+    }
+  }
+}
+```
+
+You can also target by `BUTTONHEIST_DEVICE` environment variable, device name, app name, or short ID prefix.
+
+That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any MCP client) opens a session in your project directory, it reads `.mcp.json` and spawns the `buttonheist-mcp` process. The server automatically discovers your running iOS app via Bonjour, establishes a persistent TCP connection, and exposes 16 tools that appear as native capabilities to the agent.
 
 **How it works end-to-end:**
 
@@ -157,7 +174,7 @@ That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any 
 2. MCP client reads .mcp.json, spawns buttonheist-mcp
 3. buttonheist-mcp discovers your iOS app via Bonjour (< 2 seconds)
 4. Persistent TCP connection established — stays open for the entire session
-5. Agent sees 15 tools as native capabilities (get_screen, tap, draw_path, etc.)
+5. Agent sees 16 tools as native capabilities (list_devices, get_screen, tap, draw_path, etc.)
 6. Agent calls tools directly — no shell commands, no scripts, no manual wiring
 ```
 
@@ -183,6 +200,7 @@ Because the connection is persistent (no per-call Bonjour discovery or TCP hands
 
 | Tool | Description |
 |------|-------------|
+| `list_devices` | List all discovered iOS devices with identifiers |
 | `get_interface` | Read the full UI element hierarchy |
 | `get_screen` | Capture a PNG screen capture |
 | `tap` | Tap an element or coordinate |
@@ -225,12 +243,26 @@ open ButtonHeist.xcworkspace
 
 ## CLI Usage
 
-The CLI has four subcommands: `watch` (default), `action`, `touch`, and `screenshot`.
+The CLI has five subcommands: `list`, `watch` (default), `action`, `touch`, and `screenshot`.
+
+All subcommands that connect to a device accept `--device <filter>` to target a specific instance by name, short ID prefix, simulator UDID, or vendor identifier.
+
+### list
+
+```
+USAGE: buttonheist list [--timeout <timeout>] [--format <format>]
+
+OPTIONS:
+  -t, --timeout <timeout> Discovery timeout in seconds (default: 3)
+  -f, --format <format>   Output format: human, json (default: human)
+```
+
+Lists all discovered devices with their app name, device name, short ID, and device identifiers (simulator UDID or vendor identifier).
 
 ### watch (default)
 
 ```
-USAGE: buttonheist watch [--format <format>] [--once] [--quiet] [--timeout <timeout>] [--verbose]
+USAGE: buttonheist watch [--format <format>] [--once] [--quiet] [--timeout <timeout>] [--verbose] [--device <filter>]
 
 OPTIONS:
   -f, --format <format>   Output format: human, json (default: human)
@@ -238,12 +270,13 @@ OPTIONS:
   -q, --quiet             Suppress status messages (only output data)
   -t, --timeout <timeout> Timeout in seconds waiting for device (default: 0)
   -v, --verbose           Show verbose output
+  --device <filter>       Target device by name, ID prefix, simulator UDID, or vendor ID
 ```
 
 ### action
 
 ```
-USAGE: buttonheist action [--identifier <id>] [--index <n>] [--type <type>] [--custom-action <name>] [--x <x>] [--y <y>] [--timeout <t>] [--quiet]
+USAGE: buttonheist action [--identifier <id>] [--index <n>] [--type <type>] [--custom-action <name>] [--x <x>] [--y <y>] [--timeout <t>] [--quiet] [--device <filter>]
 
 OPTIONS:
   --identifier <id>       Element identifier
@@ -252,6 +285,7 @@ OPTIONS:
   --custom-action <name>  Custom action name (when type is 'custom')
   --x <x>, --y <y>       Tap coordinates (when type is 'tap')
   -t, --timeout <t>       Timeout in seconds (default: 10)
+  --device <filter>       Target device by name, ID prefix, simulator UDID, or vendor ID
 ```
 
 ### touch
@@ -271,23 +305,32 @@ SUBCOMMANDS:
   draw-bezier             Draw along cubic bezier curves
 ```
 
-All touch subcommands accept `--identifier`, `--index`, or coordinate options to specify the target.
+All touch subcommands accept `--identifier`, `--index`, or coordinate options to specify the target, and `--device` to target a specific device.
 
 ### screenshot
 
 ```
-USAGE: buttonheist screenshot [--output <path>] [--timeout <t>] [--quiet]
+USAGE: buttonheist screenshot [--output <path>] [--timeout <t>] [--quiet] [--device <filter>]
 
 OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
   -t, --timeout <t>       Timeout in seconds (default: 10)
+  --device <filter>       Target device by name, ID prefix, simulator UDID, or vendor ID
 ```
 
 **Examples:**
 
 ```bash
+# List all discovered devices
+buttonheist list
+buttonheist list --format json
+
 # Interactive watch mode - see live updates
 buttonheist
+
+# Target a specific device by short ID, UDID, or name
+buttonheist --device a1b2 watch --once
+buttonheist --device DEADBEEF-1234 watch --once
 
 # Single snapshot in human-readable format
 buttonheist --once
@@ -446,8 +489,10 @@ buttonheist/
 │       └── main.swift             # MCP server with 15 tools for AI agent automation
 ├── ButtonHeistCLI/
 │   └── Sources/                   # CLI tool
-│       ├── main.swift             # Entry point with watch/action/touch/screenshot commands
+│       ├── main.swift             # Entry point with list/watch/action/touch/screenshot commands
 │       ├── CLIRunner.swift        # Watch mode implementation
+│       ├── ListCommand.swift      # Device listing command
+│       ├── DeviceConnector.swift  # Shared discover→filter→connect helper
 │       ├── ActionCommand.swift    # Action command
 │       ├── TouchCommand.swift     # Touch gesture commands (9 subcommands)
 │       └── ScreenshotCommand.swift    # Screenshot command
@@ -502,6 +547,8 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 
 **Port:** 1455 (configurable via Info.plist)
 **Bonjour service:** `_buttonheist._tcp`
+**Service name format:** `{AppName}-{DeviceName}#{shortId}`
+**TXT record keys:** `simudid` (simulator UDID), `vendorid` (vendor identifier)
 
 ## Troubleshooting
 

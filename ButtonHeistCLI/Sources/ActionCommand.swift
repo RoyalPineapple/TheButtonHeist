@@ -35,6 +35,9 @@ struct ActionCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     // swiftlint:disable:next cyclomatic_complexity
     mutating func run() async throws {
@@ -42,69 +45,10 @@ struct ActionCommand: AsyncParsableCommand {
             throw ValidationError("Must specify --identifier or --index")
         }
 
-        let client = HeistClient()
-
-        if !quiet {
-            logStatus("Searching for iOS devices...")
-        }
-
-        // Start discovery
-        client.startDiscovery()
-
-        // Wait for device discovery with timeout
-        let discoveryTimeout: UInt64 = 5_000_000_000 // 5 seconds
-        let startTime = DispatchTime.now()
-        while client.discoveredDevices.isEmpty {
-            if DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds > discoveryTimeout {
-                throw ValidationError("No devices found within timeout")
-            }
-            try await Task.sleep(nanoseconds: 100_000_000) // 100ms
-        }
-
-        guard let device = client.discoveredDevices.first else {
-            throw ValidationError("No devices found")
-        }
-
-        if !quiet {
-            logStatus("Found device: \(device.name)")
-            logStatus("Connecting...")
-        }
-
-        // Connect and wait for connection
-        var connected = false
-        var connectionError: Error?
-
-        client.onConnected = { _ in
-            connected = true
-        }
-        client.onDisconnected = { error in
-            connectionError = error
-        }
-
-        client.connect(to: device)
-
-        // Wait for connection
-        let connectionTimeout: UInt64 = 5_000_000_000 // 5 seconds
-        let connectionStart = DispatchTime.now()
-        while !connected && connectionError == nil {
-            if DispatchTime.now().uptimeNanoseconds - connectionStart.uptimeNanoseconds > connectionTimeout {
-                throw ValidationError("Connection timed out")
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        if let error = connectionError {
-            throw ValidationError("Connection failed: \(error.localizedDescription)")
-        }
-
-        if !quiet {
-            logStatus("Connected")
-        }
-
-        defer {
-            client.disconnect()
-            client.stopDiscovery()
-        }
+        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        try await connector.connect()
+        defer { connector.disconnect() }
+        let client = connector.client
 
         // Build target
         let target = ActionTarget(identifier: identifier, order: index)

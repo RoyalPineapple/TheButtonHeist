@@ -60,6 +60,9 @@ struct TapSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (x != nil && y != nil) else {
@@ -74,7 +77,7 @@ struct TapSubcommand: AsyncParsableCommand {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -104,6 +107,9 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (x != nil && y != nil) else {
@@ -118,7 +124,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -160,6 +166,9 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (fromX != nil && fromY != nil) else {
@@ -190,7 +199,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -226,6 +235,9 @@ struct DragSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (fromX != nil && fromY != nil) else {
@@ -242,7 +254,7 @@ struct DragSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -278,6 +290,9 @@ struct PinchSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (x != nil && y != nil) else {
@@ -292,7 +307,7 @@ struct PinchSubcommand: AsyncParsableCommand {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -328,6 +343,9 @@ struct RotateSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (x != nil && y != nil) else {
@@ -342,7 +360,7 @@ struct RotateSubcommand: AsyncParsableCommand {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -372,6 +390,9 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard identifier != nil || index != nil || (x != nil && y != nil) else {
@@ -386,7 +407,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
@@ -424,6 +445,9 @@ struct DrawPathSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         let pathPoints: [PathPoint]
@@ -446,7 +470,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
             velocity: velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 
     private func parseInlinePoints(_ str: String) throws -> [PathPoint] {
@@ -511,6 +535,9 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         let url = URL(fileURLWithPath: bezierFile)
@@ -529,69 +556,18 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
             velocity: velocity ?? target.velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device)
     }
 }
 
 // MARK: - Shared Connection Helper
 
 @MainActor
-private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool) async throws {
-    let client = HeistClient()
-
-    if !quiet {
-        logStatus("Searching for iOS devices...")
-    }
-
-    client.startDiscovery()
-
-    let discoveryTimeout: UInt64 = 5_000_000_000
-    let startTime = DispatchTime.now()
-    while client.discoveredDevices.isEmpty {
-        if DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds > discoveryTimeout {
-            throw ValidationError("No devices found within timeout")
-        }
-        try await Task.sleep(nanoseconds: 100_000_000)
-    }
-
-    guard let device = client.discoveredDevices.first else {
-        throw ValidationError("No devices found")
-    }
-
-    if !quiet {
-        logStatus("Found device: \(device.name)")
-        logStatus("Connecting...")
-    }
-
-    var connected = false
-    var connectionError: Error?
-
-    client.onConnected = { _ in connected = true }
-    client.onDisconnected = { error in connectionError = error }
-
-    client.connect(to: device)
-
-    let connectionTimeout: UInt64 = 5_000_000_000
-    let connectionStart = DispatchTime.now()
-    while !connected && connectionError == nil {
-        if DispatchTime.now().uptimeNanoseconds - connectionStart.uptimeNanoseconds > connectionTimeout {
-            throw ValidationError("Connection timed out")
-        }
-        try await Task.sleep(nanoseconds: 100_000_000)
-    }
-
-    if let error = connectionError {
-        throw ValidationError("Connection failed: \(error.localizedDescription)")
-    }
-
-    if !quiet {
-        logStatus("Connected")
-    }
-
-    defer {
-        client.disconnect()
-        client.stopDiscovery()
-    }
+private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool, device: String? = nil) async throws {
+    let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+    try await connector.connect()
+    defer { connector.disconnect() }
+    let client = connector.client
 
     if !quiet {
         logStatus("Sending gesture...")

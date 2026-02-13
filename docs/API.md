@@ -37,6 +37,21 @@ swift build -c release
 }
 ```
 
+**Targeting a specific device** (for multi-simulator setups):
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": ["--device", "DEADBEEF-1234-5678-9ABC-DEF012345678"]
+    }
+  }
+}
+```
+
+The `--device` flag accepts any of: device name, app name, short ID prefix, simulator UDID, or vendor identifier. You can also set the `BUTTONHEIST_DEVICE` environment variable instead of using `--device`.
+
 **3. Run your iOS app** (simulator or device with InsideMan embedded).
 
 **4. Start an AI agent session** in the project directory. The agent automatically gains access to all ButtonHeist tools — no manual connection steps required.
@@ -47,13 +62,21 @@ swift build -c release
 AI agent starts session → MCP client reads .mcp.json
   → spawns buttonheist-mcp → Bonjour discovers iOS app (< 2s)
   → persistent TCP connection established
-  → 15 tools appear in agent's tool palette
+  → 16 tools appear in agent's tool palette
   → agent can see and interact with the app
 ```
 
 The persistent TCP connection means there's no per-call overhead. Tool calls complete in milliseconds, enabling real-time interaction loops where the agent can tap, verify the screen changed, and continue.
 
 ### Tools
+
+#### list_devices
+
+List all discovered iOS devices running InsideMan. Returns device names, app names, short IDs, and device identifiers (simulator UDID or vendor identifier).
+
+**Arguments**: None
+
+**Returns**: JSON array of discovered devices with `name`, `appName`, `deviceName`, `shortId`, `simulatorUDID`, and `vendorIdentifier` fields.
 
 #### get_interface
 
@@ -650,10 +673,16 @@ Represents a discovered InsideMan device.
 #### Properties
 
 - `id: String` - Unique identifier
-- `name: String` - Service name (format: "AppName-DeviceName")
+- `name: String` - Service name (format: "AppName-DeviceName#shortId")
 - `endpoint: NWEndpoint` - Network endpoint for connection
-- `appName: String` - Extracted app name
-- `deviceName: String` - Extracted device name
+- `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
+- `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
+
+#### Computed Properties
+
+- `shortId: String?` - Short instance ID parsed from service name suffix (after `#`)
+- `appName: String` - App name extracted from service name (before first `-`)
+- `deviceName: String` - Device name extracted from service name (after first `-`, before `#`)
 
 ### ClientMessage
 
@@ -754,6 +783,10 @@ Device and app metadata received after connecting.
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
+- `instanceId: String?` - Per-launch session UUID (nil for servers < v2.1)
+- `listeningPort: UInt16?` - Port the server is listening on (nil for servers < v2.1)
+- `simulatorUDID: String?` - Simulator UDID when running on iOS Simulator (nil on physical devices)
+- `vendorIdentifier: String?` - `UIDevice.identifierForVendor` UUID string (stable per app install per device)
 
 ### Interface
 
@@ -885,7 +918,23 @@ Screen capture payload.
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 2.0.0
+**Version**: 2.1.0
+
+All subcommands that connect to a device accept `--device <filter>` to target a specific instance. The filter matches against device name, app name, short ID prefix, simulator UDID, or vendor identifier (case-insensitive prefix match for IDs).
+
+### buttonheist list
+
+List discovered devices.
+
+```
+USAGE: buttonheist list [OPTIONS]
+
+OPTIONS:
+  -t, --timeout <seconds> Discovery timeout in seconds (default: 3)
+  -f, --format <format>   Output format: human, json (default: human)
+```
+
+Human output shows device index, short ID, app name, device name, and any device identifiers (simulator UDID or vendor identifier). JSON output includes all fields.
 
 ### buttonheist watch (default)
 
@@ -900,6 +949,7 @@ OPTIONS:
   -q, --quiet             Suppress status messages
   -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
   -v, --verbose           Show verbose output
+  --device <filter>       Target a specific device
 ```
 
 In watch mode, keyboard commands are available:
@@ -929,6 +979,7 @@ OPTIONS:
   --y <y>                 Y coordinate (for tap type)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
 ```
 
 ### buttonheist touch
@@ -948,7 +999,7 @@ SUBCOMMANDS:
   two-finger-tap          Tap with two fingers at a point or element
 ```
 
-All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning.
+All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
 
 ### buttonheist screenshot
 
@@ -961,6 +1012,7 @@ OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
 ```
 
 ---
@@ -1125,6 +1177,14 @@ with ButtonHeistUSBConnection() as conn:
 ### CLI Scripting
 
 ```bash
+# List all discovered devices
+buttonheist list
+buttonheist list --format json
+
+# Target a specific device (by short ID, UDID, or name)
+buttonheist --device a1b2 watch --once
+buttonheist --device DEADBEEF-1234 screenshot --output screen.png
+
 # Get hierarchy as JSON
 buttonheist --format json --once > hierarchy.json
 

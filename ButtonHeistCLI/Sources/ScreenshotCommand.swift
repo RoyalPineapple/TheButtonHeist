@@ -17,51 +17,20 @@ struct ScreenshotCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     func run() async throws {
-        let client = HeistClient()
+        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        try await connector.connect()
+        defer { connector.disconnect() }
+        let client = connector.client
 
         if !quiet {
-            FileHandle.standardError.write(Data("Searching for iOS devices...\n".utf8))
+            logStatus("Requesting screenshot...")
         }
 
-        client.startDiscovery()
-
-        // Wait for device discovery
-        var waitTime = 0.0
-        while client.discoveredDevices.isEmpty && waitTime < 5.0 {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            waitTime += 0.1
-        }
-
-        guard let device = client.discoveredDevices.first else {
-            throw ValidationError("No devices found within timeout")
-        }
-
-        if !quiet {
-            FileHandle.standardError.write(Data("Found device: \(device.name)\n".utf8))
-            FileHandle.standardError.write(Data("Connecting...\n".utf8))
-        }
-
-        var connected = false
-        client.onConnected = { _ in connected = true }
-        client.connect(to: device)
-
-        waitTime = 0.0
-        while !connected && waitTime < 5.0 {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            waitTime += 0.1
-        }
-
-        guard connected else {
-            throw ValidationError("Connection timeout")
-        }
-
-        if !quiet {
-            FileHandle.standardError.write(Data("Connected. Requesting screenshot...\n".utf8))
-        }
-
-        // Request screenshot
         client.send(.requestScreen)
 
         let payload = try await client.waitForScreen(timeout: timeout)
@@ -74,7 +43,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
             let url = URL(fileURLWithPath: outputPath)
             try pngData.write(to: url)
             if !quiet {
-                FileHandle.standardError.write(Data("Screenshot saved to: \(outputPath)\n".utf8))
+                logStatus("Screenshot saved to: \(outputPath)")
             }
         } else {
             // Write raw PNG to stdout for piping
