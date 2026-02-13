@@ -12,7 +12,7 @@ Complete API documentation for the MCP server (AI agents), InsideMan (iOS), Heis
 
 The MCP server is the primary interface for AI agents to drive iOS apps. It gives the agent **eyes** (screenshots + accessibility hierarchy) and **hands** (tap, swipe, draw, and other gestures) for any iOS app running InsideMan.
 
-When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server discovers the iOS app via Bonjour, connects over TCP, and exposes 15 tools as native agent capabilities. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
+When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server discovers the iOS app via Bonjour, connects over TCP, and exposes 16 tools as native agent capabilities. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
 
 ### Setup
 
@@ -47,7 +47,7 @@ swift build -c release
 AI agent starts session → MCP client reads .mcp.json
   → spawns buttonheist-mcp → Bonjour discovers iOS app (< 2s)
   → persistent TCP connection established
-  → 15 tools appear in agent's tool palette
+  → 16 tools appear in agent's tool palette
   → agent can see and interact with the app
 ```
 
@@ -212,6 +212,34 @@ Perform a named custom accessibility action on an element.
 | `order` | integer | Element order index |
 | `actionName` | string | Name of the custom action (**required**) |
 
+#### type_text
+
+Type text into a text field by injecting characters into the keyboard input system, and/or delete characters. Returns the current text field value after the operation. Uses UIKeyboardImpl (the same approach as KIF) to inject text directly — no keyboard layout detection needed. The software keyboard must be visible (disable 'Connect Hardware Keyboard' in Simulator). Optimized for AI agent feedback loops: type, verify, correct.
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `text` | string | Text to type character-by-character |
+| `deleteCount` | integer | Number of delete key taps before typing (for corrections) |
+| `identifier` | string | Element accessibility identifier (focuses field, reads value) |
+| `order` | integer | Element order index (focuses field, reads value) |
+
+At least `text` or `deleteCount` must be provided. When an element is specified, it is tapped to focus and the keyboard is opened. After typing, the element's value is read back and included in the response.
+
+**Response format:**
+```
+Success (method: typeText)
+Value: Hello World
+```
+
+**Example feedback loop:**
+```
+Agent: type_text(text: "Hello Wrold", identifier: "nameField")
+→ Value: Hello Wrold
+
+Agent: type_text(deleteCount: 4, text: "orld", identifier: "nameField")
+→ Value: Hello World
+```
+
 ---
 
 ## InsideMan
@@ -342,9 +370,9 @@ public func notifyChange()
 
 Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
 
-### Touch Gesture System (SafeCracker)
+### Touch Gesture & Text Input System (SafeCracker)
 
-InsideMan uses `SafeCracker` internally for handling all touch gesture commands. SafeCracker supports both single-finger and multi-touch gestures via synthetic UITouch/IOHIDEvent injection.
+InsideMan uses `SafeCracker` internally for handling all touch gesture and text input commands. SafeCracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
 
 **Supported gestures:**
 - `tap` - Single tap at a point
@@ -355,6 +383,13 @@ InsideMan uses `SafeCracker` internally for handling all touch gesture commands.
 - `rotate` - Two-finger rotation
 - `twoFingerTap` - Simultaneous two-finger tap
 - `drawPath` - Trace through a sequence of waypoints (polyline)
+
+**Text input (via UIKeyboardImpl):**
+- `typeText` - Inject text character-by-character via `addInputString:`
+- `deleteText` - Delete characters via `deleteFromInput`
+- `isKeyboardVisible` - Check if the software keyboard is showing
+
+Text input uses the same private API approach as KIF (Keep It Functional). The iOS keyboard is rendered by a remote process, so individual key views aren't accessible from within the app. UIKeyboardImpl's `addInputString:` bypasses the visual keyboard entirely, injecting text directly into the input system. This handles all characters (uppercase, symbols, `@`, `.`, etc.) without needing keyboard mode switching.
 
 **Injection stack:**
 1. `SyntheticTouchFactory` - Creates UITouch instances via private API IMP invocation
@@ -682,6 +717,7 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
+- `typeText(TypeTextTarget)` - Type text by tapping keyboard keys
 - `requestScreenshot` - Request PNG screenshot
 
 ### ServerMessage
@@ -724,6 +760,18 @@ public struct TouchTapTarget: Codable, Sendable
 - `pointX: Double?` - Explicit X coordinate
 - `pointY: Double?` - Explicit Y coordinate
 - `point: CGPoint?` - Computed CGPoint from pointX/pointY
+
+### TypeTextTarget
+
+```swift
+public struct TypeTextTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `text: String?` - Text to type character-by-character (nil if only deleting)
+- `deleteCount: Int?` - Number of delete key taps before typing
+- `elementTarget: ActionTarget?` - Element to tap for focus and value readback
 
 ### CustomActionTarget
 
@@ -841,6 +889,7 @@ public struct ActionResult: Codable, Sendable
 - `success: Bool` - Whether action succeeded
 - `method: ActionMethod` - How action was performed
 - `message: String?` - Additional context or error description
+- `value: String?` - Current text field value (populated by `typeText`)
 
 ### ActionMethod
 
@@ -861,6 +910,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `syntheticRotate` - Rotation via SafeCracker
 - `syntheticTwoFingerTap` - Two-finger tap via SafeCracker
 - `syntheticDrawPath` - Path drawing via SafeCracker
+- `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Used custom action
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
@@ -947,6 +997,39 @@ SUBCOMMANDS:
 ```
 
 All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning.
+
+### buttonheist type
+
+Type text into a field by tapping keyboard keys.
+
+```
+USAGE: buttonheist type [OPTIONS]
+
+OPTIONS:
+  --text <text>           Text to type
+  --delete <n>            Number of characters to delete before typing
+  --identifier <id>       Element identifier (focuses field, reads value back)
+  --index <n>             Element index (focuses field, reads value back)
+  -t, --timeout <seconds> Timeout in seconds (default: 30)
+  -q, --quiet             Suppress status messages
+```
+
+Outputs the current text field value to stdout after the operation. If no element target is provided, outputs "success".
+
+Examples:
+```bash
+# Type text and get the resulting value
+buttonheist type --text "Hello" --identifier "nameField"
+# Output: Hello
+
+# Delete 3 characters
+buttonheist type --delete 3 --identifier "nameField"
+# Output: He
+
+# Delete and retype (correction)
+buttonheist type --delete 2 --text "llo World" --identifier "nameField"
+# Output: Hello World
+```
 
 ### buttonheist screenshot
 
@@ -1150,4 +1233,8 @@ buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
 buttonheist touch pinch --identifier mapView --scale 2.0
 buttonheist touch rotate --x 200 --y 300 --angle 1.57
 buttonheist touch two-finger-tap --identifier zoomControl
+
+# Text entry
+buttonheist type --text "Hello World" --identifier nameField
+buttonheist type --delete 5 --text "World!" --identifier nameField
 ```

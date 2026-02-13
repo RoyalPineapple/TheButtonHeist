@@ -220,6 +220,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             handleTouchDrawPath(target, respond: respond)
         case .touchDrawBezier(let target):
             handleTouchDrawBezier(target, respond: respond)
+        case .typeText(let target):
+            handleTypeText(target, respond: respond)
         }
     }
 
@@ -719,6 +721,121 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrawPath)), respond: respond)
         }
     }
+
+    // MARK: - Text Entry Handler
+
+    private func handleTypeText(_ target: TypeTextTarget, respond: @escaping (Data) -> Void) {
+        Task { @MainActor in
+            await self.performTypeText(target, respond: respond)
+        }
+    }
+
+    private func performTypeText(_ target: TypeTextTarget, respond: @escaping (Data) -> Void) async {
+        let interKeyDelay: UInt64 = 30_000_000 // 30ms
+
+        // Step 1: If elementTarget provided, tap to focus and wait for keyboard
+        if let elementTarget = target.elementTarget {
+            refreshHierarchy()
+            guard let element = findElement(for: elementTarget) else {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .elementNotFound,
+                    message: "Target element not found"
+                )), respond: respond)
+                return
+            }
+
+            let point = element.activationPoint
+            if !safeCracker.tap(at: point) {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .typeText,
+                    message: "Failed to tap target element to bring up keyboard"
+                )), respond: respond)
+                return
+            }
+            TapVisualizerView.showTap(at: point)
+
+            // Wait for keyboard to appear (up to 2 seconds)
+            var keyboardAppeared = false
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                if safeCracker.isKeyboardVisible() {
+                    keyboardAppeared = true
+                    break
+                }
+            }
+
+            if !keyboardAppeared {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .typeText,
+                    message: "Keyboard did not appear. Ensure the software keyboard is enabled (Simulator > I/O > Keyboard > uncheck 'Connect Hardware Keyboard')."
+                )), respond: respond)
+                return
+            }
+        } else {
+            if !safeCracker.isKeyboardVisible() {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .typeText,
+                    message: "Keyboard not visible. Provide an elementTarget to focus a text field, or ensure the keyboard is already showing."
+                )), respond: respond)
+                return
+            }
+        }
+
+        // Step 2: Delete characters if requested
+        if let deleteCount = target.deleteCount, deleteCount > 0 {
+            if !(await safeCracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay)) {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .typeText,
+                    message: "Could not get UIKeyboardImpl instance for delete. Keyboard may not be active."
+                )), respond: respond)
+                return
+            }
+        }
+
+        // Step 3: Type text if provided
+        if let text = target.text, !text.isEmpty {
+            if !(await safeCracker.typeText(text, interKeyDelay: interKeyDelay)) {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .typeText,
+                    message: "Could not get UIKeyboardImpl instance for typing. Keyboard may not be active."
+                )), respond: respond)
+                return
+            }
+        }
+
+        // Step 5: Read back value if elementTarget provided
+        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+
+        var fieldValue: String?
+        if let elementTarget = target.elementTarget {
+            refreshHierarchy()
+            if let element = findElement(for: elementTarget) {
+                fieldValue = element.value
+            }
+        }
+
+        sendMessage(.actionResult(ActionResult(
+            success: true,
+            method: .typeText,
+            value: fieldValue
+        )), respond: respond)
+    }
+
+    // MARK: - Text Entry Helpers
+
+    private func refreshHierarchy() {
+        if let rootView = getRootView() {
+            cachedElements = parser.parseAccessibilityElements(in: rootView)
+        }
+    }
+
+    // MARK: - Shared Helpers
 
     private func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
         if let d = duration {
