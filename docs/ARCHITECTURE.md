@@ -79,7 +79,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
 - `Interface` - Container for UI element interface data (flat list + optional tree)
-- `ServerInfo` - Device and app metadata
+- `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method and optional message
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 
@@ -199,8 +199,8 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 **Key Types**:
 - `SimpleSocketServer` - BSD socket TCP server (IPv6 dual-stack), used by InsideMan on iOS
 - `DeviceConnection` - BSD socket TCP client with Bonjour service resolution
-- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint)
+- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier)
 
 ### ButtonHeistMCP (AI Agent Interface)
 
@@ -212,10 +212,11 @@ buttonheist-mcp (executable)
 ├── StdioTransport (MCP SDK)
 │   └── JSON-RPC 2.0 over stdin/stdout
 ├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 15 tool definitions
+│   ├── ListTools handler → 16 tool definitions (incl. list_devices)
 │   └── CallTool handler → dispatches to HeistClient
 ├── HeistClient (@MainActor)
 │   ├── DeviceDiscovery (auto-connect on startup)
+│   ├── Device filter (--device flag or BUTTONHEIST_DEVICE env var)
 │   └── Persistent TCP connection to iOS device
 └── Logging (stderr, never stdout)
 ```
@@ -229,16 +230,18 @@ MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server a
   "mcpServers": {
     "buttonheist": {
       "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": []
+      "args": ["--device", "SIMULATOR_UDID_HERE"]
     }
   }
 }
 ```
 
+The `--device` flag (or `BUTTONHEIST_DEVICE` env var) filters which device to connect to, matching against name, app name, short ID, simulator UDID, or vendor identifier. Without a filter, it connects to the first device found.
+
 When the MCP client starts a session, it:
 1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
 2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
-3. Sends `initialize` → server responds with capabilities (15 tools)
+3. Sends `initialize` → server responds with capabilities (16 tools)
 4. Sends `notifications/initialized` → server is ready
 5. Tool calls appear as **native capabilities** to the AI agent — they show up in the agent's tool palette alongside built-in tools like file reading and shell commands
 
@@ -274,7 +277,7 @@ Session ends
 - **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls. Tool calls complete in milliseconds.
 - **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
 - **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
-- **15 tools**: Read tools (`get_interface`, `get_screen`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`).
+- **16 tools**: Discovery (`list_devices`), read tools (`get_interface`, `get_screen`), and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`).
 - **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
 
 ### ButtonHeist (macOS Client Framework)
@@ -367,13 +370,28 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 1. InsideMan loads (ObjC +load)
    └── SimpleSocketServer.start(port: 1455)
    └── NetService.publish("_buttonheist._tcp")
+   │     Service name: "{AppName}-{DeviceName}#{shortId}"
+   │     shortId = first 8 chars of UUID (unique per launch)
+   └── NetService.setTXTRecord()
+         TXT keys: "simudid" (SIMULATOR_UDID), "vendorid" (identifierForVendor)
 
 2. HeistClient.startDiscovery()
    └── NWBrowser.start(for: "_buttonheist._tcp")
 
 3. NWBrowser finds service
+   └── Extract TXT record: .bonjour(let txtRecord) → simulatorUDID, vendorIdentifier
    └── HeistClient.discoveredDevices.append(device)
 ```
+
+### Multi-Instance Discovery
+
+When running multiple instances (e.g., multiple simulators), each instance has a unique identity:
+
+- **Short ID**: A per-launch UUID suffix in the Bonjour service name (e.g., `MyApp-iPhone 16 Pro#a1b2c3d4`)
+- **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
+- **Vendor Identifier**: `UIDevice.identifierForVendor` on physical devices. Stable per app install. Published in the TXT record under key `vendorid`.
+
+Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
 
 ### Connection Flow
 

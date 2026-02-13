@@ -58,10 +58,19 @@ public final class DeviceDiscovery {
             case .added(let result):
                 logger.info("Service added: \(String(describing: result.endpoint))")
                 if case let .service(name, _, _, _) = result.endpoint {
+                    // Extract TXT record identifiers if available
+                    var simUDID: String?
+                    var vendorId: String?
+                    if case .bonjour(let txtRecord) = result.metadata {
+                        simUDID = txtRecord["simudid"]
+                        vendorId = txtRecord["vendorid"]
+                    }
                     let device = DiscoveredDevice(
                         id: name,
                         name: name,
-                        endpoint: result.endpoint
+                        endpoint: result.endpoint,
+                        simulatorUDID: simUDID,
+                        vendorIdentifier: vendorId
                     )
                     discoveredDevices[name] = device
                     logger.info("Device found: \(name)")

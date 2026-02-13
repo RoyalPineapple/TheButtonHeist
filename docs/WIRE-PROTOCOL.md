@@ -19,7 +19,12 @@ This document specifies the communication protocol between InsideMan (iOS) and c
 InsideMan advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
-- **Name**: `{AppName}-{DeviceName}`
+- **Name**: `{AppName}-{DeviceName}#{shortId}` (shortId is first 8 chars of a per-launch UUID)
+- **TXT Record**:
+  - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
+  - `vendorid` — `UIDevice.identifierForVendor` UUID string (only present on physical devices)
+
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID or vendor identifier without establishing a TCP connection first.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -270,7 +275,11 @@ Sent immediately after connection. Contains device and app metadata.
   "deviceName":"iPhone 15 Pro",
   "systemVersion":"17.0",
   "screenWidth":393.0,
-  "screenHeight":852.0
+  "screenHeight":852.0,
+  "instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+  "listeningPort":1455,
+  "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
+  "vendorIdentifier":null
 }}}
 ```
 
@@ -401,6 +410,10 @@ Error message.
 | `systemVersion` | `String` | iOS version (e.g., "17.0") |
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
+| `instanceId` | `String?` | Per-launch session UUID (nil for servers < v2.1) |
+| `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
+| `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
+| `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
 
 ### Interface
 
@@ -598,8 +611,8 @@ At least one field should be provided. When both are provided, identifier is tri
 ```
 # Client connects to fd9a:6190:eed7::1:1455
 
-# Server sends info
-{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
+# Server sends info (includes instance identity and device identifiers)
+{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}

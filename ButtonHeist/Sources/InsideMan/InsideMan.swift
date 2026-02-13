@@ -33,6 +33,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private var netService: NetService?
     private var subscribedClients: Set<Int> = []
     private let port: UInt16
+    private let sessionId = UUID()
     private let parser = AccessibilityHierarchyParser()
     private let safeCracker = SafeCracker()
     private var cachedElements: [AccessibilityMarker] = []
@@ -142,16 +143,37 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Private Methods - Service Advertisement
 
+    private var shortId: String {
+        String(sessionId.uuidString.prefix(8)).lowercased()
+    }
+
     private func advertiseService(port: UInt16) {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
-        let serviceName = "\(appName)-\(UIDevice.current.name)"
+        let deviceName = UIDevice.current.name
+        let serviceName = "\(appName)-\(deviceName)#\(shortId)"
 
-        netService = NetService(
+        let service = NetService(
             domain: "local.",
             type: buttonHeistServiceType,
             name: serviceName,
             port: Int32(port)
         )
+
+        // Publish device identifiers in TXT record for pre-connection filtering
+        var txtDict: [String: Data] = [:]
+        if let simUDID = ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
+           let data = simUDID.data(using: .utf8) {
+            txtDict["simudid"] = data
+        }
+        if let vendorId = UIDevice.current.identifierForVendor?.uuidString,
+           let data = vendorId.data(using: .utf8) {
+            txtDict["vendorid"] = data
+        }
+        if !txtDict.isEmpty {
+            service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
+        }
+
+        netService = service
         netService?.publish()
         serverLog("Advertising as '\(serviceName)' on port \(port)")
     }
@@ -232,7 +254,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             deviceName: UIDevice.current.name,
             systemVersion: UIDevice.current.systemVersion,
             screenWidth: screenBounds.width,
-            screenHeight: screenBounds.height
+            screenHeight: screenBounds.height,
+            instanceId: sessionId.uuidString,
+            listeningPort: socketServer?.listeningPort,
+            simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
+            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString
         )
         sendMessage(.info(info), respond: respond)
     }

@@ -225,6 +225,10 @@ public final class HeistClient: ObservableObject {
         let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
 
         if sameAppDevices.count > 1 {
+            let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == device.deviceName }
+            if sameAppAndDevice.count > 1, let shortId = device.shortId {
+                return "\(appName) (\(device.deviceName)) [\(shortId)]"
+            }
             return "\(appName) (\(device.deviceName))"
         } else {
             return appName
