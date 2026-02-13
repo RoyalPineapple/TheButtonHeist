@@ -13,6 +13,12 @@ public final class SimpleSocketServer: @unchecked Sendable {
     private var clientCounter = 0
     private var _listeningPort: UInt16 = 0
 
+    public var listeningPort: UInt16 {
+        lock.lock()
+        defer { lock.unlock() }
+        return _listeningPort
+    }
+
     public var onClientConnected: (@Sendable (Int) -> Void)?
     public var onClientDisconnected: (@Sendable (Int) -> Void)?
     public var onDataReceived: DataHandler?

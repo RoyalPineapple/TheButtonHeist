@@ -12,7 +12,7 @@ Complete API documentation for the MCP server (AI agents), InsideMan (iOS), Heis
 
 The MCP server is the primary interface for AI agents to drive iOS apps. It gives the agent **eyes** (screenshots + accessibility hierarchy) and **hands** (tap, swipe, draw, and other gestures) for any iOS app running InsideMan.
 
-When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server discovers the iOS app via Bonjour, connects over TCP, and exposes 16 tools as native agent capabilities. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
+When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server discovers the iOS app via Bonjour, connects over TCP, and exposes 17 tools as native agent capabilities. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
 
 ### Setup
 
@@ -37,6 +37,21 @@ swift build -c release
 }
 ```
 
+**Targeting a specific device** (for multi-simulator setups):
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": ["--device", "DEADBEEF-1234-5678-9ABC-DEF012345678"]
+    }
+  }
+}
+```
+
+The `--device` flag accepts any of: device name, app name, short ID prefix, simulator UDID, or vendor identifier. You can also set the `BUTTONHEIST_DEVICE` environment variable instead of using `--device`.
+
 **3. Run your iOS app** (simulator or device with InsideMan embedded).
 
 **4. Start an AI agent session** in the project directory. The agent automatically gains access to all ButtonHeist tools — no manual connection steps required.
@@ -47,7 +62,7 @@ swift build -c release
 AI agent starts session → MCP client reads .mcp.json
   → spawns buttonheist-mcp → Bonjour discovers iOS app (< 2s)
   → persistent TCP connection established
-  → 16 tools appear in agent's tool palette
+  → 17 tools appear in agent's tool palette
   → agent can see and interact with the app
 ```
 
@@ -55,7 +70,15 @@ The persistent TCP connection means there's no per-call overhead. Tool calls com
 
 ### Tools
 
-#### get_snapshot
+#### list_devices
+
+List all discovered iOS devices running InsideMan. Returns device names, app names, short IDs, and device identifiers (simulator UDID or vendor identifier).
+
+**Arguments**: None
+
+**Returns**: JSON array of discovered devices with `name`, `appName`, `deviceName`, `shortId`, `simulatorUDID`, and `vendorIdentifier` fields.
+
+#### get_interface
 
 Read the current UI element hierarchy. Returns all accessibility elements with labels, values, identifiers, frames, and available actions.
 
@@ -63,7 +86,7 @@ Read the current UI element hierarchy. Returns all accessibility elements with l
 
 **Returns**: JSON with `elements` array and optional `tree` structure.
 
-#### get_screenshot
+#### get_screen
 
 Capture a PNG screenshot of the current screen.
 
@@ -450,18 +473,18 @@ Currently connected device, or nil if disconnected.
 
 Current connection state. See `ConnectionState` enum.
 
-##### currentSnapshot
+##### currentInterface
 
 ```swift
-@Published public private(set) var currentSnapshot: Snapshot?
+@Published public private(set) var currentInterface: Interface?
 ```
 
 Most recent UI element snapshot received from the connected device.
 
-##### currentScreenshot
+##### currentScreen
 
 ```swift
-@Published public private(set) var currentScreenshot: ScreenshotPayload?
+@Published public private(set) var currentScreen: ScreenPayload?
 ```
 
 Most recent screenshot received from the connected device.
@@ -510,10 +533,10 @@ public var onConnected: ((ServerInfo) -> Void)?
 
 Called when connection is established and server info received.
 
-##### onSnapshotUpdate
+##### onInterfaceUpdate
 
 ```swift
-public var onSnapshotUpdate: ((Snapshot) -> Void)?
+public var onInterfaceUpdate: ((Interface) -> Void)?
 ```
 
 Called when a new hierarchy is received.
@@ -526,10 +549,10 @@ public var onActionResult: ((ActionResult) -> Void)?
 
 Called when an action result is received.
 
-##### onScreenshot
+##### onScreen
 
 ```swift
-public var onScreenshot: ((ScreenshotPayload) -> Void)?
+public var onScreen: ((ScreenPayload) -> Void)?
 ```
 
 Called when a screenshot is received.
@@ -574,7 +597,7 @@ Stop device discovery.
 public func connect(to device: DiscoveredDevice)
 ```
 
-Connect to a discovered device. Automatically sends `subscribe`, `requestSnapshot`, and `requestScreenshot` on connection.
+Connect to a discovered device. Automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connection.
 
 **Parameters**:
 - `device`: Device to connect to (from `discoveredDevices`).
@@ -587,10 +610,10 @@ public func disconnect()
 
 Disconnect from the current device and clear all state.
 
-##### requestSnapshot()
+##### requestInterface()
 
 ```swift
-public func requestSnapshot()
+public func requestInterface()
 ```
 
 Request a single hierarchy snapshot.
@@ -616,10 +639,10 @@ Wait asynchronously for an action result with timeout.
 
 **Throws**: `ActionError.timeout` if no result received within timeout.
 
-##### waitForScreenshot(timeout:)
+##### waitForScreen(timeout:)
 
 ```swift
-public func waitForScreenshot(timeout: TimeInterval = 30.0) async throws -> ScreenshotPayload
+public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload
 ```
 
 Wait asynchronously for a screenshot with timeout.
@@ -685,10 +708,16 @@ Represents a discovered InsideMan device.
 #### Properties
 
 - `id: String` - Unique identifier
-- `name: String` - Service name (format: "AppName-DeviceName")
+- `name: String` - Service name (format: "AppName-DeviceName#shortId")
 - `endpoint: NWEndpoint` - Network endpoint for connection
-- `appName: String` - Extracted app name
-- `deviceName: String` - Extracted device name
+- `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
+- `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
+
+#### Computed Properties
+
+- `shortId: String?` - Short instance ID parsed from service name suffix (after `#`)
+- `appName: String` - App name extracted from service name (before first `-`)
+- `deviceName: String` - Device name extracted from service name (after first `-`, before `#`)
 
 ### ClientMessage
 
@@ -700,7 +729,7 @@ Messages sent from client to server.
 
 #### Cases
 
-- `requestSnapshot` - Request current hierarchy
+- `requestInterface` - Request current hierarchy
 - `subscribe` - Subscribe to automatic updates
 - `unsubscribe` - Unsubscribe from updates
 - `ping` - Keepalive
@@ -717,8 +746,8 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `typeText(TypeTextTarget)` - Type text by tapping keyboard keys
-- `requestScreenshot` - Request PNG screenshot
+- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection
+- `requestScreen` - Request PNG screenshot
 
 ### ServerMessage
 
@@ -731,11 +760,11 @@ Messages sent from server to client.
 #### Cases
 
 - `info(ServerInfo)` - Device/app metadata on connection
-- `hierarchy(Snapshot)` - UI element snapshot
+- `interface(Interface)` - UI element snapshot
 - `pong` - Ping response
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome
-- `screenshot(ScreenshotPayload)` - Base64-encoded PNG
+- `screen(ScreenPayload)` - Base64-encoded PNG
 
 ### ActionTarget
 
@@ -802,14 +831,18 @@ Device and app metadata received after connecting.
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
+- `instanceId: String?` - Per-launch session UUID (nil for servers < v2.1)
+- `listeningPort: UInt16?` - Port the server is listening on (nil for servers < v2.1)
+- `simulatorUDID: String?` - Simulator UDID when running on iOS Simulator (nil on physical devices)
+- `vendorIdentifier: String?` - `UIDevice.identifierForVendor` UUID string (stable per app install per device)
 
-### Snapshot
+### Interface
 
 ```swift
-public struct Snapshot: Codable, Sendable
+public struct Interface: Codable, Sendable
 ```
 
-Container for UI element snapshot snapshot.
+Container for UI element interface data.
 
 #### Properties
 
@@ -915,11 +948,13 @@ public enum ActionMethod: String, Codable, Sendable
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
-### ScreenshotPayload
+### ScreenPayload
 
 ```swift
-public struct ScreenshotPayload: Codable, Sendable
+public struct ScreenPayload: Codable, Sendable
 ```
+
+Screen capture payload.
 
 #### Properties
 
@@ -933,7 +968,23 @@ public struct ScreenshotPayload: Codable, Sendable
 ## CLI Reference
 
 **Location**: `ButtonHeistCLI/`
-**Version**: 2.0.0
+**Version**: 2.1.0
+
+All subcommands that connect to a device accept `--device <filter>` to target a specific instance. The filter matches against device name, app name, short ID prefix, simulator UDID, or vendor identifier (case-insensitive prefix match for IDs).
+
+### buttonheist list
+
+List discovered devices.
+
+```
+USAGE: buttonheist list [OPTIONS]
+
+OPTIONS:
+  -t, --timeout <seconds> Discovery timeout in seconds (default: 3)
+  -f, --format <format>   Output format: human, json (default: human)
+```
+
+Human output shows device index, short ID, app name, device name, and any device identifiers (simulator UDID or vendor identifier). JSON output includes all fields.
 
 ### buttonheist watch (default)
 
@@ -948,6 +999,7 @@ OPTIONS:
   -q, --quiet             Suppress status messages
   -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
   -v, --verbose           Show verbose output
+  --device <filter>       Target a specific device
 ```
 
 In watch mode, keyboard commands are available:
@@ -977,6 +1029,7 @@ OPTIONS:
   --y <y>                 Y coordinate (for tap type)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
 ```
 
 ### buttonheist touch
@@ -996,7 +1049,7 @@ SUBCOMMANDS:
   two-finger-tap          Tap with two fingers at a point or element
 ```
 
-All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning.
+All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
 
 ### buttonheist type
 
@@ -1042,6 +1095,7 @@ OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
 ```
 
 ---
@@ -1096,7 +1150,7 @@ struct InspectorView: View {
                 Text(client.displayName(for: device))
             }
         } detail: {
-            if let hierarchy = client.currentSnapshot {
+            if let hierarchy = client.currentInterface {
                 List(hierarchy.elements) { element in
                     VStack(alignment: .leading) {
                         Text(element.description)
@@ -1139,7 +1193,7 @@ class Inspector {
             print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
-        client.onSnapshotUpdate = { payload in
+        client.onInterfaceUpdate = { payload in
             print("Received \(payload.elements.count) elements")
             for element in payload.elements {
                 print("  \(element.order): \(element.description)")
@@ -1150,7 +1204,7 @@ class Inspector {
             print("Action: \(result.success ? "success" : "failed") via \(result.method)")
         }
 
-        client.onScreenshot = { screenshot in
+        client.onScreen = { screenshot in
             print("Screenshot: \(screenshot.width)x\(screenshot.height)")
         }
 
@@ -1206,6 +1260,14 @@ with ButtonHeistUSBConnection() as conn:
 ### CLI Scripting
 
 ```bash
+# List all discovered devices
+buttonheist list
+buttonheist list --format json
+
+# Target a specific device (by short ID, UDID, or name)
+buttonheist --device a1b2 watch --once
+buttonheist --device DEADBEEF-1234 screenshot --output screen.png
+
 # Get hierarchy as JSON
 buttonheist --format json --once > hierarchy.json
 

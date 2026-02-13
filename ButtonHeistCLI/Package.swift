@@ -6,13 +6,16 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    products: [
+        .executable(name: "buttonheist", targets: ["ButtonHeistCLIExe"])
+    ],
     dependencies: [
         .package(path: "../ButtonHeist"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0")
     ],
     targets: [
         .executableTarget(
-            name: "buttonheist",
+            name: "ButtonHeistCLIExe",
             dependencies: [
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser")

@@ -19,7 +19,12 @@ This document specifies the communication protocol between InsideMan (iOS) and c
 InsideMan advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
-- **Name**: `{AppName}-{DeviceName}`
+- **Name**: `{AppName}-{DeviceName}#{shortId}` (shortId is first 8 chars of a per-launch UUID)
+- **TXT Record**:
+  - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
+  - `vendorid` — `UIDevice.identifierForVendor` UUID string (only present on physical devices)
+
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID or vendor identifier without establishing a TCP connection first.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -37,16 +42,16 @@ Client                                    Server
    │◄─────── info ───────────────────────────│  (automatic on connect)
    │                                         │
    │──────── subscribe ──────────────────────►│  (enable auto-updates)
-   │──────── requestSnapshot ───────────────►│
-   │──────── requestScreenshot ──────────────►│
-   │◄─────── hierarchy ──────────────────────│
-   │◄─────── screenshot ────────────────────│
+   │──────── requestInterface ──────────────►│
+   │──────── requestScreen ──────────────────►│
+   │◄─────── interface ─────────────────────│
+   │◄─────── screen ────────────────────────│
    │                                         │
    │──────── activate/touchTap/touchDrag... ──►│
    │◄─────── actionResult ───────────────────│
    │                                         │
-   │◄─────── hierarchy ──────────────────────│  (auto-pushed on change)
-   │◄─────── screenshot ────────────────────│  (auto-pushed on change)
+   │◄─────── interface ─────────────────────│  (auto-pushed on change)
+   │◄─────── screen ────────────────────────│  (auto-pushed on change)
    │                                         │
    │──────── ping ───────────────────────────►│
    │◄─────── pong ───────────────────────────│
@@ -61,17 +66,17 @@ All messages are JSON objects terminated by a newline (`\n`). Swift enums with a
 
 ## Client → Server Messages
 
-### requestSnapshot
+### requestInterface
 
-Request current UI element snapshot.
+Request current UI element interface.
 
 ```json
-{"requestSnapshot":{}}
+{"requestInterface":{}}
 ```
 
 ### subscribe
 
-Subscribe to automatic hierarchy and screenshot updates.
+Subscribe to automatic interface and screen updates.
 
 ```json
 {"subscribe":{}}
@@ -259,12 +264,12 @@ Type text character-by-character by injecting into the keyboard input system (vi
 {"typeText":{"_0":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}}
 ```
 
-### requestScreenshot
+### requestScreen
 
-Request a PNG screenshot of the current screen.
+Request a PNG capture of the current screen.
 
 ```json
-{"requestScreenshot":{}}
+{"requestScreen":{}}
 ```
 
 ### ping
@@ -289,16 +294,20 @@ Sent immediately after connection. Contains device and app metadata.
   "deviceName":"iPhone 15 Pro",
   "systemVersion":"17.0",
   "screenWidth":393.0,
-  "screenHeight":852.0
+  "screenHeight":852.0,
+  "instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+  "listeningPort":1455,
+  "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
+  "vendorIdentifier":null
 }}}
 ```
 
-### hierarchy
+### interface
 
-UI element snapshot snapshot. Contains a flat element list and an optional tree structure.
+UI element interface. Contains a flat element list and an optional tree structure.
 
 ```json
-{"hierarchy":{"_0":{
+{"interface":{"_0":{
   "timestamp":"2026-02-03T10:30:45.123Z",
   "elements":[
     {
@@ -337,7 +346,7 @@ UI element snapshot snapshot. Contains a flat element list and an optional tree 
 }}}
 ```
 
-The `tree` field is optional for backwards compatibility. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
+The `tree` field is optional. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
 
 ### actionResult
 
@@ -386,12 +395,12 @@ The optional `message` field provides additional context, especially for failure
 }}}
 ```
 
-### screenshot
+### screen
 
-PNG screenshot of the current screen.
+PNG capture of the current screen.
 
 ```json
-{"screenshot":{"_0":{
+{"screen":{"_0":{
   "pngData":"iVBORw0KGgo...",
   "width":393.0,
   "height":852.0,
@@ -430,12 +439,16 @@ Error message.
 | `systemVersion` | `String` | iOS version (e.g., "17.0") |
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
+| `instanceId` | `String?` | Per-launch session UUID (nil for servers < v2.1) |
+| `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
+| `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
+| `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
 
-### Snapshot
+### Interface
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `timestamp` | `ISO8601 Date` | When hierarchy was captured |
+| `timestamp` | `ISO8601 Date` | When interface was captured |
 | `elements` | `[UIElement]` | Flat list of all UI elements |
 | `tree` | `[ElementNode]?` | Optional tree structure with containers |
 
@@ -624,37 +637,37 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | `message` | `String?` | Additional context or error description |
 | `value` | `String?` | Current text field value (populated by `typeText`) |
 
-### ScreenshotPayload
+### ScreenPayload
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `pngData` | `String` | Base64-encoded PNG image data |
 | `width` | `Double` | Screen width in points |
 | `height` | `Double` | Screen height in points |
-| `timestamp` | `ISO8601 Date` | When screenshot was captured |
+| `timestamp` | `ISO8601 Date` | When screen was captured |
 
 ## Example Session
 
 ```
 # Client connects to fd9a:6190:eed7::1:1455
 
-# Server sends info
-{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0}}}
+# Server sends info (includes instance identity and device identifiers)
+{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
 
-# Client requests hierarchy
-{"requestSnapshot":{}}
+# Client requests interface
+{"requestInterface":{}}
 
-# Server responds with hierarchy (flat + tree)
-{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
+# Server responds with interface (flat + tree)
+{"interface":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
 
-# Client requests screenshot
-{"requestScreenshot":{}}
+# Client requests screen capture
+{"requestScreen":{}}
 
-# Server responds with screenshot
-{"screenshot":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
+# Server responds with screen capture
+{"screen":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
 
 # Client activates a button
 {"activate":{"_0":{"identifier":"loginButton"}}}
@@ -692,9 +705,9 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 # Server responds
 {"pong":{}}
 
-# Server auto-pushes hierarchy change
-{"hierarchy":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
-{"screenshot":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
+# Server auto-pushes interface change
+{"interface":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
+{"screen":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
 ```
 
 ## Implementation Notes
@@ -725,7 +738,7 @@ Clients should send `ping` messages periodically (recommended: every 30 seconds)
 If the TCP connection is lost, clients should:
 1. Close the socket
 2. Optionally attempt reconnection
-3. Re-request hierarchy after reconnecting
+3. Re-request interface after reconnecting
 
 ### Hierarchy Change Detection
 
@@ -733,4 +746,4 @@ InsideMan uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast
-4. Screenshots are automatically captured and broadcast alongside hierarchy changes
+4. Screen captures are automatically captured and broadcast alongside interface changes

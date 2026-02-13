@@ -10,8 +10,8 @@ func log(_ message: String) {
 
 // MARK: - Tool Definitions
 
-let snapshotTool = Tool(
-    name: "get_snapshot",
+let interfaceTool = Tool(
+    name: "get_interface",
     // swiftlint:disable:next line_length
     description: "Get the current UI element hierarchy from the connected iOS app. Returns a list of all accessibility elements with their labels, values, identifiers, frames, and available actions.",
     inputSchema: .object([
@@ -21,8 +21,8 @@ let snapshotTool = Tool(
     annotations: .init(readOnlyHint: true, openWorldHint: false)
 )
 
-let screenshotTool = Tool(
-    name: "get_screenshot",
+let screenTool = Tool(
+    name: "get_screen",
     description: "Capture a PNG screenshot of the connected iOS app's current screen.",
     inputSchema: .object([
         "type": .string("object"),
@@ -38,7 +38,7 @@ let tapTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "x": .object(["type": .string("number"), "description": .string("Screen X coordinate in points")]),
             "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate in points")]),
         ]),
@@ -53,7 +53,7 @@ let longPressTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "x": .object(["type": .string("number"), "description": .string("Screen X coordinate")]),
             "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate")]),
             "duration": .object(["type": .string("number"), "description": .string("Press duration in seconds (default 0.5)")]),
@@ -224,7 +224,7 @@ let activateTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -237,7 +237,7 @@ let incrementTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -250,7 +250,7 @@ let decrementTool = Tool(
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
         ]),
     ]),
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
@@ -259,12 +259,12 @@ let decrementTool = Tool(
 let customActionTool = Tool(
     name: "perform_custom_action",
     // swiftlint:disable:next line_length
-    description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_snapshot.",
+    description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_interface.",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
             "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from snapshot (0-based)")]),
+            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
             "actionName": .object(["type": .string("string"), "description": .string("Name of the custom action to perform (required)")]),
         ]),
         "required": .array([.string("actionName")]),
@@ -288,8 +288,19 @@ let typeTextTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let listDevicesTool = Tool(
+    name: "list_devices",
+    // swiftlint:disable:next line_length
+    description: "List all discovered iOS devices running InsideMan. Returns device names, app names, device names, and instance IDs for targeting specific simulators.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([:]),
+    ]),
+    annotations: .init(readOnlyHint: true, openWorldHint: false)
+)
+
 let allTools: [Tool] = [
-    snapshotTool, screenshotTool,
+    listDevicesTool, interfaceTool, screenTool,
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
@@ -332,12 +343,35 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
 
     switch params.name {
 
+    // MARK: Device Discovery
+
+    case "list_devices":
+        let devices = client.discoveredDevices
+        struct DeviceInfo: Encodable {
+            let name: String
+            let appName: String
+            let deviceName: String
+            let shortId: String?
+            let simulatorUDID: String?
+            let vendorIdentifier: String?
+        }
+        let infos = devices.map {
+            DeviceInfo(name: $0.name, appName: $0.appName,
+                       deviceName: $0.deviceName, shortId: $0.shortId,
+                       simulatorUDID: $0.simulatorUDID,
+                       vendorIdentifier: $0.vendorIdentifier)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let json = try encoder.encode(infos)
+        return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "[]")])
+
     // MARK: Read Tools
 
-    case "get_snapshot":
-        client.send(.requestSnapshot)
-        // Wait for the snapshot callback to fire
-        let snapshot: Snapshot = try await withCheckedThrowingContinuation { continuation in
+    case "get_interface":
+        client.send(.requestInterface)
+        // Wait for the interface callback to fire
+        let iface: Interface = try await withCheckedThrowingContinuation { continuation in
             var didResume = false
             let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: 10_000_000_000)
@@ -346,7 +380,7 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
                     continuation.resume(throwing: HeistClient.ActionError.timeout)
                 }
             }
-            client.onSnapshotUpdate = { payload in
+            client.onInterfaceUpdate = { payload in
                 if !didResume {
                     didResume = true
                     timeoutTask.cancel()
@@ -358,14 +392,14 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let json = try encoder.encode(snapshot)
+        let json = try encoder.encode(iface)
         return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "{}")])
 
-    case "get_screenshot":
-        client.send(.requestScreenshot)
-        let screenshot = try await client.waitForScreenshot(timeout: 30)
+    case "get_screen":
+        client.send(.requestScreen)
+        let screen = try await client.waitForScreen(timeout: 30)
         return CallTool.Result(content: [
-            .image(data: screenshot.pngData, mimeType: "image/png", metadata: nil),
+            .image(data: screen.pngData, mimeType: "image/png", metadata: nil),
         ])
 
     // MARK: Touch Gesture Tools
@@ -625,36 +659,60 @@ func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> C
 // MARK: - Device Connection
 
 @MainActor
-func discoverAndConnect(client: HeistClient) async throws {
+func discoverAndConnect(client: HeistClient, deviceFilter: String? = nil) async throws {
     log("Starting device discovery...")
+    if let filter = deviceFilter {
+        log("Device filter: \(filter)")
+    }
     client.startDiscovery()
 
-    // Wait for a device (up to 30 seconds)
+    // Wait for a matching device (up to 30 seconds)
     let deadline = Date().addingTimeInterval(30)
-    while client.discoveredDevices.isEmpty {
+    while true {
         if Date() > deadline {
-            throw MCPError.internalError("No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
+            if let filter = deviceFilter {
+                let available = client.discoveredDevices.map { $0.name }.joined(separator: ", ")
+                throw MCPError.internalError(
+                    "No device matching '\(filter)' found within 30 seconds. Available: \(available.isEmpty ? "(none)" : available)")
+            }
+            throw MCPError.internalError(
+                "No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
         }
-        try await Task.sleep(nanoseconds: 100_000_000) // 100ms
-    }
 
-    let device = client.discoveredDevices[0]
-    log("Found device: \(device.name)")
+        if let device = matchDevice(from: client.discoveredDevices, filter: deviceFilter) {
+            log("Found device: \(device.name)")
 
-    // Connect and wait
-    client.connect(to: device)
-    let connectDeadline = Date().addingTimeInterval(10)
-    while client.connectionState != .connected {
-        if Date() > connectDeadline {
-            throw MCPError.internalError("Connection to device timed out")
+            client.connect(to: device)
+            let connectDeadline = Date().addingTimeInterval(10)
+            while client.connectionState != .connected {
+                if Date() > connectDeadline {
+                    throw MCPError.internalError("Connection to device timed out")
+                }
+                if case .failed(let msg) = client.connectionState {
+                    throw MCPError.internalError("Connection failed: \(msg)")
+                }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+
+            log("Connected to \(device.name)")
+            return
         }
-        if case .failed(let msg) = client.connectionState {
-            throw MCPError.internalError("Connection failed: \(msg)")
-        }
+
         try await Task.sleep(nanoseconds: 100_000_000)
     }
+}
 
-    log("Connected to \(device.name)")
+func matchDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
+    guard let filter else { return devices.first }
+    let low = filter.lowercased()
+    return devices.first { device in
+        device.name.lowercased().contains(low) ||
+        device.appName.lowercased().contains(low) ||
+        device.deviceName.lowercased().contains(low) ||
+        (device.shortId?.lowercased().hasPrefix(low) ?? false) ||
+        (device.simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
+        (device.vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
+    }
 }
 
 // MARK: - Entry Point
@@ -663,9 +721,18 @@ func discoverAndConnect(client: HeistClient) async throws {
 struct ButtonHeistMCP {
     @MainActor
     static func main() async throws {
+        // Read device filter from --device arg or BUTTONHEIST_DEVICE env var
+        let deviceFilter: String?
+        let args = CommandLine.arguments
+        if let idx = args.firstIndex(of: "--device"), idx + 1 < args.count {
+            deviceFilter = args[idx + 1]
+        } else {
+            deviceFilter = ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+        }
+
         let client = HeistClient()
 
-        try await discoverAndConnect(client: client)
+        try await discoverAndConnect(client: client, deviceFilter: deviceFilter)
 
         log("Starting MCP server...")
 
@@ -675,10 +742,10 @@ struct ButtonHeistMCP {
             version: "1.0.0",
             instructions: """
                 ButtonHeist MCP server for iOS app automation. \
-                Use get_snapshot to read the UI element hierarchy, \
-                get_screenshot to see the screen, \
+                Use get_interface to read the UI element hierarchy, \
+                get_screen to see the screen, \
                 and interaction tools (tap, swipe, etc.) to drive the app. \
-                Elements can be targeted by accessibility identifier or order index from the snapshot.
+                Elements can be targeted by accessibility identifier or order index from the interface.
                 """,
             capabilities: .init(tools: .init(listChanged: false))
         )

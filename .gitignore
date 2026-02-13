@@ -11,6 +11,10 @@ Package.resolved
 xcuserdata/
 xcshareddata/
 
+# Swift compiler diagnostics
+*.d
+*.dia
+
 # macOS
 .DS_Store
 __pycache__

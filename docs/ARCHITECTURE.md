@@ -78,10 +78,10 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 - `UIElement` - Flat UI element representation
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
-- `Snapshot` - Container for hierarchy snapshots (flat list + optional tree)
-- `ServerInfo` - Device and app metadata
+- `Interface` - Container for UI element interface data (flat list + optional tree)
+- `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method and optional message
-- `ScreenshotPayload` - Base64-encoded PNG with dimensions
+- `ScreenPayload` - Base64-encoded PNG with dimensions
 
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
@@ -90,7 +90,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 ### InsideMan
 
-**Purpose**: iOS server that captures and broadcasts UI element snapshot and handles remote interaction.
+**Purpose**: iOS server that captures and broadcasts UI element interface and handles remote interaction.
 
 **Architecture**:
 ```
@@ -105,7 +105,7 @@ InsideMan (singleton, @MainActor)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
 ├── TapVisualizerView (visual tap feedback overlay)
-├── Polling Timer (hierarchy change detection via hash comparison)
+├── Polling Timer (interface change detection via hash comparison)
 └── Debounce Timer (300ms debounce for UI notifications)
 ```
 
@@ -126,7 +126,7 @@ When the framework loads:
    - `INSIDEMAN_PORT` / `InsideManPort` - server port (default: 0 = auto)
    - `INSIDEMAN_POLLING_INTERVAL` / `InsideManPollingInterval` - update interval (default: 1.0s, min: 0.5s)
 3. Creates a Task on MainActor to configure and start InsideMan singleton
-4. Begins polling for hierarchy changes
+4. Begins polling for interface changes
 
 **Threading Model**:
 - Entire class marked `@MainActor`
@@ -194,14 +194,14 @@ SafeCracker (stateful, @MainActor)
 - **Fresh UIEvent per phase**: iOS 26's stricter validation rejects reused event objects. Each touch phase (began, moved, ended) creates a new UIEvent.
 - **Overlay window filtering**: `getKeyWindow()` filters by `windowLevel <= .normal` to skip the TapVisualizerView overlay window.
 
-### Screenshot Capture
+### Screen Capture
 
-InsideMan captures screenshots using `UIGraphicsImageRenderer`:
+InsideMan captures the screen using `UIGraphicsImageRenderer`:
 1. Finds the foreground window scene
 2. Uses `drawHierarchy(in:afterScreenUpdates:)` to capture the full visual hierarchy (including SwiftUI)
 3. Encodes as PNG, then base64
-4. Returns `ScreenshotPayload` with dimensions and timestamp
-5. Screenshots are automatically broadcast alongside hierarchy changes during polling
+4. Returns `ScreenPayload` with dimensions and timestamp
+5. Screen captures are automatically broadcast alongside interface changes during polling
 
 ### Wheelman
 
@@ -210,8 +210,8 @@ InsideMan captures screenshots using `UIGraphicsImageRenderer`:
 **Key Types**:
 - `SimpleSocketServer` - BSD socket TCP server (IPv6 dual-stack), used by InsideMan on iOS
 - `DeviceConnection` - BSD socket TCP client with Bonjour service resolution
-- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint)
+- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier)
 
 ### ButtonHeistMCP (AI Agent Interface)
 
@@ -223,10 +223,11 @@ buttonheist-mcp (executable)
 ├── StdioTransport (MCP SDK)
 │   └── JSON-RPC 2.0 over stdin/stdout
 ├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 16 tool definitions
+│   ├── ListTools handler → 17 tool definitions (incl. list_devices, type_text)
 │   └── CallTool handler → dispatches to HeistClient
 ├── HeistClient (@MainActor)
 │   ├── DeviceDiscovery (auto-connect on startup)
+│   ├── Device filter (--device flag or BUTTONHEIST_DEVICE env var)
 │   └── Persistent TCP connection to iOS device
 └── Logging (stderr, never stdout)
 ```
@@ -240,20 +241,22 @@ MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server a
   "mcpServers": {
     "buttonheist": {
       "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": []
+      "args": ["--device", "SIMULATOR_UDID_HERE"]
     }
   }
 }
 ```
 
+The `--device` flag (or `BUTTONHEIST_DEVICE` env var) filters which device to connect to, matching against name, app name, short ID, simulator UDID, or vendor identifier. Without a filter, it connects to the first device found.
+
 When the MCP client starts a session, it:
 1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
 2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
-3. Sends `initialize` → server responds with capabilities (16 tools)
+3. Sends `initialize` → server responds with capabilities (17 tools)
 4. Sends `notifications/initialized` → server is ready
 5. Tool calls appear as **native capabilities** to the AI agent — they show up in the agent's tool palette alongside built-in tools like file reading and shell commands
 
-The AI agent can then call tools like `get_screenshot`, `tap`, or `draw_path` exactly as it would call any other tool. From the agent's perspective, it has direct access to the iOS app — there's no shell, no CLI, no intermediate scripting layer.
+The AI agent can then call tools like `get_screen`, `tap`, or `draw_path` exactly as it would call any other tool. From the agent's perspective, it has direct access to the iOS app — there's no shell, no CLI, no intermediate scripting layer.
 
 **Connection lifecycle**:
 ```
@@ -285,14 +288,14 @@ Session ends
 - **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls. Tool calls complete in milliseconds.
 - **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
 - **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
-- **16 tools**: Read tools (`get_snapshot`, `get_screenshot`) and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`).
+- **17 tools**: Discovery (`list_devices`), read tools (`get_interface`, `get_screen`), and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`).
 - **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
 
 ### ButtonHeist (macOS Client Framework)
 
 **Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
 
-**Usage**: `import ButtonHeist` gives access to all types (HeistClient, UIElement, Snapshot, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (HeistClient, UIElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
@@ -306,8 +309,8 @@ HeistClient (ObservableObject, @MainActor)
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
-    ├── currentSnapshot: Snapshot?
-    ├── currentScreenshot: ScreenshotPayload?
+    ├── currentInterface: Interface?
+    ├── currentScreen: ScreenPayload?
     └── serverInfo: ServerInfo?
 ```
 
@@ -315,9 +318,9 @@ HeistClient (ObservableObject, @MainActor)
 
 1. **SwiftUI (Reactive)**: `@Published` properties trigger view updates
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
-3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreenshot(timeout:)` for scripting
+3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, HeistClient automatically sends `subscribe`, `requestSnapshot`, and `requestScreenshot` messages.
+**Auto-Subscribe on Connect**: When a connection is established, HeistClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
 
 **Connection State Machine**:
 ```
@@ -341,18 +344,18 @@ The MCP server is the primary interface for AI agents. When an AI agent (Claude 
    └── HeistClient.startDiscovery() → NWBrowser for _buttonheist._tcp
    └── Bonjour discovers iOS device within ~2 seconds
    └── HeistClient.connect() → TCP connection to device
-   └── InsideMan sends ServerInfo, initial snapshot, and screenshot
+   └── InsideMan sends ServerInfo, initial interface, and screen capture
    └── MCP Server.start(transport: StdioTransport) → ready
 
 3. MCP client sends initialize handshake
-   └── Server responds with capabilities (16 tools)
+   └── Server responds with capabilities (17 tools)
    └── Tools appear as native capabilities to the AI agent
-   └── Example: Claude sees get_screenshot, tap, draw_path as callable tools
+   └── Example: Claude sees get_screen, tap, draw_path as callable tools
 
-4. AI agent calls a read tool (e.g. get_screenshot)
-   └── JSON-RPC: {"method": "tools/call", "params": {"name": "get_screenshot"}}
-   └── Server requests screenshot from HeistClient
-   └── HeistClient.send(.requestScreenshot) → TCP to iOS device
+4. AI agent calls a read tool (e.g. get_screen)
+   └── JSON-RPC: {"method": "tools/call", "params": {"name": "get_screen"}}
+   └── Server requests screen capture from HeistClient
+   └── HeistClient.send(.requestScreen) → TCP to iOS device
    └── InsideMan captures screen → base64 PNG → TCP back
    └── Server returns image content via MCP
    └── Agent sees the app's screen as an image
@@ -363,7 +366,7 @@ The MCP server is the primary interface for AI agents. When an AI agent (Claude 
    └── InsideMan.SafeCracker performs the gesture
    └── ActionResult sent back over TCP
    └── Server returns success/failure to agent
-   └── Agent can immediately screenshot to verify the result
+   └── Agent can immediately get_screen to verify the result
 
 6. Session ends
    └── MCP client closes stdin pipe
@@ -378,13 +381,28 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 1. InsideMan loads (ObjC +load)
    └── SimpleSocketServer.start(port: 1455)
    └── NetService.publish("_buttonheist._tcp")
+   │     Service name: "{AppName}-{DeviceName}#{shortId}"
+   │     shortId = first 8 chars of UUID (unique per launch)
+   └── NetService.setTXTRecord()
+         TXT keys: "simudid" (SIMULATOR_UDID), "vendorid" (identifierForVendor)
 
 2. HeistClient.startDiscovery()
    └── NWBrowser.start(for: "_buttonheist._tcp")
 
 3. NWBrowser finds service
+   └── Extract TXT record: .bonjour(let txtRecord) → simulatorUDID, vendorIdentifier
    └── HeistClient.discoveredDevices.append(device)
 ```
+
+### Multi-Instance Discovery
+
+When running multiple instances (e.g., multiple simulators), each instance has a unique identity:
+
+- **Short ID**: A per-launch UUID suffix in the Bonjour service name (e.g., `MyApp-iPhone 16 Pro#a1b2c3d4`)
+- **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
+- **Vendor Identifier**: `UIDevice.identifierForVendor` on physical devices. Stable per app install. Published in the TXT record under key `vendorid`.
+
+Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
 
 ### Connection Flow
 
@@ -399,10 +417,10 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 3. HeistClient receives info
    └── serverInfo = info
    └── connectionState = .connected
-   └── Sends: subscribe, requestSnapshot, requestScreenshot
+   └── Sends: subscribe, requestInterface, requestScreen
 ```
 
-### Hierarchy Update Flow
+### Interface Update Flow
 
 ```
 1. Polling timer fires (configurable interval, default 1.0s)
@@ -413,9 +431,9 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
    └── Compute hash of elements array
 
 3. If hash changed:
-   └── Create Snapshot(timestamp, elements, tree)
-   └── Broadcast hierarchy to all connected clients
-   └── Capture and broadcast screenshot
+   └── Create Interface(timestamp, elements, tree)
+   └── Broadcast interface to all connected clients
+   └── Capture and broadcast screen
 ```
 
 ### Action Flow (touch gestures)
@@ -425,7 +443,7 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 
 2. InsideMan receives message
    └── Resolve target point (from element activation point or explicit coordinates)
-   └── For element targets: refresh hierarchy, find element, get activation point
+   └── For element targets: refresh interface, find element, get activation point
 
 3. SafeCracker performs gesture
    └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
@@ -470,7 +488,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Parser must run on main thread
 - Socket accept/read on GCD queues
 - Message handling dispatched to main
-- Hierarchy updates debounced by 300ms
+- Interface updates debounced by 300ms
 
 ### HeistClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties

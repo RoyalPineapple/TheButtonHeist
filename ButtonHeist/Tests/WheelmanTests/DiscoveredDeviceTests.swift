@@ -49,4 +49,100 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.id, "device-123")
         XCTAssertEqual(device.name, "TestApp-iPhone")
     }
+
+    // MARK: - Short ID Parsing
+
+    func testShortIdParsing() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#a1b2c3d4", endpoint: endpoint)
+
+        XCTAssertEqual(device.shortId, "a1b2c3d4")
+    }
+
+    func testShortIdNilWithoutHash() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro", endpoint: endpoint)
+
+        XCTAssertNil(device.shortId)
+    }
+
+    func testShortIdNilWithEmptyHash() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#", endpoint: endpoint)
+
+        XCTAssertNil(device.shortId)
+    }
+
+    // MARK: - Name Parsing with Short ID
+
+    func testParsedNameWithShortId() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#a1b2c3d4", endpoint: endpoint)
+
+        XCTAssertEqual(device.appName, "TestApp")
+        XCTAssertEqual(device.deviceName, "iPhone 16 Pro")
+        XCTAssertEqual(device.shortId, "a1b2c3d4")
+    }
+
+    func testParsedNameWithoutShortId() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro", endpoint: endpoint)
+
+        XCTAssertEqual(device.appName, "TestApp")
+        XCTAssertEqual(device.deviceName, "iPhone 16 Pro")
+        XCTAssertNil(device.shortId)
+    }
+
+    func testAppNameFallbackNoDash() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "NoDashName#abc123", endpoint: endpoint)
+
+        XCTAssertEqual(device.appName, "NoDashName")
+        XCTAssertEqual(device.deviceName, "")
+        XCTAssertEqual(device.shortId, "abc123")
+    }
+
+    func testAppNameWithDashesInDeviceName() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "My-App-iPhone#ff00ff00", endpoint: endpoint)
+
+        // Last dash splits: "My-App" and "iPhone"
+        XCTAssertEqual(device.appName, "My-App")
+        XCTAssertEqual(device.deviceName, "iPhone")
+        XCTAssertEqual(device.shortId, "ff00ff00")
+    }
+
+    // MARK: - Device Identifiers
+
+    func testSimulatorUDID() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone#abc",
+            endpoint: endpoint,
+            simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
+        )
+
+        XCTAssertEqual(device.simulatorUDID, "DEADBEEF-1234-5678-9ABC-DEF012345678")
+        XCTAssertNil(device.vendorIdentifier)
+    }
+
+    func testVendorIdentifier() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone#abc",
+            endpoint: endpoint,
+            vendorIdentifier: "CAFE0000-BABE-FACE-DEAD-BEEF12345678"
+        )
+
+        XCTAssertNil(device.simulatorUDID)
+        XCTAssertEqual(device.vendorIdentifier, "CAFE0000-BABE-FACE-DEAD-BEEF12345678")
+    }
+
+    func testDefaultIdentifiersNil() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
+
+        XCTAssertNil(device.simulatorUDID)
+        XCTAssertNil(device.vendorIdentifier)
+    }
 }
