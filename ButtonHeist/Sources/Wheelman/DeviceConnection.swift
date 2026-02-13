@@ -18,9 +18,9 @@ public final class DeviceConnection {
     public var onConnected: (() -> Void)?
     public var onDisconnected: ((Error?) -> Void)?
     public var onServerInfo: ((ServerInfo) -> Void)?
-    public var onSnapshot: ((Snapshot) -> Void)?
+    public var onInterface: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
-    public var onScreenshot: ((ScreenshotPayload) -> Void)?
+    public var onScreen: ((ScreenPayload) -> Void)?
     public var onError: ((String) -> Void)?
 
     public init(device: DiscoveredDevice) {
@@ -139,9 +139,9 @@ public final class DeviceConnection {
         case .info(let info):
             debug("Received server info: \(info.appName)")
             onServerInfo?(info)
-        case .snapshot(let payload):
-            debug("Received hierarchy: \(payload.elements.count) elements")
-            onSnapshot?(payload)
+        case .interface(let payload):
+            debug("Received interface: \(payload.elements.count) elements")
+            onInterface?(payload)
         case .actionResult(let result):
             debug("Received action result: \(result.success)")
             onActionResult?(result)
@@ -150,9 +150,9 @@ public final class DeviceConnection {
             onError?(errorMessage)
         case .pong:
             debug("Received pong")
-        case .screenshot(let payload):
-            debug("Received screenshot: \(payload.pngData.count) chars base64")
-            onScreenshot?(payload)
+        case .screen(let payload):
+            debug("Received screen: \(payload.pngData.count) chars base64")
+            onScreen?(payload)
         }
     }
 }

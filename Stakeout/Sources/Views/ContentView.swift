@@ -40,7 +40,7 @@ struct ContentView: View {
     private var detailView: some View {
         switch client.connectionState {
         case .connected:
-            if let hierarchy = client.currentSnapshot {
+            if let hierarchy = client.currentInterface {
                 HStack(spacing: 0) {
                     // Left: Element list (tree or flat)
                     VStack(spacing: 0) {
@@ -82,7 +82,7 @@ struct ContentView: View {
 
                     // Middle: Screenshot (centered, not expanding)
                     ScreenshotView(
-                        screenshotPayload: client.currentScreenshot,
+                        screenPayload: client.currentScreen,
                         elements: hierarchy.elements,
                         selectedElement: $selectedElement,
                         onActivate: { element in

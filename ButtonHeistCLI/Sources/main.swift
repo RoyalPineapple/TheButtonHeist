@@ -11,17 +11,15 @@ struct ButtonHeist: AsyncParsableCommand {
             testing, debugging, and automation of SwiftUI/UIKit apps.
 
             Examples:
-              buttonheist                     # Interactive watch mode
-              buttonheist watch --once        # Single snapshot, then exit
-              buttonheist action --identifier "myButton"   # Activate an element
-              buttonheist touch tap --x 100 --y 200          # Tap coordinates
-              buttonheist touch swipe --direction up --x 200 --y 400  # Swipe up
-              buttonheist touch pinch --identifier "mapView" --scale 2.0   # Zoom in
-              buttonheist touch rotate --x 200 --y 300 --angle 1.57        # Rotate 90°
-              buttonheist touch two-finger-tap --identifier "zoomControl"   # Two-finger tap
+              buttonheist list                          # Show available devices
+              buttonheist watch --once                  # Single snapshot, then exit
+              buttonheist --device a1b2 watch --once    # Target a specific instance
+              buttonheist action --identifier "myButton"
+              buttonheist touch tap --x 100 --y 200
             """,
-        version: "2.0.0",
-        subcommands: [WatchCommand.self, ActionCommand.self, TouchCommand.self, TypeCommand.self, ScreenshotCommand.self],
+        version: "2.1.0",
+        subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
+                       TouchCommand.self, TypeCommand.self, ScreenshotCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }
@@ -49,6 +47,9 @@ struct WatchCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Show verbose output")
     var verbose: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         let options = CLIOptions(
@@ -56,7 +57,8 @@ struct WatchCommand: AsyncParsableCommand {
             once: once,
             quiet: quiet,
             timeout: timeout,
-            verbose: verbose
+            verbose: verbose,
+            device: device
         )
 
         let runner = CLIRunner(options: options)
@@ -75,4 +77,5 @@ struct CLIOptions {
     let quiet: Bool
     let timeout: Int
     let verbose: Bool
+    let device: String?
 }

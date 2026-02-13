@@ -7,14 +7,14 @@ the listed MCP tools directly.
 ## Prerequisites
 
 - iOS app with InsideMan running (simulator or device)
-- ButtonHeist MCP server connected (tools like `get_screenshot` are available)
+- ButtonHeist MCP server connected (tools like `get_screen` are available)
 
 ## Script
 
 ### 1. Navigate to Touch Canvas
 
 ```tool
-get_screenshot
+get_screen
 ```
 
 If the app is on the main menu, tap "Touch Canvas":
@@ -100,7 +100,7 @@ draw_bezier(
 ### 4. Verify the result
 
 ```tool
-get_screenshot
+get_screen
 ```
 
 You should see the Apple "hello" drawn in a single flowing cursive stroke

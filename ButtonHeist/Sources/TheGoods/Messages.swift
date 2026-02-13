@@ -10,8 +10,8 @@ public let protocolVersion = "2.0"
 // MARK: - Client -> Server Messages
 
 public enum ClientMessage: Codable {
-    /// Request current element snapshot
-    case requestSnapshot
+    /// Request current interface (UI element hierarchy)
+    case requestInterface
 
     /// Subscribe to automatic updates
     case subscribe
@@ -68,8 +68,8 @@ public enum ClientMessage: Codable {
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 
-    /// Request a screenshot of the current screen
-    case requestScreenshot
+    /// Request a capture of the current screen
+    case requestScreen
 }
 
 // MARK: - Action Targets
@@ -387,8 +387,8 @@ public enum ServerMessage: Codable {
     /// Server info on connection
     case info(ServerInfo)
 
-    /// Element snapshot response/update
-    case snapshot(Snapshot)
+    /// Interface (UI element hierarchy) response/update
+    case interface(Interface)
 
     /// Pong response
     case pong
@@ -399,8 +399,8 @@ public enum ServerMessage: Codable {
     /// Result of an action command
     case actionResult(ActionResult)
 
-    /// Screenshot response with PNG data
-    case screenshot(ScreenshotPayload)
+    /// Screen capture response with PNG data
+    case screen(ScreenPayload)
 }
 
 // MARK: - Action Results
@@ -420,15 +420,15 @@ public struct ActionResult: Codable, Sendable {
     }
 }
 
-/// Payload containing screenshot data
-public struct ScreenshotPayload: Codable, Sendable {
+/// Payload containing screen capture data
+public struct ScreenPayload: Codable, Sendable {
     /// Base64-encoded PNG data
     public let pngData: String
     /// Screen width in points
     public let width: Double
     /// Screen height in points
     public let height: Double
-    /// Timestamp when screenshot was taken
+    /// Timestamp when screen was captured
     public let timestamp: Date
 
     public init(pngData: String, width: Double, height: Double, timestamp: Date = Date()) {
@@ -465,6 +465,14 @@ public struct ServerInfo: Codable, Sendable {
     public let systemVersion: String
     public let screenWidth: Double
     public let screenHeight: Double
+    /// Per-launch session identifier (nil for servers < v2.1)
+    public let instanceId: String?
+    /// Port the server is listening on (nil for servers < v2.1)
+    public let listeningPort: UInt16?
+    /// Simulator UDID when running on iOS Simulator (nil on physical devices)
+    public let simulatorUDID: String?
+    /// Vendor identifier from UIDevice.identifierForVendor (stable per app install per device)
+    public let vendorIdentifier: String?
 
     public init(
         protocolVersion: String,
@@ -473,7 +481,11 @@ public struct ServerInfo: Codable, Sendable {
         deviceName: String,
         systemVersion: String,
         screenWidth: Double,
-        screenHeight: Double
+        screenHeight: Double,
+        instanceId: String? = nil,
+        listeningPort: UInt16? = nil,
+        simulatorUDID: String? = nil,
+        vendorIdentifier: String? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.appName = appName
@@ -482,10 +494,14 @@ public struct ServerInfo: Codable, Sendable {
         self.systemVersion = systemVersion
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
+        self.instanceId = instanceId
+        self.listeningPort = listeningPort
+        self.simulatorUDID = simulatorUDID
+        self.vendorIdentifier = vendorIdentifier
     }
 }
 
-public struct Snapshot: Codable, Sendable {
+public struct Interface: Codable, Sendable {
     public let timestamp: Date
     public let elements: [UIElement]
     /// Optional tree structure for grouped display

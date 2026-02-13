@@ -12,16 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Touch injection fallback chain** - Three-level fallback: synthetic events, accessibilityActivate(), UIControl.sendActions()
 - **Interactivity validation** - Element trait-level and view-level checks before tap injection
 - **Tap visualization** - Visual overlay showing tap location with fade-out animation
-- **Screenshot capture** - PNG screenshot capture via `requestScreenshot` command
-- **Screenshot auto-broadcast** - Screenshots automatically sent alongside hierarchy changes during polling
+- **Screen capture** - PNG screen capture via `requestScreen` command
+- **Screen auto-broadcast** - Screen captures automatically sent alongside interface changes during polling
 - **CLI action command** - `buttonheist action` for activating, tapping, incrementing, decrementing, and custom actions
 - **CLI screenshot command** - `buttonheist screenshot` for capturing device screenshots
 - **Increment/decrement commands** - `increment` and `decrement` messages for adjustable elements
 - **Custom action support** - `performCustomAction` message for invoking named custom actions
 - **Subscribe/unsubscribe** - Explicit subscription control for automatic updates
-- **Tree hierarchy** - Optional `tree` field in `HierarchyPayload` with container structure
+- **Tree hierarchy** - Optional `tree` field in `Interface` with container structure
 - **Container types** - Semantic groups, lists, landmarks, data tables, and tab bars in tree hierarchy
-- **Async/await client API** - `waitForActionResult(timeout:)` and `waitForScreenshot(timeout:)` on Wheelman
+- **Async/await client API** - `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` on HeistClient
 - **Action result details** - `ActionResult` now includes `message` field for error descriptions
 - **Device display names** - Smart disambiguation when multiple devices run the same app
 - **Stakeout visual mode** - Screenshot display with element overlays and tap/activate gestures
