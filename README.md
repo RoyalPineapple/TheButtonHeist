@@ -236,14 +236,13 @@ swift run buttonheist           # Watch mode (live updates)
 
 **GUI App:**
 ```bash
-tuist generate
 open ButtonHeist.xcworkspace
 # Run the Stakeout scheme
 ```
 
 ## CLI Usage
 
-The CLI has five subcommands: `list`, `watch` (default), `action`, `touch`, and `screenshot`.
+The CLI has six subcommands: `list`, `watch` (default), `action`, `touch`, `type`, and `screenshot`.
 
 All subcommands that connect to a device accept `--device <filter>` to target a specific instance by name, short ID prefix, simulator UDID, or vendor identifier.
 
@@ -414,25 +413,18 @@ Each element in the hierarchy contains:
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
 | `frameX/Y/Width/Height` | `Double` | Screen coordinates |
-| `actions` | `[String]` | Available actions (activate, increment, decrement, custom) |
+| `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 ## Development Setup
 
 ### Prerequisites
 
 - Xcode 15+
-- [Tuist](https://tuist.io) for project generation
 - iOS 17+ / macOS 14+
 
 ### Building
 
 ```bash
-# Install Tuist if needed
-curl -Ls https://install.tuist.io | bash
-
-# Generate Xcode project
-tuist generate
-
 # Open workspace
 open ButtonHeist.xcworkspace
 ```
@@ -511,8 +503,7 @@ buttonheist/
 │   ├── WIRE-PROTOCOL.md           # Protocol specification
 │   ├── API.md                     # API reference
 │   └── USB_DEVICE_CONNECTIVITY.md # USB guide
-├── Project.swift                  # Tuist configuration
-└── Workspace.swift
+└── ButtonHeist.xcworkspace
 ```
 
 ## Wire Protocol

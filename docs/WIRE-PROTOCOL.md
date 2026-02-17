@@ -332,7 +332,7 @@ UI element interface. Contains a flat element list and an optional tree structur
       "frameY":140.0,
       "frameWidth":361.0,
       "frameHeight":44.0,
-      "actions":[]
+      "actions":["activate"]
     }
   ],
   "tree":[
@@ -465,7 +465,7 @@ Error message.
 | `frameY` | `Double` | Frame origin Y in points |
 | `frameWidth` | `Double` | Frame width in points |
 | `frameHeight` | `Double` | Frame height in points |
-| `actions` | `[String]` | Custom action names |
+| `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 ### ElementNode
 
