@@ -1,5 +1,69 @@
 # CLAUDE.md
 
+## Simulator Quick Start
+
+Build and deploy the test app to an iOS Simulator for end-to-end testing.
+
+### 1. Build the MCP server
+
+```bash
+cd ButtonHeistMCP && swift build -c release && cd ..
+```
+
+### 2. Pick a simulator
+
+Always target simulators by UDID, never by name (names can collide across runtimes).
+
+```bash
+# List available simulators
+xcrun simctl list devices available
+
+# Pick one and store its UDID
+SIM_UDID=<paste-udid-here>
+
+# Boot it
+xcrun simctl boot "$SIM_UDID"
+```
+
+### 3. Build the test app
+
+```bash
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
+  -destination "platform=iOS Simulator,id=$SIM_UDID" build
+```
+
+Use the `AccessibilityTestApp` scheme — this embeds InsideMan, Wheelman, and all frameworks. Building just the `InsideMan` scheme only produces the framework without the app.
+
+### 4. Install and launch
+
+```bash
+# Find the freshest build
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/AccessibilityTestApp.app | head -1)
+
+# Install and launch (bundle ID: com.buttonheist.testapp)
+xcrun simctl install "$SIM_UDID" "$APP"
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+```
+
+### 5. Known issue: resource bundle crash
+
+Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` into the app. If the app crashes at launch with a `Bundle.module` assertion, copy the bundle manually:
+
+```bash
+INSTALLED=$(xcrun simctl get_app_container "$SIM_UDID" com.buttonheist.testapp)
+BUNDLE=$(find ~/Library/Developer/Xcode/DerivedData -name "AccessibilitySnapshot_AccessibilitySnapshotParser.bundle" -path "*/Debug-iphonesimulator/*" | head -1)
+cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+```
+
+### 6. Verify
+
+```bash
+timeout 5 dns-sd -B _buttonheist._tcp .
+```
+
+Should show an `Add` entry with the app name. The MCP tools (`get_interface`, `get_screen`, etc.) should now work.
+
 ## Pre-Commit Checklist
 
 Before pushing any commit, verify the following:
@@ -67,7 +131,6 @@ Before pushing any commit, verify the following:
 
 ## End-to-End Testing with iOS Simulator
 
-- **Round-trip testing between the iOS app and CLI is essential.** The CLI drives the simulator, the app responds, and the CLI verifies the results.
-- Use `xcrun simctl` and the project CLI to launch, interact with, and inspect the iOS app running in the simulator.
-- Tests should be fully automatable: boot simulator → install app → run test scenarios via CLI → capture and verify output.
-- This creates a complete feedback loop where an agent can make code changes, rebuild, deploy to simulator, and validate behavior without human intervention.
+- Follow the **Simulator Quick Start** section above to build, install, and launch the test app.
+- After making code changes, rebuild and reinstall using those same steps.
+- Verify changes via MCP tools (`get_interface`, `get_screen`, `activate`, etc.) or the CLI — not manual GUI inspection.

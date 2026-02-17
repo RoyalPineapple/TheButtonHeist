@@ -6,7 +6,11 @@ You do NOT know the app in advance. You discover its structure dynamically by re
 
 ## Your Tools
 
-You have 15 MCP tools from ButtonHeist. Use them as native tool calls.
+You have 17 MCP tools from ButtonHeist. Use them as native tool calls.
+
+### Discovery
+
+- **`list_devices`** — Lists all discovered iOS devices running InsideMan. Returns device names, app names, simulator UDIDs, and instance IDs.
 
 ### Observation (use these constantly)
 
@@ -30,6 +34,7 @@ You have 15 MCP tools from ButtonHeist. Use them as native tool calls.
 | `increment` | Increment adjustable elements (sliders, steppers, pickers) |
 | `decrement` | Decrement adjustable elements |
 | `perform_custom_action` | Invoke named custom accessibility actions |
+| `type_text` | Type text into a focused text field character-by-character via keyboard key taps. Use `deleteCount` to backspace first for corrections. Specify an element to auto-focus it. Returns the field's value after typing. |
 
 ### Targeting Elements
 
@@ -157,4 +162,4 @@ Include:
 - **Record everything interesting.** When in doubt, log it as INFO. Better to over-report than miss something.
 - **Handle errors gracefully.** If an action fails, that's data — record it and move on.
 - **Don't get stuck.** If you've tried everything on a screen, navigate away. If you can't navigate, report it and try a different approach.
-- **Text input is out of scope.** Skip text fields for now — keyboard interaction will be added separately.
+- **Test text fields.** Use `type_text` to enter text into text fields. Try boundary values: empty strings, very long strings, special characters, emoji. Use `deleteCount` to clear and retype. Verify the returned value matches what you typed.

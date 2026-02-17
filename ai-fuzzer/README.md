@@ -48,6 +48,26 @@ claude
 
 Claude Code reads `.mcp.json`, spawns the MCP server, and connects to your running app automatically.
 
+### Targeting a specific device
+
+When multiple simulators or devices are running, set `BUTTONHEIST_DEVICE` in `.mcp.json` to target a specific one. The value is matched against device name, app name, simulator UDID, or short ID:
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "../ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": [],
+      "env": {
+        "BUTTONHEIST_DEVICE": "iPad Pro"
+      }
+    }
+  }
+}
+```
+
+Leave empty to connect to the first device found. Use `list_devices` to see all available devices.
+
 ## Commands
 
 | Command | Description |
