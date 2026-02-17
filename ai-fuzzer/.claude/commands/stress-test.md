@@ -9,6 +9,18 @@ You are going to hammer the connected iOS app with rapid, repeated interactions 
 **Arguments** (optional): `$ARGUMENTS`
 - Element identifier or "all" (default: "all" — stress test every interactive element)
 
+## Step 0: Verify Connection + Check for Existing Session
+
+1. Call `list_devices` — confirm at least one device is connected
+2. If no devices found: stop and tell the user to launch the app and try again
+3. Print the connected device name and app name for confirmation
+4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
+
+During stress testing, update your session notes file continuously:
+- After each sequence completes: update `## Coverage` with the result (PASS/FAIL)
+- After each finding: add to `## Findings`
+- Every 3 sequences: update `## Progress` and `## Next Actions`
+
 ## Step 1: Identify Targets
 
 1. Call `get_interface` to get the current screen

@@ -18,8 +18,8 @@ Process elements **in order** (by `order` field from snapshot), top to bottom:
 
 For each element, try actions in this order:
 
-1. **`tap`** — The universal interaction. Try it on everything.
-2. **`activate`** — If the element has actions, activate it via accessibility API.
+1. **`activate`** — The preferred interaction for elements with actions. Uses the accessibility API with live object references for reliable activation.
+2. **`tap`** — Fallback for elements without actions, or to test hit-testing behavior. Use coordinate-based taps for elements that don't have accessibility actions.
 3. **`long_press`** — Might reveal context menus or alternate behaviors.
 4. **`swipe` (all 4 directions)** — Might scroll, dismiss, or reveal hidden content.
 5. **`increment` / `decrement`** — Only if the element has these in its actions array.
