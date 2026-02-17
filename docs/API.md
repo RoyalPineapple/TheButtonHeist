@@ -903,7 +903,7 @@ Represents a single UI element.
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
-| `actions` | `[String]` | Custom action names |
+| `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 #### Computed Properties
 
