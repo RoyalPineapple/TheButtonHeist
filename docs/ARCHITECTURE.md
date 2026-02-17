@@ -99,7 +99,9 @@ InsideMan (singleton, @MainActor)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
-├── SafeCracker (gesture simulation + text input)
+│   └── elementVisitor closure (captures live NSObject references during parse)
+├── Interactive Object Cache (weak references to accessibility nodes, keyed by traversal index)
+├── SafeCracker (gesture simulation + text input, used as fallback)
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
@@ -425,15 +427,43 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
 ```
 1. Polling timer fires (configurable interval, default 1.0s)
 
-2. InsideMan.checkForChanges()
-   └── parser.parseAccessibilityHierarchy(in: rootView)
-   └── flattenToElements() → UIElement[]
+2. InsideMan.refreshAccessibilityData()
+   └── parser.parseAccessibilityHierarchy(in: rootView, elementVisitor: { ... })
+   │     elementVisitor captures weak refs to interactive objects (keyed by index)
+   └── flattenToElements() → AccessibilityMarker[]
+   └── Update interactiveObjects cache
+   └── Convert markers to UIElement[] (actions derived from interactive cache)
    └── Compute hash of elements array
 
 3. If hash changed:
    └── Create Interface(timestamp, elements, tree)
    └── Broadcast interface to all connected clients
    └── Capture and broadcast screen
+```
+
+### Action Flow (accessibility actions)
+
+```
+1. Client sends activate / increment / decrement / customAction message
+
+2. InsideMan receives message
+   └── refreshAccessibilityData() → re-parse hierarchy + rebuild interactive cache
+   └── Find element by identifier or order index
+   └── Resolve traversal index → look up live NSObject in interactiveObjects cache
+
+3. Dispatch via live object reference
+   └── activate:  object.accessibilityActivate()
+   └── increment: object.accessibilityIncrement()
+   └── decrement: object.accessibilityDecrement()
+   └── custom:    find UIAccessibilityCustomAction by name → call handler or target/selector
+
+4. Fallback (activate only): if accessibilityActivate() returns false
+   └── SafeCracker.tap(at: activationPoint) → synthetic touch injection
+
+5. InsideMan sends actionResult
+   └── success: true/false
+   └── method: activate / increment / decrement / customAction / syntheticTap
+   └── Show TapVisualizerView overlay on success
 ```
 
 ### Action Flow (touch gestures)
@@ -443,7 +473,8 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
 
 2. InsideMan receives message
    └── Resolve target point (from element activation point or explicit coordinates)
-   └── For element targets: refresh interface, find element, get activation point
+   └── For element targets: refreshAccessibilityData(), find element, get activation point
+   └── touchTap with element target: try accessibilityActivate() first, fall back to synthetic
 
 3. SafeCracker performs gesture
    └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
@@ -452,7 +483,7 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
 
 4. InsideMan sends actionResult
    └── success: true/false
-   └── method: syntheticTap / syntheticDrag / syntheticPinch / etc.
+   └── method: activate / syntheticTap / syntheticDrag / syntheticPinch / etc.
    └── message: optional error description
    └── Show TapVisualizerView overlay on successful taps
 ```
