@@ -6,15 +6,22 @@ description: Generate a structured findings report from the current session
 
 Generate a comprehensive report of all findings from this fuzzing session and save it to the `reports/` directory.
 
+## Step 0: Verify Connection
+
+1. Call `list_devices` — confirm at least one device is connected
+2. If no devices found: stop and tell the user to launch the app and try again
+3. Print the connected device name and app name for confirmation
+
 ## Step 1: Gather Context
 
-1. Call `get_interface` to get the current screen state (confirms the app is still connected)
-2. Review all findings, observations, and notes from this conversation session
-3. Collect:
-   - Screens visited and their descriptions
-   - Actions taken (approximate count)
-   - All findings with severity levels
-   - Screen transitions discovered
+1. **Read the session notes file** — list `session/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
+2. Call `get_interface` to get the current screen state (confirms the app is still connected)
+3. Review the session notes plus any additional findings, observations, and notes from this conversation session
+4. Collect:
+   - Screens visited and their descriptions (from `## Screens Discovered`)
+   - Actions taken (from `## Progress`)
+   - All findings with severity levels (from `## Findings`)
+   - Screen transitions discovered (from `## Transitions`)
    - Any crashes encountered
 
 ## Step 2: Build the Report

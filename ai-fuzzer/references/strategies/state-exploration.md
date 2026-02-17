@@ -33,7 +33,7 @@ Use **depth-first** exploration with backtracking:
 1. Fingerprint the current screen → call it S0
 2. Record S0 in visited set
 3. For each navigation-like element on S0:
-   a. Tap the element
+   a. Activate the element (use `activate` for elements with actions, `tap` as fallback)
    b. Get new interface, fingerprint it → Snew
    c. If Snew == S0: no transition, try next element
    d. If Snew is new (not in visited):

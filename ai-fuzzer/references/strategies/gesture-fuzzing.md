@@ -61,7 +61,7 @@ Stop gesture fuzzing a screen when:
 - Random coordinate gestures have been applied
 - Any CRASH is detected (stop and report immediately)
 
-Move to the next screen after completing the current one. Use `tap` on navigation elements to find new screens.
+Move to the next screen after completing the current one. Use `activate` on navigation elements to find new screens (falls back to `tap` for elements without actions).
 
 ## What to Look For
 
