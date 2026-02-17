@@ -47,6 +47,15 @@ Go through elements in order. For each interactive element:
 3. Try `long_press` — some elements reveal context menus only on long press
 4. Check if anything happened
 
+### Text fields
+
+If the element looks like a text input (text field, secure field, text editor):
+1. `type_text(identifier: element, text: "test input")` — type a basic string
+2. Check the returned value matches what you typed
+3. `type_text(identifier: element, deleteCount: 10, text: "replaced")` — test delete + retype
+4. Check the returned value is correct
+5. Try boundary inputs: empty string, very long string (100+ chars), special characters (`<>&"'`), emoji
+
 ### Swipe testing (on scrollable-looking containers)
 
 If the tree structure shows `list` or `landmark` containers:
