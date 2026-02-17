@@ -439,6 +439,50 @@ public struct ScreenPayload: Codable, Sendable {
     }
 }
 
+/// Actions that can be performed on a UI element.
+/// Built-in actions encode as plain strings ("activate", "increment", "decrement").
+/// Custom actions encode as their name string directly.
+public enum ElementAction: Equatable, Hashable, Sendable {
+    case activate
+    case increment
+    case decrement
+    case custom(String)
+}
+
+extension ElementAction: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .activate: return "activate"
+        case .increment: return "increment"
+        case .decrement: return "decrement"
+        case .custom(let name): return name
+        }
+    }
+}
+
+extension ElementAction: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        switch value {
+        case "activate": self = .activate
+        case "increment": self = .increment
+        case "decrement": self = .decrement
+        default: self = .custom(value)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .activate: try container.encode("activate")
+        case .increment: try container.encode("increment")
+        case .decrement: try container.encode("decrement")
+        case .custom(let name): try container.encode(name)
+        }
+    }
+}
+
 public enum ActionMethod: String, Codable, Sendable {
     case activate
     case increment
@@ -572,8 +616,8 @@ public struct UIElement: Codable, Equatable, Hashable, Sendable {
     public var frameY: Double
     public var frameWidth: Double
     public var frameHeight: Double
-    /// Available actions: "activate", "increment", "decrement", or custom action names
-    public var actions: [String]
+    /// Available actions for this element
+    public var actions: [ElementAction]
 
     public init(
         order: Int,
@@ -585,7 +629,7 @@ public struct UIElement: Codable, Equatable, Hashable, Sendable {
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double,
-        actions: [String]
+        actions: [ElementAction]
     ) {
         self.order = order
         self.description = description

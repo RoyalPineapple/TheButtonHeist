@@ -38,6 +38,16 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private let safeCracker = SafeCracker()
     private var cachedElements: [AccessibilityMarker] = []
 
+    // MARK: - Interactive Object Storage
+
+    private struct WeakObject {
+        weak var object: NSObject?
+    }
+
+    /// Weak references to interactive accessibility objects from the last parse,
+    /// keyed by traversal index.
+    private var interactiveObjects: [Int: WeakObject] = [:]
+
     private var isRunning = false
 
     // Debounce for hierarchy updates
@@ -266,19 +276,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func sendInterface(respond: @escaping (Data) -> Void) {
-        guard let rootView = getRootView() else {
+        guard let hierarchyTree = refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
         }
 
-        // Parse full tree structure
-        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
-
-        // Flatten for backwards compatibility and action handling
-        let flatElements = hierarchyTree.flattenToElements()
-        cachedElements = flatElements
-
-        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -350,14 +353,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func broadcastHierarchyUpdate() {
-        guard let rootView = getRootView() else { return }
+        guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        // Parse full tree structure
-        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
-        let flatElements = hierarchyTree.flattenToElements()
-        cachedElements = flatElements
-
-        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -388,14 +386,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func checkForChanges() {
-        guard let rootView = getRootView() else { return }
+        guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        // Parse full tree structure
-        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView)
-        let flatElements = hierarchyTree.flattenToElements()
-        cachedElements = flatElements
-
-        let elements = flatElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
@@ -444,6 +437,82 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
     }
 
+    // MARK: - Accessibility Data Refresh
+
+    /// Refresh the accessibility hierarchy. Provides a visitor closure to the parser
+    /// that captures weak references to interactive objects for action dispatch.
+    /// Returns the hierarchy tree for callers that need it (e.g., sendInterface).
+    @discardableResult
+    private func refreshAccessibilityData() -> [AccessibilityHierarchy]? {
+        guard let rootView = getRootView() else { return nil }
+        var newInteractiveObjects: [Int: WeakObject] = [:]
+        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView) { _, index, object in
+            if object.accessibilityRespondsToUserInteraction
+                || object.accessibilityTraits.contains(.adjustable)
+                || !(object.accessibilityCustomActions ?? []).isEmpty {
+                newInteractiveObjects[index] = WeakObject(object: object)
+            }
+        }
+        interactiveObjects = newInteractiveObjects
+        cachedElements = hierarchyTree.flattenToElements()
+        return hierarchyTree
+    }
+
+    // MARK: - Activation Methods
+
+    /// Calls accessibilityActivate() on the live object at the given traversal index.
+    private func activate(elementAt index: Int) -> Bool {
+        interactiveObjects[index]?.object?.accessibilityActivate() ?? false
+    }
+
+    /// Calls accessibilityIncrement() on the live object at the given traversal index.
+    private func increment(elementAt index: Int) {
+        interactiveObjects[index]?.object?.accessibilityIncrement()
+    }
+
+    /// Calls accessibilityDecrement() on the live object at the given traversal index.
+    private func decrement(elementAt index: Int) {
+        interactiveObjects[index]?.object?.accessibilityDecrement()
+    }
+
+    /// Performs a custom action by name on the live object at the given traversal index.
+    private func performCustomAction(named name: String, elementAt index: Int) -> Bool {
+        guard let actions = interactiveObjects[index]?.object?.accessibilityCustomActions else {
+            return false
+        }
+        for action in actions where action.name == name {
+            if let handler = action.actionHandler {
+                return handler(action)
+            }
+            if let target = action.target {
+                _ = (target as AnyObject).perform(action.selector, with: action)
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Returns names of custom actions on the live object at the given traversal index.
+    private func customActionNames(elementAt index: Int) -> [String] {
+        interactiveObjects[index]?.object?.accessibilityCustomActions?.map { $0.name } ?? []
+    }
+
+    /// Returns whether a live interactive object exists at the given traversal index.
+    private func hasInteractiveObject(at index: Int) -> Bool {
+        interactiveObjects[index]?.object != nil
+    }
+
+    /// Resolve the traversal index for an ActionTarget.
+    private func resolveTraversalIndex(for target: ActionTarget) -> Int? {
+        if let index = target.order {
+            return index
+        }
+        if let identifier = target.identifier {
+            return cachedElements.firstIndex { $0.identifier == identifier }
+        }
+        return nil
+    }
+
     // MARK: - Action Handlers
 
     private func findElement(for target: ActionTarget) -> AccessibilityMarker? {
@@ -454,18 +523,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return cachedElements[index]
         }
         return nil
-    }
-
-    /// Find the UIView at a given point using hit testing
-    private func findViewAtPoint(_ point: CGPoint) -> UIView? {
-        guard let window = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow }) else {
-            return nil
-        }
-        let windowPoint = window.convert(point, from: nil)
-        return window.hitTest(windowPoint, with: nil)
     }
 
     /// Check if an AccessibilityMarker element is interactive based on traits
@@ -495,10 +552,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
-        // Refresh hierarchy
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
-        }
+        refreshAccessibilityData()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(
@@ -509,7 +563,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
-        // Check if element is interactive based on traits
         if let interactivityError = checkElementInteractivity(element) {
             sendMessage(.actionResult(ActionResult(
                 success: false,
@@ -521,8 +574,19 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let point = element.activationPoint
 
-        // Try accessibilityActivate first
-        if let view = findViewAtPoint(point), view.accessibilityActivate() {
+        // Guard: element must be in interactive cache
+        guard let index = resolveTraversalIndex(for: target),
+              hasInteractiveObject(at: index) else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .activate,
+                message: "Element does not support activation"
+            )), respond: respond)
+            return
+        }
+
+        // Try accessibilityActivate via the live object reference
+        if activate(elementAt: index) {
             TapVisualizerView.showTap(at: point)
             sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
             return
@@ -543,51 +607,49 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
-        }
+        refreshAccessibilityData()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
             return
         }
 
-        // Find the view at the element's activation point and call accessibilityIncrement
-        if let view = findViewAtPoint(element.activationPoint) {
-            view.accessibilityIncrement()
-            TapVisualizerView.showTap(at: element.activationPoint)
-            sendMessage(.actionResult(ActionResult(success: true, method: .increment)), respond: respond)
-        } else {
+        guard let index = resolveTraversalIndex(for: target),
+              hasInteractiveObject(at: index) else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementNotFound,
-                message: "Could not find view for increment"
+                method: .increment,
+                message: "Element does not support increment"
             )), respond: respond)
+            return
         }
+
+        increment(elementAt: index)
+        TapVisualizerView.showTap(at: element.activationPoint)
+        sendMessage(.actionResult(ActionResult(success: true, method: .increment)), respond: respond)
     }
 
     private func handleDecrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
-        }
+        refreshAccessibilityData()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
             return
         }
 
-        // Find the view at the element's activation point and call accessibilityDecrement
-        if let view = findViewAtPoint(element.activationPoint) {
-            view.accessibilityDecrement()
-            TapVisualizerView.showTap(at: element.activationPoint)
-            sendMessage(.actionResult(ActionResult(success: true, method: .decrement)), respond: respond)
-        } else {
+        guard let index = resolveTraversalIndex(for: target),
+              hasInteractiveObject(at: index) else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementNotFound,
-                message: "Could not find view for decrement"
+                method: .decrement,
+                message: "Element does not support decrement"
             )), respond: respond)
+            return
         }
+
+        decrement(elementAt: index)
+        TapVisualizerView.showTap(at: element.activationPoint)
+        sendMessage(.actionResult(ActionResult(success: true, method: .decrement)), respond: respond)
     }
 
     // MARK: - Touch Gesture Handlers
@@ -595,8 +657,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private func handleTouchTap(_ target: TouchTapTarget, respond: @escaping (Data) -> Void) {
         guard let point = resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY, respond: respond) else { return }
 
-        // Try accessibilityActivate first
-        if let view = findViewAtPoint(point), view.accessibilityActivate() {
+        // If we have an element target, try activation via live object first
+        if let elementTarget = target.elementTarget,
+           let index = resolveTraversalIndex(for: elementTarget),
+           activate(elementAt: index) {
             TapVisualizerView.showTap(at: point)
             sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
             return
@@ -609,7 +673,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
-        sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap)), respond: respond)
+        sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap, message: "Touch tap failed")), respond: respond)
     }
 
     private func handleTouchLongPress(_ target: LongPressTarget, respond: @escaping (Data) -> Void) {
@@ -761,7 +825,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
-            refreshHierarchy()
+            refreshAccessibilityData()
             guard let element = findElement(for: elementTarget) else {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
@@ -840,7 +904,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            refreshHierarchy()
+            refreshAccessibilityData()
             if let element = findElement(for: elementTarget) {
                 fieldValue = element.value
             }
@@ -851,14 +915,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             method: .typeText,
             value: fieldValue
         )), respond: respond)
-    }
-
-    // MARK: - Text Entry Helpers
-
-    private func refreshHierarchy() {
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
-        }
     }
 
     // MARK: - Shared Helpers
@@ -888,9 +944,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         respond: @escaping (Data) -> Void
     ) -> CGPoint? {
         if let elementTarget {
-            if let rootView = getRootView() {
-                cachedElements = parser.parseAccessibilityElements(in: rootView)
-            }
+            refreshAccessibilityData()
             guard let element = findElement(for: elementTarget) else {
                 sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
                 return nil
@@ -924,54 +978,28 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func handleCustomAction(_ target: CustomActionTarget, respond: @escaping (Data) -> Void) {
-        if let rootView = getRootView() {
-            cachedElements = parser.parseAccessibilityElements(in: rootView)
-        }
+        refreshAccessibilityData()
 
-        guard let element = findElement(for: target.elementTarget) else {
+        guard findElement(for: target.elementTarget) != nil else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
             return
         }
 
-        // Find the view and perform the custom action
-        guard let view = findViewAtPoint(element.activationPoint) else {
+        guard let index = resolveTraversalIndex(for: target.elementTarget),
+              hasInteractiveObject(at: index) else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
-                method: .elementNotFound,
-                message: "Could not find view for custom action"
+                method: .customAction,
+                message: "Element does not support custom actions"
             )), respond: respond)
             return
         }
 
-        // Find the custom action by name and perform it
-        if let customActions = view.accessibilityCustomActions {
-            for action in customActions where action.name == target.actionName {
-                // UIAccessibilityCustomAction's handler returns Bool indicating success
-                if let handler = action.actionHandler {
-                    let success = handler(action)
-                    sendMessage(.actionResult(ActionResult(
-                        success: success,
-                        method: .customAction,
-                        message: success ? nil : "Custom action failed"
-                    )), respond: respond)
-                    return
-                }
-                // For target/selector based actions
-                if let actionTarget = action.target {
-                    _ = (actionTarget as AnyObject).perform(action.selector, with: action)
-                    sendMessage(.actionResult(ActionResult(
-                        success: true,
-                        method: .customAction
-                    )), respond: respond)
-                    return
-                }
-            }
-        }
-
+        let success = performCustomAction(named: target.actionName, elementAt: index)
         sendMessage(.actionResult(ActionResult(
-            success: false,
+            success: success,
             method: .customAction,
-            message: "Action '\(target.actionName)' not found"
+            message: success ? nil : "Action '\(target.actionName)' not found"
         )), respond: respond)
     }
 
@@ -1025,20 +1053,22 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
             frameHeight: frame.size.height,
-            actions: buildActions(traits: marker.traits, customActions: marker.customActions)
+            actions: buildActions(for: index, element: marker)
         )
     }
 
-    private func buildActions(traits: UIAccessibilityTraits, customActions: [AccessibilityMarker.CustomAction]) -> [String] {
-        var actions: [String] = []
-        if traits.contains(.button) || traits.contains(.link) {
-            actions.append("activate")
+    private func buildActions(for index: Int, element: AccessibilityMarker) -> [ElementAction] {
+        var actions: [ElementAction] = []
+        if hasInteractiveObject(at: index) {
+            actions.append(.activate)
         }
-        if traits.contains(.adjustable) {
-            actions.append("increment")
-            actions.append("decrement")
+        if element.traits.contains(.adjustable), hasInteractiveObject(at: index) {
+            actions.append(.increment)
+            actions.append(.decrement)
         }
-        actions.append(contentsOf: customActions.map { $0.name })
+        for name in customActionNames(elementAt: index) {
+            actions.append(.custom(name))
+        }
         return actions
     }
 
