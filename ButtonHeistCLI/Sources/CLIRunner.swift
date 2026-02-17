@@ -224,7 +224,7 @@ final class CLIRunner {
             output += "       ID: \(id)\n"
         }
         if !element.actions.isEmpty {
-            output += "       Actions: \(element.actions.joined(separator: ", "))\n"
+            output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
         }
 
         let frame = "(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))x\(Int(element.frameHeight))"

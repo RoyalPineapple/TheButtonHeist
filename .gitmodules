@@ -1,3 +1,4 @@
 [submodule "AccessibilitySnapshot"]
 	path = AccessibilitySnapshot
-	url = https://github.com/cashapp/AccessibilitySnapshot.git
+	url = git@github.com:RoyalPineapple/AccessibilitySnapshot.git
+	branch = a11y-hierarchy-parsing
