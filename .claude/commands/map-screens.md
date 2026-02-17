@@ -6,6 +6,18 @@ description: Build a navigation graph of all reachable screens in the app
 
 You are going to systematically map every reachable screen in the connected iOS app and build a navigation graph showing how screens connect.
 
+## Step 0: Verify Connection + Check for Existing Session
+
+1. Call `list_devices` — confirm at least one device is connected
+2. If no devices found: stop and tell the user to launch the app and try again
+3. Print the connected device name and app name for confirmation
+4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
+
+During mapping, update your session notes file continuously:
+- After each new screen: add to `## Screens Discovered`
+- After each transition: add to `## Transitions`
+- Every 5 actions: update `## Progress` and `## Next Actions`
+
 ## Step 1: Start Screen
 
 1. Call `get_screen` + `get_interface`
@@ -26,6 +38,8 @@ While the exploration stack is not empty:
 
 ### 2a. Pick Next Element
 
+**Consult your session notes** — read `## Screens Discovered` and `## Transitions` to know which screens and edges are already mapped. Skip navigation you've already recorded.
+
 Pop the top of the stack. If all navigation-like elements have been tried on this screen, pop again.
 
 Navigation-like elements (in priority order):
@@ -37,7 +51,7 @@ Navigation-like elements (in priority order):
 ### 2b. Try Navigation
 
 1. Record the current screen fingerprint
-2. `tap` the selected element
+2. `activate` the selected element (preferred — uses accessibility API). Fall back to `tap` if the element has no actions.
 3. `get_interface` — fingerprint the result
 4. Compare:
    - **Same screen**: No transition. Mark element as "stays on screen". Continue to next element.
