@@ -50,7 +50,7 @@ final class UIElementTests: XCTestCase {
             value: "Enabled",
             identifier: "submit_button_id",
             frameX: 50, frameY: 100, frameWidth: 200, frameHeight: 60,
-            actions: ["activate", "Delete", "Edit", "Share"]
+            actions: [.activate, .custom("Delete"), .custom("Edit"), .custom("Share")]
         )
 
         let data = try JSONEncoder().encode(element)
@@ -61,7 +61,7 @@ final class UIElementTests: XCTestCase {
         XCTAssertEqual(decoded.label, "Submit Form")
         XCTAssertEqual(decoded.value, "Enabled")
         XCTAssertEqual(decoded.identifier, "submit_button_id")
-        XCTAssertEqual(decoded.actions, ["activate", "Delete", "Edit", "Share"])
+        XCTAssertEqual(decoded.actions, [.activate, .custom("Delete"), .custom("Edit"), .custom("Share")])
     }
 
     func testElementWithNilOptionals() throws {
@@ -94,7 +94,7 @@ final class UIElementTests: XCTestCase {
             value: nil,
             identifier: nil,
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
-            actions: ["activate"]
+            actions: [.activate]
         )
     }
 }

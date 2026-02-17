@@ -50,7 +50,7 @@ final class MessageIntegrationTests: XCTestCase {
                 identifier: "element_\(i)",
                 frameX: Double(i * 10), frameY: Double(i * 5),
                 frameWidth: 100, frameHeight: 44,
-                actions: i % 3 == 0 ? ["activate"] : []
+                actions: i % 3 == 0 ? [.activate] : []
             )
         }
 

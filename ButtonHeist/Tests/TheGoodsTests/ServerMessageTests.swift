@@ -34,7 +34,7 @@ final class ServerMessageTests: XCTestCase {
             value: nil,
             identifier: "submit_btn",
             frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 44,
-            actions: ["activate"]
+            actions: [.activate]
         )
         let payload = Interface(timestamp: Date(), elements: [element])
         let message = ServerMessage.interface(payload)

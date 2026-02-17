@@ -7,7 +7,7 @@ import ButtonHeist
 final class FormattingTests: XCTestCase {
 
     func testFormatElementBasic() {
-        let element = makeElement(label: "Submit", index: 0, actions: ["activate"])
+        let element = makeElement(label: "Submit", index: 0, actions: [.activate])
         let output = formatElement(element, changed: false)
 
         XCTAssertTrue(output.contains("[ 0] Submit"))
@@ -16,7 +16,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementChanged() {
-        let element = makeElement(label: "Submit", index: 0, actions: ["activate"])
+        let element = makeElement(label: "Submit", index: 0, actions: [.activate])
         let output = formatElement(element, changed: true)
 
         XCTAssertTrue(output.hasPrefix("*"))
@@ -30,7 +30,7 @@ final class FormattingTests: XCTestCase {
             value: "50%",
             identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 30,
-            actions: ["increment", "decrement"]
+            actions: [.increment, .decrement]
         )
         let output = formatElement(element, changed: false)
 
@@ -45,7 +45,7 @@ final class FormattingTests: XCTestCase {
             value: nil,
             identifier: "login_button",
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-            actions: ["activate"]
+            actions: [.activate]
         )
         let output = formatElement(element, changed: false)
 
@@ -60,7 +60,7 @@ final class FormattingTests: XCTestCase {
             value: nil,
             identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 300, frameHeight: 60,
-            actions: ["activate", "Delete", "Archive"]
+            actions: [.activate, .custom("Delete"), .custom("Archive")]
         )
         let output = formatElement(element, changed: false)
 
@@ -126,7 +126,7 @@ final class FormattingTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String, index: Int, actions: [String]) -> UIElement {
+    private func makeElement(label: String, index: Int, actions: [ElementAction]) -> UIElement {
         UIElement(
             order: index,
             description: label,
@@ -156,7 +156,7 @@ func formatElement(_ element: UIElement, changed: Bool) -> String {
         output += "       ID: \(id)\n"
     }
     if !element.actions.isEmpty {
-        output += "       Actions: \(element.actions.joined(separator: ", "))\n"
+        output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
     }
 
     let frame = "(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))x\(Int(element.frameHeight))"
