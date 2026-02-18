@@ -143,14 +143,14 @@ A shared navigation map at `references/nav-graph.md` accumulates knowledge acros
 Each session gets a unique file:
 
 ```
-session/fuzzsession-YYYY-MM-DD-HHMM-{command}-{description}.md
+fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-{command}-{description}.md
 ```
 
 Examples:
-- `session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`
-- `session/fuzzsession-2026-02-17-1545-explore-settings-screen.md`
-- `session/fuzzsession-2026-02-17-1600-map-screens.md`
-- `session/fuzzsession-2026-02-17-1620-stress-test-all-elements.md`
+- `fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`
+- `fuzz-sessions/fuzzsession-2026-02-17-1545-explore-settings-screen.md`
+- `fuzz-sessions/fuzzsession-2026-02-17-1600-map-screens.md`
+- `fuzz-sessions/fuzzsession-2026-02-17-1620-stress-test-all-elements.md`
 
 The `{command}` is the slash command name (`fuzz`, `explore`, `map-screens`, `stress-test`). The `{description}` is a short kebab-case summary (strategy name, screen name, target element, etc.). Use the current date and time when creating the file.
 
@@ -165,8 +165,8 @@ Previous session files are kept for reference — they're never overwritten.
 
 ### Resuming after compaction
 
-At the start of any command, look for session notes files in `session/`:
-1. **List `session/fuzzsession-*.md` files** — find the most recent one with `Status: in_progress`
+At the start of any command, look for session notes files in `fuzz-sessions/`:
+1. **List `fuzz-sessions/fuzzsession-*.md` files** — find the most recent one with `Status: in_progress`
 2. **Read it fully** — this file IS your memory. Everything you knew before compaction is here.
 3. Check `## Config` for strategy and iteration limit, `## Progress` for action count and current screen
 4. Check `## Navigation Stack` to know your current position in the app and how to backtrack
@@ -256,7 +256,7 @@ Every session gets a companion **trace file** for deterministic replay. The trac
 
 **Naming**: Same as the session notes file but with `.trace.md` extension:
 ```
-session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md
+fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md
 ```
 
 **When to write trace entries:**
@@ -452,7 +452,7 @@ When you encounter non-fatal errors, read `references/troubleshooting.md` for re
 
 ## Reporting
 
-When generating a report (via `/report` or at the end of a `/fuzz` session), write to `reports/` with the format:
+When generating a report (via `/fuzz-report` or at the end of a `/fuzz` session), write to `reports/` with the format:
 
 ```
 reports/YYYY-MM-DD-HHMM-fuzz-report.md
@@ -461,7 +461,7 @@ reports/YYYY-MM-DD-HHMM-fuzz-report.md
 Include:
 - **Summary**: Total screens visited, actions taken, findings by severity
 - **Findings**: Ordered by severity (CRASH first), each with reproduction steps
-- **Screen Map**: If `/map-screens` was run, include the navigation graph
+- **Screen Map**: If `/fuzz-map-screens` was run, include the navigation graph
 - **Coverage**: Which screens were visited, which elements were tested
 
 ## Important Guidelines

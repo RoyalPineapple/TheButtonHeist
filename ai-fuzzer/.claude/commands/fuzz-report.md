@@ -2,7 +2,7 @@
 description: Generate a structured findings report from the current session
 ---
 
-# /report — Report Generator
+# /fuzz-report — Report Generator
 
 You are tasked with generating a comprehensive report of all findings from the current fuzzing session and saving it to the `reports/` directory.
 
@@ -19,7 +19,7 @@ You are tasked with generating a comprehensive report of all findings from the c
 
 ## Step 1: Gather Context
 
-1. **Read the session notes file** — list `session/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
+1. **Read the session notes file** — list `fuzz-sessions/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
 2. Call `get_interface` to get the current screen state (confirms the app is still connected)
 3. Review the session notes plus any additional findings, observations, and notes from this conversation session
 4. Collect:
@@ -92,7 +92,7 @@ Write a report file to `reports/` with today's date and time:
 
 ## Screen Map
 
-[If /map-screens was run, include the graph. Otherwise, list screens visited:]
+[If /fuzz-map-screens was run, include the graph. Otherwise, list screens visited:]
 
 | # | Screen | Elements | How Reached |
 |---|--------|----------|-------------|
