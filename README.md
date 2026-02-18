@@ -73,10 +73,10 @@ Leave empty to connect to the first device found. Use `list_devices` to see all 
 | Command | Description |
 |---------|-------------|
 | `/fuzz` | Autonomous fuzzing loop — explores the app and finds bugs |
-| `/explore` | Deep-dive on the current screen — catalogs every element and tries every action |
-| `/map-screens` | Builds a navigation graph of all reachable screens |
-| `/stress-test` | Rapid-fire interaction testing on elements |
-| `/report` | Generates a structured findings report |
+| `/fuzz-explore` | Deep-dive on the current screen — catalogs every element and tries every action |
+| `/fuzz-map-screens` | Builds a navigation graph of all reachable screens |
+| `/fuzz-stress-test` | Rapid-fire interaction testing on elements |
+| `/fuzz-report` | Generates a structured findings report |
 
 ### Quick Start
 
@@ -94,7 +94,7 @@ This starts the default fuzzing strategy (systematic traversal). The agent will:
 ### Targeted Exploration
 
 ```
-> /explore
+> /fuzz-explore
 ```
 
 Deep-dives on whatever screen is currently showing. Catalogs every element, tries every action, and reports what it finds.
@@ -102,7 +102,7 @@ Deep-dives on whatever screen is currently showing. Catalogs every element, trie
 ### Stress Testing
 
 ```
-> /stress-test
+> /fuzz-stress-test
 ```
 
 Rapidly hammers elements with repeated taps, swipes, pinches, and rotations to find stability issues.
