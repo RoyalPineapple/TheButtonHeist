@@ -592,8 +592,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Interface Delta
 
-    /// Convert current cachedElements to wire UIElements for delta comparison.
-    private func snapshotElements() -> [UIElement] {
+    /// Convert current cachedElements to wire HeistElements for delta comparison.
+    private func snapshotElements() -> [HeistElement] {
         cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
     }
 
@@ -605,7 +605,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
-        beforeElements: [UIElement]
+        beforeElements: [HeistElement]
     ) async -> ActionResult {
         guard success else {
             return ActionResult(success: false, method: method, message: message, value: value)
@@ -648,8 +648,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     /// Compare two element snapshots and return a compact delta.
     private func computeDelta(
-        before: [UIElement],
-        after: [UIElement],
+        before: [HeistElement],
+        after: [HeistElement],
         afterTree: [AccessibilityHierarchy]?
     ) -> InterfaceDelta {
         // Quick check: if hash is identical, nothing changed
@@ -1331,20 +1331,50 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Conversion
 
-    private func convertElement(_ element: AccessibilityElement, index: Int) -> UIElement {
+    private func convertElement(_ element: AccessibilityElement, index: Int) -> HeistElement {
         let frame = element.shape.frame
-        return UIElement(
+        return HeistElement(
             order: index,
             description: element.description,
             label: element.label,
             value: element.value,
             identifier: element.identifier,
+            hint: element.hint,
+            traits: traitNames(element.traits),
             frameX: frame.origin.x,
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
             frameHeight: frame.size.height,
+            activationPointX: element.activationPoint.x,
+            activationPointY: element.activationPoint.y,
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: element.customContent.isEmpty ? nil : element.customContent.map {
+                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            },
             actions: buildActions(for: index, element: element)
         )
+    }
+
+    private func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
+        var names: [String] = []
+        if traits.contains(.button) { names.append("button") }
+        if traits.contains(.link) { names.append("link") }
+        if traits.contains(.image) { names.append("image") }
+        if traits.contains(.staticText) { names.append("staticText") }
+        if traits.contains(.header) { names.append("header") }
+        if traits.contains(.adjustable) { names.append("adjustable") }
+        if traits.contains(.searchField) { names.append("searchField") }
+        if traits.contains(.selected) { names.append("selected") }
+        if traits.contains(.notEnabled) { names.append("notEnabled") }
+        if traits.contains(.keyboardKey) { names.append("keyboardKey") }
+        if traits.contains(.summaryElement) { names.append("summaryElement") }
+        if traits.contains(.updatesFrequently) { names.append("updatesFrequently") }
+        if traits.contains(.playsSound) { names.append("playsSound") }
+        if traits.contains(.startsMediaSession) { names.append("startsMediaSession") }
+        if traits.contains(.allowsDirectInteraction) { names.append("allowsDirectInteraction") }
+        if traits.contains(.causesPageTurn) { names.append("causesPageTurn") }
+        if traits.contains(.tabBar) { names.append("tabBar") }
+        return names
     }
 
     private func buildActions(for index: Int, element: AccessibilityElement) -> [ElementAction] {

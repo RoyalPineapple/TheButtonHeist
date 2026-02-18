@@ -27,7 +27,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testInterfaceEncodeDecode() throws {
-        let element = UIElement(
+        let element = HeistElement(
             order: 0,
             description: "Button",
             label: "Submit",
