@@ -27,32 +27,41 @@ Two interface results represent the same screen if their fingerprints match, eve
 
 ## Exploration Algorithm
 
+**Before starting**: Read `references/nav-graph.md` if it exists. Pre-populate your visited set and transitions with known screens. Skip re-exploring screens that are already fully mapped.
+
 Use **depth-first** exploration with backtracking:
 
 ```
 1. Fingerprint the current screen → call it S0
 2. Record S0 in visited set
 3. For each navigation-like element on S0:
-   a. Activate the element (use `activate` for elements with actions, `tap` as fallback)
-   b. Get new interface, fingerprint it → Snew
-   c. If Snew == S0: no transition, try next element
-   d. If Snew is new (not in visited):
+   a. Activate the element
+   b. Read the delta:
+      - noChange/valuesChanged: no transition, try next element
+      - screenChanged: use newInterface from delta to fingerprint → Snew
+   c. If Snew is new (not in visited):
       - Record transition: S0 --[element]--> Snew
+      - Push onto navigation stack
       - Recursively explore Snew (go to step 3 with Snew)
-      - Navigate back to S0
-   e. If Snew is already visited:
-      - Record transition: S0 --[element]--> Snew (but don't re-explore)
-      - Navigate back to S0
+      - Navigate back to S0 using known back-route (pop stack)
+   d. If Snew is already visited:
+      - Record transition: S0 --[element]--> Snew (new edge in graph)
+      - Navigate back to S0 using known back-route
 4. When all elements on S0 explored, return (backtrack)
 ```
 
 ## Back Navigation
 
-Critical for this strategy. Try these in order:
-1. Look for an element with identifier or label containing "back", "Back", "close", "Close", "cancel", "Cancel", "dismiss"
-2. Look for an element in the top-left area (x < 100, y < 100) — typical back button position
-3. Swipe right from left edge: `swipe(startX: 0, startY: 400, direction: "right", distance: 200)`
-4. If none work, record a finding: "Cannot navigate back from screen [fingerprint]"
+Critical for this strategy. **Use known routes first**, heuristics as fallback:
+
+1. **Check `## Transitions`** for a recorded reverse transition from the current screen (e.g., `Snew | activate "Back" | S0`)
+2. **Check `references/nav-graph.md`** Back Routes table for a known back-action from this screen
+3. If no known route: Look for an element with identifier or label containing "back", "Back", "close", "Close", "cancel", "Cancel", "dismiss"
+4. Look for an element in the top-left area (x < 100, y < 100) — typical back button position
+5. Swipe right from left edge: `swipe(startX: 0, startY: 400, direction: "right", distance: 200)`
+6. If none work, record a finding: "Cannot navigate back from screen [fingerprint]"
+
+**Always verify** back-navigation: read the delta to confirm you returned to the expected screen. If not, record the unexpected transition and re-plan.
 
 ## State Consistency Checks
 
