@@ -685,6 +685,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let removedOrders = removedIDs.flatMap { oldByID[$0] ?? [] }.map(\.order)
 
         var valueChanges: [ValueChange] = []
+        // Identifier-based comparison: check value, description, and label
         for id in commonIDs {
             if let oldEl = oldByID[id]?.first, let newEl = newByID[id]?.first {
                 if oldEl.value != newEl.value {
@@ -694,7 +695,33 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                         oldValue: oldEl.value,
                         newValue: newEl.value
                     ))
+                } else if oldEl.description != newEl.description || oldEl.label != newEl.label {
+                    valueChanges.append(ValueChange(
+                        order: newEl.order,
+                        identifier: id,
+                        oldValue: oldEl.description,
+                        newValue: newEl.description
+                    ))
                 }
+            }
+        }
+
+        // Order-based comparison for elements without identifiers
+        // (catches segmented controls, unlabeled buttons, etc.)
+        let minCount = min(before.count, after.count)
+        for i in 0..<minCount {
+            let oldEl = before[i]
+            let newEl = after[i]
+            if oldEl.identifier != nil && newEl.identifier != nil { continue }
+            if oldEl.description != newEl.description
+                || oldEl.label != newEl.label
+                || oldEl.value != newEl.value {
+                valueChanges.append(ValueChange(
+                    order: newEl.order,
+                    identifier: newEl.identifier,
+                    oldValue: oldEl.description,
+                    newValue: newEl.description
+                ))
             }
         }
 

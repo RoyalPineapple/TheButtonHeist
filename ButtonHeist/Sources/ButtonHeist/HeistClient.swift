@@ -40,6 +40,7 @@ public final class HeistClient: ObservableObject {
 
     private var discovery: DeviceDiscovery?
     private var connection: DeviceConnection?
+    private var keepaliveTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -94,6 +95,7 @@ public final class HeistClient: ObservableObject {
             self?.connection?.send(.subscribe)
             self?.connection?.send(.requestInterface)
             self?.connection?.send(.requestScreen)
+            self?.startKeepalive()
         }
 
         connection?.onDisconnected = { [weak self] error in
@@ -132,6 +134,8 @@ public final class HeistClient: ObservableObject {
     }
 
     public func disconnect() {
+        keepaliveTask?.cancel()
+        keepaliveTask = nil
         connection?.disconnect()
         connection = nil
         connectionState = .disconnected
@@ -196,6 +200,28 @@ public final class HeistClient: ObservableObject {
                     timeoutTask.cancel()
                     continuation.resume(returning: payload)
                 }
+            }
+        }
+    }
+
+    /// Force-close the connection, triggering the onDisconnected callback.
+    /// Use when a timeout suggests the connection is dead but TCP hasn't noticed yet.
+    public func forceDisconnect() {
+        guard connectionState == .connected else { return }
+        logger.warning("Force-disconnecting stale connection")
+        disconnect()
+        onDisconnected?(ActionError.timeout)
+    }
+
+    // MARK: - Keepalive
+
+    private func startKeepalive() {
+        keepaliveTask?.cancel()
+        keepaliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                guard !Task.isCancelled else { break }
+                self?.connection?.send(.ping)
             }
         }
     }
