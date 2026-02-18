@@ -68,6 +68,12 @@ public enum ClientMessage: Codable {
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 
+    /// Perform a standard edit action (copy, paste, cut, select, selectAll) on the first responder
+    case editAction(EditActionTarget)
+
+    /// Wait for all animations to complete, then return the settled interface
+    case waitForIdle(WaitForIdleTarget)
+
     /// Request a capture of the current screen
     case requestScreen
 }
@@ -376,6 +382,26 @@ public struct TypeTextTarget: Codable, Sendable {
     }
 }
 
+/// Target for edit actions dispatched via the responder chain
+public struct EditActionTarget: Codable, Sendable {
+    /// The edit action to perform: "copy", "paste", "cut", "select", "selectAll"
+    public let action: String
+
+    public init(action: String) {
+        self.action = action
+    }
+}
+
+/// Target for waitForIdle command
+public struct WaitForIdleTarget: Codable, Sendable {
+    /// Maximum time to wait in seconds (default 5.0)
+    public let timeout: Double?
+
+    public init(timeout: Double? = nil) {
+        self.timeout = timeout
+    }
+}
+
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
@@ -411,12 +437,87 @@ public struct ActionResult: Codable, Sendable {
     public let message: String?
     /// Current text field value after a typeText operation
     public let value: String?
+    /// Compact delta describing what changed in the hierarchy after the action
+    public let interfaceDelta: InterfaceDelta?
+    /// Whether the UI was still animating when this result was produced.
+    /// nil means idle (no animations detected).
+    public let animating: Bool?
 
-    public init(success: Bool, method: ActionMethod, message: String? = nil, value: String? = nil) {
+    public init(
+        success: Bool,
+        method: ActionMethod,
+        message: String? = nil,
+        value: String? = nil,
+        interfaceDelta: InterfaceDelta? = nil,
+        animating: Bool? = nil
+    ) {
         self.success = success
         self.method = method
         self.message = message
         self.value = value
+        self.interfaceDelta = interfaceDelta
+        self.animating = animating
+    }
+}
+
+// MARK: - Interface Delta
+
+/// Compact description of what changed in the accessibility hierarchy after an action.
+public struct InterfaceDelta: Codable, Sendable {
+    /// What kind of change occurred
+    public let kind: DeltaKind
+
+    /// Total element count after the action
+    public let elementCount: Int
+
+    /// Elements that were added (present for .elementsChanged)
+    public let added: [UIElement]?
+
+    /// Orders of elements that were removed (present for .elementsChanged)
+    public let removedOrders: [Int]?
+
+    /// Value changes on existing elements (present for .valuesChanged or .elementsChanged)
+    public let valueChanges: [ValueChange]?
+
+    /// Full new interface (present only for .screenChanged)
+    public let newInterface: Interface?
+
+    public init(
+        kind: DeltaKind,
+        elementCount: Int,
+        added: [UIElement]? = nil,
+        removedOrders: [Int]? = nil,
+        valueChanges: [ValueChange]? = nil,
+        newInterface: Interface? = nil
+    ) {
+        self.kind = kind
+        self.elementCount = elementCount
+        self.added = added
+        self.removedOrders = removedOrders
+        self.valueChanges = valueChanges
+        self.newInterface = newInterface
+    }
+
+    public enum DeltaKind: String, Codable, Sendable {
+        case noChange
+        case valuesChanged
+        case elementsChanged
+        case screenChanged
+    }
+}
+
+/// A single value change on an element
+public struct ValueChange: Codable, Sendable {
+    public let order: Int
+    public let identifier: String?
+    public let oldValue: String?
+    public let newValue: String?
+
+    public init(order: Int, identifier: String?, oldValue: String?, newValue: String?) {
+        self.order = order
+        self.identifier = identifier
+        self.oldValue = oldValue
+        self.newValue = newValue
     }
 }
 
@@ -497,6 +598,8 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticDrawPath
     case typeText
     case customAction
+    case editAction
+    case waitForIdle
     case elementNotFound
     case elementDeallocated
 }

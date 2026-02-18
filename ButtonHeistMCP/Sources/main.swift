@@ -288,6 +288,40 @@ let typeTextTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let editActionTool = Tool(
+    name: "edit_action",
+    // swiftlint:disable:next line_length
+    description: "Perform a standard edit action (copy, paste, cut, select, selectAll) on the current first responder via the responder chain. Works regardless of whether the edit menu is visible.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "action": .object([
+                "type": .string("string"),
+                "description": .string("Edit action to perform: copy, paste, cut, select, selectAll"),
+                "enum": .array([.string("copy"), .string("paste"), .string("cut"), .string("select"), .string("selectAll")]),
+            ]),
+        ]),
+        "required": .array([.string("action")]),
+    ]),
+    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
+)
+
+let waitForIdleTool = Tool(
+    name: "wait_for_idle",
+    // swiftlint:disable:next line_length
+    description: "Wait for all UI animations to complete, then return the settled interface. Useful before get_interface or get_screen to ensure the UI has finished transitions.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "timeout": .object([
+                "type": .string("number"),
+                "description": .string("Maximum seconds to wait (default 5)"),
+            ]),
+        ]),
+    ]),
+    annotations: .init(readOnlyHint: true, openWorldHint: false)
+)
+
 let listDevicesTool = Tool(
     name: "list_devices",
     // swiftlint:disable:next line_length
@@ -300,11 +334,12 @@ let listDevicesTool = Tool(
 )
 
 let allTools: [Tool] = [
-    listDevicesTool, interfaceTool, screenTool,
+    listDevicesTool, interfaceTool, screenTool, waitForIdleTool,
     tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
     typeTextTool,
+    editActionTool,
 ]
 
 // MARK: - Argument Helpers
@@ -369,31 +404,8 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
     // MARK: Read Tools
 
     case "get_interface":
-        client.send(.requestInterface)
-        // Wait for the interface callback to fire
-        let iface: Interface = try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
-            let timeoutTask = Task {
-                try await Task.sleep(nanoseconds: 10_000_000_000)
-                if !didResume {
-                    didResume = true
-                    continuation.resume(throwing: HeistClient.ActionError.timeout)
-                }
-            }
-            client.onInterfaceUpdate = { payload in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(returning: payload)
-                }
-            }
-        }
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        let json = try encoder.encode(iface)
-        return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "{}")])
+        let json = try await requestInterface(client: client)
+        return CallTool.Result(content: [.text(json)])
 
     case "get_screen":
         client.send(.requestScreen)
@@ -609,6 +621,18 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
         let customTarget = CustomActionTarget(elementTarget: target, actionName: actionName)
         return try await sendAction(.performCustomAction(customTarget), client: client)
 
+    case "edit_action":
+        guard let action = stringArg(args, "action") else {
+            return errorResult("action is required (copy, paste, cut, select, selectAll)")
+        }
+        let editMessage = ClientMessage.editAction(EditActionTarget(action: action))
+        return try await sendAction(editMessage, client: client)
+
+    case "wait_for_idle":
+        let timeout = doubleArg(args, "timeout")
+        let message = ClientMessage.waitForIdle(WaitForIdleTarget(timeout: timeout))
+        return try await sendAction(message, client: client)
+
     case "type_text":
         let text = stringArg(args, "text")
         let deleteCount = intArg(args, "deleteCount")
@@ -630,6 +654,13 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
             if let value = typeResult.value {
                 content.append(.text("Value: \(value)"))
             }
+            if let delta = typeResult.interfaceDelta {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                if let json = try? encoder.encode(delta), let str = String(data: json, encoding: .utf8) {
+                    content.append(.text(str))
+                }
+            }
             return CallTool.Result(content: content)
         } else {
             let errorMsg = typeResult.message ?? typeResult.method.rawValue
@@ -641,19 +672,58 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
     }
 }
 
-/// Send a ClientMessage and wait for ActionResult
+/// Send a ClientMessage and wait for ActionResult, pass through delta JSON
 @MainActor
 func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> CallTool.Result {
     client.send(message)
     let result = try await client.waitForActionResult(timeout: 15)
     if result.success {
-        return CallTool.Result(content: [
+        var content: [Tool.Content] = [
             .text("Success (method: \(result.method.rawValue))"),
-        ])
+        ]
+        if result.animating == true {
+            content.append(.text("Warning: UI is still animating"))
+        }
+        if let delta = result.interfaceDelta {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            if let json = try? encoder.encode(delta), let str = String(data: json, encoding: .utf8) {
+                content.append(.text(str))
+            }
+        }
+        return CallTool.Result(content: content)
     } else {
         let errorMsg = result.message ?? result.method.rawValue
         return CallTool.Result(content: [.text("Failed: \(errorMsg)")], isError: true)
     }
+}
+
+/// Request full interface as JSON (used by get_interface tool)
+@MainActor
+func requestInterface(client: HeistClient) async throws -> String {
+    client.send(.requestInterface)
+    let iface: Interface = try await withCheckedThrowingContinuation { continuation in
+        var didResume = false
+        let timeoutTask = Task {
+            try await Task.sleep(nanoseconds: 10_000_000_000)
+            if !didResume {
+                didResume = true
+                continuation.resume(throwing: HeistClient.ActionError.timeout)
+            }
+        }
+        client.onInterfaceUpdate = { payload in
+            if !didResume {
+                didResume = true
+                timeoutTask.cancel()
+                continuation.resume(returning: payload)
+            }
+        }
+    }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    encoder.dateEncodingStrategy = .iso8601
+    let json = try encoder.encode(iface)
+    return String(data: json, encoding: .utf8) ?? "{}"
 }
 
 // MARK: - Device Connection
@@ -733,6 +803,31 @@ struct ButtonHeistMCP {
         let client = HeistClient()
 
         try await discoverAndConnect(client: client, deviceFilter: deviceFilter)
+
+        // Auto-reconnect when the app restarts (new shortId after relaunch)
+        client.onDisconnected = { _ in
+            log("Device disconnected — watching for new instance...")
+            Task { @MainActor in
+                for _ in 0 ..< 60 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if let device = client.discoveredDevices.first {
+                        log("Reconnecting to \(device.name)...")
+                        client.connect(to: device)
+                        let deadline = Date().addingTimeInterval(10)
+                        while client.connectionState != .connected {
+                            if Date() > deadline { break }
+                            if case .failed = client.connectionState { break }
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                        }
+                        if client.connectionState == .connected {
+                            log("Reconnected to \(device.name)")
+                            return
+                        }
+                    }
+                }
+                log("Auto-reconnect gave up after 60 attempts")
+            }
+        }
 
         log("Starting MCP server...")
 
