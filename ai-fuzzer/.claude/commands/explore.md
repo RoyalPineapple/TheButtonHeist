@@ -4,14 +4,26 @@ description: Deep-dive exploration of the current screen — catalogs every elem
 
 # /explore — Screen Explorer
 
-You are going to thoroughly explore whatever screen is currently showing in the connected iOS app. Your goal is to catalog every element, try every reasonable interaction, and report what you find.
+You are tasked with thoroughly exploring whatever screen is currently showing in the connected iOS app. Catalog every element, try every reasonable interaction, and report what you find.
+
+## CRITICAL
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
+- ALWAYS use `activate` before falling back to `tap` — accessibility API interaction is more reliable
+- ALWAYS process elements in batches of 3-5 — plan multiple actions, execute them, then write files once
+- DO NOT write trace/notes after every single action — batch your file I/O every 3-5 actions
+- DO NOT call `get_screen` on every action — only for findings and new screens
+- DO NOT skip elements without actions — tap and long-press may still reveal behavior
 
 ## Step 0: Verify Connection + Check for Existing Session
 
 1. Call `list_devices` — confirm at least one device is connected
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to understand what's already been explored on this screen. Skip elements already covered. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md`
+4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
+   - Create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
+   - Create the companion trace file: `session/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
+5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
 
 ## Step 1: Observe the Current Screen
 
@@ -37,24 +49,24 @@ Go through elements in order. For each interactive element:
 
 ### Elements with actions (activate, increment, decrement, custom)
 
-1. Call `activate` on the element (by identifier if available, otherwise by order) — this uses the accessibility API with live object references for reliable interaction
-2. Call `get_interface` — compare with baseline:
-   - If the **screen changed** (different elements appeared): record the transition, then navigate back. Use back buttons, "Close"/"Cancel" elements, or swipe right from left edge.
-   - If the **screen is the same** but **values changed**: record the change as expected behavior.
-   - If the **element disappeared** unexpectedly: record as ANOMALY.
-3. If the element has `increment`/`decrement` in its actions:
-   - Call `increment` — check the value changed
-   - Call `decrement` — check the value changed back
-4. If the element has custom actions:
-   - Try each custom action via `perform_custom_action`
-   - Record the result
+Process elements in batches of 3-5. For each element:
+1. Call `activate` (by identifier if available, otherwise by order)
+2. Read the delta from the response:
+   - **`noChange`**: Element is inert — continue batch
+   - **`valuesChanged`**: Note the value changes as expected behavior, continue batch
+   - **`elementsChanged`**: Check `added`/`removedOrders` — if elements disappeared, flag as ANOMALY, continue batch
+   - **`screenChanged`**: Stop batch, **push** onto `## Navigation Stack`, use the `newInterface` from delta to record the new screen and transition. Navigate back using **known back-route** from `## Transitions` or `references/nav-graph.md` if available, otherwise use heuristic back-nav. **Pop** navigation stack on return. Re-plan.
+3. If the element has `increment`/`decrement`: call both, read deltas to verify value changes
+4. If the element has custom actions: try each via `perform_custom_action`
+
+After the batch: append all trace entries at once, update session notes once.
 
 ### Elements without actions
 
 1. `tap` at the element's center coordinates (computed from frame) — use `tap` as a fallback since these elements lack accessibility actions
-2. Check if anything happened (interface changed)
+2. Read the delta — check if anything changed (`noChange` means truly inert)
 3. Try `long_press` — some elements reveal context menus only on long press
-4. Check if anything happened
+4. Read the delta — check if anything changed
 
 ### Text fields
 
@@ -74,17 +86,19 @@ If the tree structure shows `list` or `landmark` containers:
 
 ## Keeping Notes
 
-Your notes are your memory. Both read AND write your session notes file throughout:
+Your notes exist for compaction survival, not per-action bookkeeping. Keep state in memory during active exploration.
 
-**Read your notes** before each action decision — check `## Coverage` to avoid repeating work, check `## Next Actions` to follow your plan.
+**Read notes**: Only at session start and after compaction. Don't re-read between actions on the same screen.
 
-**Write your notes** after each result:
-- After each element interaction: update `## Coverage` to mark it tested
-- After each finding: add to `## Findings`
-- After each transition: add to `## Transitions`
-- Every 5 elements: update `## Progress` and `## Next Actions`
+**Write notes** in batches after every 3-5 elements:
+- Update `## Coverage` — mark all tested elements from the batch
+- Add any findings with finding IDs and trace refs
+- Add any transitions and update `## Navigation Stack`
+- Update `## Progress` and `## Next Actions`
 
-This ensures you can resume if the session hits compaction.
+**Write trace entries** in batches — accumulate entries, then append them all at once.
+
+**Write immediately**: Only for CRASH findings or new screen discoveries.
 
 ## Step 4: Report Findings
 
@@ -101,8 +115,9 @@ After going through all elements, print a structured report:
 - [element] → [new screen description]
 
 ### Findings
-#### [SEVERITY] Description
-- Action: [what you did]
+#### F-N [SEVERITY] Description
+- Trace refs: #X, #Y
+- Action: [what you did] [trace #Y]
 - Expected: [what you expected]
 - Actual: [what happened]
 
@@ -111,6 +126,8 @@ After going through all elements, print a structured report:
 |-------|-------|-----------|-------|---------|--------|
 | 0 | ... | ... | ... | ... | tap, activate |
 ```
+
+After reporting, **update persistent nav graph**: Merge any new transitions and back-routes into `references/nav-graph.md`.
 
 ## Error Handling
 

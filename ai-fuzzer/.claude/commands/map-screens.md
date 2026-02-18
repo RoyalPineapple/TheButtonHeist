@@ -4,7 +4,13 @@ description: Build a navigation graph of all reachable screens in the app
 
 # /map-screens — Screen Graph Builder
 
-You are going to systematically map every reachable screen in the connected iOS app and build a navigation graph showing how screens connect.
+You are tasked with systematically mapping every reachable screen in the connected iOS app and building a navigation graph showing how screens connect.
+
+## CRITICAL
+- ALWAYS fingerprint screens by their element set, not by visual appearance or a single identifier
+- ALWAYS record transitions even to already-known screens — they are new edges in the graph
+- DO NOT re-explore screens that are already fully mapped — check your session notes first
+- DO NOT spend more than 200 total actions — report a partial map if the limit is reached
 
 ## Step 0: Verify Connection + Check for Existing Session
 
@@ -12,6 +18,7 @@ You are going to systematically map every reachable screen in the connected iOS 
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
 4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
+5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. Pre-populate known screens and transitions — skip mapping what's already known.
 
 During mapping, update your session notes file continuously:
 - After each new screen: add to `## Screens Discovered`
@@ -52,18 +59,19 @@ Navigation-like elements (in priority order):
 
 1. Record the current screen fingerprint
 2. `activate` the selected element (preferred — uses accessibility API). Fall back to `tap` if the element has no actions.
-3. `get_interface` — fingerprint the result
-4. Compare:
-   - **Same screen**: No transition. Mark element as "stays on screen". Continue to next element.
-   - **New screen (not in `screens` dict)**:
-     - Name it based on prominent elements
-     - Add to `screens` dict
-     - Record transition: `{from: current_screen, action: "tap [element]", to: new_screen}`
-     - Push new screen onto exploration stack
-     - **Explore it** (push current screen's remaining elements back on stack first)
-   - **Known screen (already in `screens` dict)**:
-     - Record transition (it's a new edge in the graph, even if the screen is known)
-     - Navigate back — don't re-explore
+3. Read the delta from the response:
+   - **`noChange` or `valuesChanged`**: No navigation. Mark element as "stays on screen". Continue to next element.
+   - **`screenChanged`**: The delta includes the full `newInterface` — use it to fingerprint the new screen (no separate `get_interface` needed).
+     - **New screen (not in `screens` dict)**:
+       - Name it based on prominent elements
+       - Add to `screens` dict
+       - Record transition: `{from: current_screen, action: "activate [element]", to: new_screen}`
+       - Push new screen onto exploration stack
+       - **Explore it** (push current screen's remaining elements back on stack first)
+     - **Known screen (already in `screens` dict)**:
+       - Record transition (it's a new edge in the graph, even if the screen is known)
+       - Navigate back — don't re-explore
+   - **`elementsChanged`**: Some elements appeared/disappeared but same screen. Mark as structural change, continue.
 
 ### 2c. Navigate Back
 
@@ -122,7 +130,8 @@ Main Menu
 
 ## Step 4: Save Report
 
-Write the full screen map to `reports/YYYY-MM-DD-HHMM-screen-map.md`.
+1. Write the full screen map to `reports/YYYY-MM-DD-HHMM-screen-map.md`.
+2. **Update persistent nav graph**: Write all discovered screens, transitions (with reverse actions), and back-routes to `references/nav-graph.md`. This is the primary output — future sessions will use it for navigation planning.
 
 ## Limits
 

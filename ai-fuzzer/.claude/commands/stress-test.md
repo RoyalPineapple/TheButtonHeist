@@ -4,7 +4,12 @@ description: Rapid-fire interaction testing to find stability and performance is
 
 # /stress-test — Stress Tester
 
-You are going to hammer the connected iOS app with rapid, repeated interactions to find stability issues, memory leaks, and crash bugs.
+You are tasked with hammering the connected iOS app with rapid, repeated interactions to find stability issues, memory leaks, and crash bugs.
+
+## CRITICAL
+- ALWAYS verify the app is still responsive after each sequence — call `get_interface`
+- ALWAYS record which sequence and iteration caused a crash — this makes reproduction trivial
+- DO NOT stop at the first crash — record it and continue with other elements if possible
 
 **Arguments** (optional): `$ARGUMENTS`
 - Element identifier or "all" (default: "all" — stress test every interactive element)
@@ -15,6 +20,7 @@ You are going to hammer the connected iOS app with rapid, repeated interactions 
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
 4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
+5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
 
 During stress testing, update your session notes file continuously:
 - After each sequence completes: update `## Coverage` with the result (PASS/FAIL)
