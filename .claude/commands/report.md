@@ -4,7 +4,12 @@ description: Generate a structured findings report from the current session
 
 # /report — Report Generator
 
-Generate a comprehensive report of all findings from this fuzzing session and save it to the `reports/` directory.
+You are tasked with generating a comprehensive report of all findings from the current fuzzing session and saving it to the `reports/` directory.
+
+## CRITICAL
+- ALWAYS read the session notes file as primary source of truth — it survives compaction, your memory doesn't
+- ALWAYS include trace refs for every finding — findings without trace refs are not reproducible
+- DO NOT invent or embellish findings — report only what was observed and recorded
 
 ## Step 0: Verify Connection
 

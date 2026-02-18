@@ -4,11 +4,20 @@ description: Autonomous fuzzing loop — explores the app and discovers bugs
 
 # /fuzz — Autonomous Fuzzer
 
-You are going to autonomously fuzz the connected iOS app. You will explore screens, try interactions, navigate the app, and report any crashes, errors, or anomalies you find.
+You are tasked with autonomously fuzzing the connected iOS app. Explore screens, try interactions, navigate the app, and report any crashes, errors, or anomalies you find.
 
 **Arguments** (optional): `$ARGUMENTS`
 - First argument: strategy name (default: `systematic-traversal`). Options: `systematic-traversal`, `boundary-testing`, `gesture-fuzzing`, `state-exploration`, `swarm-testing`, `invariant-testing`
 - Second argument: max iterations (default: 100)
+
+## CRITICAL
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
+- ALWAYS plan actions in batches of 3-5 — do not reason individually per element
+- ALWAYS batch your file writes — update notes and trace every 3-5 actions, not every action
+- DO NOT call `get_screen` on every action — only for findings and new screens
+- DO NOT re-read session notes between actions — keep state in memory, notes are for compaction survival
+- DO NOT skip the refinement pass — unverified findings are unreliable
 
 ## Step 0: Verify Connection + Check for Existing Session
 
@@ -16,8 +25,9 @@ You are going to autonomously fuzz the connected iOS app. You will explore scree
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
 4. **Check for existing session**: List `session/fuzzsession-*.md` files. Find the most recent one and read it.
-   - If one exists with `Status: in_progress`: **resume the session** — read all sections, skip to the appropriate step, and continue from `## Next Actions`
+   - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
+5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
 
 ## Step 1: Load Strategy
 
@@ -60,64 +70,57 @@ Create a new session notes file (see SKILL.md for naming convention):
 **Filename**: `session/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.md`
 (e.g. `session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`)
 
-1. Write the `## Config` section (strategy, max iterations, app/device info, status: `in_progress`)
+1. Write the `## Config` section (strategy, max iterations, app/device info, status: `in_progress`, trace file name, next finding ID: `F-1`)
 2. Write the `## Progress` section (actions: 0, current screen, phase: `fuzzing_loop`)
 3. Write the `## Screens Discovered` table with Screen #1
 4. Write the `## Coverage` section listing all elements on Screen #1 as untried
-5. Write empty `## Transitions`, `## Findings`, `## Action Log` sections
+5. Write empty `## Transitions`, `## Navigation Stack` (with Screen #1 at depth 0), `## Findings`, `## Action Log` sections
 6. Write `## Next Actions` describing what to try first on Screen #1
+7. **Create the companion trace file**: `session/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
+   - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
+   - Append the first `observe` entry for the initial `get_interface` from Step 2
 
-This file is your lifeline — keep it updated throughout the session.
+Both files are your lifeline — the session notes for compaction survival, the trace for reproducibility.
 
 ## Step 4: Fuzzing Loop
 
 Repeat until max iterations reached or a CRASH is detected:
 
-### 4a. Observe
-- `get_interface` — current hierarchy
-- Fingerprint the screen
+### 4a. Observe + Plan Batch
+1. If this is the first batch or you don't have current state: call `get_interface`. Otherwise, use the delta from the last action (especially `screenChanged` which includes the full interface).
+2. Look at the elements on screen and **plan 3-5 actions** at once:
+   - Score elements using the Element Scoring system from SKILL.md (novelty +3, action gap +2, navigation +2, etc.)
+   - Pick the top 3-5 untried element+action combinations
+   - If the element is a text field, plan multiple `type_text` calls with values from `references/interesting-values.md`
+   - If everything on this screen has been tried, **plan a route** to the highest-priority unexplored screen using known transitions from `## Transitions` and `references/nav-graph.md` (see "Navigation Planning" in SKILL.md). Don't wander — navigate directly.
+3. Only read your session notes file if resuming after compaction — keep state in memory during the batch
 
-### 4b. Select Action (per strategy)
-**Consult your notes first.** Read your session notes file — specifically `## Coverage` (which elements+actions have been tried on this screen) and `## Next Actions` (what you planned to do next). Use this to avoid repeating work and to follow through on your own plan.
+### 4b. Execute Batch
+For each planned action:
+1. **Execute**: Call the selected MCP tool. Increment `actions_taken`.
+2. **Read the delta** from the action response (JSON after the success message):
+   - **`noChange`**: Nothing happened — element is inert. Continue batch.
+   - **`valuesChanged`**: Note the specific value changes. Expected for adjustable elements, anomaly otherwise. Continue batch.
+   - **`elementsChanged`**: Elements were added/removed. Check `added` and `removedOrders`. If elements disappeared unexpectedly, flag as ANOMALY. Continue batch.
+   - **`screenChanged`**: Navigated to a new screen. The delta includes the full `newInterface` — use it directly (no `get_interface` needed). **Push** onto `## Navigation Stack`. Record transition in `## Transitions`. Stop batch, explore or navigate back (use known back-route if available), then re-plan.
+   - **Connection error**: CRASH detected — stop immediately
+3. Only call `get_interface` if you need the full hierarchy and aren't performing an action (e.g., at session start or to re-orient after compaction).
+4. Only call `get_screen` when investigating a finding or arriving at a brand new screen — not every action.
+5. **Append trace entries**: Write the complete `interact` entry (with delta kind and details) and, if you called `get_interface`, an `observe` entry. See `references/trace-format.md` for the entry format.
 
-Then follow the loaded strategy's element selection and action selection rules:
-- Score elements using the Element Scoring system from SKILL.md (novelty +3, action gap +2, navigation +2, etc.) and pick the highest-scoring untried element+action combination
-- If the element is a text field, read `references/interesting-values.md` for curated test inputs — try values from at least 3 categories
-- If everything on this screen has been tried, use Screen Prioritization from SKILL.md to choose the next screen (highest exploration gap, fewest visits, directly reachable)
-- If your planned Next Actions are still relevant, follow them
+### 4c. Record (batched)
+After completing the batch (3-5 actions), do all recording at once:
 
-### 4c. Execute
-- Call the selected MCP tool
-- Increment `actions_taken`
-- Add to `current_screen_actions`
-
-### 4d. Verify
-- `get_interface` — new hierarchy
-- `get_screen` — visual state (take screenshots periodically, not after every single action — use judgment)
-- Compare with pre-action state:
-  - **Same screen, no change**: Normal, continue
-  - **Same screen, value changed**: Expected for adjustable elements, anomaly otherwise
-  - **New screen**: Record transition, add to `screens_visited` if new
-  - **Element disappeared**: Potential ANOMALY
-  - **Connection error**: CRASH detected — stop loop
-
-### 4e. Record Findings
-If anything unexpected happened, add to findings with severity level.
-**Update session notes**: Add the finding to `## Findings`.
-
-### 4f. Navigate
-If the action navigated to a new screen:
-- If the new screen hasn't been visited: switch to exploring it
-- If already visited: navigate back to continue current screen
-
-**Update session notes**: If a new screen was discovered, add it to `## Screens Discovered` and `## Coverage`. Add the transition to `## Transitions`.
-
-### 4g. Checkpoint
-Every 5 actions (or after any significant event):
-- Update `## Progress` (action count, current screen, phase)
-- Update `## Coverage` (mark tested elements)
-- Update `## Action Log` (keep last 10 actions)
-- Update `## Next Actions` (what you plan to do next)
+1. **Findings** (write immediately if CRASH): Assign finding IDs (`F-1`, `F-2`...) and add to `## Findings` with trace refs
+2. **Batch file write**: In a single update to session notes:
+   - Update `## Coverage` — mark all tested elements from the batch
+   - Update `## Progress` — action count, current screen
+   - Update `## Transitions` — any new transitions from the batch
+   - Update `## Navigation Stack` — push for forward navigation, pop for back navigation
+   - Update `## Screens Discovered` — any new screens
+   - Update `## Action Log` — last 10 actions
+   - Update `## Next Actions` — plan for the next batch
+3. **Batch trace write**: Append all trace entries from the batch to the trace file at once
 
 Print a brief progress update every 10 actions:
 ```
@@ -128,7 +131,7 @@ Print a brief progress update every 10 actions:
 
 If any ERROR or ANOMALY findings were discovered during the main loop:
 
-1. **Reproduce**: For each finding, navigate back to the screen where it occurred
+1. **Navigate to finding's screen**: Use the navigation graph (`## Transitions` + `references/nav-graph.md`) to plan a route to each finding's screen
 2. **Confirm**: Attempt to reproduce the exact same action 3 times
 3. **Vary**: Try variations of the triggering action:
    - Same element, different action type (tap vs activate vs long_press)
@@ -151,6 +154,7 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 1. Print a summary to the conversation
 2. Write a full report to `reports/` using the format from SKILL.md
 3. **Update session notes**: Set `## Status` to `complete`
+4. **Update persistent nav graph**: Merge all new transitions and back-routes into `references/nav-graph.md`
 
 ```
 ## Fuzzing Report
@@ -183,6 +187,7 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 If the app crashes (MCP tool call fails with connection error):
 
 1. **Stop immediately** — the connection is dead
-2. **Update session notes** immediately: Add the CRASH finding with the exact action, last 5-10 actions from `## Action Log`, and screen state. Set `## Status` to `crashed`.
-3. Generate the report with what you have
-4. Tell the user the app crashed and they need to relaunch it
+2. **Update trace**: Append the `interact` entry with `result.status: crash` and `result.finding: F-N`
+3. **Update session notes** immediately: Add the CRASH finding with finding ID, trace refs, the exact action, last 5-10 actions from `## Action Log`, and screen state. Set `## Status` to `crashed`.
+4. Generate the report with what you have
+5. Tell the user the app crashed and they need to relaunch it. Note that `/reproduce F-N` can be used to replay the crash sequence.
