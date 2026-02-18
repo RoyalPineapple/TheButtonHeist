@@ -471,7 +471,7 @@ public struct InterfaceDelta: Codable, Sendable {
     public let elementCount: Int
 
     /// Elements that were added (present for .elementsChanged)
-    public let added: [UIElement]?
+    public let added: [HeistElement]?
 
     /// Orders of elements that were removed (present for .elementsChanged)
     public let removedOrders: [Int]?
@@ -485,7 +485,7 @@ public struct InterfaceDelta: Codable, Sendable {
     public init(
         kind: DeltaKind,
         elementCount: Int,
-        added: [UIElement]? = nil,
+        added: [HeistElement]? = nil,
         removedOrders: [Int]? = nil,
         valueChanges: [ValueChange]? = nil,
         newInterface: Interface? = nil
@@ -650,11 +650,11 @@ public struct ServerInfo: Codable, Sendable {
 
 public struct Interface: Codable, Sendable {
     public let timestamp: Date
-    public let elements: [UIElement]
+    public let elements: [HeistElement]
     /// Optional tree structure for grouped display
     public let tree: [ElementNode]?
 
-    public init(timestamp: Date, elements: [UIElement], tree: [ElementNode]? = nil) {
+    public init(timestamp: Date, elements: [HeistElement], tree: [ElementNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
         self.tree = tree
@@ -704,10 +704,11 @@ public indirect enum ElementNode: Codable, Equatable, Sendable {
     case container(Group, children: [ElementNode])
 }
 
-// MARK: - UI Element
+// MARK: - Heist Element
 
-/// A UI element that can be inspected and interacted with
-public struct UIElement: Codable, Equatable, Hashable, Sendable {
+/// A UI element captured from the accessibility hierarchy.
+/// Wraps the parser's AccessibilityElement with all its rich data in a wire-friendly form.
+public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Element order in the snapshot (0-based)
     public var order: Int
     /// Human-readable description of the element
@@ -715,10 +716,22 @@ public struct UIElement: Codable, Equatable, Hashable, Sendable {
     public var label: String?
     public var value: String?
     public var identifier: String?
+    /// Accessibility hint (read by VoiceOver after the description)
+    public var hint: String?
+    /// Accessibility traits as human-readable strings (e.g. ["button", "adjustable"])
+    public var traits: [String]
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
     public var frameHeight: Double
+    /// Activation point X coordinate (where VoiceOver would tap)
+    public var activationPointX: Double
+    /// Activation point Y coordinate
+    public var activationPointY: Double
+    /// Whether the element responds to user interaction
+    public var respondsToUserInteraction: Bool
+    /// Custom content label/value pairs provided by the element
+    public var customContent: [HeistCustomContent]?
     /// Available actions for this element
     public var actions: [ElementAction]
 
@@ -728,10 +741,16 @@ public struct UIElement: Codable, Equatable, Hashable, Sendable {
         label: String?,
         value: String?,
         identifier: String?,
+        hint: String? = nil,
+        traits: [String] = [],
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double,
+        activationPointX: Double = 0,
+        activationPointY: Double = 0,
+        respondsToUserInteraction: Bool = true,
+        customContent: [HeistCustomContent]? = nil,
         actions: [ElementAction]
     ) {
         self.order = order
@@ -739,20 +758,44 @@ public struct UIElement: Codable, Equatable, Hashable, Sendable {
         self.label = label
         self.value = value
         self.identifier = identifier
+        self.hint = hint
+        self.traits = traits
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
+        self.activationPointX = activationPointX
+        self.activationPointY = activationPointY
+        self.respondsToUserInteraction = respondsToUserInteraction
+        self.customContent = customContent
         self.actions = actions
+    }
+}
+
+/// Custom content attached to a HeistElement (maps to AccessibilityElement.CustomContent)
+public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
+    public var label: String
+    public var value: String
+    public var isImportant: Bool
+
+    public init(label: String, value: String, isImportant: Bool) {
+        self.label = label
+        self.value = value
+        self.isImportant = isImportant
     }
 }
 
 // MARK: - Convenience Extensions
 
-extension UIElement {
+extension HeistElement {
     /// Computed frame as CGRect
     public var frame: CGRect {
         CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
+    }
+
+    /// Computed activation point as CGPoint
+    public var activationPoint: CGPoint {
+        CGPoint(x: activationPointX, y: activationPointY)
     }
 }
 

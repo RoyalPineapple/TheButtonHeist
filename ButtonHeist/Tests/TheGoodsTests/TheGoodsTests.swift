@@ -42,7 +42,7 @@ final class MessageIntegrationTests: XCTestCase {
     /// Test snapshot payload with multiple elements
     func testLargeSnapshotPayload() throws {
         let elements = (0..<100).map { i in
-            UIElement(
+            HeistElement(
                 order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
@@ -149,7 +149,7 @@ final class MessageIntegrationTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
 
         for i in 0..<5 {
-            let element = UIElement(
+            let element = HeistElement(
                 order: 0,
                 description: "Update \(i)",
                 label: "Label \(i)",
