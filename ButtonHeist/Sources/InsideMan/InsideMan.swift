@@ -315,13 +315,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         return windowScene.windows
             .filter { window in
-                // Exclude our tap visualizer overlay
                 !(window is TapOverlayWindow) &&
-                // Must have a root view to traverse
-                window.rootViewController?.view != nil
+                !window.isHidden &&
+                window.bounds.size != .zero
             }
             .sorted { $0.windowLevel > $1.windowLevel }
-            .map { ($0, $0.rootViewController!.view) }
+            .map { ($0, $0 as UIView) }
     }
 
     // MARK: - Accessibility Observation
@@ -611,25 +610,29 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return ActionResult(success: false, method: method, message: message, value: value)
         }
 
-        // First pass: immediate snapshot
+        // Wait for animations to settle before snapshotting so the delta
+        // reflects the final state — callers don't need a separate wait_for_idle.
+        if hasActiveAnimations() {
+            let settled = await waitForAnimationsToSettle(timeout: 2.0)
+            if settled {
+                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms for layout to finalize
+            }
+        } else {
+            // Brief yield in case the accessibility tree update is slightly deferred
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        }
+
         var afterTree = refreshAccessibilityData()
         var afterElements = snapshotElements()
         var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
 
-        // If nothing changed, check for animations and wait
-        if delta.kind == .noChange {
-            if hasActiveAnimations() {
-                let settled = await waitForAnimationsToSettle(timeout: 2.0)
-                // Give one extra frame after animations complete for layout to finalize
-                if settled {
-                    try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
-                }
-            } else {
-                // No animations — brief yield in case the accessibility tree update is slightly deferred
-                try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        // If animations are still running after the first snapshot (e.g. navigation
+        // spring animations), wait longer and re-snapshot for the settled state.
+        if delta.kind != .noChange && hasActiveAnimations() {
+            let settled = await waitForAnimationsToSettle(timeout: 4.0)
+            if settled {
+                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms for layout
             }
-
-            // Retry the snapshot
             afterTree = refreshAccessibilityData()
             afterElements = snapshotElements()
             delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
