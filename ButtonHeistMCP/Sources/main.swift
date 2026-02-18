@@ -675,8 +675,18 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
 /// Send a ClientMessage and wait for ActionResult, pass through delta JSON
 @MainActor
 func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> CallTool.Result {
+    guard client.connectionState == .connected else {
+        throw MCPError.internalError("Not connected to device — app may have been terminated")
+    }
     client.send(message)
-    let result = try await client.waitForActionResult(timeout: 15)
+    let result: ActionResult
+    do {
+        result = try await client.waitForActionResult(timeout: 15)
+    } catch {
+        // Timeout likely means the connection is dead — force disconnect to trigger reconnect
+        client.forceDisconnect()
+        throw MCPError.internalError("Action timed out — connection lost, reconnecting...")
+    }
     if result.success {
         var content: [Tool.Content] = [
             .text("Success (method: \(result.method.rawValue))"),
@@ -701,23 +711,32 @@ func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> C
 /// Request full interface as JSON (used by get_interface tool)
 @MainActor
 func requestInterface(client: HeistClient) async throws -> String {
+    guard client.connectionState == .connected else {
+        throw MCPError.internalError("Not connected to device — app may have been terminated")
+    }
     client.send(.requestInterface)
-    let iface: Interface = try await withCheckedThrowingContinuation { continuation in
-        var didResume = false
-        let timeoutTask = Task {
-            try await Task.sleep(nanoseconds: 10_000_000_000)
-            if !didResume {
-                didResume = true
-                continuation.resume(throwing: HeistClient.ActionError.timeout)
+    let iface: Interface
+    do {
+        iface = try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: 10_000_000_000)
+                if !didResume {
+                    didResume = true
+                    continuation.resume(throwing: HeistClient.ActionError.timeout)
+                }
+            }
+            client.onInterfaceUpdate = { payload in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(returning: payload)
+                }
             }
         }
-        client.onInterfaceUpdate = { payload in
-            if !didResume {
-                didResume = true
-                timeoutTask.cancel()
-                continuation.resume(returning: payload)
-            }
-        }
+    } catch {
+        client.forceDisconnect()
+        throw MCPError.internalError("Action timed out — connection lost, reconnecting...")
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -810,7 +829,7 @@ struct ButtonHeistMCP {
             Task { @MainActor in
                 for _ in 0 ..< 60 {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if let device = client.discoveredDevices.first {
+                    if let device = matchDevice(from: client.discoveredDevices, filter: deviceFilter) {
                         log("Reconnecting to \(device.name)...")
                         client.connect(to: device)
                         let deadline = Date().addingTimeInterval(10)
