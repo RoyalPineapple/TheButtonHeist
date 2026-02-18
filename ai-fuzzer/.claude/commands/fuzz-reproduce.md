@@ -2,7 +2,7 @@
 description: Replay a finding's action trace to verify reproducibility and investigate root cause
 ---
 
-# /reproduce — Finding Reproducer
+# /fuzz-reproduce — Finding Reproducer
 
 You are tasked with replaying the action sequence that triggered a specific finding to verify it is reproducible. Read the action trace from a previous fuzzing session and re-execute the minimal sequence needed to reach and trigger the finding.
 
@@ -19,13 +19,13 @@ You are tasked with replaying the action sequence that triggered a specific find
 
 ## Step 0: Find the Trace
 
-1. List `session/fuzzsession-*.trace.md` files
+1. List `fuzz-sessions/fuzzsession-*.trace.md` files
 2. If a session was specified in `$ARGUMENTS`, find the matching trace file
 3. Otherwise, use the most recent trace file
 4. Read the trace file header to find the companion session notes file
 5. Read the session notes file
 
-If no trace files exist, stop and tell the user: "No trace files found. Run `/fuzz` or `/explore` first — they generate trace files automatically."
+If no trace files exist, stop and tell the user: "No trace files found. Run `/fuzz` or `/fuzz-explore` first — they generate trace files automatically."
 
 ## Step 1: Find the Finding
 

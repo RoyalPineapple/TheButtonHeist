@@ -24,7 +24,7 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 1. Call `list_devices` — confirm at least one device is connected
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `session/fuzzsession-*.md` files. Find the most recent one and read it.
+4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. Find the most recent one and read it.
    - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
@@ -41,7 +41,7 @@ The strategy tells you how to select elements, which actions to try, when to mov
 
 If no strategy was specified in `$ARGUMENTS`, choose based on context:
 
-1. **Check for prior sessions**: List `session/fuzzsession-*.md` files for this app. If 2+ completed sessions exist, use `swarm-testing` — previous sessions already covered the basics, now maximize diversity.
+1. **Check for prior sessions**: List `fuzz-sessions/fuzzsession-*.md` files for this app. If 2+ completed sessions exist, use `swarm-testing` — previous sessions already covered the basics, now maximize diversity.
 2. **Otherwise, use the initial observation** (after Step 2):
    - Count the interactive elements on the first screen
    - **> 3 navigation elements** (tabs, list cells, buttons with navigation labels): use `state-exploration` — map the app structure first
@@ -67,8 +67,8 @@ Record this as Screen #1 with a fingerprint (set of identifiers + labels).
 
 Create a new session notes file (see SKILL.md for naming convention):
 
-**Filename**: `session/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.md`
-(e.g. `session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`)
+**Filename**: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.md`
+(e.g. `fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`)
 
 1. Write the `## Config` section (strategy, max iterations, app/device info, status: `in_progress`, trace file name, next finding ID: `F-1`)
 2. Write the `## Progress` section (actions: 0, current screen, phase: `fuzzing_loop`)
@@ -76,7 +76,7 @@ Create a new session notes file (see SKILL.md for naming convention):
 4. Write the `## Coverage` section listing all elements on Screen #1 as untried
 5. Write empty `## Transitions`, `## Navigation Stack` (with Screen #1 at depth 0), `## Findings`, `## Action Log` sections
 6. Write `## Next Actions` describing what to try first on Screen #1
-7. **Create the companion trace file**: `session/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
+7. **Create the companion trace file**: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
    - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
    - Append the first `observe` entry for the initial `get_interface` from Step 2
 
@@ -190,4 +190,4 @@ If the app crashes (MCP tool call fails with connection error):
 2. **Update trace**: Append the `interact` entry with `result.status: crash` and `result.finding: F-N`
 3. **Update session notes** immediately: Add the CRASH finding with finding ID, trace refs, the exact action, last 5-10 actions from `## Action Log`, and screen state. Set `## Status` to `crashed`.
 4. Generate the report with what you have
-5. Tell the user the app crashed and they need to relaunch it. Note that `/reproduce F-N` can be used to replay the crash sequence.
+5. Tell the user the app crashed and they need to relaunch it. Note that `/fuzz-reproduce F-N` can be used to replay the crash sequence.

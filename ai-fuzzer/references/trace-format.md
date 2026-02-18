@@ -7,8 +7,8 @@ The action trace is a complete, append-only log of every tool call in a fuzzing 
 The trace file is a companion to the session notes file:
 
 ```
-session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md        ← session notes
-session/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md  ← action trace
+fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md        ← session notes
+fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md  ← action trace
 ```
 
 Replace the `.md` extension with `.trace.md`. The two files are always paired.

@@ -2,7 +2,7 @@
 description: Deep-dive exploration of the current screen — catalogs every element and tries every action
 ---
 
-# /explore — Screen Explorer
+# /fuzz-explore — Screen Explorer
 
 You are tasked with thoroughly exploring whatever screen is currently showing in the connected iOS app. Catalog every element, try every reasonable interaction, and report what you find.
 
@@ -20,9 +20,9 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 1. Call `list_devices` — confirm at least one device is connected
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
-   - Create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
-   - Create the companion trace file: `session/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
+4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
+   - Create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
+   - Create the companion trace file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
 
 ## Step 1: Observe the Current Screen

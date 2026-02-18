@@ -2,7 +2,7 @@
 description: Build a navigation graph of all reachable screens in the app
 ---
 
-# /map-screens — Screen Graph Builder
+# /fuzz-map-screens — Screen Graph Builder
 
 You are tasked with systematically mapping every reachable screen in the connected iOS app and building a navigation graph showing how screens connect.
 
@@ -17,7 +17,7 @@ You are tasked with systematically mapping every reachable screen in the connect
 1. Call `list_devices` — confirm at least one device is connected
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `session/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `session/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
+4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. Pre-populate known screens and transitions — skip mapping what's already known.
 
 During mapping, update your session notes file continuously:
