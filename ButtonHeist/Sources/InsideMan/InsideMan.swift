@@ -212,7 +212,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         switch message {
         case .requestInterface:
             serverLog("Interface requested")
-            sendInterface(respond: respond)
+            await sendInterface(respond: respond)
         case .subscribe:
             serverLog("Client subscribed to updates")
             // Note: with socket server we broadcast to all, so subscribed is implicit
@@ -279,7 +279,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         sendMessage(.info(info), respond: respond)
     }
 
-    private func sendInterface(respond: @escaping (Data) -> Void) {
+    private func sendInterface(respond: @escaping (Data) -> Void) async {
+        // If animating, wait briefly for fast animations to end.
+        if hasActiveAnimations() {
+            _ = await waitForAnimationsToSettle(timeout: 0.5)
+        }
+
         guard let hierarchyTree = refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
@@ -597,8 +602,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
-    /// If the immediate snapshot shows no change, uses animation-aware polling to wait for
-    /// UI transitions to complete before retrying.
+    /// Waits briefly for animations to settle (0.5s). If the screen changed and animations
+    /// are still active (e.g. navigation spring), waits 1s more and re-snapshots.
     private func actionResultWithDelta(
         success: Bool,
         method: ActionMethod,
@@ -610,29 +615,26 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return ActionResult(success: false, method: method, message: message, value: value)
         }
 
-        // Wait for animations to settle before snapshotting so the delta
-        // reflects the final state — callers don't need a separate wait_for_idle.
-        if hasActiveAnimations() {
-            let settled = await waitForAnimationsToSettle(timeout: 2.0)
-            if settled {
-                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms for layout to finalize
-            }
-        } else {
-            // Brief yield in case the accessibility tree update is slightly deferred
+        // Quick check: if no animations, just yield briefly for the tree to update.
+        if !hasActiveAnimations() {
             try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        } else {
+            // Animations active — wait for them to end (fast for toggles/menus)
+            // or cap at 0.5s (avoids blocking on long simulator springs).
+            _ = await waitForAnimationsToSettle(timeout: 0.5)
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms layout
         }
 
         var afterTree = refreshAccessibilityData()
         var afterElements = snapshotElements()
         var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
 
-        // If animations are still running after the first snapshot (e.g. navigation
-        // spring animations), wait longer and re-snapshot for the settled state.
+        // If the screen changed and animations are still running (navigation push),
+        // the source screen is still sliding out. Wait a fixed 1s for the destination
+        // to fully appear, then re-snapshot. This is cheaper than polling
+        // refreshAccessibilityData() repeatedly during the transition.
         if delta.kind != .noChange && hasActiveAnimations() {
-            let settled = await waitForAnimationsToSettle(timeout: 4.0)
-            if settled {
-                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms for layout
-            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
             afterTree = refreshAccessibilityData()
             afterElements = snapshotElements()
             delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
