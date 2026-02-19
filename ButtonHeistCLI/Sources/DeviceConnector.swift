@@ -72,18 +72,7 @@ final class DeviceConnector {
 
     /// Find first device matching the filter (or first device if no filter)
     private func matchingDevice() -> DiscoveredDevice? {
-        guard let filter = deviceFilter else {
-            return client.discoveredDevices.first
-        }
-        let lowFilter = filter.lowercased()
-        return client.discoveredDevices.first { device in
-            device.name.lowercased().contains(lowFilter) ||
-            device.appName.lowercased().contains(lowFilter) ||
-            device.deviceName.lowercased().contains(lowFilter) ||
-            (device.shortId?.lowercased().hasPrefix(lowFilter) ?? false) ||
-            (device.simulatorUDID?.lowercased().hasPrefix(lowFilter) ?? false) ||
-            (device.vendorIdentifier?.lowercased().hasPrefix(lowFilter) ?? false)
-        }
+        client.discoveredDevices.first(matching: deviceFilter)
     }
 }
 

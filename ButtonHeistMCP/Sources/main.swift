@@ -768,7 +768,7 @@ func discoverAndConnect(client: HeistClient, deviceFilter: String? = nil) async 
                 "No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
         }
 
-        if let device = matchDevice(from: client.discoveredDevices, filter: deviceFilter) {
+        if let device = client.discoveredDevices.first(matching: deviceFilter) {
             log("Found device: \(device.name)")
 
             client.connect(to: device)
@@ -788,19 +788,6 @@ func discoverAndConnect(client: HeistClient, deviceFilter: String? = nil) async 
         }
 
         try await Task.sleep(nanoseconds: 100_000_000)
-    }
-}
-
-func matchDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
-    guard let filter else { return devices.first }
-    let low = filter.lowercased()
-    return devices.first { device in
-        device.name.lowercased().contains(low) ||
-        device.appName.lowercased().contains(low) ||
-        device.deviceName.lowercased().contains(low) ||
-        (device.shortId?.lowercased().hasPrefix(low) ?? false) ||
-        (device.simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
-        (device.vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
     }
 }
 
@@ -829,7 +816,7 @@ struct ButtonHeistMCP {
             Task { @MainActor in
                 for _ in 0 ..< 60 {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if let device = matchDevice(from: client.discoveredDevices, filter: deviceFilter) {
+                    if let device = client.discoveredDevices.first(matching: deviceFilter) {
                         log("Reconnecting to \(device.name)...")
                         client.connect(to: device)
                         let deadline = Date().addingTimeInterval(10)

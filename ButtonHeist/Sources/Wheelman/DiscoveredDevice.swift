@@ -64,4 +64,24 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public var deviceName: String {
         parsedName?.deviceName ?? ""
     }
+
+    /// Check if this device matches a filter string.
+    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/simulatorUDID/vendorIdentifier.
+    public func matches(filter: String) -> Bool {
+        let low = filter.lowercased()
+        return name.lowercased().contains(low) ||
+            appName.lowercased().contains(low) ||
+            deviceName.lowercased().contains(low) ||
+            (shortId?.lowercased().hasPrefix(low) ?? false) ||
+            (simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
+            (vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
+    }
+}
+
+extension Array where Element == DiscoveredDevice {
+    /// Return the first device matching the filter, or the first device if filter is nil.
+    public func first(matching filter: String?) -> DiscoveredDevice? {
+        guard let filter else { return first }
+        return first { $0.matches(filter: filter) }
+    }
 }
