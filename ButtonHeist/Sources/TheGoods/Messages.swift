@@ -71,6 +71,9 @@ public enum ClientMessage: Codable {
     /// Perform a standard edit action (copy, paste, cut, select, selectAll) on the first responder
     case editAction(EditActionTarget)
 
+    /// Resign first responder (dismiss keyboard)
+    case resignFirstResponder
+
     /// Wait for all animations to complete, then return the settled interface
     case waitForIdle(WaitForIdleTarget)
 
@@ -599,6 +602,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case typeText
     case customAction
     case editAction
+    case resignFirstResponder
     case waitForIdle
     case elementNotFound
     case elementDeallocated
