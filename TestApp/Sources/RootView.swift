@@ -15,6 +15,9 @@ struct RootView: View {
                 NavigationLink("Notes") {
                     NotesView()
                 }
+                NavigationLink("Calculator") {
+                    CalculatorView()
+                }
                 NavigationLink("Touch Canvas") {
                     TouchCanvasView()
                 }
