@@ -36,7 +36,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private let sessionId = UUID()
     private let parser = AccessibilityHierarchyParser()
     private let safeCracker = SafeCracker()
-    private var cachedElements: [AccessibilityMarker] = []
+    private var cachedElements: [AccessibilityElement] = []
 
     // MARK: - Interactive Object Storage
 
@@ -92,7 +92,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         server.onDataReceived = { [weak self] data, respond in
             Task { @MainActor in
-                self?.handleClientMessage(data, respond: respond)
+                await self?.handleClientMessage(data, respond: respond)
             }
         }
 
@@ -198,7 +198,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func handleClientMessage(_ data: Data, respond: @escaping (Data) -> Void) {
+    private func handleClientMessage(_ data: Data, respond: @escaping (Data) -> Void) async {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
             serverLog("Failed to decode client message")
             if let str = String(data: data, encoding: .utf8) {
@@ -212,7 +212,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         switch message {
         case .requestInterface:
             serverLog("Interface requested")
-            sendInterface(respond: respond)
+            await sendInterface(respond: respond)
         case .subscribe:
             serverLog("Client subscribed to updates")
             // Note: with socket server we broadcast to all, so subscribed is implicit
@@ -223,37 +223,41 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Action handling
         case .activate(let target):
-            handleActivate(target, respond: respond)
+            await handleActivate(target, respond: respond)
         case .increment(let target):
-            handleIncrement(target, respond: respond)
+            await handleIncrement(target, respond: respond)
         case .decrement(let target):
-            handleDecrement(target, respond: respond)
+            await handleDecrement(target, respond: respond)
         case .performCustomAction(let target):
-            handleCustomAction(target, respond: respond)
+            await handleCustomAction(target, respond: respond)
         case .requestScreen:
             handleScreen(respond: respond)
 
         // Touch gesture handling
         case .touchTap(let target):
-            handleTouchTap(target, respond: respond)
+            await handleTouchTap(target, respond: respond)
         case .touchLongPress(let target):
-            handleTouchLongPress(target, respond: respond)
+            await handleTouchLongPress(target, respond: respond)
         case .touchSwipe(let target):
-            handleTouchSwipe(target, respond: respond)
+            await handleTouchSwipe(target, respond: respond)
         case .touchDrag(let target):
-            handleTouchDrag(target, respond: respond)
+            await handleTouchDrag(target, respond: respond)
         case .touchPinch(let target):
-            handleTouchPinch(target, respond: respond)
+            await handleTouchPinch(target, respond: respond)
         case .touchRotate(let target):
-            handleTouchRotate(target, respond: respond)
+            await handleTouchRotate(target, respond: respond)
         case .touchTwoFingerTap(let target):
-            handleTouchTwoFingerTap(target, respond: respond)
+            await handleTouchTwoFingerTap(target, respond: respond)
         case .touchDrawPath(let target):
-            handleTouchDrawPath(target, respond: respond)
+            await handleTouchDrawPath(target, respond: respond)
         case .touchDrawBezier(let target):
-            handleTouchDrawBezier(target, respond: respond)
+            await handleTouchDrawBezier(target, respond: respond)
         case .typeText(let target):
-            handleTypeText(target, respond: respond)
+            await handleTypeText(target, respond: respond)
+        case .editAction(let target):
+            await handleEditAction(target, respond: respond)
+        case .waitForIdle(let target):
+            await handleWaitForIdle(target, respond: respond)
         }
     }
 
@@ -275,13 +279,18 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         sendMessage(.info(info), respond: respond)
     }
 
-    private func sendInterface(respond: @escaping (Data) -> Void) {
+    private func sendInterface(respond: @escaping (Data) -> Void) async {
+        // If animating, wait briefly for fast animations to end.
+        if hasActiveAnimations() {
+            _ = await waitForAnimationsToSettle(timeout: 0.5)
+        }
+
         guard let hierarchyTree = refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
         }
 
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -300,19 +309,23 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         respond(data)
     }
 
-    private func getRootView() -> UIView? {
+    /// Returns all windows that should be included in the accessibility traversal,
+    /// sorted by windowLevel descending (frontmost first).
+    /// Excludes our own overlay windows (TapVisualizerView).
+    private func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-            return nil
+            return []
         }
 
-        // Find the main app window, skipping overlay windows (high windowLevel)
-        // Overlay windows like TapVisualizerView use windowLevel > statusBar
-        let appWindow = windowScene.windows.first { window in
-            window.windowLevel <= .statusBar && window.rootViewController?.view != nil
-        }
-
-        return appWindow?.rootViewController?.view
+        return windowScene.windows
+            .filter { window in
+                !(window is TapOverlayWindow) &&
+                !window.isHidden &&
+                window.bounds.size != .zero
+            }
+            .sorted { $0.windowLevel > $1.windowLevel }
+            .map { ($0, $0 as UIView) }
     }
 
     // MARK: - Accessibility Observation
@@ -355,7 +368,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private func broadcastHierarchyUpdate() {
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -388,7 +401,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private func checkForChanges() {
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        let elements = cachedElements.enumerated().map { convertMarker($0.element, index: $0.offset) }
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
@@ -411,25 +424,30 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func broadcastScreen() {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-              let window = windowScene.windows.first(where: {
-                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
-              }) else { return }
+    /// Capture the screen by compositing all traversable windows.
+    private func captureScreen() -> (image: UIImage, bounds: CGRect)? {
+        let windows = getTraversableWindows()
+        guard let background = windows.last else { return nil }
+        let bounds = background.window.bounds
 
-        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
+        let renderer = UIGraphicsImageRenderer(bounds: bounds)
         let image = renderer.image { _ in
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            // Draw windows bottom-to-top (lowest level first) so frontmost paints on top
+            for (window, _) in windows.reversed() {
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
         }
+        return (image, bounds)
+    }
 
-        guard let pngData = image.pngData() else { return }
+    private func broadcastScreen() {
+        guard let (image, bounds) = captureScreen(),
+              let pngData = image.pngData() else { return }
 
         let screenPayload = ScreenPayload(
             pngData: pngData.base64EncodedString(),
-            width: window.bounds.width,
-            height: window.bounds.height
+            width: bounds.width,
+            height: bounds.height
         )
 
         if let data = try? JSONEncoder().encode(ServerMessage.screen(screenPayload)) {
@@ -444,18 +462,48 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     /// Returns the hierarchy tree for callers that need it (e.g., sendInterface).
     @discardableResult
     private func refreshAccessibilityData() -> [AccessibilityHierarchy]? {
-        guard let rootView = getRootView() else { return nil }
+        let windows = getTraversableWindows()
+        guard !windows.isEmpty else { return nil }
+
+        var allHierarchy: [AccessibilityHierarchy] = []
         var newInteractiveObjects: [Int: WeakObject] = [:]
-        let hierarchyTree = parser.parseAccessibilityHierarchy(in: rootView) { _, index, object in
-            if object.accessibilityRespondsToUserInteraction
-                || object.accessibilityTraits.contains(.adjustable)
-                || !(object.accessibilityCustomActions ?? []).isEmpty {
-                newInteractiveObjects[index] = WeakObject(object: object)
+        var allElements: [AccessibilityElement] = []
+
+        for (window, rootView) in windows {
+            let baseIndex = allElements.count
+            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { _, index, object in
+                let globalIndex = baseIndex + index
+                if object.accessibilityRespondsToUserInteraction
+                    || object.accessibilityTraits.contains(.adjustable)
+                    || !(object.accessibilityCustomActions ?? []).isEmpty {
+                    newInteractiveObjects[globalIndex] = WeakObject(object: object)
+                }
             }
+            let windowElements = windowTree.flattenToElements()
+
+            // Wrap each window's tree in a container node when multiple windows are present
+            if windows.count > 1 {
+                let windowName = NSStringFromClass(type(of: window))
+                let container = AccessibilityContainer(
+                    type: .semanticGroup(
+                        label: windowName,
+                        value: "windowLevel: \(window.windowLevel.rawValue)",
+                        identifier: nil
+                    ),
+                    frame: window.frame
+                )
+                let reindexed = windowTree.reindexed(offset: baseIndex)
+                allHierarchy.append(.container(container, children: reindexed))
+            } else {
+                allHierarchy.append(contentsOf: windowTree)
+            }
+
+            allElements.append(contentsOf: windowElements)
         }
+
         interactiveObjects = newInteractiveObjects
-        cachedElements = hierarchyTree.flattenToElements()
-        return hierarchyTree
+        cachedElements = allElements
+        return allHierarchy
     }
 
     // MARK: - Activation Methods
@@ -497,6 +545,220 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         interactiveObjects[index]?.object?.accessibilityCustomActions?.map { $0.name } ?? []
     }
 
+    // MARK: - Animation Detection
+
+    /// Animation key prefixes to ignore during detection.
+    /// These are persistent or internal animations that don't indicate meaningful UI transitions.
+    private static let ignoredAnimationKeyPrefixes: [String] = [
+        "_UIParallaxMotionEffect",
+    ]
+
+    /// Poll interval for checking animation state (10ms).
+    private static let animationPollInterval: UInt64 = 10_000_000
+
+    /// Returns true if any layer in the traversable window hierarchy has active animations.
+    private func hasActiveAnimations() -> Bool {
+        getTraversableWindows().contains { layerTreeHasAnimations($0.window.layer) }
+    }
+
+    /// Iterative (stack-based) walk of the layer tree checking for animation keys.
+    private func layerTreeHasAnimations(_ root: CALayer) -> Bool {
+        var stack: [CALayer] = [root]
+        while let layer = stack.popLast() {
+            if let keys = layer.animationKeys(), !keys.isEmpty {
+                let hasRelevantAnimation = keys.contains { key in
+                    !Self.ignoredAnimationKeyPrefixes.contains { key.hasPrefix($0) }
+                }
+                if hasRelevantAnimation {
+                    return true
+                }
+            }
+            if let sublayers = layer.sublayers {
+                stack.append(contentsOf: sublayers)
+            }
+        }
+        return false
+    }
+
+    /// Wait until all animations in the traversable window hierarchy have completed,
+    /// or until the timeout expires.
+    /// - Returns: true if animations settled before timeout, false if timed out
+    private func waitForAnimationsToSettle(timeout: TimeInterval = 2.0) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            try? await Task.sleep(nanoseconds: Self.animationPollInterval)
+            if !hasActiveAnimations() {
+                return true
+            }
+        }
+        return false
+    }
+
+    // MARK: - Interface Delta
+
+    /// Convert current cachedElements to wire HeistElements for delta comparison.
+    private func snapshotElements() -> [HeistElement] {
+        cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+    }
+
+    /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
+    /// Waits briefly for animations to settle (0.5s). If the screen changed and animations
+    /// are still active (e.g. navigation spring), waits 1s more and re-snapshots.
+    private func actionResultWithDelta(
+        success: Bool,
+        method: ActionMethod,
+        message: String? = nil,
+        value: String? = nil,
+        beforeElements: [HeistElement]
+    ) async -> ActionResult {
+        guard success else {
+            return ActionResult(success: false, method: method, message: message, value: value)
+        }
+
+        // Quick check: if no animations, just yield briefly for the tree to update.
+        if !hasActiveAnimations() {
+            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        } else {
+            // Animations active — wait for them to end (fast for toggles/menus)
+            // or cap at 0.5s (avoids blocking on long simulator springs).
+            _ = await waitForAnimationsToSettle(timeout: 0.5)
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms layout
+        }
+
+        var afterTree = refreshAccessibilityData()
+        var afterElements = snapshotElements()
+        var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
+
+        // If the screen changed and animations are still running (navigation push),
+        // the source screen is still sliding out. Wait a fixed 1s for the destination
+        // to fully appear, then re-snapshot. This is cheaper than polling
+        // refreshAccessibilityData() repeatedly during the transition.
+        if delta.kind != .noChange && hasActiveAnimations() {
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
+            afterTree = refreshAccessibilityData()
+            afterElements = snapshotElements()
+            delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
+        }
+
+        let stillAnimating = hasActiveAnimations()
+        return ActionResult(
+            success: true,
+            method: method,
+            message: message,
+            value: value,
+            interfaceDelta: delta,
+            animating: stillAnimating ? true : nil
+        )
+    }
+
+    /// Compare two element snapshots and return a compact delta.
+    private func computeDelta(
+        before: [HeistElement],
+        after: [HeistElement],
+        afterTree: [AccessibilityHierarchy]?
+    ) -> InterfaceDelta {
+        // Quick check: if hash is identical, nothing changed
+        if before.hashValue == after.hashValue && before == after {
+            return InterfaceDelta(kind: .noChange, elementCount: after.count)
+        }
+
+        // Build identifier sets for screen-change detection
+        let oldIDs = Set(before.compactMap(\.identifier))
+        let newIDs = Set(after.compactMap(\.identifier))
+        let commonIDs = oldIDs.intersection(newIDs)
+        let maxCount = max(oldIDs.count, newIDs.count, 1)
+
+        // Screen change: fewer than 50% of identifiers overlap
+        if commonIDs.count < maxCount / 2 {
+            let tree = afterTree?.map { convertHierarchyNode($0) }
+            let fullInterface = Interface(timestamp: Date(), elements: after, tree: tree)
+            return InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: after.count,
+                newInterface: fullInterface
+            )
+        }
+
+        // Element-level diff
+        let oldByID = Dictionary(grouping: before.filter { $0.identifier != nil }, by: { $0.identifier! })
+        let newByID = Dictionary(grouping: after.filter { $0.identifier != nil }, by: { $0.identifier! })
+
+        let addedIDs = newIDs.subtracting(oldIDs)
+        let added = addedIDs.flatMap { newByID[$0] ?? [] }
+
+        let removedIDs = oldIDs.subtracting(newIDs)
+        let removedOrders = removedIDs.flatMap { oldByID[$0] ?? [] }.map(\.order)
+
+        var valueChanges: [ValueChange] = []
+        // Identifier-based comparison: check value, description, and label
+        for id in commonIDs {
+            if let oldEl = oldByID[id]?.first, let newEl = newByID[id]?.first {
+                if oldEl.value != newEl.value {
+                    valueChanges.append(ValueChange(
+                        order: newEl.order,
+                        identifier: id,
+                        oldValue: oldEl.value,
+                        newValue: newEl.value
+                    ))
+                } else if oldEl.description != newEl.description || oldEl.label != newEl.label {
+                    valueChanges.append(ValueChange(
+                        order: newEl.order,
+                        identifier: id,
+                        oldValue: oldEl.description,
+                        newValue: newEl.description
+                    ))
+                }
+            }
+        }
+
+        // Order-based comparison for elements without identifiers
+        // (catches segmented controls, unlabeled buttons, etc.)
+        let minCount = min(before.count, after.count)
+        for i in 0..<minCount {
+            let oldEl = before[i]
+            let newEl = after[i]
+            if oldEl.identifier != nil && newEl.identifier != nil { continue }
+            if oldEl.description != newEl.description
+                || oldEl.label != newEl.label
+                || oldEl.value != newEl.value {
+                valueChanges.append(ValueChange(
+                    order: newEl.order,
+                    identifier: newEl.identifier,
+                    oldValue: oldEl.description,
+                    newValue: newEl.description
+                ))
+            }
+        }
+
+        if added.isEmpty && removedOrders.isEmpty && valueChanges.isEmpty {
+            if before.count != after.count {
+                return InterfaceDelta(
+                    kind: .elementsChanged,
+                    elementCount: after.count,
+                    added: after.count > before.count ? Array(after.suffix(after.count - before.count)) : nil,
+                    removedOrders: after.count < before.count ? Array(after.count..<before.count) : nil
+                )
+            }
+            return InterfaceDelta(kind: .noChange, elementCount: after.count)
+        }
+
+        if added.isEmpty && removedOrders.isEmpty {
+            return InterfaceDelta(
+                kind: .valuesChanged,
+                elementCount: after.count,
+                valueChanges: valueChanges.isEmpty ? nil : valueChanges
+            )
+        }
+
+        return InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: after.count,
+            added: added.isEmpty ? nil : added,
+            removedOrders: removedOrders.isEmpty ? nil : removedOrders,
+            valueChanges: valueChanges.isEmpty ? nil : valueChanges
+        )
+    }
+
     /// Returns whether a live interactive object exists at the given traversal index.
     private func hasInteractiveObject(at index: Int) -> Bool {
         interactiveObjects[index]?.object != nil
@@ -515,7 +777,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Action Handlers
 
-    private func findElement(for target: ActionTarget) -> AccessibilityMarker? {
+    private func findElement(for target: ActionTarget) -> AccessibilityElement? {
         if let identifier = target.identifier {
             return cachedElements.first { $0.identifier == identifier }
         }
@@ -525,9 +787,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         return nil
     }
 
-    /// Check if an AccessibilityMarker element is interactive based on traits
+    /// Check if an AccessibilityElement element is interactive based on traits
     /// - Returns: nil if interactive, or an error string if not interactive
-    private func checkElementInteractivity(_ element: AccessibilityMarker) -> String? {
+    private func checkElementInteractivity(_ element: AccessibilityElement) -> String? {
         // Check for notEnabled trait (disabled element)
         if element.traits.contains(.notEnabled) {
             return "Element is disabled (has 'notEnabled' trait)"
@@ -551,8 +813,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         return nil  // Element is considered interactive
     }
 
-    private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+    private func handleActivate(_ target: ActionTarget, respond: @escaping (Data) -> Void) async {
         refreshAccessibilityData()
+        let beforeElements = snapshotElements()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(
@@ -588,14 +851,16 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         // Try accessibilityActivate via the live object reference
         if activate(elementAt: index) {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
+            let result = await actionResultWithDelta(success: true, method: .activate, beforeElements: beforeElements)
+            sendMessage(.actionResult(result), respond: respond)
             return
         }
 
         // Fall back to synthetic touch injection
         if safeCracker.tap(at: point) {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
+            sendMessage(.actionResult(result), respond: respond)
             return
         }
 
@@ -606,8 +871,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         )), respond: respond)
     }
 
-    private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+    private func handleIncrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) async {
         refreshAccessibilityData()
+        let beforeElements = snapshotElements()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
@@ -626,11 +892,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         increment(elementAt: index)
         TapVisualizerView.showTap(at: element.activationPoint)
-        sendMessage(.actionResult(ActionResult(success: true, method: .increment)), respond: respond)
+        let result = await actionResultWithDelta(success: true, method: .increment, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleDecrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) {
+    private func handleDecrement(_ target: ActionTarget, respond: @escaping (Data) -> Void) async {
         refreshAccessibilityData()
+        let beforeElements = snapshotElements()
 
         guard let element = findElement(for: target) else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
@@ -649,44 +917,100 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         decrement(elementAt: index)
         TapVisualizerView.showTap(at: element.activationPoint)
-        sendMessage(.actionResult(ActionResult(success: true, method: .decrement)), respond: respond)
+        let result = await actionResultWithDelta(success: true, method: .decrement, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
+    }
+
+    // MARK: - Edit Action Handler
+
+    private func handleEditAction(_ target: EditActionTarget, respond: @escaping (Data) -> Void) async {
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
+
+        guard let action = SafeCracker.EditAction(rawValue: target.action) else {
+            let valid = SafeCracker.EditAction.allCases.map(\.rawValue).joined(separator: ", ")
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .editAction,
+                message: "Unknown edit action '\(target.action)'. Valid: \(valid)"
+            )), respond: respond)
+            return
+        }
+
+        let success = safeCracker.performEditAction(action)
+        let result = await actionResultWithDelta(success: success, method: .editAction, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
+    }
+
+    // MARK: - Wait For Idle Handler
+
+    private func handleWaitForIdle(_ target: WaitForIdleTarget, respond: @escaping (Data) -> Void) async {
+        let timeout = target.timeout ?? 5.0
+        let settled = await waitForAnimationsToSettle(timeout: timeout)
+
+        guard let hierarchyTree = refreshAccessibilityData() else {
+            sendMessage(.error("Could not access root view"), respond: respond)
+            return
+        }
+
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+
+        let result = ActionResult(
+            success: true,
+            method: .waitForIdle,
+            message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: elements.count,
+                newInterface: payload
+            ),
+            animating: settled ? nil : true
+        )
+        sendMessage(.actionResult(result), respond: respond)
     }
 
     // MARK: - Touch Gesture Handlers
 
-    private func handleTouchTap(_ target: TouchTapTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchTap(_ target: TouchTapTarget, respond: @escaping (Data) -> Void) async {
         guard let point = resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
         // If we have an element target, try activation via live object first
         if let elementTarget = target.elementTarget,
            let index = resolveTraversalIndex(for: elementTarget),
            activate(elementAt: index) {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .activate)), respond: respond)
+            let result = await actionResultWithDelta(success: true, method: .activate, beforeElements: beforeElements)
+            sendMessage(.actionResult(result), respond: respond)
             return
         }
 
         // Fall back to synthetic tap
         if safeCracker.tap(at: point) {
             TapVisualizerView.showTap(at: point)
-            sendMessage(.actionResult(ActionResult(success: true, method: .syntheticTap)), respond: respond)
+            let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
+            sendMessage(.actionResult(result), respond: respond)
             return
         }
 
         sendMessage(.actionResult(ActionResult(success: false, method: .syntheticTap, message: "Touch tap failed")), respond: respond)
     }
 
-    private func handleTouchLongPress(_ target: LongPressTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchLongPress(_ target: LongPressTarget, respond: @escaping (Data) -> Void) async {
         guard let point = resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
-        Task { @MainActor in
-            let success = await self.safeCracker.longPress(at: point, duration: target.duration)
-            if success { TapVisualizerView.showTap(at: point) }
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticLongPress)), respond: respond)
-        }
+        let success = await safeCracker.longPress(at: point, duration: target.duration)
+        if success { TapVisualizerView.showTap(at: point) }
+        let result = await actionResultWithDelta(success: success, method: .syntheticLongPress, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchSwipe(_ target: SwipeTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchSwipe(_ target: SwipeTarget, respond: @escaping (Data) -> Void) async {
         guard let startPoint = resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY, respond: respond) else { return }
 
         // Resolve end point from explicit coordinates or direction
@@ -706,58 +1030,62 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
         let duration = target.duration ?? 0.15
 
-        Task { @MainActor in
-            let success = await self.safeCracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticSwipe)), respond: respond)
-        }
+        let success = await safeCracker.swipe(from: startPoint, to: endPoint, duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticSwipe, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchDrag(_ target: DragTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchDrag(_ target: DragTarget, respond: @escaping (Data) -> Void) async {
         guard let startPoint = resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
         let duration = target.duration ?? 0.5
-
-        Task { @MainActor in
-            let success = await self.safeCracker.drag(from: startPoint, to: target.endPoint, duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrag)), respond: respond)
-        }
+        let success = await safeCracker.drag(from: startPoint, to: target.endPoint, duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticDrag, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchPinch(_ target: PinchTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchPinch(_ target: PinchTarget, respond: @escaping (Data) -> Void) async {
         guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 100.0
         let duration = target.duration ?? 0.5
-
-        Task { @MainActor in
-            let success = await self.safeCracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticPinch)), respond: respond)
-        }
+        let success = await safeCracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticPinch, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchRotate(_ target: RotateTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchRotate(_ target: RotateTarget, respond: @escaping (Data) -> Void) async {
         guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
         let radius = target.radius ?? 100.0
         let duration = target.duration ?? 0.5
-
-        Task { @MainActor in
-            let success = await self.safeCracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticRotate)), respond: respond)
-        }
+        let success = await safeCracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticRotate, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchTwoFingerTap(_ target: TwoFingerTapTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchTwoFingerTap(_ target: TwoFingerTapTarget, respond: @escaping (Data) -> Void) async {
         guard let center = resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY, respond: respond) else { return }
+        if target.elementTarget == nil { refreshAccessibilityData() }
+        let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 40.0
         let success = safeCracker.twoFingerTap(at: center, spread: CGFloat(spread))
-        sendMessage(.actionResult(ActionResult(success: success, method: .syntheticTwoFingerTap)), respond: respond)
+        let result = await actionResultWithDelta(success: success, method: .syntheticTwoFingerTap, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchDrawPath(_ target: DrawPathTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchDrawPath(_ target: DrawPathTarget, respond: @escaping (Data) -> Void) async {
         let cgPoints = target.points.map { $0.cgPoint }
 
         guard cgPoints.count >= 2 else {
@@ -769,15 +1097,16 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
-        Task { @MainActor in
-            let success = await self.safeCracker.drawPath(points: cgPoints, duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrawPath)), respond: respond)
-        }
+        let success = await safeCracker.drawPath(points: cgPoints, duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
-    private func handleTouchDrawBezier(_ target: DrawBezierTarget, respond: @escaping (Data) -> Void) {
+    private func handleTouchDrawBezier(_ target: DrawBezierTarget, respond: @escaping (Data) -> Void) async {
         guard !target.segments.isEmpty else {
             sendMessage(.actionResult(ActionResult(
                 success: false,
@@ -804,24 +1133,25 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
-        Task { @MainActor in
-            let success = await self.safeCracker.drawPath(points: cgPoints, duration: duration)
-            self.sendMessage(.actionResult(ActionResult(success: success, method: .syntheticDrawPath)), respond: respond)
-        }
+        let success = await safeCracker.drawPath(points: cgPoints, duration: duration)
+        let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
     }
 
     // MARK: - Text Entry Handler
 
-    private func handleTypeText(_ target: TypeTextTarget, respond: @escaping (Data) -> Void) {
-        Task { @MainActor in
-            await self.performTypeText(target, respond: respond)
-        }
+    private func handleTypeText(_ target: TypeTextTarget, respond: @escaping (Data) -> Void) async {
+        await performTypeText(target, respond: respond)
     }
 
     private func performTypeText(_ target: TypeTextTarget, respond: @escaping (Data) -> Void) async {
         let interKeyDelay: UInt64 = 30_000_000 // 30ms
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
@@ -910,11 +1240,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             }
         }
 
-        sendMessage(.actionResult(ActionResult(
+        let result = await actionResultWithDelta(
             success: true,
             method: .typeText,
-            value: fieldValue
-        )), respond: respond)
+            value: fieldValue,
+            beforeElements: beforeElements
+        )
+        sendMessage(.actionResult(result), respond: respond)
     }
 
     // MARK: - Shared Helpers
@@ -958,10 +1290,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
     }
 
-    private func findElementAtPoint(_ point: CGPoint) -> AccessibilityMarker? {
+    private func findElementAtPoint(_ point: CGPoint) -> AccessibilityElement? {
         // Find the smallest element whose frame contains the point
         // Smaller elements are more specific (e.g., button vs container)
-        var bestMatch: AccessibilityMarker?
+        var bestMatch: AccessibilityElement?
         var bestArea: CGFloat = .greatestFiniteMagnitude
 
         for element in cachedElements {
@@ -977,8 +1309,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         return bestMatch
     }
 
-    private func handleCustomAction(_ target: CustomActionTarget, respond: @escaping (Data) -> Void) {
+    private func handleCustomAction(_ target: CustomActionTarget, respond: @escaping (Data) -> Void) async {
         refreshAccessibilityData()
+        let beforeElements = snapshotElements()
 
         guard findElement(for: target.elementTarget) != nil else {
             sendMessage(.actionResult(ActionResult(success: false, method: .elementNotFound)), respond: respond)
@@ -996,31 +1329,21 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         let success = performCustomAction(named: target.actionName, elementAt: index)
-        sendMessage(.actionResult(ActionResult(
+        let result = await actionResultWithDelta(
             success: success,
             method: .customAction,
-            message: success ? nil : "Action '\(target.actionName)' not found"
-        )), respond: respond)
+            message: success ? nil : "Action '\(target.actionName)' not found",
+            beforeElements: beforeElements
+        )
+        sendMessage(.actionResult(result), respond: respond)
     }
 
     private func handleScreen(respond: @escaping (Data) -> Void) {
         serverLog("Screen requested")
 
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-              let window = windowScene.windows.first(where: {
-                  $0.windowLevel <= .statusBar && $0.rootViewController?.view != nil
-              }) else {
+        guard let (image, bounds) = captureScreen() else {
             sendMessage(.error("Could not access app window"), respond: respond)
             return
-        }
-
-        // Use UIGraphicsImageRenderer with drawHierarchy - same as AccessibilitySnapshot library
-        let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
-        let image = renderer.image { _ in
-            // drawHierarchy captures the full visual appearance including SwiftUI content
-            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
 
         guard let pngData = image.pngData() else {
@@ -1028,11 +1351,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
-        let base64String = pngData.base64EncodedString()
         let payload = ScreenPayload(
-            pngData: base64String,
-            width: window.bounds.width,
-            height: window.bounds.height
+            pngData: pngData.base64EncodedString(),
+            width: bounds.width,
+            height: bounds.height
         )
 
         sendMessage(.screen(payload), respond: respond)
@@ -1041,23 +1363,53 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Conversion
 
-    private func convertMarker(_ marker: AccessibilityMarker, index: Int) -> UIElement {
-        let frame = marker.shape.frame
-        return UIElement(
+    private func convertElement(_ element: AccessibilityElement, index: Int) -> HeistElement {
+        let frame = element.shape.frame
+        return HeistElement(
             order: index,
-            description: marker.description,
-            label: marker.label,
-            value: marker.value,
-            identifier: marker.identifier,
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            identifier: element.identifier,
+            hint: element.hint,
+            traits: traitNames(element.traits),
             frameX: frame.origin.x,
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
             frameHeight: frame.size.height,
-            actions: buildActions(for: index, element: marker)
+            activationPointX: element.activationPoint.x,
+            activationPointY: element.activationPoint.y,
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: element.customContent.isEmpty ? nil : element.customContent.map {
+                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            },
+            actions: buildActions(for: index, element: element)
         )
     }
 
-    private func buildActions(for index: Int, element: AccessibilityMarker) -> [ElementAction] {
+    private func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
+        var names: [String] = []
+        if traits.contains(.button) { names.append("button") }
+        if traits.contains(.link) { names.append("link") }
+        if traits.contains(.image) { names.append("image") }
+        if traits.contains(.staticText) { names.append("staticText") }
+        if traits.contains(.header) { names.append("header") }
+        if traits.contains(.adjustable) { names.append("adjustable") }
+        if traits.contains(.searchField) { names.append("searchField") }
+        if traits.contains(.selected) { names.append("selected") }
+        if traits.contains(.notEnabled) { names.append("notEnabled") }
+        if traits.contains(.keyboardKey) { names.append("keyboardKey") }
+        if traits.contains(.summaryElement) { names.append("summaryElement") }
+        if traits.contains(.updatesFrequently) { names.append("updatesFrequently") }
+        if traits.contains(.playsSound) { names.append("playsSound") }
+        if traits.contains(.startsMediaSession) { names.append("startsMediaSession") }
+        if traits.contains(.allowsDirectInteraction) { names.append("allowsDirectInteraction") }
+        if traits.contains(.causesPageTurn) { names.append("causesPageTurn") }
+        if traits.contains(.tabBar) { names.append("tabBar") }
+        return names
+    }
+
+    private func buildActions(for index: Int, element: AccessibilityElement) -> [ElementAction] {
         var actions: [ElementAction] = []
         if hasInteractiveObject(at: index) {
             actions.append(.activate)
@@ -1119,7 +1471,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
 // MARK: - Shape Helper
 
-private extension AccessibilityMarker.Shape {
+private extension AccessibilityElement.Shape {
     var frame: CGRect {
         switch self {
         case let .frame(rect): return rect

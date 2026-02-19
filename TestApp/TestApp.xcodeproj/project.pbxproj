@@ -254,6 +254,7 @@
 				1AB605FD94866359FA51497A /* Resources */,
 				D809E046728FB7B6A276ABD2 /* Frameworks */,
 				764415133CCF494506933502 /* Embed Frameworks */,
+				12E4F2E2968DA7FC6936A11C /* Copy AccessibilitySnapshotParser Resources */,
 			);
 			buildRules = (
 			);
@@ -274,6 +275,7 @@
 				18A41928F54CF30301A67115 /* Resources */,
 				26AA3641D53AD534C8AD8B2F /* Frameworks */,
 				7A12C62CE369DFE732C1FCAC /* Embed Frameworks */,
+				F0AE37ABBA9C2069C80E2FE9 /* Copy AccessibilitySnapshotParser Resources */,
 			);
 			buildRules = (
 			);
@@ -331,6 +333,47 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		12E4F2E2968DA7FC6936A11C /* Copy AccessibilitySnapshotParser Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy AccessibilitySnapshotParser Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "BUNDLE=\"$BUILT_PRODUCTS_DIR/AccessibilitySnapshot_AccessibilitySnapshotParser.bundle\"\nif [ -d \"$BUNDLE\" ]; then\n    cp -R \"$BUNDLE\" \"$CODESIGNING_FOLDER_PATH/\"\nfi";
+		};
+		F0AE37ABBA9C2069C80E2FE9 /* Copy AccessibilitySnapshotParser Resources */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy AccessibilitySnapshotParser Resources";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "BUNDLE=\"$BUILT_PRODUCTS_DIR/AccessibilitySnapshot_AccessibilitySnapshotParser.bundle\"\nif [ -d \"$BUNDLE\" ]; then\n    cp -R \"$BUNDLE\" \"$CODESIGNING_FOLDER_PATH/\"\nfi";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		86D6FDCD059309C881E50C2B /* Sources */ = {
