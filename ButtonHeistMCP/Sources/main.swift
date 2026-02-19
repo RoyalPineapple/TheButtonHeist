@@ -306,6 +306,17 @@ let editActionTool = Tool(
     annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
 )
 
+let resignFirstResponderTool = Tool(
+    name: "dismiss_keyboard",
+    // swiftlint:disable:next line_length
+    description: "Dismiss the software keyboard by resigning first responder. Finds the current first responder in the view hierarchy and calls resignFirstResponder() on it.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([:]),
+    ]),
+    annotations: .init(readOnlyHint: false, idempotentHint: true, openWorldHint: false)
+)
+
 let waitForIdleTool = Tool(
     name: "wait_for_idle",
     // swiftlint:disable:next line_length
@@ -339,7 +350,7 @@ let allTools: [Tool] = [
     drawPathTool, drawBezierTool,
     activateTool, incrementTool, decrementTool, customActionTool,
     typeTextTool,
-    editActionTool,
+    editActionTool, resignFirstResponderTool,
 ]
 
 // MARK: - Argument Helpers
@@ -627,6 +638,9 @@ func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async th
         }
         let editMessage = ClientMessage.editAction(EditActionTarget(action: action))
         return try await sendAction(editMessage, client: client)
+
+    case "dismiss_keyboard":
+        return try await sendAction(.resignFirstResponder, client: client)
 
     case "wait_for_idle":
         let timeout = doubleArg(args, "timeout")
