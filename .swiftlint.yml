@@ -7,7 +7,6 @@ included:
   - ButtonHeistCLI/Sources
   - ButtonHeistCLI/Tests
   - ButtonHeistMCP/Sources
-  - Stakeout/Sources
   - TestApp/Sources
   - TestApp/UIKitSources
 

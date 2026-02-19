@@ -16,7 +16,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **Multi-device** - Run many instances on many simulators with stable identifiers for each
 - **Device targeting** - Match devices by name, short ID, simulator UDID, or vendor identifier
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
-- **Multiple interfaces** - MCP server, GUI app, CLI, Python, or custom tools
+- **Multiple interfaces** - MCP server, CLI, Python, or custom tools
 
 ## Architecture
 
@@ -34,12 +34,12 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 │  │  (MCP server)    │                                               │
 │  └────────┬─────────┘                                               │
 │           │                                                          │
-│  ┌────────┴─────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │     Stakeout     │  │  buttonheist CLI │  │  Python/Scripts  │  │
-│  │    (GUI app)     │  │                  │  │                  │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘  │
-│           │                     │                     │            │
-│           └─────────────────────┼─────────────────────┘            │
+│  ┌──────────────────┐  ┌──────────────────┐                       │
+│  │  buttonheist CLI │  │  Python/Scripts  │                       │
+│  │                  │  │                  │                       │
+│  └────────┬─────────┘  └────────┬─────────┘                       │
+│           │                     │                                 │
+│           └─────────────────────┘                                 │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
 │                        │   ButtonHeist   │  ← Bonjour discovery    │
@@ -69,7 +69,6 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 | **Wheelman** | iOS + macOS | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
 | **ButtonHeistMCP** | macOS | MCP server — lets AI agents drive iOS apps via Model Context Protocol |
-| **Stakeout** | macOS | GUI app for visual inspection with screenshots and element overlays |
 | **buttonheist** | macOS | CLI tool with list, watch, action, touch, and screenshot commands |
 
 ## Quick Start
@@ -232,12 +231,6 @@ python3 scripts/buttonheist_usb.py
 cd ButtonHeistCLI
 swift run buttonheist --once    # Single snapshot
 swift run buttonheist           # Watch mode (live updates)
-```
-
-**GUI App:**
-```bash
-open ButtonHeist.xcworkspace
-# Run the Stakeout scheme
 ```
 
 ## CLI Usage
@@ -471,10 +464,6 @@ buttonheist/
 │       └── ButtonHeist/              # macOS client framework
 │           ├── HeistClient.swift            # Main client (ObservableObject)
 │           └── Exports.swift                # Re-exports TheGoods + Wheelman
-├── Stakeout/
-│   └── Sources/                   # macOS GUI app
-│       ├── Views/                 # SwiftUI views
-│       └── Design/                # Design tokens (colors, typography)
 ├── ButtonHeistMCP/
 │   ├── Package.swift              # Swift 6.0 package (depends on ButtonHeist + MCP SDK)
 │   └── Sources/
