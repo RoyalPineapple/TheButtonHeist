@@ -36,6 +36,9 @@ struct TypeCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
+    var device: String?
+
     @MainActor
     mutating func run() async throws {
         guard text != nil || delete != nil else {
@@ -51,61 +54,10 @@ struct TypeCommand: AsyncParsableCommand {
             elementTarget: elementTarget
         ))
 
-        let client = HeistClient()
-
-        if !quiet {
-            logStatus("Searching for iOS devices...")
-        }
-
-        client.startDiscovery()
-
-        let discoveryTimeout: UInt64 = 5_000_000_000
-        let startTime = DispatchTime.now()
-        while client.discoveredDevices.isEmpty {
-            if DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds > discoveryTimeout {
-                throw ValidationError("No devices found within timeout")
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        guard let device = client.discoveredDevices.first else {
-            throw ValidationError("No devices found")
-        }
-
-        if !quiet {
-            logStatus("Found device: \(device.name)")
-            logStatus("Connecting...")
-        }
-
-        var connected = false
-        var connectionError: Error?
-
-        client.onConnected = { _ in connected = true }
-        client.onDisconnected = { error in connectionError = error }
-
-        client.connect(to: device)
-
-        let connectionTimeout: UInt64 = 5_000_000_000
-        let connectionStart = DispatchTime.now()
-        while !connected && connectionError == nil {
-            if DispatchTime.now().uptimeNanoseconds - connectionStart.uptimeNanoseconds > connectionTimeout {
-                throw ValidationError("Connection timed out")
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        if let error = connectionError {
-            throw ValidationError("Connection failed: \(error.localizedDescription)")
-        }
-
-        if !quiet {
-            logStatus("Connected")
-        }
-
-        defer {
-            client.disconnect()
-            client.stopDiscovery()
-        }
+        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        try await connector.connect()
+        defer { connector.disconnect() }
+        let client = connector.client
 
         if !quiet {
             logStatus("Sending type command...")
@@ -119,7 +71,6 @@ struct TypeCommand: AsyncParsableCommand {
             if !quiet {
                 logStatus("Type succeeded (method: \(result.method.rawValue))")
             }
-            // Output the field value if available, otherwise "success"
             writeOutput(result.value ?? "success")
         } else {
             let errorMessage = result.message ?? result.method.rawValue

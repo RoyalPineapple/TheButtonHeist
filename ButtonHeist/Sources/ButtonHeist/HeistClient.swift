@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Wheelman
 import TheGoods
 import os.log
@@ -6,18 +7,19 @@ import os.log
 private let logger = Logger(subsystem: "com.buttonheist", category: "client")
 
 /// Client for discovering and connecting to iOS apps running InsideMan
+@Observable
 @MainActor
-public final class HeistClient: ObservableObject {
+public final class HeistClient {
 
-    // MARK: - Published State
+    // MARK: - Observable State
 
-    @Published public private(set) var discoveredDevices: [DiscoveredDevice] = []
-    @Published public private(set) var connectedDevice: DiscoveredDevice?
-    @Published public private(set) var serverInfo: ServerInfo?
-    @Published public private(set) var currentInterface: Interface?
-    @Published public private(set) var currentScreen: ScreenPayload?
-    @Published public private(set) var isDiscovering: Bool = false
-    @Published public private(set) var connectionState: ConnectionState = .disconnected
+    public private(set) var discoveredDevices: [DiscoveredDevice] = []
+    public private(set) var connectedDevice: DiscoveredDevice?
+    public private(set) var serverInfo: ServerInfo?
+    public private(set) var currentInterface: Interface?
+    public private(set) var currentScreen: ScreenPayload?
+    public private(set) var isDiscovering: Bool = false
+    public private(set) var connectionState: ConnectionState = .disconnected
 
     public enum ConnectionState: Equatable {
         case disconnected
@@ -228,14 +230,10 @@ public final class HeistClient: ObservableObject {
 
     public enum ActionError: Error, LocalizedError {
         case timeout
-        case notConnected
-
         public var errorDescription: String? {
             switch self {
             case .timeout:
                 return "Action timed out"
-            case .notConnected:
-                return "Not connected to device"
             }
         }
     }
