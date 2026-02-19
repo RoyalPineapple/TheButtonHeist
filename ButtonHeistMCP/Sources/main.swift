@@ -309,7 +309,7 @@ let editActionTool = Tool(
 let waitForIdleTool = Tool(
     name: "wait_for_idle",
     // swiftlint:disable:next line_length
-    description: "Wait for all UI animations to complete, then return the settled interface. Useful before get_interface or get_screen to ensure the UI has finished transitions.",
+    description: "Wait for all UI animations to complete, then return the settled interface. Actions and get_interface already settle automatically; use this only when you need a longer explicit wait (e.g. after a complex transition).",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
