@@ -24,6 +24,10 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
    - Create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
    - Create the companion trace file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
+6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+8. **Load response examples**: Read `references/examples.md` for annotated MCP response interpretation examples.
+9. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
 
 ## Step 1: Observe the Current Screen
 
@@ -34,18 +38,31 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
    - List each element: `[order] label/description (identifier) — frame — actions`
    - Note the tree structure (containers, groups)
 
-## Step 2: Baseline State
+## Step 2: Identify Screen Intent + Baseline State
 
-Record the current state as your baseline:
-- Element count
-- Element identifiers and values
-- Screen capture visual state
+1. **Identify the screen's intent** using `references/screen-intent.md`. Is this a form, list, settings page, detail view, nav hub, picker, modal, or canvas? Record the intent in session notes (`## Screen Intents`).
+2. Record the current state as your baseline:
+   - Element count
+   - Element identifiers and values
+   - Screen capture visual state
 
-## Step 3: Interact with Each Element
+## Step 3: Workflow Tests, Then Element Interaction
 
 **Before starting**: Read your session notes file — check `## Coverage` for this screen to know which elements have already been tested. Skip those and pick up where you left off.
 
-Go through elements in order. For each interactive element:
+### Intent-Driven Workflow Testing
+
+If you identified a screen intent, **run the workflow tests first** (see `references/screen-intent.md` for the specific tests per category):
+- **Form**: Fill all fields with intent-appropriate values → submit → verify. Then: submit empty, partial fill, fill-then-abandon.
+- **Item list**: Add → verify → edit → delete → verify empty state. Then: delete-when-empty, add-duplicate, rapid-add-delete.
+- **Settings**: Change → navigate away → return → verify persisted. Then: toggle-rapidly, dependency-chain.
+- **Other intents**: Follow the workflow and violation tests from screen-intent.md.
+
+Record workflow test results in session notes and trace. Then proceed to element-by-element exploration for anything the workflows didn't cover.
+
+### Element-by-Element Exploration
+
+Process elements in **randomized order** (not always top-to-bottom). For each interactive element:
 
 ### Elements with actions (activate, increment, decrement, custom)
 
@@ -71,11 +88,13 @@ After the batch: append all trace entries at once, update session notes once.
 ### Text fields
 
 If the element looks like a text input (text field, secure field, text editor):
-1. `type_text(identifier: element, text: "test input")` — type a basic string
-2. Check the returned value matches what you typed
-3. `type_text(identifier: element, deleteCount: 10, text: "replaced")` — test delete + retype
-4. Check the returned value is correct
-5. Read `references/interesting-values.md` for curated test inputs. Try values from at least 3 categories (boundary numbers, unicode edge cases, injection strings, long strings, etc.). Use `deleteCount` to clear before each new value.
+1. **Read the field's label/identifier** to understand what it expects (name, email, phone, password, description, etc.)
+2. **Generate context-appropriate values** using the "Context-Aware Value Generation" section of `references/interesting-values.md`. For a "Name" field, try real names that break assumptions (`O'Brien-Smith Jr.`, `Null`, `信田`). For an "Email" field, try technically-valid-but-weird addresses (`a@b.c`, `user+tag@example.com`). Don't default to `"test input"` and `<script>alert(1)</script>` for every field.
+3. `type_text(identifier: element, text: "context-appropriate value")` — type a value that matches the field's purpose
+4. Check the returned value matches what you typed
+5. `type_text(identifier: element, deleteCount: ..., text: "adversarial variant")` — clear and try an adversarial version of valid input
+6. Try values from at least 3 categories in `references/interesting-values.md`, starting from a **random** category (not always boundary numbers first). Use `deleteCount` to clear before each new value.
+7. **Generate at least 1 novel value** not from any list — derive it from the field's label, mutate a listed value, or combine categories.
 
 ### Swipe testing (on scrollable-looking containers)
 

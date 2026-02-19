@@ -47,10 +47,10 @@ Record the swarm configuration in session notes under `## Config`:
 
 ## Element Selection
 
-Same as `systematic-traversal` — process elements in order, top to bottom:
+Same priority tiers as `systematic-traversal`, but **randomize the order within each tier**. Don't always start from the top — the swarm's power comes from diversity, and element order is part of that:
 
-1. Elements with actions first
-2. Elements without explicit actions (try tapping)
+1. Elements with actions first (shuffled)
+2. Elements without explicit actions (try tapping, shuffled)
 3. Skip static/decorative elements
 
 ## Action Selection

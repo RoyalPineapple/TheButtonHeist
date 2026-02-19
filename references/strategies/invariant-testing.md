@@ -1,5 +1,15 @@
 # Strategy: Invariant Testing
 
+## Contents
+- [Goal](#goal) — self-consistency verification
+- [Prerequisites](#prerequisites) — needs prior exploration data
+- [Passes](#passes) — stability, idempotency, reversibility, persistence, completeness, consistency
+- [Element Selection](#element-selection) — per-invariant element targeting
+- [Termination](#termination) — completion and partial results
+- [What to Look For](#what-to-look-for) — state leaks, ghost state, dead elements
+
+---
+
 Systematically verifies the 6 observable invariants defined in SKILL.md. Instead of testing invariants opportunistically during exploration, this strategy makes invariant verification the primary goal.
 
 ## Goal

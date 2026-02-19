@@ -6,9 +6,17 @@ The default fuzzing strategy. Methodically visits every element on every reachab
 
 Achieve complete coverage — every interactive element on every screen gets exercised at least once. Finds bugs that occur during normal usage paths.
 
+## Screen Intent First
+
+Before element-by-element testing, **identify the screen's intent** using `references/screen-intent.md`. Run the workflow tests for the recognized intent (happy path, then violations). Then proceed to element traversal for anything the workflow didn't cover.
+
+## Model Before Traversal
+
+After identifying intent, **build a behavioral model** before element-by-element testing. The model generates predictions that make your testing targeted — instead of "activate and see what happens," you're validating specific expected behaviors. See `## Behavioral Modeling` in SKILL.md.
+
 ## Element Selection
 
-Process elements **in order** (by `order` field from snapshot), top to bottom:
+Process elements in **randomized order within each priority tier** — don't always go top to bottom. Vary the traversal direction each session (bottom-to-top, middle-out, random shuffle):
 
 1. Start with elements that have actions (activate, increment, decrement, custom)
 2. Then elements without explicit actions (try tapping them — they may be buttons without accessibility actions)
