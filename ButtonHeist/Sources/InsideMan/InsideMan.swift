@@ -950,8 +950,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let success = safeCracker.resignFirstResponder()
         let result = await actionResultWithDelta(
-            success: success, method: .resignFirstResponder, beforeElements: beforeElements,
-            message: success ? nil : "No first responder found"
+            success: success, method: .resignFirstResponder,
+            message: success ? nil : "No first responder found",
+            beforeElements: beforeElements
         )
         sendMessage(.actionResult(result), respond: respond)
     }
