@@ -84,28 +84,6 @@ let project = Project(
             ]
         ),
 
-        // MARK: - macOS Stakeout App
-        .target(
-            name: "Stakeout",
-            destinations: .macOS,
-            product: .app,
-            bundleId: "com.buttonheist.stakeout",
-            deploymentTargets: .macOS("14.0"),
-            infoPlist: .extendingDefault(with: [
-                "NSPrincipalClass": "NSApplication",
-                "CFBundleDisplayName": "Stakeout",
-                "NSLocalNetworkUsageDescription": "Stakeout needs local network access to discover and connect to iOS apps running InsideMan.",
-                "NSBonjourServices": ["_buttonheist._tcp"],
-            ]),
-            sources: ["Stakeout/Sources/**"],
-            resources: [],
-            entitlements: .file(path: "Stakeout/Stakeout.entitlements"),
-            scripts: [swiftlintScript],
-            dependencies: [
-                .target(name: "ButtonHeist"),
-            ]
-        ),
-
         // MARK: - TheGoods Tests
         .target(
             name: "TheGoodsTests",
