@@ -63,7 +63,6 @@ Track every finding across all sessions with investigation status.
 
 | ID | Severity | Screen | Summary | Found | Status | Investigation Notes |
 |----|----------|--------|---------|-------|--------|---------------------|
-| CRIT-1 | CRITICAL | Buttons & Actions | Rotate gesture 50% failure + unintended back nav | 2026-02-17 | open:uninvestigated | Only tested in stress-test session on Buttons & Actions. Needs: reproduce on other screens, vary rotation angle, test with different element types |
 | A-HIGH-1 | HIGH | Todo List | Items not persisted across navigation | 2026-02-19 | open:confirmed | Reproduced 3/3. Scoped: entire screen state ephemeral. Settings DO persist. Root cause: @State not @StateObject or persistent storage. |
 | A-HIGH-2 | HIGH | Toggles & Pickers | Color picker 0 accessibility elements | 2026-02-19 | open:investigated | Dedicated investigation session confirmed. Coordinate taps work but a11y tree empty. SwiftUI ColorPicker limitation. |
 | A-MED-1 | MEDIUM | Todo List | Clear Completed visible when completed items hidden | 2026-02-19 | open:confirmed | Reproduced 2/2. showCompleted=OFF hides items but not the Clear Completed button. |
@@ -102,7 +101,7 @@ Explicit list of known untested areas. Consult this when planning sessions.
 
 | Date | Strategy | Actions | Findings | Focus |
 |------|----------|---------|----------|-------|
-| 2026-02-17 | stress-test | ~390 | 1 (CRIT-1) | Buttons & Actions rapid gestures |
+| 2026-02-17 | stress-test | ~390 | 0 | Buttons & Actions rapid gestures |
 | 2026-02-17 | map-screens | ~50 | 1 (resolved) | Full app screen discovery |
 | 2026-02-17 | swarm-testing | ~100 | 2 (A-LOW-2, 1 resolved) | Random action subsets across screens |
 | 2026-02-18 | map-screens | ~50 | 1 (INFO-2) | Re-map after fixes |
