@@ -1,7 +1,7 @@
 import XCTest
  import TheGoods
 
-final class UIElementTests: XCTestCase {
+final class HeistElementTests: XCTestCase {
 
     func testEquality() {
         let element1 = makeElement(label: "Button1", index: 0)
@@ -16,7 +16,7 @@ final class UIElementTests: XCTestCase {
         let element1 = makeElement(label: "Button1", index: 0)
         let element2 = makeElement(label: "Button1", index: 0)
 
-        var set = Set<UIElement>()
+        var set = Set<HeistElement>()
         set.insert(element1)
         set.insert(element2)
 
@@ -37,13 +37,13 @@ final class UIElementTests: XCTestCase {
         let element = makeElement(label: "RoundTrip", index: 5)
 
         let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(UIElement.self, from: data)
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
 
         XCTAssertEqual(element, decoded)
     }
 
     func testElementWithAllFields() throws {
-        let element = UIElement(
+        let element = HeistElement(
             order: 10,
             description: "A complex button",
             label: "Submit Form",
@@ -54,7 +54,7 @@ final class UIElementTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(UIElement.self, from: data)
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
 
         XCTAssertEqual(decoded.order, 10)
         XCTAssertEqual(decoded.description, "A complex button")
@@ -65,7 +65,7 @@ final class UIElementTests: XCTestCase {
     }
 
     func testElementWithNilOptionals() throws {
-        let element = UIElement(
+        let element = HeistElement(
             order: 0,
             description: "Minimal",
             label: nil,
@@ -76,7 +76,7 @@ final class UIElementTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(element)
-        let decoded = try JSONDecoder().decode(UIElement.self, from: data)
+        let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
 
         XCTAssertEqual(element, decoded)
         XCTAssertNil(decoded.label)
@@ -86,8 +86,8 @@ final class UIElementTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String, index: Int) -> UIElement {
-        UIElement(
+    private func makeElement(label: String, index: Int) -> HeistElement {
+        HeistElement(
             order: index,
             description: label,
             label: label,
