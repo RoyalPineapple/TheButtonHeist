@@ -74,6 +74,10 @@ After navigating A → B → C → back → back to A:
 1. Verify we actually returned to A (fingerprint match)
 2. If we ended up somewhere else: ANOMALY — back navigation is inconsistent
 
+## Prediction-Driven State Checks
+
+When performing state consistency checks (A→B→back-to-A), use your behavioral model to make predictions explicit. Instead of "compare with original interface," predict specifically: "element X should have value Y, count should be N, no elements should have been added or removed." Specific predictions catch subtle state leaks that a generic diff might miss (e.g., a value changed from "50" to "50.0" — same semantically but different string).
+
 ## Termination
 
 - **Depth limit**: 15 levels of navigation. Report deeper paths as INFO.

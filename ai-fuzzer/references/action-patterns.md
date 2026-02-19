@@ -1,5 +1,19 @@
 # Reusable Action Sequence Patterns
 
+## Contents
+- [Navigate-Interact-Verify-Return](#navigate-interact-verify-return) — test element on another screen
+- [Set-Leave-Return-Check](#set-leave-return-check) — persistence testing
+- [Rapid-Fire](#rapid-fire) — stability under repeated interaction
+- [Cross-Product](#cross-product) — every action type on one element
+- [Cascade](#cascade) — interaction ordering effects
+- [Reset Test](#reset-test) — reversibility verification
+- [Scroll-Discover](#scroll-discover) — find hidden content
+- [Double-Tap Divergence](#double-tap-divergence) — single vs double tap
+- [Pattern Composition](#pattern-composition) — chain, nest, invert, interleave
+- [Pattern Mutation](#pattern-mutation) — scale, target, order variation
+
+---
+
 Composable interaction templates that strategies can reference. Each pattern is a self-contained sequence with a clear purpose. Apply these as building blocks instead of reinventing them per strategy.
 
 ## Navigate-Interact-Verify-Return
@@ -156,3 +170,97 @@ Test if rapid double-tapping produces different behavior from two separate taps.
 **Finding if violated**: INFO — "Element [id] behaves differently on double-tap vs single tap"
 
 Use this when: Testing buttons that might have accidental double-tap handlers, or list items that might have tap-vs-double-tap ambiguity.
+
+---
+
+## Pattern Composition
+
+The patterns above are building blocks. Combine them into richer test sequences that find bugs no single pattern would.
+
+### Chain: Pattern A → check side effects → Pattern B
+
+Run one pattern, then check if it affected something unexpected, then run another pattern.
+
+```
+1. Rapid-Fire on element A (tap 10x)
+2. Record state of UNRELATED element B → S_B
+3. Rapid-Fire on element A again (tap 10x more)
+4. Record state of element B → S_B2
+5. Compare S_B and S_B2 — did stressing A affect B?
+```
+
+Use this when: Looking for cross-element coupling or state leaks. Especially useful on settings screens where one control might secretly affect another.
+
+### Nest: Pattern inside another pattern's step
+
+Take a multi-step pattern and expand one of its steps into a full sub-pattern.
+
+```
+Set-Leave-Return-Check, but during the "Leave" step:
+1. Record element value → Original
+2. Change the value
+3. Navigate to a different screen
+   3a. [NESTED] Run Cross-Product on every element of this screen
+   3b. Record any findings from Cross-Product
+4. Navigate back
+5. Check if the value is still what you set
+```
+
+Use this when: You want maximum coverage — test persistence while also fully exercising the intermediate screen.
+
+### Invert: Run a pattern backwards or from an unexpected starting point
+
+```
+Instead of increment → observe → decrement → check restored:
+1. Decrement from the initial value (go below default)
+2. Record what happens — does it go below 0? wrap? clamp?
+3. Then increment back up past the original
+4. Record — does it pass through the original value or skip it?
+```
+
+Use this when: Testing boundary behavior. Most testing starts from defaults — inverting tests what happens when you start from the other direction.
+
+### Interleave: Two patterns on two elements simultaneously
+
+```
+1. Step 1 of Pattern A on element X
+2. Step 1 of Pattern B on element Y
+3. Step 2 of Pattern A on element X
+4. Step 2 of Pattern B on element Y
+... continue alternating
+5. Verify both elements are in expected states
+```
+
+Use this when: Testing whether interacting with two elements simultaneously causes conflicts. Good for forms (fill field A, then field B, then validate A again) and settings (toggle A, then change B's picker, then check A's state).
+
+---
+
+## Pattern Mutation
+
+Vary a pattern's parameters to avoid running identical tests across sessions.
+
+### Scale Variation
+
+The same pattern at different intensities produces different bugs:
+- **Rapid-Fire × 1**: Does a single interaction work at all?
+- **Rapid-Fire × 10**: Normal stress level — catches most timing bugs
+- **Rapid-Fire × 100**: Extreme stress — catches memory leaks, counter overflow, performance degradation
+- **Rapid-Fire × 3**: Light touch — catches obvious failures without spending time
+
+Pick a different scale each session.
+
+### Target Variation
+
+Apply a pattern to an element type it wasn't designed for:
+- **Cross-Product** (designed for buttons) applied to a text field — try every gesture type on a text input
+- **Set-Leave-Return-Check** (designed for stateful elements) applied to a navigation button — does tapping a button leave traces?
+- **Rapid-Fire** (designed for single actions) applied to a form workflow — submit 10x rapidly
+
+The mismatch is the point — unexpected combinations find unexpected bugs.
+
+### Order Variation
+
+Run a pattern's steps in a different sequence:
+- **Reset Test backwards**: Try to undo first (before any change was made), then change, then undo normally
+- **Navigate-Interact-Verify-Return**: Skip the "Return" step — what happens if you stay on the target screen?
+- **Cascade**: Instead of A-then-B vs B-then-A, try A-B-A-B alternating

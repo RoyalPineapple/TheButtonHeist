@@ -21,6 +21,7 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
 3. Print the connected device name and app name for confirmation
 4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
+6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 
 During stress testing, update your session notes file continuously:
 - After each sequence completes: update `## Coverage` with the result (PASS/FAIL)
