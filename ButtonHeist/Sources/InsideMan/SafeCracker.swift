@@ -213,6 +213,31 @@ final class SafeCracker {
         UIApplication.shared.sendAction(action.selector, to: nil, from: nil, for: nil)
     }
 
+    /// Resign first responder, dismissing the keyboard if visible.
+    /// Walks the view hierarchy of all windows to find the current first responder
+    /// and calls resignFirstResponder() on it.
+    /// - Returns: true if a first responder was found and resigned
+    func resignFirstResponder() -> Bool {
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        for window in allWindows {
+            if let responder = findFirstResponder(in: window) {
+                responder.resignFirstResponder()
+                return true
+            }
+        }
+        return false
+    }
+
+    private func findFirstResponder(in view: UIView) -> UIView? {
+        if view.isFirstResponder { return view }
+        for sub in view.subviews {
+            if let found = findFirstResponder(in: sub) { return found }
+        }
+        return nil
+    }
+
     // MARK: - Private: Keyboard Helpers
 
     /// Get the UIKeyboardImpl active instance via ObjC runtime.
