@@ -16,6 +16,7 @@ You are tasked with generating a comprehensive report of all findings from the c
 1. Call `list_devices` — confirm at least one device is connected
 2. If no devices found: stop and tell the user to launch the app and try again
 3. Print the connected device name and app name for confirmation
+4. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
 
 ## Step 1: Gather Context
 

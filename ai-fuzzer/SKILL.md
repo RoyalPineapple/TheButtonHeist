@@ -20,18 +20,39 @@ You are a specialist at discovering bugs in iOS apps through black-box explorati
 - DO NOT skip elements because they "look normal" — only observation reveals behavior
 - ALWAYS read the interface delta returned by every action — never fire blind
 
+## Reference Files
+
+These files contain detailed specifications loaded on demand. Don't read them all at once — load each one when you need it.
+
+| File | When to Read | What It Contains |
+|------|-------------|-----------------|
+| `references/session-notes-format.md` | Session start (to create notes file) | Notes file format, naming, trace file protocol, update frequency |
+| `references/navigation-planning.md` | When you need to plan a route | BFS algorithm, navigation stack, persistent nav-graph I/O |
+| `references/nav-graph.md` | Session start + session end (to merge) | Cross-session navigation map with screens, transitions, back routes |
+| `references/app-knowledge.md` | Session start + session end (to merge) | Cross-session knowledge: coverage, models, findings, gaps |
+| `references/screen-intent.md` | When landing on a new screen | Screen intent categories, workflow tests, violation tests |
+| `references/interesting-values.md` | When testing text fields | Context-aware value generation, value categories, mutation techniques |
+| `references/action-patterns.md` | When planning action batches | Composable interaction sequences, pattern composition, mutation |
+| `references/examples.md` | Session start (for response interpretation) | Annotated MCP tool response examples, intent-driven testing demos |
+| `references/trace-format.md` | When writing trace entries | Trace entry format, field definitions, examples |
+| `references/troubleshooting.md` | When encountering errors | Error recovery procedures |
+| `references/strategies/*.md` | Session start (when strategy is specified) | Strategy-specific element selection, action ordering, anomaly focus |
+
 ## Core Loop
 
-Every fuzzing cycle follows a **batch** pattern to minimize overhead:
+Every fuzzing cycle follows a **predict-and-validate** pattern:
 
 ```
-OBSERVE → PLAN BATCH → EXECUTE BATCH → RECORD
+OBSERVE → IDENTIFY INTENT → BUILD MODEL → PREDICT+ACT → VALIDATE → INVESTIGATE → RECORD
 ```
 
 1. **OBSERVE**: Call `get_interface` to read the UI hierarchy. Call `get_screen` only when you need visual state (findings, new screens — not every action).
-2. **PLAN BATCH**: Look at the current screen's elements and plan 3-5 actions at once. Pick elements by priority (untried first, then untried action types). No need to re-read notes between actions on the same screen — your notes are for resuming after compaction, not for per-action decisions.
-3. **EXECUTE BATCH**: Fire all planned actions in sequence. Each action returns an interface delta — read it to know what changed. Only call `get_interface` separately if you need the full hierarchy without performing an action.
-4. **RECORD**: After the batch completes, write all updates at once — session notes (coverage, findings, progress) and trace entries. Batch your file writes.
+2. **IDENTIFY INTENT**: On a new screen, classify it using `references/screen-intent.md` (form, list, settings, etc.). This drives what tests you plan. See `## Screen Intent Recognition` below.
+3. **BUILD MODEL**: On a new screen, build a behavioral model — state variables, element-state relationships, and testable predictions. Use the intent's model template as a starting point, then refine from observation. Record in `## Behavioral Models`. See `## Behavioral Modeling` below.
+4. **PREDICT+ACT**: For each action in the batch (3-5 actions), state what you expect to happen — state changes, screen transitions, element appearances/disappearances. Then execute the action. Read the delta.
+5. **VALIDATE**: Compare the actual delta against your prediction. Match → model confirmed, continue batch. Mismatch → proceed to INVESTIGATE.
+6. **INVESTIGATE**: When a prediction is violated, probe deeper — reproduce, vary, scope, reduce, find boundaries. See `### When Predictions Fail: Investigate` below. Budget: up to 5 actions per deviation.
+7. **RECORD**: After the batch completes, write all updates at once — session notes (coverage, findings, models, progress) and trace entries. Batch your file writes.
 
 **Key efficiency rules:**
 - **Action tools return interface deltas.** Every successful action includes a JSON delta showing what changed:
@@ -57,235 +78,49 @@ Track element classifications in your `## Coverage` notes. Focus fuzzing effort 
 
 ## Navigation Planning
 
-You accumulate a navigation graph as you explore. **Use it.** When you need to reach a specific screen, don't wander — plan a route.
+You accumulate a navigation graph as you explore. **Use it.** When you need to reach a specific screen, don't wander — plan a route using BFS through your `## Transitions` table.
 
-### Building the Graph
+Read `references/navigation-planning.md` for the complete algorithm: graph building, BFS route finding, route execution with verification, navigation stack management, and persistent nav-graph.md I/O protocol.
 
-Your `## Transitions` table IS the graph. Each row is a directed edge:
+**Key rules** (always in memory):
+- Check `## Transitions` for known routes before exploring
+- Push to `## Navigation Stack` on every `screenChanged`
+- Pop on every back-navigation
+- Read `references/nav-graph.md` at session start, merge discoveries at session end
 
-| From | Action | To |
-|------|--------|----|
-| Main Menu | activate "Settings" | Settings |
-| Settings | activate "Back" | Main Menu |
+## Cross-Session Knowledge
 
-This gives you two edges: Main Menu → Settings and Settings → Main Menu. As you explore, this graph grows. By mid-session you know how most screens connect.
+You accumulate app knowledge across sessions in `references/app-knowledge.md`. This is your long-term memory — behavioral models, coverage gaps, finding investigation status, and testing history.
 
-### Finding a Route
+### Reading the Knowledge Base
 
-When you need to navigate from screen A to screen B:
+At session start, read `references/app-knowledge.md`. Use it to:
+1. **Skip re-discovery**: If a screen's behavioral model is recorded, start from it (verify it's still accurate, don't rebuild from scratch)
+2. **Target gaps**: Check `## Testing Gaps` for unchecked items — these are high-priority targets
+3. **Prioritize investigation**: Check `## Findings Tracker` for `open:uninvestigated` entries — these need follow-up probes
+4. **Avoid redundancy**: Check `## Session History` to avoid running the same strategy on the same screens again
+5. **Load models**: Check `## Behavioral Models` for existing models of screens you're about to test — start from the recorded model and verify/update it
 
-1. Check `## Transitions` for a direct edge A → B. If found, use it.
-2. If no direct edge, trace through known transitions:
-   - Start from A
-   - Find all screens reachable in 1 step from A
-   - For each, find all screens reachable in 1 step from those
-   - Continue until you find B (breadth-first search)
-   - The path with fewest steps is your route
-3. If B is not reachable via known transitions, navigate to the screen closest to B (fewest hops from B's known entry points) and explore from there.
+### Updating the Knowledge Base
 
-### Executing a Route
+At session end, merge your session's discoveries into `references/app-knowledge.md`:
+1. **Coverage Summary**: Update tested counts, action types used, strategies run, last-tested dates, and gaps for every screen you touched
+2. **Behavioral Models**: For each screen where you built or refined a model, update the stored model. Newer observations replace older ones.
+3. **Findings Tracker**: Add new findings with status `open:uninvestigated` or `open:confirmed`. Update investigation status for findings you probed.
+4. **Testing Gaps**: Check off completed gaps. Add any new gaps you identified.
+5. **Session History**: Add a row for this session.
 
-For each step in the planned route:
-1. Look up the action from `## Transitions` (e.g., `activate "Settings"`)
-2. Find the element on the current screen matching that action (by identifier or label)
-3. Execute the action
-4. Read the delta: `screenChanged` should show the expected destination
-5. Verify the fingerprint matches the expected screen
-6. If verification fails: you're on an unexpected screen. Record the unexpected transition and re-plan from your current position.
-
-### Navigation Stack
-
-Maintain a `## Navigation Stack` in your session notes to track your current path through the app.
-
-**Push** when any action produces a `screenChanged` delta (forward navigation):
-- Add a row: depth, screen name, action that got you there
-
-**Pop** when you navigate back:
-- Remove the top row
-- The new top is your current screen
-
-**Use the stack to**:
-- Know your current depth in the app (useful for deciding whether to go deeper or back out)
-- Backtrack efficiently: the "Arrived Via" column for the current row tells you what transition to reverse
-- Detect navigation anomalies: if a "back" action doesn't pop to the expected screen, it's a finding
-- Resume after compaction: read the stack to know exactly where you are
-
-### Persistent Navigation Map
-
-A shared navigation map at `references/nav-graph.md` accumulates knowledge across sessions.
-
-**At session start:**
-1. Read `references/nav-graph.md` if it exists
-2. Pre-populate your mental navigation graph with all known transitions and back-routes
-3. You now know how to reach every previously discovered screen without re-exploring
-
-**At session end:**
-1. Merge any new transitions into `references/nav-graph.md`
-2. Update the Back Routes table with any new back-navigation discoveries
-3. Mark transitions as "reliable" if they've been verified in 2+ sessions
-4. Add any navigation anomalies to the Notes section
-
-**If no nav graph exists:** First session creates it after exploration.
-
-### When to Plan Routes
-
-- **Fuzzing loop**: When `## Next Actions` says to visit a different screen, plan a route instead of wandering
-- **Refinement**: Navigate to each finding's screen via the graph
-- **Reproduction**: Use the graph to reach the finding's screen without replaying the full trace
-- **Returning after interruption**: After a `screenChanged` interrupts your batch, plan a route back
+The knowledge base should stay concise — it's a reference table, not a narrative. Use session notes files for detailed per-session records.
 
 ## Session Notes
 
-**Long-running sessions will lose context to compaction.** To survive this, write all state to a session notes file continuously. This is your external memory.
+Long-running sessions lose context to compaction. Write all state to a session notes file continuously — this is your external memory. Read `references/session-notes-format.md` for the complete format specification, naming conventions, file template, trace file protocol, and update frequency rules.
 
-### Naming convention
-
-Each session gets a unique file:
-
-```
-fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-{command}-{description}.md
-```
-
-Examples:
-- `fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1545-explore-settings-screen.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1600-map-screens.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1620-stress-test-all-elements.md`
-
-The `{command}` is the slash command name (`fuzz`, `explore`, `map-screens`, `stress-test`). The `{description}` is a short kebab-case summary (strategy name, screen name, target element, etc.). Use the current date and time when creating the file.
-
-Previous session files are kept for reference — they're never overwritten.
-
-### How it works
-
-1. **At session start**: Create a new notes file with initial config (strategy, app info, iteration limit)
-2. **After every significant event**: Update the notes file — new screen discovered, finding recorded, navigation transition (push/pop `## Navigation Stack`), or every ~5 actions as a periodic checkpoint
-3. **After compaction**: If you find yourself in a conversation with no memory of what you've done, **find and read your notes file immediately**. It contains everything you need to resume.
-4. **At session end**: The notes file persists as a record of the session
-
-### Resuming after compaction
-
-At the start of any command, look for session notes files in `fuzz-sessions/`:
-1. **List `fuzz-sessions/fuzzsession-*.md` files** — find the most recent one with `Status: in_progress`
-2. **Read it fully** — this file IS your memory. Everything you knew before compaction is here.
-3. Check `## Config` for strategy and iteration limit, `## Progress` for action count and current screen
-4. Check `## Navigation Stack` to know your current position in the app and how to backtrack
-5. Check `## Coverage` to understand what's been tried on each screen
-6. Check `## Findings` for what you've already discovered
-7. Check `## Next Actions` — this is what past-you decided to do next. Follow this plan.
-8. Continue from where you left off — don't restart, don't re-explore screens marked as fully explored
-
-If no `in_progress` session is found, start a fresh one.
-
-### Notes file format
-
-```markdown
-# Fuzzing Session Notes
-
-## Config
-- **Strategy**: [name]
-- **Max iterations**: [N]
-- **App**: [name from list_devices]
-- **Device**: [device name]
-- **Started**: [timestamp]
-- **Status**: in_progress | refinement | complete
-- **Trace file**: [trace filename]
-- **Next finding ID**: F-1
-
-## Progress
-- **Actions taken**: [count]
-- **Current screen**: [name / fingerprint]
-- **Current phase**: fuzzing_loop | refinement | report
-
-## Screens Discovered
-| # | Name | Fingerprint (key identifiers) | Elements | Fully Explored |
-|---|------|-------------------------------|----------|----------------|
-| 1 | Main Menu | {home, settings, profile} | 8 | yes |
-| 2 | Settings | {back, theme, notifications} | 12 | no |
-
-## Coverage
-### Screen: Main Menu
-- [x] home — activate, tap, long_press
-- [x] settings — activate → navigates to Settings
-- [ ] profile — not yet tried
-
-### Screen: Settings
-- [x] back — activate → navigates to Main Menu
-- [ ] theme — not yet tried
-- [ ] notifications — not yet tried
-
-## Transitions
-| From | Action | To |
-|------|--------|----|
-| Main Menu | activate "settings" | Settings |
-| Settings | activate "back" | Main Menu |
-
-## Navigation Stack
-| Depth | Screen | Arrived Via |
-|-------|--------|-------------|
-| 0 | Main Menu | (root) |
-| 1 | Settings | activate "settings" |
-
-**Current screen**: Settings (depth 1)
-**Back action**: activate "back" → Main Menu (known transition)
-
-## Findings
-### F-1 [ANOMALY] Toggle doesn't respond to activate
-**Trace refs**: #42, #43
-**Screen**: Settings
-**Action**: activate(identifier: "darkModeToggle") [trace #43]
-**Expected**: Toggle value changes
-**Actual**: No change
-**Confidence**: pending
-
-## Action Log (last 10)
-1. [trace #42] activate(identifier: "settings") on Main Menu → navigated to Settings
-2. [trace #43] get_interface on Settings — 12 elements
-3. [trace #44] activate(identifier: "theme") on Settings → navigated to Theme Picker
-...
-
-## Next Actions
-- Continue exploring Screen: Settings
-- Untried elements: theme, notifications, privacy
-- After this screen: visit Theme Picker (discovered but unexplored)
-```
-
-### Action Trace File
-
-Every session gets a companion **trace file** for deterministic replay. The trace captures every tool call with exact parameters, before/after state, and results — enough for another agent to replay the exact sequence.
-
-**Naming**: Same as the session notes file but with `.trace.md` extension:
-```
-fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md
-```
-
-**When to write trace entries:**
-- After every `get_interface` call → `observe` entry
-- After every interaction (activate, tap, swipe, increment, etc.) → `interact` entry
-- After every back-navigation → `navigate` entry
-- After every simulator snapshot save/restore → `snapshot` entry
-
-**How to write:** Append each entry to the end of the trace file. Never rewrite the whole file. Collect all before/after state before writing a single complete entry. See `references/trace-format.md` for the entry format, field definitions, and examples.
-
-**Cross-references:**
-- In `## Config`, include: `- **Trace file**: [trace filename]`
-- In `## Findings`, include `**Trace refs**: #N, #M` with the sequence numbers of relevant actions
-- In `## Action Log`, prefix entries with `[trace #N]` to link to the trace
-
-### Update frequency
-
-**Minimize file I/O — batch your writes.** The session notes exist for compaction survival, not per-action bookkeeping.
-
-Write session notes:
-- **Immediately**: Findings (CRASH, ERROR, ANOMALY) and new screen discoveries — these are high-value and must not be lost
-- **Every 5 actions**: Batch update Coverage, Progress, Action Log, Next Actions, and Transitions
-- **On phase changes**: fuzzing → refinement → report
-
-Write trace entries:
-- **Every 3-5 actions**: Accumulate entries in memory, then append them all at once to the trace file
-- **Immediately**: Only for CRASH findings — write the trace before the session dies
-
-You don't need to rewrite the entire file every time — use targeted edits to update specific sections.
+**Key rules** (always in memory):
+- Create a new notes file at session start
+- Write findings and new screens immediately
+- Batch other updates every 5 actions
+- After compaction: find and read your notes file — it IS your memory
 
 ## UI Coverage (Your Coverage Metric)
 
@@ -371,6 +206,157 @@ Test these invariants whenever the opportunity arises:
 
 You don't need to know what the "correct" behavior is — you only need to observe that behavior is **self-consistent**.
 
+## Screen Intent Recognition
+
+Don't treat screens as flat bags of elements. When you land on a new screen, **identify its intent** before testing individual elements. A form, a task list, a settings page, and a navigation hub each demand different testing approaches.
+
+### The Intent-Driven Loop
+
+The core loop is:
+
+```
+OBSERVE → IDENTIFY INTENT → BUILD MODEL → PREDICT+ACT → VALIDATE → INVESTIGATE → RECORD
+```
+
+### How It Works
+
+1. **Observe** the screen's elements via `get_interface`
+2. **Classify** the screen using `references/screen-intent.md` — scan element labels, actions, and spatial layout for recognition signals
+3. **Record** the intent in session notes (`## Screen Intents` table)
+4. **Run workflow tests** for the matched intent — happy path first (fill form and submit, add item and verify, toggle setting and check persistence)
+5. **Run violation tests** — the screen-intent reference lists specific violations for each category (submit empty form, delete from empty list, toggle rapidly, etc.)
+6. **Then** do element-by-element fuzzing for coverage of anything the workflows didn't touch
+
+### Key Principles
+
+- **Intent drives value generation.** A "Name" field on a form screen should get names that break assumptions (`O'Brien-Smith Jr.`, `Null`, `李明`), not generic injection strings. Read the field's label and generate adversarial versions of *valid input* for that field. See `references/interesting-values.md` for context-aware generation guidance.
+- **Test workflows, not just elements.** "Add" and "Delete" are two halves of the same operation. Test them together: add → verify → delete → verify empty state. Then test violations: delete when empty, add duplicate, delete during edit.
+- **Test the happy path before violating it.** Understand what the screen is supposed to do, verify it works, *then* break it.
+- **Cross-screen relationships matter.** A list screen, its detail screen, and its edit screen form a workflow chain. Test the full chain — bugs hide in transitions. See the "Cross-Screen Relationships" section of `references/screen-intent.md`.
+- **Unknown intents are fine.** If a screen doesn't match any category, fall back to element-by-element testing. Record it as "Unknown" in your notes.
+
+### Session Notes Integration
+
+Add these sections to your session notes:
+
+```markdown
+## Screen Intents
+| Screen | Intent | Workflow Tested | Violations Tested |
+|--------|--------|-----------------|-------------------|
+| Controls Demo | Navigation hub | round-trip all destinations | rapid switching |
+| Text Input | Form | fill-all→submit | submit-empty, fill→navigate-away→return |
+| Toggles & Pickers | Settings | change→persist | toggle-rapidly, dependency-chain |
+
+## Screen Relationships
+- [Hub: Controls Demo] → "Text Input" → [Form: Text Input]
+- [Hub: Controls Demo] → "Adjustable Controls" → [Settings: Adjustable Controls]
+- [Settings: Toggles & Pickers] segment change → affects → [Display] theme
+```
+
+## Behavioral Modeling
+
+After identifying a screen's intent, build a **behavioral model** — your best hypothesis about how the screen works, based purely on observation. The model makes your expectations explicit and testable.
+
+### What a Model Contains
+
+1. **State variables**: What does this screen manage? Items in a list, values in form fields, toggle states, a selected filter, a count label. Name each one.
+2. **Element-state map**: Which elements *read* state (labels, counts, badges) and which elements *write* state (buttons, toggles, fields)? Map the relationships.
+3. **Coupling rules**: How do elements relate to each other? "Text in field enables Add button." "Toggling parent shows/hides children." "Changing filter changes visible items but not the backing list."
+4. **Predictions**: What should happen when you interact with each writable element? Be specific: "tapping Add will append the field's text as a new item, increment count from N to N+1, clear the field, and disable the Add button."
+
+### How to Build a Model
+
+1. Start from the screen intent's **model template** (see `references/screen-intent.md`)
+2. Fill in specifics from the actual elements you observe — real identifiers, real labels, real current values
+3. Infer coupling rules from element proximity and naming (a field called "newItemField" next to an "addButton" are coupled)
+4. State your predictions explicitly before acting
+
+### Prediction Types
+
+- **State mutation**: "Tapping Add will set count from 0 to 1" — the action changes a specific state variable in a specific way
+- **State persistence**: "Items will survive a navigation roundtrip" — state endures across screens
+- **Pattern consistency**: "Empty state for 'All' filter will follow the same template as 'Active' and 'Completed'" — observed pattern extends to untested cases
+- **Element coupling**: "Typing into the text field will enable the Add button" — one element's state affects another
+- **Cross-screen effect**: "Changing the 'Show Completed' toggle in Settings will hide completed items on the Todo List" — action on screen A affects screen B
+
+### Validating Predictions
+
+After each action, compare the delta against your prediction:
+- **Match**: Prediction confirmed. Your model is consistent with observed behavior.
+- **Mismatch — model was naive**: You predicted "nothing happens" but something did. Update your model, not a finding yet — but investigate if the unexpected behavior seems wrong.
+- **Mismatch — clear violation**: You predicted specific behavior based on strong evidence and the app contradicted it. Investigate immediately.
+- **Mismatch — ambiguous**: Could be a bug or a feature you didn't understand. Investigate to disambiguate.
+
+The model doesn't need to be perfect. An incorrect model that gets refined through observation is still doing its job — it's forcing you to reason about expected behavior before acting.
+
+### When Predictions Fail: Investigate
+
+When something unexpected happens, **don't just record it and move on**. Treat every deviation as a thread to pull. The goal is to understand the deviation — its scope, its consistency, and its boundaries.
+
+**Reproduce** — try the exact same action again. Does it happen every time?
+- If yes: the behavior is deterministic. It's either a bug or your model was wrong.
+- If no: it's intermittent. Try 3 more times to establish the rate.
+
+**Vary** — try related actions. Does the deviation extend?
+- Same element, different action (tap vs activate vs long_press)
+- Adjacent elements (order ±1, same type)
+- Same action on a similar element elsewhere on the screen
+
+**Scope** — how far does this go?
+- Is it just this element, or all elements of this type?
+- Is it just this screen, or does it affect other screens?
+- Navigate to a related screen and check for cross-screen effects
+
+**Reduce** — what's the minimal trigger?
+- What's the shortest action sequence that reproduces it?
+- Does it happen on a fresh visit to the screen, or only after specific prior actions?
+- Does the starting state matter?
+
+**Boundary** — where exactly does it break?
+- If a pattern holds for N cases but fails for one, test every case to find the exact boundary
+- If persistence fails, test which state survives and which doesn't (e.g., "settings persist but todo items don't")
+
+Investigation doesn't need to be exhaustive — 3-5 focused probes are enough to classify the deviation. Record what you find: the deviation's scope, consistency, and minimal trigger. This turns a vague "something weird happened" into a precise, actionable finding.
+
+**Budget**: Spend up to 5 actions investigating a deviation. If it's still ambiguous after 5 probes, record what you know and move on — you can revisit during the refinement pass.
+
+### Model Evolution
+
+Models improve as you explore:
+- After validating predictions, update the model with confirmed or corrected rules
+- When investigation reveals new behavior (changing A also changes B), add it to the model
+- When a prediction fails but investigation shows the behavior is correct, the model was wrong — fix it
+- When investigation confirms a bug, the model was right — the app is wrong. Record the finding.
+- Record model updates in session notes so they survive compaction
+
+## Novelty and Variation
+
+Deterministic testing produces identical sessions. Break the patterns:
+
+### Element Order
+After scoring elements, **shuffle within the top tier**. If 4 elements all score equally, don't always pick the first one. Vary the traversal direction — bottom-to-top one session, middle-out the next.
+
+### Action Order
+Don't always try activate → tap → long_press → swipe. Each session, pick a different action priority. One session leads with long_press on everything. Another leads with swipe. The strategy's constraints still apply, but the *order within* those constraints should vary.
+
+### Value Selection
+Never type the same test values session after session. When testing text fields:
+- Start from a **random category** in `references/interesting-values.md`, not always from the top
+- **Generate at least 1 novel value per field** that isn't from any list — derive it from the field's label, the app's content, or by mutating a listed value
+- **Combine categories**: boundary number inside an injection string, unicode inside a URL, emoji inside a format string
+
+### Session Flavor
+At session start, define a testing bias for this session. Examples:
+- "This session emphasizes multi-byte text in every field"
+- "This session focuses on state persistence across navigation"
+- "This session tests rapid-fire interactions on every interactive element"
+- "This session prioritizes testing cross-screen side effects"
+
+Record the flavor in `## Config` and let it influence your choices throughout.
+
+### Cross-Screen Side Effects
+After making changes on one screen (toggling a setting, submitting a form, deleting an item), **navigate to a related screen and check for unintended side effects**. Did toggling dark mode also reset the sort order? Did deleting item #3 corrupt item #4's data?
+
 ## Strategy System
 
 Strategy files in `references/strategies/` define exploration approaches. When a user specifies a strategy with `/fuzz`, read the corresponding file from `references/strategies/` and follow its instructions for:
@@ -393,7 +379,7 @@ When deciding what to do next, **always check your notes first** (`## Coverage` 
 
 ### Element Scoring
 
-Score each element to decide what to interact with next. Pick the highest-scoring element. Break ties by order (top of screen first).
+Score each element to decide what to interact with next. Pick the highest-scoring element. **Break ties randomly** — don't always default to top-of-screen first.
 
 | Factor | Points | Condition |
 |--------|--------|-----------|
@@ -418,6 +404,33 @@ When everything on the current screen has been tried and you need to choose the 
 4. **Recently discovered** — newer screens may have fresh, untested territory
 
 Avoid long navigation chains to reach a distant screen when a nearby screen also has untested elements.
+
+## Yield Monitoring
+
+Track your effectiveness as you explore. Not every action finds a bug, but long stretches of zero findings signal you should change approach.
+
+### Yield Check (every 15 actions)
+
+Every 15 actions, assess:
+1. **Findings in last 15 actions**: How many anomalies, errors, or prediction violations?
+2. **New coverage in last 15 actions**: How many previously-untested elements or action types?
+3. **Screen staleness**: Have you been on the same screen for > 20 actions?
+
+### When to Pivot
+
+- **0 findings AND < 3 new coverage items in 15 actions**: This screen/approach is saturated. Move to the highest-priority screen from `## Testing Gaps` in `references/app-knowledge.md`, or the screen with lowest coverage in `## Coverage Summary`. If all screens are high-coverage, switch to a different action approach (e.g., from element-by-element to workflow testing, or from activate to gesture-based).
+- **Same screen for 20+ actions with 0 findings**: Leave immediately. Mark screen as "saturated for current strategy" in coverage notes.
+- **3+ findings on current screen**: Stay and go deeper. This is a productive vein — mine it.
+
+### Yield in Session Notes
+
+Track yield in `## Progress`:
+```
+- **Actions taken**: 45
+- **Findings**: 3
+- **Yield**: 1 finding per 15 actions
+- **Last pivot**: action 30 (moved from Display to Text Input — Display saturated)
+```
 
 ## Back Navigation
 
