@@ -26,7 +26,6 @@ Thank you for your interest in contributing to ButtonHeist!
 | `ButtonHeist/Sources/InsideMan/` | iOS server framework (server, touch injection, tap visualization) |
 | `ButtonHeist/Sources/InsideManLoader/` | ObjC auto-start via +load |
 | `ButtonHeist/Sources/Wheelman/` | macOS client library (discovery, connection) |
-| `Stakeout/Sources/` | macOS GUI application |
 | `ButtonHeistCLI/` | Command-line tool (watch, action, screenshot commands) |
 | `TestApp/` | Sample SwiftUI and UIKit iOS applications |
 | `AccessibilitySnapshot/` | Hierarchy parsing submodule |
@@ -87,7 +86,6 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan \
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
 
 # Build apps
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme Stakeout build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TestApp \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
 
@@ -98,9 +96,8 @@ cd ButtonHeistCLI && swift build
 ### Manual Testing
 
 1. Run TestApp on iOS simulator
-2. Run Stakeout on macOS
-3. Verify device discovery works
-4. Verify hierarchy updates in real-time
+2. Verify device discovery works via CLI
+3. Verify hierarchy updates in real-time
 
 ## Module Guidelines
 
@@ -121,11 +118,6 @@ cd ButtonHeistCLI && swift build
 - macOS-only
 - Provide both `@Published` properties and callbacks
 - Handle connection lifecycle gracefully
-
-### Stakeout
-
-- Use semantic colors from `Design/ElementStyling.swift`
-- Keep views small and composable
 
 ## Questions?
 

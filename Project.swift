@@ -45,12 +45,12 @@ let project = Project(
             headers: .headers(
                 public: ["ButtonHeist/Sources/InsideManLoader/include/**"]
             ),
+            scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheGoods"),
                 .target(name: "Wheelman"),
                 .external(name: "AccessibilitySnapshotParser"),
-            ],
-            scripts: [swiftlintScript]
+            ]
         ),
 
         // MARK: - Cross-Platform Networking Library
@@ -62,10 +62,10 @@ let project = Project(
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/Wheelman/**"],
+            scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheGoods"),
-            ],
-            scripts: [swiftlintScript]
+            ]
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)
@@ -77,33 +77,11 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/ButtonHeist/**"],
+            scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheGoods"),
                 .target(name: "Wheelman"),
-            ],
-            scripts: [swiftlintScript]
-        ),
-
-        // MARK: - macOS Stakeout App
-        .target(
-            name: "Stakeout",
-            destinations: .macOS,
-            product: .app,
-            bundleId: "com.buttonheist.stakeout",
-            deploymentTargets: .macOS("14.0"),
-            infoPlist: .extendingDefault(with: [
-                "NSPrincipalClass": "NSApplication",
-                "CFBundleDisplayName": "Stakeout",
-                "NSLocalNetworkUsageDescription": "Stakeout needs local network access to discover and connect to iOS apps running InsideMan.",
-                "NSBonjourServices": ["_buttonheist._tcp"],
-            ]),
-            sources: ["Stakeout/Sources/**"],
-            resources: [],
-            entitlements: .file(path: "Stakeout/Stakeout.entitlements"),
-            dependencies: [
-                .target(name: "ButtonHeist"),
-            ],
-            scripts: [swiftlintScript]
+            ]
         ),
 
         // MARK: - TheGoods Tests

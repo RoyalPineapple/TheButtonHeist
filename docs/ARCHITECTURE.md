@@ -25,12 +25,12 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 │  │  mcp server  │                                                   │
 │  └──────┬───────┘                                                   │
 │         │                                                            │
-│  ┌──────┴───────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │   Stakeout   │  │     CLI      │  │ Python/Shell │              │
-│  │     (GUI)    │  │              │  │   Scripts    │              │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
-│         │                 │                 │                       │
-│         └─────────────────┼─────────────────┘                       │
+│  ┌──────────────┐  ┌──────────────┐                                │
+│  │     CLI      │  │ Python/Shell │                                │
+│  │              │  │   Scripts    │                                │
+│  └──────┬───────┘  └──────┬───────┘                                │
+│         │                 │                                        │
+│         └─────────────────┘                                        │
 │                           │                                          │
 │                  ┌────────┴────────┐                                │
 │                  │   ButtonHeist   │ (import ButtonHeist)           │
