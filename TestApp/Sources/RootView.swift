@@ -12,6 +12,9 @@ struct RootView: View {
                 NavigationLink("Todo List") {
                     TodoListView()
                 }
+                NavigationLink("Notes") {
+                    NotesView()
+                }
                 NavigationLink("Touch Canvas") {
                     TouchCanvasView()
                 }
