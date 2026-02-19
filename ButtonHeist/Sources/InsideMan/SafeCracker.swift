@@ -184,6 +184,35 @@ final class SafeCracker {
         return true
     }
 
+    // MARK: - Edit Actions (via Responder Chain)
+
+    /// Standard edit actions that can be invoked on the first responder.
+    enum EditAction: String, CaseIterable {
+        case copy
+        case paste
+        case cut
+        case select
+        case selectAll
+
+        var selector: Selector {
+            switch self {
+            case .copy:      return #selector(UIResponderStandardEditActions.copy(_:))
+            case .paste:     return #selector(UIResponderStandardEditActions.paste(_:))
+            case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
+            case .select:    return #selector(UIResponderStandardEditActions.select(_:))
+            case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
+            }
+        }
+    }
+
+    /// Perform a standard edit action on the current first responder.
+    /// Uses UIApplication.sendAction to route through the responder chain,
+    /// following KIF's pattern of bypassing the edit menu UI entirely.
+    /// - Returns: true if the action was handled by some responder
+    func performEditAction(_ action: EditAction) -> Bool {
+        UIApplication.shared.sendAction(action.selector, to: nil, from: nil, for: nil)
+    }
+
     // MARK: - Private: Keyboard Helpers
 
     /// Get the UIKeyboardImpl active instance via ObjC runtime.

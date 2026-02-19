@@ -20,9 +20,9 @@ private class PassthroughView: UIView {
     }
 }
 
-/// Passthrough window for tap overlay
+/// Passthrough window for tap overlay (internal so InsideMan can filter it from traversal)
 @MainActor
-private class TapOverlayWindow: UIWindow {
+class TapOverlayWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         return nil
     }
