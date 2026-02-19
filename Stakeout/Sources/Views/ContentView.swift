@@ -2,7 +2,7 @@ import SwiftUI
 import ButtonHeist
 
 struct ContentView: View {
-    @StateObject private var client = HeistClient()
+    @State private var client = HeistClient()
     @State private var selectedDevice: DiscoveredDevice?
     @State private var selectedElement: UIElement?
     @State private var showTreeView = true

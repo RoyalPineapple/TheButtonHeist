@@ -90,14 +90,7 @@ final class CLIRunner {
             if self.client.connectedDevice == nil {
                 // Apply device filter if specified
                 if let filter = self.options.device {
-                    let low = filter.lowercased()
-                    let matches = device.name.lowercased().contains(low) ||
-                        device.appName.lowercased().contains(low) ||
-                        device.deviceName.lowercased().contains(low) ||
-                        (device.shortId?.lowercased().hasPrefix(low) ?? false) ||
-                        (device.simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
-                        (device.vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
-                    guard matches else { return }
+                    guard device.matches(filter: filter) else { return }
                 }
                 if !self.options.quiet {
                     logStatus("Found: \(self.client.displayName(for: device))")

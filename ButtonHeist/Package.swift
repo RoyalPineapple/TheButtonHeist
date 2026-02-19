@@ -11,8 +11,6 @@ let package = Package(
         .library(name: "TheGoods", targets: ["TheGoods"]),
         // InsideMan with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "InsideMan", targets: ["InsideMan", "InsideManLoader"]),
-        // InsideManCore: Swift implementation only, manual start required
-        .library(name: "InsideManCore", targets: ["InsideMan"]),
         .library(name: "Wheelman", targets: ["Wheelman"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
