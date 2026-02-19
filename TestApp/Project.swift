@@ -1,5 +1,16 @@
 import ProjectDescription
 
+let copyResourceBundleScript: TargetScript = .post(
+    script: """
+    BUNDLE="$BUILT_PRODUCTS_DIR/AccessibilitySnapshot_AccessibilitySnapshotParser.bundle"
+    if [ -d "$BUNDLE" ]; then
+        cp -R "$BUNDLE" "$CODESIGNING_FOLDER_PATH/"
+    fi
+    """,
+    name: "Copy AccessibilitySnapshotParser Resources",
+    basedOnDependencyAnalysis: false
+)
+
 let project = Project(
     name: "TestApp",
     targets: [
@@ -18,6 +29,7 @@ let project = Project(
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
+            scripts: [copyResourceBundleScript],
             dependencies: [
                 .project(target: "TheGoods", path: ".."),
                 .project(target: "InsideMan", path: ".."),
@@ -50,6 +62,7 @@ let project = Project(
             ]),
             sources: ["UIKitSources/**"],
             resources: ["UIKitResources/**"],
+            scripts: [copyResourceBundleScript],
             dependencies: [
                 .project(target: "TheGoods", path: ".."),
                 .project(target: "InsideMan", path: ".."),

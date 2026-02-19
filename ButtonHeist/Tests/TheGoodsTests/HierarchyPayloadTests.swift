@@ -19,7 +19,7 @@ final class SnapshotTests: XCTestCase {
 
     func testPayloadWithMultipleElements() throws {
         let elements = (0..<10).map { i in
-            UIElement(
+            HeistElement(
                 order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
