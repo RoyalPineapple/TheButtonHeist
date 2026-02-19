@@ -256,6 +256,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             await handleTypeText(target, respond: respond)
         case .editAction(let target):
             await handleEditAction(target, respond: respond)
+        case .resignFirstResponder:
+            await handleResignFirstResponder(respond: respond)
         case .waitForIdle(let target):
             await handleWaitForIdle(target, respond: respond)
         }
@@ -937,6 +939,20 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let success = safeCracker.performEditAction(action)
         let result = await actionResultWithDelta(success: success, method: .editAction, beforeElements: beforeElements)
+        sendMessage(.actionResult(result), respond: respond)
+    }
+
+    // MARK: - Resign First Responder Handler
+
+    private func handleResignFirstResponder(respond: @escaping (Data) -> Void) async {
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
+
+        let success = safeCracker.resignFirstResponder()
+        let result = await actionResultWithDelta(
+            success: success, method: .resignFirstResponder, beforeElements: beforeElements,
+            message: success ? nil : "No first responder found"
+        )
         sendMessage(.actionResult(result), respond: respond)
     }
 
