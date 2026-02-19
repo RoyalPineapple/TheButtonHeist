@@ -14,6 +14,7 @@
 		25DF05C46A706164AE4C8343 /* Wheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 58296904D156AED07299DF88 /* Wheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3446F6FA07532BAC23F137EF /* AlertsSheetDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */; };
 		36F39E740A9A97F26389BD3B /* TheGoods.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 4784481124F1F97268082FC0 /* TheGoods.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3E93AE1108866F17601CB8 /* SettingsView.swift */; };
 		4A575BC2046730F1109649D6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4784481124F1F97268082FC0 /* TheGoods.framework */; };
 		540D12ACEC20064BAC859223 /* AccessibilitySnapshotParser.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		5ADD7EE878F11746F33810CA /* DisclosureGroupingDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */; };
@@ -40,7 +41,9 @@
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
 		E3376FECA536A8AAA171C294 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */; };
 		EA78FA2AA8AB39C21DACFC8B /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EFF4E3FA1EDE832D8A2EE75C /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1E33E92F9049326D6B7919 /* AppSettings.swift */; };
 		F44ED5C500A24FED0E4AC1CE /* Wheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 58296904D156AED07299DF88 /* Wheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F72D8F1D2B784116A32F363B /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D07E273A0048DA7FE282A3 /* TodoListView.swift */; };
 		F7594C97FD102C3D1C7005FD /* InsideMan.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D4930B28E2BEA711748A9C94 /* InsideMan.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F8653ABF476DECEF4671858E /* TuistBundle+AccessibilityTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E724C266432DF64AF26AFB6E /* TuistBundle+AccessibilityTestApp.swift */; };
 /* End PBXBuildFile section */
@@ -94,6 +97,7 @@
 		7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclosureGroupingDemo.swift; sourceTree = "<group>"; };
 		7EB069D6039881E065A92F23 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		877D35FA7E56356C3A73F9AC /* UIKitTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UIKitTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B1E33E92F9049326D6B7919 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		8B3440EB87568A6CD7D69264 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsSheetDemo.swift; sourceTree = "<group>"; };
@@ -106,6 +110,8 @@
 		D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+UIKitTestApp.swift"; sourceTree = "<group>"; };
 		E601B3DB12C7BDDE9834556C /* AccessibilityTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccessibilityTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E724C266432DF64AF26AFB6E /* TuistBundle+AccessibilityTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+AccessibilityTestApp.swift"; sourceTree = "<group>"; };
+		ED3E93AE1108866F17601CB8 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F7D07E273A0048DA7FE282A3 /* TodoListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoListView.swift; sourceTree = "<group>"; };
 		F9BC830ADCF5B689EF75EDAD /* AccessibilityTestApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "AccessibilityTestApp-Info.plist"; sourceTree = "<group>"; };
 		FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayDemo.swift; sourceTree = "<group>"; };
 		FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+UIKitTestApp.swift"; sourceTree = "<group>"; };
@@ -140,12 +146,15 @@
 				4917AB19CA54DDF7BFEB1849 /* AccessibilityTestApp.swift */,
 				00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */,
 				B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */,
+				8B1E33E92F9049326D6B7919 /* AppSettings.swift */,
 				3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */,
 				B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */,
 				7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */,
 				FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */,
 				7EB069D6039881E065A92F23 /* RootView.swift */,
+				ED3E93AE1108866F17601CB8 /* SettingsView.swift */,
 				B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */,
+				F7D07E273A0048DA7FE282A3 /* TodoListView.swift */,
 				FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */,
 				BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */,
 			);
@@ -399,12 +408,15 @@
 				B3C4B970F28D4E9F8349261E /* AccessibilityTestApp.swift in Sources */,
 				C5DCE8138771A3FA9B3E9A3C /* AdjustableControlsDemo.swift in Sources */,
 				3446F6FA07532BAC23F137EF /* AlertsSheetDemo.swift in Sources */,
+				EFF4E3FA1EDE832D8A2EE75C /* AppSettings.swift in Sources */,
 				6CD11C258BD8A5FDA8CDC91B /* ButtonsActionsDemo.swift in Sources */,
 				BA06AC07DEFEA59F05F3BAA5 /* ControlsDemoView.swift in Sources */,
 				5ADD7EE878F11746F33810CA /* DisclosureGroupingDemo.swift in Sources */,
 				D2985988AB6E8AFB376EB2D1 /* DisplayDemo.swift in Sources */,
 				BA04B66749F873353950DA7A /* RootView.swift in Sources */,
+				3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */,
 				7EDC08F72FF1AA94E23C68AE /* TextInputDemo.swift in Sources */,
+				F72D8F1D2B784116A32F363B /* TodoListView.swift in Sources */,
 				8CFF7D3CBED9A5220DD83FCC /* TogglePickerDemo.swift in Sources */,
 				A7AFDDCAB62A9EDAB026F09D /* TouchCanvasView.swift in Sources */,
 			);
