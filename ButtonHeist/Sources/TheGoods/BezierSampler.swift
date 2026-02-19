@@ -12,7 +12,7 @@ public enum BezierSampler {
     ///   - p3: End point
     ///   - sampleCount: Number of points to generate (minimum 2)
     /// - Returns: Array of PathPoint samples along the curve
-    public static func sampleCubicBezier(
+    static func sampleCubicBezier(
         p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint,
         sampleCount: Int = 20
     ) -> [PathPoint] {
