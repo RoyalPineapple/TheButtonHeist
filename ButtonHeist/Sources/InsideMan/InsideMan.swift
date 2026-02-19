@@ -640,14 +640,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
         }
 
-        let stillAnimating = hasActiveAnimations()
         return ActionResult(
             success: true,
             method: method,
             message: message,
             value: value,
-            interfaceDelta: delta,
-            animating: stillAnimating ? true : nil
+            interfaceDelta: delta
         )
     }
 
