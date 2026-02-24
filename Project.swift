@@ -16,6 +16,10 @@ let swiftlintScript: TargetScript = .post(
 
 let project = Project(
     name: "ButtonHeist",
+    settings: .settings(base: [
+        "SWIFT_VERSION": "5.0",
+        "LastSwiftMigration": "2620",
+    ]),
     targets: [
         // MARK: - Shared Protocol Types (cross-platform)
         .target(
@@ -27,7 +31,10 @@ let project = Project(
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheGoods/**"],
             scripts: [swiftlintScript],
-            settings: .settings(base: ["SWIFT_VERSION": "5.0"])
+            settings: .settings(base: [
+                "SWIFT_VERSION": "5.0",
+                "LastSwiftMigration": "2620",
+            ])
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
@@ -67,7 +74,10 @@ let project = Project(
             dependencies: [
                 .target(name: "TheGoods"),
             ],
-            settings: .settings(base: ["SWIFT_VERSION": "5.0"])
+            settings: .settings(base: [
+                "SWIFT_VERSION": "5.0",
+                "LastSwiftMigration": "2620",
+            ])
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)
