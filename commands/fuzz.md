@@ -21,17 +21,27 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 
 ## Step 0: Verify Connection + Check for Existing Session
 
-1. Call `list_devices` — confirm at least one device is connected
-2. If no devices found: stop and tell the user to launch the app and try again
-3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. Find the most recent one and read it.
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
+3. If no devices found: stop and tell the user to launch the app and try again
+4. Print the connected device name and app name for confirmation
+5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
    - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
 6. **Load app knowledge**: Read `references/app-knowledge.md` if it exists. This gives you accumulated coverage, behavioral models, finding investigation status, and known testing gaps from prior sessions.
 7. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 8. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-9. **Load response examples**: Read `references/examples.md` for annotated MCP tool response examples — these show how to interpret deltas and recognize screen intents in practice.
+9. **Load response examples**: Read `references/examples.md` for annotated CLI response examples — these show how to interpret deltas and recognize screen intents in practice.
 10. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences to use when planning action batches.
 11. **Gap analysis**: Before choosing a strategy, identify the highest-priority work from `references/app-knowledge.md`:
     - **Uninvestigated findings**: Check `## Findings Tracker` for `open:uninvestigated` entries — these need 5-10 actions of investigation each
@@ -73,8 +83,8 @@ If no strategy was specified in `$ARGUMENTS`, choose based on gaps and context:
 
 ## Step 2: Initial Observation
 
-1. Call `get_screen` — see the app's current state
-2. Call `get_interface` — read the full element hierarchy
+1. Run `buttonheist screenshot --output /tmp/bh-screen.png` (via Bash), then Read the PNG — see the app's current state
+2. Run `buttonheist watch --once --format json --quiet` (via Bash) — read the full element hierarchy
 3. Print what you see:
    - App info (if visible from elements)
    - Screen description
@@ -87,8 +97,8 @@ Record this as Screen #1 with a fingerprint (set of identifiers + labels).
 
 Create a new session notes file (see SKILL.md for naming convention):
 
-**Filename**: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.md`
-(e.g. `fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`)
+**Filename**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.md`
+(e.g. `.fuzzer-data/sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`)
 
 1. Write the `## Config` section (strategy, max iterations, app/device info, status: `in_progress`, trace file name, next finding ID: `F-1`)
 2. Write the `## Progress` section (actions: 0, current screen, phase: `fuzzing_loop`)
@@ -96,7 +106,7 @@ Create a new session notes file (see SKILL.md for naming convention):
 4. Write the `## Coverage` section listing all elements on Screen #1 as untried
 5. Write empty `## Transitions`, `## Navigation Stack` (with Screen #1 at depth 0), `## Findings`, `## Action Log` sections
 6. Write `## Next Actions` describing what to try first on Screen #1
-7. **Create the companion trace file**: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
+7. **Create the companion trace file**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
    - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
    - Append the first `observe` entry for the initial `get_interface` from Step 2
 
@@ -136,15 +146,15 @@ Before starting the main exploration loop, process uninvestigated findings from 
 
 ### 4b. Execute Batch
 For each planned action:
-1. **Execute**: Call the selected MCP tool. Increment `actions_taken`.
+1. **Execute**: Run the CLI command via Bash. Increment `actions_taken`.
 2. **Read the delta** from the action response (JSON after the success message):
    - **`noChange`**: Nothing happened — element is inert. Continue batch.
    - **`valuesChanged`**: Note the specific value changes. Expected for adjustable elements, anomaly otherwise. Continue batch.
    - **`elementsChanged`**: Elements were added/removed. Check `added` and `removedOrders`. If elements disappeared unexpectedly, flag as ANOMALY. Continue batch.
    - **`screenChanged`**: Navigated to a new screen. The delta includes the full `newInterface` — use it directly (no `get_interface` needed). **Push** onto `## Navigation Stack`. Record transition in `## Transitions`. Stop batch, explore or navigate back (use known back-route if available), then re-plan.
    - **Connection error**: CRASH detected — stop immediately
-3. Only call `get_interface` if you need the full hierarchy and aren't performing an action (e.g., at session start or to re-orient after compaction).
-4. Only call `get_screen` when investigating a finding or arriving at a brand new screen — not every action.
+3. Only run `buttonheist watch --once` if you need the full hierarchy and aren't performing an action (e.g., at session start or to re-orient after compaction).
+4. Only take a screenshot (`buttonheist screenshot`) when investigating a finding or arriving at a brand new screen — not every action.
 5. **Append trace entries**: Write the complete `interact` entry (with delta kind and details) and, if you called `get_interface`, an `observe` entry. See `references/trace-format.md` for the entry format.
 
 ### 4c. Record (batched)
@@ -202,7 +212,7 @@ If no ERROR or ANOMALY findings, skip this step.
 When the loop ends (iterations exhausted, crash detected, or all screens explored):
 
 1. Print a summary to the conversation
-2. Write a full report to `reports/` using the format from SKILL.md
+2. Write a full report to `.fuzzer-data/reports/` using the format from SKILL.md
 3. **Update session notes**: Set `## Status` to `complete`
 4. **Update persistent nav graph**: Merge all new transitions and back-routes into `references/nav-graph.md`
 5. **Update app knowledge base**: Merge session discoveries into `references/app-knowledge.md`:
@@ -240,7 +250,7 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 
 ## Crash Handling
 
-If the app crashes (MCP tool call fails with connection error):
+If the app crashes (CLI command fails with a connection error or non-zero exit code):
 
 1. **Stop immediately** — the connection is dead
 2. **Update trace**: Append the `interact` entry with `result.status: crash` and `result.finding: F-N`

@@ -18,8 +18,8 @@ The action trace is a complete, append-only log of every tool call in a fuzzing 
 The trace file is a companion to the session notes file:
 
 ```
-fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md        ← session notes
-fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md  ← action trace
+.fuzzer-data/sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md        ← session notes
+.fuzzer-data/sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md  ← action trace
 ```
 
 Replace the `.md` extension with `.trace.md`. The two files are always paired.
@@ -135,7 +135,7 @@ result:
 | `seq` | yes | Sequence number |
 | `ts` | yes | ISO 8601 timestamp |
 | `type` | yes | Always `interact` |
-| `tool` | yes | Exact MCP tool name |
+| `tool` | yes | CLI command name (e.g., `action`, `touch tap`, `type`) |
 | `args` | yes | Exact arguments passed to the tool (preserve types — integers stay integers, strings stay strings) |
 | `target` | yes* | The element being acted upon. Include `label`, `identifier`, `order`, `value` (before), and `actions` list. *Omit for coordinate-only actions like `tap(x:, y:)` with no element. |
 | `screen_before` | yes | Screen name before the action |

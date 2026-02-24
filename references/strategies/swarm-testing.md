@@ -89,4 +89,4 @@ Everything from `systematic-traversal`, plus:
 
 Run multiple swarm sessions on the same app. Each session's random subset covers different ground. After 3+ sessions, the combined coverage exceeds what any single full-palette session would achieve.
 
-Check prior `fuzz-sessions/fuzzsession-*-swarm-testing*.md` files to see which action subsets were used before. Ideally, each session uses a different subset.
+Check prior `.fuzzer-data/sessions/fuzzsession-*-swarm-testing*.md` files to see which action subsets were used before. Ideally, each session uses a different subset.
