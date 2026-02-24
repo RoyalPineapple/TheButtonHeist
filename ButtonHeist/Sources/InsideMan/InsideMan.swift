@@ -50,6 +50,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     /// Number of currently authenticated clients (for overlay display)
     private var authenticatedClientCount: Int = 0
 
+    /// Set of client IDs that have been authenticated (for accurate disconnect tracking)
+    private var authenticatedClientIDs: Set<Int> = []
+
     // MARK: - Interactive Object Storage
 
     private struct WeakObject {
@@ -103,7 +106,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                 serverLog("Client \(clientId) disconnected")
                 self?.subscribedClients.remove(clientId)
                 self?.pendingApprovalClients.removeValue(forKey: clientId)
-                self?.updateAuthenticatedCount(delta: -1)
+                if self?.authenticatedClientIDs.remove(clientId) != nil {
+                    self?.updateAuthenticatedCount(delta: -1)
+                } else {
+                    self?.updateOverlayState()
+                }
             }
         }
 
@@ -163,6 +170,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         subscribedClients.removeAll()
         pendingApprovalClients.removeAll()
+        authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
 
         stopAccessibilityObservation()
@@ -281,6 +289,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         socketServer?.markAuthenticated(clientId)
         serverLog("Client \(clientId) authenticated")
+        authenticatedClientIDs.insert(clientId)
         updateAuthenticatedCount(delta: 1)
         handleClientConnected(clientId, respond: respond)
     }
@@ -291,6 +300,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
         socketServer?.markAuthenticated(clientId)
         serverLog("Client \(clientId) approved via UI")
+        authenticatedClientIDs.insert(clientId)
         sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
         updateAuthenticatedCount(delta: 1)
         handleClientConnected(clientId, respond: respond)
