@@ -1,18 +1,18 @@
 # AI Fuzzer
 
-AI-powered iOS app fuzzing framework built on [ButtonHeist](../README.md). An autonomous Claude agent explores your app, interacts with every element, and discovers crashes, errors, and edge cases — all through ButtonHeist's MCP tools.
+AI-powered iOS app fuzzing framework built on [ButtonHeist](../README.md). An autonomous Claude agent explores your app, interacts with every element, and discovers crashes, errors, and edge cases — all through the `buttonheist` CLI.
 
 ## How It Works
 
-The Claude agent **is** the fuzzer. CLAUDE.md teaches it how to observe screens, reason about what to try, execute gestures, detect failures, and report findings. No scripts, no test harnesses — just an AI agent with eyes and hands for your iOS app.
+The Claude agent **is** the fuzzer. SKILL.md teaches it how to observe screens, reason about what to try, execute gestures, detect failures, and report findings. No scripts, no test harnesses — just an AI agent with eyes and hands for your iOS app.
 
 ```
 Claude Agent (fuzzer brain)
-    │ reads CLAUDE.md + strategy files
-    │ calls MCP tools as native capabilities
+    │ reads SKILL.md + strategy files
+    │ calls buttonheist CLI via Bash tool
     ▼
-buttonheist-mcp (MCP server)
-    │ persistent TCP connection
+buttonheist CLI
+    │ Bonjour discovery + TCP connection
     ▼
 InsideMan (embedded in your iOS app)
     │ accessibility parsing + gesture injection
@@ -24,14 +24,14 @@ Your iOS App (simulator or device)
 
 - Xcode 15+
 - An iOS app with InsideMan embedded (see [main README](../README.md#1-add-insideman-to-your-ios-app))
-- ButtonHeist MCP server built
+- ButtonHeist CLI built
 
 ## Setup
 
-### 1. Build the MCP server
+### 1. Build the CLI
 
 ```bash
-cd ../ButtonHeistMCP
+cd ../ButtonHeistCLI
 swift build -c release
 ```
 
@@ -46,27 +46,18 @@ cd ai-fuzzer
 claude
 ```
 
-Claude Code reads `.mcp.json`, spawns the MCP server, and connects to your running app automatically.
+Claude Code reads SKILL.md, uses the buttonheist CLI via Bash to connect to your running app.
 
 ### Targeting a specific device
 
-When multiple simulators or devices are running, set `BUTTONHEIST_DEVICE` in `.mcp.json` to target a specific one. The value is matched against device name, app name, simulator UDID, or short ID:
+When multiple simulators or devices are running, add `--device` to CLI commands to target a specific one. The value is matched against device name, app name, simulator UDID, or short ID:
 
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "../ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": [],
-      "env": {
-        "BUTTONHEIST_DEVICE": "iPad Pro"
-      }
-    }
-  }
-}
+```bash
+buttonheist list                           # See all available devices
+buttonheist watch --once --device "iPad Pro"  # Target a specific device
 ```
 
-Leave empty to connect to the first device found. Use `list_devices` to see all available devices.
+Use `buttonheist list` to see all available devices.
 
 ## Commands
 
@@ -109,7 +100,7 @@ Rapidly hammers elements with repeated taps, swipes, pinches, and rotations to f
 
 ## Strategies
 
-Strategy files in `strategies/` define how the agent explores:
+Strategy files in `references/strategies/` define how the agent explores:
 
 | Strategy | Focus |
 |----------|-------|
@@ -129,13 +120,13 @@ Findings are categorized by severity:
 
 | Severity | Meaning |
 |----------|---------|
-| **CRASH** | App died — MCP connection lost after an action |
+| **CRASH** | App died — connection lost after an action |
 | **ERROR** | Action failed unexpectedly (not just "element not found") |
 | **ANOMALY** | Unexpected state change, visual glitch, or missing element |
 | **INFO** | Interesting behavior worth noting |
 
-Reports are saved to `reports/` as timestamped markdown files.
+Reports are saved to `.fuzzer-data/reports/` as timestamped markdown files.
 
 ## Works With Any App
 
-This fuzzer is **app-agnostic**. It discovers the UI dynamically via `get_interface` and doesn't rely on hard-coded identifiers or screen layouts. Any iOS app with InsideMan embedded can be fuzzed.
+This fuzzer is **app-agnostic**. It discovers the UI dynamically via `buttonheist watch --once` and doesn't rely on hard-coded identifiers or screen layouts. Any iOS app with InsideMan embedded can be fuzzed.

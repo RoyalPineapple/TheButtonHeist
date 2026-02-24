@@ -14,10 +14,20 @@ You are tasked with systematically mapping every reachable screen in the connect
 
 ## Step 0: Verify Connection + Check for Existing Session
 
-1. Call `list_devices` — confirm at least one device is connected
-2. If no devices found: stop and tell the user to launch the app and try again
-3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
+3. If no devices found: stop and tell the user to launch the app and try again
+4. Print the connected device name and app name for confirmation
+5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. Pre-populate known screens and transitions — skip mapping what's already known.
 6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
@@ -29,7 +39,7 @@ During mapping, update your session notes file continuously:
 
 ## Step 1: Start Screen
 
-1. Call `get_screen` + `get_interface`
+1. Run `buttonheist screenshot --output /tmp/bh-screen.png` then Read it, and run `buttonheist watch --once --format json --quiet`
 2. Fingerprint the current screen:
    - Extract all element identifiers (excluding nil)
    - Extract all element labels
@@ -60,7 +70,7 @@ Navigation-like elements (in priority order):
 ### 2b. Try Navigation
 
 1. Record the current screen fingerprint
-2. `activate` the selected element (preferred — uses accessibility API). Fall back to `tap` if the element has no actions.
+2. Run `buttonheist action --identifier ID --format json` for the selected element (preferred — uses accessibility API). Fall back to `buttonheist touch tap` if the element has no actions.
 3. Read the delta from the response:
    - **`noChange` or `valuesChanged`**: No navigation. Mark element as "stays on screen". Continue to next element.
    - **`screenChanged`**: The delta includes the full `newInterface` — use it to fingerprint the new screen (no separate `get_interface` needed).
@@ -132,7 +142,7 @@ Main Menu
 
 ## Step 4: Save Report
 
-1. Write the full screen map to `reports/YYYY-MM-DD-HHMM-screen-map.md`.
+1. Write the full screen map to `.fuzzer-data/reports/YYYY-MM-DD-HHMM-screen-map.md`.
 2. **Update persistent nav graph**: Write all discovered screens, transitions (with reverse actions), and back-routes to `references/nav-graph.md`. This is the primary output — future sessions will use it for navigation planning.
 
 ## Limits

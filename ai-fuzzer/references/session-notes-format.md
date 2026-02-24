@@ -17,14 +17,14 @@
 Each session gets a unique file:
 
 ```
-fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-{command}-{description}.md
+.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-{command}-{description}.md
 ```
 
 Examples:
-- `fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1545-explore-settings-screen.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1600-map-screens.md`
-- `fuzz-sessions/fuzzsession-2026-02-17-1620-stress-test-all-elements.md`
+- `.fuzzer-data/sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md`
+- `.fuzzer-data/sessions/fuzzsession-2026-02-17-1545-explore-settings-screen.md`
+- `.fuzzer-data/sessions/fuzzsession-2026-02-17-1600-map-screens.md`
+- `.fuzzer-data/sessions/fuzzsession-2026-02-17-1620-stress-test-all-elements.md`
 
 The `{command}` is the slash command name (`fuzz`, `explore`, `map-screens`, `stress-test`). The `{description}` is a short kebab-case summary (strategy name, screen name, target element, etc.). Use the current date and time when creating the file.
 
@@ -39,8 +39,8 @@ Previous session files are kept for reference — they're never overwritten.
 
 ### Resuming after compaction
 
-At the start of any command, look for session notes files in `fuzz-sessions/`:
-1. **List `fuzz-sessions/fuzzsession-*.md` files** — find the most recent one with `Status: in_progress`
+At the start of any command, look for session notes files in `.fuzzer-data/sessions/`:
+1. **List `.fuzzer-data/sessions/fuzzsession-*.md` files** — find the most recent one with `Status: in_progress`
 2. **Read it fully** — this file IS your memory. Everything you knew before compaction is here.
 3. Check `## Config` for strategy and iteration limit, `## Progress` for action count and current screen
 4. Check `## Navigation Stack` to know your current position in the app and how to backtrack
@@ -141,7 +141,7 @@ Every session gets a companion **trace file** for deterministic replay. The trac
 
 **Naming**: Same as the session notes file but with `.trace.md` extension:
 ```
-fuzz-sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md
+.fuzzer-data/sessions/fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.trace.md
 ```
 
 **When to write trace entries:**

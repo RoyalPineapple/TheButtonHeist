@@ -99,7 +99,7 @@ For apps with deep navigation (5+ levels):
 ## Limitations
 
 - Snapshots include the full simulator state (all apps, system settings, etc.)
-- Restoring a snapshot kills and relaunches the app — the MCP connection needs to be re-established
+- Restoring a snapshot kills and relaunches the app — you'll need to wait for the app to re-advertise via Bonjour
 - Snapshot save/restore takes a few seconds
 - Storage: each snapshot can be large (hundreds of MB). Clean up snapshots at session end.
 

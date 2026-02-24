@@ -4,7 +4,7 @@ description: Generate a structured findings report from the current session
 
 # /fuzz-report — Report Generator
 
-You are tasked with generating a comprehensive report of all findings from the current fuzzing session and saving it to the `reports/` directory.
+You are tasked with generating a comprehensive report of all findings from the current fuzzing session and saving it to the `.fuzzer-data/reports/` directory.
 
 ## CRITICAL
 - ALWAYS read the session notes file as primary source of truth — it survives compaction, your memory doesn't
@@ -13,15 +13,25 @@ You are tasked with generating a comprehensive report of all findings from the c
 
 ## Step 0: Verify Connection
 
-1. Call `list_devices` — confirm at least one device is connected
-2. If no devices found: stop and tell the user to launch the app and try again
-3. Print the connected device name and app name for confirmation
-4. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
+3. If no devices found: stop and tell the user to launch the app and try again
+4. Print the connected device name and app name for confirmation
+5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection:
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
 
 ## Step 1: Gather Context
 
-1. **Read the session notes file** — list `fuzz-sessions/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
-2. Call `get_interface` to get the current screen state (confirms the app is still connected)
+1. **Read the session notes file** — list `.fuzzer-data/sessions/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
+2. Run `buttonheist watch --once --format json --quiet` to get the current screen state (confirms the app is still connected)
 3. Review the session notes plus any additional findings, observations, and notes from this conversation session
 4. Collect:
    - Screens visited and their descriptions (from `## Screens Discovered`)
@@ -32,9 +42,9 @@ You are tasked with generating a comprehensive report of all findings from the c
 
 ## Step 2: Build the Report
 
-Write a report file to `reports/` with today's date and time:
+Write a report file to `.fuzzer-data/reports/` with today's date and time:
 
-**Filename**: `reports/YYYY-MM-DD-HHMM-fuzz-report.md`
+**Filename**: `.fuzzer-data/reports/YYYY-MM-DD-HHMM-fuzz-report.md`
 
 **Structure**:
 
@@ -120,7 +130,7 @@ Write a report file to `reports/` with today's date and time:
 
 ## Step 3: Save and Confirm
 
-1. Write the report to `reports/YYYY-MM-DD-HHMM-fuzz-report.md`
+1. Write the report to `.fuzzer-data/reports/YYYY-MM-DD-HHMM-fuzz-report.md`
 2. Print the report summary to the conversation
 3. Tell the user where the report was saved
 
