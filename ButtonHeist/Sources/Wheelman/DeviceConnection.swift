@@ -10,8 +10,11 @@ private func debug(_ message: String) {
 @MainActor
 public final class DeviceConnection {
 
+    private static let maxBufferSize = 10_000_000 // 10 MB
+
     private var connection: NWConnection?
     private let device: DiscoveredDevice
+    private let token: String?
     private var receiveBuffer = Data()
     private var isConnected = false
 
@@ -23,8 +26,9 @@ public final class DeviceConnection {
     public var onScreen: ((ScreenPayload) -> Void)?
     public var onError: ((String) -> Void)?
 
-    public init(device: DiscoveredDevice) {
+    public init(device: DiscoveredDevice, token: String? = nil) {
         self.device = device
+        self.token = token
     }
 
     public func connect() {
@@ -101,6 +105,14 @@ public final class DeviceConnection {
 
                 if let content {
                     self.receiveBuffer.append(content)
+
+                    if self.receiveBuffer.count > Self.maxBufferSize {
+                        debug("Server exceeded max buffer size, disconnecting")
+                        self.disconnect()
+                        self.onDisconnected?(nil)
+                        return
+                    }
+
                     self.processBuffer()
                 }
 
@@ -136,6 +148,19 @@ public final class DeviceConnection {
         }
 
         switch message {
+        case .authRequired:
+            debug("Auth required, sending token")
+            if let token {
+                send(.authenticate(AuthenticatePayload(token: token)))
+            } else {
+                debug("No token available, disconnecting")
+                disconnect()
+                onDisconnected?(nil)
+            }
+        case .authFailed(let reason):
+            debug("Auth failed: \(reason)")
+            disconnect()
+            onDisconnected?(nil)
         case .info(let info):
             debug("Received server info: \(info.appName)")
             onServerInfo?(info)
