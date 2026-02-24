@@ -72,6 +72,7 @@ final class SessionRunner {
         self.connectionTimeout = connectionTimeout
         self.format = format
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.autoSubscribe = false
     }
 
     func run() async throws {
