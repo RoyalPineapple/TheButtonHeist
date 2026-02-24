@@ -1,20 +1,12 @@
-# USB Device Connectivity for ButtonHeist
+# USB Device Connectivity
 
-This document describes how to connect to iOS devices over USB using the CoreDevice IPv6 tunnel, bypassing WiFi/mDNS discovery issues.
+Connecting to iOS devices over USB via CoreDevice IPv6 tunnels, bypassing WiFi/mDNS discovery.
 
 ## Overview
 
-When WiFi connectivity is unreliable (VPN interference, network segmentation, mDNS issues), you can connect to InsideMan on a physical iOS device over USB. Apple's CoreDevice framework creates an IPv6 tunnel over USB that we can use for TCP connections.
+When WiFi is unreliable (VPN interference, network segmentation, mDNS issues), ButtonHeist automatically discovers USB-connected devices alongside WiFi devices. No extra flags or scripts needed — `buttonheist list` shows both.
 
-## Quick Start
-
-```bash
-# Connect to device (launches app, connects on port 1455)
-./scripts/usb-connect.sh "Your Device Name"
-
-# Or use Python
-python3 scripts/buttonheist_usb.py
-```
+USB discovery uses the same protocol as WiFi. The only difference is how the endpoint is found: Bonjour for WiFi, CoreDevice IPv6 tunnel for USB.
 
 ## How It Works
 
@@ -28,6 +20,17 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
    - Device: `fd9a:6190:eed7::1`
 3. **TCP connections can be made** directly to the device's IPv6 address
 
+### Automatic Discovery
+
+`USBDeviceDiscovery` (in the Wheelman framework) runs alongside Bonjour discovery:
+
+1. Polls `xcrun devicectl list devices` to find connected devices
+2. Parses `lsof -i -P -n` output to locate the CoreDevice IPv6 tunnel address
+3. Constructs an `NWEndpoint` with the IPv6 address and port 1455
+4. Produces a `DiscoveredDevice` — identical to Bonjour-discovered devices
+
+USB devices appear in the device list with a `(USB)` suffix.
+
 ### Fixed Port Configuration
 
 InsideMan uses a fixed port configured in `Info.plist`:
@@ -37,20 +40,50 @@ InsideMan uses a fixed port configured in `Info.plist`:
 <integer>1455</integer>
 ```
 
-This eliminates the need for port scanning and enables instant connections.
+This eliminates port scanning and enables instant connections over USB.
 
 ### Requirements
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
 2. **InsideMan must use IPv6 dual-stack** (enabled by default)
 3. **App must be running** on the device with InsideMan started
+4. **Xcode command line tools** installed (`xcrun` must be available)
 
-## Building and Deploying
+## Usage
+
+### CLI
+
+```bash
+# List all devices (WiFi and USB appear together)
+buttonheist list
+
+# Connect to a USB device by name
+buttonheist --device "iPhone 15 Pro" watch --once
+
+# Take a screenshot over USB
+buttonheist --device "iPhone 15 Pro" screenshot --output screen.png
+```
+
+### MCP Server
+
+Target a USB device in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": ["--device", "iPhone 15 Pro"]
+    }
+  }
+}
+```
+
+## Building and Deploying to Device
 
 ### Command Line Build
 
 ```bash
-# Build for device with automatic signing
 xcodebuild -workspace ButtonHeist.xcworkspace \
   -scheme AccessibilityTestApp \
   -destination 'platform=iOS,name=Your Device Name' \
@@ -58,27 +91,22 @@ xcodebuild -workspace ButtonHeist.xcworkspace \
   CODE_SIGN_STYLE=Automatic \
   DEVELOPMENT_TEAM=YOUR_TEAM_ID \
   build
-
-# Find your team ID from provisioning profile
-cat path/to/app/embedded.mobileprovision | security cms -D | grep -A1 TeamIdentifier
 ```
 
 ### Install to Device
 
 ```bash
-# Install the built app
 xcrun devicectl device install app \
   --device "Your Device Name" \
   ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
 
-# Launch the app
 xcrun devicectl device process launch \
   --device "Your Device Name" \
   --terminate-existing --activate \
   com.buttonheist.testapp
 ```
 
-## Discovering the Tunnel
+## Discovering the Tunnel Manually
 
 ### Check Device Status
 
@@ -97,46 +125,7 @@ Test Phone 15 Pro     Test-Phone-15-Pro.coredevice.local    ...   connected   iP
 lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 ```
 
-Output shows the tunnel prefix (e.g., `fd9a:6190:eed7::1`).
-
-## Connecting to InsideMan
-
-### Using the Helper Script
-
-```bash
-./scripts/usb-connect.sh "Test Phone 15 Pro"
-```
-
-Output:
-```
-=== ButtonHeist USB Connection ===
-
-Connected to AccessibilityTestApp on fd9a:6190:eed7::1:1455
-Device: iPhone (iOS 26.2.1)
-Elements: 15
-
-Quick connect:
-  nc -6 fd9a:6190:eed7::1 1455
-
-Python:
-  sock.connect(('fd9a:6190:eed7::1', 1455))
-```
-
-### Using Python
-
-```python
-from scripts.buttonheist_usb import ButtonHeistUSBConnection
-
-with ButtonHeistUSBConnection() as conn:
-    print(f"Connected to: {conn.info['appName']}")
-    hierarchy = conn.get_hierarchy()
-    print(f"Elements: {len(hierarchy['elements'])}")
-
-    # Activate a button
-    conn.activate(identifier="myButton")
-```
-
-### Manual Connection
+### Manual Connection (for debugging)
 
 **Note**: Protocol v3.0 requires token authentication before any commands are accepted.
 
@@ -147,39 +136,6 @@ nc -6 "fd9a:6190:eed7::1" 1455
 # Send: {"authenticate":{"_0":{"token":"your-token"}}}
 # Server sends: {"info":{"_0":{...}}}
 # Send: {"requestInterface":{}}
-```
-
-```python
-import socket
-import json
-
-sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-sock.connect(("fd9a:6190:eed7::1", 1455))
-sock.settimeout(5)
-
-# Read auth challenge
-data = b""
-while b"\n" not in data:
-    data += sock.recv(4096)
-# Should be: {"authRequired":{}}
-
-# Authenticate
-sock.send(b'{"authenticate":{"_0":{"token":"your-token"}}}\n')
-data = b""
-while b"\n" not in data:
-    data += sock.recv(4096)
-info = json.loads(data.split(b"\n")[0])
-print("Connected to:", info["info"]["_0"]["appName"])
-
-# Request interface
-sock.send(b'{"requestInterface":{}}\n')
-data = b""
-while b"\n" not in data:
-    data += sock.recv(4096)
-interface = json.loads(data.split(b"\n")[0])
-print("Elements:", len(interface["interface"]["_0"]["elements"]))
-
-sock.close()
 ```
 
 ## Message Protocol
@@ -220,25 +176,15 @@ Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for as
 
 ### Changing the Port
 
-The port is configured in three places:
+The port is configured in Info.plist:
 
-1. **Info.plist** (app reads this on launch):
-   ```xml
-   <key>InsideManPort</key>
-   <integer>1455</integer>
-   ```
-
-2. **scripts/usb-connect.sh** (default port):
-   ```bash
-   PORT="${3:-1455}"
-   ```
-
-3. **scripts/buttonheist_usb.py** (Python default):
-   ```python
-   DEFAULT_PORT = 1455
-   ```
+```xml
+<key>InsideManPort</key>
+<integer>1455</integer>
+```
 
 After changing, rebuild and reinstall the app.
+
 
 ## Implementation Details
 
@@ -285,6 +231,13 @@ Common issues that USB bypasses:
 - Wrong IPv6 prefix (check `lsof -i -P -n | grep CoreDev`)
 - Tunnel interface not up (reconnect USB cable)
 
-### Connection Works But Port Wrong
-- App was built with old Info.plist - rebuild and reinstall
-- Verify with: `plutil -p /path/to/AccessibilityTestApp.app/Info.plist | grep InsideManPort`
+### USB device not appearing in `buttonheist list`
+- Verify device shows as "connected" in `xcrun devicectl list devices`
+- Ensure app is running on the device
+- USB discovery polls every 3 seconds — wait a moment
+
+## See Also
+
+- [Wire Protocol](WIRE-PROTOCOL.md) — Message format (identical over WiFi and USB)
+- [Project Overview](../README.md) — Architecture and quick start
+- [CLI Reference](../ButtonHeistCLI/) — All commands work over USB

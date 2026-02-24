@@ -16,10 +16,20 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
 
 ## Step 0: Verify Connection + Check for Existing Session
 
-1. Call `list_devices` — confirm at least one device is connected
-2. If no devices found: stop and tell the user to launch the app and try again
-3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
+3. If no devices found: stop and tell the user to launch the app and try again
+4. Print the connected device name and app name for confirmation
+5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
 6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 
@@ -30,20 +40,20 @@ During stress testing, update your session notes file continuously:
 
 ## Step 1: Identify Targets
 
-1. Call `get_interface` to get the current screen
+1. Run `buttonheist watch --once --format json --quiet` to get the current screen
 2. If a specific element was requested, find it by identifier
 3. If "all" (default), collect all interactive elements (those with actions or tappable)
-4. Call `get_screen` for baseline visual state
+4. Run `buttonheist screenshot --output /tmp/bh-screen.png` then Read the PNG for baseline visual state
 
 ## Step 2: Stress Test Sequences
 
-For each target element, run these sequences. After each sequence, call `get_interface` to verify the app is still alive.
+For each target element, run these sequences. After each sequence, run `buttonheist watch --once --format json --quiet` to verify the app is still alive.
 
 ### Sequence 1: Rapid Taps (20x)
 
 ```
 for i in 1..20:
-    tap(identifier: element)
+    buttonheist touch tap --identifier ELEMENT --format json
 ```
 
 Check: Is the app still responsive? Did any element disappear? Did the screen change unexpectedly?
@@ -52,8 +62,8 @@ Check: Is the app still responsive? Did any element disappear? Did the screen ch
 
 ```
 for i in 1..5:
-    swipe(identifier: element, direction: "up")
-    swipe(identifier: element, direction: "down")
+    buttonheist touch swipe --identifier ELEMENT --direction up --format json
+    buttonheist touch swipe --identifier ELEMENT --direction down --format json
 ```
 
 Check: Does the element still exist? Is the screen in a sane state?
@@ -62,8 +72,8 @@ Check: Does the element still exist? Is the screen in a sane state?
 
 ```
 for i in 1..5:
-    pinch(identifier: element, scale: 2.0)
-    pinch(identifier: element, scale: 0.5)
+    buttonheist touch pinch --identifier ELEMENT --scale 2.0 --format json
+    buttonheist touch pinch --identifier ELEMENT --scale 0.5 --format json
 ```
 
 Check: Did the view return to its original state after equal in/out cycles?
@@ -72,8 +82,8 @@ Check: Did the view return to its original state after equal in/out cycles?
 
 ```
 for i in 1..5:
-    rotate(identifier: element, angle: 1.57)
-    rotate(identifier: element, angle: -1.57)
+    buttonheist touch rotate --identifier ELEMENT --angle 1.57 --format json
+    buttonheist touch rotate --identifier ELEMENT --angle -1.57 --format json
 ```
 
 Check: Same as pinch — did it return to original?
@@ -81,16 +91,16 @@ Check: Same as pinch — did it return to original?
 ### Sequence 5: Mixed Rapid Gestures
 
 ```
-tap(identifier: element)
-long_press(identifier: element, duration: 0.1)
-swipe(identifier: element, direction: "left")
-tap(identifier: element)
-pinch(identifier: element, scale: 1.5)
-tap(identifier: element)
-rotate(identifier: element, angle: 0.5)
-tap(identifier: element)
-two_finger_tap(identifier: element)
-tap(identifier: element)
+buttonheist touch tap --identifier ELEMENT --format json
+buttonheist touch longpress --identifier ELEMENT --duration 0.1 --format json
+buttonheist touch swipe --identifier ELEMENT --direction left --format json
+buttonheist touch tap --identifier ELEMENT --format json
+buttonheist touch pinch --identifier ELEMENT --scale 1.5 --format json
+buttonheist touch tap --identifier ELEMENT --format json
+buttonheist touch rotate --identifier ELEMENT --angle 0.5 --format json
+buttonheist touch tap --identifier ELEMENT --format json
+buttonheist touch two-finger-tap --identifier ELEMENT --format json
+buttonheist touch tap --identifier ELEMENT --format json
 ```
 
 Check: App still alive? Any unexpected state changes?
@@ -99,9 +109,9 @@ Check: App still alive? Any unexpected state changes?
 
 ```
 for i in 1..20:
-    increment(identifier: element)
+    buttonheist action --identifier ELEMENT --type increment --format json
 for i in 1..20:
-    decrement(identifier: element)
+    buttonheist action --identifier ELEMENT --type decrement --format json
 ```
 
 Check: Did value go up 20 then back down 20? Any overflow?
@@ -119,8 +129,8 @@ After individual element testing, do a full-screen stress pass:
 
 After all sequences:
 
-1. `get_interface` — verify element count hasn't changed dramatically
-2. `get_screen` — visual comparison with baseline
+1. `buttonheist watch --once --format json --quiet` — verify element count hasn't changed dramatically
+2. `buttonheist screenshot` — visual comparison with baseline
 3. Report any degradation:
    - Elements that disappeared
    - Values that changed unexpectedly

@@ -10,60 +10,56 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **InsideMan** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
-5. **ButtonHeistMCP** - MCP server that bridges AI agents to the iOS app
+5. **buttonheist CLI** - Command-line tool for driving iOS apps (used by AI agents via Bash)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                              macOS                                   │
 │                                                                      │
-│  ┌──────────────┐                                                   │
-│  │  AI Agent    │ (Claude Code, or any MCP client)                  │
-│  └──────┬───────┘                                                   │
-│         │ MCP (JSON-RPC 2.0 over stdio)                             │
-│  ┌──────┴───────┐                                                   │
-│  │buttonheist-  │ Persistent connection — no per-call overhead      │
-│  │  mcp server  │                                                   │
-│  └──────┬───────┘                                                   │
-│         │                                                            │
 │  ┌──────────────┐  ┌──────────────┐                                │
-│  │     CLI      │  │ Python/Shell │                                │
-│  │              │  │   Scripts    │                                │
+│  │  AI Agent    │  │ Python/Shell │                                │
+│  │(Claude Code) │  │   Scripts    │                                │
 │  └──────┬───────┘  └──────┬───────┘                                │
-│         │                 │                                        │
-│         └─────────────────┘                                        │
-│                           │                                          │
-│                  ┌────────┴────────┐                                │
-│                  │   ButtonHeist   │ (import ButtonHeist)           │
-│                  │   HeistClient   │                                │
-│                  └────────┬────────┘                                │
-│                           │                                          │
-│            ┌──────────────┼──────────────┐                          │
-│            │              │              │                          │
-│      ┌─────┴─────┐  ┌─────┴─────┐  ┌─────┴─────┐                   │
-│      │  Device   │  │  Device   │  │    BSD    │                   │
-│      │ Discovery │  │Connection │  │  Socket   │                   │
-│      │(NWBrowser)│  │   Mgmt    │  │  Client   │                   │
-│      └───────────┘  └───────────┘  └─────┬─────┘                   │
-│                  Wheelman (networking)     │                         │
-└──────────────────────────────────────────┼──────────────────────────┘
-                                           │
-                    WiFi (Bonjour + TCP) or USB (IPv6 + TCP)
-                                           │
-┌──────────────────────────────────────────┼──────────────────────────┐
-│                           ┌──────────────┴──────────────┐           │
-│                           │         InsideMan           │           │
-│                           │        (Framework)          │           │
-│                           └──────────────┬──────────────┘           │
-│                                          │                          │
-│           ┌──────────────┬───────────────┼───────────────┐          │
-│           │              │               │               │          │
-│     ┌─────┴─────┐  ┌────┴──────┐  ┌─────┴─────┐  ┌─────┴─────┐    │
-│     │ NetService│  │SimpleSocket│  │   A11y    │  │SafeCracker│    │
-│     │ (Bonjour) │  │Server(TCP)│  │  Parser   │  │(Gestures) │    │
-│     └───────────┘  └───────────┘  └───────────┘  └───────────┘    │
-│                  Wheelman (networking)                               │
-│                              iOS Device                              │
-└──────────────────────────────────────────────────────────────────────┘
+│         │ Bash tool calls  │                                        │
+│         └──────────────────┘                                        │
+│                  │                                                   │
+│         ┌────────┴────────┐                                         │
+│         │  buttonheist    │  CLI tool (per-command or session)      │
+│         │     (CLI)       │                                         │
+│         └────────┬────────┘                                         │
+│                  │                                                   │
+│         ┌────────┴────────┐                                         │
+│         │   ButtonHeist   │ (import ButtonHeist)                    │
+│         │   HeistClient   │                                         │
+│         └────────┬────────┘                                         │
+│                  │                                                   │
+│    ┌─────────────┼──────────────┐                                   │
+│    │             │              │                                   │
+│  ┌─┴───────┐  ┌─┴───────┐  ┌──┴────────┐                          │
+│  │ Device  │  │ Device  │  │   BSD     │                          │
+│  │Discovery│  │Connectn │  │  Socket   │                          │
+│  │(Browser)│  │  Mgmt   │  │  Client   │                          │
+│  └─────────┘  └─────────┘  └─────┬─────┘                          │
+│                Wheelman (networking)│                                │
+└────────────────────────────────────┼────────────────────────────────┘
+                                     │
+              WiFi (Bonjour + TCP) or USB (IPv6 + TCP)
+                                     │
+┌────────────────────────────────────┼────────────────────────────────┐
+│                     ┌──────────────┴──────────────┐                 │
+│                     │         InsideMan           │                 │
+│                     │        (Framework)          │                 │
+│                     └──────────────┬──────────────┘                 │
+│                                    │                                │
+│         ┌──────────────┬───────────┼───────────────┐                │
+│         │              │           │               │                │
+│   ┌─────┴─────┐  ┌────┴──────┐  ┌┴──────────┐  ┌─┴─────────┐      │
+│   │ NetService│  │SimpleSocket│  │   A11y   │  │SafeCracker│      │
+│   │ (Bonjour) │  │Server(TCP)│  │  Parser  │  │(Gestures) │      │
+│   └───────────┘  └───────────┘  └──────────┘  └───────────┘      │
+│                Wheelman (networking)                                 │
+│                            iOS Device                                │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Details
@@ -216,83 +212,6 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier, tokenHash, instanceId)
 
-### ButtonHeistMCP (AI Agent Interface)
-
-**Purpose**: Model Context Protocol server that lets AI agents drive iOS apps. Proxies tool calls to a `buttonheist session` subprocess via a single `run` tool.
-
-**Architecture**:
-```
-buttonheist-mcp (executable)
-├── StdioTransport (MCP SDK)
-│   └── JSON-RPC 2.0 over stdin/stdout
-├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 1 tool definition ("run")
-│   └── CallTool handler → serialized through SessionPipe
-├── SessionPipe (actor, serializes pipe I/O)
-│   └── JSON lines over subprocess stdin/stdout
-└── buttonheist session subprocess
-    └── HeistClient, DeviceDiscovery, TCP connection (all in CLI)
-```
-
-**How MCP Clients Connect**:
-
-MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server automatically. The configuration is a `.mcp.json` file in the project root:
-
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": ["--device", "SIMULATOR_UDID_HERE"]
-    }
-  }
-}
-```
-
-The `--device` flag (or `BUTTONHEIST_DEVICE` env var) is forwarded to the `buttonheist session` subprocess, which uses it to filter which device to connect to, matching against name, app name, short ID, simulator UDID, or vendor identifier. Without a filter, it connects to the first device found.
-
-When the MCP client starts a session, it:
-1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
-2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
-3. Sends `initialize` → server responds with capabilities (1 tool: `run`)
-4. Sends `notifications/initialized` → server is ready
-5. Tool calls are proxied as JSON lines through the `SessionPipe` actor to the `buttonheist session` subprocess, which handles all device communication
-
-The AI agent calls the `run` tool with a `command` field and any additional parameters. The MCP server forwards the call as a JSON line to the subprocess stdin and reads the response from subprocess stdout, serialized through `SessionPipe` to prevent interleaving of concurrent calls.
-
-**Connection lifecycle**:
-```
-MCP client starts session
-  └── spawns buttonheist-mcp process
-        └── buttonheist-mcp spawns buttonheist session subprocess
-        └── session subprocess: Bonjour discovery → TCP connection to iOS device
-        └── MCP Server.start(transport: StdioTransport)
-        └── Ready for tool calls
-
-Tool call (e.g. run {"command": "tap", ...})
-  └── MCP client sends JSON-RPC request on stdin
-  └── Server.handleToolCall() on MCP actor
-  └── SessionPipe.send() → writes JSON line to subprocess stdin
-  └── SessionPipe waits → reads JSON line from subprocess stdout
-  └── subprocess: HeistClient sends message → TCP to iOS device
-  └── subprocess: InsideMan processes gesture, sends result over TCP
-  └── subprocess writes response JSON line to stdout
-  └── Server returns JSON-RPC response on stdout
-  └── MCP client receives result
-
-Session ends
-  └── MCP client closes stdin
-  └── buttonheist-mcp exits, subprocess terminated
-  └── TCP connection closed
-```
-
-**Key Design Decisions**:
-- **Subprocess proxy**: All iOS device logic lives in the CLI's `session` subcommand, shared between interactive CLI use and MCP. The MCP server is a thin proxy with no direct device knowledge.
-- **Single `run` tool**: Collapses individual tools into one with command dispatch, reducing token overhead in LLM context.
-- **SessionPipe actor**: Serializes concurrent MCP tool calls through the subprocess pipe, preventing interleaved writes and mismatched read/response pairs.
-- **Separate package**: ButtonHeistMCP depends only on the MCP Swift SDK. The ButtonHeist framework dependency has been removed from the MCP package.
-- **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
-
 ### ButtonHeist (macOS Client Framework)
 
 **Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
@@ -333,50 +252,34 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 ## Data Flow
 
-### MCP Agent Flow
+### CLI Agent Flow
 
-The MCP server is the primary interface for AI agents. When an AI agent (Claude Code, Claude Desktop, or any MCP client) starts a session in a project containing `.mcp.json`, the full flow is:
+The CLI is the primary interface for AI agents. Agents use the Bash tool to run `buttonheist` commands directly. With `--host`/`--port` (or `BUTTONHEIST_HOST`/`BUTTONHEIST_PORT` env vars), commands skip Bonjour discovery and connect directly — reducing per-command latency from ~2s to ~50ms.
 
 ```
-1. MCP client reads .mcp.json, spawns buttonheist-mcp
-   └── stdio transport: stdin for JSON-RPC requests, stdout for responses
+1. Agent reads the UI hierarchy
+   └── Bash: buttonheist --host 127.0.0.1 --port 1455 watch --once --format json
+   └── CLI: TCP connect → requestInterface → print JSON → exit
 
-2. buttonheist-mcp startup (before accepting MCP calls)
-   └── spawns buttonheist session subprocess (with --format json and optional --device flag)
-   └── session subprocess: HeistClient.startDiscovery() → NWBrowser for _buttonheist._tcp
-   └── session subprocess: Bonjour discovers iOS device within ~2 seconds
-   └── session subprocess: HeistClient.connect() → TCP connection to device
-   └── MCP Server.start(transport: StdioTransport) → ready
+2. Agent captures a screenshot
+   └── Bash: buttonheist --host 127.0.0.1 --port 1455 screenshot --output /tmp/screen.png
+   └── CLI: TCP connect → requestScreen → save PNG → exit
 
-3. MCP client sends initialize handshake
-   └── Server responds with capabilities (1 tool: run)
-   └── Tool appears as a native capability to the AI agent
-   └── Example: Claude calls run with {"command": "get_screen"} or {"command": "tap", ...}
+3. Agent taps a button
+   └── Bash: buttonheist --host 127.0.0.1 --port 1455 touch tap --identifier loginButton --format json
+   └── CLI: TCP connect → touchTap → print ActionResult JSON → exit
+   └── JSON includes delta (noChange, valuesChanged, elementsChanged, screenChanged)
 
-4. AI agent calls a read command (e.g. run {"command": "get_screen"})
-   └── JSON-RPC: {"method": "tools/call", "params": {"name": "run", "arguments": {"command": "get_screen"}}}
-   └── SessionPipe.send() writes JSON line to subprocess stdin
-   └── subprocess: HeistClient.send(.requestScreen) → TCP to iOS device
-   └── subprocess: InsideMan captures screen → base64 PNG → TCP back
-   └── subprocess writes JSON response line to stdout
-   └── SessionPipe reads response, Server returns image content via MCP
-   └── Agent sees the app's screen as an image
+4. Agent types text
+   └── Bash: buttonheist --host 127.0.0.1 --port 1455 type --text "hello" --identifier emailField --format json
+   └── CLI: TCP connect → typeText → print result JSON → exit
 
-5. AI agent calls an interaction command (e.g. run {"command": "tap", ...})
-   └── SessionPipe.send() writes JSON line to subprocess stdin
-   └── subprocess: HeistClient.send(message) → TCP to iOS device
-   └── subprocess: InsideMan.SafeCracker performs the gesture
-   └── subprocess: ActionResult received over TCP
-   └── subprocess writes JSON response line to stdout
-   └── SessionPipe reads response, Server returns success/failure to agent
-   └── Agent can immediately call run {"command": "get_screen"} to verify the result
-
-6. Session ends
-   └── MCP client closes stdin pipe
-   └── buttonheist-mcp exits, subprocess terminated, TCP connection closes
+5. Agent verifies the result
+   └── Bash: buttonheist --host 127.0.0.1 --port 1455 watch --once --format json
+   └── Agent compares new hierarchy to previous state
 ```
 
-This architecture means the AI agent interacts with the iOS app as naturally as it reads files or runs commands. All device logic is shared with the CLI via the `session` subcommand — the MCP server is a thin proxy. The `SessionPipe` actor serializes concurrent tool calls, and screenshots are routed via unique temp files to avoid collisions.
+Each CLI invocation is stateless — it connects, performs the operation, and exits. With direct host/port, there is no discovery overhead. Without host/port, Bonjour discovery adds ~1-2s per command.
 
 ### Discovery Flow
 
@@ -405,7 +308,7 @@ When running multiple instances (e.g., multiple simulators), each instance has a
 - **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
 - **Token Hash**: SHA256 hash prefix of the auth token. Published in the TXT record under key `tokenhash` for pre-connection filtering.
 
-Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
+Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
 
 ### Connection Flow
 

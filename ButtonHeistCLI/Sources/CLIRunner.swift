@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import Network
 import ButtonHeist
 
 // MARK: - Output Helpers
@@ -13,6 +14,30 @@ func logStatus(_ message: String) {
 func writeOutput(_ message: String) {
     print(message)
     fflush(stdout)
+}
+
+/// Format an ActionResult as a JSON string matching the session protocol format.
+func formatActionResultJSON(_ result: ActionResult) -> String {
+    var d: [String: Any] = [
+        "status": result.success ? "ok" : "error",
+        "method": result.method.rawValue,
+    ]
+    if let msg = result.message { d["message"] = msg }
+    if let value = result.value { d["value"] = value }
+    if result.animating == true { d["animating"] = true }
+    if let delta = result.interfaceDelta {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        if let data = try? encoder.encode(delta),
+           let deltaObj = try? JSONSerialization.jsonObject(with: data) {
+            d["delta"] = deltaObj
+        }
+    }
+    if let data = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
+       let json = String(data: data, encoding: .utf8) {
+        return json
+    }
+    return "{\"status\":\"error\",\"message\":\"Serialization failed\"}"
 }
 
 // MARK: - Exit Codes
@@ -36,20 +61,45 @@ final class CLIRunner {
     private var oldTermios = termios()
     private var hasReceivedInterface = false
     private var exitCode: ExitCode = .success
+    private var effectiveDeviceFilter: String?
 
     init(options: CLIOptions) {
         self.options = options
+        self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
     }
 
     func run() async throws {
         setupSignalHandlers()
         setupClientCallbacks()
 
-        if !options.quiet {
-            logStatus("Searching for iOS devices...")
+        let effectiveHost = options.host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
+        let effectivePort = options.port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
+        let effectiveDevice = options.device ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+
+        if let host = effectiveHost, let port = effectivePort {
+            // Direct connection — skip Bonjour discovery
+            if !options.quiet {
+                logStatus("Connecting to \(host):\(port)...")
+            }
+            let endpoint = NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(integerLiteral: port)
+            )
+            let device = DiscoveredDevice(
+                id: "\(host):\(port)",
+                name: "\(host):\(port)",
+                endpoint: endpoint
+            )
+            client.connect(to: device)
+        } else {
+            if !options.quiet {
+                logStatus("Searching for iOS devices...")
+            }
+            client.startDiscovery()
         }
 
-        client.startDiscovery()
+        // Store effective device filter for callback
+        self.effectiveDeviceFilter = effectiveDevice
 
         // Handle timeout
         if options.timeout > 0 {
@@ -89,7 +139,7 @@ final class CLIRunner {
             guard let self = self else { return }
             if self.client.connectedDevice == nil {
                 // Apply device filter if specified
-                if let filter = self.options.device {
+                if let filter = self.effectiveDeviceFilter {
                     guard device.matches(filter: filter) else { return }
                 }
                 if !self.options.quiet {

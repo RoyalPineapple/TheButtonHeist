@@ -27,8 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Stakeout visual mode** - Screenshot display with element overlays and tap/activate gestures
 - **Stakeout tree view** - Hierarchical tree display of accessibility containers
 - **Element styling** - Color-coded badges and icons by trait type in inspector
-- **USB connectivity** - CoreDevice IPv6 tunnel support with helper scripts
-- **Python USB module** - `buttonheist_usb.py` for scripted USB connections
+- **USB connectivity** - Automatic CoreDevice IPv6 tunnel discovery via `USBDeviceDiscovery`
 - **Auto-start configuration** - Environment variables and Info.plist keys for port, polling interval, and disable
 - **Comprehensive test suite** - TheGoodsTests (37 tests), WheelmanTests (12 tests), ButtonHeistCLITests
 - **Token authentication** - Protocol v3.0 token-based auth with auto-generated or configured secrets

@@ -4,13 +4,7 @@
 
 Build and deploy the test app to an iOS Simulator for end-to-end testing.
 
-### 1. Build the MCP server
-
-```bash
-cd ButtonHeistMCP && swift build -c release && cd ..
-```
-
-### 2. Pick a simulator
+### 1. Pick a simulator
 
 Always target simulators by UDID, never by name (names can collide across runtimes).
 
@@ -25,7 +19,7 @@ SIM_UDID=<paste-udid-here>
 xcrun simctl boot "$SIM_UDID"
 ```
 
-### 3. Build the test app
+### 2. Build the test app
 
 ```bash
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
@@ -34,7 +28,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
 
 Use the `AccessibilityTestApp` scheme — this embeds InsideMan, Wheelman, and all frameworks. Building just the `InsideMan` scheme only produces the framework without the app.
 
-### 4. Install and launch
+### 3. Install and launch
 
 ```bash
 # Find the freshest build
@@ -45,7 +39,7 @@ xcrun simctl install "$SIM_UDID" "$APP"
 xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-### 5. Known issue: resource bundle crash
+### 4. Known issue: resource bundle crash
 
 Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` into the app. If the app crashes at launch with a `Bundle.module` assertion, copy the bundle manually:
 
@@ -56,13 +50,43 @@ cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
 xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
+### 5. Build the CLI and add to PATH
+
+```bash
+cd ButtonHeistCLI && swift build -c release && cd ..
+export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+```
+
+This uses the repo-relative path so it works in any workspace.
+
 ### 6. Verify
 
 ```bash
 timeout 5 dns-sd -B _buttonheist._tcp .
 ```
 
-Should show an `Add` entry with the app name. The MCP tools (`get_interface`, `get_screen`, etc.) should now work.
+Should show an `Add` entry with the app name. The CLI commands (`buttonheist watch --once`, `buttonheist action`, etc.) should now work.
+
+### Tip: Skip Bonjour Discovery
+
+For simulators, the InsideMan server always listens on `127.0.0.1:1455`. Set environment variables to skip the ~2s Bonjour discovery on every command:
+
+```bash
+export BUTTONHEIST_HOST=127.0.0.1
+export BUTTONHEIST_PORT=1455
+```
+
+Or pass `--host` and `--port` flags directly:
+
+```bash
+buttonheist watch --once --host 127.0.0.1 --port 1455
+```
+
+**If direct connection fails:**
+- Verify the app is running: `buttonheist list` (uses Bonjour, works without host/port)
+- Both `BUTTONHEIST_HOST` and `BUTTONHEIST_PORT` must be set — if only one is set, it falls back to Bonjour
+- After an app relaunch, wait 2-3 seconds for the server to start
+- To reset: `unset BUTTONHEIST_HOST BUTTONHEIST_PORT`
 
 ## Pre-Commit Checklist
 
@@ -133,4 +157,4 @@ Before pushing any commit, verify the following:
 
 - Follow the **Simulator Quick Start** section above to build, install, and launch the test app.
 - After making code changes, rebuild and reinstall using those same steps.
-- Verify changes via MCP tools (`get_interface`, `get_screen`, `activate`, etc.) or the CLI — not manual GUI inspection.
+- Verify changes via CLI commands (`buttonheist watch --once`, `buttonheist action`, `buttonheist screenshot`, etc.) — not manual GUI inspection.

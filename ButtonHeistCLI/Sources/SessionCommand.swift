@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import Darwin
+import Network
 import ButtonHeist
 
 // MARK: - ArgumentParser Command
@@ -29,6 +30,12 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
+    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
+    var host: String?
+
+    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
+    var port: UInt16?
+
     @Option(name: .shortAndLong, help: "Connection timeout in seconds")
     var timeout: Double = 30.0
 
@@ -37,8 +44,9 @@ struct SessionCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        let effectiveFormat = format ?? (isatty(STDIN_FILENO) != 0 ? .human : .json)
-        let runner = SessionRunner(deviceFilter: device, connectionTimeout: timeout, format: effectiveFormat)
+        let effectiveFormat = format ?? .auto
+        let runner = SessionRunner(deviceFilter: device, host: host, port: port,
+                                   connectionTimeout: timeout, format: effectiveFormat)
         try await runner.run()
     }
 }
@@ -48,16 +56,22 @@ struct SessionCommand: AsyncParsableCommand {
 @MainActor
 final class SessionRunner {
     private let deviceFilter: String?
+    private let directHost: String?
+    private let directPort: UInt16?
     private let connectionTimeout: Double
     private let format: OutputFormat
     private let client = HeistClient()
     private var isRunning = true
     private var shouldExit = false
 
-    init(deviceFilter: String?, connectionTimeout: Double, format: OutputFormat) {
-        self.deviceFilter = deviceFilter
+    init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
+         connectionTimeout: Double, format: OutputFormat) {
+        self.directHost = host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
+        self.directPort = port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
+        self.deviceFilter = deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.connectionTimeout = connectionTimeout
         self.format = format
+        self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
     }
 
     func run() async throws {
@@ -102,27 +116,46 @@ final class SessionRunner {
     // MARK: - Connection
 
     private func connect() async throws {
-        logStatus("Searching for iOS devices...")
-        client.startDiscovery()
+        let device: DiscoveredDevice
 
-        let discoveryNs = UInt64(max(connectionTimeout, 5) * 1_000_000_000)
-        let discoveryStart = DispatchTime.now().uptimeNanoseconds
-        while client.discoveredDevices.first(matching: deviceFilter) == nil {
-            if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryNs {
-                if let filter = deviceFilter {
-                    throw CLIError.noMatchingDevice(filter: filter,
-                        available: client.discoveredDevices.map { $0.name })
+        if let host = directHost, let port = directPort {
+            // Direct connection — skip Bonjour
+            logStatus("Connecting to \(host):\(port)...")
+            let endpoint = NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(integerLiteral: port)
+            )
+            device = DiscoveredDevice(
+                id: "\(host):\(port)",
+                name: "\(host):\(port)",
+                endpoint: endpoint
+            )
+        } else {
+            // Bonjour discovery
+            logStatus("Searching for iOS devices...")
+            client.startDiscovery()
+
+            let discoveryNs = UInt64(max(connectionTimeout, 5) * 1_000_000_000)
+            let discoveryStart = DispatchTime.now().uptimeNanoseconds
+            while client.discoveredDevices.first(matching: deviceFilter) == nil {
+                if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryNs {
+                    if let filter = deviceFilter {
+                        throw CLIError.noMatchingDevice(filter: filter,
+                            available: client.discoveredDevices.map { $0.name })
+                    }
+                    throw CLIError.noDeviceFound
                 }
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+
+            guard let found = client.discoveredDevices.first(matching: deviceFilter) else {
                 throw CLIError.noDeviceFound
             }
-            try await Task.sleep(nanoseconds: 100_000_000)
+
+            logStatus("Found: \(client.displayName(for: found))")
+            device = found
         }
 
-        guard let device = client.discoveredDevices.first(matching: deviceFilter) else {
-            throw CLIError.noDeviceFound
-        }
-
-        logStatus("Found: \(client.displayName(for: device))")
         logStatus("Connecting...")
 
         var connected = false
