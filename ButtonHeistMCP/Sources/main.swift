@@ -1,884 +1,169 @@
 import Foundation
 import MCP
-import ButtonHeist
 
-// MARK: - Logging (stderr, never stdout — MCP uses stdout)
-
-func log(_ message: String) {
-    FileHandle.standardError.write(Data("[buttonheist-mcp] \(message)\n".utf8))
+func log(_ msg: String) {
+    FileHandle.standardError.write(Data("[buttonheist-mcp] \(msg)\n".utf8))
 }
 
-// MARK: - Tool Definitions
+// MARK: - Line Reader
 
-let interfaceTool = Tool(
-    name: "get_interface",
-    // swiftlint:disable:next line_length
-    description: "Get the current UI element hierarchy from the connected iOS app. Returns a list of all accessibility elements with their labels, values, identifiers, frames, and available actions.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([:]),
-    ]),
-    annotations: .init(readOnlyHint: true, openWorldHint: false)
-)
+/// Reads newline-delimited JSON from the session subprocess stdout
+final class LineReader: @unchecked Sendable {
+    private let handle: FileHandle
+    private var buffer = Data()
 
-let screenTool = Tool(
-    name: "get_screen",
-    description: "Capture a PNG screenshot of the connected iOS app's current screen.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([:]),
-    ]),
-    annotations: .init(readOnlyHint: true, openWorldHint: false)
-)
+    init(_ handle: FileHandle) { self.handle = handle }
 
-let tapTool = Tool(
-    name: "tap",
-    description: "Tap an element or screen coordinate. Specify either an element (by identifier or order) or exact screen coordinates (x, y).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-            "x": .object(["type": .string("number"), "description": .string("Screen X coordinate in points")]),
-            "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate in points")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let longPressTool = Tool(
-    name: "long_press",
-    description: "Long press at an element or screen coordinate.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-            "x": .object(["type": .string("number"), "description": .string("Screen X coordinate")]),
-            "y": .object(["type": .string("number"), "description": .string("Screen Y coordinate")]),
-            "duration": .object(["type": .string("number"), "description": .string("Press duration in seconds (default 0.5)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let swipeTool = Tool(
-    name: "swipe",
-    // swiftlint:disable:next line_length
-    description: "Swipe from a start point to an end point or in a direction. Start from an element or explicit coordinates. End with explicit coordinates, or use direction (up/down/left/right) with optional distance.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Start from element's center (accessibility identifier)")]),
-            "order": .object(["type": .string("integer"), "description": .string("Start from element's center (order index)")]),
-            "startX": .object(["type": .string("number"), "description": .string("Start X coordinate")]),
-            "startY": .object(["type": .string("number"), "description": .string("Start Y coordinate")]),
-            "endX": .object(["type": .string("number"), "description": .string("End X coordinate")]),
-            "endY": .object(["type": .string("number"), "description": .string("End Y coordinate")]),
-            "direction": .object(["type": .string("string"), "description": .string("Swipe direction: up, down, left, right")]),
-            "distance": .object(["type": .string("number"), "description": .string("Swipe distance in points (default 200)")]),
-            "duration": .object(["type": .string("number"), "description": .string("Duration in seconds (default 0.15)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let dragTool = Tool(
-    name: "drag",
-    description: "Drag from a start point to an end point. Start from an element or explicit coordinates. End coordinates are required.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Start from element's center")]),
-            "order": .object(["type": .string("integer"), "description": .string("Start from element's center (order index)")]),
-            "startX": .object(["type": .string("number"), "description": .string("Start X coordinate")]),
-            "startY": .object(["type": .string("number"), "description": .string("Start Y coordinate")]),
-            "endX": .object(["type": .string("number"), "description": .string("End X coordinate (required)")]),
-            "endY": .object(["type": .string("number"), "description": .string("End Y coordinate (required)")]),
-            "duration": .object(["type": .string("number"), "description": .string("Duration in seconds (default 0.5)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let pinchTool = Tool(
-    name: "pinch",
-    description: "Pinch/zoom gesture. Scale > 1.0 zooms in (fingers spread apart), < 1.0 zooms out (fingers pinch together).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Center on element")]),
-            "order": .object(["type": .string("integer"), "description": .string("Center on element (order index)")]),
-            "centerX": .object(["type": .string("number"), "description": .string("Center X coordinate")]),
-            "centerY": .object(["type": .string("number"), "description": .string("Center Y coordinate")]),
-            "scale": .object(["type": .string("number"), "description": .string("Scale factor (required). >1.0 = zoom in, <1.0 = zoom out")]),
-            "spread": .object(["type": .string("number"), "description": .string("Initial finger spread in points (default 100)")]),
-            "duration": .object(["type": .string("number"), "description": .string("Duration in seconds (default 0.5)")]),
-        ]),
-        "required": .array([.string("scale")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let rotateTool = Tool(
-    name: "rotate",
-    description: "Two-finger rotation gesture. Angle is in radians (positive = counter-clockwise).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Center on element")]),
-            "order": .object(["type": .string("integer"), "description": .string("Center on element (order index)")]),
-            "centerX": .object(["type": .string("number"), "description": .string("Center X coordinate")]),
-            "centerY": .object(["type": .string("number"), "description": .string("Center Y coordinate")]),
-            "angle": .object(["type": .string("number"), "description": .string("Rotation angle in radians (required)")]),
-            "radius": .object(["type": .string("number"), "description": .string("Finger distance from center in points (default 100)")]),
-            "duration": .object(["type": .string("number"), "description": .string("Duration in seconds (default 0.5)")]),
-        ]),
-        "required": .array([.string("angle")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let twoFingerTapTool = Tool(
-    name: "two_finger_tap",
-    description: "Simultaneous two-finger tap at an element or screen coordinate.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Center on element")]),
-            "order": .object(["type": .string("integer"), "description": .string("Center on element (order index)")]),
-            "centerX": .object(["type": .string("number"), "description": .string("Center X coordinate")]),
-            "centerY": .object(["type": .string("number"), "description": .string("Center Y coordinate")]),
-            "spread": .object(["type": .string("number"), "description": .string("Distance between fingers in points (default 40)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let drawPathTool = Tool(
-    name: "draw_path",
-    // swiftlint:disable:next line_length
-    description: "Draw along a path by tracing through a sequence of points. Useful for drawing shapes, writing characters, or following complex paths on canvas views.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "points": .object([
-                "type": .string("array"),
-                "description": .string("Array of {x, y} coordinate objects to trace through (minimum 2)"),
-                "items": .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "x": .object(["type": .string("number"), "description": .string("X coordinate in screen points")]),
-                        "y": .object(["type": .string("number"), "description": .string("Y coordinate in screen points")]),
-                    ]),
-                    "required": .array([.string("x"), .string("y")]),
-                ]),
-            ]),
-            "duration": .object(["type": .string("number"), "description": .string("Total duration in seconds (mutually exclusive with velocity)")]),
-            "velocity": .object(["type": .string("number"), "description": .string("Speed in points per second (mutually exclusive with duration)")]),
-        ]),
-        "required": .array([.string("points")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let drawBezierTool = Tool(
-    name: "draw_bezier",
-    // swiftlint:disable:next line_length
-    description: "Draw along a cubic bezier curve path. Provide a start point and one or more bezier segments (each with two control points and an endpoint). The curve is sampled to a polyline and traced as a touch gesture. Useful for smooth curves, arcs, and organic shapes.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "startX": .object(["type": .string("number"), "description": .string("Start X coordinate")]),
-            "startY": .object(["type": .string("number"), "description": .string("Start Y coordinate")]),
-            "segments": .object([
-                "type": .string("array"),
-                "description": .string("Array of cubic bezier segments"),
-                "items": .object([
-                    "type": .string("object"),
-                    "properties": .object([
-                        "cp1X": .object(["type": .string("number"), "description": .string("First control point X")]),
-                        "cp1Y": .object(["type": .string("number"), "description": .string("First control point Y")]),
-                        "cp2X": .object(["type": .string("number"), "description": .string("Second control point X")]),
-                        "cp2Y": .object(["type": .string("number"), "description": .string("Second control point Y")]),
-                        "endX": .object(["type": .string("number"), "description": .string("Endpoint X")]),
-                        "endY": .object(["type": .string("number"), "description": .string("Endpoint Y")]),
-                    ]),
-                    "required": .array([.string("cp1X"), .string("cp1Y"), .string("cp2X"), .string("cp2Y"), .string("endX"), .string("endY")]),
-                ]),
-            ]),
-            "samplesPerSegment": .object(["type": .string("integer"), "description": .string("Points to sample per bezier segment (default 20)")]),
-            "duration": .object(["type": .string("number"), "description": .string("Total duration in seconds (mutually exclusive with velocity)")]),
-            "velocity": .object(["type": .string("number"), "description": .string("Speed in points per second (mutually exclusive with duration)")]),
-        ]),
-        "required": .array([.string("startX"), .string("startY"), .string("segments")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let activateTool = Tool(
-    name: "activate",
-    // swiftlint:disable:next line_length
-    description: "Activate an element using accessibility API (equivalent to VoiceOver double-tap). Falls back to synthetic tap if accessibility activation fails.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let incrementTool = Tool(
-    name: "increment",
-    description: "Increment an adjustable element (slider, stepper, picker).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let decrementTool = Tool(
-    name: "decrement",
-    description: "Decrement an adjustable element (slider, stepper, picker).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let customActionTool = Tool(
-    name: "perform_custom_action",
-    // swiftlint:disable:next line_length
-    description: "Perform a named custom accessibility action on an element. The action name must match one listed in the element's 'actions' array from get_interface.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index from interface (0-based)")]),
-            "actionName": .object(["type": .string("string"), "description": .string("Name of the custom action to perform (required)")]),
-        ]),
-        "required": .array([.string("actionName")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let typeTextTool = Tool(
-    name: "type_text",
-    // swiftlint:disable:next line_length
-    description: "Type text into a text field by tapping individual keyboard keys, and/or delete characters. Returns the current text field value after the operation. Use deleteCount to backspace before typing for corrections. The software keyboard must be visible (disable 'Connect Hardware Keyboard' in Simulator). Specify an element to target — it will be tapped to focus, and its value read back after typing.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "text": .object(["type": .string("string"), "description": .string("Text to type character-by-character")]),
-            "deleteCount": .object(["type": .string("integer"), "description": .string("Number of delete key taps before typing (for corrections)")]),
-            "identifier": .object(["type": .string("string"), "description": .string("Element accessibility identifier (focuses field, reads value)")]),
-            "order": .object(["type": .string("integer"), "description": .string("Element order index (focuses field, reads value)")]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let editActionTool = Tool(
-    name: "edit_action",
-    // swiftlint:disable:next line_length
-    description: "Perform a standard edit action (copy, paste, cut, select, selectAll) on the current first responder via the responder chain. Works regardless of whether the edit menu is visible.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "action": .object([
-                "type": .string("string"),
-                "description": .string("Edit action to perform: copy, paste, cut, select, selectAll"),
-                "enum": .array([.string("copy"), .string("paste"), .string("cut"), .string("select"), .string("selectAll")]),
-            ]),
-        ]),
-        "required": .array([.string("action")]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: false, openWorldHint: false)
-)
-
-let resignFirstResponderTool = Tool(
-    name: "dismiss_keyboard",
-    // swiftlint:disable:next line_length
-    description: "Dismiss the software keyboard by resigning first responder. Finds the current first responder in the view hierarchy and calls resignFirstResponder() on it.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([:]),
-    ]),
-    annotations: .init(readOnlyHint: false, idempotentHint: true, openWorldHint: false)
-)
-
-let waitForIdleTool = Tool(
-    name: "wait_for_idle",
-    // swiftlint:disable:next line_length
-    description: "Wait for all UI animations to complete, then return the settled interface. Actions and get_interface already settle automatically; use this only when you need a longer explicit wait (e.g. after a complex transition).",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "timeout": .object([
-                "type": .string("number"),
-                "description": .string("Maximum seconds to wait (default 5)"),
-            ]),
-        ]),
-    ]),
-    annotations: .init(readOnlyHint: true, openWorldHint: false)
-)
-
-let listDevicesTool = Tool(
-    name: "list_devices",
-    // swiftlint:disable:next line_length
-    description: "List all discovered iOS devices running InsideMan. Returns device names, app names, device names, and instance IDs for targeting specific simulators.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([:]),
-    ]),
-    annotations: .init(readOnlyHint: true, openWorldHint: false)
-)
-
-let allTools: [Tool] = [
-    listDevicesTool, interfaceTool, screenTool, waitForIdleTool,
-    tapTool, longPressTool, swipeTool, dragTool, pinchTool, rotateTool, twoFingerTapTool,
-    drawPathTool, drawBezierTool,
-    activateTool, incrementTool, decrementTool, customActionTool,
-    typeTextTool,
-    editActionTool, resignFirstResponderTool,
-]
-
-// MARK: - Argument Helpers
-
-func stringArg(_ args: [String: Value]?, _ key: String) -> String? {
-    args?[key]?.stringValue
-}
-
-func intArg(_ args: [String: Value]?, _ key: String) -> Int? {
-    args?[key]?.intValue
-}
-
-func doubleArg(_ args: [String: Value]?, _ key: String) -> Double? {
-    if let d = args?[key]?.doubleValue { return d }
-    if let i = args?[key]?.intValue { return Double(i) }
-    return nil
-}
-
-func elementTarget(_ args: [String: Value]?) -> ActionTarget? {
-    let id = stringArg(args, "identifier")
-    let order = intArg(args, "order")
-    guard id != nil || order != nil else { return nil }
-    return ActionTarget(identifier: id, order: order)
-}
-
-func errorResult(_ message: String) -> CallTool.Result {
-    CallTool.Result(content: [.text(message)], isError: true)
-}
-
-// MARK: - Tool Call Handler
-
-@MainActor
-// swiftlint:disable:next cyclomatic_complexity function_body_length
-func handleToolCall(_ params: CallTool.Parameters, client: HeistClient) async throws -> CallTool.Result {
-    let args = params.arguments
-
-    switch params.name {
-
-    // MARK: Device Discovery
-
-    case "list_devices":
-        let devices = client.discoveredDevices
-        struct DeviceInfo: Encodable {
-            let name: String
-            let appName: String
-            let deviceName: String
-            let shortId: String?
-            let simulatorUDID: String?
-            let vendorIdentifier: String?
-        }
-        let infos = devices.map {
-            DeviceInfo(name: $0.name, appName: $0.appName,
-                       deviceName: $0.deviceName, shortId: $0.shortId,
-                       simulatorUDID: $0.simulatorUDID,
-                       vendorIdentifier: $0.vendorIdentifier)
-        }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let json = try encoder.encode(infos)
-        return CallTool.Result(content: [.text(String(data: json, encoding: .utf8) ?? "[]")])
-
-    // MARK: Read Tools
-
-    case "get_interface":
-        let json = try await requestInterface(client: client)
-        return CallTool.Result(content: [.text(json)])
-
-    case "get_screen":
-        client.send(.requestScreen)
-        let screen = try await client.waitForScreen(timeout: 30)
-        return CallTool.Result(content: [
-            .image(data: screen.pngData, mimeType: "image/png", metadata: nil),
-        ])
-
-    // MARK: Touch Gesture Tools
-
-    case "tap":
-        let target = elementTarget(args)
-        let x = doubleArg(args, "x")
-        let y = doubleArg(args, "y")
-        let message: ClientMessage
-        if let target {
-            message = .touchTap(TouchTapTarget(elementTarget: target))
-        } else if let x, let y {
-            message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
-        } else {
-            return errorResult("Must specify element (identifier or order) or coordinates (x, y)")
-        }
-        return try await sendAction(message, client: client)
-
-    case "long_press":
-        let target = elementTarget(args)
-        let x = doubleArg(args, "x")
-        let y = doubleArg(args, "y")
-        let duration = doubleArg(args, "duration") ?? 0.5
-        let message: ClientMessage
-        if let target {
-            message = .touchLongPress(LongPressTarget(elementTarget: target, duration: duration))
-        } else if let x, let y {
-            message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
-        } else {
-            return errorResult("Must specify element (identifier or order) or coordinates (x, y)")
-        }
-        return try await sendAction(message, client: client)
-
-    case "swipe":
-        let target = elementTarget(args)
-        let startX = doubleArg(args, "startX")
-        let startY = doubleArg(args, "startY")
-        let endX = doubleArg(args, "endX")
-        let endY = doubleArg(args, "endY")
-        let dirStr = stringArg(args, "direction")
-        let distance = doubleArg(args, "distance")
-        let duration = doubleArg(args, "duration")
-
-        var direction: SwipeDirection?
-        if let dirStr {
-            direction = SwipeDirection(rawValue: dirStr.lowercased())
-            if direction == nil {
-                return errorResult("Invalid direction '\(dirStr)'. Valid: up, down, left, right")
+    func readLine() -> String? {
+        while true {
+            if let i = buffer.firstIndex(of: 0x0A) {
+                let line = String(data: buffer[buffer.startIndex..<i], encoding: .utf8)
+                buffer.removeSubrange(buffer.startIndex...i)
+                return line
             }
+            let chunk = handle.availableData
+            if chunk.isEmpty { return nil }
+            buffer.append(chunk)
         }
-
-        let message = ClientMessage.touchSwipe(SwipeTarget(
-            elementTarget: target,
-            startX: startX, startY: startY,
-            endX: endX, endY: endY,
-            direction: direction, distance: distance,
-            duration: duration
-        ))
-        return try await sendAction(message, client: client)
-
-    case "drag":
-        let target = elementTarget(args)
-        let startX = doubleArg(args, "startX")
-        let startY = doubleArg(args, "startY")
-        guard let endX = doubleArg(args, "endX"), let endY = doubleArg(args, "endY") else {
-            return errorResult("endX and endY are required for drag")
-        }
-        let duration = doubleArg(args, "duration")
-        let message = ClientMessage.touchDrag(DragTarget(
-            elementTarget: target,
-            startX: startX, startY: startY,
-            endX: endX, endY: endY,
-            duration: duration
-        ))
-        return try await sendAction(message, client: client)
-
-    case "pinch":
-        let target = elementTarget(args)
-        let centerX = doubleArg(args, "centerX")
-        let centerY = doubleArg(args, "centerY")
-        guard let scale = doubleArg(args, "scale") else {
-            return errorResult("scale is required for pinch")
-        }
-        let spread = doubleArg(args, "spread")
-        let duration = doubleArg(args, "duration")
-        let message = ClientMessage.touchPinch(PinchTarget(
-            elementTarget: target,
-            centerX: centerX, centerY: centerY,
-            scale: scale, spread: spread, duration: duration
-        ))
-        return try await sendAction(message, client: client)
-
-    case "rotate":
-        let target = elementTarget(args)
-        let centerX = doubleArg(args, "centerX")
-        let centerY = doubleArg(args, "centerY")
-        guard let angle = doubleArg(args, "angle") else {
-            return errorResult("angle is required for rotate")
-        }
-        let radius = doubleArg(args, "radius")
-        let duration = doubleArg(args, "duration")
-        let message = ClientMessage.touchRotate(RotateTarget(
-            elementTarget: target,
-            centerX: centerX, centerY: centerY,
-            angle: angle, radius: radius, duration: duration
-        ))
-        return try await sendAction(message, client: client)
-
-    case "two_finger_tap":
-        let target = elementTarget(args)
-        let centerX = doubleArg(args, "centerX")
-        let centerY = doubleArg(args, "centerY")
-        let spread = doubleArg(args, "spread")
-        let message = ClientMessage.touchTwoFingerTap(TwoFingerTapTarget(
-            elementTarget: target,
-            centerX: centerX, centerY: centerY,
-            spread: spread
-        ))
-        return try await sendAction(message, client: client)
-
-    case "draw_path":
-        guard let pointsValue = args?["points"]?.arrayValue else {
-            return errorResult("points array is required")
-        }
-        let pathPoints: [PathPoint] = try pointsValue.compactMap { value in
-            guard let obj = value.objectValue,
-                  let x = obj["x"]?.doubleValue ?? obj["x"]?.intValue.map(Double.init),
-                  let y = obj["y"]?.doubleValue ?? obj["y"]?.intValue.map(Double.init) else {
-                throw MCPError.invalidParams("Each point must have x and y numbers")
-            }
-            return PathPoint(x: x, y: y)
-        }
-        guard pathPoints.count >= 2 else {
-            return errorResult("Path requires at least 2 points")
-        }
-        let dpDuration = doubleArg(args, "duration")
-        let dpVelocity = doubleArg(args, "velocity")
-        let dpMessage = ClientMessage.touchDrawPath(DrawPathTarget(
-            points: pathPoints,
-            duration: dpDuration,
-            velocity: dpVelocity
-        ))
-        return try await sendAction(dpMessage, client: client)
-
-    case "draw_bezier":
-        guard let startX = doubleArg(args, "startX"),
-              let startY = doubleArg(args, "startY") else {
-            return errorResult("startX and startY are required")
-        }
-        guard let segmentsValue = args?["segments"]?.arrayValue else {
-            return errorResult("segments array is required")
-        }
-        let segments: [BezierSegment] = try segmentsValue.map { value in
-            guard let obj = value.objectValue,
-                  let cp1X = obj["cp1X"]?.doubleValue ?? obj["cp1X"]?.intValue.map(Double.init),
-                  let cp1Y = obj["cp1Y"]?.doubleValue ?? obj["cp1Y"]?.intValue.map(Double.init),
-                  let cp2X = obj["cp2X"]?.doubleValue ?? obj["cp2X"]?.intValue.map(Double.init),
-                  let cp2Y = obj["cp2Y"]?.doubleValue ?? obj["cp2Y"]?.intValue.map(Double.init),
-                  let endX = obj["endX"]?.doubleValue ?? obj["endX"]?.intValue.map(Double.init),
-                  let endY = obj["endY"]?.doubleValue ?? obj["endY"]?.intValue.map(Double.init) else {
-                throw MCPError.invalidParams("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
-            }
-            return BezierSegment(cp1X: cp1X, cp1Y: cp1Y, cp2X: cp2X, cp2Y: cp2Y, endX: endX, endY: endY)
-        }
-        guard !segments.isEmpty else {
-            return errorResult("At least 1 bezier segment is required")
-        }
-        let dbSamples = intArg(args, "samplesPerSegment")
-        let dbDuration = doubleArg(args, "duration")
-        let dbVelocity = doubleArg(args, "velocity")
-        let dbMessage = ClientMessage.touchDrawBezier(DrawBezierTarget(
-            startX: startX, startY: startY,
-            segments: segments,
-            samplesPerSegment: dbSamples,
-            duration: dbDuration,
-            velocity: dbVelocity
-        ))
-        return try await sendAction(dbMessage, client: client)
-
-    // MARK: Accessibility Action Tools
-
-    case "activate":
-        guard let target = elementTarget(args) else {
-            return errorResult("Must specify element identifier or order")
-        }
-        return try await sendAction(.activate(target), client: client)
-
-    case "increment":
-        guard let target = elementTarget(args) else {
-            return errorResult("Must specify element identifier or order")
-        }
-        return try await sendAction(.increment(target), client: client)
-
-    case "decrement":
-        guard let target = elementTarget(args) else {
-            return errorResult("Must specify element identifier or order")
-        }
-        return try await sendAction(.decrement(target), client: client)
-
-    case "perform_custom_action":
-        guard let target = elementTarget(args) else {
-            return errorResult("Must specify element identifier or order")
-        }
-        guard let actionName = stringArg(args, "actionName") else {
-            return errorResult("actionName is required")
-        }
-        let customTarget = CustomActionTarget(elementTarget: target, actionName: actionName)
-        return try await sendAction(.performCustomAction(customTarget), client: client)
-
-    case "edit_action":
-        guard let action = stringArg(args, "action") else {
-            return errorResult("action is required (copy, paste, cut, select, selectAll)")
-        }
-        let editMessage = ClientMessage.editAction(EditActionTarget(action: action))
-        return try await sendAction(editMessage, client: client)
-
-    case "dismiss_keyboard":
-        return try await sendAction(.resignFirstResponder, client: client)
-
-    case "wait_for_idle":
-        let timeout = doubleArg(args, "timeout")
-        let message = ClientMessage.waitForIdle(WaitForIdleTarget(timeout: timeout))
-        return try await sendAction(message, client: client)
-
-    case "type_text":
-        let text = stringArg(args, "text")
-        let deleteCount = intArg(args, "deleteCount")
-        guard text != nil || deleteCount != nil else {
-            return errorResult("Must specify text, deleteCount, or both")
-        }
-        let target = elementTarget(args)
-        let message = ClientMessage.typeText(TypeTextTarget(
-            text: text,
-            deleteCount: deleteCount,
-            elementTarget: target
-        ))
-        client.send(message)
-        let typeResult = try await client.waitForActionResult(timeout: 30)
-        if typeResult.success {
-            var content: [Tool.Content] = [
-                .text("Success (method: \(typeResult.method.rawValue))"),
-            ]
-            if let value = typeResult.value {
-                content.append(.text("Value: \(value)"))
-            }
-            if let delta = typeResult.interfaceDelta {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.sortedKeys]
-                if let json = try? encoder.encode(delta), let str = String(data: json, encoding: .utf8) {
-                    content.append(.text(str))
-                }
-            }
-            return CallTool.Result(content: content)
-        } else {
-            let errorMsg = typeResult.message ?? typeResult.method.rawValue
-            return CallTool.Result(content: [.text("Failed: \(errorMsg)")], isError: true)
-        }
-
-    default:
-        throw MCPError.methodNotFound("Unknown tool: \(params.name)")
     }
 }
 
-/// Send a ClientMessage and wait for ActionResult, pass through delta JSON
-@MainActor
-func sendAction(_ message: ClientMessage, client: HeistClient) async throws -> CallTool.Result {
-    guard client.connectionState == .connected else {
-        throw MCPError.internalError("Not connected to device — app may have been terminated")
+// MARK: - Binary Discovery
+
+func findCLI() -> String {
+    if let p = ProcessInfo.processInfo.environment["BUTTONHEIST_CLI"] { return p }
+    if let selfURL = Bundle.main.executableURL {
+        let p = selfURL.deletingLastPathComponent().appendingPathComponent("buttonheist").path
+        if FileManager.default.isExecutableFile(atPath: p) { return p }
     }
-    client.send(message)
-    let result: ActionResult
-    do {
-        result = try await client.waitForActionResult(timeout: 15)
-    } catch {
-        // Timeout likely means the connection is dead — force disconnect to trigger reconnect
-        client.forceDisconnect()
-        throw MCPError.internalError("Action timed out — connection lost, reconnecting...")
+    for p in ["../ButtonHeistCLI/.build/release/buttonheist",
+              "../ButtonHeistCLI/.build/debug/buttonheist"] {
+        if FileManager.default.isExecutableFile(atPath: p) { return p }
     }
-    if result.success {
-        var content: [Tool.Content] = [
-            .text("Success (method: \(result.method.rawValue))"),
-        ]
-        if result.animating == true {
-            content.append(.text("Warning: UI is still animating"))
-        }
-        if let delta = result.interfaceDelta {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            if let json = try? encoder.encode(delta), let str = String(data: json, encoding: .utf8) {
-                content.append(.text(str))
-            }
-        }
-        return CallTool.Result(content: content)
-    } else {
-        let errorMsg = result.message ?? result.method.rawValue
-        return CallTool.Result(content: [.text("Failed: \(errorMsg)")], isError: true)
-    }
-}
-
-/// Request full interface as JSON (used by get_interface tool)
-@MainActor
-func requestInterface(client: HeistClient) async throws -> String {
-    guard client.connectionState == .connected else {
-        throw MCPError.internalError("Not connected to device — app may have been terminated")
-    }
-    client.send(.requestInterface)
-    let iface: Interface
-    do {
-        iface = try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
-            let timeoutTask = Task {
-                try await Task.sleep(nanoseconds: 10_000_000_000)
-                if !didResume {
-                    didResume = true
-                    continuation.resume(throwing: HeistClient.ActionError.timeout)
-                }
-            }
-            client.onInterfaceUpdate = { payload in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(returning: payload)
-                }
-            }
-        }
-    } catch {
-        client.forceDisconnect()
-        throw MCPError.internalError("Action timed out — connection lost, reconnecting...")
-    }
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    encoder.dateEncodingStrategy = .iso8601
-    let json = try encoder.encode(iface)
-    return String(data: json, encoding: .utf8) ?? "{}"
-}
-
-// MARK: - Device Connection
-
-@MainActor
-func discoverAndConnect(client: HeistClient, deviceFilter: String? = nil) async throws {
-    log("Starting device discovery...")
-    if let filter = deviceFilter {
-        log("Device filter: \(filter)")
-    }
-    client.startDiscovery()
-
-    // Wait for a matching device (up to 30 seconds)
-    let deadline = Date().addingTimeInterval(30)
-    while true {
-        if Date() > deadline {
-            if let filter = deviceFilter {
-                let available = client.discoveredDevices.map { $0.name }.joined(separator: ", ")
-                throw MCPError.internalError(
-                    "No device matching '\(filter)' found within 30 seconds. Available: \(available.isEmpty ? "(none)" : available)")
-            }
-            throw MCPError.internalError(
-                "No iOS devices found within 30 seconds. Ensure an app with InsideMan is running.")
-        }
-
-        if let device = client.discoveredDevices.first(matching: deviceFilter) {
-            log("Found device: \(device.name)")
-
-            client.connect(to: device)
-            let connectDeadline = Date().addingTimeInterval(10)
-            while client.connectionState != .connected {
-                if Date() > connectDeadline {
-                    throw MCPError.internalError("Connection to device timed out")
-                }
-                if case .failed(let msg) = client.connectionState {
-                    throw MCPError.internalError("Connection failed: \(msg)")
-                }
-                try await Task.sleep(nanoseconds: 100_000_000)
-            }
-
-            log("Connected to \(device.name)")
-            return
-        }
-
-        try await Task.sleep(nanoseconds: 100_000_000)
-    }
+    return "buttonheist"
 }
 
 // MARK: - Entry Point
 
 @main
 struct ButtonHeistMCP {
-    @MainActor
     static func main() async throws {
-        // Read device filter from --device arg or BUTTONHEIST_DEVICE env var
-        let deviceFilter: String?
-        let args = CommandLine.arguments
-        if let idx = args.firstIndex(of: "--device"), idx + 1 < args.count {
-            deviceFilter = args[idx + 1]
-        } else {
-            deviceFilter = ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+        let cli = findCLI()
+        log("CLI: \(cli)")
+
+        // Build session args
+        var sessionArgs = ["session", "--format", "json"]
+        let argv = CommandLine.arguments
+        if let i = argv.firstIndex(of: "--device"), i + 1 < argv.count {
+            sessionArgs += ["--device", argv[i + 1]]
+        } else if let d = ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"] {
+            sessionArgs += ["--device", d]
         }
 
-        let client = HeistClient()
+        // Spawn session subprocess
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: cli)
+        proc.arguments = sessionArgs
+        let inPipe = Pipe(), outPipe = Pipe()
+        proc.standardInput = inPipe
+        proc.standardOutput = outPipe
+        proc.standardError = FileHandle.standardError
+        try proc.run()
+        log("Session PID \(proc.processIdentifier)")
 
-        try await discoverAndConnect(client: client, deviceFilter: deviceFilter)
+        let writer = inPipe.fileHandleForWriting
+        let reader = LineReader(outPipe.fileHandleForReading)
 
-        // Auto-reconnect when the app restarts (new shortId after relaunch)
-        client.onDisconnected = { _ in
-            log("Device disconnected — watching for new instance...")
-            Task { @MainActor in
-                for _ in 0 ..< 60 {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if let device = client.discoveredDevices.first(matching: deviceFilter) {
-                        log("Reconnecting to \(device.name)...")
-                        client.connect(to: device)
-                        let deadline = Date().addingTimeInterval(10)
-                        while client.connectionState != .connected {
-                            if Date() > deadline { break }
-                            if case .failed = client.connectionState { break }
-                            try? await Task.sleep(nanoseconds: 100_000_000)
-                        }
-                        if client.connectionState == .connected {
-                            log("Reconnected to \(device.name)")
-                            return
-                        }
-                    }
-                }
-                log("Auto-reconnect gave up after 60 attempts")
-            }
+        proc.terminationHandler = { p in
+            log("Session exited (\(p.terminationStatus))")
+            Darwin.exit(1)
         }
 
-        log("Starting MCP server...")
-
-        // Create MCP server
+        // MCP server with single tool
         let server = Server(
             name: "buttonheist",
-            version: "1.0.0",
+            version: "2.0.0",
             instructions: """
-                ButtonHeist MCP server for iOS app automation. \
-                Use get_interface to read the UI element hierarchy, \
-                get_screen to see the screen, \
-                and interaction tools (tap, swipe, etc.) to drive the app. \
-                Elements can be targeted by accessibility identifier or order index from the interface.
+                iOS app automation. Use the `run` tool with {"command":"<name>", ...params}.
+
+                Commands: get_interface, get_screen, tap, long_press, swipe, drag, pinch, \
+                rotate, two_finger_tap, draw_path, draw_bezier, activate, increment, \
+                decrement, perform_custom_action, type_text, edit_action, dismiss_keyboard, \
+                wait_for_idle, list_devices, status, help
+
+                Target elements by `identifier` or `order` (from get_interface). \
+                Touch commands also accept `x`/`y` coordinates.
+
+                Examples:
+                  {"command":"get_interface"}
+                  {"command":"tap","identifier":"loginButton"}
+                  {"command":"tap","order":3}
+                  {"command":"swipe","direction":"up"}
+                  {"command":"type_text","text":"hello","identifier":"emailField"}
+                  {"command":"get_screen"}
                 """,
             capabilities: .init(tools: .init(listChanged: false))
         )
 
-        // Register tool list handler
+        let tool = Tool(
+            name: "run",
+            description: "Send a command to the connected iOS app.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "command": .object([
+                        "type": .string("string"),
+                        "description": .string("Command name"),
+                    ]),
+                ]),
+                "required": .array([.string("command")]),
+                "additionalProperties": .bool(true),
+            ])
+        )
+
         await server.withMethodHandler(ListTools.self) { _ in
-            ListTools.Result(tools: allTools)
+            ListTools.Result(tools: [tool])
         }
 
-        // Register tool call handler — bridge from Server actor to MainActor
+        let screenFile = NSTemporaryDirectory() + "buttonheist-screen.png"
+
         await server.withMethodHandler(CallTool.self) { params in
-            try await handleToolCall(params, client: client)
+            guard var dict = params.arguments else {
+                return CallTool.Result(content: [.text("No arguments")], isError: true)
+            }
+
+            // For screenshots, route PNG to a temp file instead of through the pipe
+            let isScreenshot = dict["command"]?.stringValue == "get_screen"
+            if isScreenshot { dict["output"] = .string(screenFile) }
+
+            // Encode args → JSON line → session stdin
+            var data = try JSONEncoder().encode(dict)
+            data.append(0x0A)
+            writer.write(data)
+
+            // Read one response line from session stdout
+            guard let line = await Task.detached(operation: { reader.readLine() }).value else {
+                return CallTool.Result(content: [.text("Session closed")], isError: true)
+            }
+
+            let isError = line.contains("\"status\":\"error\"")
+
+            // Screenshot: read temp file → inline image
+            if isScreenshot, !isError, let pngData = FileManager.default.contents(atPath: screenFile) {
+                defer { try? FileManager.default.removeItem(atPath: screenFile) }
+                return CallTool.Result(content: [
+                    .image(data: pngData.base64EncodedString(), mimeType: "image/png", metadata: nil),
+                ])
+            }
+
+            // Pass through session's compact JSON as-is
+            return CallTool.Result(content: [.text(line)], isError: isError)
         }
 
-        // Start stdio transport
         let transport = StdioTransport()
         try await server.start(transport: transport)
         log("MCP server running")
         await server.waitUntilCompleted()
+        proc.terminate()
     }
 }
