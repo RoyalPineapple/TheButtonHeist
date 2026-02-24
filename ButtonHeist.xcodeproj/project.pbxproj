@@ -41,14 +41,14 @@
 		BA4019B6EA6DC5489D884944 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F3CA420333318E833FBFB9 /* AuthMessageTests.swift */; };
 		BCE808EA3B411F92813C0389 /* InsideManAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CA44F5E8F22D9E1C90F6DEA0 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */; };
+		CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */; };
 		CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */; };
 		D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* TapVisualizerView.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
+		EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D27D93EA5484662C986D92 /* TheSafecracker.swift */; };
 		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
 		F73B2CA4EB09C26A552FFDB3 /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */; };
-		F8B7F5CD5109590B17B1C005 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */; };
 		FCF386C3B7AAB9659383354C /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 746D54E3D34B0FB2631A3F2C /* BezierSamplerTests.swift */; };
-		FD1A2B3C4D5E6F7081920A1B /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */; };
 		FE4BF8C6D4DBC62E742EEDDA /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 /* End PBXBuildFile section */
 
@@ -192,9 +192,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
-		FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
+		13D27D93EA5484662C986D92 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
 		1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
@@ -229,6 +228,7 @@
 		AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClientTests.swift; sourceTree = "<group>"; };
 		C3B71D54592688B9D702D11E /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
 		C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideMan.swift; sourceTree = "<group>"; };
+		CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
 		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
 		D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
@@ -381,11 +381,11 @@
 			children = (
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
-				FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */,
-				0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
 				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
+				CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */,
+				13D27D93EA5484662C986D92 /* TheSafecracker.swift */,
 			);
 			path = InsideMan;
 			sourceTree = "<group>";
@@ -864,11 +864,11 @@
 			files = (
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
-				FD1A2B3C4D5E6F7081920A1B /* TheMuscle.swift in Sources */,
-				F8B7F5CD5109590B17B1C005 /* TheSafecracker.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
 				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
+				CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */,
+				EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */,
 				5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -989,7 +989,6 @@
 				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -1015,7 +1014,6 @@
 				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1039,7 +1037,6 @@
 				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1059,7 +1056,6 @@
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -1088,7 +1084,6 @@
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -1132,6 +1127,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
+				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
@@ -1153,9 +1149,6 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1204,6 +1197,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
+				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thegoods;
 				PRODUCT_NAME = TheGoods;
@@ -1237,9 +1231,6 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
 				SWIFT_VERSION = 5.0;
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1294,7 +1285,6 @@
 				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -1341,7 +1331,6 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -1395,8 +1384,10 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1439,6 +1430,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
+				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
@@ -1472,9 +1464,6 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
 				SWIFT_VERSION = 5.0;
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1538,9 +1527,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1564,7 +1555,6 @@
 				);
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1584,7 +1574,6 @@
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -1626,6 +1615,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
+				LastSwiftMigration = 2620;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thegoods;
 				PRODUCT_NAME = TheGoods;
@@ -1647,9 +1637,6 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
-				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
-				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
-				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1676,7 +1663,6 @@
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
