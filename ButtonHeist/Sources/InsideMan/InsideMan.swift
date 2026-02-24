@@ -3,6 +3,7 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
+import CryptoKit
 import TheGoods
 import Wheelman
 import os.log
@@ -19,12 +20,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Singleton
 
-    /// Shared instance - use `configure(port:)` before first access if custom port needed
+    /// Shared instance - use `configure(port:token:instanceId:)` before first access
     public static var shared: InsideMan = InsideMan()
 
-    /// Configure the shared instance with a specific port. Must be called before start().
-    public static func configure(port: UInt16) {
-        shared = InsideMan(port: port)
+    /// Configure the shared instance. Must be called before start().
+    public static func configure(port: UInt16, token: String? = nil, instanceId: String? = nil) {
+        shared = InsideMan(port: port, token: token, instanceId: instanceId)
     }
 
     // MARK: - Properties
@@ -33,6 +34,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private var netService: NetService?
     private var subscribedClients: Set<Int> = []
     private let port: UInt16
+    private let authToken: String
+    private let instanceId: String?
     private let sessionId = UUID()
     private let parser = AccessibilityHierarchyParser()
     private let safeCracker = SafeCracker()
@@ -62,8 +65,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     // MARK: - Initialization
 
-    public init(port: UInt16 = 0) {
+    public init(port: UInt16 = 0, token: String? = nil, instanceId: String? = nil) {
         self.port = port
+        self.authToken = token ?? UUID().uuidString
+        self.instanceId = instanceId
     }
 
     // MARK: - Public Methods
@@ -78,8 +83,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         server.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
-                serverLog("Client \(clientId) connected")
-                self?.handleClientConnected(clientId)
+                serverLog("Client \(clientId) connected, awaiting auth")
+                self?.sendAuthRequired(clientId: clientId)
             }
         }
 
@@ -96,11 +101,30 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             }
         }
 
-        let actualPort = try server.start(port: port)
+        server.onUnauthenticatedData = { [weak self] clientId, data, respond in
+            Task { @MainActor in
+                self?.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+            }
+        }
+
+        let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
+        let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
+            .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
+        let bindToLoopback = isSimulator && !bindAllOverride
+
+        let actualPort = try server.start(port: port, bindToLoopback: bindToLoopback)
         self.socketServer = server
         isRunning = true
 
-        serverLog("Server listening on port \(actualPort)")
+        if bindToLoopback {
+            serverLog("Server listening on loopback port \(actualPort) (simulator)")
+        } else {
+            serverLog("Server listening on port \(actualPort)")
+        }
+        serverLog("Auth token: \(authToken)")
+        if let instanceId {
+            serverLog("Instance ID: \(instanceId)")
+        }
         advertiseService(port: actualPort)
 
         // Start observing accessibility changes
@@ -157,10 +181,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         String(sessionId.uuidString.prefix(8)).lowercased()
     }
 
+    private var effectiveInstanceId: String {
+        instanceId ?? shortId
+    }
+
     private func advertiseService(port: UInt16) {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
-        let deviceName = UIDevice.current.name
-        let serviceName = "\(appName)-\(deviceName)#\(shortId)"
+        let serviceName = "\(appName)#\(effectiveInstanceId)"
 
         let service = NetService(
             domain: "local.",
@@ -169,32 +196,66 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             port: Int32(port)
         )
 
-        // Publish device identifiers in TXT record for pre-connection filtering
+        // Publish identifiers in TXT record for pre-connection filtering
         var txtDict: [String: Data] = [:]
         if let simUDID = ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
            let data = simUDID.data(using: .utf8) {
             txtDict["simudid"] = data
         }
-        if let vendorId = UIDevice.current.identifierForVendor?.uuidString,
-           let data = vendorId.data(using: .utf8) {
-            txtDict["vendorid"] = data
+
+        // Token hash for pre-connection filtering (SHA256, first 8 bytes hex)
+        let tokenHash = SHA256.hash(data: Data(authToken.utf8))
+        let tokenHashPrefix = tokenHash.prefix(8).map { String(format: "%02x", $0) }.joined()
+        if let data = tokenHashPrefix.data(using: .utf8) {
+            txtDict["tokenhash"] = data
         }
-        if !txtDict.isEmpty {
-            service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
+
+        // Instance ID for human-readable identification
+        if let data = effectiveInstanceId.data(using: .utf8) {
+            txtDict["instanceid"] = data
         }
+
+        service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
 
         netService = service
         netService?.publish()
         serverLog("Advertising as '\(serviceName)' on port \(port)")
     }
 
+    // MARK: - Private Methods - Authentication
+
+    private func sendAuthRequired(clientId: Int) {
+        guard let data = try? JSONEncoder().encode(ServerMessage.authRequired) else { return }
+        socketServer?.send(data, to: clientId)
+    }
+
+    private func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) {
+        guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
+              case .authenticate(let payload) = message else {
+            serverLog("Client \(clientId) sent non-auth message before authenticating, disconnecting")
+            socketServer?.disconnect(clientId: clientId)
+            return
+        }
+
+        guard payload.token == authToken else {
+            sendMessage(.authFailed("Invalid token"), respond: respond)
+            serverLog("Client \(clientId) failed auth")
+            Task {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                self.socketServer?.disconnect(clientId: clientId)
+            }
+            return
+        }
+
+        socketServer?.markAuthenticated(clientId)
+        serverLog("Client \(clientId) authenticated")
+        handleClientConnected(clientId, respond: respond)
+    }
+
     // MARK: - Private Methods - Client Handling
 
-    private func handleClientConnected(_ clientId: Int) {
-        // Send server info immediately
-        sendServerInfo(respond: { [weak self] data in
-            self?.socketServer?.broadcastToAll(data)
-        })
+    private func handleClientConnected(_ clientId: Int, respond: @escaping (Data) -> Void) {
+        sendServerInfo(respond: respond)
     }
 
     // swiftlint:disable:next cyclomatic_complexity
@@ -202,14 +263,16 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
             serverLog("Failed to decode client message")
             if let str = String(data: data, encoding: .utf8) {
-                serverLog("Raw message: \(str.prefix(200))")
+                serverLog("Unparsable message: \(data.count) bytes")
             }
             return
         }
 
-        serverLog("Received message: \(message)")
+        serverLog("Received: \(String(describing: message).prefix(40))")
 
         switch message {
+        case .authenticate:
+            break // Already authenticated via onUnauthenticatedData path
         case .requestInterface:
             serverLog("Interface requested")
             await sendInterface(respond: respond)
@@ -274,6 +337,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             screenWidth: screenBounds.width,
             screenHeight: screenBounds.height,
             instanceId: sessionId.uuidString,
+            instanceIdentifier: effectiveInstanceId,
             listeningPort: socketServer?.listeningPort,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
             vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString
@@ -960,7 +1024,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     // MARK: - Wait For Idle Handler
 
     private func handleWaitForIdle(_ target: WaitForIdleTarget, respond: @escaping (Data) -> Void) async {
-        let timeout = target.timeout ?? 5.0
+        let timeout = min(target.timeout ?? 5.0, 60.0)
         let settled = await waitForAnimationsToSettle(timeout: timeout)
 
         guard let hierarchyTree = refreshAccessibilityData() else {
@@ -1019,7 +1083,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         if target.elementTarget == nil { refreshAccessibilityData() }
         let beforeElements = snapshotElements()
 
-        let success = await safeCracker.longPress(at: point, duration: target.duration)
+        let success = await safeCracker.longPress(at: point, duration: clampDuration(target.duration))
         if success { TapVisualizerView.showTap(at: point) }
         let result = await actionResultWithDelta(success: success, method: .syntheticLongPress, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1047,7 +1111,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         if target.elementTarget == nil { refreshAccessibilityData() }
         let beforeElements = snapshotElements()
-        let duration = target.duration ?? 0.15
+        let duration = clampDuration(target.duration ?? 0.15)
 
         let success = await safeCracker.swipe(from: startPoint, to: endPoint, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticSwipe, beforeElements: beforeElements)
@@ -1059,7 +1123,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         if target.elementTarget == nil { refreshAccessibilityData() }
         let beforeElements = snapshotElements()
 
-        let duration = target.duration ?? 0.5
+        let duration = clampDuration(target.duration ?? 0.5)
         let success = await safeCracker.drag(from: startPoint, to: target.endPoint, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticDrag, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1071,7 +1135,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 100.0
-        let duration = target.duration ?? 0.5
+        let duration = clampDuration(target.duration ?? 0.5)
         let success = await safeCracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticPinch, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1083,7 +1147,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let radius = target.radius ?? 100.0
-        let duration = target.duration ?? 0.5
+        let duration = clampDuration(target.duration ?? 0.5)
         let success = await safeCracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticRotate, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1131,7 +1195,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
-        let samplesPerSegment = target.samplesPerSegment ?? 20
+        let samplesPerSegment = min(target.samplesPerSegment ?? 20, 1000)
         let pathPoints = BezierSampler.sampleBezierPath(
             startPoint: target.startPoint,
             segments: target.segments,
@@ -1264,11 +1328,22 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         sendMessage(.actionResult(result), respond: respond)
     }
 
+    // MARK: - Input Validation
+
+    private func clampDuration(_ value: Double?) -> Double {
+        min(max(value ?? 0.5, 0.01), 60.0)
+    }
+
+    private func clampCoordinate(_ value: Double) -> Double {
+        min(max(value, -10000), 10000)
+    }
+
     // MARK: - Shared Helpers
 
     private func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
+        let result: Double
         if let d = duration {
-            return d
+            result = d
         } else if let velocity = velocity, velocity > 0 {
             var totalLength: Double = 0
             for i in 1..<points.count {
@@ -1276,10 +1351,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                 let dy = points[i].y - points[i-1].y
                 totalLength += sqrt(dx * dx + dy * dy)
             }
-            return totalLength / velocity
+            result = totalLength / velocity
         } else {
-            return 0.5
+            result = 0.5
         }
+        return clampDuration(result)
     }
 
     /// Resolve a screen point from an element target or explicit coordinates.
@@ -1501,6 +1577,8 @@ private extension AccessibilityElement.Shape {
 /// Configuration via environment variables (highest priority) or Info.plist:
 /// - INSIDEMAN_DISABLE / InsideManDisableAutoStart: Set to true to disable
 /// - INSIDEMAN_PORT / InsideManPort: Fixed port number (0 = auto, default)
+/// - INSIDEMAN_TOKEN / InsideManToken: Auth token (auto-generated if not set)
+/// - INSIDEMAN_ID / InsideManInstanceId: Human-readable instance identifier
 /// - INSIDEMAN_POLLING_INTERVAL / InsideManPollingInterval: Polling interval in seconds
 @_cdecl("InsideMan_autoStartFromLoad")
 public func insideManAutoStartFromLoad() {
@@ -1540,15 +1618,28 @@ public func insideManAutoStartFromLoad() {
         interval = max(0.5, plistInterval)
     }
 
+    // Get auth token
+    var token: String?
+    if let envToken = ProcessInfo.processInfo.environment["INSIDEMAN_TOKEN"] {
+        token = envToken
+    } else if let plistToken = Bundle.main.object(forInfoDictionaryKey: "InsideManToken") as? String {
+        token = plistToken
+    }
+
+    // Get instance ID
+    var instanceId: String?
+    if let envId = ProcessInfo.processInfo.environment["INSIDEMAN_ID"] {
+        instanceId = envId
+    } else if let plistId = Bundle.main.object(forInfoDictionaryKey: "InsideManInstanceId") as? String {
+        instanceId = plistId
+    }
+
     NSLog("[InsideMan] Starting with port: %d, polling interval: %f", port, interval)
 
     Task { @MainActor in
         NSLog("[InsideMan] MainActor task executing...")
         do {
-            // Configure shared instance with port if specified
-            if port != 0 {
-                InsideMan.configure(port: port)
-            }
+            InsideMan.configure(port: port, token: token, instanceId: instanceId)
             try InsideMan.shared.start()
             InsideMan.shared.startPolling(interval: interval)
             NSLog("[InsideMan] ========== AUTO-START SUCCESS ==========")

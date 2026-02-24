@@ -10,14 +10,21 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let simulatorUDID: String?
     /// Vendor identifier from Bonjour TXT record
     public let vendorIdentifier: String?
+    /// Token hash from Bonjour TXT record (for pre-connection filtering)
+    public let tokenHash: String?
+    /// Instance identifier from Bonjour TXT record (human-readable label)
+    public let instanceId: String?
 
     public init(id: String, name: String, endpoint: NWEndpoint,
-                simulatorUDID: String? = nil, vendorIdentifier: String? = nil) {
+                simulatorUDID: String? = nil, vendorIdentifier: String? = nil,
+                tokenHash: String? = nil, instanceId: String? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
         self.vendorIdentifier = vendorIdentifier
+        self.tokenHash = tokenHash
+        self.instanceId = instanceId
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -45,7 +52,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     /// Parse the service name to extract app name and device name
-    /// Service name format: "AppName-DeviceName" or "AppName-DeviceName#shortId"
+    /// Service name format: "AppName#instanceId" (v3) or "AppName-DeviceName#shortId" (v2)
     public var parsedName: (appName: String, deviceName: String)? {
         let baseName = nameWithoutId
         guard let lastDashIndex = baseName.lastIndex(of: "-") else { return nil }
@@ -56,23 +63,25 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     /// App name extracted from service name
+    /// For v3 format "AppName#id", returns the part before #
     public var appName: String {
         parsedName?.appName ?? nameWithoutId
     }
 
-    /// Device name extracted from service name
+    /// Device name extracted from service name (empty for v3 format)
     public var deviceName: String {
         parsedName?.deviceName ?? ""
     }
 
     /// Check if this device matches a filter string.
-    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/simulatorUDID/vendorIdentifier.
+    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/instanceId/simulatorUDID/vendorIdentifier.
     public func matches(filter: String) -> Bool {
         let low = filter.lowercased()
         return name.lowercased().contains(low) ||
             appName.lowercased().contains(low) ||
             deviceName.lowercased().contains(low) ||
             (shortId?.lowercased().hasPrefix(low) ?? false) ||
+            (instanceId?.lowercased().hasPrefix(low) ?? false) ||
             (simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
             (vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
     }

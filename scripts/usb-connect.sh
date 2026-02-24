@@ -36,19 +36,38 @@ xcrun devicectl device process launch --device "$DEVICE_NAME" --terminate-existi
 sleep 2
 
 # Connect to fixed port
-python3 << PYEOF
+DEVICE_IPV6="$DEVICE_IPV6" PORT="$PORT" python3 << 'PYEOF'
 import socket
 import json
+import os
+
+ipv6 = os.environ["DEVICE_IPV6"]
+port = int(os.environ["PORT"])
 
 sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 sock.settimeout(5)
-sock.connect(("$DEVICE_IPV6", $PORT))
+sock.connect((ipv6, port))
 
-# Read info
+# Read first message (authRequired for v3, info for v2)
 data = b""
 while b"\n" not in data:
     data += sock.recv(4096)
-info = json.loads(data.split(b"\n")[0])["info"]["_0"]
+first_msg = json.loads(data.split(b"\n")[0])
+
+if "authRequired" in first_msg:
+    token = os.environ.get("BUTTONHEIST_TOKEN", "")
+    sock.send((json.dumps({"authenticate": {"_0": {"token": token}}}) + "\n").encode())
+    data = b""
+    while b"\n" not in data:
+        data += sock.recv(4096)
+    response = json.loads(data.split(b"\n")[0])
+    if "authFailed" in response:
+        print("Authentication failed: " + str(response["authFailed"]))
+        sock.close()
+        exit(1)
+    info = response["info"]["_0"]
+else:
+    info = first_msg["info"]["_0"]
 
 # Get hierarchy
 sock.send(b'{"requestHierarchy":{}}\n')
@@ -58,15 +77,15 @@ while b"\n" not in data:
 hier = json.loads(data.split(b"\n")[0])["hierarchy"]["_0"]
 
 print(f"""
-Connected to {info['appName']} on $DEVICE_IPV6:$PORT
+Connected to {info['appName']} on {ipv6}:{port}
 Device: {info['deviceName']} (iOS {info['systemVersion']})
 Elements: {len(hier['elements'])}
 
 Quick connect:
-  nc -6 $DEVICE_IPV6 $PORT
+  nc -6 {ipv6} {port}
 
 Python:
-  sock.connect(('$DEVICE_IPV6', $PORT))
+  sock.connect(('{ipv6}', {port}))
 """)
 sock.close()
 PYEOF

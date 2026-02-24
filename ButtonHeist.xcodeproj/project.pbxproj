@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00882646C6DD0E6E11E0BEC2 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
+		00A1B2C3D4E5F6A7B8C9D0E1 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AuthMessageTests.swift */; };
 		00B4F92C5BC3735FFD8D27D4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */; };
 		071AA9B18FA57C01D4A360C0 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		07BFA5FF9C20EA99328799EF /* HeistClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */; };
@@ -218,6 +219,7 @@
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InsideManAutoStart.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
 		AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGoodsTests.swift; sourceTree = "<group>"; };
 		AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClientTests.swift; sourceTree = "<group>"; };
@@ -423,6 +425,7 @@
 			isa = PBXGroup;
 			children = (
 				D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* AuthMessageTests.swift */,
 				746D54E3D34B0FB2631A3F2C /* BezierSamplerTests.swift */,
 				8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */,
 				AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */,
@@ -821,6 +824,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				697FAF594BD1F255084B7692 /* AccessibilityElementDataTests.swift in Sources */,
+				00A1B2C3D4E5F6A7B8C9D0E1 /* AuthMessageTests.swift in Sources */,
 				FCF386C3B7AAB9659383354C /* BezierSamplerTests.swift in Sources */,
 				9786FBD1E5F2D76AEAC81662 /* ClientMessageTests.swift in Sources */,
 				00B4F92C5BC3735FFD8D27D4 /* ConstantsTests.swift in Sources */,

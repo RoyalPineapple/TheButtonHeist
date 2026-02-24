@@ -61,16 +61,22 @@ public final class DeviceDiscovery {
                     // Extract TXT record identifiers if available
                     var simUDID: String?
                     var vendorId: String?
+                    var tokenHash: String?
+                    var instanceId: String?
                     if case .bonjour(let txtRecord) = result.metadata {
                         simUDID = txtRecord["simudid"]
                         vendorId = txtRecord["vendorid"]
+                        tokenHash = txtRecord["tokenhash"]
+                        instanceId = txtRecord["instanceid"]
                     }
                     let device = DiscoveredDevice(
                         id: name,
                         name: name,
                         endpoint: result.endpoint,
                         simulatorUDID: simUDID,
-                        vendorIdentifier: vendorId
+                        vendorIdentifier: vendorId,
+                        tokenHash: tokenHash,
+                        instanceId: instanceId
                     )
                     discoveredDevices[name] = device
                     logger.info("Device found: \(name)")

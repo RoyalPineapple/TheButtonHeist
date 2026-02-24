@@ -17,6 +17,7 @@ Usage:
 
 import socket
 import json
+import os
 import subprocess
 import re
 import time
@@ -121,8 +122,18 @@ class ButtonHeistUSBConnection:
         self._actual_port = self._find_port()
         self._connect_socket()
 
-        # Read initial info message
-        self._info = self._read_message()
+        # Handle auth handshake (protocol v3.0)
+        auth_msg = self._read_message()
+        if "authRequired" in auth_msg:
+            token = os.environ.get("BUTTONHEIST_TOKEN", "")
+            self._send_message({"authenticate": {"_0": {"token": token}}})
+            self._info = self._read_message()
+            if "authFailed" in self._info:
+                raise ConnectionError("Authentication failed: " + str(self._info["authFailed"]))
+        else:
+            # Pre-v3 server: first message is info directly
+            self._info = auth_msg
+
         if "info" not in self._info:
             raise ConnectionError("Invalid server response")
         self._info = self._info["info"]["_0"]
@@ -285,26 +296,16 @@ class ButtonHeistUSBConnection:
 
     def _find_port(self) -> int:
         """Find the InsideMan port."""
-        # Try fixed port first with retries
         if self.port > 0:
             for attempt in range(3):
                 if self._test_port(self.port):
                     return self.port
                 time.sleep(0.5)
 
-        # Scan for port
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = {executor.submit(self._test_port, p): p
-                      for p in range(52500, 53500)}
-            for future in concurrent.futures.as_completed(futures):
-                if future.result():
-                    port = futures[future]
-                    for f in futures:
-                        f.cancel()
-                    return port
-
-        raise ConnectionError("Could not find InsideMan port")
+        raise ConnectionError(
+            f"Could not connect to InsideMan on port {self.port}. "
+            "Ensure the app is running with InsideMan enabled."
+        )
 
     def _test_port(self, port: int) -> bool:
         """Test if a port has InsideMan."""
