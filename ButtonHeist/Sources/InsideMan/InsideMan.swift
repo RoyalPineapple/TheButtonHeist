@@ -52,6 +52,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private var interactiveObjects: [Int: WeakObject] = [:]
 
     private var isRunning = false
+    private var isSuspended = false
 
     // Debounce for hierarchy updates
     private var updateDebounceTask: Task<Void, Never>?
@@ -80,8 +81,38 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         serverLog("Starting InsideMan with SimpleSocketServer...")
 
         let server = SimpleSocketServer()
+        wireServer(server)
 
-        // Wire TheMuscle callbacks to the socket server
+        let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
+        let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
+            .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
+        let bindToLoopback = isSimulator && !bindAllOverride
+
+        // Simulators share localhost — use random port to avoid collisions.
+        // Fixed ports are only useful on physical devices (for USB tunneling).
+        let effectivePort = isSimulator ? 0 : port
+        let actualPort = try server.start(port: effectivePort, bindToLoopback: bindToLoopback)
+        self.socketServer = server
+        isRunning = true
+
+        if bindToLoopback {
+            serverLog("Server listening on loopback port \(actualPort) (simulator)")
+        } else {
+            serverLog("Server listening on port \(actualPort)")
+        }
+        serverLog("Auth token: \(muscle.authToken)")
+        if let instanceId {
+            serverLog("Instance ID: \(instanceId)")
+        }
+        advertiseService(port: actualPort)
+
+        startAccessibilityObservation()
+        startLifecycleObservation()
+
+        serverLog("Server started successfully")
+    }
+
+    private func wireServer(_ server: SimpleSocketServer) {
         muscle.sendToClient = { [weak server] data, clientId in server?.send(data, to: clientId) }
         muscle.markClientAuthenticated = { [weak server] clientId in server?.markAuthenticated(clientId) }
         muscle.disconnectClient = { [weak server] clientId in server?.disconnect(clientId: clientId) }
@@ -115,39 +146,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                 self?.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
             }
         }
-
-        let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
-        let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
-            .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
-        let bindToLoopback = isSimulator && !bindAllOverride
-
-        // Simulators share localhost — use random port to avoid collisions.
-        // Fixed ports are only useful on physical devices (for USB tunneling).
-        let effectivePort = isSimulator ? 0 : port
-        let actualPort = try server.start(port: effectivePort, bindToLoopback: bindToLoopback)
-        self.socketServer = server
-        isRunning = true
-
-        if bindToLoopback {
-            serverLog("Server listening on loopback port \(actualPort) (simulator)")
-        } else {
-            serverLog("Server listening on port \(actualPort)")
-        }
-        serverLog("Auth token: \(muscle.authToken)")
-        if let instanceId {
-            serverLog("Instance ID: \(instanceId)")
-        }
-        advertiseService(port: actualPort)
-
-        // Start observing accessibility changes
-        startAccessibilityObservation()
-
-        serverLog("Server started successfully")
     }
 
     /// Stop the server
     public func stop() {
         isRunning = false
+        isSuspended = false
         stopPolling()
 
         socketServer?.stop()
@@ -160,6 +164,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         muscle.tearDown()
 
         stopAccessibilityObservation()
+        stopLifecycleObservation()
 
         serverLog("Server stopped")
     }
@@ -397,11 +402,124 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func stopAccessibilityObservation() {
-        NotificationCenter.default.removeObserver(self)
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIAccessibility.elementFocusedNotification,
+            object: nil
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIAccessibility.voiceOverStatusDidChangeNotification,
+            object: nil
+        )
     }
 
     @objc private func accessibilityDidChange() {
         scheduleHierarchyUpdate()
+    }
+
+    // MARK: - App Lifecycle
+
+    private func startLifecycleObservation() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    private func stopLifecycleObservation() {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    @objc private func appDidEnterBackground() {
+        serverLog("App entering background, suspending server")
+        suspend()
+    }
+
+    @objc private func appWillEnterForeground() {
+        serverLog("App entering foreground, resuming server")
+        resume()
+    }
+
+    private func suspend() {
+        guard isRunning, !isSuspended else { return }
+        isSuspended = true
+
+        pollingTask?.cancel()
+        pollingTask = nil
+
+        updateDebounceTask?.cancel()
+        updateDebounceTask = nil
+
+        socketServer?.stop()
+        socketServer = nil
+
+        netService?.stop()
+        netService = nil
+
+        subscribedClients.removeAll()
+        muscle.tearDown()
+
+        stopAccessibilityObservation()
+
+        cachedElements.removeAll()
+        interactiveObjects.removeAll()
+        lastHierarchyHash = 0
+
+        serverLog("Server suspended")
+    }
+
+    private func resume() {
+        guard isRunning, isSuspended else { return }
+        isSuspended = false
+
+        serverLog("Resuming server...")
+
+        do {
+            let server = SimpleSocketServer()
+            wireServer(server)
+
+            let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
+            let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
+                .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
+            let bindToLoopback = isSimulator && !bindAllOverride
+            let effectivePort = isSimulator ? 0 : port
+
+            let actualPort = try server.start(port: effectivePort, bindToLoopback: bindToLoopback)
+            self.socketServer = server
+
+            serverLog("Server resumed on port \(actualPort)")
+            advertiseService(port: actualPort)
+
+            startAccessibilityObservation()
+
+            if isPollingEnabled {
+                startPollingLoop()
+            }
+
+            serverLog("Server resume complete")
+        } catch {
+            serverLog("Failed to resume server: \(error)")
+            isRunning = false
+            isSuspended = false
+        }
     }
 
     private func scheduleHierarchyUpdate() {
