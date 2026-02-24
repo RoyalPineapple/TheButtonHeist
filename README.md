@@ -11,7 +11,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
 - **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
-- **Token auth** — Token-based authentication with auto-generated or configured secrets
+- **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
 - **Auto-start** — InsideMan starts automatically when your app launches (ObjC `+load`, DEBUG only)
 - **Multi-device** — Run many instances on many simulators with stable identifiers
 - **USB auto-discovery** — USB devices discovered automatically alongside WiFi via Bonjour

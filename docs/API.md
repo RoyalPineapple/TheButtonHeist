@@ -525,6 +525,7 @@ Messages sent from server to client.
 
 - `authRequired` - Server requires authentication (sent immediately on connection)
 - `authFailed(String)` - Authentication failed (sent before disconnect)
+- `authApproved(AuthApprovedPayload)` - Connection approved via on-device UI (contains token for future use). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 - `info(ServerInfo)` - Device/app metadata (sent after successful auth)
 - `interface(Interface)` - UI element snapshot
 - `pong` - Ping response
