@@ -24,6 +24,8 @@ You are tasked with replaying the action sequence that triggered a specific find
 3. Otherwise, use the most recent trace file
 4. Read the trace file header to find the companion session notes file
 5. Read the session notes file
+6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format conventions.
+7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
 
 If no trace files exist, stop and tell the user: "No trace files found. Run `/fuzz` or `/fuzz-explore` first — they generate trace files automatically."
 

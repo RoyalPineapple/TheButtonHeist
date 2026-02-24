@@ -28,6 +28,24 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
    - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
+6. **Load app knowledge**: Read `references/app-knowledge.md` if it exists. This gives you accumulated coverage, behavioral models, finding investigation status, and known testing gaps from prior sessions.
+7. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+8. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+9. **Load response examples**: Read `references/examples.md` for annotated MCP tool response examples — these show how to interpret deltas and recognize screen intents in practice.
+10. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences to use when planning action batches.
+11. **Gap analysis**: Before choosing a strategy, identify the highest-priority work from `references/app-knowledge.md`:
+    - **Uninvestigated findings**: Check `## Findings Tracker` for `open:uninvestigated` entries — these need 5-10 actions of investigation each
+    - **Untested areas**: Check `## Testing Gaps` for unchecked items — these are explicitly known blind spots
+    - **Low-coverage screens**: Check `## Coverage Summary` for screens with < 80% element coverage or missing action types
+    - **Stale screens**: Screens not tested in the last 2+ sessions may have regressed
+    Print the gap analysis:
+    ```
+    [Gap Analysis]
+    Uninvestigated findings: [list findings needing investigation]
+    Untested areas: [list unchecked gaps]
+    Low coverage: [list screens below 80%]
+    Session plan: [prioritized plan for this session]
+    ```
 
 ## Step 1: Load Strategy
 
@@ -39,17 +57,19 @@ The strategy tells you how to select elements, which actions to try, when to mov
 
 ### Strategy Auto-Selection
 
-If no strategy was specified in `$ARGUMENTS`, choose based on context:
+If no strategy was specified in `$ARGUMENTS`, choose based on gaps and context:
 
-1. **Check for prior sessions**: List `fuzz-sessions/fuzzsession-*.md` files for this app. If 2+ completed sessions exist, use `swarm-testing` — previous sessions already covered the basics, now maximize diversity.
-2. **Otherwise, use the initial observation** (after Step 2):
+1. **Check for uninvestigated findings**: If `references/app-knowledge.md` has `open:uninvestigated` findings at CRITICAL or HIGH severity, use `state-exploration` focused on those findings' screens — investigation is highest priority.
+2. **Check for untested strategies**: If `## Session History` shows that `invariant-testing` or `boundary-testing` have never been run, prefer those — they find different bug classes than traversal/exploration.
+3. **Check for prior sessions**: If 3+ completed sessions exist with similar strategies, use `swarm-testing` — maximize diversity.
+4. **Otherwise, use the initial observation** (after Step 2):
    - Count the interactive elements on the first screen
    - **> 3 navigation elements** (tabs, list cells, buttons with navigation labels): use `state-exploration` — map the app structure first
    - **> 5 adjustable elements** (sliders, steppers, pickers) or **> 2 text fields**: use `boundary-testing` — test value extremes. Consider `invariant-testing` if the screen also has toggles or navigation.
    - **< 5 total interactive elements**: use `gesture-fuzzing` — go deep on each element with every gesture type
    - **Otherwise** (default): use `systematic-traversal` — breadth-first coverage
-3. Print the auto-selected strategy and reasoning
-4. Read the corresponding strategy file from `references/strategies/`
+5. Print the auto-selected strategy, reasoning, and how it connects to the gap analysis
+6. Read the corresponding strategy file from `references/strategies/`
 
 ## Step 2: Initial Observation
 
@@ -86,14 +106,33 @@ Both files are your lifeline — the session notes for compaction survival, the 
 
 Repeat until max iterations reached or a CRASH is detected:
 
-### 4a. Observe + Plan Batch
+### 4-pre. Investigation Queue (if uninvestigated findings exist)
+
+Before starting the main exploration loop, process uninvestigated findings from `references/app-knowledge.md`:
+
+1. For each `open:uninvestigated` finding (highest severity first, max 3 per session):
+   a. Navigate to the finding's screen using `references/nav-graph.md`
+   b. Spend up to 5 actions investigating: reproduce, vary, scope, reduce, boundary (see SKILL.md `### When Predictions Fail: Investigate`)
+   c. Update the finding's status in session notes:
+      - Reproduced consistently → `open:confirmed`
+      - Fully understood (scope + minimal trigger) → `open:investigated`
+      - Cannot reproduce → note the failure, keep as `open:uninvestigated`
+   d. Record investigation results in session notes and trace
+2. After processing the investigation queue, continue to the main loop
+3. Budget: max 15 actions total for investigation queue (3 findings x 5 actions)
+
+### 4a. Observe + Identify Intent + Plan Batch
 1. If this is the first batch or you don't have current state: call `get_interface`. Otherwise, use the delta from the last action (especially `screenChanged` which includes the full interface).
-2. Look at the elements on screen and **plan 3-5 actions** at once:
-   - Score elements using the Element Scoring system from SKILL.md (novelty +3, action gap +2, navigation +2, etc.)
-   - Pick the top 3-5 untried element+action combinations
-   - If the element is a text field, plan multiple `type_text` calls with values from `references/interesting-values.md`
+2. **On a new screen, identify its intent first** using `references/screen-intent.md` (form, list, settings, nav hub, etc.). Record the intent in `## Screen Intents`. Plan workflow tests (happy path + violations) before element-by-element fuzzing. See "Screen Intent Recognition" in SKILL.md.
+3. **Plan 3-5 actions** informed by the screen's intent:
+   - For a **form**: fill fields with intent-appropriate values → submit → test violations (submit empty, partial fill, abandon)
+   - For an **item list**: add → verify → edit → delete → test empty state
+   - For **settings**: change → persist check → dependency chain testing
+   - For **unknown** screens: fall back to element scoring (novelty +3, action gap +2, navigation +2, etc.)
+   - If the element is a text field, generate values from `references/interesting-values.md` — use the context-aware generation section, not just the static lists
    - If everything on this screen has been tried, **plan a route** to the highest-priority unexplored screen using known transitions from `## Transitions` and `references/nav-graph.md` (see "Navigation Planning" in SKILL.md). Don't wander — navigate directly.
-3. Only read your session notes file if resuming after compaction — keep state in memory during the batch
+   - When choosing the next screen, **consult `references/app-knowledge.md`**: prefer screens listed in `## Testing Gaps` with unchecked items, screens with lowest coverage in `## Coverage Summary`, and screens not tested by the current session's strategy.
+4. Only read your session notes file if resuming after compaction — keep state in memory during the batch
 
 ### 4b. Execute Batch
 For each planned action:
@@ -127,6 +166,17 @@ Print a brief progress update every 10 actions:
 [Progress] Actions: 42/100 | Screens: 5 | Findings: 2 (0 crash, 1 error, 1 anomaly)
 ```
 
+4. **Yield check** (every 15 actions): Count findings and new coverage in the last 15 actions.
+   - If yield is low (0 findings, < 3 new coverage items): pivot to the highest-priority untested area from `references/app-knowledge.md`. Print:
+     ```
+     [Yield] Low yield on [screen] — 0 findings in 15 actions. Pivoting to [next target].
+     ```
+   - If yield is high (2+ findings in 15 actions): stay and go deeper. Print:
+     ```
+     [Yield] Productive vein on [screen] — N findings in 15 actions. Continuing.
+     ```
+   - If same screen for 20+ actions with 0 findings: leave immediately and mark as saturated for current strategy.
+
 ## Step 5: Refinement Pass
 
 If any ERROR or ANOMALY findings were discovered during the main loop:
@@ -155,6 +205,12 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 2. Write a full report to `reports/` using the format from SKILL.md
 3. **Update session notes**: Set `## Status` to `complete`
 4. **Update persistent nav graph**: Merge all new transitions and back-routes into `references/nav-graph.md`
+5. **Update app knowledge base**: Merge session discoveries into `references/app-knowledge.md`:
+   - Update `## Coverage Summary` for all screens touched this session
+   - Update or add `## Behavioral Models` for screens where models were built/refined
+   - Update `## Findings Tracker` — add new findings, update investigation status for probed findings
+   - Check off completed items in `## Testing Gaps`, add any newly identified gaps
+   - Add this session to `## Session History`
 
 ```
 ## Fuzzing Report

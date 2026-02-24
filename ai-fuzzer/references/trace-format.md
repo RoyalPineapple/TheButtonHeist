@@ -1,5 +1,16 @@
 # Action Trace Format
 
+## Contents
+- [File Naming](#file-naming) — trace file naming convention
+- [File Header](#file-header) — required header fields
+- [Entry Format](#entry-format) — heading + YAML structure, writing rules
+- [Entry Types](#entry-types) — observe, interact, navigate, snapshot
+- [Fingerprint Comparison](#fingerprint-comparison) — divergence detection during replay
+- [Rapid-Fire Summarization](#rapid-fire-summarization) — compact format for stress sequences
+- [Complete Example](#complete-example) — full trace file with 6 entries
+
+---
+
 The action trace is a complete, append-only log of every tool call in a fuzzing session. It captures exact parameters, before/after state, and results — enough information for another agent to replay the session deterministically.
 
 ## File Naming
@@ -138,6 +149,22 @@ result:
 | `result.value_after` | no | New value of the target element (for sliders, steppers, text fields, toggles) |
 | `result.error` | no | Error message if status is `error` |
 | `result.finding` | no | Finding ID (e.g., `F-1`) if this action generated a finding |
+| `prediction` | no | What you expected: state changes, screen change, value changes. Short free-text. |
+| `validation` | no | Match/mismatch result. If mismatch, describe the deviation. Reference finding ID if applicable. |
+
+**Prediction examples** (optional fields — omit when predictions are trivial):
+
+```yaml
+# Prediction confirmed
+prediction: "count 0→1, emptyLabel removed, field cleared, addButton disabled"
+validation: "MATCH — all predictions confirmed"
+```
+
+```yaml
+# Prediction violated → finding
+prediction: "items persist, count still 1"
+validation: "VIOLATED — count=0, items=[], emptyLabel returned. See F-1."
+```
 
 ### `navigate` — Back-Navigation
 
