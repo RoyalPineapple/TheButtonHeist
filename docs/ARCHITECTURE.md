@@ -54,7 +54,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 │         ┌──────────────┬───────────┼───────────────┐                │
 │         │              │           │               │                │
 │   ┌─────┴─────┐  ┌────┴──────┐  ┌┴──────────┐  ┌─┴─────────┐      │
-│   │ NetService│  │SimpleSocket│  │   A11y   │  │SafeCracker│      │
+│   │ NetService│  │SimpleSocket│  │   A11y   │  │TheSafecracker│      │
 │   │ (Bonjour) │  │Server(TCP)│  │  Parser  │  │(Gestures) │      │
 │   └───────────┘  └───────────┘  └──────────┘  └───────────┘      │
 │                Wheelman (networking)                                 │
@@ -97,13 +97,13 @@ InsideMan (singleton, @MainActor)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
 ├── Interactive Object Cache (weak references to accessibility nodes, keyed by traversal index)
-├── SafeCracker (gesture simulation + text input, used as fallback)
+├── TheSafecracker (gesture simulation + text input, used as fallback)
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
+├── TheMuscle (authentication, token persistence, connection approval UI)
 ├── TapVisualizerView (visual tap feedback overlay)
-├── ConnectionApprovalOverlay (DEBUG-only Allow/Deny UI for auto-generated tokens)
 ├── Polling Timer (interface change detection via hash comparison)
 └── Debounce Timer (300ms debounce for UI notifications)
 ```
@@ -142,13 +142,13 @@ When the framework loads:
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
 - Token-based authentication (v3.0)
 
-### SafeCracker (Touch Gesture & Text Input System)
+### TheSafecracker (Touch Gesture & Text Input System)
 
 **Purpose**: Synthesize touch gestures and inject text on the iOS device to allow remote interaction. Supports single-finger gestures (tap, long press, swipe, drag), multi-touch gestures (pinch, rotate, two-finger tap), and text input via UIKeyboardImpl.
 
 **Architecture**:
 ```
-SafeCracker (stateful, @MainActor)
+TheSafecracker (stateful, @MainActor)
 │
 ├── Single-Finger Gestures
 │   ├── tap(at:)           → touchDown + touchUp
@@ -185,7 +185,7 @@ SafeCracker (stateful, @MainActor)
 
 **Text Input Design**:
 - The iOS software keyboard is rendered by a separate remote process. Individual key views are not in the app's view hierarchy — only a `_UIRemoteKeyboardPlaceholderView` placeholder exists.
-- SafeCracker uses `UIKeyboardImpl.activeInstance` (via ObjC runtime) to get the keyboard controller, then calls `addInputString:` to inject text and `deleteFromInput` to delete — the same approach used by KIF (Keep It Functional).
+- TheSafecracker uses `UIKeyboardImpl.activeInstance` (via ObjC runtime) to get the keyboard controller, then calls `addInputString:` to inject text and `deleteFromInput` to delete — the same approach used by KIF (Keep It Functional).
 - Keyboard visibility is detected by finding `UIInputSetHostView` (height > 100pt) in the window hierarchy.
 
 **Key Design Decisions**:
@@ -193,6 +193,23 @@ SafeCracker (stateful, @MainActor)
 - **`@convention(c)` for dlsym**: C function pointers from `dlsym` are 8 bytes; Swift closures are 16 bytes. All IOKit function pointer variables use `@convention(c)` for `unsafeBitCast` compatibility.
 - **Fresh UIEvent per phase**: iOS 26's stricter validation rejects reused event objects. Each touch phase (began, moved, ended) creates a new UIEvent.
 - **Overlay window filtering**: `getKeyWindow()` filters by `windowLevel <= .normal` to skip the TapVisualizerView overlay window.
+
+### TheMuscle (Authentication & Connection Approval)
+
+**Purpose**: Manages client authentication, token persistence, and UI-based connection approval. Extracted from InsideMan to isolate auth concerns.
+
+**Token Persistence**: Auto-generated tokens are stored in UserDefaults (`InsideManAuthToken` key) so they survive app relaunches. Previously approved clients can reconnect without re-approval. When an explicit token is provided via `INSIDEMAN_TOKEN` or `InsideManToken` plist key, UserDefaults is not used.
+
+**Token Invalidation**: `invalidateToken()` generates a new token and stores it in UserDefaults. All previously approved clients lose access and must re-authenticate.
+
+**Responsibilities**:
+- Token resolution: explicit → persisted (UserDefaults) → generate new
+- Token-based authentication (validate incoming tokens)
+- UI approval flow (present UIAlertController, handle allow/deny)
+- Track authenticated client count and IDs
+- Manage pending approval state
+
+**Integration**: TheMuscle communicates back to InsideMan via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
 ### Screen Capture
 
@@ -329,7 +346,7 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
    └── On empty token (auto-generated mode): triggers UI approval flow
 
 4b. UI Approval Flow (when token is auto-generated and client sends empty token)
-   └── InsideMan shows ConnectionApprovalOverlay with Allow/Deny prompt
+   └── TheMuscle presents UIAlertController with Allow/Deny prompt
    └── User taps Allow: sends ServerMessage.authApproved(token), then ServerMessage.info
    └── User taps Deny: sends ServerMessage.authFailed, disconnects
 
@@ -375,7 +392,7 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
    └── custom:    find UIAccessibilityCustomAction by name → call handler or target/selector
 
 4. Fallback (activate only): if accessibilityActivate() returns false
-   └── SafeCracker.tap(at: activationPoint) → synthetic touch injection
+   └── TheSafecracker.tap(at: activationPoint) → synthetic touch injection
 
 5. InsideMan sends actionResult
    └── success: true/false
@@ -393,7 +410,7 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
    └── For element targets: refreshAccessibilityData(), find element, get activation point
    └── touchTap with element target: try accessibilityActivate() first, fall back to synthetic
 
-3. SafeCracker performs gesture
+3. TheSafecracker performs gesture
    └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
    └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
    └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()

@@ -119,7 +119,7 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 ### touchTap
 
-Tap at coordinates or on an element using synthetic touch injection via SafeCracker.
+Tap at coordinates or on an element using synthetic touch injection via TheSafecracker.
 
 **At coordinates:**
 ```json
@@ -442,14 +442,14 @@ For `typeText`, the response includes the current text field value:
 ```
 
 Possible methods:
-- `syntheticTap` - Tap synthesized via SafeCracker
-- `syntheticLongPress` - Long press synthesized via SafeCracker
-- `syntheticSwipe` - Swipe synthesized via SafeCracker
-- `syntheticDrag` - Drag synthesized via SafeCracker
-- `syntheticPinch` - Pinch gesture synthesized via SafeCracker
-- `syntheticRotate` - Rotation gesture synthesized via SafeCracker
-- `syntheticTwoFingerTap` - Two-finger tap synthesized via SafeCracker
-- `syntheticDrawPath` - Path drawing synthesized via SafeCracker
+- `syntheticTap` - Tap synthesized via TheSafecracker
+- `syntheticLongPress` - Long press synthesized via TheSafecracker
+- `syntheticSwipe` - Swipe synthesized via TheSafecracker
+- `syntheticDrag` - Drag synthesized via TheSafecracker
+- `syntheticPinch` - Pinch gesture synthesized via TheSafecracker
+- `syntheticRotate` - Rotation gesture synthesized via TheSafecracker
+- `syntheticTwoFingerTap` - Two-finger tap synthesized via TheSafecracker
+- `syntheticDrawPath` - Path drawing synthesized via TheSafecracker
 - `activate` - Element's `activate()` was used
 - `increment` - Element's `increment()` was called
 - `decrement` - Element's `decrement()` was called
@@ -851,7 +851,7 @@ Protocol v3.0 requires token-based authentication for all connections:
 3. On success, server sends `info` and the session proceeds normally
 4. On failure, server sends `authFailed` and disconnects after a brief delay
 
-The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated at startup and logged to the console. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### UI Approval Flow
 
