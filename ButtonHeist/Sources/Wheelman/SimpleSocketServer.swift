@@ -6,12 +6,18 @@ import Network
 public final class SimpleSocketServer: @unchecked Sendable {
     public typealias DataHandler = @Sendable (Data, @escaping @Sendable (Data) -> Void) -> Void
 
+    private static let maxBufferSize = 10_000_000 // 10 MB
+    private static let maxConnections = 5
+    private static let maxMessagesPerSecond = 30
+
     // All mutable state protected by this lock
     private let lock = NSLock()
     private var listener: NWListener?
     private var connections: [Int: NWConnection] = [:]
     private var clientCounter = 0
     private var _listeningPort: UInt16 = 0
+    private var authenticatedClients: Set<Int> = []
+    private var clientMessageTimestamps: [Int: [Date]] = [:]
 
     public var listeningPort: UInt16 {
         lock.lock()
@@ -22,6 +28,8 @@ public final class SimpleSocketServer: @unchecked Sendable {
     public var onClientConnected: (@Sendable (Int) -> Void)?
     public var onClientDisconnected: (@Sendable (Int) -> Void)?
     public var onDataReceived: DataHandler?
+    /// Called for messages from unauthenticated clients (before auth succeeds)
+    public var onUnauthenticatedData: ((_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
     private let queue = DispatchQueue(label: "com.buttonheist.wheelman.server")
 
@@ -32,12 +40,15 @@ public final class SimpleSocketServer: @unchecked Sendable {
     }
 
     /// Start the server on the specified port.
-    /// - Parameter port: Port to listen on (0 = any available)
+    /// - Parameters:
+    ///   - port: Port to listen on (0 = any available)
+    ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     /// - Returns: Actual port number bound
-    public func start(port: UInt16 = 0) throws -> UInt16 {
+    public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
         let parameters = NWParameters.tcp
+        let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
         parameters.requiredLocalEndpoint = .hostPort(
-            host: .ipv6(.any),
+            host: host,
             port: NWEndpoint.Port(rawValue: port) ?? .any
         )
 
@@ -118,9 +129,25 @@ public final class SimpleSocketServer: @unchecked Sendable {
         })
     }
 
+    public func disconnect(clientId: Int) {
+        removeClient(clientId)
+    }
+
+    public func markAuthenticated(_ clientId: Int) {
+        lock.lock()
+        authenticatedClients.insert(clientId)
+        lock.unlock()
+    }
+
+    public func isAuthenticated(_ clientId: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return authenticatedClients.contains(clientId)
+    }
+
     public func broadcastToAll(_ data: Data) {
         lock.lock()
-        let clientIds = Array(connections.keys)
+        let clientIds = Array(connections.keys).filter { authenticatedClients.contains($0) }
         lock.unlock()
 
         for clientId in clientIds {
@@ -131,6 +158,16 @@ public final class SimpleSocketServer: @unchecked Sendable {
     // MARK: - Private
 
     private func handleNewConnection(_ connection: NWConnection) {
+        lock.lock()
+        let currentCount = connections.count
+        lock.unlock()
+
+        if currentCount >= Self.maxConnections {
+            NSLog("[SimpleSocketServer] Max connections (\(Self.maxConnections)) reached, rejecting")
+            connection.cancel()
+            return
+        }
+
         lock.lock()
         clientCounter += 1
         let clientId = clientCounter
@@ -159,10 +196,26 @@ public final class SimpleSocketServer: @unchecked Sendable {
     private func removeClient(_ clientId: Int) {
         lock.lock()
         let conn = connections.removeValue(forKey: clientId)
+        authenticatedClients.remove(clientId)
+        clientMessageTimestamps.removeValue(forKey: clientId)
         lock.unlock()
 
         conn?.cancel()
         self.onClientDisconnected?(clientId)
+    }
+
+    private func isRateLimited(_ clientId: Int) -> Bool {
+        lock.lock()
+        let now = Date()
+        var timestamps = clientMessageTimestamps[clientId] ?? []
+        timestamps = timestamps.filter { now.timeIntervalSince($0) < 1.0 }
+        let limited = timestamps.count >= Self.maxMessagesPerSecond
+        if !limited {
+            timestamps.append(now)
+        }
+        clientMessageTimestamps[clientId] = timestamps
+        lock.unlock()
+        return limited
     }
 
     private func startReceiving(clientId: Int, connection: NWConnection) {
@@ -184,14 +237,30 @@ public final class SimpleSocketServer: @unchecked Sendable {
                 messageBuffer.append(content)
             }
 
+            if messageBuffer.count > Self.maxBufferSize {
+                NSLog("[SimpleSocketServer] Client \(clientId) exceeded max buffer size, disconnecting")
+                self.removeClient(clientId)
+                return
+            }
+
             // Process newline-delimited messages
             while let newlineIndex = messageBuffer.firstIndex(of: 0x0A) {
                 let messageData = Data(messageBuffer.prefix(upTo: newlineIndex))
                 messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
 
                 if !messageData.isEmpty {
-                    self.onDataReceived?(messageData) { response in
-                        self.send(response, to: clientId)
+                    if self.isAuthenticated(clientId) {
+                        if self.isRateLimited(clientId) {
+                            NSLog("[SimpleSocketServer] Client \(clientId) rate limited, dropping message")
+                        } else {
+                            self.onDataReceived?(messageData) { response in
+                                self.send(response, to: clientId)
+                            }
+                        }
+                    } else {
+                        self.onUnauthenticatedData?(clientId, messageData) { response in
+                            self.send(response, to: clientId)
+                        }
                     }
                 }
             }
