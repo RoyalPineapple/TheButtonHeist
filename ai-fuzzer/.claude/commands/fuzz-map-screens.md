@@ -19,6 +19,8 @@ You are tasked with systematically mapping every reachable screen in the connect
 3. Print the connected device name and app name for confirmation
 4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. Pre-populate known screens and transitions — skip mapping what's already known.
+6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
 
 During mapping, update your session notes file continuously:
 - After each new screen: add to `## Screens Discovered`

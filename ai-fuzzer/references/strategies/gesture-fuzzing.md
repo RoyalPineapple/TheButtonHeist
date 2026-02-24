@@ -19,7 +19,7 @@ Target elements that are **least likely** to expect complex gestures:
 
 ## Action Selection
 
-For each element, apply the **full gesture matrix**:
+For each element, apply the **full gesture matrix** in a **randomized order** — don't always start with tap. Shuffle the gesture list per element so different sessions exercise different orderings:
 
 ### Single-Finger Gestures
 1. `tap` — baseline
