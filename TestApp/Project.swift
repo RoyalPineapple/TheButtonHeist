@@ -26,6 +26,7 @@ let project = Project(
                 "CFBundleDisplayName": "A11y SwiftUI",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
+                "InsideManPort": 1455,
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
@@ -33,7 +34,11 @@ let project = Project(
             dependencies: [
                 .project(target: "TheGoods", path: ".."),
                 .project(target: "InsideMan", path: ".."),
-            ]
+            ],
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "Y4XC6NM5DD",
+            ])
         ),
 
         // MARK: - UIKit Test App
@@ -59,6 +64,7 @@ let project = Project(
                 ],
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
+                "InsideManPort": 1455,
             ]),
             sources: ["UIKitSources/**"],
             resources: ["UIKitResources/**"],
@@ -66,7 +72,11 @@ let project = Project(
             dependencies: [
                 .project(target: "TheGoods", path: ".."),
                 .project(target: "InsideMan", path: ".."),
-            ]
+            ],
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "Y4XC6NM5DD",
+            ])
         ),
     ]
 )

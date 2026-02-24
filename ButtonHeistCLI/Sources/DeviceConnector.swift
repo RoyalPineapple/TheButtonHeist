@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import ButtonHeist
 
 @MainActor
@@ -8,18 +9,44 @@ final class DeviceConnector {
     private let quiet: Bool
     private let discoveryTimeout: UInt64
     private let connectionTimeout: UInt64
+    private let directHost: String?
+    private let directPort: UInt16?
 
-    init(deviceFilter: String?, token: String? = nil, quiet: Bool = false,
+    init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
+         token: String? = nil, quiet: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
+        // Flags override env vars
+        self.directHost = host
+            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
+        self.directPort = port
+            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         self.deviceFilter = deviceFilter
+            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.quiet = quiet
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
         self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
     }
 
-    /// Discover devices, filter by --device if set, connect, and return
+    /// Connect to a device — direct if host/port are set, otherwise via Bonjour discovery.
     func connect() async throws {
+        if let host = directHost, let port = directPort {
+            // Direct connection — skip Bonjour entirely
+            if !quiet { logStatus("Connecting to \(host):\(port)...") }
+            let endpoint = NWEndpoint.hostPort(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(integerLiteral: port)
+            )
+            let device = DiscoveredDevice(
+                id: "\(host):\(port)",
+                name: "\(host):\(port)",
+                endpoint: endpoint
+            )
+            try await connectToDevice(device)
+            return
+        }
+
+        // Bonjour discovery path
         if !quiet { logStatus("Searching for iOS devices...") }
         client.startDiscovery()
 
@@ -42,8 +69,20 @@ final class DeviceConnector {
 
         if !quiet {
             logStatus("Found: \(client.displayName(for: device))")
-            logStatus("Connecting...")
         }
+
+        try await connectToDevice(device)
+    }
+
+    func disconnect() {
+        client.disconnect()
+        client.stopDiscovery()
+    }
+
+    // MARK: - Private
+
+    private func connectToDevice(_ device: DiscoveredDevice) async throws {
+        if !quiet { logStatus("Connecting...") }
 
         var connected = false
         var connectionError: Error?
@@ -70,11 +109,6 @@ final class DeviceConnector {
         }
 
         if !quiet { logStatus("Connected") }
-    }
-
-    func disconnect() {
-        client.disconnect()
-        client.stopDiscovery()
     }
 
     /// Find first device matching the filter (or first device if no filter)

@@ -19,7 +19,7 @@ You are tasked with replaying the action sequence that triggered a specific find
 
 ## Step 0: Find the Trace
 
-1. List `fuzz-sessions/fuzzsession-*.trace.md` files
+1. List `.fuzzer-data/sessions/fuzzsession-*.trace.md` files
 2. If a session was specified in `$ARGUMENTS`, find the matching trace file
 3. Otherwise, use the most recent trace file
 4. Read the trace file header to find the companion session notes file
@@ -70,9 +70,19 @@ Proceed? (waiting for confirmation)
 
 ## Step 3: Verify Connection
 
-1. Call `list_devices` — confirm device is connected
-2. **Load nav graph**: Read `references/nav-graph.md` for route planning
-3. Call `get_interface` — fingerprint the current screen
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm device is connected
+3. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection:
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+4. **Load nav graph**: Read `references/nav-graph.md` for route planning
+3. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
 4. If already on the finding's screen, skip navigation steps
 5. If not on the expected starting screen, **plan a route** from current screen to the finding's screen using the nav graph and `## Transitions`
 
@@ -81,7 +91,7 @@ Proceed? (waiting for confirmation)
 For each action in the reproduction sequence:
 
 ### Before each action
-1. Call `get_interface` to get the current fingerprint
+1. Run `buttonheist watch --once --format json --quiet` to get the current fingerprint
 2. Compare with the trace's expected `screen_fingerprint_before`:
 
 ```
@@ -98,7 +108,7 @@ similarity = len(overlap) / max(len(expected), len(actual))
    - **< 50%**: Major divergence — app is on a different screen. Report and ask to continue or abort.
 
 ### Execute the action
-1. Use the exact `tool` and `args` from the trace entry
+1. Run the corresponding CLI command from the trace entry
 2. If the target element's identifier is not found in the current interface:
    a. Search by label (trace's `target.label`)
    b. Search by frame position overlap

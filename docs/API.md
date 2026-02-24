@@ -1,320 +1,6 @@
 # ButtonHeist API Reference
 
-Complete API documentation for the MCP server (AI agents), InsideMan (iOS), HeistClient (macOS), and the CLI.
-
-## MCP Server (AI Agent Interface)
-
-**Binary**: `ButtonHeistMCP/.build/release/buttonheist-mcp`
-**Protocol**: MCP (Model Context Protocol) — JSON-RPC 2.0 over stdio
-**Location**: `ButtonHeistMCP/Sources/main.swift`
-
-### Overview
-
-The MCP server is the primary interface for AI agents to drive iOS apps. It gives the agent **eyes** (screenshots + accessibility hierarchy) and **hands** (tap, swipe, draw, and other gestures) for any iOS app running InsideMan.
-
-When an MCP client (Claude Code, Claude Desktop, etc.) starts a session in a directory containing `.mcp.json`, it automatically spawns the server process. The server spawns `buttonheist session --format json` as a subprocess and exposes a single `run` tool that proxies JSON commands to that session. From the agent's perspective, interacting with the iOS app is as natural as reading a file or running a shell command.
-
-### Setup
-
-**1. Build the MCP server:**
-
-```bash
-cd ButtonHeistMCP
-swift build -c release
-# Binary at .build/release/buttonheist-mcp
-```
-
-**2. Add `.mcp.json` to your project root:**
-
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-**Targeting a specific device** (for multi-simulator setups):
-
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": ["--device", "DEADBEEF-1234-5678-9ABC-DEF012345678"]
-    }
-  }
-}
-```
-
-The `--device` flag accepts any of: device name, app name, short ID prefix, simulator UDID, or vendor identifier. You can also set the `BUTTONHEIST_DEVICE` environment variable instead of using `--device`.
-
-**3. Run your iOS app** (simulator or device with InsideMan embedded).
-
-**4. Start an AI agent session** in the project directory. The agent automatically gains access to all ButtonHeist tools — no manual connection steps required.
-
-### How it works
-
-```
-AI agent starts session → MCP client reads .mcp.json
-  → spawns buttonheist-mcp → spawns "buttonheist session --format json"
-  → session subprocess discovers iOS app via Bonjour and connects
-  → single "run" tool appears in agent's tool palette
-  → agent can see and interact with the app
-```
-
-The `buttonheist session` subprocess maintains the persistent connection to the iOS app. The MCP server serializes all `run` tool calls through a `SessionPipe` actor to prevent concurrent pipe I/O races, so tool calls complete in milliseconds even under heavy use.
-
-### Tool: `run`
-
-The MCP server exposes a single tool named `run`. Every interaction with the iOS app goes through this one tool.
-
-**Schema:**
-
-```json
-{
-  "command": "<name>",
-  "<param>": "<value>",
-  ...
-}
-```
-
-The `command` field is required. All other fields are command-specific parameters passed through to the `buttonheist session` subprocess.
-
-**Example calls:**
-
-```json
-{"command": "get_interface"}
-{"command": "get_screen"}
-{"command": "tap", "identifier": "loginButton"}
-{"command": "tap", "order": 3}
-{"command": "tap", "x": 196.5, "y": 659}
-{"command": "swipe", "direction": "up"}
-{"command": "type_text", "text": "hello", "identifier": "emailField"}
-{"command": "status"}
-```
-
-### Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `get_interface` | Read the current UI element hierarchy |
-| `get_screen` | Capture a PNG screenshot of the current screen |
-| `tap` | Tap an element or screen coordinate |
-| `long_press` | Long press at an element or screen coordinate |
-| `swipe` | Swipe from a start point or in a direction |
-| `drag` | Drag from one point to another |
-| `pinch` | Two-finger pinch/zoom gesture |
-| `rotate` | Two-finger rotation gesture |
-| `two_finger_tap` | Simultaneous two-finger tap |
-| `draw_path` | Trace through a sequence of waypoints |
-| `draw_bezier` | Draw along cubic bezier curves |
-| `activate` | Activate an element via accessibility API (VoiceOver double-tap) |
-| `increment` | Increment an adjustable element (slider, stepper, picker) |
-| `decrement` | Decrement an adjustable element (slider, stepper, picker) |
-| `perform_custom_action` | Invoke a named custom accessibility action on an element |
-| `type_text` | Type text and/or delete characters via UIKeyboardImpl injection |
-| `edit_action` | Perform edit action (copy, paste, cut, select, selectAll) via responder chain |
-| `dismiss_keyboard` | Dismiss the software keyboard (resign first responder) |
-| `wait_for_idle` | Wait for animations to settle, then return the interface |
-| `list_devices` | List all discovered iOS devices running InsideMan |
-| `status` | Show connection status |
-| `help` | List all commands with descriptions |
-
-### Command Parameters
-
-#### get_interface
-
-Read the current UI element hierarchy. Returns all accessibility elements with labels, values, identifiers, frames, and available actions.
-
-**Parameters**: None
-
-**Returns**: JSON with `elements` array and optional `tree` structure.
-
-#### get_screen
-
-Capture a PNG screenshot of the current screen. The MCP server routes the PNG through a temp file and returns it as an inline image to the agent.
-
-**Parameters**: None
-
-**Returns**: PNG image content.
-
-#### tap
-
-Tap an element or screen coordinate.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Element accessibility identifier |
-| `order` | integer | Element order index from get_interface (0-based) |
-| `x` | number | Screen X coordinate in points |
-| `y` | number | Screen Y coordinate in points |
-
-Specify either an element (`identifier` or `order`) or coordinates (`x`, `y`).
-
-#### long_press
-
-Long press at an element or screen coordinate.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Element accessibility identifier |
-| `order` | integer | Element order index |
-| `x` | number | Screen X coordinate |
-| `y` | number | Screen Y coordinate |
-| `duration` | number | Press duration in seconds (default 0.5) |
-
-#### swipe
-
-Swipe from a start point to an end point or in a direction.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Start from element's center |
-| `order` | integer | Start from element's center (order index) |
-| `startX`, `startY` | number | Start coordinates |
-| `endX`, `endY` | number | End coordinates |
-| `direction` | string | `up`, `down`, `left`, `right` |
-| `distance` | number | Swipe distance in points (default 200) |
-| `duration` | number | Duration in seconds (default 0.15) |
-
-#### drag
-
-Drag from a start point to an end point.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Start from element's center |
-| `order` | integer | Start from element's center (order index) |
-| `startX`, `startY` | number | Start coordinates |
-| `endX`, `endY` | number | End coordinates (required) |
-| `duration` | number | Duration in seconds (default 0.5) |
-
-#### pinch
-
-Pinch/zoom gesture. Scale > 1.0 zooms in, < 1.0 zooms out.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Center on element |
-| `order` | integer | Center on element (order index) |
-| `centerX`, `centerY` | number | Center coordinates |
-| `scale` | number | Scale factor (**required**) |
-| `spread` | number | Initial finger spread in points (default 100) |
-| `duration` | number | Duration in seconds (default 0.5) |
-
-#### rotate
-
-Two-finger rotation gesture.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Center on element |
-| `order` | integer | Center on element (order index) |
-| `centerX`, `centerY` | number | Center coordinates |
-| `angle` | number | Rotation angle in radians (**required**) |
-| `radius` | number | Finger distance from center (default 100) |
-| `duration` | number | Duration in seconds (default 0.5) |
-
-#### two_finger_tap
-
-Simultaneous two-finger tap.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Center on element |
-| `order` | integer | Center on element (order index) |
-| `centerX`, `centerY` | number | Center coordinates |
-| `spread` | number | Distance between fingers (default 40) |
-
-#### draw_path
-
-Draw along a path by tracing through a sequence of points.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `points` | array | Array of `{x, y}` objects to trace through (minimum 2, **required**) |
-| `duration` | number | Total duration in seconds (mutually exclusive with velocity) |
-| `velocity` | number | Speed in points per second (mutually exclusive with duration) |
-
-#### draw_bezier
-
-Draw along cubic bezier curves. The session subprocess samples curves to a polyline before tracing.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `startX` | number | Start X coordinate (**required**) |
-| `startY` | number | Start Y coordinate (**required**) |
-| `segments` | array | Array of bezier segments (**required**) |
-| `samplesPerSegment` | integer | Points per segment (default 20) |
-| `duration` | number | Total duration in seconds |
-| `velocity` | number | Speed in points per second |
-
-Each segment has: `cp1X`, `cp1Y`, `cp2X`, `cp2Y`, `endX`, `endY`.
-
-#### activate
-
-Activate an element using accessibility API (equivalent to VoiceOver double-tap). Falls back to synthetic tap if accessibility activation fails.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Element accessibility identifier |
-| `order` | integer | Element order index |
-
-#### increment / decrement
-
-Adjust an adjustable element (slider, stepper, picker).
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Element accessibility identifier |
-| `order` | integer | Element order index |
-
-#### perform_custom_action
-
-Perform a named custom accessibility action on an element.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `identifier` | string | Element accessibility identifier |
-| `order` | integer | Element order index |
-| `actionName` | string | Name of the custom action (**required**) |
-
-#### type_text
-
-Type text into a text field by injecting characters into the keyboard input system, and/or delete characters. Returns the current text field value after the operation. Uses UIKeyboardImpl (the same approach as KIF) to inject text directly — no keyboard layout detection needed. The software keyboard must be visible (disable 'Connect Hardware Keyboard' in Simulator). Optimized for AI agent feedback loops: type, verify, correct.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `text` | string | Text to type character-by-character |
-| `deleteCount` | integer | Number of delete key taps before typing (for corrections) |
-| `identifier` | string | Element accessibility identifier (focuses field, reads value) |
-| `order` | integer | Element order index (focuses field, reads value) |
-
-At least `text` or `deleteCount` must be provided. When an element is specified, it is tapped to focus and the keyboard is opened. After typing, the element's value is read back and included in the response.
-
-**Example feedback loop using the `run` tool:**
-
-```json
-{"command": "type_text", "text": "Hello Wrold", "identifier": "nameField"}
-→ {"status":"ok","value":"Hello Wrold"}
-
-{"command": "type_text", "deleteCount": 4, "text": "orld", "identifier": "nameField"}
-→ {"status":"ok","value":"Hello World"}
-```
-
-#### list_devices
-
-List all discovered iOS devices running InsideMan. Returns device names, app names, short IDs, and device identifiers (simulator UDID or vendor identifier).
-
-**Parameters**: None
-
-**Returns**: JSON array of discovered devices with `name`, `appName`, `deviceName`, `shortId`, `simulatorUDID`, and `vendorIdentifier` fields.
-
----
+Complete API documentation for InsideMan (iOS), HeistClient (macOS), and the CLI.
 
 ## InsideMan
 
@@ -1063,7 +749,26 @@ Screen capture payload.
 **Location**: `ButtonHeistCLI/`
 **Version**: 2.1.0
 
-All subcommands that connect to a device accept `--device <filter>` to target a specific instance. The filter matches against device name, app name, short ID prefix, simulator UDID, or vendor identifier (case-insensitive prefix match for IDs).
+All subcommands that connect to a device accept these connection options:
+
+| Option | Description |
+|--------|-------------|
+| `--device <filter>` | Target a specific device by name, ID prefix, simulator UDID, or vendor ID |
+| `--host <address>` | Direct host address — skips Bonjour discovery |
+| `--port <number>` | Direct port number — skips Bonjour discovery |
+
+When `--host` and `--port` are both provided, the CLI connects directly via TCP without Bonjour discovery, reducing latency from ~2s to ~50ms per command.
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `BUTTONHEIST_HOST` | Default host address (overridden by `--host`) |
+| `BUTTONHEIST_PORT` | Default port number (overridden by `--port`) |
+| `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
+| `BUTTONHEIST_TOKEN` | Auth token for InsideMan |
+
+Flags always take precedence over environment variables.
 
 ### buttonheist list
 
@@ -1093,6 +798,8 @@ OPTIONS:
   -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
   -v, --verbose           Show verbose output
   --device <filter>       Target a specific device
+  --host <address>        Direct host address (skip Bonjour)
+  --port <number>         Direct port number (skip Bonjour)
 ```
 
 In watch mode, keyboard commands are available:
@@ -1179,7 +886,7 @@ buttonheist type --delete 2 --text "llo World" --identifier "nameField"
 
 ### buttonheist session
 
-Start a persistent interactive session that accepts JSON commands on stdin and emits JSON responses on stdout. This is the subprocess that `buttonheist-mcp` spawns internally.
+Start a persistent interactive session that accepts JSON commands on stdin and emits JSON responses on stdout.
 
 ```
 USAGE: buttonheist session [OPTIONS]
@@ -1191,7 +898,7 @@ OPTIONS:
   --device <filter>       Target a specific device
 ```
 
-In `--format json` mode (used by the MCP server), each line of stdin is parsed as a JSON object with a `command` field. Each command produces exactly one JSON response line on stdout.
+In `--format json` mode, each line of stdin is parsed as a JSON object with a `command` field. Each command produces exactly one JSON response line on stdout.
 
 ```bash
 # Start an interactive session
@@ -1201,7 +908,7 @@ buttonheist session --format json
 echo '{"command":"get_interface"}' | buttonheist session --format json --once
 ```
 
-This command is the backbone of the MCP server integration: `buttonheist-mcp` spawns `buttonheist session --format json` and routes all `run` tool calls through it.
+This command is useful for persistent connections where multiple commands need to share a single TCP session.
 
 ### buttonheist screenshot
 
@@ -1355,25 +1062,6 @@ do {
 } catch {
     print("Timeout waiting for action result")
 }
-```
-
-### Direct TCP Connection (Python)
-
-```python
-from scripts.buttonheist_usb import ButtonHeistUSBConnection
-
-with ButtonHeistUSBConnection() as conn:
-    # Get hierarchy
-    hierarchy = conn.get_hierarchy()
-    for element in hierarchy['elements']:
-        print(f"{element['order']}: {element['label']}")
-
-    # Activate element
-    result = conn.activate(identifier="loginButton")
-    print(f"Success: {result['success']}")
-
-    # Tap at coordinates
-    result = conn.tap(x=196.5, y=659)
 ```
 
 ### CLI Scripting
