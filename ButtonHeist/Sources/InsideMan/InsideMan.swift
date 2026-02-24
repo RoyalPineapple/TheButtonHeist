@@ -34,24 +34,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private var netService: NetService?
     private var subscribedClients: Set<Int> = []
     private let port: UInt16
-    private let authToken: String
+    private let muscle: TheMuscle
     private let instanceId: String?
     private let sessionId = UUID()
     private let parser = AccessibilityHierarchyParser()
-    private let safeCracker = SafeCracker()
+    private let theSafecracker = TheSafecracker()
     private var cachedElements: [AccessibilityElement] = []
-
-    /// Whether UI approval is required (true when token is auto-generated, not explicitly set)
-    private let requiresUIApproval: Bool
-
-    /// Clients waiting for UI approval, keyed by client ID → respond closure
-    private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
-
-    /// Number of currently authenticated clients (for overlay display)
-    private var authenticatedClientCount: Int = 0
-
-    /// Set of client IDs that have been authenticated (for accurate disconnect tracking)
-    private var authenticatedClientIDs: Set<Int> = []
 
     // MARK: - Interactive Object Storage
 
@@ -79,8 +67,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     public init(port: UInt16 = 0, token: String? = nil, instanceId: String? = nil) {
         self.port = port
-        self.authToken = token ?? UUID().uuidString
-        self.requiresUIApproval = (token == nil)
+        self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
     }
 
@@ -94,10 +81,18 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let server = SimpleSocketServer()
 
+        // Wire TheMuscle callbacks to the socket server
+        muscle.sendToClient = { [weak server] data, clientId in server?.send(data, to: clientId) }
+        muscle.markClientAuthenticated = { [weak server] clientId in server?.markAuthenticated(clientId) }
+        muscle.disconnectClient = { [weak server] clientId in server?.disconnect(clientId: clientId) }
+        muscle.onClientAuthenticated = { [weak self] clientId, respond in
+            self?.handleClientConnected(clientId, respond: respond)
+        }
+
         server.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
                 serverLog("Client \(clientId) connected, awaiting auth")
-                self?.sendAuthRequired(clientId: clientId)
+                self?.muscle.sendAuthRequired(clientId: clientId)
             }
         }
 
@@ -105,12 +100,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             Task { @MainActor in
                 serverLog("Client \(clientId) disconnected")
                 self?.subscribedClients.remove(clientId)
-                self?.pendingApprovalClients.removeValue(forKey: clientId)
-                if self?.authenticatedClientIDs.remove(clientId) != nil {
-                    self?.updateAuthenticatedCount(delta: -1)
-                } else {
-                    self?.updateOverlayState()
-                }
+                self?.muscle.handleClientDisconnected(clientId)
             }
         }
 
@@ -122,7 +112,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         server.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
-                self?.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+                self?.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
             }
         }
 
@@ -143,7 +133,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         } else {
             serverLog("Server listening on port \(actualPort)")
         }
-        serverLog("Auth token: \(authToken)")
+        serverLog("Auth token: \(muscle.authToken)")
         if let instanceId {
             serverLog("Instance ID: \(instanceId)")
         }
@@ -151,11 +141,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Start observing accessibility changes
         startAccessibilityObservation()
-
-        // Show connection overlay when UI approval is required
-        if requiresUIApproval {
-            ConnectionApprovalOverlay.show(state: .waiting)
-        }
 
         serverLog("Server started successfully")
     }
@@ -172,12 +157,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         netService = nil
 
         subscribedClients.removeAll()
-        pendingApprovalClients.removeAll()
-        authenticatedClientIDs.removeAll()
-        authenticatedClientCount = 0
+        muscle.tearDown()
 
         stopAccessibilityObservation()
-        ConnectionApprovalOverlay.hide()
 
         serverLog("Server stopped")
     }
@@ -235,7 +217,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         // Token hash for pre-connection filtering (SHA256, first 8 bytes hex)
-        let tokenHash = SHA256.hash(data: Data(authToken.utf8))
+        let tokenHash = SHA256.hash(data: Data(muscle.authToken.utf8))
         let tokenHashPrefix = tokenHash.prefix(8).map { String(format: "%02x", $0) }.joined()
         if let data = tokenHashPrefix.data(using: .utf8) {
             txtDict["tokenhash"] = data
@@ -251,87 +233,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         netService = service
         netService?.publish()
         serverLog("Advertising as '\(serviceName)' on port \(port)")
-    }
-
-    // MARK: - Private Methods - Authentication
-
-    private func sendAuthRequired(clientId: Int) {
-        guard let data = try? JSONEncoder().encode(ServerMessage.authRequired) else { return }
-        socketServer?.send(data, to: clientId)
-    }
-
-    private func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) {
-        guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-              case .authenticate(let payload) = message else {
-            serverLog("Client \(clientId) sent non-auth message before authenticating, disconnecting")
-            socketServer?.disconnect(clientId: clientId)
-            return
-        }
-
-        // Empty token + UI approval mode → show approval overlay
-        if payload.token.isEmpty && requiresUIApproval {
-            serverLog("Client \(clientId) requesting UI approval")
-            pendingApprovalClients[clientId] = respond
-            ConnectionApprovalOverlay.showApproval(
-                clientId: clientId,
-                onAllow: { [weak self] in self?.approveClient(clientId) },
-                onDeny: { [weak self] in self?.denyClient(clientId) }
-            )
-            return
-        }
-
-        guard payload.token == authToken else {
-            sendMessage(.authFailed("Invalid token"), respond: respond)
-            serverLog("Client \(clientId) failed auth")
-            Task {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-                self.socketServer?.disconnect(clientId: clientId)
-            }
-            return
-        }
-
-        socketServer?.markAuthenticated(clientId)
-        serverLog("Client \(clientId) authenticated")
-        authenticatedClientIDs.insert(clientId)
-        updateAuthenticatedCount(delta: 1)
-        handleClientConnected(clientId, respond: respond)
-    }
-
-    // MARK: - Private Methods - Connection Approval
-
-    private func approveClient(_ clientId: Int) {
-        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
-        socketServer?.markAuthenticated(clientId)
-        serverLog("Client \(clientId) approved via UI")
-        authenticatedClientIDs.insert(clientId)
-        sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
-        updateAuthenticatedCount(delta: 1)
-        handleClientConnected(clientId, respond: respond)
-    }
-
-    private func denyClient(_ clientId: Int) {
-        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
-        sendMessage(.authFailed("Connection denied by user"), respond: respond)
-        serverLog("Client \(clientId) denied via UI")
-        Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            self.socketServer?.disconnect(clientId: clientId)
-        }
-        updateOverlayState()
-    }
-
-    private func updateAuthenticatedCount(delta: Int) {
-        authenticatedClientCount = max(0, authenticatedClientCount + delta)
-        updateOverlayState()
-    }
-
-    private func updateOverlayState() {
-        guard requiresUIApproval else { return }
-        if authenticatedClientCount > 0 {
-            ConnectionApprovalOverlay.updateConnectedCount(authenticatedClientCount)
-        } else {
-            ConnectionApprovalOverlay.show(state: .waiting)
-        }
     }
 
     // MARK: - Private Methods - Client Handling
@@ -1003,7 +904,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         // Fall back to synthetic touch injection
-        if safeCracker.tap(at: point) {
+        if theSafecracker.tap(at: point) {
             TapVisualizerView.showTap(at: point)
             let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
@@ -1073,8 +974,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         refreshAccessibilityData()
         let beforeElements = snapshotElements()
 
-        guard let action = SafeCracker.EditAction(rawValue: target.action) else {
-            let valid = SafeCracker.EditAction.allCases.map(\.rawValue).joined(separator: ", ")
+        guard let action = TheSafecracker.EditAction(rawValue: target.action) else {
+            let valid = TheSafecracker.EditAction.allCases.map(\.rawValue).joined(separator: ", ")
             sendMessage(.actionResult(ActionResult(
                 success: false,
                 method: .editAction,
@@ -1083,7 +984,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
-        let success = safeCracker.performEditAction(action)
+        let success = theSafecracker.performEditAction(action)
         let result = await actionResultWithDelta(success: success, method: .editAction, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1094,7 +995,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         refreshAccessibilityData()
         let beforeElements = snapshotElements()
 
-        let success = safeCracker.resignFirstResponder()
+        let success = theSafecracker.resignFirstResponder()
         let result = await actionResultWithDelta(
             success: success, method: .resignFirstResponder,
             message: success ? nil : "No first responder found",
@@ -1150,7 +1051,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         // Fall back to synthetic tap
-        if safeCracker.tap(at: point) {
+        if theSafecracker.tap(at: point) {
             TapVisualizerView.showTap(at: point)
             let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
@@ -1165,7 +1066,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         if target.elementTarget == nil { refreshAccessibilityData() }
         let beforeElements = snapshotElements()
 
-        let success = await safeCracker.longPress(at: point, duration: clampDuration(target.duration))
+        let success = await theSafecracker.longPress(at: point, duration: clampDuration(target.duration))
         if success { TapVisualizerView.showTap(at: point) }
         let result = await actionResultWithDelta(success: success, method: .syntheticLongPress, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1195,7 +1096,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = clampDuration(target.duration ?? 0.15)
 
-        let success = await safeCracker.swipe(from: startPoint, to: endPoint, duration: duration)
+        let success = await theSafecracker.swipe(from: startPoint, to: endPoint, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticSwipe, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1206,7 +1107,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let duration = clampDuration(target.duration ?? 0.5)
-        let success = await safeCracker.drag(from: startPoint, to: target.endPoint, duration: duration)
+        let success = await theSafecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticDrag, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1218,7 +1119,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let spread = target.spread ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
-        let success = await safeCracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
+        let success = await theSafecracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticPinch, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1230,7 +1131,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let radius = target.radius ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
-        let success = await safeCracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
+        let success = await theSafecracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticRotate, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1241,7 +1142,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 40.0
-        let success = safeCracker.twoFingerTap(at: center, spread: CGFloat(spread))
+        let success = theSafecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         let result = await actionResultWithDelta(success: success, method: .syntheticTwoFingerTap, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1262,7 +1163,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
-        let success = await safeCracker.drawPath(points: cgPoints, duration: duration)
+        let success = await theSafecracker.drawPath(points: cgPoints, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1298,7 +1199,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
-        let success = await safeCracker.drawPath(points: cgPoints, duration: duration)
+        let success = await theSafecracker.drawPath(points: cgPoints, duration: duration)
         let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1327,7 +1228,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             }
 
             let point = element.activationPoint
-            if !safeCracker.tap(at: point) {
+            if !theSafecracker.tap(at: point) {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
                     method: .typeText,
@@ -1341,7 +1242,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             var keyboardAppeared = false
             for _ in 0..<20 {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                if safeCracker.isKeyboardVisible() {
+                if theSafecracker.isKeyboardVisible() {
                     keyboardAppeared = true
                     break
                 }
@@ -1356,7 +1257,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                 return
             }
         } else {
-            if !safeCracker.isKeyboardVisible() {
+            if !theSafecracker.isKeyboardVisible() {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
                     method: .typeText,
@@ -1368,7 +1269,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Step 2: Delete characters if requested
         if let deleteCount = target.deleteCount, deleteCount > 0 {
-            if !(await safeCracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay)) {
+            if !(await theSafecracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay)) {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
                     method: .typeText,
@@ -1380,7 +1281,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Step 3: Type text if provided
         if let text = target.text, !text.isEmpty {
-            if !(await safeCracker.typeText(text, interKeyDelay: interKeyDelay)) {
+            if !(await theSafecracker.typeText(text, interKeyDelay: interKeyDelay)) {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
                     method: .typeText,
