@@ -25,8 +25,9 @@ Thank you for your interest in contributing to ButtonHeist!
 | `ButtonHeist/Sources/TheGoods/` | Shared types and protocol messages |
 | `ButtonHeist/Sources/InsideMan/` | iOS server framework (server, touch injection, tap visualization) |
 | `ButtonHeist/Sources/InsideManLoader/` | ObjC auto-start via +load |
-| `ButtonHeist/Sources/Wheelman/` | macOS client library (discovery, connection) |
-| `ButtonHeistCLI/` | Command-line tool (watch, action, screenshot commands) |
+| `ButtonHeist/Sources/Wheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
+| `ButtonHeistCLI/` | Command-line tool (list, watch, action, touch, type, screenshot, session) |
+| `ButtonHeistMCP/` | MCP server for AI agent integration |
 | `TestApp/` | Sample SwiftUI and UIKit iOS applications |
 | `AccessibilitySnapshot/` | Hierarchy parsing submodule |
 
@@ -86,7 +87,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan \
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
 
 # Build apps
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme TestApp \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
 
 # CLI
@@ -111,13 +112,13 @@ cd ButtonHeistCLI && swift build
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`
-- Uses BSD sockets for TCP server (not Network framework)
+- Uses SimpleSocketServer (from Wheelman) for TCP server
 
 ### Wheelman
 
-- macOS-only
-- Provide both `@Published` properties and callbacks
-- Handle connection lifecycle gracefully
+- Cross-platform (iOS + macOS)
+- TCP server (SimpleSocketServer), client (DeviceConnection), and Bonjour discovery (DeviceDiscovery)
+- Uses Network framework (NWListener, NWConnection, NWBrowser)
 
 ## Questions?
 
