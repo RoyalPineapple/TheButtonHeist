@@ -9,12 +9,13 @@ final class DeviceConnector {
     private let discoveryTimeout: UInt64
     private let connectionTimeout: UInt64
 
-    init(deviceFilter: String?, quiet: Bool = false,
+    init(deviceFilter: String?, token: String? = nil, quiet: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
         self.deviceFilter = deviceFilter
         self.quiet = quiet
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
+        self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
     }
 
     /// Discover devices, filter by --device if set, connect, and return

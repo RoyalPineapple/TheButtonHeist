@@ -341,6 +341,8 @@ When the InsideMan framework loads:
 INSIDEMAN_PORT=1455                  # Server port (0 = auto-assign)
 INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEMAN_DISABLE=true               # Disable auto-start
+INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated if not set)
+INSIDEMAN_ID=my-instance             # Human-readable instance identifier
 ```
 
 **Info.plist (fallback):**
@@ -351,7 +353,13 @@ INSIDEMAN_DISABLE=true               # Disable auto-start
 <real>1.0</real>
 <key>InsideManDisableAutoStart</key>
 <false/>
+<key>InsideManToken</key>
+<string>my-secret-token</string>
+<key>InsideManInstanceId</key>
+<string>my-instance</string>
 ```
+
+**Client-side:** Set `BUTTONHEIST_TOKEN` environment variable to authenticate with the server.
 
 ### InsideMan Class
 
@@ -382,15 +390,20 @@ Whether the server is currently running.
 
 #### Methods
 
-##### configure(port:)
+##### configure(port:token:instanceId:)
 
 ```swift
-public static func configure(port: UInt16)
+public static func configure(port: UInt16, token: String? = nil, instanceId: String? = nil)
 ```
 
-Configure the shared instance with a specific port. Must be called before `start()` if not using Info.plist.
+Configure the shared instance with a specific port, auth token, and instance identifier. Must be called before `start()` if not using Info.plist/environment variables.
 
-**Note**: Normally not needed - use Info.plist configuration instead.
+**Parameters**:
+- `port`: Port to listen on. Use `0` for automatic port selection.
+- `token`: Auth token for client authentication. If nil, auto-generated at startup.
+- `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
+
+**Note**: Normally not needed - use Info.plist or environment variable configuration instead.
 
 ##### start()
 
@@ -732,7 +745,7 @@ public enum ActionError: Error, LocalizedError {
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "2.0"
+public let protocolVersion = "3.0"
 ```
 
 ### ConnectionState
@@ -759,16 +772,15 @@ Represents a discovered InsideMan device.
 #### Properties
 
 - `id: String` - Unique identifier
-- `name: String` - Service name (format: "AppName-DeviceName#shortId")
+- `name: String` - Service name (v3 format: "AppName#instanceId")
 - `endpoint: NWEndpoint` - Network endpoint for connection
 - `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
-- `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
+- `instanceId: String?` - Instance identifier from Bonjour TXT record
 
 #### Computed Properties
 
 - `shortId: String?` - Short instance ID parsed from service name suffix (after `#`)
-- `appName: String` - App name extracted from service name (before first `-`)
-- `deviceName: String` - Device name extracted from service name (after first `-`, before `#`)
+- `appName: String` - App name extracted from service name (before `#`)
 
 ### ClientMessage
 
@@ -780,6 +792,7 @@ Messages sent from client to server.
 
 #### Cases
 
+- `authenticate(AuthenticatePayload)` - Authenticate with a token (must be first message sent)
 - `requestInterface` - Request current hierarchy
 - `subscribe` - Subscribe to automatic updates
 - `unsubscribe` - Unsubscribe from updates
@@ -810,7 +823,9 @@ Messages sent from server to client.
 
 #### Cases
 
-- `info(ServerInfo)` - Device/app metadata on connection
+- `authRequired` - Server requires authentication (sent immediately on connection)
+- `authFailed(String)` - Authentication failed (sent before disconnect)
+- `info(ServerInfo)` - Device/app metadata (sent after successful auth)
 - `interface(Interface)` - UI element snapshot
 - `pong` - Ping response
 - `error(String)` - Error description

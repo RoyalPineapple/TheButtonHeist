@@ -38,6 +38,9 @@ public final class HeistClient {
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
 
+    /// Auth token to send during connection handshake
+    public var token: String?
+
     // MARK: - Private
 
     private var discovery: DeviceDiscovery?
@@ -89,7 +92,7 @@ public final class HeistClient {
         disconnect()
 
         connectionState = .connecting
-        connection = DeviceConnection(device: device)
+        connection = DeviceConnection(device: device, token: token)
 
         connection?.onConnected = { [weak self] in
             self?.connectionState = .connected

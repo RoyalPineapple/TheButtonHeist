@@ -5,11 +5,14 @@ import CoreGraphics
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "2.0"
+public let protocolVersion = "3.0"
 
 // MARK: - Client -> Server Messages
 
 public enum ClientMessage: Codable {
+    /// Authenticate with a token (must be first message sent)
+    case authenticate(AuthenticatePayload)
+
     /// Request current interface (UI element hierarchy)
     case requestInterface
 
@@ -405,6 +408,12 @@ public struct WaitForIdleTarget: Codable, Sendable {
     }
 }
 
+/// Payload for authenticate message
+public struct AuthenticatePayload: Codable, Sendable {
+    public let token: String
+    public init(token: String) { self.token = token }
+}
+
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
@@ -413,6 +422,12 @@ public enum SwipeDirection: String, Codable, Sendable {
 // MARK: - Server -> Client Messages
 
 public enum ServerMessage: Codable {
+    /// Server requires authentication (sent immediately on connection)
+    case authRequired
+
+    /// Authentication failed (sent before disconnect)
+    case authFailed(String)
+
     /// Server info on connection
     case info(ServerInfo)
 
@@ -618,6 +633,8 @@ public struct ServerInfo: Codable, Sendable {
     public let screenHeight: Double
     /// Per-launch session identifier (nil for servers < v2.1)
     public let instanceId: String?
+    /// Human-readable instance identifier (from INSIDEMAN_ID env var, or shortId fallback)
+    public let instanceIdentifier: String?
     /// Port the server is listening on (nil for servers < v2.1)
     public let listeningPort: UInt16?
     /// Simulator UDID when running on iOS Simulator (nil on physical devices)
@@ -634,6 +651,7 @@ public struct ServerInfo: Codable, Sendable {
         screenWidth: Double,
         screenHeight: Double,
         instanceId: String? = nil,
+        instanceIdentifier: String? = nil,
         listeningPort: UInt16? = nil,
         simulatorUDID: String? = nil,
         vendorIdentifier: String? = nil
@@ -646,6 +664,7 @@ public struct ServerInfo: Codable, Sendable {
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
         self.instanceId = instanceId
+        self.instanceIdentifier = instanceIdentifier
         self.listeningPort = listeningPort
         self.simulatorUDID = simulatorUDID
         self.vendorIdentifier = vendorIdentifier
