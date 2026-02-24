@@ -28,6 +28,7 @@
 		739C806ACE0F65800CB24918 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
 		7AA7540D74C2A550ABD18739 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
+		7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */; };
 		812D56C0F322065CF4966D1B /* HeistClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1F25ADDEF86D35E12406EB /* HeistClient.swift */; };
 		8184581FABD6CE3C5A82A2B4 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		861D5E1B49C53414C4059C48 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */; };
@@ -229,6 +230,7 @@
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		F20BB761FA684C7D90336187 /* InsideManAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InsideManAutoStart.m; sourceTree = "<group>"; };
 		F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
 		F5F3CA420333318E833FBFB9 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
@@ -408,6 +410,7 @@
 				40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */,
 				D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */,
 				E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */,
+				F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */,
 			);
 			path = Wheelman;
 			sourceTree = "<group>";
@@ -844,6 +847,7 @@
 				0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */,
 				4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */,
 				F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */,
+				7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

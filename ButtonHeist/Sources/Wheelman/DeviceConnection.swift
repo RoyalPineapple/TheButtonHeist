@@ -72,8 +72,9 @@ public final class DeviceConnection {
         case .ready:
             debug("Connected")
             isConnected = true
-            onConnected?()
             startReceiving()
+            // Don't fire onConnected yet — wait for auth to complete.
+            // onConnected is fired when we receive the server info message (post-auth).
         case .failed(let error):
             debug("Connection failed: \(error)")
             isConnected = false
@@ -164,6 +165,7 @@ public final class DeviceConnection {
         case .info(let info):
             debug("Received server info: \(info.appName)")
             onServerInfo?(info)
+            onConnected?()
         case .interface(let payload):
             debug("Received interface: \(payload.elements.count) elements")
             onInterface?(payload)

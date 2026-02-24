@@ -112,7 +112,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
         let bindToLoopback = isSimulator && !bindAllOverride
 
-        let actualPort = try server.start(port: port, bindToLoopback: bindToLoopback)
+        // Simulators share localhost — use random port to avoid collisions.
+        // Fixed ports are only useful on physical devices (for USB tunneling).
+        let effectivePort = isSimulator ? 0 : port
+        let actualPort = try server.start(port: effectivePort, bindToLoopback: bindToLoopback)
         self.socketServer = server
         isRunning = true
 
