@@ -554,6 +554,8 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEMAN_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
 | `INSIDEMAN_PORT` | Fixed port number, 0 = auto | 0 |
 | `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
+| `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
+| `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 
 ### Info.plist Keys (fallback)
 ```xml
@@ -563,6 +565,10 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 <real>1.0</real>
 <key>InsideManDisableAutoStart</key>
 <false/>
+<key>InsideManToken</key>
+<string>my-secret-token</string>
+<key>InsideManInstanceId</key>
+<string>my-instance</string>
 <key>NSLocalNetworkUsageDescription</key>
 <string>element inspector connection.</string>
 <key>NSBonjourServices</key>

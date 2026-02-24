@@ -258,8 +258,12 @@ public final class SimpleSocketServer: @unchecked Sendable {
                             }
                         }
                     } else {
-                        self.onUnauthenticatedData?(clientId, messageData) { response in
-                            self.send(response, to: clientId)
+                        if self.isRateLimited(clientId) {
+                            NSLog("[SimpleSocketServer] Unauthenticated client \(clientId) rate limited, dropping message")
+                        } else {
+                            self.onUnauthenticatedData?(clientId, messageData) { response in
+                                self.send(response, to: clientId)
+                            }
                         }
                     }
                 }
