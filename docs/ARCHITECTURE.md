@@ -70,7 +70,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 **Key Types**:
 - `ClientMessage` - Messages from client to server (23 cases including 9 touch gestures, text input, edit actions, and idle waiting)
-- `ServerMessage` - Messages from server to client (8 cases including auth challenge/failure)
+- `ServerMessage` - Messages from server to client (9 cases including auth challenge/failure/approval)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
@@ -103,6 +103,7 @@ InsideMan (singleton, @MainActor)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
 ├── TapVisualizerView (visual tap feedback overlay)
+├── ConnectionApprovalOverlay (DEBUG-only Allow/Deny UI for auto-generated tokens)
 ├── Polling Timer (interface change detection via hash comparison)
 └── Debounce Timer (300ms debounce for UI notifications)
 ```
@@ -136,7 +137,7 @@ When the framework loads:
 - Network framework implementation using `NWListener` and `NWConnection`
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
 - Loopback-only binding on simulators (`::1`), all-interfaces on devices (`::`)
-- Fixed port from configuration (default: 1455)
+- Fixed port from configuration (default: 1455 on devices; simulators always use port 0/auto-assign)
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
 - Token-based authentication (v3.0)
@@ -325,6 +326,12 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 4. InsideMan validates token
    └── On success: sends ServerMessage.info
    └── On failure: sends ServerMessage.authFailed, disconnects
+   └── On empty token (auto-generated mode): triggers UI approval flow
+
+4b. UI Approval Flow (when token is auto-generated and client sends empty token)
+   └── InsideMan shows ConnectionApprovalOverlay with Allow/Deny prompt
+   └── User taps Allow: sends ServerMessage.authApproved(token), then ServerMessage.info
+   └── User taps Deny: sends ServerMessage.authFailed, disconnects
 
 5. HeistClient receives info
    └── serverInfo = info
@@ -405,7 +412,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 **Summary**:
 - Protocol version: 3.0
 - Transport: TCP socket (Network framework NWListener/NWConnection)
-- Authentication: Token-based (required for all connections)
+- Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
