@@ -17,22 +17,32 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 
 ## Step 0: Verify Connection + Check for Existing Session
 
-1. Call `list_devices` — confirm at least one device is connected
-2. If no devices found: stop and tell the user to launch the app and try again
-3. Print the connected device name and app name for confirmation
-4. **Check for existing session**: List `fuzz-sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
-   - Create a new notes file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
-   - Create the companion trace file: `fuzz-sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
+1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
+   ```bash
+   cd ButtonHeistCLI && swift build -c release && cd ..
+   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
+   ```
+2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
+3. If no devices found: stop and tell the user to launch the app and try again
+4. Print the connected device name and app name for confirmation
+5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
+   ```bash
+   export BUTTONHEIST_HOST=127.0.0.1
+   export BUTTONHEIST_PORT=1455
+   ```
+6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
+   - Create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
+   - Create the companion trace file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
 6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-8. **Load response examples**: Read `references/examples.md` for annotated MCP response interpretation examples.
+8. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation examples.
 9. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
 
 ## Step 1: Observe the Current Screen
 
-1. Call `get_screen` to see what's on screen.
-2. Call `get_interface` to get the full element hierarchy.
+1. Run `buttonheist screenshot --output /tmp/bh-screen.png` (via Bash), then Read the PNG to see what's on screen.
+2. Run `buttonheist watch --once --format json --quiet` (via Bash) to get the full element hierarchy.
 3. Print a summary:
    - How many elements are on screen
    - List each element: `[order] label/description (identifier) — frame — actions`
@@ -67,22 +77,22 @@ Process elements in **randomized order** (not always top-to-bottom). For each in
 ### Elements with actions (activate, increment, decrement, custom)
 
 Process elements in batches of 3-5. For each element:
-1. Call `activate` (by identifier if available, otherwise by order)
+1. Run `buttonheist action --identifier ID --format json` (by identifier if available, otherwise by order)
 2. Read the delta from the response:
    - **`noChange`**: Element is inert — continue batch
    - **`valuesChanged`**: Note the value changes as expected behavior, continue batch
    - **`elementsChanged`**: Check `added`/`removedOrders` — if elements disappeared, flag as ANOMALY, continue batch
    - **`screenChanged`**: Stop batch, **push** onto `## Navigation Stack`, use the `newInterface` from delta to record the new screen and transition. Navigate back using **known back-route** from `## Transitions` or `references/nav-graph.md` if available, otherwise use heuristic back-nav. **Pop** navigation stack on return. Re-plan.
-3. If the element has `increment`/`decrement`: call both, read deltas to verify value changes
+3. If the element has `increment`/`decrement`: run both via `buttonheist action --type increment/decrement`, read deltas to verify value changes
 4. If the element has custom actions: try each via `perform_custom_action`
 
 After the batch: append all trace entries at once, update session notes once.
 
 ### Elements without actions
 
-1. `tap` at the element's center coordinates (computed from frame) — use `tap` as a fallback since these elements lack accessibility actions
+1. `buttonheist touch tap --x X --y Y --format json` at the element's center coordinates (computed from frame) — use tap as a fallback since these elements lack accessibility actions
 2. Read the delta — check if anything changed (`noChange` means truly inert)
-3. Try `long_press` — some elements reveal context menus only on long press
+3. Try `buttonheist touch longpress` — some elements reveal context menus only on long press
 4. Read the delta — check if anything changed
 
 ### Text fields
@@ -90,16 +100,16 @@ After the batch: append all trace entries at once, update session notes once.
 If the element looks like a text input (text field, secure field, text editor):
 1. **Read the field's label/identifier** to understand what it expects (name, email, phone, password, description, etc.)
 2. **Generate context-appropriate values** using the "Context-Aware Value Generation" section of `references/interesting-values.md`. For a "Name" field, try real names that break assumptions (`O'Brien-Smith Jr.`, `Null`, `信田`). For an "Email" field, try technically-valid-but-weird addresses (`a@b.c`, `user+tag@example.com`). Don't default to `"test input"` and `<script>alert(1)</script>` for every field.
-3. `type_text(identifier: element, text: "context-appropriate value")` — type a value that matches the field's purpose
+3. `buttonheist type --identifier ID --text "..." --format json` — type a value that matches the field's purpose
 4. Check the returned value matches what you typed
-5. `type_text(identifier: element, deleteCount: ..., text: "adversarial variant")` — clear and try an adversarial version of valid input
+5. `buttonheist type --identifier ID --delete N --text "..." --format json` — clear and try an adversarial version of valid input
 6. Try values from at least 3 categories in `references/interesting-values.md`, starting from a **random** category (not always boundary numbers first). Use `deleteCount` to clear before each new value.
 7. **Generate at least 1 novel value** not from any list — derive it from the field's label, mutate a listed value, or combine categories.
 
 ### Swipe testing (on scrollable-looking containers)
 
 If the tree structure shows `list` or `landmark` containers:
-1. `swipe(direction: "up")` on the container area — check if new elements appear
+1. `buttonheist touch swipe --direction up --format json` on the container area — check if new elements appear
 2. `swipe(direction: "down")` — check if original elements return
 3. Record any newly discovered elements from scrolling
 
@@ -150,6 +160,6 @@ After reporting, **update persistent nav graph**: Merge any new transitions and 
 
 ## Error Handling
 
-- If a tool call **fails with a connection error**: the app crashed. This is a CRASH finding. Record the last action and stop.
-- If an action returns `success: false`: record the error method and message. Continue testing other elements.
+- If a CLI command **fails with a connection error or non-zero exit**: the app crashed. This is a CRASH finding. Record the last action and stop.
+- If a CLI command exits with non-zero status: record the error method and message. Continue testing other elements.
 - If you can't navigate back after a transition: record as INFO ("no back navigation from [screen]") and continue exploring from the new screen.

@@ -11,8 +11,8 @@ struct ListCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Discovery timeout in seconds")
     var timeout: Double = 3.0
 
-    @Option(name: .shortAndLong, help: "Output format: human, json")
-    var format: OutputFormat = .human
+    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    var format: OutputFormat?
 
     @MainActor
     mutating func run() async throws {
@@ -31,7 +31,7 @@ struct ListCommand: AsyncParsableCommand {
             return
         }
 
-        switch format {
+        switch format ?? .auto {
         case .json:
             outputJSON(devices)
         case .human:

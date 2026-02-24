@@ -29,6 +29,9 @@ struct ActionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Custom action name (when type is 'custom')")
     var customAction: String?
 
+    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    var format: OutputFormat?
+
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
@@ -38,6 +41,12 @@ struct ActionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
+    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
+    var host: String?
+
+    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
+    var port: UInt16?
+
     @MainActor
     // swiftlint:disable:next cyclomatic_complexity
     mutating func run() async throws {
@@ -45,7 +54,7 @@ struct ActionCommand: AsyncParsableCommand {
             throw ValidationError("Must specify --identifier or --index")
         }
 
-        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
@@ -83,18 +92,24 @@ struct ActionCommand: AsyncParsableCommand {
         // Wait for result
         let result = try await client.waitForActionResult(timeout: timeout)
 
-        if result.success {
-            if !quiet {
-                logStatus("Action succeeded (method: \(result.method.rawValue))")
+        switch format ?? .auto {
+        case .json:
+            writeOutput(formatActionResultJSON(result))
+            if !result.success { Darwin.exit(1) }
+        case .human:
+            if result.success {
+                if !quiet {
+                    logStatus("Action succeeded (method: \(result.method.rawValue))")
+                }
+                writeOutput("success")
+            } else {
+                let errorMessage = result.message ?? result.method.rawValue
+                if !quiet {
+                    logStatus("Action failed: \(errorMessage)")
+                }
+                writeOutput("failed: \(errorMessage)")
+                Darwin.exit(1)
             }
-            writeOutput("success")
-        } else {
-            let errorMessage = result.message ?? result.method.rawValue
-            if !quiet {
-                logStatus("Action failed: \(errorMessage)")
-            }
-            writeOutput("failed: \(errorMessage)")
-            Darwin.exit(1)
         }
     }
 }
