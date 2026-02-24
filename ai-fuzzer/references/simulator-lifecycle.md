@@ -271,7 +271,7 @@ echo "Waiting for Bonjour advertisement..."
 timeout 5 dns-sd -B _buttonheist._tcp . 2>&1 | head -5
 
 echo "Simulator UDID: $SIM_UDID"
-echo "Set BUTTONHEIST_DEVICE=$SIM_UDID in .mcp.json to target this simulator"
+echo "Use --device $SIM_UDID to target this simulator"
 ```
 
 ## Cleanup Flow

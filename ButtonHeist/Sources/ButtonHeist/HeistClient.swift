@@ -95,11 +95,8 @@ public final class HeistClient {
         connection = DeviceConnection(device: device, token: token)
 
         connection?.onConnected = { [weak self] in
-            self?.connectionState = .connected
+            self?.connectionState = .connecting
             self?.connectedDevice = device
-            self?.connection?.send(.subscribe)
-            self?.connection?.send(.requestInterface)
-            self?.connection?.send(.requestScreen)
             self?.startKeepalive()
         }
 
@@ -113,7 +110,11 @@ public final class HeistClient {
         }
 
         connection?.onServerInfo = { [weak self] info in
+            self?.connectionState = .connected
             self?.serverInfo = info
+            self?.connection?.send(.subscribe)
+            self?.connection?.send(.requestInterface)
+            self?.connection?.send(.requestScreen)
             self?.onConnected?(info)
         }
 

@@ -20,7 +20,10 @@ struct ButtonHeist: AsyncParsableCommand {
         version: "2.1.0",
         subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
-                       SessionCommand.self],
+                       SessionCommand.self,
+                       CopyCommand.self, PasteCommand.self, CutCommand.self,
+                       SelectCommand.self, SelectAllCommand.self,
+                       DismissKeyboardCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }
@@ -33,8 +36,8 @@ struct WatchCommand: AsyncParsableCommand {
         abstract: "Watch UI elements in real-time"
     )
 
-    @Option(name: .shortAndLong, help: "Output format: human, json")
-    var format: OutputFormat = .human
+    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    var format: OutputFormat?
 
     @Flag(name: .shortAndLong, help: "Single snapshot then exit (default: watch mode)")
     var once: Bool = false
@@ -51,15 +54,23 @@ struct WatchCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
+    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
+    var host: String?
+
+    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
+    var port: UInt16?
+
     @MainActor
     mutating func run() async throws {
         let options = CLIOptions(
-            format: format,
+            format: format ?? .auto,
             once: once,
             quiet: quiet,
             timeout: timeout,
             verbose: verbose,
-            device: device
+            device: device,
+            host: host,
+            port: port
         )
 
         let runner = CLIRunner(options: options)
@@ -70,6 +81,10 @@ struct WatchCommand: AsyncParsableCommand {
 enum OutputFormat: String, ExpressibleByArgument, CaseIterable {
     case human
     case json
+
+    static var auto: OutputFormat {
+        isatty(STDIN_FILENO) != 0 ? .human : .json
+    }
 }
 
 struct CLIOptions {
@@ -79,4 +94,6 @@ struct CLIOptions {
     let timeout: Int
     let verbose: Bool
     let device: String?
+    let host: String?
+    let port: UInt16?
 }
