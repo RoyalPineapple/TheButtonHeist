@@ -41,6 +41,15 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private let safeCracker = SafeCracker()
     private var cachedElements: [AccessibilityElement] = []
 
+    /// Whether UI approval is required (true when token is auto-generated, not explicitly set)
+    private let requiresUIApproval: Bool
+
+    /// Clients waiting for UI approval, keyed by client ID → respond closure
+    private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
+
+    /// Number of currently authenticated clients (for overlay display)
+    private var authenticatedClientCount: Int = 0
+
     // MARK: - Interactive Object Storage
 
     private struct WeakObject {
@@ -68,6 +77,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     public init(port: UInt16 = 0, token: String? = nil, instanceId: String? = nil) {
         self.port = port
         self.authToken = token ?? UUID().uuidString
+        self.requiresUIApproval = (token == nil)
         self.instanceId = instanceId
     }
 
@@ -92,6 +102,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             Task { @MainActor in
                 serverLog("Client \(clientId) disconnected")
                 self?.subscribedClients.remove(clientId)
+                self?.pendingApprovalClients.removeValue(forKey: clientId)
+                self?.updateAuthenticatedCount(delta: -1)
             }
         }
 
@@ -130,6 +142,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         // Start observing accessibility changes
         startAccessibilityObservation()
 
+        // Show connection overlay when UI approval is required
+        if requiresUIApproval {
+            ConnectionApprovalOverlay.show(state: .waiting)
+        }
+
         serverLog("Server started successfully")
     }
 
@@ -145,8 +162,11 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         netService = nil
 
         subscribedClients.removeAll()
+        pendingApprovalClients.removeAll()
+        authenticatedClientCount = 0
 
         stopAccessibilityObservation()
+        ConnectionApprovalOverlay.hide()
 
         serverLog("Server stopped")
     }
@@ -237,6 +257,18 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             return
         }
 
+        // Empty token + UI approval mode → show approval overlay
+        if payload.token.isEmpty && requiresUIApproval {
+            serverLog("Client \(clientId) requesting UI approval")
+            pendingApprovalClients[clientId] = respond
+            ConnectionApprovalOverlay.showApproval(
+                clientId: clientId,
+                onAllow: { [weak self] in self?.approveClient(clientId) },
+                onDeny: { [weak self] in self?.denyClient(clientId) }
+            )
+            return
+        }
+
         guard payload.token == authToken else {
             sendMessage(.authFailed("Invalid token"), respond: respond)
             serverLog("Client \(clientId) failed auth")
@@ -249,7 +281,44 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         socketServer?.markAuthenticated(clientId)
         serverLog("Client \(clientId) authenticated")
+        updateAuthenticatedCount(delta: 1)
         handleClientConnected(clientId, respond: respond)
+    }
+
+    // MARK: - Private Methods - Connection Approval
+
+    private func approveClient(_ clientId: Int) {
+        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
+        socketServer?.markAuthenticated(clientId)
+        serverLog("Client \(clientId) approved via UI")
+        sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
+        updateAuthenticatedCount(delta: 1)
+        handleClientConnected(clientId, respond: respond)
+    }
+
+    private func denyClient(_ clientId: Int) {
+        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
+        sendMessage(.authFailed("Connection denied by user"), respond: respond)
+        serverLog("Client \(clientId) denied via UI")
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            self.socketServer?.disconnect(clientId: clientId)
+        }
+        updateOverlayState()
+    }
+
+    private func updateAuthenticatedCount(delta: Int) {
+        authenticatedClientCount = max(0, authenticatedClientCount + delta)
+        updateOverlayState()
+    }
+
+    private func updateOverlayState() {
+        guard requiresUIApproval else { return }
+        if authenticatedClientCount > 0 {
+            ConnectionApprovalOverlay.updateConnectedCount(authenticatedClientCount)
+        } else {
+            ConnectionApprovalOverlay.show(state: .waiting)
+        }
     }
 
     // MARK: - Private Methods - Client Handling

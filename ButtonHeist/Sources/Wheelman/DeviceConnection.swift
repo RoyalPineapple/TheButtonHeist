@@ -14,7 +14,7 @@ public final class DeviceConnection {
 
     private var connection: NWConnection?
     private let device: DiscoveredDevice
-    private let token: String?
+    private(set) var token: String?
     private var receiveBuffer = Data()
     private var isConnected = false
 
@@ -25,6 +25,7 @@ public final class DeviceConnection {
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
     public var onError: ((String) -> Void)?
+    public var onAuthApproved: ((String) -> Void)?
 
     public init(device: DiscoveredDevice, token: String? = nil) {
         self.device = device
@@ -150,17 +151,16 @@ public final class DeviceConnection {
         switch message {
         case .authRequired:
             debug("Auth required, sending token")
-            if let token {
-                send(.authenticate(AuthenticatePayload(token: token)))
-            } else {
-                debug("No token available, disconnecting")
-                disconnect()
-                onDisconnected?(nil)
-            }
+            // Send token if available, otherwise send empty token to request UI approval
+            send(.authenticate(AuthenticatePayload(token: token ?? "")))
         case .authFailed(let reason):
             debug("Auth failed: \(reason)")
             disconnect()
             onDisconnected?(nil)
+        case .authApproved(let payload):
+            debug("Auth approved via UI, received token")
+            token = payload.token
+            onAuthApproved?(payload.token)
         case .info(let info):
             debug("Received server info: \(info.appName)")
             onServerInfo?(info)
