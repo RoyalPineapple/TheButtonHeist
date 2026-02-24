@@ -4,7 +4,7 @@ import Network
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
 public final class SimpleSocketServer: @unchecked Sendable {
-    public typealias DataHandler = @Sendable (Data, @escaping @Sendable (Data) -> Void) -> Void
+    public typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
     private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
@@ -253,7 +253,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
                         if self.isRateLimited(clientId) {
                             NSLog("[SimpleSocketServer] Client \(clientId) rate limited, dropping message")
                         } else {
-                            self.onDataReceived?(messageData) { response in
+                            self.onDataReceived?(clientId, messageData) { response in
                                 self.send(response, to: clientId)
                             }
                         }

@@ -13,6 +13,7 @@ struct AccessibilityTestApp: App {
                 .preferredColorScheme(settings.colorScheme.resolved)
                 .tint(settings.accentColor.color)
                 .dynamicTypeSize(settings.textSize.dynamicTypeSize)
+                .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         }
     }
 }
