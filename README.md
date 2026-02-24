@@ -16,6 +16,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **Multi-device** - Run many instances on many simulators with stable identifiers for each
 - **Device targeting** - Match devices by name, short ID, simulator UDID, or vendor identifier
 - **Fixed port** - Predictable port (1455) for reliable scripted connections
+- **Token auth** - Token-based authentication with auto-generated or configured secrets
 - **Multiple interfaces** - CLI, Python, or custom tools
 
 ## Architecture
@@ -261,7 +262,7 @@ SUBCOMMANDS:
   drag                    Drag from one point to another
   pinch                   Pinch/zoom at a point or element
   rotate                  Rotate at a point or element
-  two-finger-tap          Tap with two fingers at a point or element
+  two-finger-tap          Two-finger tap at a point or element
   draw-path               Draw along a path of points
   draw-bezier             Draw along cubic bezier curves
 ```
@@ -363,18 +364,23 @@ See [docs/USB_DEVICE_CONNECTIVITY.md](docs/USB_DEVICE_CONNECTIVITY.md) for detai
 
 ## Data Model
 
-### UIElement
+### HeistElement
 
 Each element in the hierarchy contains:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `order` | `Int` | Element reading order |
-| `description` | `String` | Description |
+| `order` | `Int` | Element reading order (0-based) |
+| `description` | `String` | VoiceOver description |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
-| `frameX/Y/Width/Height` | `Double` | Screen coordinates |
+| `hint` | `String?` | Accessibility hint |
+| `traits` | `[String]` | Trait names (e.g., `["button"]`, `["adjustable"]`) |
+| `frameX/Y/Width/Height` | `Double` | Screen coordinates in points |
+| `activationPointX/Y` | `Double` | Where VoiceOver would tap |
+| `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
+| `customContent` | `[{label, value, isImportant}]?` | Custom accessibility content |
 | `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 ## Development Setup
@@ -418,7 +424,6 @@ buttonheist/
 │       ├── TheGoods/              # Shared types (Messages.swift)
 │       ├── InsideMan/             # iOS server
 │       │   ├── InsideMan.swift            # Main server singleton
-│       │   ├── SimpleSocketServer.swift   # BSD socket TCP server
 │       │   ├── SafeCracker.swift           # Multi-touch gesture simulation
 │       │   ├── SyntheticTouchFactory.swift    # UITouch creation via private APIs
 │       │   ├── SyntheticEventFactory.swift    # UIEvent manipulation
@@ -428,8 +433,8 @@ buttonheist/
 │       ├── Wheelman/                 # Cross-platform networking
 │       │   ├── DiscoveredDevice.swift       # Device model
 │       │   ├── DeviceDiscovery.swift        # Bonjour browsing
-│       │   ├── DeviceConnection.swift       # BSD socket connection
-│       │   └── SimpleSocketServer.swift     # TCP server
+│       │   ├── DeviceConnection.swift       # TCP client connection
+│       │   └── SimpleSocketServer.swift     # TCP server (Network framework)
 │       └── ButtonHeist/              # macOS client framework
 │           ├── HeistClient.swift            # Main client (ObservableObject)
 │           └── Exports.swift                # Re-exports TheGoods + Wheelman
@@ -445,8 +450,8 @@ buttonheist/
 │       └── SessionCommand.swift       # Persistent interactive session command
 ├── TestApp/
 │   ├── Sources/                   # SwiftUI test app ("A11y SwiftUI")
-│   │   ├── RootView.swift             # Navigation menu
-│   │   ├── ContentView.swift          # UI showcase
+│   │   ├── RootView.swift             # Navigation menu and main view
+│   │   ├── ControlsDemoView.swift     # UI controls showcase
 │   │   └── TouchCanvasView.swift      # Multi-touch drawing canvas
 │   └── UIKitSources/              # UIKit test app ("A11y UIKit")
 ├── AccessibilitySnapshot/         # Git submodule (hierarchy parsing)
@@ -463,9 +468,10 @@ buttonheist/
 
 ## Wire Protocol
 
-Communication uses newline-delimited JSON over TCP (protocol version 2.0):
+Communication uses newline-delimited JSON over TCP (protocol version 3.0):
 
 **Client → Server:**
+- `authenticate` - Token authentication (must be first message)
 - `requestInterface` - Request current hierarchy
 - `subscribe` / `unsubscribe` - Automatic update subscription
 - `activate` - Activate element (VoiceOver double-tap)
@@ -480,21 +486,27 @@ Communication uses newline-delimited JSON over TCP (protocol version 2.0):
 - `touchTwoFingerTap` - Two-finger tap
 - `touchDrawPath` - Draw along a path of waypoints
 - `touchDrawBezier` - Draw along bezier curves (sampled server-side)
+- `typeText` - Type text via keyboard injection
+- `editAction` - Perform edit action (copy, paste, cut, select, selectAll)
+- `resignFirstResponder` - Dismiss keyboard
+- `waitForIdle` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot
 - `ping` - Keepalive
 
 **Server → Client:**
-- `info` - Server info on connection
+- `authRequired` - Server requires authentication
+- `authFailed` - Authentication failed
+- `info` - Server info after successful auth
 - `interface` - UI element interface (flat list + optional tree)
-- `actionResult` - Result of action with method used
+- `actionResult` - Result of action with method, optional delta, and animation state
 - `screen` - Base64-encoded PNG with dimensions
 - `error` - Error description
 - `pong` - Ping response
 
 **Port:** 1455 (configurable via Info.plist)
 **Bonjour service:** `_buttonheist._tcp`
-**Service name format:** `{AppName}-{DeviceName}#{shortId}`
-**TXT record keys:** `simudid` (simulator UDID), `vendorid` (vendor identifier)
+**Service name format:** `{AppName}#{instanceId}`
+**TXT record keys:** `simudid` (simulator UDID), `tokenhash` (auth token hash), `instanceid` (instance identifier)
 
 ## Troubleshooting
 
