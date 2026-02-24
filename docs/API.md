@@ -1056,25 +1056,6 @@ do {
 }
 ```
 
-### Direct TCP Connection (Python)
-
-```python
-from scripts.buttonheist_usb import ButtonHeistUSBConnection
-
-with ButtonHeistUSBConnection() as conn:
-    # Get hierarchy
-    hierarchy = conn.get_hierarchy()
-    for element in hierarchy['elements']:
-        print(f"{element['order']}: {element['label']}")
-
-    # Activate element
-    result = conn.activate(identifier="loginButton")
-    print(f"Success: {result['success']}")
-
-    # Tap at coordinates
-    result = conn.tap(x=196.5, y=659)
-```
-
 ### CLI Scripting
 
 ```bash
