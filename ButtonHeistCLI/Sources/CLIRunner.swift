@@ -76,6 +76,8 @@ final class CLIRunner {
         let effectivePort = options.port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         let effectiveDevice = options.device ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
 
+        warnIfPartialDirectConfig(host: effectiveHost, port: effectivePort, quiet: options.quiet)
+
         if let host = effectiveHost, let port = effectivePort {
             // Direct connection — skip Bonjour discovery
             if !options.quiet {
@@ -176,9 +178,25 @@ final class CLIRunner {
             guard let self = self else { return }
             if let error = error {
                 if !self.options.quiet {
-                    logStatus("Error: Connection failed - \(error.localizedDescription)")
+                    let msg = error.localizedDescription
+                    logStatus("Error: Connection failed - \(msg)")
+                    let lower = msg.lowercased()
+                    if lower.contains("refused") {
+                        logStatus("  Hint: Connection refused usually means wrong port or the app isn't running.")
+                    } else {
+                        logStatus("  Hint: Check that the host and port are correct and the app is running.")
+                    }
                 }
                 self.exitCode = .connectionFailed
+                // Proactively scan for devices via Bonjour to give the user context
+                if !self.options.quiet {
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        await discoverAndReport(client: self.client)
+                        self.isRunning = false
+                    }
+                    return
+                }
             }
             self.isRunning = false
         }
