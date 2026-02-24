@@ -27,7 +27,7 @@ When the InsideMan framework loads:
 INSIDEMAN_PORT=1455                  # Server port (0 = auto-assign)
 INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEMAN_DISABLE=true               # Disable auto-start
-INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated if not set)
+INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated and persisted in UserDefaults if not set)
 INSIDEMAN_ID=my-instance             # Human-readable instance identifier
 ```
 
@@ -143,9 +143,9 @@ public func notifyChange()
 
 Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
 
-### Touch Gesture & Text Input System (SafeCracker)
+### Touch Gesture & Text Input System (TheSafecracker)
 
-InsideMan uses `SafeCracker` internally for handling all touch gesture and text input commands. SafeCracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
+InsideMan uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
 
 **Supported gestures:**
 - `tap` - Single tap at a point
@@ -314,6 +314,14 @@ public var onDisconnected: ((Error?) -> Void)?
 ```
 
 Called when disconnected. Error is nil for clean disconnections.
+
+##### onTokenReceived
+
+```swift
+public var onTokenReceived: ((String) -> Void)?
+```
+
+Called when a token is received via on-device UI approval. The client should store this token and set it as `client.token` for future connections to skip the approval flow. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
 #### Methods
 
@@ -517,6 +525,7 @@ Messages sent from server to client.
 
 - `authRequired` - Server requires authentication (sent immediately on connection)
 - `authFailed(String)` - Authentication failed (sent before disconnect)
+- `authApproved(AuthApprovedPayload)` - Connection approved via on-device UI (contains token for future use). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 - `info(ServerInfo)` - Device/app metadata (sent after successful auth)
 - `interface(Interface)` - UI element snapshot
 - `pong` - Ping response
@@ -703,14 +712,14 @@ public enum ActionMethod: String, Codable, Sendable
 - `activate` - Used activation
 - `increment` - Used increment action
 - `decrement` - Used decrement action
-- `syntheticTap` - Tap via SafeCracker
-- `syntheticLongPress` - Long press via SafeCracker
-- `syntheticSwipe` - Swipe via SafeCracker
-- `syntheticDrag` - Drag via SafeCracker
-- `syntheticPinch` - Pinch via SafeCracker
-- `syntheticRotate` - Rotation via SafeCracker
-- `syntheticTwoFingerTap` - Two-finger tap via SafeCracker
-- `syntheticDrawPath` - Path drawing via SafeCracker
+- `syntheticTap` - Tap via TheSafecracker
+- `syntheticLongPress` - Long press via TheSafecracker
+- `syntheticSwipe` - Swipe via TheSafecracker
+- `syntheticDrag` - Drag via TheSafecracker
+- `syntheticPinch` - Pinch via TheSafecracker
+- `syntheticRotate` - Rotation via TheSafecracker
+- `syntheticTwoFingerTap` - Two-finger tap via TheSafecracker
+- `syntheticDrawPath` - Path drawing via TheSafecracker
 - `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Used custom action
 - `editAction` - Edit action via responder chain

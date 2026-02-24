@@ -16,6 +16,7 @@
 		2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */; };
 		267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
+		292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */; };
 		319F0EE2BDDEAEA018814D63 /* TheGoodsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */; };
 		38B66D610D649E6F0A63A510 /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B71D54592688B9D702D11E /* ServerInfoTests.swift */; };
 		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
@@ -45,8 +46,9 @@
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
 		F73B2CA4EB09C26A552FFDB3 /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */; };
-		F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0516039025C7D645A7C9F2 /* SafeCracker.swift */; };
+		F8B7F5CD5109590B17B1C005 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */; };
 		FCF386C3B7AAB9659383354C /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 746D54E3D34B0FB2631A3F2C /* BezierSamplerTests.swift */; };
+		FD1A2B3C4D5E6F7081920A1B /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */; };
 		FE4BF8C6D4DBC62E742EEDDA /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 /* End PBXBuildFile section */
 
@@ -190,8 +192,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0A0516039025C7D645A7C9F2 /* SafeCracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeCracker.swift; sourceTree = "<group>"; };
+		0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
+		FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
 		183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
 		1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
@@ -218,6 +221,7 @@
 		9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
 		9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
 		A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InsideManAutoStart.h; sourceTree = "<group>"; };
 		AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
@@ -377,7 +381,8 @@
 			children = (
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
-				0A0516039025C7D645A7C9F2 /* SafeCracker.swift */,
+				FD1A2B3C4D5E6F7081920A1C /* TheMuscle.swift */,
+				0A0516039025C7D645A7C9F2 /* TheSafecracker.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
 				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
@@ -466,6 +471,7 @@
 		F5A6CBAA90C77D981D32BACA /* WheelmanTests */ = {
 			isa = PBXGroup;
 			children = (
+				A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
 				F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */,
 			);
@@ -817,6 +823,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
 				13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */,
 			);
@@ -857,7 +864,8 @@
 			files = (
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
-				F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */,
+				FD1A2B3C4D5E6F7081920A1B /* TheMuscle.swift in Sources */,
+				F8B7F5CD5109590B17B1C005 /* TheSafecracker.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
 				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
@@ -1144,6 +1152,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
 				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
 				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
 				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
@@ -1227,6 +1236,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_VERSION = 5.0;
 				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
 				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
 				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
@@ -1461,6 +1471,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_VERSION = 5.0;
 				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
 				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
 				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
@@ -1635,6 +1646,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_VERSION = 5.0;
 				"SWIFT_VERSION[sdk=iphoneos*]" = 5.0;
 				"SWIFT_VERSION[sdk=iphonesimulator*]" = 5.0;
 				"SWIFT_VERSION[sdk=macosx*]" = 5.0;
