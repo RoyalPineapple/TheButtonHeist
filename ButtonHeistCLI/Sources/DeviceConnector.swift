@@ -26,6 +26,7 @@ final class DeviceConnector {
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
         self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.autoSubscribe = false
     }
 
     /// Connect to a device — direct if host/port are set, otherwise via Bonjour discovery.

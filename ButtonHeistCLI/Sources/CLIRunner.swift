@@ -137,7 +137,7 @@ final class CLIRunner {
         // Handle device discovery
         client.onDeviceDiscovered = { [weak self] device in
             guard let self = self else { return }
-            if self.client.connectedDevice == nil {
+            if self.client.connectionState == .disconnected {
                 // Apply device filter if specified
                 if let filter = self.effectiveDeviceFilter {
                     guard device.matches(filter: filter) else { return }
