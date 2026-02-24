@@ -398,8 +398,8 @@ final class SafeCracker {
     /// Begin touches at N screen points simultaneously.
     private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
-        guard let window = getKeyWindow() else {
-            print("[SafeCracker] No key window found")
+        guard let window = windowForPoint(points[0]) else {
+            print("[SafeCracker] No window found for point \(points[0])")
             return false
         }
 
@@ -503,12 +503,24 @@ final class SafeCracker {
 
     // MARK: - Private
 
-    private func getKeyWindow() -> UIWindow? {
-        // Find the main app window, skipping overlay windows (high windowLevel)
-        UIApplication.shared.connectedScenes
+    /// Find the correct window for a tap at the given screen point.
+    /// Iterates all windows frontmost-first (highest windowLevel first),
+    /// following KIF's pattern from UIApplication-KIFAdditions.m.
+    /// Returns the first window whose hitTest succeeds at the point.
+    private func windowForPoint(_ point: CGPoint) -> UIWindow? {
+        let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .first { $0.windowLevel <= .normal && $0.rootViewController?.view != nil }
+            .filter { !($0 is TapOverlayWindow) && !$0.isHidden }
+            .sorted { $0.windowLevel > $1.windowLevel }
+
+        for window in allWindows {
+            let windowPoint = window.convert(point, from: nil)
+            if window.hitTest(windowPoint, with: nil) != nil {
+                return window
+            }
+        }
+        return nil
     }
 }
 #endif // DEBUG
