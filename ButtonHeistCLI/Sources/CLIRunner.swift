@@ -32,7 +32,7 @@ final class CLIRunner {
     private let options: CLIOptions
     private let client = HeistClient()
     private var isRunning = true
-    private var previousElements: [UIElement] = []
+    private var previousElements: [HeistElement] = []
     private var oldTermios = termios()
     private var hasReceivedInterface = false
     private var exitCode: ExitCode = .success
@@ -202,7 +202,7 @@ final class CLIRunner {
         writeOutput(output)
     }
 
-    private func formatElement(_ element: UIElement, changed: Bool) -> String {
+    private func formatElement(_ element: HeistElement, changed: Bool) -> String {
         var output = ""
         let prefix = changed ? "* " : "  "
         let index = String(format: "[%2d]", element.order)
@@ -217,7 +217,7 @@ final class CLIRunner {
             output += "       ID: \(id)\n"
         }
         if !element.actions.isEmpty {
-            output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
+            output += "       Actions: \(element.actions.map { $0.description }.joined(separator: ", "))\n"
         }
 
         let frame = "(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))x\(Int(element.frameHeight))"

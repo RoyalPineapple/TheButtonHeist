@@ -19,7 +19,8 @@ struct ButtonHeist: AsyncParsableCommand {
             """,
         version: "2.1.0",
         subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
-                       TouchCommand.self, TypeCommand.self, ScreenshotCommand.self],
+                       TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
+                       SessionCommand.self],
         defaultSubcommand: WatchCommand.self
     )
 }
