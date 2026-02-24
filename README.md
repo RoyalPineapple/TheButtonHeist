@@ -30,16 +30,16 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 │  └────────┬─────────┘                                               │
 │           │ MCP (JSON-RPC over stdio)                                │
 │  ┌────────┴─────────┐                                               │
-│  │ buttonheist-mcp  │  ← Persistent connection, no per-call overhead│
+│  │ buttonheist-mcp  │  ← Thin proxy, exposes single `run` tool      │
 │  │  (MCP server)    │                                               │
 │  └────────┬─────────┘                                               │
-│           │                                                          │
-│  ┌──────────────────┐  ┌──────────────────┐                       │
-│  │  buttonheist CLI │  │  Python/Scripts  │                       │
-│  │                  │  │                  │                       │
-│  └────────┬─────────┘  └────────┬─────────┘                       │
-│           │                     │                                 │
-│           └─────────────────────┘                                 │
+│           │ spawns subprocess                                        │
+│  ┌────────┴─────────────────┐  ┌──────────────────┐               │
+│  │  buttonheist session     │  │  Python/Scripts  │               │
+│  │  (persistent CLI session)│  │                  │               │
+│  └────────┬─────────────────┘  └────────┬─────────┘               │
+│           │                             │                           │
+│           └─────────────────────────────┘                           │
 │                                 │                                   │
 │                        ┌────────┴────────┐                         │
 │                        │   ButtonHeist   │  ← Bonjour discovery    │
@@ -60,6 +60,11 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+**End-to-end data flow:**
+```
+AI Agent → MCP (stdio) → buttonheist-mcp → spawns → buttonheist session → HeistClient → Network → InsideMan
+```
+
 ## Modules
 
 | Module | Platform | Description |
@@ -69,7 +74,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 | **Wheelman** | iOS + macOS | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | **ButtonHeist** | macOS | Client framework with HeistClient class; re-exports TheGoods + Wheelman |
 | **ButtonHeistMCP** | macOS | MCP server — lets AI agents drive iOS apps via Model Context Protocol |
-| **buttonheist** | macOS | CLI tool with list, watch, action, touch, and screenshot commands |
+| **buttonheist** | macOS | CLI tool with list, watch, action, touch, screenshot, and session commands |
 
 ## Quick Start
 
@@ -164,42 +169,51 @@ swift build -c release
 
 You can also target by `BUTTONHEIST_DEVICE` environment variable, device name, app name, or short ID prefix.
 
-That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any MCP client) opens a session in your project directory, it reads `.mcp.json` and spawns the `buttonheist-mcp` process. The server automatically discovers your running iOS app via Bonjour, establishes a persistent TCP connection, and exposes 16 tools that appear as native capabilities to the agent.
+That's it. When an MCP-compatible AI agent (Claude Code, Claude Desktop, or any MCP client) opens a session in your project directory, it reads `.mcp.json` and spawns the `buttonheist-mcp` process. The server spawns a `buttonheist session` subprocess that discovers your iOS app via Bonjour and exposes a single `run` tool through which all commands are dispatched.
 
 **How it works end-to-end:**
 
 ```
 1. AI agent starts a session in your project directory
 2. MCP client reads .mcp.json, spawns buttonheist-mcp
-3. buttonheist-mcp discovers your iOS app via Bonjour (< 2 seconds)
-4. Persistent TCP connection established — stays open for the entire session
-5. Agent sees 16 tools as native capabilities (list_devices, get_screen, tap, draw_path, etc.)
-6. Agent calls tools directly — no shell commands, no scripts, no manual wiring
+3. buttonheist-mcp spawns a `buttonheist session` subprocess that discovers your iOS app via Bonjour
+4. The subprocess maintains a persistent TCP connection — stays open for the entire session
+5. Agent sees a single `run` tool — commands are passed as parameters (e.g. command: "get_screen")
+6. Agent calls run() with the desired command — no shell commands, no scripts, no manual wiring
 ```
 
 The agent can now look at your app and interact with it naturally:
 
 ```
 Agent: "Let me see what's on screen"
-→ calls get_screen → sees your app's UI as an image
-→ calls get_interface  → reads the accessibility hierarchy as structured data
+→ calls run(command: "get_screen") → sees your app's UI as an image
+→ calls run(command: "get_interface") → reads the accessibility hierarchy as structured data
 
 Agent: "I'll tap the login button"
-→ calls tap(identifier: "loginButton")
+→ calls run(command: "tap", identifier: "loginButton")
 → gets success/failure result
 
 Agent: "Let me draw a signature"
-→ calls draw_bezier(startX: 100, startY: 400, segments: [...])
+→ calls run(command: "draw_bezier", startX: 100, startY: 400, segments: [...])
 → smooth curve traced on screen
 ```
 
 Because the connection is persistent (no per-call Bonjour discovery or TCP handshake), tool calls complete in milliseconds. An agent can chain dozens of interactions — navigate through screens, fill forms, verify visual state — without delay.
 
-**Available tools:**
+**Available tool:**
 
-| Tool | Description |
-|------|-------------|
-| `list_devices` | List all discovered iOS devices with identifiers |
+The MCP server exposes a single `run` tool. Pass the desired command name and any parameters:
+
+```json
+{"command": "tap", "identifier": "loginButton"}
+{"command": "get_screen"}
+{"command": "swipe", "identifier": "scrollView", "direction": "up"}
+```
+
+**Available commands:**
+
+| Command | Description |
+|---------|-------------|
 | `get_interface` | Read the full UI element hierarchy |
 | `get_screen` | Capture a PNG screen capture |
 | `tap` | Tap an element or coordinate |
@@ -214,6 +228,13 @@ Because the connection is persistent (no per-call Bonjour discovery or TCP hands
 | `activate` | Accessibility activate (VoiceOver double-tap) |
 | `increment` / `decrement` | Adjust sliders, steppers, pickers |
 | `perform_custom_action` | Invoke named custom accessibility actions |
+| `type_text` | Type text into the focused element |
+| `edit_action` | Edit text in an element |
+| `dismiss_keyboard` | Dismiss the on-screen keyboard |
+| `wait_for_idle` | Wait until the UI settles |
+| `list_devices` | List all discovered iOS devices with identifiers |
+| `status` | Show connection status |
+| `help` | List available commands |
 
 ### 3. Connect Manually
 
@@ -235,7 +256,7 @@ swift run buttonheist           # Watch mode (live updates)
 
 ## CLI Usage
 
-The CLI has six subcommands: `list`, `watch` (default), `action`, `touch`, `type`, and `screenshot`.
+The CLI has seven subcommands: `list`, `watch` (default), `action`, `touch`, `type`, `screenshot`, and `session`.
 
 All subcommands that connect to a device accept `--device <filter>` to target a specific instance by name, short ID prefix, simulator UDID, or vendor identifier.
 
@@ -465,18 +486,19 @@ buttonheist/
 │           ├── HeistClient.swift            # Main client (ObservableObject)
 │           └── Exports.swift                # Re-exports TheGoods + Wheelman
 ├── ButtonHeistMCP/
-│   ├── Package.swift              # Swift 6.0 package (depends on ButtonHeist + MCP SDK)
+│   ├── Package.swift              # Swift 6.0 package (depends on MCP SDK)
 │   └── Sources/
-│       └── main.swift             # MCP server with 15 tools for AI agent automation
+│       └── main.swift             # MCP server — thin proxy to CLI session
 ├── ButtonHeistCLI/
 │   └── Sources/                   # CLI tool
-│       ├── main.swift             # Entry point with list/watch/action/touch/screenshot commands
+│       ├── main.swift             # Entry point with list/watch/action/touch/screenshot/session commands
 │       ├── CLIRunner.swift        # Watch mode implementation
 │       ├── ListCommand.swift      # Device listing command
 │       ├── DeviceConnector.swift  # Shared discover→filter→connect helper
 │       ├── ActionCommand.swift    # Action command
 │       ├── TouchCommand.swift     # Touch gesture commands (9 subcommands)
-│       └── ScreenshotCommand.swift    # Screenshot command
+│       ├── ScreenshotCommand.swift    # Screenshot command
+│       └── SessionCommand.swift       # Persistent interactive session command
 ├── TestApp/
 │   ├── Sources/                   # SwiftUI test app ("A11y SwiftUI")
 │   │   ├── RootView.swift             # Navigation menu

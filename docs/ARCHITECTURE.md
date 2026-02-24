@@ -217,7 +217,7 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 
 ### ButtonHeistMCP (AI Agent Interface)
 
-**Purpose**: Model Context Protocol server that lets AI agents drive iOS apps. Wraps HeistClient in an MCP-compliant JSON-RPC 2.0 interface over stdio.
+**Purpose**: Model Context Protocol server that lets AI agents drive iOS apps. Proxies tool calls to a `buttonheist session` subprocess via a single `run` tool.
 
 **Architecture**:
 ```
@@ -225,13 +225,12 @@ buttonheist-mcp (executable)
 ├── StdioTransport (MCP SDK)
 │   └── JSON-RPC 2.0 over stdin/stdout
 ├── Server (MCP SDK, actor)
-│   ├── ListTools handler → 17 tool definitions (incl. list_devices, type_text)
-│   └── CallTool handler → dispatches to HeistClient
-├── HeistClient (@MainActor)
-│   ├── DeviceDiscovery (auto-connect on startup)
-│   ├── Device filter (--device flag or BUTTONHEIST_DEVICE env var)
-│   └── Persistent TCP connection to iOS device
-└── Logging (stderr, never stdout)
+│   ├── ListTools handler → 1 tool definition ("run")
+│   └── CallTool handler → serialized through SessionPipe
+├── SessionPipe (actor, serializes pipe I/O)
+│   └── JSON lines over subprocess stdin/stdout
+└── buttonheist session subprocess
+    └── HeistClient, DeviceDiscovery, TCP connection (all in CLI)
 ```
 
 **How MCP Clients Connect**:
@@ -249,48 +248,48 @@ MCP clients (Claude Code, Claude Desktop, etc.) discover and launch the server a
 }
 ```
 
-The `--device` flag (or `BUTTONHEIST_DEVICE` env var) filters which device to connect to, matching against name, app name, short ID, simulator UDID, or vendor identifier. Without a filter, it connects to the first device found.
+The `--device` flag (or `BUTTONHEIST_DEVICE` env var) is forwarded to the `buttonheist session` subprocess, which uses it to filter which device to connect to, matching against name, app name, short ID, simulator UDID, or vendor identifier. Without a filter, it connects to the first device found.
 
 When the MCP client starts a session, it:
 1. Reads `.mcp.json` and spawns the `buttonheist-mcp` process
 2. Opens a bidirectional stdio pipe (JSON-RPC 2.0 over stdin/stdout)
-3. Sends `initialize` → server responds with capabilities (17 tools)
+3. Sends `initialize` → server responds with capabilities (1 tool: `run`)
 4. Sends `notifications/initialized` → server is ready
-5. Tool calls appear as **native capabilities** to the AI agent — they show up in the agent's tool palette alongside built-in tools like file reading and shell commands
+5. Tool calls are proxied as JSON lines through the `SessionPipe` actor to the `buttonheist session` subprocess, which handles all device communication
 
-The AI agent can then call tools like `get_screen`, `tap`, or `draw_path` exactly as it would call any other tool. From the agent's perspective, it has direct access to the iOS app — there's no shell, no CLI, no intermediate scripting layer.
+The AI agent calls the `run` tool with a `command` field and any additional parameters. The MCP server forwards the call as a JSON line to the subprocess stdin and reads the response from subprocess stdout, serialized through `SessionPipe` to prevent interleaving of concurrent calls.
 
 **Connection lifecycle**:
 ```
 MCP client starts session
   └── spawns buttonheist-mcp process
-        └── HeistClient.startDiscovery() → Bonjour browse
-        └── Finds iOS device (< 2 seconds on local network)
-        └── HeistClient.connect() → TCP connection
+        └── buttonheist-mcp spawns buttonheist session subprocess
+        └── session subprocess: Bonjour discovery → TCP connection to iOS device
         └── MCP Server.start(transport: StdioTransport)
         └── Ready for tool calls
 
-Tool call (e.g. tap)
+Tool call (e.g. run {"command": "tap", ...})
   └── MCP client sends JSON-RPC request on stdin
   └── Server.handleToolCall() on MCP actor
-  └── await → hops to @MainActor
-  └── HeistClient.send(message) → TCP to iOS device
-  └── HeistClient.waitForActionResult() → async continuation
-  └── InsideMan processes gesture, sends result
+  └── SessionPipe.send() → writes JSON line to subprocess stdin
+  └── SessionPipe waits → reads JSON line from subprocess stdout
+  └── subprocess: HeistClient sends message → TCP to iOS device
+  └── subprocess: InsideMan processes gesture, sends result over TCP
+  └── subprocess writes response JSON line to stdout
   └── Server returns JSON-RPC response on stdout
   └── MCP client receives result
 
 Session ends
   └── MCP client closes stdin
-  └── buttonheist-mcp process exits
+  └── buttonheist-mcp exits, subprocess terminated
   └── TCP connection closed
 ```
 
 **Key Design Decisions**:
-- **Persistent connection**: The MCP server connects to the iOS device on startup and maintains the connection for the lifetime of the process. This eliminates the 5-10 second Bonjour discovery + TCP connect overhead that would occur with per-invocation CLI calls. Tool calls complete in milliseconds.
-- **@MainActor entry point**: HeistClient is `@MainActor`. Rather than bridging between actor contexts with `MainActor.run`, the entire `main()` function is `@MainActor`, and the MCP Server actor hops via `await` when calling tool handlers.
-- **Separate package**: ButtonHeistMCP is a standalone Swift 6.0 package (the main ButtonHeist package is Swift 5.9). It depends on `ButtonHeist` (local path) and the MCP Swift SDK.
-- **17 tools**: Discovery (`list_devices`), read tools (`get_interface`, `get_screen`), and interaction tools (`tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`).
+- **Subprocess proxy**: All iOS device logic lives in the CLI's `session` subcommand, shared between interactive CLI use and MCP. The MCP server is a thin proxy with no direct device knowledge.
+- **Single `run` tool**: Collapses individual tools into one with command dispatch, reducing token overhead in LLM context.
+- **SessionPipe actor**: Serializes concurrent MCP tool calls through the subprocess pipe, preventing interleaved writes and mismatched read/response pairs.
+- **Separate package**: ButtonHeistMCP depends only on the MCP Swift SDK. The ButtonHeist framework dependency has been removed from the MCP package.
 - **stderr for logging**: MCP uses stdout for JSON-RPC, so all diagnostic logging goes to stderr. This ensures protocol messages are never corrupted by debug output.
 
 ### ButtonHeist (macOS Client Framework)
@@ -343,39 +342,41 @@ The MCP server is the primary interface for AI agents. When an AI agent (Claude 
    └── stdio transport: stdin for JSON-RPC requests, stdout for responses
 
 2. buttonheist-mcp startup (before accepting MCP calls)
-   └── HeistClient.startDiscovery() → NWBrowser for _buttonheist._tcp
-   └── Bonjour discovers iOS device within ~2 seconds
-   └── HeistClient.connect() → TCP connection to device
-   └── InsideMan sends ServerInfo, initial interface, and screen capture
+   └── spawns buttonheist session subprocess (with --format json and optional --device flag)
+   └── session subprocess: HeistClient.startDiscovery() → NWBrowser for _buttonheist._tcp
+   └── session subprocess: Bonjour discovers iOS device within ~2 seconds
+   └── session subprocess: HeistClient.connect() → TCP connection to device
    └── MCP Server.start(transport: StdioTransport) → ready
 
 3. MCP client sends initialize handshake
-   └── Server responds with capabilities (17 tools)
-   └── Tools appear as native capabilities to the AI agent
-   └── Example: Claude sees get_screen, tap, draw_path as callable tools
+   └── Server responds with capabilities (1 tool: run)
+   └── Tool appears as a native capability to the AI agent
+   └── Example: Claude calls run with {"command": "get_screen"} or {"command": "tap", ...}
 
-4. AI agent calls a read tool (e.g. get_screen)
-   └── JSON-RPC: {"method": "tools/call", "params": {"name": "get_screen"}}
-   └── Server requests screen capture from HeistClient
-   └── HeistClient.send(.requestScreen) → TCP to iOS device
-   └── InsideMan captures screen → base64 PNG → TCP back
-   └── Server returns image content via MCP
+4. AI agent calls a read command (e.g. run {"command": "get_screen"})
+   └── JSON-RPC: {"method": "tools/call", "params": {"name": "run", "arguments": {"command": "get_screen"}}}
+   └── SessionPipe.send() writes JSON line to subprocess stdin
+   └── subprocess: HeistClient.send(.requestScreen) → TCP to iOS device
+   └── subprocess: InsideMan captures screen → base64 PNG → TCP back
+   └── subprocess writes JSON response line to stdout
+   └── SessionPipe reads response, Server returns image content via MCP
    └── Agent sees the app's screen as an image
 
-5. AI agent calls an interaction tool (e.g. tap, draw_path)
-   └── Server builds ClientMessage from tool arguments
-   └── HeistClient.send(message) → TCP to iOS device
-   └── InsideMan.SafeCracker performs the gesture
-   └── ActionResult sent back over TCP
-   └── Server returns success/failure to agent
-   └── Agent can immediately get_screen to verify the result
+5. AI agent calls an interaction command (e.g. run {"command": "tap", ...})
+   └── SessionPipe.send() writes JSON line to subprocess stdin
+   └── subprocess: HeistClient.send(message) → TCP to iOS device
+   └── subprocess: InsideMan.SafeCracker performs the gesture
+   └── subprocess: ActionResult received over TCP
+   └── subprocess writes JSON response line to stdout
+   └── SessionPipe reads response, Server returns success/failure to agent
+   └── Agent can immediately call run {"command": "get_screen"} to verify the result
 
 6. Session ends
    └── MCP client closes stdin pipe
-   └── buttonheist-mcp exits, TCP connection closes
+   └── buttonheist-mcp exits, subprocess terminated, TCP connection closes
 ```
 
-This architecture means the AI agent interacts with the iOS app as naturally as it reads files or runs commands. There is no shell scripting, no manual connection management, and no per-call discovery overhead. The persistent connection makes tool calls fast enough for real-time interaction loops.
+This architecture means the AI agent interacts with the iOS app as naturally as it reads files or runs commands. All device logic is shared with the CLI via the `session` subcommand — the MCP server is a thin proxy. The `SessionPipe` actor serializes concurrent tool calls, and screenshots are routed via unique temp files to avoid collisions.
 
 ### Discovery Flow
 
