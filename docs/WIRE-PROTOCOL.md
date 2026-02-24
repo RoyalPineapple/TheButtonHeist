@@ -1,6 +1,6 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 2.0
+**Version**: 3.0
 
 This document specifies the communication protocol between InsideMan (iOS) and clients (Wheelman, CLI, Python scripts).
 
@@ -19,12 +19,13 @@ This document specifies the communication protocol between InsideMan (iOS) and c
 InsideMan advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
-- **Name**: `{AppName}-{DeviceName}#{shortId}` (shortId is first 8 chars of a per-launch UUID)
+- **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEMAN_ID` env var, or first 8 chars of a per-launch UUID)
 - **TXT Record**:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
-  - `vendorid` — `UIDevice.identifierForVendor` UUID string (only present on physical devices)
+  - `tokenhash` — SHA256 hash prefix of the auth token (first 8 bytes, hex-encoded). Used for pre-connection filtering.
+  - `instanceid` — Human-readable instance identifier
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID or vendor identifier without establishing a TCP connection first.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, token hash, or instance ID without establishing a TCP connection first.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -39,7 +40,11 @@ Client                                    Server
    │                                         │
    │──────── TCP Connect ────────────────────►│
    │                                         │
-   │◄─────── info ───────────────────────────│  (automatic on connect)
+   │◄─────── authRequired ──────────────────│  (v3.0: auth challenge)
+   │──────── authenticate(token) ───────────►│
+   │◄─────── info ──────────────────────────│  (on successful auth)
+   │           OR                              │
+   │◄─────── authFailed ───────────────────│  (bad token → disconnect)
    │                                         │
    │──────── subscribe ──────────────────────►│  (enable auto-updates)
    │──────── requestInterface ──────────────►│
@@ -65,6 +70,14 @@ Client                                    Server
 All messages are JSON objects terminated by a newline (`\n`). Swift enums with associated values encode with `_0` wrapper.
 
 ## Client → Server Messages
+
+### authenticate
+
+Authenticate with the server. Must be the first message sent after receiving `authRequired`. Sending any other message before authenticating will result in immediate disconnection.
+
+```json
+{"authenticate":{"_0":{"token":"your-secret-token"}}}
+```
 
 ### requestInterface
 
@@ -282,13 +295,29 @@ Keepalive ping.
 
 ## Server → Client Messages
 
+### authRequired
+
+Sent immediately on connection. Indicates the client must authenticate before any other interaction.
+
+```json
+{"authRequired":{}}
+```
+
+### authFailed
+
+Sent when the client provides an invalid token. The server disconnects shortly after.
+
+```json
+{"authFailed":{"_0":"Invalid token"}}
+```
+
 ### info
 
-Sent immediately after connection. Contains device and app metadata.
+Sent after successful authentication. Contains device and app metadata.
 
 ```json
 {"info":{"_0":{
-  "protocolVersion":"2.0",
+  "protocolVersion":"3.0",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -296,6 +325,7 @@ Sent immediately after connection. Contains device and app metadata.
   "screenWidth":393.0,
   "screenHeight":852.0,
   "instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+  "instanceIdentifier":"my-instance",
   "listeningPort":1455,
   "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
   "vendorIdentifier":null
@@ -432,7 +462,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "2.0") |
+| `protocolVersion` | `String` | Protocol version (e.g., "3.0") |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
@@ -440,6 +470,7 @@ Error message.
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
 | `instanceId` | `String?` | Per-launch session UUID (nil for servers < v2.1) |
+| `instanceIdentifier` | `String?` | Human-readable instance identifier from `INSIDEMAN_ID` env var (falls back to shortId) |
 | `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
 | `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
 | `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
@@ -651,8 +682,14 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 ```
 # Client connects to fd9a:6190:eed7::1:1455
 
-# Server sends info (includes instance identity and device identifiers)
-{"info":{"_0":{"protocolVersion":"2.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
+# Server sends auth challenge (v3.0)
+{"authRequired":{}}
+
+# Client authenticates
+{"authenticate":{"_0":{"token":"my-secret-token"}}}
+
+# Server sends info after successful auth
+{"info":{"_0":{"protocolVersion":"3.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
@@ -712,6 +749,24 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 
 ## Implementation Notes
 
+### Authentication
+
+Protocol v3.0 requires token-based authentication for all connections:
+
+1. Server sends `authRequired` immediately on TCP connect
+2. Client must respond with `authenticate` containing the correct token
+3. On success, server sends `info` and the session proceeds normally
+4. On failure, server sends `authFailed` and disconnects after a brief delay
+
+The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated at startup and logged to the console. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+
+### Security Limits
+
+- **Max connections**: 5 concurrent TCP connections
+- **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
+- **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
+- **Loopback binding**: On iOS Simulator, the server binds to `::1` (loopback only) by default. Override with `INSIDEMAN_BIND_ALL=true`.
+
 ### Port Configuration
 
 The port is configured via Info.plist:
@@ -725,7 +780,7 @@ Or via environment variable `INSIDEMAN_PORT`.
 
 ### IPv6 Dual-Stack
 
-The server binds to `::` (IPv6 any) with `IPV6_V6ONLY=0`, accepting:
+The server binds to `::` (IPv6 any) on physical devices or `::1` (loopback) on simulators, accepting:
 - IPv4 connections (mapped to `::ffff:x.x.x.x`)
 - IPv6 connections (USB tunnel, WiFi)
 
