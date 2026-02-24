@@ -23,7 +23,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementWithValue() {
-        let element = UIElement(
+        let element = HeistElement(
             order: 1,
             description: "Slider",
             label: "Volume",
@@ -38,7 +38,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementWithIdentifier() {
-        let element = UIElement(
+        let element = HeistElement(
             order: 2,
             description: "Button",
             label: "Login",
@@ -53,7 +53,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementWithActions() {
-        let element = UIElement(
+        let element = HeistElement(
             order: 3,
             description: "Cell",
             label: "Item",
@@ -94,7 +94,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementUsesLabelOverDescription() {
-        let element = UIElement(
+        let element = HeistElement(
             order: 0,
             description: "Description text",
             label: "Label text",
@@ -110,7 +110,7 @@ final class FormattingTests: XCTestCase {
     }
 
     func testFormatElementFallsBackToDescription() {
-        let element = UIElement(
+        let element = HeistElement(
             order: 0,
             description: "Description text",
             label: nil,
@@ -126,8 +126,8 @@ final class FormattingTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String, index: Int, actions: [ElementAction]) -> UIElement {
-        UIElement(
+    private func makeElement(label: String, index: Int, actions: [ElementAction]) -> HeistElement {
+        HeistElement(
             order: index,
             description: label,
             label: label,
@@ -141,7 +141,7 @@ final class FormattingTests: XCTestCase {
 
 // MARK: - Formatting Functions (copied from CLI for testing)
 
-func formatElement(_ element: UIElement, changed: Bool) -> String {
+func formatElement(_ element: HeistElement, changed: Bool) -> String {
     var output = ""
     let prefix = changed ? "* " : "  "
     let index = String(format: "[%2d]", element.order)
@@ -156,7 +156,7 @@ func formatElement(_ element: UIElement, changed: Bool) -> String {
         output += "       ID: \(id)\n"
     }
     if !element.actions.isEmpty {
-        output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
+        output += "       Actions: \(element.actions.map { $0.description }.joined(separator: ", "))\n"
     }
 
     let frame = "(\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))x\(Int(element.frameHeight))"

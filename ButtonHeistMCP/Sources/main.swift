@@ -5,16 +5,29 @@ func log(_ msg: String) {
     FileHandle.standardError.write(Data("[buttonheist-mcp] \(msg)\n".utf8))
 }
 
-// MARK: - Line Reader
+// MARK: - Session Pipe
 
-/// Reads newline-delimited JSON from the session subprocess stdout
-final class LineReader: @unchecked Sendable {
+/// Serializes write→read round-trips to the session subprocess.
+/// The MCP SDK dispatches CallTool handlers concurrently (Server is an actor
+/// but handlers suspend at await points, allowing re-entrancy). Without
+/// serialization, concurrent tool calls would race on the pipe I/O.
+actor SessionPipe {
+    private let writer: FileHandle
     private let handle: FileHandle
     private var buffer = Data()
 
-    init(_ handle: FileHandle) { self.handle = handle }
+    init(writer: FileHandle, reader: FileHandle) {
+        self.writer = writer
+        self.handle = reader
+    }
 
-    func readLine() -> String? {
+    /// Send a JSON line and read one response line, atomically.
+    func roundTrip(_ data: Data) -> String? {
+        writer.write(data)
+        return readLine()
+    }
+
+    private func readLine() -> String? {
         while true {
             if let i = buffer.firstIndex(of: 0x0A) {
                 let line = String(data: buffer[buffer.startIndex..<i], encoding: .utf8)
@@ -71,8 +84,8 @@ struct ButtonHeistMCP {
         try proc.run()
         log("Session PID \(proc.processIdentifier)")
 
-        let writer = inPipe.fileHandleForWriting
-        let reader = LineReader(outPipe.fileHandleForReading)
+        let pipe = SessionPipe(writer: inPipe.fileHandleForWriting,
+                               reader: outPipe.fileHandleForReading)
 
         proc.terminationHandler = { p in
             log("Session exited (\(p.terminationStatus))")
@@ -125,8 +138,6 @@ struct ButtonHeistMCP {
             ListTools.Result(tools: [tool])
         }
 
-        let screenFile = NSTemporaryDirectory() + "buttonheist-screen.png"
-
         await server.withMethodHandler(CallTool.self) { params in
             guard var dict = params.arguments else {
                 return CallTool.Result(content: [.text("No arguments")], isError: true)
@@ -134,15 +145,15 @@ struct ButtonHeistMCP {
 
             // For screenshots, route PNG to a temp file instead of through the pipe
             let isScreenshot = dict["command"]?.stringValue == "get_screen"
+            let screenFile = isScreenshot
+                ? NSTemporaryDirectory() + "buttonheist-screen-\(UUID().uuidString).png"
+                : ""
             if isScreenshot { dict["output"] = .string(screenFile) }
 
-            // Encode args → JSON line → session stdin
+            // Encode args → JSON line, send through serialized pipe
             var data = try JSONEncoder().encode(dict)
             data.append(0x0A)
-            writer.write(data)
-
-            // Read one response line from session stdout
-            guard let line = await Task.detached(operation: { reader.readLine() }).value else {
+            guard let line = await pipe.roundTrip(data) else {
                 return CallTool.Result(content: [.text("Session closed")], isError: true)
             }
 
