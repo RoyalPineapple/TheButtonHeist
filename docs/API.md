@@ -315,6 +315,14 @@ public var onDisconnected: ((Error?) -> Void)?
 
 Called when disconnected. Error is nil for clean disconnections.
 
+##### onTokenReceived
+
+```swift
+public var onTokenReceived: ((String) -> Void)?
+```
+
+Called when a token is received via on-device UI approval. The client should store this token and set it as `client.token` for future connections to skip the approval flow. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
+
 #### Methods
 
 ##### init()

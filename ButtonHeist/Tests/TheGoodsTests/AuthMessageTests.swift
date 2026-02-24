@@ -50,6 +50,34 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - authApproved
+
+    func testAuthApprovedEncodeDecode() throws {
+        let payload = AuthApprovedPayload(token: "auto-generated-uuid")
+        let message = ServerMessage.authApproved(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .authApproved(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload.token, "auto-generated-uuid")
+        } else {
+            XCTFail("Expected authApproved, got \(decoded)")
+        }
+    }
+
+    func testAuthApprovedFromRawJSON() throws {
+        let json = """
+        {"authApproved":{"_0":{"token":"abc-123"}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+        if case .authApproved(let payload) = decoded {
+            XCTAssertEqual(payload.token, "abc-123")
+        } else {
+            XCTFail("Expected authApproved from raw JSON")
+        }
+    }
+
     // MARK: - authenticate (ClientMessage)
 
     func testAuthenticateEncodeDecode() throws {
