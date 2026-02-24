@@ -118,9 +118,13 @@ final class SessionRunner {
 
     private func connect() async throws {
         let device: DiscoveredDevice
+        let isDirect: Bool
+
+        warnIfPartialDirectConfig(host: directHost, port: directPort, quiet: false)
 
         if let host = directHost, let port = directPort {
             // Direct connection — skip Bonjour
+            isDirect = true
             logStatus("Connecting to \(host):\(port)...")
             let endpoint = NWEndpoint.hostPort(
                 host: NWEndpoint.Host(host),
@@ -133,6 +137,7 @@ final class SessionRunner {
             )
         } else {
             // Bonjour discovery
+            isDirect = false
             logStatus("Searching for iOS devices...")
             client.startDiscovery()
 
@@ -169,12 +174,14 @@ final class SessionRunner {
         let connNs = UInt64(10 * 1_000_000_000)
         while !connected && connectionError == nil {
             if DispatchTime.now().uptimeNanoseconds - connStart > connNs {
+                if isDirect { await discoverAndReport(client: client) }
                 throw CLIError.connectionTimeout
             }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
 
         if let error = connectionError {
+            if isDirect { await discoverAndReport(client: client) }
             throw CLIError.connectionFailed(error.localizedDescription)
         }
 
