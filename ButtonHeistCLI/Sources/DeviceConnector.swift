@@ -88,6 +88,12 @@ final class DeviceConnector {
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
         client.onDisconnected = { error in connectionError = error }
+        client.onTokenReceived = { [quiet] token in
+            if !quiet {
+                logStatus("Received auth token from device")
+                logStatus("Set BUTTONHEIST_TOKEN=\(token) for future connections")
+            }
+        }
         client.connect(to: device)
 
         let connStart = DispatchTime.now()

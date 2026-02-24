@@ -414,6 +414,12 @@ public struct AuthenticatePayload: Codable, Sendable {
     public init(token: String) { self.token = token }
 }
 
+/// Payload sent when a connection is approved via the on-device UI
+public struct AuthApprovedPayload: Codable, Sendable {
+    public let token: String
+    public init(token: String) { self.token = token }
+}
+
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
@@ -427,6 +433,9 @@ public enum ServerMessage: Codable {
 
     /// Authentication failed (sent before disconnect)
     case authFailed(String)
+
+    /// Authentication approved via on-device UI — includes token for future reconnections
+    case authApproved(AuthApprovedPayload)
 
     /// Server info on connection
     case info(ServerInfo)

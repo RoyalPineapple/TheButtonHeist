@@ -14,7 +14,7 @@ import UIKit
 /// (accessibilityActivate) should be attempted first by the caller,
 /// since synthetic touch injection cannot confirm that the gesture was handled.
 @MainActor
-final class SafeCracker {
+final class TheSafecracker {
 
     // MARK: - Internal Touch State
 
@@ -399,7 +399,7 @@ final class SafeCracker {
     private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard let window = windowForPoint(points[0]) else {
-            print("[SafeCracker] No window found for point \(points[0])")
+            print("[TheSafecracker] No window found for point \(points[0])")
             return false
         }
 
@@ -409,13 +409,13 @@ final class SafeCracker {
         for point in points {
             let windowPoint = window.convert(point, from: nil)
             guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                print("[SafeCracker] No view at point \(point)")
+                print("[TheSafecracker] No view at point \(point)")
                 return false
             }
             guard let touch = SyntheticTouchFactory.createTouch(
                 at: windowPoint, in: window, view: hitView, phase: .began
             ) else {
-                print("[SafeCracker] Failed to create touch")
+                print("[TheSafecracker] Failed to create touch")
                 return false
             }
             touches.append(touch)
@@ -430,7 +430,7 @@ final class SafeCracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
-            print("[SafeCracker] Failed to create began event")
+            print("[TheSafecracker] Failed to create began event")
             return false
         }
 
@@ -491,7 +491,7 @@ final class SafeCracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
-            print("[SafeCracker] Failed to create ended event")
+            print("[TheSafecracker] Failed to create ended event")
             return false
         }
 
