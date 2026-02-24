@@ -13,6 +13,7 @@
 		07BFA5FF9C20EA99328799EF /* HeistClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */; };
 		0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */; };
 		13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */; };
+		A1B2C3D4E5F60718A9B0C1D2 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C90123D4E5F6A7 /* AuthFlowIntegrationTests.swift */; };
 		2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */; };
 		267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
@@ -43,6 +44,7 @@
 		CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */; };
 		D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* TapVisualizerView.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
+		F265796FE74534DFF3F5031A /* ConnectionApprovalOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F019868EF99603E8FB87271B /* ConnectionApprovalOverlay.swift */; };
 		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
 		F73B2CA4EB09C26A552FFDB3 /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */; };
 		F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0516039025C7D645A7C9F2 /* SafeCracker.swift */; };
@@ -230,10 +232,12 @@
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F019868EF99603E8FB87271B /* ConnectionApprovalOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionApprovalOverlay.swift; sourceTree = "<group>"; };
 		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		F20BB761FA684C7D90336187 /* InsideManAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InsideManAutoStart.m; sourceTree = "<group>"; };
 		F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
 		F5F3CA420333318E833FBFB9 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C90123D4E5F6A7 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
 		F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WheelmanTests.swift; sourceTree = "<group>"; };
 		F9C1708416E311A34CD2AD74 /* TheGoodsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheGoodsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -375,6 +379,7 @@
 		56A7C6557715AACEDBA97AEC /* InsideMan */ = {
 			isa = PBXGroup;
 			children = (
+				F019868EF99603E8FB87271B /* ConnectionApprovalOverlay.swift */,
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
 				0A0516039025C7D645A7C9F2 /* SafeCracker.swift */,
@@ -466,6 +471,7 @@
 		F5A6CBAA90C77D981D32BACA /* WheelmanTests */ = {
 			isa = PBXGroup;
 			children = (
+				D4E5F6A7B8C90123D4E5F6A7 /* AuthFlowIntegrationTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
 				F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */,
 			);
@@ -817,6 +823,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1B2C3D4E5F60718A9B0C1D2 /* AuthFlowIntegrationTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
 				13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */,
 			);
@@ -855,6 +862,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F265796FE74534DFF3F5031A /* ConnectionApprovalOverlay.swift in Sources */,
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
 				F8B7F5CD5109590B17B1C005 /* SafeCracker.swift in Sources */,
