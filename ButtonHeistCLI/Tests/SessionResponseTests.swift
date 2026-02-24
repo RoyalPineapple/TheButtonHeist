@@ -433,63 +433,67 @@ enum SessionResponse {
         switch self {
         case .ok(let message):
             return ["status": "ok", "message": message]
-
         case .error(let message):
             return ["status": "error", "message": message]
-
         case .help(let commands):
             return ["status": "ok", "commands": commands]
-
         case .status(let connected, let deviceName):
             var d: [String: Any] = ["status": "ok", "connected": connected]
             if let name = deviceName { d["device"] = name }
             return d
-
         case .devices(let devices):
-            let infos: [[String: Any]] = devices.map { d in
-                var info: [String: Any] = [
-                    "name": d.name,
-                    "appName": d.appName,
-                    "deviceName": d.deviceName,
-                ]
-                if let sid = d.shortId { info["shortId"] = sid }
-                if let udid = d.simulatorUDID { info["simulatorUDID"] = udid }
-                if let vid = d.vendorIdentifier { info["vendorIdentifier"] = vid }
-                return info
-            }
-            return ["status": "ok", "devices": infos]
-
+            return devicesDict(devices)
         case .interface(let iface):
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
-            encoder.dateEncodingStrategy = .iso8601
-            guard let data = try? encoder.encode(iface),
-                  let ifaceObj = try? JSONSerialization.jsonObject(with: data) else { return nil }
-            return ["status": "ok", "interface": ifaceObj]
-
+            return interfaceDict(iface)
         case .action(let result):
-            var d: [String: Any] = [
-                "status": result.success ? "ok" : "error",
-                "method": result.method.rawValue,
-            ]
-            if let msg = result.message { d["message"] = msg }
-            if let value = result.value { d["value"] = value }
-            if result.animating == true { d["animating"] = true }
-            if let delta = result.interfaceDelta {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.sortedKeys]
-                if let data = try? encoder.encode(delta),
-                   let deltaObj = try? JSONSerialization.jsonObject(with: data) {
-                    d["delta"] = deltaObj
-                }
-            }
-            return d
-
+            return actionDict(result)
         case .screenshot(let path, let width, let height):
             return ["status": "ok", "path": path, "width": width, "height": height]
-
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
         }
+    }
+
+    private func devicesDict(_ devices: [DiscoveredDevice]) -> [String: Any] {
+        let infos: [[String: Any]] = devices.map { d in
+            var info: [String: Any] = [
+                "name": d.name,
+                "appName": d.appName,
+                "deviceName": d.deviceName,
+            ]
+            if let sid = d.shortId { info["shortId"] = sid }
+            if let udid = d.simulatorUDID { info["simulatorUDID"] = udid }
+            if let vid = d.vendorIdentifier { info["vendorIdentifier"] = vid }
+            return info
+        }
+        return ["status": "ok", "devices": infos]
+    }
+
+    private func interfaceDict(_ iface: Interface) -> [String: Any]? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(iface),
+              let ifaceObj = try? JSONSerialization.jsonObject(with: data) else { return nil }
+        return ["status": "ok", "interface": ifaceObj]
+    }
+
+    private func actionDict(_ result: ActionResult) -> [String: Any] {
+        var d: [String: Any] = [
+            "status": result.success ? "ok" : "error",
+            "method": result.method.rawValue,
+        ]
+        if let msg = result.message { d["message"] = msg }
+        if let value = result.value { d["value"] = value }
+        if result.animating == true { d["animating"] = true }
+        if let delta = result.interfaceDelta {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            if let data = try? encoder.encode(delta),
+               let deltaObj = try? JSONSerialization.jsonObject(with: data) {
+                d["delta"] = deltaObj
+            }
+        }
+        return d
     }
 }

@@ -50,8 +50,9 @@ func findCLI() -> String {
         if FileManager.default.isExecutableFile(atPath: p) { return p }
     }
     for p in ["../ButtonHeistCLI/.build/release/buttonheist",
-              "../ButtonHeistCLI/.build/debug/buttonheist"] {
-        if FileManager.default.isExecutableFile(atPath: p) { return p }
+              "../ButtonHeistCLI/.build/debug/buttonheist"]
+        where FileManager.default.isExecutableFile(atPath: p) {
+        return p
     }
     return "buttonheist"
 }
