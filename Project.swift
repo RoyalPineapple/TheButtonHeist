@@ -26,7 +26,8 @@ let project = Project(
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheGoods/**"],
-            scripts: [swiftlintScript]
+            scripts: [swiftlintScript],
+            settings: .settings(base: ["SWIFT_VERSION": "5.0"])
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
@@ -65,7 +66,8 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheGoods"),
-            ]
+            ],
+            settings: .settings(base: ["SWIFT_VERSION": "5.0"])
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)
