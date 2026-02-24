@@ -31,19 +31,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Python USB module** - `buttonheist_usb.py` for scripted USB connections
 - **Auto-start configuration** - Environment variables and Info.plist keys for port, polling interval, and disable
 - **Comprehensive test suite** - TheGoodsTests (37 tests), WheelmanTests (12 tests), ButtonHeistCLITests
+- **Token authentication** - Protocol v3.0 token-based auth with auto-generated or configured secrets
+- **Rate limiting** - 30 messages/second per client, max 5 connections, 10 MB buffer limit
+- **Loopback binding** - Simulator builds bind to loopback only by default
+- **MCP server** - `buttonheist-mcp` for AI agent integration via Model Context Protocol
+- **CLI session command** - Persistent interactive REPL with auto-reconnect
+- **CLI type command** - Text entry via UIKeyboardImpl injection
+- **CLI touch gestures** - Full gesture simulation (tap, swipe, drag, pinch, rotate, draw)
+- **Interface delta** - ActionResult includes compact diff of hierarchy changes
+- **Animation detection** - Wait-for-idle support and animation state in action results
+- **HeistElement** - Rich element model with traits, hints, activation points, custom content
+- **Edit actions** - Copy, paste, cut, select, selectAll via responder chain
+- **Multi-window support** - Traverses all visible windows sorted by window level
 
 ### Changed
-- Protocol version updated to 2.0
-- InsideMan uses BSD sockets (SimpleSocketServer) instead of Network framework
-- Wheelman uses BSD sockets for data transport (NWConnection only for service resolution)
+- Protocol version updated to 3.0 (with token authentication)
+- SimpleSocketServer reimplemented with Network framework (NWListener/NWConnection)
 - `bundleIdentifier` in `ServerInfo` changed from `String?` to `String`
-- Bonjour service name format changed to `{AppName}-{DeviceName}`
+- Bonjour service name format changed to `{AppName}#{instanceId}`
+- Element type renamed from `UIElement` to `HeistElement` with additional fields
 - Updated AccessibilitySnapshot submodule to latest `a11y-hierarchy-parsing` branch
 
 ### Technical Details
-- Wire protocol version: 2.0
+- Wire protocol version: 3.0
 - Bonjour service type: `_buttonheist._tcp`
 - Default port: 1455 (configurable)
 - Minimum iOS: 17.0
 - Minimum macOS: 14.0
-- CLI version: 2.0.0
+- CLI version: 2.1.0

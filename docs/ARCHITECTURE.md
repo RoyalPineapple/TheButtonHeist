@@ -73,20 +73,20 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
 **Key Types**:
-- `ClientMessage` - Messages from client to server (15 cases including 7 touch gestures)
-- `ServerMessage` - Messages from server to client (6 cases)
-- `UIElement` - Flat UI element representation
+- `ClientMessage` - Messages from client to server (23 cases including 9 touch gestures, text input, edit actions, and idle waiting)
+- `ServerMessage` - Messages from server to client (8 cases including auth challenge/failure)
+- `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
 - `Interface` - Container for UI element interface data (flat list + optional tree)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
-- `ActionResult` - Action outcome with method and optional message
+- `ActionResult` - Action outcome with method, optional message, interface delta, and animation state
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 2.0 included for compatibility
+- Protocol version 3.0 with token-based authentication
 
 ### InsideMan
 
@@ -95,7 +95,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 **Architecture**:
 ```
 InsideMan (singleton, @MainActor)
-├── SimpleSocketServer (from Wheelman; BSD socket TCP server, IPv6 dual-stack)
+├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
@@ -137,12 +137,13 @@ When the framework loads:
 - Socket accept/read on dedicated GCD queues
 
 **TCP Server (SimpleSocketServer)**:
-- BSD socket implementation using `socket()`, `bind()`, `listen()`, `accept()`
-- IPv6 dual-stack socket (accepts both IPv4 and IPv6)
+- Network framework implementation using `NWListener` and `NWConnection`
+- IPv6 dual-stack (accepts both IPv4 and IPv6)
+- Loopback-only binding on simulators (`::1`), all-interfaces on devices (`::`)
 - Fixed port from configuration (default: 1455)
 - Newline-delimited JSON protocol (0x0A separator)
-- Multiple concurrent client support
-- SIGPIPE handling to prevent crashes on closed connections
+- Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
+- Token-based authentication (v3.0)
 
 ### SafeCracker (Touch Gesture & Text Input System)
 
@@ -210,10 +211,10 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 **Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
 
 **Key Types**:
-- `SimpleSocketServer` - BSD socket TCP server (IPv6 dual-stack), used by InsideMan on iOS
-- `DeviceConnection` - BSD socket TCP client with Bonjour service resolution
+- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by InsideMan on iOS
+- `DeviceConnection` - TCP client with NWConnection service resolution and data transport
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier)
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier, tokenHash, instanceId)
 
 ### ButtonHeistMCP (AI Agent Interface)
 
@@ -296,7 +297,7 @@ Session ends
 
 **Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
 
-**Usage**: `import ButtonHeist` gives access to all types (HeistClient, UIElement, Interface, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (HeistClient, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
@@ -304,8 +305,7 @@ HeistClient (ObservableObject, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
-│   ├── NWConnection (service resolution only)
-│   └── BSD socket (actual data transport)
+│   └── NWConnection (service resolution + data transport)
 └── Published Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
@@ -384,10 +384,10 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 1. InsideMan loads (ObjC +load)
    └── SimpleSocketServer.start(port: 1455)
    └── NetService.publish("_buttonheist._tcp")
-   │     Service name: "{AppName}-{DeviceName}#{shortId}"
-   │     shortId = first 8 chars of UUID (unique per launch)
+   │     Service name: "{AppName}#{instanceId}"
+   │     instanceId = INSIDEMAN_ID env var, or first 8 chars of per-launch UUID
    └── NetService.setTXTRecord()
-         TXT keys: "simudid" (SIMULATOR_UDID), "vendorid" (identifierForVendor)
+         TXT keys: "simudid" (SIMULATOR_UDID), "tokenhash" (SHA256 prefix), "instanceid"
 
 2. HeistClient.startDiscovery()
    └── NWBrowser.start(for: "_buttonheist._tcp")
@@ -401,9 +401,9 @@ This architecture means the AI agent interacts with the iOS app as naturally as 
 
 When running multiple instances (e.g., multiple simulators), each instance has a unique identity:
 
-- **Short ID**: A per-launch UUID suffix in the Bonjour service name (e.g., `MyApp-iPhone 16 Pro#a1b2c3d4`)
+- **Instance ID**: Configurable via `INSIDEMAN_ID` env var, or defaults to first 8 chars of a per-launch UUID. Appears in the Bonjour service name (e.g., `MyApp#a1b2c3d4`) and TXT record.
 - **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
-- **Vendor Identifier**: `UIDevice.identifierForVendor` on physical devices. Stable per app install. Published in the TXT record under key `vendorid`.
+- **Token Hash**: SHA256 hash prefix of the auth token. Published in the TXT record under key `tokenhash` for pre-connection filtering.
 
 Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
 
@@ -411,13 +411,19 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
 
 ```
 1. HeistClient.connect(to: device)
-   └── NWConnection resolves Bonjour service to host:port
-   └── BSD socket connects to 127.0.0.1:port
+   └── NWConnection resolves Bonjour service and connects
 
 2. TCP connection established
-   └── InsideMan sends ServerMessage.info
+   └── InsideMan sends ServerMessage.authRequired
 
-3. HeistClient receives info
+3. HeistClient receives authRequired
+   └── Sends: authenticate(token)
+
+4. InsideMan validates token
+   └── On success: sends ServerMessage.info
+   └── On failure: sends ServerMessage.authFailed, disconnects
+
+5. HeistClient receives info
    └── serverInfo = info
    └── connectionState = .connected
    └── Sends: subscribe, requestInterface, requestScreen
@@ -433,7 +439,7 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
    │     elementVisitor captures weak refs to interactive objects (keyed by index)
    └── flattenToElements() → AccessibilityMarker[]
    └── Update interactiveObjects cache
-   └── Convert markers to UIElement[] (actions derived from interactive cache)
+   └── Convert markers to HeistElement[] (actions derived from interactive cache)
    └── Compute hash of elements array
 
 3. If hash changed:
@@ -494,8 +500,9 @@ Clients (CLI, MCP, GUI) can filter devices by any of these identifiers. The matc
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 2.0
-- Transport: TCP socket (BSD sockets, not WebSocket)
+- Protocol version: 3.0
+- Transport: TCP socket (Network framework NWListener/NWConnection)
+- Authentication: Token-based (required for all connections)
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
@@ -525,7 +532,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 ### HeistClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
-- BSD socket read loop on background queue
+- NWConnection for data transport
 - Message processing dispatched to main actor
 
 ## Error Handling
