@@ -138,9 +138,15 @@ with ButtonHeistUSBConnection() as conn:
 
 ### Manual Connection
 
+**Note**: Protocol v3.0 requires token authentication before any commands are accepted.
+
 ```bash
-# Using netcat
-echo '{"requestHierarchy":{}}' | nc -6 "fd9a:6190:eed7::1" 1455
+# Using netcat (must authenticate first)
+nc -6 "fd9a:6190:eed7::1" 1455
+# Server sends: {"authRequired":{}}
+# Send: {"authenticate":{"_0":{"token":"your-token"}}}
+# Server sends: {"info":{"_0":{...}}}
+# Send: {"requestInterface":{}}
 ```
 
 ```python
@@ -151,46 +157,58 @@ sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 sock.connect(("fd9a:6190:eed7::1", 1455))
 sock.settimeout(5)
 
-# Read initial info message
+# Read auth challenge
+data = b""
+while b"\n" not in data:
+    data += sock.recv(4096)
+# Should be: {"authRequired":{}}
+
+# Authenticate
+sock.send(b'{"authenticate":{"_0":{"token":"your-token"}}}\n')
 data = b""
 while b"\n" not in data:
     data += sock.recv(4096)
 info = json.loads(data.split(b"\n")[0])
 print("Connected to:", info["info"]["_0"]["appName"])
 
-# Request hierarchy
-sock.send(b'{"requestHierarchy":{}}\n')
+# Request interface
+sock.send(b'{"requestInterface":{}}\n')
 data = b""
 while b"\n" not in data:
     data += sock.recv(4096)
-hierarchy = json.loads(data.split(b"\n")[0])
-print("Elements:", len(hierarchy["hierarchy"]["_0"]["elements"]))
+interface = json.loads(data.split(b"\n")[0])
+print("Elements:", len(interface["interface"]["_0"]["elements"]))
 
 sock.close()
 ```
 
 ## Message Protocol
 
-Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values.
+Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. Protocol v3.0 requires authentication before any commands are accepted.
 
-### Request Hierarchy
+### Authenticate
 ```json
-{"requestHierarchy":{}}
+{"authenticate":{"_0":{"token":"your-secret-token"}}}
 ```
 
-### Activate Element (by traversal index)
+### Request Interface
 ```json
-{"activate":{"_0":{"traversalIndex":6}}}
+{"requestInterface":{}}
+```
+
+### Activate Element (by order index)
+```json
+{"activate":{"_0":{"order":6}}}
 ```
 
 ### Activate Element (by identifier)
 ```json
-{"activate":{"_0":{"identifier":"buttonheist.action.testButton"}}}
+{"activate":{"_0":{"identifier":"loginButton"}}}
 ```
 
 ### Tap at Coordinates
 ```json
-{"tap":{"_0":{"pointX":196.5,"pointY":659}}}
+{"touchTap":{"_0":{"pointX":196.5,"pointY":659}}}
 ```
 
 ### Ping
@@ -226,25 +244,20 @@ After changing, rebuild and reinstall the app.
 
 ### IPv6 Dual-Stack Server
 
-The `SimpleSocketServer` uses an IPv6 dual-stack socket to accept both IPv4 (simulator) and IPv6 (USB device) connections:
+The `SimpleSocketServer` uses Network framework (`NWListener`) with IPv6 dual-stack to accept both IPv4 and IPv6 connections:
 
 ```swift
-// Create IPv6 socket
-let fd = socket(AF_INET6, SOCK_STREAM, 0)
-
-// Enable dual-stack (accept IPv4 via mapped addresses)
-var no: Int32 = 0
-setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, socklen_t(MemoryLayout<Int32>.size))
-
-// Bind to all interfaces
-var addr = sockaddr_in6()
-addr.sin6_family = sa_family_t(AF_INET6)
-addr.sin6_port = port.bigEndian
-addr.sin6_addr = in6addr_any
+// Network framework listener
+let parameters = NWParameters.tcp
+let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
+parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(rawValue: port)!)
+let listener = try NWListener(using: parameters)
 ```
 
+On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. Override with `INSIDEMAN_BIND_ALL=true`.
+
 This allows:
-- Simulator connections via `127.0.0.1` (mapped to `::ffff:127.0.0.1`)
+- Simulator connections via `127.0.0.1` (loopback)
 - USB device connections via the CoreDevice IPv6 tunnel
 - WiFi connections via local network IPv4/IPv6
 

@@ -285,6 +285,38 @@ Request a PNG capture of the current screen.
 {"requestScreen":{}}
 ```
 
+### editAction
+
+Perform a standard edit action via the responder chain.
+
+```json
+{"editAction":{"_0":{"action":"copy"}}}
+```
+
+Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
+
+### resignFirstResponder
+
+Dismiss the keyboard by resigning first responder.
+
+```json
+{"resignFirstResponder":{}}
+```
+
+### waitForIdle
+
+Wait for all animations to complete, then return the settled interface.
+
+```json
+{"waitForIdle":{"_0":{"timeout":5.0}}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timeout` | `Double?` | Max wait time in seconds (default: 5.0, max: 60.0) |
+
+Returns an `actionResult` with `method: "waitForIdle"`, an `interfaceDelta` containing the full interface, and `animating: true` if the timeout expired before animations settled.
+
 ### ping
 
 Keepalive ping.
@@ -413,6 +445,9 @@ Possible methods:
 - `decrement` - Element's `decrement()` was called
 - `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Named custom action was invoked
+- `editAction` - Edit action performed via responder chain
+- `resignFirstResponder` - First responder resigned (keyboard dismissed)
+- `waitForIdle` - Wait-for-idle completed
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 
@@ -480,10 +515,10 @@ Error message.
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `ISO8601 Date` | When interface was captured |
-| `elements` | `[UIElement]` | Flat list of all UI elements |
+| `elements` | `[HeistElement]` | Flat list of all UI elements |
 | `tree` | `[ElementNode]?` | Optional tree structure with containers |
 
-### UIElement
+### HeistElement
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -492,10 +527,16 @@ Error message.
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
+| `hint` | `String?` | Accessibility hint |
+| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`) |
 | `frameX` | `Double` | Frame origin X in points |
 | `frameY` | `Double` | Frame origin Y in points |
 | `frameWidth` | `Double` | Frame width in points |
 | `frameHeight` | `Double` | Frame height in points |
+| `activationPointX` | `Double` | Activation point X (where VoiceOver would tap) |
+| `activationPointY` | `Double` | Activation point Y |
+| `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
+| `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
 | `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 ### ElementNode
@@ -659,6 +700,18 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | `elementTarget` | `ActionTarget` | Target element |
 | `actionName` | `String` | Name of the custom action |
 
+### EditActionTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action` | `String` | Edit action: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"` |
+
+### WaitForIdleTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timeout` | `Double?` | Maximum wait time in seconds (default: 5.0, max: 60.0) |
+
 ### ActionResult
 
 | Field | Type | Description |
@@ -667,6 +720,36 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
 | `value` | `String?` | Current text field value (populated by `typeText`) |
+| `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
+| `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
+
+### InterfaceDelta
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | `String` | `"noChange"`, `"valuesChanged"`, `"elementsChanged"`, or `"screenChanged"` |
+| `elementCount` | `Int` | Total element count after the action |
+| `added` | `[HeistElement]?` | Elements that were added (for `elementsChanged`) |
+| `removedOrders` | `[Int]?` | Orders of removed elements (for `elementsChanged`) |
+| `valueChanges` | `[ValueChange]?` | Value changes on existing elements |
+| `newInterface` | `Interface?` | Full new interface (for `screenChanged` only) |
+
+### ValueChange
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `order` | `Int` | Element order |
+| `identifier` | `String?` | Element identifier |
+| `oldValue` | `String?` | Previous value |
+| `newValue` | `String?` | New value |
+
+### HeistCustomContent
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | `String` | Content label |
+| `value` | `String` | Content value |
+| `isImportant` | `Bool` | Whether this content is marked important |
 
 ### ScreenPayload
 

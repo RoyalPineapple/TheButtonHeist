@@ -117,9 +117,9 @@ The `command` field is required. All other fields are command-specific parameter
 | `decrement` | Decrement an adjustable element (slider, stepper, picker) |
 | `perform_custom_action` | Invoke a named custom accessibility action on an element |
 | `type_text` | Type text and/or delete characters via UIKeyboardImpl injection |
-| `edit_action` | Edit an element's accessibility action |
-| `dismiss_keyboard` | Dismiss the software keyboard |
-| `wait_for_idle` | Wait until the UI is idle |
+| `edit_action` | Perform edit action (copy, paste, cut, select, selectAll) via responder chain |
+| `dismiss_keyboard` | Dismiss the software keyboard (resign first responder) |
+| `wait_for_idle` | Wait for animations to settle, then return the interface |
 | `list_devices` | List all discovered iOS devices running InsideMan |
 | `status` | Show connection status |
 | `help` | List all commands with descriptions |
@@ -745,7 +745,7 @@ public enum ActionError: Error, LocalizedError {
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "3.0"
+public let protocolVersion = "3.0"  // Protocol v3.0 with token auth
 ```
 
 ### ConnectionState
@@ -775,12 +775,15 @@ Represents a discovered InsideMan device.
 - `name: String` - Service name (v3 format: "AppName#instanceId")
 - `endpoint: NWEndpoint` - Network endpoint for connection
 - `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
+- `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
+- `tokenHash: String?` - Token hash from Bonjour TXT record (for pre-connection filtering)
 - `instanceId: String?` - Instance identifier from Bonjour TXT record
 
 #### Computed Properties
 
 - `shortId: String?` - Short instance ID parsed from service name suffix (after `#`)
 - `appName: String` - App name extracted from service name (before `#`)
+- `deviceName: String` - Device name extracted from service name (empty for v3 format)
 
 ### ClientMessage
 
@@ -811,6 +814,9 @@ Messages sent from client to server.
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
 - `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection
+- `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
+- `resignFirstResponder` - Dismiss keyboard
+- `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot
 
 ### ServerMessage
@@ -889,7 +895,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "2.0")
+- `protocolVersion: String` - Protocol version (e.g., "3.0")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
@@ -897,8 +903,9 @@ Device and app metadata received after connecting.
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
-- `instanceId: String?` - Per-launch session UUID (nil for servers < v2.1)
-- `listeningPort: UInt16?` - Port the server is listening on (nil for servers < v2.1)
+- `instanceId: String?` - Per-launch session UUID
+- `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEMAN_ID` env var, or shortId fallback)
+- `listeningPort: UInt16?` - Port the server is listening on
 - `simulatorUDID: String?` - Simulator UDID when running on iOS Simulator (nil on physical devices)
 - `vendorIdentifier: String?` - `UIDevice.identifierForVendor` UUID string (stable per app install per device)
 
@@ -913,7 +920,7 @@ Container for UI element interface data.
 #### Properties
 
 - `timestamp: Date` - When the hierarchy was captured
-- `elements: [UIElement]` - Flat list of UI elements
+- `elements: [HeistElement]` - Flat list of UI elements
 - `tree: [ElementNode]?` - Optional tree structure with containers
 
 ### ElementNode
@@ -948,33 +955,40 @@ public struct Group: Codable, Equatable, Hashable, Sendable
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
 
-### UIElement
+### HeistElement
 
 ```swift
-public struct UIElement: Codable, Equatable, Hashable, Sendable
+public struct HeistElement: Codable, Equatable, Hashable, Sendable
 ```
 
-Represents a single UI element.
+Represents a single UI element captured from the accessibility hierarchy.
 
 #### Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `order` | `Int` | VoiceOver reading order |
+| `order` | `Int` | VoiceOver reading order (0-based) |
 | `description` | `String` | VoiceOver description |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value |
 | `identifier` | `String?` | Identifier |
+| `hint` | `String?` | Accessibility hint |
+| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`) |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
 | `frameHeight` | `Double` | Frame height |
-| `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
+| `activationPointX` | `Double` | Activation point X (where VoiceOver would tap) |
+| `activationPointY` | `Double` | Activation point Y |
+| `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
+| `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
+| `actions` | `[ElementAction]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
 
 #### Computed Properties
 
 ```swift
-public var frame: CGRect       // Frame as CGRect
+public var frame: CGRect            // Frame as CGRect
+public var activationPoint: CGPoint // Activation point as CGPoint
 ```
 
 ### ActionResult
@@ -989,6 +1003,8 @@ public struct ActionResult: Codable, Sendable
 - `method: ActionMethod` - How action was performed
 - `message: String?` - Additional context or error description
 - `value: String?` - Current text field value (populated by `typeText`)
+- `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
+- `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
 
 ### ActionMethod
 
@@ -1011,6 +1027,9 @@ public enum ActionMethod: String, Codable, Sendable
 - `syntheticDrawPath` - Path drawing via SafeCracker
 - `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Used custom action
+- `editAction` - Edit action via responder chain
+- `resignFirstResponder` - Keyboard dismissed
+- `waitForIdle` - Wait-for-idle completed
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
@@ -1242,8 +1261,8 @@ struct InspectorView: View {
                 Text(client.displayName(for: device))
             }
         } detail: {
-            if let hierarchy = client.currentInterface {
-                List(hierarchy.elements) { element in
+            if let iface = client.currentInterface {
+                List(iface.elements, id: \.order) { element in
                     VStack(alignment: .leading) {
                         Text(element.description)
                         Text(element.identifier ?? "")
@@ -1285,9 +1304,9 @@ class Inspector {
             print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
-        client.onInterfaceUpdate = { payload in
-            print("Received \(payload.elements.count) elements")
-            for element in payload.elements {
+        client.onInterfaceUpdate = { iface in
+            print("Received \(iface.elements.count) elements")
+            for element in iface.elements {
                 print("  \(element.order): \(element.description)")
             }
         }
