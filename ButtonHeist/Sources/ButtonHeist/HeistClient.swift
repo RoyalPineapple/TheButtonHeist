@@ -43,6 +43,10 @@ public final class HeistClient {
     /// Auth token to send during connection handshake
     public var token: String?
 
+    /// When true (default), automatically sends .subscribe, .requestInterface, and .requestScreen
+    /// after connecting. Set to false for session-style usage where you request data explicitly.
+    public var autoSubscribe: Bool = true
+
     // MARK: - Private
 
     private var discovery: DeviceDiscovery?
@@ -120,7 +124,6 @@ public final class HeistClient {
         connection = DeviceConnection(device: device, token: token)
 
         connection?.onConnected = { [weak self] in
-            self?.connectionState = .connecting
             self?.connectedDevice = device
             self?.startKeepalive()
         }
@@ -137,9 +140,11 @@ public final class HeistClient {
         connection?.onServerInfo = { [weak self] info in
             self?.connectionState = .connected
             self?.serverInfo = info
-            self?.connection?.send(.subscribe)
-            self?.connection?.send(.requestInterface)
-            self?.connection?.send(.requestScreen)
+            if self?.autoSubscribe == true {
+                self?.connection?.send(.subscribe)
+                self?.connection?.send(.requestInterface)
+                self?.connection?.send(.requestScreen)
+            }
             self?.onConnected?(info)
         }
 

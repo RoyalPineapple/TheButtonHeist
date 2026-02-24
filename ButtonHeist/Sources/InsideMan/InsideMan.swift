@@ -135,9 +135,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             }
         }
 
-        server.onDataReceived = { [weak self] data, respond in
+        server.onDataReceived = { [weak self] clientId, data, respond in
             Task { @MainActor in
-                await self?.handleClientMessage(data, respond: respond)
+                await self?.handleClientMessage(clientId, data: data, respond: respond)
             }
         }
 
@@ -247,28 +247,29 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func handleClientMessage(_ data: Data, respond: @escaping (Data) -> Void) async {
+    private func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
             serverLog("Failed to decode client message")
-            if let str = String(data: data, encoding: .utf8) {
+            if String(data: data, encoding: .utf8) != nil {
                 serverLog("Unparsable message: \(data.count) bytes")
             }
             return
         }
 
-        serverLog("Received: \(String(describing: message).prefix(40))")
+        serverLog("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
         switch message {
         case .authenticate:
             break // Already authenticated via onUnauthenticatedData path
         case .requestInterface:
-            serverLog("Interface requested")
+            serverLog("Interface requested by client \(clientId)")
             await sendInterface(respond: respond)
         case .subscribe:
-            serverLog("Client subscribed to updates")
-            // Note: with socket server we broadcast to all, so subscribed is implicit
+            subscribedClients.insert(clientId)
+            serverLog("Client \(clientId) subscribed (\(subscribedClients.count) subscribers)")
         case .unsubscribe:
-            serverLog("Client unsubscribed from updates")
+            subscribedClients.remove(clientId)
+            serverLog("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
         case .ping:
             sendMessage(.pong, respond: respond)
 
@@ -349,9 +350,6 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
         sendMessage(.interface(payload), respond: respond)
-
-        // Also send screen capture with initial interface
-        broadcastScreen()
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
@@ -533,6 +531,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func broadcastHierarchyUpdate() {
+        guard !subscribedClients.isEmpty else { return }
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
         let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
@@ -545,10 +544,10 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         lastHierarchyHash = elements.hashValue
 
         if let data = try? JSONEncoder().encode(message) {
-            socketServer?.broadcastToAll(data)
+            broadcastToSubscribed(data)
         }
 
-        serverLog("Broadcast hierarchy update")
+        serverLog("Broadcast hierarchy update to \(subscribedClients.count) subscriber(s)")
     }
 
     // MARK: - Polling
@@ -566,6 +565,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func checkForChanges() {
+        guard !subscribedClients.isEmpty else { return }
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
         let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
@@ -581,13 +581,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             // Broadcast hierarchy with tree
             let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
             if let data = try? JSONEncoder().encode(ServerMessage.interface(payload)) {
-                socketServer?.broadcastToAll(data)
+                broadcastToSubscribed(data)
             }
 
             // Also broadcast screen when hierarchy changes
             broadcastScreen()
 
-            serverLog("Polling detected change, broadcast interface + screen")
+            serverLog("Polling detected change, broadcast to \(subscribedClients.count) subscriber(s)")
         }
     }
 
@@ -608,6 +608,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func broadcastScreen() {
+        guard !subscribedClients.isEmpty else { return }
         guard let (image, bounds) = captureScreen(),
               let pngData = image.pngData() else { return }
 
@@ -618,7 +619,14 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         )
 
         if let data = try? JSONEncoder().encode(ServerMessage.screen(screenPayload)) {
-            socketServer?.broadcastToAll(data)
+            broadcastToSubscribed(data)
+        }
+    }
+
+    /// Send data only to clients that have explicitly subscribed.
+    private func broadcastToSubscribed(_ data: Data) {
+        for clientId in subscribedClients {
+            socketServer?.send(data, to: clientId)
         }
     }
 
