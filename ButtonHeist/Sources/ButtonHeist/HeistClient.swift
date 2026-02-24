@@ -37,6 +37,8 @@ public final class HeistClient {
     public var onInterfaceUpdate: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
+    /// Called when a token is received via UI approval (store for future reconnections)
+    public var onTokenReceived: ((String) -> Void)?
 
     /// Auth token to send during connection handshake
     public var token: String?
@@ -133,6 +135,11 @@ public final class HeistClient {
 
         connection?.onError = { [weak self] message in
             self?.connectionState = .failed(message)
+        }
+
+        connection?.onAuthApproved = { [weak self] approvedToken in
+            self?.token = approvedToken
+            self?.onTokenReceived?(approvedToken)
         }
 
         connection?.connect()

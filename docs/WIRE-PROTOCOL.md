@@ -337,11 +337,21 @@ Sent immediately on connection. Indicates the client must authenticate before an
 
 ### authFailed
 
-Sent when the client provides an invalid token. The server disconnects shortly after.
+Sent when the client provides an invalid token or when a UI approval request is denied. The server disconnects shortly after.
 
 ```json
 {"authFailed":{"_0":"Invalid token"}}
 ```
+
+### authApproved
+
+Sent when a connection is approved via the on-device UI (see [UI Approval Flow](#ui-approval-flow)). Contains the auth token for future reconnections.
+
+```json
+{"authApproved":{"_0":{"token":"auto-generated-uuid-token"}}}
+```
+
+After receiving `authApproved`, the client should store the token and use it for future `authenticate` messages to skip the approval flow.
 
 ### info
 
@@ -842,6 +852,33 @@ Protocol v3.0 requires token-based authentication for all connections:
 4. On failure, server sends `authFailed` and disconnects after a brief delay
 
 The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated at startup and logged to the console. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+
+### UI Approval Flow
+
+When the token is auto-generated (not explicitly set), InsideMan supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
+
+1. Server starts with auto-generated token — a floating overlay appears showing "Waiting for connection"
+2. Client connects and sends `authenticate` with an empty token (`""`)
+3. Server shows an approval prompt overlay with Allow/Deny buttons
+4. **If approved**: Server sends `authApproved` with the token, then `info` — the session proceeds normally
+5. **If denied**: Server sends `authFailed("Connection denied by user")` and disconnects
+
+```
+Client                                    Server (UI approval mode)
+   │                                         │
+   │──────── TCP Connect ────────────────────►│
+   │◄─────── authRequired ──────────────────│
+   │──────── authenticate(token:"") ────────►│  (empty token)
+   │                                         │  [Overlay: "Allow / Deny"]
+   │                                         │  ... user taps Allow ...
+   │◄─────── authApproved(token) ───────────│  (token for future use)
+   │◄─────── info ──────────────────────────│
+   │                                         │
+```
+
+The client stores the received token and uses it for subsequent connections, which will authenticate normally without requiring approval.
+
+This flow is **only active** when the token is auto-generated. If `INSIDEMAN_TOKEN` or `InsideManToken` is explicitly set, the standard token-based flow is used and no overlay is shown.
 
 ### Security Limits
 
