@@ -25,12 +25,7 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
 3. If no devices found: stop and tell the user to launch the app and try again
 4. Print the connected device name and app name for confirmation
-5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
+5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
    - Create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
    - Create the companion trace file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.

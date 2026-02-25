@@ -45,7 +45,6 @@ struct CLIOptions {
     let timeout: Int
     let verbose: Bool
     let device: String?
-    let host: String?
-    let port: UInt16?
     let force: Bool
+    let token: String?
 }

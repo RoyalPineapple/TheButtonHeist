@@ -45,6 +45,8 @@ public final class HeistClient {
     public var onTokenReceived: ((String) -> Void)?
     /// Called when the server rejects the connection because another driver holds the session
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
+    /// Called when the server rejects the auth token (reason string from server)
+    public var onAuthFailed: ((String) -> Void)?
 
     /// Auth token to send during connection handshake
     public var token: String?
@@ -63,9 +65,6 @@ public final class HeistClient {
     // MARK: - Private
 
     private var discovery: DeviceDiscovery?
-    #if os(macOS)
-    @ObservationIgnored private var usbDiscovery: USBDeviceDiscovery?
-    #endif
     private var connection: DeviceConnection?
     private var keepaliveTask: Task<Void, Never>?
 
@@ -100,31 +99,12 @@ public final class HeistClient {
         }
         discovery?.start()
 
-        #if os(macOS)
-        usbDiscovery = USBDeviceDiscovery()
-        usbDiscovery?.onDeviceFound = { [weak self] device in
-            logger.info("USB device found callback: \(device.name)")
-            self?.discoveredDevices.append(device)
-            self?.onDeviceDiscovered?(device)
-        }
-        usbDiscovery?.onDeviceLost = { [weak self] device in
-            logger.info("USB device lost callback: \(device.name)")
-            self?.discoveredDevices.removeAll { $0.id == device.id }
-            self?.onDeviceLost?(device)
-        }
-        usbDiscovery?.start()
-        #endif
-
         logger.info("Discovery started")
     }
 
     public func stopDiscovery() {
         discovery?.stop()
         discovery = nil
-        #if os(macOS)
-        usbDiscovery?.stop()
-        usbDiscovery = nil
-        #endif
         isDiscovering = false
     }
 
@@ -207,6 +187,11 @@ public final class HeistClient {
         connection?.onSessionLocked = { [weak self] payload in
             self?.connectionState = .failed(payload.message)
             self?.onSessionLocked?(payload)
+        }
+
+        connection?.onAuthFailed = { [weak self] reason in
+            self?.connectionState = .failed(reason)
+            self?.onAuthFailed?(reason)
         }
 
         connection?.connect()

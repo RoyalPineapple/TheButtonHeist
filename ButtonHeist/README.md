@@ -68,7 +68,7 @@ Only active in `#if DEBUG` builds — never ships in production.
 
 | Env Var | Info.plist Key | Default | Description |
 |---------|----------------|---------|-------------|
-| `INSIDEMAN_PORT` | `InsideManPort` | `0` (auto) | Server port. Use `1455` for predictable connections |
+| `INSIDEMAN_PORT` | `InsideManPort` | `0` (auto) | Server port (0 = OS-assigned, advertised via Bonjour) |
 | `INSIDEMAN_TOKEN` | `InsideManToken` | Auto-generated UUID | Auth token for client connections |
 | `INSIDEMAN_ID` | `InsideManInstanceId` | Short UUID prefix | Human-readable instance identifier |
 | `INSIDEMAN_POLLING_INTERVAL` | `InsideManPollingInterval` | `1.0` | UI change polling interval (min 0.5s) |

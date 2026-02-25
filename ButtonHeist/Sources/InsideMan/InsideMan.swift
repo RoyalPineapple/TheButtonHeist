@@ -34,12 +34,12 @@ public final class InsideMan: ElementStore {
 
     // MARK: - Singleton
 
-    /// Shared instance - use `configure(port:token:instanceId:)` before first access
+    /// Shared instance - use `configure(token:instanceId:)` before first access
     public static var shared: InsideMan = InsideMan()
 
     /// Configure the shared instance. Must be called before start().
-    public static func configure(port: UInt16, token: String? = nil, instanceId: String? = nil) {
-        shared = InsideMan(port: port, token: token, instanceId: instanceId)
+    public static func configure(token: String? = nil, instanceId: String? = nil) {
+        shared = InsideMan(token: token, instanceId: instanceId)
     }
 
     // MARK: - Properties
@@ -47,7 +47,6 @@ public final class InsideMan: ElementStore {
     private var socketServer: SimpleSocketServer?
     private var netService: NetService?
     var subscribedClients: Set<Int> = []
-    private let port: UInt16
     private let muscle: TheMuscle
     private let instanceId: String?
     private let sessionId = UUID()
@@ -77,8 +76,7 @@ public final class InsideMan: ElementStore {
 
     // MARK: - Initialization
 
-    public init(port: UInt16 = 0, token: String? = nil, instanceId: String? = nil) {
-        self.port = port
+    public init(token: String? = nil, instanceId: String? = nil) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.theSafecracker.elementStore = self
@@ -98,21 +96,9 @@ public final class InsideMan: ElementStore {
 
     // MARK: - Environment Helpers
 
-    private var isSimulator: Bool {
-        ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
-    }
-
-    private var shouldBindToLoopback: Bool {
-        let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
-            .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
-        return isSimulator && !bindAllOverride
-    }
-
-    /// Simulators share localhost — use random port to avoid collisions.
-    /// Fixed ports are only useful on physical devices (for USB tunneling).
-    private var effectivePort: UInt16 {
-        isSimulator ? 0 : port
-    }
+    /// Always bind to all interfaces — loopback binding breaks Bonjour-resolved
+    /// connections which may arrive on non-loopback interfaces.
+    private var shouldBindToLoopback: Bool { false }
 
     /// Start the server
     public func start() throws {
@@ -123,15 +109,11 @@ public final class InsideMan: ElementStore {
         let server = SimpleSocketServer()
         wireServer(server)
 
-        let actualPort = try server.start(port: effectivePort, bindToLoopback: shouldBindToLoopback)
+        let actualPort = try server.start(port: 0, bindToLoopback: shouldBindToLoopback)
         self.socketServer = server
         isRunning = true
 
-        if shouldBindToLoopback {
-            serverLog("Server listening on loopback port \(actualPort) (simulator)")
-        } else {
-            serverLog("Server listening on port \(actualPort)")
-        }
+        serverLog("Server listening on port \(actualPort)")
         serverLog("Auth token: \(muscle.authToken)")
         if let instanceId {
             serverLog("Instance ID: \(instanceId)")
@@ -311,6 +293,7 @@ public final class InsideMan: ElementStore {
             subscribedClients.remove(clientId)
             serverLog("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
         case .ping:
+            muscle.noteClientActivity(clientId)
             sendMessage(.pong, respond: respond)
         case .requestScreen:
             handleScreen(respond: respond)
@@ -559,7 +542,7 @@ public final class InsideMan: ElementStore {
             let server = SimpleSocketServer()
             wireServer(server)
 
-            let actualPort = try server.start(port: effectivePort, bindToLoopback: shouldBindToLoopback)
+            let actualPort = try server.start(port: 0, bindToLoopback: shouldBindToLoopback)
             self.socketServer = server
 
             serverLog("Server resumed on port \(actualPort)")

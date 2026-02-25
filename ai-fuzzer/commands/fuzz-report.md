@@ -21,12 +21,7 @@ You are tasked with generating a comprehensive report of all findings from the c
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
 3. If no devices found: stop and tell the user to launch the app and try again
 4. Print the connected device name and app name for confirmation
-5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection:
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
+5. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
 
 ## Step 1: Gather Context
 

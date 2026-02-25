@@ -2,18 +2,16 @@
 
 Common errors and how to recover from them during fuzzing.
 
-## Connection failed (direct connect)
+## Connection failed
 
-A command with `--host`/`--port` (or `BUTTONHEIST_HOST`/`BUTTONHEIST_PORT` env vars) fails with "Connection timed out" or "Connection failed".
+A command fails with "Connection timed out" or "Connection failed".
 
 **Causes & fixes:**
-- **App not running**: The app must be launched and InsideMan must be active. Verify with `buttonheist list` (which uses Bonjour, not direct connect).
-- **Wrong host/port**: For simulators, the address is always `127.0.0.1:1455`. For physical devices, use the host/port shown by `buttonheist list --format json`.
-- **Only one of host/port set**: Both `BUTTONHEIST_HOST` and `BUTTONHEIST_PORT` must be set together. If only one is set, the CLI silently falls back to Bonjour discovery.
-- **Port changed after app relaunch**: The port is fixed at `1455` for simulators, but physical devices may get a different port after relaunch. Re-run `buttonheist list --format json` to get the current address.
+- **App not running**: The app must be launched and InsideMan must be active. Verify with `buttonheist list` (which uses Bonjour discovery).
+- **App just relaunched**: The server uses an OS-assigned port advertised via Bonjour. After a relaunch, wait 2-3 seconds for the server to start and Bonjour to re-advertise.
 - **Token mismatch**: If the app requires authentication, set `BUTTONHEIST_TOKEN` or pass the correct token.
 
-**Recovery**: Unset the env vars (`unset BUTTONHEIST_HOST BUTTONHEIST_PORT`) to fall back to Bonjour discovery and confirm the app is reachable, then re-set them with the correct values.
+**Recovery**: Run `buttonheist list --format json` to confirm the app is reachable via Bonjour discovery.
 
 ## No devices found
 
@@ -96,9 +94,8 @@ If any CLI command fails with a connection error after previously working:
 
 If a command fails with a connection error but the app didn't crash (e.g., network interruption, simulator reset):
 
-- Try the command again — the CLI creates a fresh connection each time
-- If using direct connect, verify the app is still listening: `buttonheist list --format json`
-- If the simulator was reset or the app was relaunched, the port stays the same (`1455`) but the app needs a moment to start the server — wait 2-3 seconds
-- If on a physical device, the port may have changed — re-run `buttonheist list --format json` and update `BUTTONHEIST_PORT`
+- Try the command again — the CLI creates a fresh connection each time via Bonjour discovery
+- Verify the app is still listening: `buttonheist list --format json`
+- If the simulator was reset or the app was relaunched, the app needs a moment to start the server and re-advertise via Bonjour — wait 2-3 seconds
 
 **Record as**: Only record as CRASH if the connection was working, you performed an action, and the connection died immediately after. Transient connection issues are not findings.
