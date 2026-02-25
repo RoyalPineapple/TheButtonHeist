@@ -9,7 +9,7 @@ This document specifies the communication protocol between InsideMan (iOS) and c
 - **Layer**: TCP socket (BSD sockets)
 - **Discovery**: Bonjour/mDNS (WiFi) or CoreDevice IPv6 tunnel (USB)
 - **Service Type**: `_buttonheist._tcp`
-- **Port**: 1455 (configurable via Info.plist `InsideManPort` key)
+- **Port**: OS-assigned (advertised via Bonjour)
 - **Encoding**: Newline-delimited JSON (UTF-8)
 - **Socket**: IPv6 dual-stack (accepts both IPv4 and IPv6)
 
@@ -30,7 +30,7 @@ The TXT record enables pre-connection device identification. Clients can match d
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
 - **Device address**: `fd{prefix}::1` (e.g., `fd9a:6190:eed7::1`)
-- **Port**: 1455
+- **Port**: OS-assigned (same port as WiFi, advertised via Bonjour)
 - **Discovery**: `lsof -i -P -n | grep CoreDev`
 
 ## Connection Lifecycle
@@ -420,7 +420,7 @@ Sent after successful authentication. Contains device and app metadata.
   "screenHeight":852.0,
   "instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
   "instanceIdentifier":"my-instance",
-  "listeningPort":1455,
+  "listeningPort":52341,
   "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
   "vendorIdentifier":null
 }}}
@@ -895,7 +895,7 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 ## Example Session
 
 ```
-# Client connects to fd9a:6190:eed7::1:1455
+# Client connects to fd9a:6190:eed7::1 on the Bonjour-advertised port
 
 # Server sends auth challenge
 {"authRequired":{}}
@@ -904,7 +904,7 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 {"authenticate":{"_0":{"token":"my-secret-token"}}}
 
 # Server sends info after successful auth
-{"info":{"_0":{"protocolVersion":"3.1","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
+{"info":{"_0":{"protocolVersion":"3.1","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
@@ -1111,14 +1111,7 @@ This flow is **only active** when the token is auto-generated. If `INSIDEMAN_TOK
 
 ### Port Configuration
 
-The port is configured via Info.plist:
-
-```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
-```
-
-Or via environment variable `INSIDEMAN_PORT`.
+The server uses OS-assigned ports by default. The actual port is advertised via Bonjour and included in the `info` message (`listeningPort` field) after connection.
 
 ### IPv6 Dual-Stack
 

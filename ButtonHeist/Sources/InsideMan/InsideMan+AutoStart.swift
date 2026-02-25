@@ -5,7 +5,6 @@ import UIKit
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
 /// - INSIDEMAN_DISABLE / InsideManDisableAutoStart: Set to true to disable
-/// - INSIDEMAN_PORT / InsideManPort: Fixed port number (0 = auto, default)
 /// - INSIDEMAN_TOKEN / InsideManToken: Auth token (auto-generated if not set)
 /// - INSIDEMAN_ID / InsideManInstanceId: Human-readable instance identifier
 /// - INSIDEMAN_POLLING_INTERVAL / InsideManPollingInterval: Polling interval in seconds
@@ -27,15 +26,6 @@ public func insideManAutoStartFromLoad() {
     if let disable = Bundle.main.object(forInfoDictionaryKey: "InsideManDisableAutoStart") as? Bool, disable {
         NSLog("[InsideMan] Auto-start disabled via Info.plist")
         return
-    }
-
-    // Get fixed port (0 = auto-assign)
-    var port: UInt16 = 0
-    if let envPort = ProcessInfo.processInfo.environment["INSIDEMAN_PORT"],
-       let parsed = UInt16(envPort) {
-        port = parsed
-    } else if let plistPort = Bundle.main.object(forInfoDictionaryKey: "InsideManPort") as? Int {
-        port = UInt16(clamping: plistPort)
     }
 
     // Get polling interval (default 1.0, minimum 0.5)
@@ -63,12 +53,12 @@ public func insideManAutoStartFromLoad() {
         instanceId = plistId
     }
 
-    NSLog("[InsideMan] Starting with port: %d, polling interval: %f", port, interval)
+    NSLog("[InsideMan] Starting with polling interval: %f", interval)
 
     Task { @MainActor in
         NSLog("[InsideMan] MainActor task executing...")
         do {
-            InsideMan.configure(port: port, token: token, instanceId: instanceId)
+            InsideMan.configure(token: token, instanceId: instanceId)
             try InsideMan.shared.start()
             InsideMan.shared.startPolling(interval: interval)
             NSLog("[InsideMan] ========== AUTO-START SUCCESS ==========")

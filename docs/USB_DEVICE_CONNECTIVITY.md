@@ -26,21 +26,14 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 1. Polls `xcrun devicectl list devices` to find connected devices
 2. Parses `lsof -i -P -n` output to locate the CoreDevice IPv6 tunnel address
-3. Constructs an `NWEndpoint` with the IPv6 address and port 1455
+3. Constructs an `NWEndpoint` with the IPv6 address and the Bonjour-advertised port
 4. Produces a `DiscoveredDevice` — identical to Bonjour-discovered devices
 
 USB devices appear in the device list with a `(USB)` suffix.
 
-### Fixed Port Configuration
+### Port Discovery
 
-InsideMan uses a fixed port configured in `Info.plist`:
-
-```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
-```
-
-This eliminates port scanning and enables instant connections over USB.
+InsideMan uses an OS-assigned port advertised via Bonjour. USB discovery resolves the port automatically through the same Bonjour service advertisement used for WiFi.
 
 ### Requirements
 
@@ -131,7 +124,7 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 
 ```bash
 # Using netcat (must authenticate first)
-nc -6 "fd9a:6190:eed7::1" 1455
+nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
 # Server sends: {"authRequired":{}}
 # Send: {"authenticate":{"_0":{"token":"your-token"}}}
 # Server sends: {"info":{"_0":{...}}}
@@ -171,20 +164,6 @@ Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for as
 ```json
 {"ping":{}}
 ```
-
-## Configuration
-
-### Changing the Port
-
-The port is configured in Info.plist:
-
-```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
-```
-
-After changing, rebuild and reinstall the app.
-
 
 ## Implementation Details
 

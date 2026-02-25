@@ -29,12 +29,7 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
 3. If no devices found: stop and tell the user to launch the app and try again
 4. Print the connected device name and app name for confirmation
-5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
+5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
    - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.

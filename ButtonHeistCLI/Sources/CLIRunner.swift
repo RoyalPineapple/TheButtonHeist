@@ -17,7 +17,7 @@ final class CLIRunner {
 
     init(options: CLIOptions) {
         self.options = options
-        self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.token = options.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
         self.client.forceSession = options.force
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
     }
@@ -26,28 +26,15 @@ final class CLIRunner {
         setupSignalHandlers()
         setupClientCallbacks()
 
-        let effectiveHost = options.host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
-        let effectivePort = options.port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         let effectiveDevice = options.device ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
-
-        warnIfPartialDirectConfig(host: effectiveHost, port: effectivePort, quiet: options.quiet)
 
         // Store device filter BEFORE starting discovery so the callback can use it
         self.effectiveDeviceFilter = effectiveDevice
 
-        if let host = effectiveHost, let port = effectivePort {
-            // Direct connection — skip Bonjour discovery
-            if !options.quiet {
-                logStatus("Connecting to \(host):\(port)...")
-            }
-            let device = DiscoveredDevice(host: host, port: port)
-            client.connect(to: device)
-        } else {
-            if !options.quiet {
-                logStatus("Searching for iOS devices...")
-            }
-            client.startDiscovery()
+        if !options.quiet {
+            logStatus("Searching for iOS devices...")
         }
+        client.startDiscovery()
 
         // Handle timeout
         if options.timeout > 0 {
@@ -119,6 +106,21 @@ final class CLIRunner {
             }
         }
 
+        // Handle token received (always output for caller to capture)
+        client.onTokenReceived = { token in
+            logStatus("BUTTONHEIST_TOKEN=\(token)")
+        }
+
+        // Handle auth failure
+        client.onAuthFailed = { [weak self] reason in
+            guard let self = self else { return }
+            if !self.options.quiet {
+                logStatus("Auth failed: \(reason)")
+            }
+            self.exitCode = .authFailed
+            self.isRunning = false
+        }
+
         // Handle disconnection
         client.onDisconnected = { [weak self] error in
             guard let self = self else { return }
@@ -126,23 +128,8 @@ final class CLIRunner {
                 if !self.options.quiet {
                     let msg = error.localizedDescription
                     logStatus("Error: Connection failed - \(msg)")
-                    let lower = msg.lowercased()
-                    if lower.contains("refused") {
-                        logStatus("  Hint: Connection refused usually means wrong port or the app isn't running.")
-                    } else {
-                        logStatus("  Hint: Check that the host and port are correct and the app is running.")
-                    }
                 }
                 self.exitCode = .connectionFailed
-                // Proactively scan for devices via Bonjour to give the user context
-                if !self.options.quiet {
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        await discoverAndReport(client: self.client)
-                        self.isRunning = false
-                    }
-                    return
-                }
             }
             self.isRunning = false
         }

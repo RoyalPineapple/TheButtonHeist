@@ -30,6 +30,7 @@ public final class DeviceConnection {
     public var onError: ((String) -> Void)?
     public var onAuthApproved: ((String) -> Void)?
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
+    public var onAuthFailed: ((String) -> Void)?
 
     /// When true, send forceSession in the auth handshake to take over an existing session
     public var forceSession: Bool
@@ -171,6 +172,7 @@ public final class DeviceConnection {
             )))
         case .authFailed(let reason):
             debug("Auth failed: \(reason)")
+            onAuthFailed?(reason)
             disconnect()
             onDisconnected?(nil)
         case .authApproved(let payload):

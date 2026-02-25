@@ -49,7 +49,7 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 ┌───────────┼──────────────────────────────────────────────────────────┐
 │  ┌────────┴────────┐                                                │
 │  │    InsideMan    │  ← Auto-starts on load                         │
-│  │   (framework)   │    Port 1455 + Bonjour                         │
+│  │   (framework)   │    Bonjour                                     │
 │  └────────┬────────┘                                                │
 │           │                                                          │
 │  ┌────────┴────────┐                                                │
@@ -100,10 +100,6 @@ struct MyApp: App {
 Add the required Info.plist entries:
 
 ```xml
-<!-- Fixed port for InsideMan -->
-<key>InsideManPort</key>
-<integer>1455</integer>
-
 <!-- Network permissions -->
 <key>NSLocalNetworkUsageDescription</key>
 <string>This app uses local network to communicate with the element inspector.</string>
@@ -218,8 +214,7 @@ ButtonHeist/
 
 1. Check device is connected: `xcrun devicectl list devices`
 2. Verify app is running on device
-3. Check port in Info.plist matches (default: 1455)
-4. Find IPv6 tunnel: `lsof -i -P -n | grep CoreDev`
+3. Find IPv6 tunnel: `lsof -i -P -n | grep CoreDev`
 
 ### Empty hierarchy
 

@@ -16,22 +16,18 @@ enum SessionError: Error {
 @MainActor
 final class SessionRunner {
     private let deviceFilter: String?
-    private let directHost: String?
-    private let directPort: UInt16?
     private let connectionTimeout: Double
     private let format: OutputFormat
     private let client = HeistClient()
     private var isRunning = true
     private var shouldExit = false
 
-    init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
-         connectionTimeout: Double, format: OutputFormat, force: Bool = false) {
-        self.directHost = host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
-        self.directPort = port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
+    init(deviceFilter: String?,
+         connectionTimeout: Double, format: OutputFormat, force: Bool = false, token: String? = nil) {
         self.deviceFilter = deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.connectionTimeout = connectionTimeout
         self.format = format
-        self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
         self.client.forceSession = force
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = false
@@ -79,43 +75,27 @@ final class SessionRunner {
     // MARK: - Connection
 
     private func connect() async throws {
-        let device: DiscoveredDevice
-        let isDirect: Bool
+        logStatus("Searching for iOS devices...")
+        client.startDiscovery()
 
-        warnIfPartialDirectConfig(host: directHost, port: directPort, quiet: false)
-
-        if let host = directHost, let port = directPort {
-            // Direct connection — skip Bonjour
-            isDirect = true
-            logStatus("Connecting to \(host):\(port)...")
-            device = DiscoveredDevice(host: host, port: port)
-        } else {
-            // Bonjour discovery
-            isDirect = false
-            logStatus("Searching for iOS devices...")
-            client.startDiscovery()
-
-            let discoveryNs = UInt64(max(connectionTimeout, 5) * 1_000_000_000)
-            let discoveryStart = DispatchTime.now().uptimeNanoseconds
-            while client.discoveredDevices.first(matching: deviceFilter) == nil {
-                if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryNs {
-                    if let filter = deviceFilter {
-                        throw CLIError.noMatchingDevice(filter: filter,
-                            available: client.discoveredDevices.map { $0.name })
-                    }
-                    throw CLIError.noDeviceFound
+        let discoveryNs = UInt64(max(connectionTimeout, 5) * 1_000_000_000)
+        let discoveryStart = DispatchTime.now().uptimeNanoseconds
+        while client.discoveredDevices.first(matching: deviceFilter) == nil {
+            if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryNs {
+                if let filter = deviceFilter {
+                    throw CLIError.noMatchingDevice(filter: filter,
+                        available: client.discoveredDevices.map { $0.name })
                 }
-                try await Task.sleep(nanoseconds: 100_000_000)
-            }
-
-            guard let found = client.discoveredDevices.first(matching: deviceFilter) else {
                 throw CLIError.noDeviceFound
             }
-
-            logStatus("Found: \(client.displayName(for: found))")
-            device = found
+            try await Task.sleep(nanoseconds: 100_000_000)
         }
 
+        guard let device = client.discoveredDevices.first(matching: deviceFilter) else {
+            throw CLIError.noDeviceFound
+        }
+
+        logStatus("Found: \(client.displayName(for: device))")
         logStatus("Connecting...")
 
         var connected = false
@@ -128,14 +108,12 @@ final class SessionRunner {
         let connNs = UInt64(10 * 1_000_000_000)
         while !connected && connectionError == nil {
             if DispatchTime.now().uptimeNanoseconds - connStart > connNs {
-                if isDirect { await discoverAndReport(client: client) }
                 throw CLIError.connectionTimeout
             }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
 
         if let error = connectionError {
-            if isDirect { await discoverAndReport(client: client) }
             throw CLIError.connectionFailed(error.localizedDescription)
         }
 
