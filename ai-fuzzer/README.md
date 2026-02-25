@@ -64,6 +64,7 @@ Use `buttonheist list` to see all available devices.
 | Command | Description |
 |---------|-------------|
 | `/fuzz` | Autonomous fuzzing loop — explores the app and finds bugs |
+| `/fuzz-validate` | Validate a specific feature — targeted testing with regression checks |
 | `/fuzz-explore` | Deep-dive on the current screen — catalogs every element and tries every action |
 | `/fuzz-map-screens` | Builds a navigation graph of all reachable screens |
 | `/fuzz-stress-test` | Rapid-fire interaction testing on elements |
@@ -81,6 +82,20 @@ This starts the default fuzzing strategy (systematic traversal). The agent will:
 3. Navigate to new screens when discovered
 4. Detect crashes, errors, and anomalies
 5. Generate a report when done
+
+### Feature Validation
+
+```
+> /fuzz-validate todo list
+```
+
+Navigates directly to the Todo List screen, checks known findings (regressions), runs workflow tests (add/edit/delete lifecycle, persistence), and reports results scoped to that feature.
+
+```
+> /fuzz-validate settings focus on cross-screen effects
+```
+
+Validates the Settings screen with extra focus on how settings changes affect other screens.
 
 ### Targeted Exploration
 

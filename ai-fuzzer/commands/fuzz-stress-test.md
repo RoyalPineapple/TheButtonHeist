@@ -4,11 +4,12 @@ description: Rapid-fire interaction testing to find stability and performance is
 
 # /fuzz-stress-test — Stress Tester
 
-You are tasked with hammering the connected iOS app with rapid, repeated interactions to find stability issues, memory leaks, and crash bugs.
+You are tasked with hammering the connected iOS app with rapid, repeated interactions to find stability issues, memory leaks, and crash bugs. You plan the stress tests, then delegate execution to a Haiku agent.
 
 ## CRITICAL
-- ALWAYS verify the app is still responsive after each sequence — call `get_interface`
+- ALWAYS verify the app is still responsive after each sequence — include health checks in the execution plan
 - ALWAYS record which sequence and iteration caused a crash — this makes reproduction trivial
+- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT stop at the first crash — record it and continue with other elements if possible
 
 **Arguments** (optional): `$ARGUMENTS`
@@ -22,16 +23,13 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. If no devices found: stop and tell the user to launch the app and try again
-4. Print the connected device name and app name for confirmation
-5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
-5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
-6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-
-During stress testing, update your session notes file continuously:
-- After each sequence completes: update `## Coverage` with the result (PASS/FAIL)
-- After each finding: add to `## Findings`
-- Every 3 sequences: update `## Progress` and `## Next Actions`
+3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
+4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
+5. If no devices found: stop and tell the user to launch the app and try again
+6. Print the connected device name and app name for confirmation
+7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
+8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
+9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 
 ## Step 1: Identify Targets
 
@@ -39,90 +37,114 @@ During stress testing, update your session notes file continuously:
 2. If a specific element was requested, find it by identifier
 3. If "all" (default), collect all interactive elements (those with actions or tappable)
 4. Run `buttonheist screenshot --output /tmp/bh-screen.png` then Read the PNG for baseline visual state
+5. Record the screen fingerprint (sorted set of identifiers) and element list
 
-## Step 2: Stress Test Sequences
+## Step 2: Build Execution Plans + Dispatch to Haiku
 
-For each target element, run these sequences. After each sequence, run `buttonheist watch --once --format json --quiet` to verify the app is still alive.
+For each target element, build an execution plan and dispatch it to a Haiku executor via the Task tool (`model: "haiku"`).
 
-### Sequence 1: Rapid Taps (20x)
+### Building the Execution Plan
 
+Read `references/execution-protocol.md` for the full plan format. For each target element, generate an execution plan containing:
+
+**Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen name + fingerprint, nav stack.
+
+**Action list**: All 6 stress test sequences for this element, with health checks between sequences. Generate the exact CLI commands by substituting the element's identifier into the templates below.
+
+#### Sequence Templates
+
+For each target element (`ELEMENT` = the identifier), the action list contains:
+
+**Sequence 1 — Rapid Taps (20 actions)**:
+- 20x `buttonheist touch tap --identifier ELEMENT --format json`
+- Expected delta: `noChange` for most (some may produce `valuesChanged`)
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Sequence 2 — Rapid Swipes (10 actions, alternating up/down)**:
+- 5x alternating: `buttonheist touch swipe --identifier ELEMENT --direction up --format json` then `--direction down`
+- Expected delta: `noChange` or `valuesChanged`
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Sequence 3 — Rapid Pinch Cycles (10 actions)**:
+- 5x alternating: `buttonheist touch pinch --identifier ELEMENT --scale 2.0 --format json` then `--scale 0.5`
+- Expected delta: `noChange`
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Sequence 4 — Rapid Rotate Cycles (10 actions)**:
+- 5x alternating: `buttonheist touch rotate --identifier ELEMENT --angle 1.57 --format json` then `--angle -1.57`
+- Expected delta: `noChange`
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Sequence 5 — Mixed Rapid Gestures (10 actions)**:
+- tap, longpress (0.1s), swipe left, tap, pinch (1.5), tap, rotate (0.5), tap, two-finger-tap, tap
+- Expected delta: `noChange` for most
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Sequence 6 — Increment/Decrement Hammering (40 actions, only if element is adjustable)**:
+- 20x `buttonheist action --identifier ELEMENT --type increment --format json`
+- 20x `buttonheist action --identifier ELEMENT --type decrement --format json`
+- Expected delta: `valuesChanged`
+- Purpose: `stress`
+
+**Health check**: `buttonheist watch --once --format json --quiet`
+
+**Stop conditions**: Stop on crash. Stop on 3+ consecutive unexpected results.
+
+**Total actions per element**: ~80-106 (depending on whether Sequence 6 applies).
+
+### Dispatching
+
+For each target element:
+
+1. Generate the full execution plan from the templates above, substituting the element identifier
+2. Dispatch to Haiku:
+   ```
+   Task(
+     description: "[the execution plan as markdown]",
+     model: "haiku",
+     subagent_type: "Bash"
+   )
+   ```
+3. Wait for Haiku to return
+4. Read the Execution Result from Haiku's return
+5. If status is `stopped` with reason `crash`:
+   - Record the crash finding with exact sequence and iteration
+   - If other target elements remain and crash was element-specific, continue to next element
+   - If crash killed the app connection, stop and proceed to report
+6. If status is `complete`: record results, proceed to next element
+7. Update session notes between elements: `## Coverage` with per-sequence results, `## Findings` with any new findings, `## Progress` with action count
+
+### Progress Tracking
+
+After each element's batch completes, print:
 ```
-for i in 1..20:
-    buttonheist touch tap --identifier ELEMENT --format json
+[Stress] Element: IDENTIFIER — [complete/stopped] | Actions: N | Findings: M
 ```
-
-Check: Is the app still responsive? Did any element disappear? Did the screen change unexpectedly?
-
-### Sequence 2: Rapid Swipes (10x alternating)
-
-```
-for i in 1..5:
-    buttonheist touch swipe --identifier ELEMENT --direction up --format json
-    buttonheist touch swipe --identifier ELEMENT --direction down --format json
-```
-
-Check: Does the element still exist? Is the screen in a sane state?
-
-### Sequence 3: Rapid Pinch Cycles (5x)
-
-```
-for i in 1..5:
-    buttonheist touch pinch --identifier ELEMENT --scale 2.0 --format json
-    buttonheist touch pinch --identifier ELEMENT --scale 0.5 --format json
-```
-
-Check: Did the view return to its original state after equal in/out cycles?
-
-### Sequence 4: Rapid Rotate Cycles (5x)
-
-```
-for i in 1..5:
-    buttonheist touch rotate --identifier ELEMENT --angle 1.57 --format json
-    buttonheist touch rotate --identifier ELEMENT --angle -1.57 --format json
-```
-
-Check: Same as pinch — did it return to original?
-
-### Sequence 5: Mixed Rapid Gestures
-
-```
-buttonheist touch tap --identifier ELEMENT --format json
-buttonheist touch longpress --identifier ELEMENT --duration 0.1 --format json
-buttonheist touch swipe --identifier ELEMENT --direction left --format json
-buttonheist touch tap --identifier ELEMENT --format json
-buttonheist touch pinch --identifier ELEMENT --scale 1.5 --format json
-buttonheist touch tap --identifier ELEMENT --format json
-buttonheist touch rotate --identifier ELEMENT --angle 0.5 --format json
-buttonheist touch tap --identifier ELEMENT --format json
-buttonheist touch two-finger-tap --identifier ELEMENT --format json
-buttonheist touch tap --identifier ELEMENT --format json
-```
-
-Check: App still alive? Any unexpected state changes?
-
-### Sequence 6: Increment/Decrement Hammering (if adjustable)
-
-```
-for i in 1..20:
-    buttonheist action --identifier ELEMENT --type increment --format json
-for i in 1..20:
-    buttonheist action --identifier ELEMENT --type decrement --format json
-```
-
-Check: Did value go up 20 then back down 20? Any overflow?
 
 ## Step 3: Full-Screen Stress
 
-After individual element testing, do a full-screen stress pass:
+After individual element testing, build a second execution plan for full-screen stress:
 
-1. Tap 10 random coordinates across the screen
-2. Swipe in all 4 directions from screen center
+1. 10 taps at random coordinates across the screen
+2. Swipes in all 4 directions from screen center
 3. Pinch at screen center (scale 3.0 then 0.3)
 4. Rotate at screen center (full rotation then reverse)
 
+Dispatch this as a single Haiku batch (~20 actions). Read the return and record results.
+
 ## Step 4: Health Check
 
-After all sequences:
+After all sequences (Opus does this directly — not delegated):
 
 1. `buttonheist watch --once --format json --quiet` — verify element count hasn't changed dramatically
 2. `buttonheist screenshot` — visual comparison with baseline
@@ -130,7 +152,7 @@ After all sequences:
    - Elements that disappeared
    - Values that changed unexpectedly
    - Visual differences from baseline
-   - Tool calls that started timing out (performance degradation)
+   - Haiku-reported notes about unexpected state changes
 
 ## Step 5: Report
 
@@ -154,7 +176,11 @@ Print a stress test report:
 
 ### Findings
 
-[Any CRASH, ERROR, or ANOMALY findings]
+[Any CRASH, ERROR, or ANOMALY findings — include those reported by Haiku]
+
+### Haiku Execution Notes
+
+[Collate all Notes sections from Haiku returns — element-not-found, prediction mismatches, etc.]
 
 ### Health Check
 - Elements before: [count], after: [count]
@@ -164,8 +190,8 @@ Print a stress test report:
 
 ## Crash Handling
 
-Crashes during stress testing are **expected and valuable**. When detected:
-1. Record exactly which sequence and iteration caused the crash
-2. Record the element being stressed
-3. This is reproducible: "[sequence name] on [element] at iteration [N]"
-4. Save report and stop
+Crashes during stress testing are **expected and valuable**. When Haiku reports a crash (status: `stopped`, reason: `crash`):
+1. Record the exact sequence, element, and iteration from Haiku's Stop Details
+2. This is directly reproducible: "[sequence name] on [element] at iteration [N]"
+3. If the app is dead (connection lost), generate the report with what you have
+4. Tell the user the app crashed and they need to relaunch it
