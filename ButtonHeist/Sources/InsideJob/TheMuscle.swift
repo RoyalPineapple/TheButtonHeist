@@ -2,7 +2,7 @@
 #if DEBUG
 import Foundation
 import UIKit
-import TheGoods
+import TheScore
 
 /// Manages client authentication, token validation, and UI-based connection approval.
 ///

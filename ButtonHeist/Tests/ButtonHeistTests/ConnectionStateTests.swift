@@ -4,17 +4,17 @@ import XCTest
 final class ConnectionStateTests: XCTestCase {
 
     func testStateEquality() {
-        XCTAssertEqual(HeistClient.ConnectionState.disconnected, .disconnected)
-        XCTAssertEqual(HeistClient.ConnectionState.connecting, .connecting)
-        XCTAssertEqual(HeistClient.ConnectionState.connected, .connected)
-        XCTAssertEqual(HeistClient.ConnectionState.failed("error"), .failed("error"))
+        XCTAssertEqual(TheClient.ConnectionState.disconnected, .disconnected)
+        XCTAssertEqual(TheClient.ConnectionState.connecting, .connecting)
+        XCTAssertEqual(TheClient.ConnectionState.connected, .connected)
+        XCTAssertEqual(TheClient.ConnectionState.failed("error"), .failed("error"))
 
-        XCTAssertNotEqual(HeistClient.ConnectionState.disconnected, .connecting)
-        XCTAssertNotEqual(HeistClient.ConnectionState.failed("a"), .failed("b"))
+        XCTAssertNotEqual(TheClient.ConnectionState.disconnected, .connecting)
+        XCTAssertNotEqual(TheClient.ConnectionState.failed("a"), .failed("b"))
     }
 
     func testAllStatesDifferent() {
-        let states: [HeistClient.ConnectionState] = [
+        let states: [TheClient.ConnectionState] = [
             .disconnected,
             .connecting,
             .connected,
@@ -33,9 +33,9 @@ final class ConnectionStateTests: XCTestCase {
     }
 
     func testFailedStateWithDifferentMessages() {
-        let error1 = HeistClient.ConnectionState.failed("Connection refused")
-        let error2 = HeistClient.ConnectionState.failed("Timeout")
-        let error3 = HeistClient.ConnectionState.failed("Connection refused")
+        let error1 = TheClient.ConnectionState.failed("Connection refused")
+        let error2 = TheClient.ConnectionState.failed("Timeout")
+        let error3 = TheClient.ConnectionState.failed("Connection refused")
 
         XCTAssertNotEqual(error1, error2)
         XCTAssertEqual(error1, error3)

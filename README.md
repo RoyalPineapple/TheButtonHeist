@@ -17,15 +17,15 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists, eac
 | **TheSafecracker** | The Specialist | Performs all physical interactions with the app's UI: taps, long presses, swipes, drags, pinches, rotations, text entry, and accessibility actions. Cracks open any interface element. |
 | **Stakeout** | The Lookout | Captures H.264/MP4 screen recordings. Watches the scene, records everything, and composites fingerprint overlays so gestures are visible in the video. |
 | **Fingerprints** | The Evidence | Visual touch indicators — glowing circles that appear and fade on screen during gestures. Visible on-device and composited into recordings by Stakeout. |
-| **InsideJobLoader** | The Advance Man | Tiny ObjC `+load` hook that boots InsideJob before any Swift code runs. Just link the framework — no app code needed. |
+| **ThePlant** | The Advance Man | Tiny ObjC `+load` hook that boots InsideJob before any Swift code runs. Just link the framework — no app code needed. |
 
 ### The Outside Team (macOS)
 
 | Character | Role | What They Do |
 |-----------|------|-------------|
 | **Wheelman** | The Getaway Driver | The networking layer. Runs the TCP server (inside the app) and client-side discovery + connection (on macOS). Gets everyone to and from the job. |
-| **HeistClient** | The Outside Coordinator | The macOS client API. Wraps discovery, connection, and typed callbacks into an Observable-friendly facade for building tools. |
-| **TheGoods** | The Score | The shared protocol types — all wire messages, element types, and constants. The contract that both sides of the operation understand. |
+| **TheClient** | The Outside Coordinator | The macOS client API. Wraps discovery, connection, and typed callbacks into an Observable-friendly facade for building tools. |
+| **TheScore** | The Score | The shared protocol types — all wire messages, element types, and constants. The contract that both sides of the operation understand. |
 
 ### Supporting Cast
 
@@ -57,7 +57,7 @@ graph TD
     AI["AI Agent<br/>(Claude, any MCP client)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
     Session["buttonheist session<br/>(persistent CLI)"]
-    Client["HeistClient<br/>(ButtonHeist framework)"]
+    Client["TheClient<br/>(ButtonHeist framework)"]
     IJ["InsideJob<br/>(embedded framework)"]
     App["Your iOS App"]
 
@@ -82,17 +82,17 @@ graph TD
 
 **End-to-end:**
 ```
-AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → HeistClient → TCP → InsideJob
+AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheClient → TCP → InsideJob
 ```
 
 ## Modules
 
 | Module | Platform | Description | Details |
 |--------|----------|-------------|---------|
-| **TheGoods** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
+| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **InsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **Wheelman** | iOS + macOS | TCP server/client, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (HeistClient); re-exports TheGoods + Wheelman | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheClient); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — AI agents drive iOS apps via Model Context Protocol | [ButtonHeistMCP/](ButtonHeistMCP/) |
 | **buttonheist** | macOS | CLI tool: list, watch, action, touch, type, screenshot, record, session | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
@@ -213,7 +213,7 @@ open ButtonHeist.xcworkspace
 
 ```
 ButtonHeist/
-├── ButtonHeist/Sources/          # Core frameworks (TheGoods, InsideJob, Wheelman, ButtonHeist)
+├── ButtonHeist/Sources/          # Core frameworks (TheScore, InsideJob, Wheelman, ButtonHeist)
 ├── ButtonHeistMCP/               # MCP server (Swift Package)
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
@@ -245,7 +245,7 @@ ButtonHeist/
 ## Documentation
 
 **Frameworks and tools:**
-- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheGoods, InsideJob, Wheelman, client
+- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, InsideJob, Wheelman, client
 - [MCP Server](ButtonHeistMCP/) — AI agent integration via Model Context Protocol
 - [CLI Reference](ButtonHeistCLI/) — Full command-line documentation
 - [Test Apps](TestApp/) — Sample iOS applications for testing
