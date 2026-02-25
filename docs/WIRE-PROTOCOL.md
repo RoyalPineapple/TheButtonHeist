@@ -86,7 +86,12 @@ Authenticate with the server. Must be the first message sent after receiving `au
 {"authenticate":{"_0":{"token":"your-secret-token","forceSession":true}}}
 ```
 
-The optional `forceSession` field requests immediate takeover of any existing session held by a different driver. See [Session Locking](#session-locking) for details.
+**With driver identity** (v3.1):
+```json
+{"authenticate":{"_0":{"token":"your-secret-token","driverId":"agent-1"}}}
+```
+
+The optional `forceSession` field requests immediate takeover of any existing session held by a different driver. The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
 
 ### requestInterface
 
@@ -868,6 +873,7 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
 | `forceSession` | `Bool?` | When `true`, forcibly takes over any existing session (v3.1). Omitted or `null` for normal auth. |
+| `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
 
@@ -894,13 +900,19 @@ The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.p
 
 Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control an InsideMan host at a time.
 
-**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` and `watch` maintain persistent connections. The session concept spans multiple sequential connections from the same driver by using the auth token as driver identity.
+**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` and `watch` maintain persistent connections. The session concept spans multiple sequential connections from the same driver.
+
+**Driver Identity**: The server identifies drivers using a two-tier approach:
+1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var
+2. `token` as fallback (when `driverId` is absent) — all same-token connections are one "driver"
+
+This maintains backward compatibility: existing clients without `driverId` use token-based identity. Setting `BUTTONHEIST_DRIVER_ID` enables multiple drivers sharing the same auth token to be distinguished.
 
 #### Session Lifecycle
 
-1. **Claim** — The first authenticated client's token becomes the active session
-2. **Join** — Subsequent connections with the **same token** are allowed (same driver, different commands)
-3. **Reject** — Connections with a **different token** receive `sessionLocked` and are disconnected
+1. **Claim** — The first authenticated client's driver identity becomes the active session
+2. **Join** — Subsequent connections with the **same driver identity** are allowed (same driver, different commands)
+3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected
 4. **Release timer** — When the last connection from the session holder disconnects, a configurable timer starts (default: 30 seconds)
 5. **Release** — Timer fires → session clears → next driver can claim
 6. **Cancel timer** — Same-token reconnect within the timeout window cancels the release timer

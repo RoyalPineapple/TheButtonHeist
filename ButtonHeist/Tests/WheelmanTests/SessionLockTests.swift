@@ -140,6 +140,81 @@ final class SessionLockTests: XCTestCase {
         await fulfillment(of: [authReceived], timeout: 5.0)
     }
 
+    func testDriverIdSentInAuthPayload() async throws {
+        let port = try startServer()
+
+        let clientConnected = expectation(description: "client connected")
+        let driverIdReceived = expectation(description: "driverId received")
+
+        server.onClientConnected = { clientId in
+            clientConnected.fulfill()
+            let msg = ServerMessage.authRequired
+            if let data = try? JSONEncoder().encode(msg) {
+                self.server.send(data, to: clientId)
+            }
+        }
+
+        server.onUnauthenticatedData = { _, data, _ in
+            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
+                  case .authenticate(let payload) = message else {
+                XCTFail("Expected authenticate message")
+                return
+            }
+            XCTAssertEqual(payload.driverId, "test-driver-id")
+            driverIdReceived.fulfill()
+        }
+
+        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
+        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
+        await MainActor.run {
+            let conn = DeviceConnection(device: device, token: "test-token", driverId: "test-driver-id")
+            self.deviceConnection = conn
+            conn.connect()
+        }
+
+        await fulfillment(of: [clientConnected], timeout: 5.0)
+        await fulfillment(of: [driverIdReceived], timeout: 5.0)
+    }
+
+    func testNilDriverIdNotSentInAuthPayload() async throws {
+        let port = try startServer()
+
+        let clientConnected = expectation(description: "client connected")
+        let authReceived = expectation(description: "auth received")
+
+        server.onClientConnected = { clientId in
+            clientConnected.fulfill()
+            let msg = ServerMessage.authRequired
+            if let data = try? JSONEncoder().encode(msg) {
+                self.server.send(data, to: clientId)
+            }
+        }
+
+        server.onUnauthenticatedData = { _, data, _ in
+            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
+                  case .authenticate(let payload) = message else {
+                XCTFail("Expected authenticate message")
+                return
+            }
+            XCTAssertNil(payload.driverId)
+            // Also verify driverId is not present in the raw JSON
+            let json = String(data: data, encoding: .utf8) ?? ""
+            XCTAssertFalse(json.contains("driverId"))
+            authReceived.fulfill()
+        }
+
+        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
+        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
+        await MainActor.run {
+            let conn = DeviceConnection(device: device, token: "test-token")
+            self.deviceConnection = conn
+            conn.connect()
+        }
+
+        await fulfillment(of: [clientConnected], timeout: 5.0)
+        await fulfillment(of: [authReceived], timeout: 5.0)
+    }
+
     func testSessionLockedCallbackFires() async throws {
         let port = try startServer()
 

@@ -82,7 +82,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 3.0 with token-based authentication
+- Protocol version 3.1 with token-based authentication and session locking
 
 ### InsideMan
 
@@ -140,7 +140,7 @@ When the framework loads:
 - Fixed port from configuration (default: 1455 on devices; simulators always use port 0/auto-assign)
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication (v3.0)
+- Token-based authentication with session locking (v3.1)
 
 ### TheSafecracker (Touch Gesture & Text Input System)
 
@@ -208,6 +208,9 @@ TheSafecracker (stateful, @MainActor)
 - UI approval flow (present UIAlertController, handle allow/deny)
 - Track authenticated client count and IDs
 - Manage pending approval state
+- Session locking: single-driver exclusivity with configurable release timeout
+- Track active session driver identity and connections
+- Force-takeover handling (evict existing session on `forceSession`)
 
 **Integration**: TheMuscle communicates back to InsideMan via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
@@ -427,9 +430,10 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 3.0
+- Protocol version: 3.1
 - Transport: TCP socket (Network framework NWListener/NWConnection)
 - Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
+- Session locking: Single-driver exclusivity with configurable release timeout and force-takeover
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
@@ -490,6 +494,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 | `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
+| `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds (min: 1) | 30 |
 
 ### Info.plist Keys (fallback)
 ```xml

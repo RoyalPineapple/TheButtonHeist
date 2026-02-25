@@ -31,12 +31,13 @@ final class TheMuscle {
 
     // MARK: - Session Lock State
 
-    /// Token of the driver that currently holds the session (nil = no active session)
-    private(set) var activeSessionToken: String?
+    /// Driver identity that currently holds the session (nil = no active session).
+    /// This is derived from driverId (when provided) or the auth token (fallback).
+    private(set) var activeSessionDriverId: String?
     /// Client IDs belonging to the active session
     private(set) var activeSessionConnections: Set<Int> = []
-    /// Maps each authenticated client to the token they used
-    private var clientTokens: [Int: String] = [:]
+    /// Maps each authenticated client to their effective driver identity
+    private var clientDriverIds: [Int: String] = [:]
     /// Timer that fires to release the session after all connections disconnect
     private var sessionReleaseTimer: Task<Void, Never>?
     /// Timeout before releasing a session after all connections disconnect
@@ -117,28 +118,29 @@ final class TheMuscle {
         }
 
         // Session lock check
-        if !acquireSession(token: payload.token, clientId: clientId, forceSession: payload.forceSession == true, respond: respond) {
+        let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
+        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, forceSession: payload.forceSession == true, respond: respond) {
             return
         }
 
         markClientAuthenticated?(clientId)
         NSLog("[TheMuscle] Client \(clientId) authenticated")
         authenticatedClientIDs.insert(clientId)
-        clientTokens[clientId] = payload.token
+        clientDriverIds[clientId] = driverIdentity
         updateAuthenticatedCount(delta: 1)
         onClientAuthenticated?(clientId, respond)
     }
 
     func handleClientDisconnected(_ clientId: Int) {
         pendingApprovalClients.removeValue(forKey: clientId)
-        clientTokens.removeValue(forKey: clientId)
+        clientDriverIds.removeValue(forKey: clientId)
         if authenticatedClientIDs.remove(clientId) != nil {
             updateAuthenticatedCount(delta: -1)
         }
 
         // Session tracking
         activeSessionConnections.remove(clientId)
-        if activeSessionToken != nil && activeSessionConnections.isEmpty {
+        if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
             NSLog("[TheMuscle] All session connections gone, starting \(sessionReleaseTimeout)s release timer")
             sessionReleaseTimer?.cancel()
             sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
@@ -153,14 +155,15 @@ final class TheMuscle {
         guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
 
         // UI-approved clients use the server's authToken — session check with that token
-        if !acquireSession(token: authToken, clientId: clientId, forceSession: false, respond: respond) {
+        let driverIdentity = effectiveDriverId(driverId: nil, token: authToken)
+        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, forceSession: false, respond: respond) {
             return
         }
 
         markClientAuthenticated?(clientId)
         NSLog("[TheMuscle] Client \(clientId) approved via UI")
         authenticatedClientIDs.insert(clientId)
-        clientTokens[clientId] = authToken
+        clientDriverIds[clientId] = driverIdentity
         sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
         updateAuthenticatedCount(delta: 1)
         onClientAuthenticated?(clientId, respond)
@@ -180,7 +183,7 @@ final class TheMuscle {
         pendingApprovalClients.removeAll()
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
-        clientTokens.removeAll()
+        clientDriverIds.removeAll()
         releaseSession()
         dismissAlert()
     }
@@ -194,10 +197,19 @@ final class TheMuscle {
 
     // MARK: - Session Lock
 
+    /// Resolve the effective driver identity for session locking.
+    /// Uses driverId if provided, falls back to token.
+    private func effectiveDriverId(driverId: String?, token: String) -> String {
+        if let driverId, !driverId.isEmpty {
+            return "driver:\(driverId)"
+        }
+        return "token:\(token)"
+    }
+
     /// Attempt to acquire the session for a client. Returns true if acquired, false if rejected.
-    private func acquireSession(token: String, clientId: Int, forceSession: Bool, respond: @escaping @Sendable (Data) -> Void) -> Bool {
-        if let activeToken = activeSessionToken {
-            if token == activeToken {
+    private func acquireSession(driverIdentity: String, clientId: Int, forceSession: Bool, respond: @escaping @Sendable (Data) -> Void) -> Bool {
+        if let activeId = activeSessionDriverId {
+            if driverIdentity == activeId {
                 // Same driver — allow, cancel any pending release timer
                 sessionReleaseTimer?.cancel()
                 sessionReleaseTimer = nil
@@ -210,7 +222,7 @@ final class TheMuscle {
                 NSLog("[TheMuscle] Client \(clientId) force-taking session, evicting \(evictedClients.count) connection(s)")
                 releaseSession()
                 disconnectClientsForSession?(evictedClients)
-                claimSession(token: token, clientId: clientId)
+                claimSession(driverIdentity: driverIdentity, clientId: clientId)
                 return true
             } else {
                 // Different driver, no force — reject
@@ -228,13 +240,13 @@ final class TheMuscle {
             }
         } else {
             // No active session — claim it
-            claimSession(token: token, clientId: clientId)
+            claimSession(driverIdentity: driverIdentity, clientId: clientId)
             return true
         }
     }
 
-    private func claimSession(token: String, clientId: Int) {
-        activeSessionToken = token
+    private func claimSession(driverIdentity: String, clientId: Int) {
+        activeSessionDriverId = driverIdentity
         activeSessionConnections = [clientId]
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
@@ -242,8 +254,8 @@ final class TheMuscle {
     }
 
     private func releaseSession() {
-        let hadSession = activeSessionToken != nil
-        activeSessionToken = nil
+        let hadSession = activeSessionDriverId != nil
+        activeSessionDriverId = nil
         activeSessionConnections.removeAll()
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
@@ -296,8 +308,8 @@ final class TheMuscle {
         return vc
     }
 
-    func clientIDs(for token: String) -> [Int] {
-        clientTokens.filter { $0.value == token }.map(\.key)
+    func clientIDs(for driverIdentity: String) -> [Int] {
+        clientDriverIds.filter { $0.value == driverIdentity }.map(\.key)
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {

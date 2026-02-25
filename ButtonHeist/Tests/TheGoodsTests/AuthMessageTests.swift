@@ -313,4 +313,42 @@ final class AuthMessageTests: XCTestCase {
         // forceSession is nil so should not appear in output
         XCTAssertFalse(json.contains("forceSession"))
     }
+
+    // MARK: - Driver ID
+
+    func testAuthenticateWithDriverId() throws {
+        let payload = AuthenticatePayload(token: "my-token", driverId: "agent-1")
+        let message = ClientMessage.authenticate(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .authenticate(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload.token, "my-token")
+            XCTAssertEqual(decodedPayload.driverId, "agent-1")
+        } else {
+            XCTFail("Expected authenticate with driverId")
+        }
+    }
+
+    func testAuthenticateWithoutDriverIdBackwardCompat() throws {
+        // Old-style JSON without driverId should still decode
+        let json = """
+        {"authenticate":{"_0":{"token":"old-client"}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        if case .authenticate(let payload) = decoded {
+            XCTAssertEqual(payload.token, "old-client")
+            XCTAssertNil(payload.driverId)
+        } else {
+            XCTFail("Expected authenticate from old-style JSON")
+        }
+    }
+
+    func testAuthenticateNilDriverIdOmittedFromJSON() throws {
+        let payload = AuthenticatePayload(token: "test")
+        let data = try JSONEncoder().encode(payload)
+        let json = String(data: data, encoding: .utf8)!
+        XCTAssertFalse(json.contains("driverId"))
+    }
 }
