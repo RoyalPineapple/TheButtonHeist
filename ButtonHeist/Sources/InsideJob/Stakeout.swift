@@ -3,7 +3,7 @@
 #if DEBUG
 import UIKit
 import AVFoundation
-import TheGoods
+import TheScore
 
 private func stakeoutLog(_ message: String) {
     NSLog("[Stakeout] %@", message)

@@ -7,7 +7,7 @@ import ButtonHeist
 @MainActor
 final class CLIRunner {
     private let options: CLIOptions
-    private let client = HeistClient()
+    private let client = TheClient()
     private var isRunning = true
     private var previousElements: [HeistElement] = []
     private var oldTermios = termios()

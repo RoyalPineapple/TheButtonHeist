@@ -1,12 +1,12 @@
 import XCTest
 @testable import ButtonHeist
-import TheGoods
+import TheScore
 
 @MainActor
-final class HeistClientTests: XCTestCase {
+final class TheClientTests: XCTestCase {
 
     func testInitialState() {
-        let client = HeistClient()
+        let client = TheClient()
 
         XCTAssertTrue(client.discoveredDevices.isEmpty)
         XCTAssertNil(client.connectedDevice)
@@ -17,7 +17,7 @@ final class HeistClientTests: XCTestCase {
     }
 
     func testDisconnectClearsState() {
-        let client = HeistClient()
+        let client = TheClient()
 
         // Call disconnect (even without connection should be safe)
         client.disconnect()
@@ -29,7 +29,7 @@ final class HeistClientTests: XCTestCase {
     }
 
     func testStopDiscoveryClearsFlag() {
-        let client = HeistClient()
+        let client = TheClient()
 
         // Start and stop discovery
         client.startDiscovery()
@@ -39,7 +39,7 @@ final class HeistClientTests: XCTestCase {
     }
 
     func testMultipleDisconnectsSafe() {
-        let client = HeistClient()
+        let client = TheClient()
 
         // Multiple disconnects should be safe
         client.disconnect()
@@ -52,7 +52,7 @@ final class HeistClientTests: XCTestCase {
     // MARK: - waitForRecording
 
     func testWaitForRecordingSuccess() async throws {
-        let client = HeistClient()
+        let client = TheClient()
         let expectedPayload = makeRecordingPayload(stopReason: .manual)
 
         let task = Task {
@@ -70,7 +70,7 @@ final class HeistClientTests: XCTestCase {
     }
 
     func testWaitForRecordingServerError() async throws {
-        let client = HeistClient()
+        let client = TheClient()
 
         let task = Task {
             try await client.waitForRecording(timeout: 5.0)
@@ -83,7 +83,7 @@ final class HeistClientTests: XCTestCase {
         do {
             _ = try await task.value
             XCTFail("Expected RecordingError.serverError to be thrown")
-        } catch let error as HeistClient.RecordingError {
+        } catch let error as TheClient.RecordingError {
             if case .serverError(let message) = error {
                 XCTAssertEqual(message, "AVAssetWriter failed")
             } else {
@@ -93,12 +93,12 @@ final class HeistClientTests: XCTestCase {
     }
 
     func testWaitForRecordingTimeout() async throws {
-        let client = HeistClient()
+        let client = TheClient()
 
         do {
             _ = try await client.waitForRecording(timeout: 0.05)
             XCTFail("Expected ActionError.timeout to be thrown")
-        } catch is HeistClient.ActionError {
+        } catch is TheClient.ActionError {
             // Expected
         }
     }

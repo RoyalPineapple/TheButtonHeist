@@ -7,7 +7,7 @@ Technical documentation for ButtonHeist internals.
 | Document | Description |
 |----------|-------------|
 | [Architecture](ARCHITECTURE.md) | System design, component interaction, and data flow diagrams |
-| [API Reference](API.md) | Complete API for the MCP server, InsideJob, HeistClient, and CLI |
+| [API Reference](API.md) | Complete API for the MCP server, InsideJob, TheClient, and CLI |
 | [Wire Protocol](WIRE-PROTOCOL.md) | Protocol v3.1 specification — message formats, authentication, transport |
 | [Authentication](AUTH.md) | Token auth, session locking, UI approval |
 | [USB Connectivity](USB_DEVICE_CONNECTIVITY.md) | Connecting to physical devices over USB via CoreDevice IPv6 tunnels |

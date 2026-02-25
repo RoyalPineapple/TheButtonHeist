@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
-import TheGoods
+import TheScore
 
 extension InsideJob {
 

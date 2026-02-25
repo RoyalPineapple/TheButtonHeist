@@ -1,6 +1,6 @@
 # ButtonHeist API Reference
 
-Complete API documentation for InsideJob (iOS), HeistClient (macOS), and the CLI.
+Complete API documentation for InsideJob (iOS), TheClient (macOS), and the CLI.
 
 ## InsideJob
 
@@ -197,16 +197,16 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/ButtonHeist/HeistClient.swift`
+**Location**: `ButtonHeist/Sources/ButtonHeist/TheClient.swift`
 
-### HeistClient
+### TheClient
 
 Main client class. Uses the `@Observable` macro for SwiftUI integration.
 
 ```swift
 @Observable
 @MainActor
-public final class HeistClient
+public final class TheClient
 ```
 
 #### Observable Properties
@@ -509,11 +509,11 @@ public enum ActionError: Error, LocalizedError {
 
 ---
 
-## TheGoods Types
+## TheScore Types
 
-**Import**: `import TheGoods`
+**Import**: `import TheScore`
 **Platform**: iOS 17.0+ / macOS 14.0+
-**Location**: `ButtonHeist/Sources/TheGoods/Messages.swift`
+**Location**: `ButtonHeist/Sources/TheScore/Messages.swift`
 
 ### Constants
 
@@ -1134,10 +1134,10 @@ struct MyApp: App {
 ```swift
 import SwiftUI
 import ButtonHeist
-import TheGoods
+import TheScore
 
 struct InspectorView: View {
-    @State private var client = HeistClient()
+    @State private var client = TheClient()
 
     var body: some View {
         NavigationSplitView {
@@ -1173,10 +1173,10 @@ struct InspectorView: View {
 
 ```swift
 import ButtonHeist
-import TheGoods
+import TheScore
 
 class Inspector {
-    let client = HeistClient()
+    let client = TheClient()
 
     init() {
         client.onDeviceDiscovered = { [weak self] device in

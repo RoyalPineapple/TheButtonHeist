@@ -200,7 +200,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **InsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
-| **HeistClient** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
+| **TheClient** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
 
 ## Related Documentation
 

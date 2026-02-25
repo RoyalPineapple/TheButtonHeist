@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 import Network
 import ButtonHeist
-import TheGoods
+import TheScore
 
 // MARK: - Session Errors
 
@@ -18,7 +18,7 @@ final class SessionRunner {
     private let deviceFilter: String?
     private let connectionTimeout: Double
     private let format: OutputFormat
-    private let client = HeistClient()
+    private let client = TheClient()
     private var isRunning = true
     private var shouldExit = false
 
@@ -521,7 +521,7 @@ final class SessionRunner {
                     try await Task.sleep(nanoseconds: 10_000_000_000)
                     if !didResume {
                         didResume = true
-                        continuation.resume(throwing: HeistClient.ActionError.timeout)
+                        continuation.resume(throwing: TheClient.ActionError.timeout)
                     }
                 }
                 client.onInterfaceUpdate = { payload in

@@ -16,7 +16,7 @@ struct ListCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        let client = HeistClient()
+        let client = TheClient()
         logStatus("Discovering devices...")
         client.startDiscovery()
 

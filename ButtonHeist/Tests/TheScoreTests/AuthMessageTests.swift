@@ -1,5 +1,5 @@
 import XCTest
- import TheGoods
+ import TheScore
 
 final class AuthMessageTests: XCTestCase {
 
