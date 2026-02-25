@@ -1,6 +1,8 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import AccessibilitySnapshotParser
+import TheGoods
 
 /// Cracks open the app's touch system for remote gesture injection.
 ///
@@ -15,6 +17,27 @@ import UIKit
 /// since synthetic touch injection cannot confirm that the gesture was handled.
 @MainActor
 final class TheSafecracker {
+
+    // MARK: - Element Store
+
+    /// Back-reference to the element cache owner (InsideMan).
+    /// Used by extension files to resolve interaction targets.
+    weak var elementStore: (any ElementStore)?
+
+    // MARK: - Interaction Result
+
+    /// Outcome of a high-level interaction (action, gesture, text entry).
+    /// InsideMan wraps this with InterfaceDelta to produce the wire ActionResult.
+    struct InteractionResult: Error {
+        let success: Bool
+        let method: ActionMethod
+        let message: String?
+        let value: String?
+
+        static func failure(_ method: ActionMethod, message: String) -> InteractionResult {
+            InteractionResult(success: false, method: method, message: message, value: nil)
+        }
+    }
 
     // MARK: - Internal Touch State
 

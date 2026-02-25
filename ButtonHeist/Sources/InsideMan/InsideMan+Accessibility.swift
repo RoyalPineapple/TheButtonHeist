@@ -126,14 +126,14 @@ extension InsideMan {
 
     private func buildActions(for index: Int, element: AccessibilityElement) -> [ElementAction] {
         var actions: [ElementAction] = []
-        if hasInteractiveObject(at: index) {
+        if theSafecracker.hasInteractiveObject(at: index) {
             actions.append(.activate)
         }
-        if element.traits.contains(.adjustable), hasInteractiveObject(at: index) {
+        if element.traits.contains(.adjustable), theSafecracker.hasInteractiveObject(at: index) {
             actions.append(.increment)
             actions.append(.decrement)
         }
-        for name in customActionNames(elementAt: index) {
+        for name in theSafecracker.customActionNames(elementAt: index) {
             actions.append(.custom(name))
         }
         return actions
