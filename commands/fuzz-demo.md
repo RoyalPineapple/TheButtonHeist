@@ -115,12 +115,7 @@ Proceed? (waiting for confirmation)
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` — confirm device is connected
-3. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set:
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-4. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
+3. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
 5. If not on the app's main/launch screen, navigate there using the nav graph or Back actions
 
 ## Step 4: Execute the Demo with Recording
