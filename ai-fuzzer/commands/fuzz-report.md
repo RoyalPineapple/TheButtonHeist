@@ -9,6 +9,7 @@ You are tasked with generating a comprehensive report of all findings from the c
 ## CRITICAL
 - ALWAYS read the session notes file as primary source of truth — it survives compaction, your memory doesn't
 - ALWAYS include trace refs for every finding — findings without trace refs are not reproducible
+- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT invent or embellish findings — report only what was observed and recorded
 
 ## Step 0: Verify Connection
@@ -19,9 +20,11 @@ You are tasked with generating a comprehensive report of all findings from the c
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. If no devices found: stop and tell the user to launch the app and try again
-4. Print the connected device name and app name for confirmation
-5. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
+3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
+4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
+5. If no devices found: stop and tell the user to launch the app and try again
+6. Print the connected device name and app name for confirmation
+7. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
 
 ## Step 1: Gather Context
 

@@ -4,16 +4,15 @@ description: Deep-dive exploration of the current screen — catalogs every elem
 
 # /fuzz-explore — Screen Explorer
 
-You are tasked with thoroughly exploring whatever screen is currently showing in the connected iOS app. Catalog every element, try every reasonable interaction, and report what you find.
+You are tasked with thoroughly exploring whatever screen is currently showing in the connected iOS app. You identify the screen's intent and design tests, then delegate execution to a Haiku agent.
 
 ## CRITICAL
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
+- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - ALWAYS use `activate` before falling back to `tap` — accessibility API interaction is more reliable
-- ALWAYS process elements in batches of 3-5 — plan multiple actions, execute them, then write files once
-- DO NOT write trace/notes after every single action — batch your file I/O every 3-5 actions
-- DO NOT call `get_screen` on every action — only for findings and new screens
-- DO NOT skip elements without actions — tap and long-press may still reveal behavior
+- ALWAYS plan actions in batches — do not reason individually per element
+- DO NOT call `buttonheist screenshot` on every action — only for findings and new screens
 
 ## Step 0: Verify Connection + Check for Existing Session
 
@@ -23,16 +22,18 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. If no devices found: stop and tell the user to launch the app and try again
-4. Print the connected device name and app name for confirmation
-5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
+3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
+4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
+5. If no devices found: stop and tell the user to launch the app and try again
+6. Print the connected device name and app name for confirmation
+7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
    - Create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
    - Create the companion trace file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
-5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
-6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-8. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation examples.
-9. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
+8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
+9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+10. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+11. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation examples.
+12. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
 
 ## Step 1: Observe the Current Screen
 
@@ -43,90 +44,87 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
    - List each element: `[order] label/description (identifier) — frame — actions`
    - Note the tree structure (containers, groups)
 
-## Step 2: Identify Screen Intent + Baseline State
+## Step 2: Identify Screen Intent + Design Tests
 
 1. **Identify the screen's intent** using `references/screen-intent.md`. Is this a form, list, settings page, detail view, nav hub, picker, modal, or canvas? Record the intent in session notes (`## Screen Intents`).
 2. Record the current state as your baseline:
    - Element count
    - Element identifiers and values
    - Screen capture visual state
+3. **Design workflow tests** based on the screen's intent (see `references/screen-intent.md`):
+   - **Form**: Fill all fields → submit → verify. Violations: submit empty, partial fill, fill-then-abandon.
+   - **Item list**: Add → verify → edit → delete → verify empty state. Violations: delete-when-empty, add-duplicate, rapid-add-delete.
+   - **Settings**: Change → navigate away → return → verify persisted. Violations: toggle-rapidly, dependency-chain.
+   - **Other intents**: Follow the workflow and violation tests from screen-intent.md.
+4. **Order elements** for exploration: randomize within priority tiers. Score by novelty (+3 if untested), action gap (+2 per untried action), navigation potential (+2), adjustable (+1).
+5. **Plan text field values**: For each text field, read its label and generate context-appropriate values using `references/interesting-values.md`. Generate at least 1 novel value per field.
 
-## Step 3: Workflow Tests, Then Element Interaction
+## Step 3: Dispatch Execution to Haiku
 
-**Before starting**: Read your session notes file — check `## Coverage` for this screen to know which elements have already been tested. Skip those and pick up where you left off.
+Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
 
-### Intent-Driven Workflow Testing
+### Batch 1: Workflow Tests
 
-If you identified a screen intent, **run the workflow tests first** (see `references/screen-intent.md` for the specific tests per category):
-- **Form**: Fill all fields with intent-appropriate values → submit → verify. Then: submit empty, partial fill, fill-then-abandon.
-- **Item list**: Add → verify → edit → delete → verify empty state. Then: delete-when-empty, add-duplicate, rapid-add-delete.
-- **Settings**: Change → navigate away → return → verify persisted. Then: toggle-rapidly, dependency-chain.
-- **Other intents**: Follow the workflow and violation tests from screen-intent.md.
+Build an execution plan containing the workflow test sequence designed in Step 2:
 
-Record workflow test results in session notes and trace. Then proceed to element-by-element exploration for anything the workflows didn't cover.
+**Context block**: Include CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
-### Element-by-Element Exploration
+**Action list**: Happy path actions first, then violation tests. Include:
+- Exact CLI commands for each workflow step
+- Expected deltas based on the screen intent's typical behavior
+- Predictions from the behavioral model
+- Navigation commands (with back-routes from nav-graph) for any workflow steps that leave the current screen
+- Purpose: `fuzzing`
 
-Process elements in **randomized order** (not always top-to-bottom). For each interactive element:
+**Stop conditions**: Max actions ~15. Stop on crash. Stop on 3+ consecutive unexpected.
 
-### Elements with actions (activate, increment, decrement, custom)
+Dispatch to Haiku:
+```
+Task(
+  description: "[the execution plan]",
+  model: "haiku",
+  subagent_type: "Bash"
+)
+```
 
-Process elements in batches of 3-5. For each element:
-1. Run `buttonheist action --identifier ID --format json` (by identifier if available, otherwise by order)
-2. Read the delta from the response:
-   - **`noChange`**: Element is inert — continue batch
-   - **`valuesChanged`**: Note the value changes as expected behavior, continue batch
-   - **`elementsChanged`**: Check `added`/`removedOrders` — if elements disappeared, flag as ANOMALY, continue batch
-   - **`screenChanged`**: Stop batch, **push** onto `## Navigation Stack`, use the `newInterface` from delta to record the new screen and transition. Navigate back using **known back-route** from `## Transitions` or `references/nav-graph.md` if available, otherwise use heuristic back-nav. **Pop** navigation stack on return. Re-plan.
-3. If the element has `increment`/`decrement`: run both via `buttonheist action --type increment/decrement`, read deltas to verify value changes
-4. If the element has custom actions: try each via `perform_custom_action`
+Read Haiku's return. Print: `[Workflow] Happy path: PASS/FAIL | Violations: N findings`
 
-After the batch: append all trace entries at once, update session notes once.
+### Batch 2+: Element-by-Element Exploration
 
-### Elements without actions
+For remaining elements not covered by workflow tests, build execution plans in chunks of 15-20 actions:
 
-1. `buttonheist touch tap --x X --y Y --format json` at the element's center coordinates (computed from frame) — use tap as a fallback since these elements lack accessibility actions
-2. Read the delta — check if anything changed (`noChange` means truly inert)
-3. Try `buttonheist touch longpress` — some elements reveal context menus only on long press
-4. Read the delta — check if anything changed
+**For elements with actions** (activate, increment, decrement, custom):
+- `buttonheist action --identifier ID --format json`
+- If element has increment/decrement: include both actions
+- Expected delta: varies by element type (buttons → noChange or screenChanged, toggles → valuesChanged)
 
-### Text fields
+**For elements without actions**:
+- `buttonheist touch tap --x X --y Y --format json` at center coordinates
+- `buttonheist touch longpress --x X --y Y --duration 1.0 --format json`
+- Expected delta: `noChange` for most
 
-If the element looks like a text input (text field, secure field, text editor):
-1. **Read the field's label/identifier** to understand what it expects (name, email, phone, password, description, etc.)
-2. **Generate context-appropriate values** using the "Context-Aware Value Generation" section of `references/interesting-values.md`. For a "Name" field, try real names that break assumptions (`O'Brien-Smith Jr.`, `Null`, `信田`). For an "Email" field, try technically-valid-but-weird addresses (`a@b.c`, `user+tag@example.com`). Don't default to `"test input"` and `<script>alert(1)</script>` for every field.
-3. `buttonheist type --identifier ID --text "..." --format json` — type a value that matches the field's purpose
-4. Check the returned value matches what you typed
-5. `buttonheist type --identifier ID --delete N --text "..." --format json` — clear and try an adversarial version of valid input
-6. Try values from at least 3 categories in `references/interesting-values.md`, starting from a **random** category (not always boundary numbers first). Use `deleteCount` to clear before each new value.
-7. **Generate at least 1 novel value** not from any list — derive it from the field's label, mutate a listed value, or combine categories.
+**For text fields** (generate the CLI commands with values from Step 2):
+- `buttonheist type --identifier ID --text "VALUE" --format json`
+- `buttonheist type --identifier ID --delete N --text "ADVERSARIAL" --format json`
+- Include values from at least 3 categories per field
 
-### Swipe testing (on scrollable-looking containers)
+**For scrollable containers** (list/landmark elements):
+- `buttonheist touch swipe --direction up --format json` on the container area
+- `buttonheist touch swipe --direction down --format json`
 
-If the tree structure shows `list` or `landmark` containers:
-1. `buttonheist touch swipe --direction up --format json` on the container area — check if new elements appear
-2. `swipe(direction: "down")` — check if original elements return
-3. Record any newly discovered elements from scrolling
+**Stop conditions**: Max actions per batch. Stop on crash. Stop on 3+ consecutive unexpected.
 
-## Keeping Notes
+Dispatch each batch to Haiku. Between batches:
+1. Read Haiku's return (findings, coverage, notes)
+2. If Haiku discovered new elements via scrolling, add them to the next batch
+3. If Haiku's notes report unexpected screenChanged with recovery, account for it
+4. Plan the next batch with remaining untested elements
 
-Your notes exist for compaction survival, not per-action bookkeeping. Keep state in memory during active exploration.
-
-**Read notes**: Only at session start and after compaction. Don't re-read between actions on the same screen.
-
-**Write notes** in batches after every 3-5 elements:
-- Update `## Coverage` — mark all tested elements from the batch
-- Add any findings with finding IDs and trace refs
-- Add any transitions and update `## Navigation Stack`
-- Update `## Progress` and `## Next Actions`
-
-**Write trace entries** in batches — accumulate entries, then append them all at once.
-
-**Write immediately**: Only for CRASH findings or new screen discoveries.
+Print after each batch: `[Explore] Batch N: M actions | K findings | L elements remaining`
 
 ## Step 4: Report Findings
 
-After going through all elements, print a structured report:
+After all batches complete, Opus generates the report directly (not delegated):
 
 ```
 ## Screen Exploration Report
@@ -145,16 +143,21 @@ After going through all elements, print a structured report:
 - Expected: [what you expected]
 - Actual: [what happened]
 
+### Haiku Execution Notes
+[Collate noteworthy events from all Haiku returns — element-not-found, prediction mismatches, recovered screen changes, etc.]
+
 ### Element Catalog
 | Order | Label | Identifier | Value | Actions | Tested |
 |-------|-------|-----------|-------|---------|--------|
 | 0 | ... | ... | ... | ... | tap, activate |
 ```
 
-After reporting, **update persistent nav graph**: Merge any new transitions and back-routes into `references/nav-graph.md`.
+After reporting:
+- **Update persistent nav graph**: Merge any new transitions and back-routes into `references/nav-graph.md`
+- **Update app knowledge**: Merge coverage and findings into `references/app-knowledge.md`
 
 ## Error Handling
 
-- If a CLI command **fails with a connection error or non-zero exit**: the app crashed. This is a CRASH finding. Record the last action and stop.
-- If a CLI command exits with non-zero status: record the error method and message. Continue testing other elements.
-- If you can't navigate back after a transition: record as INFO ("no back navigation from [screen]") and continue exploring from the new screen.
+- If Haiku reports a crash (status: `stopped`, reason: `crash`): Record the CRASH finding. The app is dead — generate the report with what you have and tell the user to relaunch.
+- If Haiku reports stuck on wrong screen: Read the current state from session notes, attempt to navigate back using nav-graph, then re-plan the remaining exploration.
+- If Haiku skipped elements (not found): Note these in the report and try them manually if the list is short.

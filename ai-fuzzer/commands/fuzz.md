@@ -11,11 +11,12 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 - Second argument: max iterations (default: 100)
 
 ## CRITICAL
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
-- ALWAYS plan actions in batches of 3-5 — do not reason individually per element
-- ALWAYS batch your file writes — update notes and trace every 3-5 actions, not every action
-- DO NOT call `get_screen` on every action — only for findings and new screens
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
+- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
+- ALWAYS plan actions in explicit batches (typically 10-15 actions) — do not reason individually per element
+- ALWAYS batch your file writes at batch boundaries — do not write notes and trace after every action
+- DO NOT call `buttonheist screenshot` on every action — only for findings and new screens
 - DO NOT re-read session notes between actions — keep state in memory, notes are for compaction survival
 - DO NOT skip the refinement pass — unverified findings are unreliable
 
@@ -27,18 +28,20 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. If no devices found: stop and tell the user to launch the app and try again
-4. Print the connected device name and app name for confirmation
-5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
+3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
+4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
+5. If no devices found: stop and tell the user to launch the app and try again
+6. Print the connected device name and app name for confirmation
+7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
    - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
    - Otherwise: start a fresh session (previous notes files stay for reference)
-5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
-6. **Load app knowledge**: Read `references/app-knowledge.md` if it exists. This gives you accumulated coverage, behavioral models, finding investigation status, and known testing gaps from prior sessions.
-7. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-8. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-9. **Load response examples**: Read `references/examples.md` for annotated CLI response examples — these show how to interpret deltas and recognize screen intents in practice.
-10. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences to use when planning action batches.
-11. **Gap analysis**: Before choosing a strategy, identify the highest-priority work from `references/app-knowledge.md`:
+8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
+9. **Load app knowledge**: Read `references/app-knowledge.md` if it exists. This gives you accumulated coverage, behavioral models, finding investigation status, and known testing gaps from prior sessions.
+10. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+11. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+12. **Load response examples**: Read `references/examples.md` for annotated CLI response examples — these show how to interpret deltas and recognize screen intents in practice.
+13. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences to use when planning action batches.
+14. **Gap analysis**: Before choosing a strategy, identify the highest-priority work from `references/app-knowledge.md`:
     - **Uninvestigated findings**: Check `## Findings Tracker` for `open:uninvestigated` entries — these need 5-10 actions of investigation each
     - **Untested areas**: Check `## Testing Gaps` for unchecked items — these are explicitly known blind spots
     - **Low-coverage screens**: Check `## Coverage Summary` for screens with < 80% element coverage or missing action types
@@ -103,33 +106,36 @@ Create a new session notes file (see SKILL.md for naming convention):
 6. Write `## Next Actions` describing what to try first on Screen #1
 7. **Create the companion trace file**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
    - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
-   - Append the first `observe` entry for the initial `get_interface` from Step 2
+   - Append the first `observe` entry for the initial `buttonheist watch --once --format json --quiet` from Step 2
 
 Both files are your lifeline — the session notes for compaction survival, the trace for reproducibility.
 
-## Step 4: Fuzzing Loop
+## Step 4: Fuzzing Loop (Opus Plans, Haiku Executes)
+
+Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
 
 Repeat until max iterations reached or a CRASH is detected:
 
 ### 4-pre. Investigation Queue (if uninvestigated findings exist)
 
-Before starting the main exploration loop, process uninvestigated findings from `references/app-knowledge.md`:
+Before starting the main exploration loop, process uninvestigated findings from `references/app-knowledge.md`. Opus plans the investigation, Haiku executes:
 
 1. For each `open:uninvestigated` finding (highest severity first, max 3 per session):
-   a. Navigate to the finding's screen using `references/nav-graph.md`
-   b. Spend up to 5 actions investigating: reproduce, vary, scope, reduce, boundary (see SKILL.md `### When Predictions Fail: Investigate`)
-   c. Update the finding's status in session notes:
+   a. Plan a navigation route to the finding's screen using `references/nav-graph.md`
+   b. Build an execution plan with up to 5 investigation actions: reproduce, vary, scope, reduce, boundary (see SKILL.md `### When Predictions Fail: Investigate`)
+   c. Dispatch to Haiku via `Task(model: "haiku", subagent_type: "Bash")`
+   d. Read Haiku's return. Update the finding's status based on results:
       - Reproduced consistently → `open:confirmed`
       - Fully understood (scope + minimal trigger) → `open:investigated`
       - Cannot reproduce → note the failure, keep as `open:uninvestigated`
-   d. Record investigation results in session notes and trace
 2. After processing the investigation queue, continue to the main loop
 3. Budget: max 15 actions total for investigation queue (3 findings x 5 actions)
 
-### 4a. Observe + Identify Intent + Plan Batch
-1. If this is the first batch or you don't have current state: call `get_interface`. Otherwise, use the delta from the last action (especially `screenChanged` which includes the full interface).
+### 4a. Opus: Observe + Identify Intent + Plan Batch
+
+1. If this is the first batch or you don't have current state: run `buttonheist watch --once --format json --quiet`. Otherwise, use the state from Haiku's last return (current screen, fingerprint, nav stack).
 2. **On a new screen, identify its intent first** using `references/screen-intent.md` (form, list, settings, nav hub, etc.). Record the intent in `## Screen Intents`. Plan workflow tests (happy path + violations) before element-by-element fuzzing. See "Screen Intent Recognition" in SKILL.md.
-3. **Plan 3-5 actions** informed by the screen's intent:
+3. **Plan 10-15 actions** informed by the screen's intent:
    - For a **form**: fill fields with intent-appropriate values → submit → test violations (submit empty, partial fill, abandon)
    - For an **item list**: add → verify → edit → delete → test empty state
    - For **settings**: change → persist check → dependency chain testing
@@ -137,50 +143,64 @@ Before starting the main exploration loop, process uninvestigated findings from 
    - If the element is a text field, generate values from `references/interesting-values.md` — use the context-aware generation section, not just the static lists
    - If everything on this screen has been tried, **plan a route** to the highest-priority unexplored screen using known transitions from `## Transitions` and `references/nav-graph.md` (see "Navigation Planning" in SKILL.md). Don't wander — navigate directly.
    - When choosing the next screen, **consult `references/app-knowledge.md`**: prefer screens listed in `## Testing Gaps` with unchecked items, screens with lowest coverage in `## Coverage Summary`, and screens not tested by the current session's strategy.
-4. Only read your session notes file if resuming after compaction — keep state in memory during the batch
+4. Generate the exact CLI commands for each planned action with expected deltas and predictions
 
-### 4b. Execute Batch
-For each planned action:
-1. **Execute**: Run the CLI command via Bash. Increment `actions_taken`.
-2. **Read the delta** from the action response (JSON after the success message):
-   - **`noChange`**: Nothing happened — element is inert. Continue batch.
-   - **`valuesChanged`**: Note the specific value changes. Expected for adjustable elements, anomaly otherwise. Continue batch.
-   - **`elementsChanged`**: Elements were added/removed. Check `added` and `removedOrders`. If elements disappeared unexpectedly, flag as ANOMALY. Continue batch.
-   - **`screenChanged`**: Navigated to a new screen. The delta includes the full `newInterface` — use it directly (no `get_interface` needed). **Push** onto `## Navigation Stack`. Record transition in `## Transitions`. Stop batch, explore or navigate back (use known back-route if available), then re-plan.
-   - **Connection error**: CRASH detected — stop immediately
-3. Only run `buttonheist watch --once` if you need the full hierarchy and aren't performing an action (e.g., at session start or to re-orient after compaction).
-4. Only take a screenshot (`buttonheist screenshot`) when investigating a finding or arriving at a brand new screen — not every action.
-5. **Append trace entries**: Write the complete `interact` entry (with delta kind and details) and, if you called `get_interface`, an `observe` entry. See `references/trace-format.md` for the entry format.
+### 4b. Opus: Build Execution Plan + Dispatch to Haiku
 
-### 4c. Record (batched)
-After completing the batch (3-5 actions), do all recording at once:
+Build an execution plan containing the 10-15 planned actions:
 
-1. **Findings** (write immediately if CRASH): Assign finding IDs (`F-1`, `F-2`...) and add to `## Findings` with trace refs
-2. **Batch file write**: In a single update to session notes:
-   - Update `## Coverage` — mark all tested elements from the batch
-   - Update `## Progress` — action count, current screen
-   - Update `## Transitions` — any new transitions from the batch
-   - Update `## Navigation Stack` — push for forward navigation, pop for back navigation
-   - Update `## Screens Discovered` — any new screens
-   - Update `## Action Log` — last 10 actions
-   - Update `## Next Actions` — plan for the next batch
-3. **Batch trace write**: Append all trace entries from the batch to the trace file at once
+**Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
-Print a brief progress update every 10 actions:
+**Action list**: Each action with:
+- Exact CLI command
+- Expected delta kind
+- Expected screen (if screenChanged)
+- Prediction (free text from behavioral model)
+- Purpose: `fuzzing` or `navigation`
+
+**Stop conditions**: Max actions (the batch size). Stop on crash. Stop on 3+ consecutive unexpected.
+
+Dispatch:
 ```
-[Progress] Actions: 42/100 | Screens: 5 | Findings: 2 (0 crash, 1 error, 1 anomaly)
+Task(
+  description: "[the execution plan]",
+  model: "haiku",
+  subagent_type: "Bash"
+)
 ```
 
-4. **Yield check** (every 15 actions): Count findings and new coverage in the last 15 actions.
-   - If yield is low (0 findings, < 3 new coverage items): pivot to the highest-priority untested area from `references/app-knowledge.md`. Print:
+### 4c. Opus: Process Results + Yield Check
+
+Read Haiku's Execution Result:
+
+1. **Parse status**:
+   - `complete` → all actions executed, proceed to yield check
+   - `stopped` with `crash` → proceed to crash handling
+   - `stopped` with other reason → handle the issue (navigate back, replan)
+
+2. **Incorporate results**:
+   - Add Haiku's findings to the running findings list
+   - Update mental model of coverage from Haiku's coverage report
+   - Note any noteworthy events from Haiku's notes (element fallbacks, prediction mismatches, recovered screen changes)
+   - Update current screen and nav stack from Haiku's current state
+
+3. **Print progress** (every ~10 actions based on cumulative count):
+   ```
+   [Progress] Actions: 42/100 | Screens: 5 | Findings: 2 (0 crash, 1 error, 1 anomaly)
+   ```
+
+4. **Yield check** (every ~15 actions based on cumulative count): Count findings and new coverage from recent Haiku returns.
+   - If yield is low (0 findings, < 3 new coverage items in ~15 actions): pivot to the highest-priority untested area from `references/app-knowledge.md`. Print:
      ```
      [Yield] Low yield on [screen] — 0 findings in 15 actions. Pivoting to [next target].
      ```
-   - If yield is high (2+ findings in 15 actions): stay and go deeper. Print:
+   - If yield is high (2+ findings in ~15 actions): stay and go deeper. Print:
      ```
      [Yield] Productive vein on [screen] — N findings in 15 actions. Continuing.
      ```
    - If same screen for 20+ actions with 0 findings: leave immediately and mark as saturated for current strategy.
+
+5. **Loop back to 4a** — replan the next batch based on Haiku's results and the yield assessment.
 
 ## Step 5: Refinement Pass
 
