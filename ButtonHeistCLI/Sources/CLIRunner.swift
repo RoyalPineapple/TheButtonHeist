@@ -32,6 +32,9 @@ final class CLIRunner {
 
         warnIfPartialDirectConfig(host: effectiveHost, port: effectivePort, quiet: options.quiet)
 
+        // Store device filter BEFORE starting discovery so the callback can use it
+        self.effectiveDeviceFilter = effectiveDevice
+
         if let host = effectiveHost, let port = effectivePort {
             // Direct connection — skip Bonjour discovery
             if !options.quiet {
@@ -45,9 +48,6 @@ final class CLIRunner {
             }
             client.startDiscovery()
         }
-
-        // Store effective device filter for callback
-        self.effectiveDeviceFilter = effectiveDevice
 
         // Handle timeout
         if options.timeout > 0 {
