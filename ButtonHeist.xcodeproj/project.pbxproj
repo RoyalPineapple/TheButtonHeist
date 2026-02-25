@@ -23,6 +23,7 @@
 		40C3B253271DA9EBB264CB80 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D734AD549893C0988511EEE /* RecordingPayloadTests.swift */; };
 		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
 		4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */; };
+		4F3765FF5A040DA7F0FA8BCA /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */; };
 		529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */; };
 		5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = F20BB761FA684C7D90336187 /* InsideManAutoStart.m */; };
 		679CA47F948203471BC84765 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */; };
@@ -237,6 +238,7 @@
 		D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
+		E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		F20BB761FA684C7D90336187 /* InsideManAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InsideManAutoStart.m; sourceTree = "<group>"; };
@@ -480,6 +482,7 @@
 				A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
 				F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */,
+				E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */,
 			);
 			path = WheelmanTests;
 			sourceTree = "<group>";
@@ -524,8 +527,6 @@
 				EFC08AE5F154BAB591313A74 /* PBXTargetDependency */,
 			);
 			name = ButtonHeist;
-			packageProductDependencies = (
-			);
 			productName = ButtonHeist;
 			productReference = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */;
 			productType = "com.apple.product-type.framework";
@@ -546,8 +547,6 @@
 				B0E19EDA4C4B97A87C8FD5F0 /* PBXTargetDependency */,
 			);
 			name = Wheelman;
-			packageProductDependencies = (
-			);
 			productName = Wheelman;
 			productReference = 5606B65675665A31CFB80D72 /* Wheelman.framework */;
 			productType = "com.apple.product-type.framework";
@@ -567,8 +566,6 @@
 				A76FE0BA3CBA9E1CA7C11501 /* PBXTargetDependency */,
 			);
 			name = TheGoodsTests;
-			packageProductDependencies = (
-			);
 			productName = TheGoodsTests;
 			productReference = F9C1708416E311A34CD2AD74 /* TheGoodsTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -589,8 +586,6 @@
 				864CE9CCEF3B0A8F84871CA7 /* PBXTargetDependency */,
 			);
 			name = WheelmanTests;
-			packageProductDependencies = (
-			);
 			productName = WheelmanTests;
 			productReference = EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -613,8 +608,6 @@
 				186ABBA8DDE0347593950896 /* PBXTargetDependency */,
 			);
 			name = InsideMan;
-			packageProductDependencies = (
-			);
 			productName = InsideMan;
 			productReference = 816E500336496E10A79B40CA /* InsideMan.framework */;
 			productType = "com.apple.product-type.framework";
@@ -634,8 +627,6 @@
 				4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */,
 			);
 			name = ButtonHeistTests;
-			packageProductDependencies = (
-			);
 			productName = ButtonHeistTests;
 			productReference = 2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -655,8 +646,6 @@
 			dependencies = (
 			);
 			name = TheGoods;
-			packageProductDependencies = (
-			);
 			productName = TheGoods;
 			productReference = 96B4860B52B50A1AF596A086 /* TheGoods.framework */;
 			productType = "com.apple.product-type.framework";
@@ -832,6 +821,7 @@
 				292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
 				13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */,
+				4F3765FF5A040DA7F0FA8BCA /* SessionLockTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -991,10 +981,7 @@
 				PRODUCT_NAME = ButtonHeist;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1016,10 +1003,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -1039,10 +1023,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thegoods.tests;
 				PRODUCT_NAME = TheGoodsTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -1220,18 +1201,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) DEBUG";
 				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
@@ -1275,11 +1247,7 @@
 					"$(inherited)",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insideman;
 				PRODUCT_NAME = InsideMan;
 				SDKROOT = iphoneos;
@@ -1287,10 +1255,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1325,11 +1290,7 @@
 					"$(inherited)",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insideman;
 				PRODUCT_NAME = InsideMan;
 				SDKROOT = iphoneos;
@@ -1453,18 +1414,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) DEBUG";
 				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
@@ -1557,10 +1509,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman.tests;
 				PRODUCT_NAME = WheelmanTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};

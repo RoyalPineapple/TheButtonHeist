@@ -45,6 +45,9 @@ struct WatchCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages (only output data)")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .shortAndLong, help: "Timeout in seconds waiting for device (0 = no timeout)")
     var timeout: Int = 0
 
@@ -66,6 +69,7 @@ struct WatchCommand: AsyncParsableCommand {
             format: format ?? .auto,
             once: once,
             quiet: quiet,
+            force: force,
             timeout: timeout,
             verbose: verbose,
             device: device,
@@ -91,6 +95,7 @@ struct CLIOptions {
     let format: OutputFormat
     let once: Bool
     let quiet: Bool
+    let force: Bool
     let timeout: Int
     let verbose: Bool
     let device: String?
