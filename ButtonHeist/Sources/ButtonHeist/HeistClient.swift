@@ -39,9 +39,14 @@ public final class HeistClient {
     public var onScreen: ((ScreenPayload) -> Void)?
     /// Called when a token is received via UI approval (store for future reconnections)
     public var onTokenReceived: ((String) -> Void)?
+    /// Called when the server rejects the connection because another driver holds the session
+    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
 
     /// Auth token to send during connection handshake
     public var token: String?
+
+    /// When true, force-takeover the session during the next connection
+    public var forceSession: Bool = false
 
     /// When true (default), automatically sends .subscribe, .requestInterface, and .requestScreen
     /// after connecting. Set to false for session-style usage where you request data explicitly.
@@ -121,7 +126,7 @@ public final class HeistClient {
         disconnect()
 
         connectionState = .connecting
-        connection = DeviceConnection(device: device, token: token)
+        connection = DeviceConnection(device: device, token: token, forceSession: forceSession)
 
         connection?.onConnected = { [weak self] in
             self?.connectedDevice = device
@@ -169,6 +174,11 @@ public final class HeistClient {
         connection?.onAuthApproved = { [weak self] approvedToken in
             self?.token = approvedToken
             self?.onTokenReceived?(approvedToken)
+        }
+
+        connection?.onSessionLocked = { [weak self] payload in
+            self?.connectionState = .failed(payload.message)
+            self?.onSessionLocked?(payload)
         }
 
         connection?.connect()

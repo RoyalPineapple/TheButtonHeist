@@ -246,4 +246,71 @@ final class AuthMessageTests: XCTestCase {
             XCTFail("Expected authenticate from raw JSON")
         }
     }
+
+    // MARK: - Session Locking
+
+    func testSessionLockedEncodeDecode() throws {
+        let payload = SessionLockedPayload(message: "Session is locked", activeConnections: 2)
+        let message = ServerMessage.sessionLocked(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .sessionLocked(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload.message, "Session is locked")
+            XCTAssertEqual(decodedPayload.activeConnections, 2)
+        } else {
+            XCTFail("Expected sessionLocked, got \(decoded)")
+        }
+    }
+
+    func testSessionLockedFromRawJSON() throws {
+        let json = """
+        {"sessionLocked":{"_0":{"message":"Locked by driver","activeConnections":1}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+        if case .sessionLocked(let payload) = decoded {
+            XCTAssertEqual(payload.message, "Locked by driver")
+            XCTAssertEqual(payload.activeConnections, 1)
+        } else {
+            XCTFail("Expected sessionLocked from raw JSON")
+        }
+    }
+
+    func testAuthenticateWithForceSession() throws {
+        let payload = AuthenticatePayload(token: "my-token", forceSession: true)
+        let message = ClientMessage.authenticate(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .authenticate(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload.token, "my-token")
+            XCTAssertEqual(decodedPayload.forceSession, true)
+        } else {
+            XCTFail("Expected authenticate with forceSession")
+        }
+    }
+
+    func testAuthenticateWithoutForceSessionBackwardCompat() throws {
+        // Old-style JSON without forceSession should still decode
+        let json = """
+        {"authenticate":{"_0":{"token":"old-client"}}}
+        """
+        let data = Data(json.utf8)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+        if case .authenticate(let payload) = decoded {
+            XCTAssertEqual(payload.token, "old-client")
+            XCTAssertNil(payload.forceSession)
+        } else {
+            XCTFail("Expected authenticate from old-style JSON")
+        }
+    }
+
+    func testAuthenticateNilForceSessionOmittedFromJSON() throws {
+        let payload = AuthenticatePayload(token: "test")
+        let data = try JSONEncoder().encode(payload)
+        let json = String(data: data, encoding: .utf8)!
+        // forceSession is nil so should not appear in output
+        XCTAssertFalse(json.contains("forceSession"))
+    }
 }

@@ -13,7 +13,7 @@ final class DeviceConnector {
     private let directPort: UInt16?
 
     init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
-         token: String? = nil, quiet: Bool = false,
+         token: String? = nil, quiet: Bool = false, force: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
         // Flags override env vars
         self.directHost = host
@@ -26,6 +26,7 @@ final class DeviceConnector {
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
         self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.forceSession = force
         self.client.autoSubscribe = false
     }
 
@@ -104,6 +105,9 @@ final class DeviceConnector {
                 logStatus("Set BUTTONHEIST_TOKEN=\(token) for future connections")
             }
         }
+        client.onSessionLocked = { payload in
+            connectionError = CLIError.sessionLocked(payload.message)
+        }
         client.connect(to: device)
 
         let connStart = DispatchTime.now()
@@ -132,6 +136,7 @@ enum CLIError: Error, CustomStringConvertible {
     case noMatchingDevice(filter: String, available: [String])
     case connectionTimeout
     case connectionFailed(String)
+    case sessionLocked(String)
 
     var description: String {
         switch self {
@@ -156,6 +161,12 @@ enum CLIError: Error, CustomStringConvertible {
             return """
                 Connection failed: \(msg)
                   Hint: Check that the host and port are correct and the app is running.
+                """
+        case .sessionLocked(let msg):
+            return """
+                Session locked: \(msg)
+                  Another driver is currently connected. Wait for it to finish,
+                  or use --force to take over the session.
                 """
         }
     }
