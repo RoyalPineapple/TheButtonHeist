@@ -7,19 +7,24 @@ The core frameworks that power ButtonHeist. Four modules spanning iOS and macOS 
 | Module | Platform | What It Does |
 |--------|----------|-------------|
 | **TheGoods** (shared types) | iOS + macOS | Wire protocol messages, UI element models, constants |
-| **InsideMan** (iOS server) | iOS | Embeds in your app. Parses accessibility hierarchy, executes gestures, serves it all over TCP |
+| **InsideJob** (iOS server) | iOS | Embeds in your app. Parses accessibility hierarchy, executes gestures, serves it all over TCP |
 | **Wheelman** (networking) | iOS + macOS | TCP server/client, Bonjour discovery, BSD socket transport |
 | **ButtonHeist** (macOS client) | macOS | `HeistClient` class for macOS consumers. Re-exports TheGoods + Wheelman |
 
 ## How They Connect
 
-```
-iOS App
-  └── InsideMan (uses TheGoods for messages, Wheelman for TCP)
-         ↕ TCP over WiFi (Bonjour) or USB (IPv6)
-macOS
-  └── ButtonHeist framework (HeistClient, re-exports TheGoods + Wheelman)
-         └── Used by: CLI, MCP server, or your own tools
+```mermaid
+graph LR
+    subgraph ios["iOS App"]
+        IJ["InsideJob<br>(uses TheGoods + Wheelman)"]
+    end
+
+    IJ <-->|"TCP over WiFi (Bonjour)<br>or USB (IPv6)"| BH
+
+    subgraph macos["macOS"]
+        BH["ButtonHeist framework<br>(HeistClient, re-exports TheGoods + Wheelman)"]
+        BH --> Consumers["CLI, MCP server, or your own tools"]
+    end
 ```
 
 ---
@@ -35,19 +40,19 @@ The cross-platform type library. No UIKit or AppKit imports — just pure `Codab
   - `ServerMessage` (8 cases — auth challenge, info, interface, action results, screen, errors)
   - Target structs: `ActionTarget`, `TouchTapTarget`, `SwipeTarget`, `PinchTarget`, `DrawBezierTarget`, etc.
   - Response types: `ServerInfo`, `Interface`, `HeistElement`, `ActionResult`, `InterfaceDelta`, `ScreenPayload`
-  - Constants: `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"3.0"`)
+  - Constants: `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"3.1"`)
 - **`BezierSampler.swift`** — Converts cubic bezier curves into polyline point arrays for the `touchDrawBezier` command
 
-## InsideMan — iOS Server
+## InsideJob — iOS Server
 
-**Location**: `Sources/InsideMan/`
+**Location**: `Sources/InsideJob/`
 
 The server that runs inside the iOS app. A `@MainActor` singleton that auto-starts, parses the accessibility tree, and handles remote commands.
 
 | File | What It Does |
 |------|-------------|
-| `InsideMan.swift` | Main server singleton. Starts TCP server, advertises via Bonjour, polls for UI changes, dispatches all client messages |
-| `SafeCracker.swift` | Gesture simulation engine — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path. Also handles text input via UIKeyboardImpl |
+| `InsideJob.swift` | Main server singleton. Starts TCP server, advertises via Bonjour, polls for UI changes, dispatches all client messages |
+| `TheSafecracker.swift` | Gesture simulation engine — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path. Also handles text input via UIKeyboardImpl |
 | `SyntheticTouchFactory.swift` | Creates `UITouch` instances by calling private UIKit methods via direct IMP invocation |
 | `SyntheticEventFactory.swift` | Creates fresh `UIEvent` objects per touch phase (iOS 26 compatible) |
 | `IOHIDEventBuilder.swift` | Low-level IOKit HID event creation via `dlsym`-loaded C function pointers |
@@ -55,10 +60,10 @@ The server that runs inside the iOS app. A `@MainActor` singleton that auto-star
 
 ### Auto-Start
 
-InsideMan starts automatically when the framework loads — no code changes needed in your app.
+InsideJob starts automatically when the framework loads — no code changes needed in your app.
 
-1. **`InsideManAutoStart.m`** (in `Sources/InsideManLoader/`) implements ObjC `+load`
-2. `+load` dispatches to the main queue and calls `InsideMan_autoStartFromLoad()`
+1. **`InsideJobAutoStart.m`** (in `Sources/InsideJobLoader/`) implements ObjC `+load`
+2. `+load` dispatches to the main queue and calls `InsideJob_autoStartFromLoad()`
 3. That function reads config from environment variables (highest priority) or Info.plist
 4. Creates the server on the configured port, starts Bonjour advertisement, begins polling
 
@@ -68,18 +73,18 @@ Only active in `#if DEBUG` builds — never ships in production.
 
 | Env Var | Info.plist Key | Default | Description |
 |---------|----------------|---------|-------------|
-| `INSIDEMAN_PORT` | `InsideManPort` | `0` (auto) | Server port (0 = OS-assigned, advertised via Bonjour) |
-| `INSIDEMAN_TOKEN` | `InsideManToken` | Auto-generated UUID | Auth token for client connections |
-| `INSIDEMAN_ID` | `InsideManInstanceId` | Short UUID prefix | Human-readable instance identifier |
-| `INSIDEMAN_POLLING_INTERVAL` | `InsideManPollingInterval` | `1.0` | UI change polling interval (min 0.5s) |
-| `INSIDEMAN_DISABLE` | `InsideManDisableAutoStart` | Not set | Set to `true` to prevent auto-start |
+| `INSIDEJOB_PORT` | `InsideJobPort` | `0` (auto) | Server port (0 = OS-assigned, advertised via Bonjour) |
+| `INSIDEJOB_TOKEN` | `InsideJobToken` | Auto-generated UUID | Auth token for client connections |
+| `INSIDEJOB_ID` | `InsideJobInstanceId` | Short UUID prefix | Human-readable instance identifier |
+| `INSIDEJOB_POLLING_INTERVAL` | `InsideJobPollingInterval` | `1.0` | UI change polling interval (min 0.5s) |
+| `INSIDEJOB_DISABLE` | `InsideJobDisableAutoStart` | Not set | Set to `true` to prevent auto-start |
 
-### SafeCracker — Touch Injection Pipeline
+### TheSafecracker — Touch Injection Pipeline
 
-SafeCracker synthesizes touch events through a 4-layer stack:
+TheSafecracker synthesizes touch events through a 4-layer stack:
 
 ```
-SafeCracker (gesture logic — timing, interpolation, multi-finger coordination)
+TheSafecracker (gesture logic — timing, interpolation, multi-finger coordination)
     ↓
 SyntheticTouchFactory (UITouch creation via private API IMP invocation)
     ↓
@@ -120,5 +125,5 @@ Single-import macOS framework. `import ButtonHeist` gives you `HeistClient` plus
 
 - [Architecture](../docs/ARCHITECTURE.md) — Full system design with data flow diagrams
 - [API Reference](../docs/API.md) — Complete API documentation for all modules
-- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v3.0 message format specification
+- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v3.1 message format specification
 - [Project Overview](../README.md) — Quick start and getting connected

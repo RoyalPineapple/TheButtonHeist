@@ -1,20 +1,20 @@
 # ButtonHeist API Reference
 
-Complete API documentation for InsideMan (iOS), HeistClient (macOS), and the CLI.
+Complete API documentation for InsideJob (iOS), HeistClient (macOS), and the CLI.
 
-## InsideMan
+## InsideJob
 
-**Import**: `import InsideMan`
+**Import**: `import InsideJob`
 **Platform**: iOS 17.0+
-**Location**: `ButtonHeist/Sources/InsideMan/InsideMan.swift`
+**Location**: `ButtonHeist/Sources/InsideJob/InsideJob.swift`
 
 ### Overview
 
-InsideMan automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
+InsideJob automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
 
 ### Auto-Start Behavior
 
-When the InsideMan framework loads:
+When the InsideJob framework loads:
 1. Reads configuration from environment variables or Info.plist
 2. Creates a TCP server on an OS-assigned port
 3. Begins Bonjour advertisement as `_buttonheist._tcp`
@@ -24,35 +24,35 @@ When the InsideMan framework loads:
 
 **Environment variables (highest priority):**
 ```bash
-INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
-INSIDEMAN_DISABLE=true               # Disable auto-start
-INSIDEMAN_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
-INSIDEMAN_ID=my-instance             # Human-readable instance identifier
-INSIDEMAN_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
-INSIDEMAN_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
+INSIDEJOB_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
+INSIDEJOB_DISABLE=true               # Disable auto-start
+INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
+INSIDEJOB_ID=my-instance             # Human-readable instance identifier
+INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
+INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
 ```
 
 **Info.plist (fallback):**
 ```xml
-<key>InsideManPollingInterval</key>
+<key>InsideJobPollingInterval</key>
 <real>1.0</real>
-<key>InsideManDisableAutoStart</key>
+<key>InsideJobDisableAutoStart</key>
 <false/>
-<key>InsideManToken</key>
+<key>InsideJobToken</key>
 <string>my-secret-token</string>
-<key>InsideManInstanceId</key>
+<key>InsideJobInstanceId</key>
 <string>my-instance</string>
 ```
 
 **Client-side:** Set `BUTTONHEIST_TOKEN` environment variable to authenticate with the server.
 
-### InsideMan Class
+### InsideJob Class
 
 Main server class. Use the shared singleton instance.
 
 ```swift
 @MainActor
-public final class InsideMan
+public final class InsideJob
 ```
 
 #### Properties
@@ -60,7 +60,7 @@ public final class InsideMan
 ##### shared
 
 ```swift
-public static var shared: InsideMan
+public static var shared: InsideJob
 ```
 
 Singleton instance. Automatically initialized on framework load.
@@ -141,7 +141,7 @@ Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 30
 
 ### Touch Gesture & Text Input System (TheSafecracker)
 
-InsideMan uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
+InsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
 
 **Supported gestures:**
 - `tap` - Single tap at a point
@@ -541,7 +541,7 @@ public enum ConnectionState: Equatable
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable
 ```
 
-Represents a discovered InsideMan device.
+Represents a discovered InsideJob device.
 
 #### Properties
 
@@ -700,7 +700,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "3.0")
+- `protocolVersion: String` - Protocol version (e.g., "3.1")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
@@ -709,7 +709,7 @@ Device and app metadata received after connecting.
 - `screenHeight: Double` - Screen height in points
 - `screenSize: CGSize` - Computed from width/height
 - `instanceId: String?` - Per-launch session UUID
-- `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEMAN_ID` env var, or shortId fallback)
+- `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEJOB_ID` env var, or shortId fallback)
 - `listeningPort: UInt16?` - Port the server is listening on
 - `simulatorUDID: String?` - Simulator UDID when running on iOS Simulator (nil on physical devices)
 - `vendorIdentifier: String?` - `UIDevice.identifierForVendor` UUID string (stable per app install per device)
@@ -907,7 +907,7 @@ All subcommands that connect to a device accept these connection options:
 | Variable | Description |
 |----------|-------------|
 | `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
-| `BUTTONHEIST_TOKEN` | Auth token for InsideMan |
+| `BUTTONHEIST_TOKEN` | Auth token for InsideJob |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking (distinguishes drivers sharing the same token) |
 
 Flags always take precedence over environment variables.
@@ -1105,11 +1105,11 @@ Just import the framework - it auto-starts:
 
 ```swift
 import SwiftUI
-import InsideMan
+import InsideJob
 
 @main
 struct MyApp: App {
-    // InsideMan auto-starts via ObjC +load
+    // InsideJob auto-starts via ObjC +load
 
     var body: some Scene {
         WindowGroup {

@@ -6,7 +6,7 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "client")
 
-/// Client for discovering and connecting to iOS apps running InsideMan
+/// Client for discovering and connecting to iOS apps running InsideJob
 @Observable
 @MainActor
 public final class HeistClient {

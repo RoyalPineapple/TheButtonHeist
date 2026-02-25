@@ -9,7 +9,7 @@ import os.log
 
 /// Debug logging helper - uses NSLog for maximum visibility
 func serverLog(_ message: String) {
-    NSLog("[InsideMan] %@", message)
+    NSLog("[InsideJob] %@", message)
 }
 
 /// Weak reference wrapper for interactive accessibility objects.
@@ -18,7 +18,7 @@ struct WeakObject {
 }
 
 /// Provides access to the parsed accessibility element cache.
-/// InsideMan owns the data; TheSafecracker reads it to resolve interaction targets
+/// InsideJob owns the data; TheSafecracker reads it to resolve interaction targets
 /// and can trigger a refresh when it needs fresh data (e.g. after typing).
 @MainActor
 protocol ElementStore: AnyObject {
@@ -30,16 +30,16 @@ protocol ElementStore: AnyObject {
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor
-public final class InsideMan: ElementStore {
+public final class InsideJob: ElementStore {
 
     // MARK: - Singleton
 
     /// Shared instance - use `configure(token:instanceId:)` before first access
-    public static var shared: InsideMan = InsideMan()
+    public static var shared: InsideJob = InsideJob()
 
     /// Configure the shared instance. Must be called before start().
     public static func configure(token: String? = nil, instanceId: String? = nil) {
-        shared = InsideMan(token: token, instanceId: instanceId)
+        shared = InsideJob(token: token, instanceId: instanceId)
     }
 
     // MARK: - Properties
@@ -104,7 +104,7 @@ public final class InsideMan: ElementStore {
     public func start() throws {
         guard !isRunning else { return }
 
-        serverLog("Starting InsideMan with SimpleSocketServer...")
+        serverLog("Starting InsideJob with SimpleSocketServer...")
 
         let server = SimpleSocketServer()
         wireServer(server)
@@ -120,7 +120,7 @@ public final class InsideMan: ElementStore {
         }
         advertiseService(port: actualPort)
 
-        // Prevent the screen from locking while InsideMan is running
+        // Prevent the screen from locking while InsideJob is running
         UIApplication.shared.isIdleTimerDisabled = true
 
         startAccessibilityObservation()

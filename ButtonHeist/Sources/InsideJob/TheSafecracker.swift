@@ -20,14 +20,14 @@ final class TheSafecracker {
 
     // MARK: - Element Store
 
-    /// Back-reference to the element cache owner (InsideMan).
+    /// Back-reference to the element cache owner (InsideJob).
     /// Used by extension files to resolve interaction targets.
     weak var elementStore: (any ElementStore)?
 
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
-    /// InsideMan wraps this with InterfaceDelta to produce the wire ActionResult.
+    /// InsideJob wraps this with InterfaceDelta to produce the wire ActionResult.
     struct InteractionResult: Error {
         let success: Bool
         let method: ActionMethod
@@ -45,7 +45,7 @@ final class TheSafecracker {
     private var activeWindow: UIWindow?
 
     /// Called during continuous gestures with all current finger positions.
-    /// Set by InsideMan to update recording overlays during gesture execution.
+    /// Set by InsideJob to update recording overlays during gesture execution.
     var onGestureMove: (([CGPoint]) -> Void)?
 
     // MARK: - Public: Single-Finger Gestures
