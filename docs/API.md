@@ -595,6 +595,7 @@ Messages sent from server to client.
 - `actionResult(ActionResult)` - Action outcome
 - `screen(ScreenPayload)` - Base64-encoded PNG
 - `recordingStarted` - Recording has begun
+- `recordingStopped` - Recording stop acknowledged
 - `recording(RecordingPayload)` - Completed recording (H.264/MP4 as base64)
 - `recordingError(String)` - Recording failed
 
@@ -841,7 +842,7 @@ Completed recording payload.
 - `fps: Int` - Frames per second used during recording
 - `startTime: Date` - When recording started
 - `endTime: Date` - When recording ended
-- `stopReason: StopReason` - Why recording stopped (`.manual`, `.inactivity`, `.maxDuration`, `.fileSizeLimit`, `.error`)
+- `stopReason: StopReason` - Why recording stopped (`.manual`, `.inactivity`, `.maxDuration`, `.fileSizeLimit`)
 
 ---
 

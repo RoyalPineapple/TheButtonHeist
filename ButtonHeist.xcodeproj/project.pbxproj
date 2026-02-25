@@ -389,7 +389,6 @@
 				607CA99EFBB7CC8AB397E5D1 /* Stakeout.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
-				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
 				CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */,
 				13D27D93EA5484662C986D92 /* TheSafecracker.swift */,
 			);
@@ -876,7 +875,6 @@
 				03E45308C67E30638290BC36 /* Stakeout.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
-				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
 				CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */,
 				EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */,
 				5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */,

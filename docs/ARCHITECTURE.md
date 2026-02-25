@@ -70,7 +70,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 **Key Types**:
 - `ClientMessage` - Messages from client to server (25 cases including 9 touch gestures, text input, edit actions, idle waiting, and recording control)
-- `ServerMessage` - Messages from server to client (12 cases including auth challenge/failure/approval, recording events)
+- `ServerMessage` - Messages from server to client (13 cases including auth challenge/failure/approval, recording events)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
