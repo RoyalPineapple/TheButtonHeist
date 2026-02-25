@@ -60,16 +60,24 @@ enum SessionResponse {
 
         case .recording(let path, let payload):
             let dur = String(format: "%.1f", payload.duration)
-            return "✓ Recording saved: \(path)  " +
+            var out = "✓ Recording saved: \(path)  " +
                 "(\(payload.width)×\(payload.height), \(dur)s, " +
                 "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                out += "\n  Interactions: \(log.count)"
+            }
+            return out
 
         case .recordingData(let payload):
             let sizeKB = payload.videoData.count * 3 / 4 / 1024
             let dur = String(format: "%.1f", payload.duration)
-            return "✓ Recording captured " +
+            var out = "✓ Recording captured " +
                 "(\(payload.width)×\(payload.height), \(dur)s, " +
                 "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                out += "\n  Interactions: \(log.count)"
+            }
+            return out
         }
     }
 
@@ -213,7 +221,7 @@ enum SessionResponse {
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
 
         case .recording(let path, let payload):
-            return [
+            var d: [String: Any] = [
                 "status": "ok",
                 "path": path,
                 "width": payload.width,
@@ -223,9 +231,11 @@ enum SessionResponse {
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
             ]
+            d["interactionCount"] = payload.interactionLog?.count ?? 0
+            return d
 
         case .recordingData(let payload):
-            return [
+            var d: [String: Any] = [
                 "status": "ok",
                 "videoData": payload.videoData,
                 "width": payload.width,
@@ -235,6 +245,8 @@ enum SessionResponse {
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
             ]
+            d["interactionCount"] = payload.interactionLog?.count ?? 0
+            return d
         }
     }
 }

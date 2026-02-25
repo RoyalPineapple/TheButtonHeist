@@ -188,6 +188,9 @@ public struct RecordingPayload: Codable, Sendable {
         case fileSizeLimit
     }
 
+    /// Ordered log of interactions recorded during this session (nil if no interactions occurred)
+    public let interactionLog: [InteractionEvent]?
+
     public init(
         videoData: String,
         width: Int,
@@ -197,7 +200,8 @@ public struct RecordingPayload: Codable, Sendable {
         fps: Int,
         startTime: Date,
         endTime: Date,
-        stopReason: StopReason
+        stopReason: StopReason,
+        interactionLog: [InteractionEvent]? = nil
     ) {
         self.videoData = videoData
         self.width = width
@@ -208,6 +212,35 @@ public struct RecordingPayload: Codable, Sendable {
         self.startTime = startTime
         self.endTime = endTime
         self.stopReason = stopReason
+        self.interactionLog = interactionLog
+    }
+}
+
+/// A single recorded interaction event captured during a Stakeout recording.
+public struct InteractionEvent: Codable, Sendable {
+    /// Time offset from recording start in seconds
+    public let timestamp: Double
+    /// The command that triggered this interaction
+    public let command: ClientMessage
+    /// The result returned to the client
+    public let result: ActionResult
+    /// Interface state before the interaction (elements only, no tree)
+    public let interfaceBefore: Interface
+    /// Interface state after the interaction (elements only, no tree)
+    public let interfaceAfter: Interface
+
+    public init(
+        timestamp: Double,
+        command: ClientMessage,
+        result: ActionResult,
+        interfaceBefore: Interface,
+        interfaceAfter: Interface
+    ) {
+        self.timestamp = timestamp
+        self.command = command
+        self.result = result
+        self.interfaceBefore = interfaceBefore
+        self.interfaceAfter = interfaceAfter
     }
 }
 
