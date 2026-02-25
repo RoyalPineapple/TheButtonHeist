@@ -38,20 +38,20 @@ let project = Project(
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
-        // Includes InsideManLoader for automatic initialization via ObjC +load
+        // Includes InsideJobLoader for automatic initialization via ObjC +load
         .target(
-            name: "InsideMan",
+            name: "InsideJob",
             destinations: [.iPhone, .iPad],
             product: .framework,
-            bundleId: "com.buttonheist.insideman",
+            bundleId: "com.buttonheist.insidejob",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
             sources: [
-                "ButtonHeist/Sources/InsideMan/**",
-                "ButtonHeist/Sources/InsideManLoader/**",
+                "ButtonHeist/Sources/InsideJob/**",
+                "ButtonHeist/Sources/InsideJobLoader/**",
             ],
             headers: .headers(
-                public: ["ButtonHeist/Sources/InsideManLoader/include/**"]
+                public: ["ButtonHeist/Sources/InsideJobLoader/include/**"]
             ),
             scripts: [swiftlintScript],
             dependencies: [

@@ -3,7 +3,7 @@
 import UIKit
 import TheGoods
 
-extension InsideMan {
+extension InsideJob {
 
     // MARK: - Screen Capture
 

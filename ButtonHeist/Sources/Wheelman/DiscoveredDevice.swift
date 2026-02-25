@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-/// A discovered iOS device running InsideMan
+/// A discovered iOS device running InsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let id: String
     public let name: String
