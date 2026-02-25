@@ -26,7 +26,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 ```
 
-Use the `AccessibilityTestApp` scheme — this embeds InsideMan, Wheelman, and all frameworks. Building just the `InsideMan` scheme only produces the framework without the app.
+Use the `AccessibilityTestApp` scheme — this embeds InsideJob, Wheelman, and all frameworks. Building just the `InsideJob` scheme only produces the framework without the app.
 
 ### 3. Install and launch
 
@@ -77,7 +77,7 @@ Before pushing any commit, verify the following:
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan -destination 'generic/platform=iOS' build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build
   ```
 - For device builds, include signing:
   ```bash
@@ -140,7 +140,7 @@ Before pushing any commit, verify the following:
 
 ## Recording and Demo Commands
 
-Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with InsideMan embedded.
+Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with InsideJob embedded.
 
 | Command | Description |
 |---------|-------------|

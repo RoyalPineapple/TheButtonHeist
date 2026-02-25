@@ -7,7 +7,7 @@ import TheGoods
 /// Manages client authentication, token validation, and UI-based connection approval.
 ///
 /// Token resolution order:
-/// 1. Explicit token (from INSIDEMAN_TOKEN env var or InsideManToken plist key)
+/// 1. Explicit token (from INSIDEJOB_TOKEN env var or InsideJobToken plist key)
 /// 2. New auto-generated UUID (fresh each launch, logged to console)
 ///
 /// Auth behavior is determined per-connection by the incoming token:
@@ -44,7 +44,7 @@ final class TheMuscle {
     /// Lease duration — session released if no pings within this window
     private let sessionLeaseTimeout: TimeInterval
 
-    // MARK: - Callbacks (set by InsideMan)
+    // MARK: - Callbacks (set by InsideJob)
 
     var sendToClient: ((_ data: Data, _ clientId: Int) -> Void)?
     var markClientAuthenticated: ((_ clientId: Int) -> Void)?
@@ -57,13 +57,13 @@ final class TheMuscle {
 
     init(explicitToken: String?) {
         self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
-        if let envTimeout = ProcessInfo.processInfo.environment["INSIDEMAN_SESSION_TIMEOUT"],
+        if let envTimeout = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_TIMEOUT"],
            let parsed = TimeInterval(envTimeout) {
             self.sessionReleaseTimeout = max(1.0, parsed)
         } else {
             self.sessionReleaseTimeout = 30.0
         }
-        if let envLease = ProcessInfo.processInfo.environment["INSIDEMAN_SESSION_LEASE"],
+        if let envLease = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_LEASE"],
            let parsed = TimeInterval(envLease) {
             self.sessionLeaseTimeout = max(10.0, parsed)
         } else {

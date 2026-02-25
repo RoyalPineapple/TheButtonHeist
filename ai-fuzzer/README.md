@@ -6,24 +6,17 @@ AI-powered iOS app fuzzing framework built on [ButtonHeist](../README.md). An au
 
 The Claude agent **is** the fuzzer. SKILL.md teaches it how to observe screens, reason about what to try, execute gestures, detect failures, and report findings. No scripts, no test harnesses — just an AI agent with eyes and hands for your iOS app.
 
-```
-Claude Agent (fuzzer brain)
-    │ reads SKILL.md + strategy files
-    │ calls buttonheist CLI via Bash tool
-    ▼
-buttonheist CLI
-    │ Bonjour discovery + TCP connection
-    ▼
-InsideMan (embedded in your iOS app)
-    │ accessibility parsing + gesture injection
-    ▼
-Your iOS App (simulator or device)
+```mermaid
+graph TB
+    Agent["Claude Agent<br>(fuzzer brain)"] -->|"reads SKILL.md + strategy files<br>calls buttonheist CLI via Bash tool"| CLI["buttonheist CLI"]
+    CLI -->|"Bonjour discovery + TCP connection"| IJ["InsideJob<br>(embedded in your iOS app)"]
+    IJ -->|"accessibility parsing + gesture injection"| App["Your iOS App<br>(simulator or device)"]
 ```
 
 ## Prerequisites
 
 - Xcode 15+
-- An iOS app with InsideMan embedded (see [main README](../README.md#1-add-insideman-to-your-ios-app))
+- An iOS app with InsideJob embedded (see [main README](../README.md#1-add-insidejob-to-your-ios-app))
 - ButtonHeist CLI built
 
 ## Setup
@@ -37,7 +30,7 @@ swift build -c release
 
 ### 2. Run your iOS app
 
-Launch your app in the iOS Simulator (or on a USB-connected device). InsideMan auto-starts when the app loads.
+Launch your app in the iOS Simulator (or on a USB-connected device). InsideJob auto-starts when the app loads.
 
 ### 3. Start the fuzzer
 
@@ -129,4 +122,4 @@ Reports are saved to `.fuzzer-data/reports/` as timestamped markdown files.
 
 ## Works With Any App
 
-This fuzzer is **app-agnostic**. It discovers the UI dynamically via `buttonheist watch --once` and doesn't rely on hard-coded identifiers or screen layouts. Any iOS app with InsideMan embedded can be fuzzed.
+This fuzzer is **app-agnostic**. It discovers the UI dynamically via `buttonheist watch --once` and doesn't rely on hard-coded identifiers or screen layouts. Any iOS app with InsideJob embedded can be fuzzed.

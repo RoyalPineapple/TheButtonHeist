@@ -15,19 +15,13 @@ There are two authentication modes:
 
 The server resolves its auth token at startup using this priority:
 
-```
-1. Explicit token
-   └─ INSIDEMAN_TOKEN env var, or InsideManToken Info.plist key
-   └─ requiresUIApproval = false
-
-2. Persisted token (UserDefaults)
-   └─ Key: "InsideManAuthToken"
-   └─ Survives app relaunches — same token until invalidated
-   └─ requiresUIApproval = true
-
-3. Generated token (first launch)
-   └─ UUID().uuidString → stored in UserDefaults for step 2 on next launch
-   └─ requiresUIApproval = true
+```mermaid
+flowchart TD
+    Start["Server starts"] --> Check1{"Explicit token set?"}
+    Check1 -->|"INSIDEJOB_TOKEN env var<br/>or InsideJobToken plist key"| Explicit["Use explicit token<br/>requiresUIApproval = false"]
+    Check1 -->|No| Check2{"Persisted token in<br/>UserDefaults?"}
+    Check2 -->|"Key: InsideJobAuthToken<br/>Survives app relaunches"| Persisted["Use persisted token<br/>requiresUIApproval = true"]
+    Check2 -->|No| Generate["Generate UUID<br/>Store in UserDefaults<br/>requiresUIApproval = true"]
 ```
 
 When an explicit token is set, it is used directly and UserDefaults is not touched. When no explicit token is set, the auto-generated token persists across app relaunches so previously approved clients retain access.
@@ -42,13 +36,13 @@ Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new 
 
 | Method | Key | Example |
 |--------|-----|---------|
-| Environment variable | `INSIDEMAN_TOKEN` | `INSIDEMAN_TOKEN=my-secret-token` |
-| Info.plist | `InsideManToken` | `<string>my-secret-token</string>` |
+| Environment variable | `INSIDEJOB_TOKEN` | `INSIDEJOB_TOKEN=my-secret-token` |
+| Info.plist | `InsideJobToken` | `<string>my-secret-token</string>` |
 | Auto-generated | (none) | Token logged to console at startup |
 
 When no explicit token is configured, the token is logged to the console:
 ```
-[InsideMan] Auth token: A1B2C3D4-E5F6-...
+[InsideJob] Auth token: A1B2C3D4-E5F6-...
 ```
 
 ### Client-side (macOS / CLI)
@@ -72,89 +66,86 @@ Set BUTTONHEIST_TOKEN=<token> for future connections
 
 Client has the correct token (explicit or previously received via UI approval).
 
-```
-Client                                    InsideMan (iOS)
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │                                         │
-   │◄─────── authRequired ──────────────────│  TheMuscle.sendAuthRequired
-   │                                         │
-   │──────── authenticate(token) ───────────►│  TheMuscle.handleUnauthenticatedMessage
-   │                                         │    token matches → markAuthenticated
-   │                                         │
-   │◄─────── info ──────────────────────────│  handleClientConnected → sendServerInfo
-   │                                         │
-   │──────── subscribe / requestInterface ──►│  (client is now fully connected)
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant InsideJob as InsideJob (iOS)
+
+    Client->>InsideJob: TCP Connect
+    InsideJob->>Client: authRequired
+    Note right of InsideJob: TheMuscle.sendAuthRequired
+    Client->>InsideJob: authenticate(token)
+    Note right of InsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → markAuthenticated
+    InsideJob->>Client: info
+    Note right of InsideJob: handleClientConnected → sendServerInfo
+    Client->>InsideJob: subscribe / requestInterface
+    Note over Client,InsideJob: Client is now fully connected
 ```
 
 ### UI Approval — Allowed
 
 Client has no token. Server is in UI approval mode (auto-generated token).
 
-```
-Client                                    InsideMan (iOS)
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │                                         │
-   │◄─────── authRequired ──────────────────│
-   │                                         │
-   │──────── authenticate(token:"") ────────►│  token is empty + requiresUIApproval
-   │                                         │    → store in pendingApprovalClients
-   │                                         │    → show UIAlertController
-   │                                         │
-   │                              ┌──────────┤
-   │                              │ "Connection Request"
-   │                              │ Connection #N is
-   │                              │ requesting access.
-   │                              │ [Deny]  [Allow]
-   │                              └──────────┤
-   │                                         │
-   │                              [User taps Allow]
-   │                                         │
-   │◄─────── authApproved(token) ───────────│  TheMuscle.approveClient
-   │   (client stores token for reuse)       │    → markAuthenticated
-   │                                         │
-   │◄─────── info ──────────────────────────│  handleClientConnected → sendServerInfo
-   │                                         │
-   │──────── subscribe / requestInterface ──►│
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant InsideJob as InsideJob (iOS)
+
+    Client->>InsideJob: TCP Connect
+    InsideJob->>Client: authRequired
+    Client->>InsideJob: authenticate(token:"")
+    Note right of InsideJob: token is empty + requiresUIApproval<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
+
+    rect rgb(240, 240, 240)
+        Note right of InsideJob: Connection Request<br/>Connection #N is requesting access.<br/>[Deny] [Allow]
+    end
+
+    Note right of InsideJob: User taps Allow
+    InsideJob->>Client: authApproved(token)
+    Note left of Client: Client stores token for reuse
+    Note right of InsideJob: TheMuscle.approveClient<br/>→ markAuthenticated
+    InsideJob->>Client: info
+    Note right of InsideJob: handleClientConnected → sendServerInfo
+    Client->>InsideJob: subscribe / requestInterface
 ```
 
 The `authApproved` message includes the server's token. The client stores it and sends it on future connections, skipping the UI prompt.
 
 ### UI Approval — Denied
 
-```
-Client                                    InsideMan (iOS)
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │◄─────── authRequired ──────────────────│
-   │──────── authenticate(token:"") ────────►│  → show UIAlertController
-   │                                         │
-   │                              [User taps Deny]
-   │                                         │
-   │◄─────── authFailed ───────────────────│  "Connection denied by user"
-   │                                         │    → disconnect after 100ms
-   │◄─────── [TCP closed] ─────────────────│
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant InsideJob as InsideJob (iOS)
+
+    Client->>InsideJob: TCP Connect
+    InsideJob->>Client: authRequired
+    Client->>InsideJob: authenticate(token:"")
+    Note right of InsideJob: → show UIAlertController
+    Note right of InsideJob: User taps Deny
+    InsideJob->>Client: authFailed
+    Note left of Client: "Connection denied by user"
+    Note right of InsideJob: → disconnect after 100ms
+    InsideJob--xClient: TCP closed
 ```
 
 ### Invalid Token
 
 Client sends a wrong token (typo, rotated token, etc.).
 
-```
-Client                                    InsideMan (iOS)
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │◄─────── authRequired ──────────────────│
-   │──────── authenticate(token:"wrong") ───►│  token doesn't match
-   │                                         │
-   │◄─────── authFailed ───────────────────│  "Invalid token"
-   │                                         │    → disconnect after 100ms
-   │◄─────── [TCP closed] ─────────────────│
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant InsideJob as InsideJob (iOS)
+
+    Client->>InsideJob: TCP Connect
+    InsideJob->>Client: authRequired
+    Client->>InsideJob: authenticate(token:"wrong")
+    Note right of InsideJob: token doesn't match
+    InsideJob->>Client: authFailed
+    Note left of Client: "Invalid token"
+    Note right of InsideJob: → disconnect after 100ms
+    InsideJob--xClient: TCP closed
 ```
 
 ## Wire Format
@@ -198,7 +189,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | Rate limit | 30 msg/sec | Per-client, sliding 1-second window |
 | Receive buffer | 10 MB | Per-client; exceeded → disconnect |
 | Auth failure delay | 100 ms | Allows `authFailed` to arrive before TCP close |
-| Bind address (simulator) | `::1` (loopback) | Override with `INSIDEMAN_BIND_ALL=true` |
+| Bind address (simulator) | `::1` (loopback) | Override with `INSIDEJOB_BIND_ALL=true` |
 | Bind address (device) | `::` (all interfaces) | Accepts WiFi and USB connections |
 
 ## Component Responsibilities
@@ -207,7 +198,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 |-----------|------|
 | **TheMuscle** | Token resolution, persistence (UserDefaults), validation, UI approval state, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `requiresUIApproval`, `pendingApprovalClients`, `authenticatedClientIDs`. |
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
-| **InsideMan** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
+| **InsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
 | **HeistClient** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
 

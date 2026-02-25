@@ -6,7 +6,7 @@ the listed MCP tools directly.
 
 ## Prerequisites
 
-- iOS app with InsideMan running (simulator or device)
+- iOS app with InsideJob running (simulator or device)
 - ButtonHeist MCP server connected (tools like `get_screen` are available)
 
 ## Script

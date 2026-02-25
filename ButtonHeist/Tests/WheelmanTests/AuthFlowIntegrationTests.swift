@@ -326,7 +326,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
                     respond(data)
                 }
 
-                // Disconnect after a brief delay (matching InsideMan behavior)
+                // Disconnect after a brief delay (matching InsideJob behavior)
                 DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
                     self.server.disconnect(clientId: clientId)
                 }

@@ -4,7 +4,7 @@ description: >
   Autonomous iOS app fuzzer using the ButtonHeist CLI. Use this when you want to
   fuzz-test an iOS app, explore screens for bugs, map app navigation, stress-test
   UI elements, or generate fuzzing reports. Requires the buttonheist CLI and an
-  iOS app with InsideMan embedded.
+  iOS app with InsideJob embedded.
 ---
 
 # AI Fuzzer

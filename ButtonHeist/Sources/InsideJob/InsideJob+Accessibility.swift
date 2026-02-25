@@ -4,7 +4,7 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheGoods
 
-extension InsideMan {
+extension InsideJob {
 
     // MARK: - Accessibility Data Refresh
 
