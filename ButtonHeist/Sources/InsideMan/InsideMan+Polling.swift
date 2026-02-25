@@ -74,6 +74,9 @@ extension InsideMan {
             // Also broadcast screen when hierarchy changes
             broadcastScreen()
 
+            // Notify stakeout of screen change (for inactivity timeout)
+            stakeout?.noteScreenChange()
+
             serverLog("Polling detected change, broadcast to \(subscribedClients.count) subscriber(s)")
         }
     }

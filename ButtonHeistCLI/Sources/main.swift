@@ -21,6 +21,7 @@ struct ButtonHeist: AsyncParsableCommand {
         subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
                        SessionCommand.self,
+                       RecordCommand.self, StopRecordingCommand.self,
                        CopyCommand.self, PasteCommand.self, CutCommand.self,
                        SelectCommand.self, SelectAllCommand.self,
                        DismissKeyboardCommand.self],
@@ -46,4 +47,5 @@ struct CLIOptions {
     let device: String?
     let host: String?
     let port: UInt16?
+    let force: Bool
 }

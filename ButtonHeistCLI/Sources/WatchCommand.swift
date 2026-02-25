@@ -31,6 +31,9 @@ struct WatchCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
     var port: UInt16?
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @MainActor
     mutating func run() async throws {
         let options = CLIOptions(
@@ -41,7 +44,8 @@ struct WatchCommand: AsyncParsableCommand {
             verbose: verbose,
             device: device,
             host: host,
-            port: port
+            port: port,
+            force: force
         )
 
         let runner = CLIRunner(options: options)

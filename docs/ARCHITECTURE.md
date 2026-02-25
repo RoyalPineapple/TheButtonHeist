@@ -69,8 +69,8 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
 **Key Types**:
-- `ClientMessage` - Messages from client to server (23 cases including 9 touch gestures, text input, edit actions, and idle waiting)
-- `ServerMessage` - Messages from server to client (9 cases including auth challenge/failure/approval)
+- `ClientMessage` - Messages from client to server (25 cases including 9 touch gestures, text input, edit actions, idle waiting, and recording control)
+- `ServerMessage` - Messages from server to client (13 cases including auth challenge/failure/approval, recording events)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
@@ -78,11 +78,13 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method, optional message, interface delta, and animation state
 - `ScreenPayload` - Base64-encoded PNG with dimensions
+- `RecordingConfig` - Recording configuration (fps, scale, inactivity timeout, max duration)
+- `RecordingPayload` - Completed recording with base64 H.264/MP4 video and metadata
 
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 3.0 with token-based authentication
+- Protocol version 3.1 with token-based authentication and session locking
 
 ### InsideMan
 
@@ -96,7 +98,7 @@ InsideMan (singleton, @MainActor) — coordinator split across extension files:
 │   InsideMan+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
 │   InsideMan+AutoStart.swift    — ObjC +load auto-start bridge
 │   InsideMan+Polling.swift      — polling loop, interface broadcasting
-│   InsideMan+Screen.swift       — screen capture and broadcasting
+│   InsideMan+Screen.swift       — screen capture, broadcasting, recording management
 │
 ├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
@@ -113,8 +115,13 @@ InsideMan (singleton, @MainActor) — coordinator split across extension files:
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
+├── Stakeout (screen recording engine)
+│   ├── AVAssetWriter (H.264/MP4 encoding)
+│   ├── Frame capture via drawHierarchy + CGContext fingerprint compositing
+│   ├── Inactivity monitor (screen hash + command tracking)
+│   └── File size guard (7MB cap for wire protocol)
 ├── TheMuscle (authentication, token persistence, connection approval UI)
-├── TapVisualizerView (visual tap feedback overlay)
+├── Fingerprints (FingerprintWindow overlay + TheSafecracker gesture tracking)
 ├── Polling Timer (interface change detection via hash comparison)
 └── Debounce Timer (300ms debounce for UI notifications)
 ```
@@ -151,7 +158,7 @@ When the framework loads:
 - Fixed port from configuration (default: 1455 on devices; simulators always use port 0/auto-assign)
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication (v3.0)
+- Token-based authentication with session locking (v3.1)
 
 ### TheSafecracker (Touch Gesture & Text Input System)
 
@@ -203,7 +210,7 @@ TheSafecracker (stateful, @MainActor)
 - **Direct IMP invocation**: `perform(_:with:)` boxes non-object types (Int, Bool, Double, UnsafeMutableRawPointer) as NSNumber objects, corrupting values passed to private ObjC methods. All private API calls use `method(for:)` + `unsafeBitCast` to `@convention(c)` typed function pointers.
 - **`@convention(c)` for dlsym**: C function pointers from `dlsym` are 8 bytes; Swift closures are 16 bytes. All IOKit function pointer variables use `@convention(c)` for `unsafeBitCast` compatibility.
 - **Fresh UIEvent per phase**: iOS 26's stricter validation rejects reused event objects. Each touch phase (began, moved, ended) creates a new UIEvent.
-- **Overlay window filtering**: `getKeyWindow()` filters by `windowLevel <= .normal` to skip the TapVisualizerView overlay window.
+- **Overlay window filtering**: `windowForPoint()` filters out `FingerprintWindow` instances by type to prevent touch injection into the overlay window.
 
 ### TheMuscle (Authentication & Connection Approval)
 
@@ -219,6 +226,9 @@ TheSafecracker (stateful, @MainActor)
 - UI approval flow (present UIAlertController, handle allow/deny)
 - Track authenticated client count and IDs
 - Manage pending approval state
+- Session locking: single-driver exclusivity with configurable release timeout
+- Track active session driver identity and connections
+- Force-takeover handling (evict existing session on `forceSession`)
 
 **Integration**: TheMuscle communicates back to InsideMan via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
@@ -230,6 +240,21 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 3. Encodes as PNG, then base64
 4. Returns `ScreenPayload` with dimensions and timestamp
 5. Screen captures are automatically broadcast alongside interface changes during polling
+
+### Screen Recording (Stakeout)
+
+The `Stakeout` class provides on-device screen recording as H.264/MP4:
+
+1. Client sends `startRecording` with optional configuration (fps, scale, timeouts)
+2. InsideMan creates a `Stakeout` instance with a frame capture closure
+3. Stakeout uses `AVAssetWriter` with H.264 codec, encoding frames from `drawHierarchy` compositing
+4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video. Additionally, `Stakeout` composites fingerprint circles directly into frames via CGContext for interactions that complete between frame captures.
+5. Frames are captured at the configured FPS (default 8, range 1-15) using `afterScreenUpdates: false` to reduce main thread impact
+6. Action-triggered bonus frames are captured after each successful action completes
+7. An inactivity monitor checks every second — recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the configured timeout. Pings and keepalive messages do not reset the inactivity timer.
+8. File size is capped at 7MB to stay within the wire protocol's 10MB buffer limit after base64 encoding
+9. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native
+10. On completion, the video is base64-encoded and sent as a `recording(RecordingPayload)` message
 
 ### Wheelman
 
@@ -249,12 +274,12 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 
 **Architecture**:
 ```
-HeistClient (@Observable, @MainActor)
+HeistClient (ObservableObject, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
 │   └── NWConnection (service resolution + data transport)
-└── Observable Properties
+└── Published Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
@@ -265,7 +290,7 @@ HeistClient (@Observable, @MainActor)
 
 **Dual API Design**:
 
-1. **SwiftUI (Reactive)**: `@Observable` properties trigger view updates automatically
+1. **SwiftUI (Reactive)**: `@Published` properties trigger view updates
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
@@ -386,35 +411,51 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
    └── Capture and broadcast screen
 ```
 
-### Action Flow (all interactions)
-
-All interactions (accessibility actions, touch gestures, text entry) follow the same
-`performInteraction` pattern in InsideMan:
+### Action Flow (accessibility actions)
 
 ```
-1. Client sends action/gesture/text message
+1. Client sends activate / increment / decrement / customAction message
 
-2. InsideMan.performInteraction()
+2. InsideMan receives message
    └── refreshAccessibilityData() → re-parse hierarchy + rebuild interactive cache
-   └── snapshotElements() → capture before-state for delta computation
-   └── Delegate to TheSafecracker.execute*() → returns InteractionResult
+   └── Find element by identifier or order index
+   └── Resolve traversal index → look up live NSObject in interactiveObjects cache
 
-3. TheSafecracker resolves target and executes
-   └── Reads element cache via ElementStore protocol (weak back-reference to InsideMan)
-   └── For accessibility actions (activate, increment, decrement, customAction):
-   │     Resolve element → call accessibilityActivate/Increment/Decrement on live NSObject
-   │     Activate fallback: if accessibilityActivate() returns false → synthetic tap
-   └── For touch gestures (tap, longPress, swipe, drag, pinch, rotate, etc.):
-   │     Resolve target point (from element activation point or explicit coordinates)
-   │     touchTap with element target: try accessibilityActivate() first, fall back to synthetic
-   │     Dispatch UITouch + IOHIDEvent via UIApplication.sendEvent()
-   └── For text entry (typeText):
-         Inject text via UIKeyboardImpl → refresh elements → read back field value
+3. Dispatch via live object reference
+   └── activate:  object.accessibilityActivate()
+   └── increment: object.accessibilityIncrement()
+   └── decrement: object.accessibilityDecrement()
+   └── custom:    find UIAccessibilityCustomAction by name → call handler or target/selector
 
-4. InsideMan wraps InteractionResult with InterfaceDelta
-   └── Compute delta (noChange / valuesChanged / elementsChanged / screenChanged)
-   └── Send actionResult to client
-   └── Show TapVisualizerView overlay on successful taps
+4. Fallback (activate only): if accessibilityActivate() returns false
+   └── TheSafecracker.tap(at: activationPoint) → synthetic touch injection
+
+5. InsideMan sends actionResult
+   └── success: true/false
+   └── method: activate / increment / decrement / customAction / syntheticTap
+   └── Show fingerprint overlay on success
+```
+
+### Action Flow (touch gestures)
+
+```
+1. Client sends touch gesture message (touchTap, touchDrag, touchPinch, etc.)
+
+2. InsideMan receives message
+   └── Resolve target point (from element activation point or explicit coordinates)
+   └── For element targets: refreshAccessibilityData(), find element, get activation point
+   └── touchTap with element target: try accessibilityActivate() first, fall back to synthetic
+
+3. TheSafecracker performs gesture
+   └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
+   └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
+   └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()
+
+4. InsideMan sends actionResult
+   └── success: true/false
+   └── method: activate / syntheticTap / syntheticDrag / syntheticPinch / etc.
+   └── message: optional error description
+   └── Show fingerprint overlay; continuous gestures show tracking fingerprints
 ```
 
 ## Network Protocol
@@ -422,9 +463,10 @@ All interactions (accessibility actions, touch gestures, text entry) follow the 
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 3.0
+- Protocol version: 3.1
 - Transport: TCP socket (Network framework NWListener/NWConnection)
 - Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
+- Session locking: Single-driver exclusivity with configurable release timeout and force-takeover
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
@@ -452,7 +494,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Interface updates debounced by 300ms
 
 ### HeistClient (macOS)
-- `@MainActor` for SwiftUI `@Observable` properties
+- `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
 - NWConnection for data transport
 - Message processing dispatched to main actor
@@ -485,6 +527,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 | `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
+| `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds (min: 1) | 30 |
 
 ### Info.plist Keys (fallback)
 ```xml

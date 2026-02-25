@@ -1,5 +1,6 @@
 import Foundation
 import ButtonHeist
+import TheGoods
 
 // MARK: - Session Response
 
@@ -13,6 +14,8 @@ enum SessionResponse {
     case action(result: ActionResult)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
+    case recording(path: String, payload: RecordingPayload)
+    case recordingData(payload: RecordingPayload)
 
     // MARK: Human formatting
 
@@ -54,6 +57,19 @@ enum SessionResponse {
 
         case .screenshotData(let pngData, let width, let height):
             return "✓ Screenshot captured (\(Int(width)) × \(Int(height))) — base64 PNG follows\n\(pngData)"
+
+        case .recording(let path, let payload):
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording saved: \(path)  " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+
+        case .recordingData(let payload):
+            let sizeKB = payload.videoData.count * 3 / 4 / 1024
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording captured " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
         }
     }
 
@@ -195,6 +211,30 @@ enum SessionResponse {
 
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
+
+        case .recording(let path, let payload):
+            return [
+                "status": "ok",
+                "path": path,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
+
+        case .recordingData(let payload):
+            return [
+                "status": "ok",
+                "videoData": payload.videoData,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
         }
     }
 }

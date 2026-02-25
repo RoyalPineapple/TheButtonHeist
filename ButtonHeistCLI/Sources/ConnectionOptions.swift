@@ -16,4 +16,7 @@ struct ConnectionOptions: ParsableArguments {
 
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
+
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
 }

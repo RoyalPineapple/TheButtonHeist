@@ -62,6 +62,9 @@ public final class InsideMan: ElementStore {
     private var isRunning = false
     private var isSuspended = false
 
+    // Screen recording
+    var stakeout: Stakeout?
+
     // Debounce for hierarchy updates
     var updateDebounceTask: Task<Void, Never>?
     let updateDebounceInterval: UInt64 = 300_000_000 // 300ms in nanoseconds
@@ -79,6 +82,10 @@ public final class InsideMan: ElementStore {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.theSafecracker.elementStore = self
+        // Wire gesture tracking so Stakeout can overlay finger positions in recordings
+        self.theSafecracker.onGestureMove = { [weak self] points in
+            self?.stakeout?.updateInteractionPositions(points)
+        }
     }
 
     // MARK: - ElementStore Conformance
@@ -130,6 +137,9 @@ public final class InsideMan: ElementStore {
             serverLog("Instance ID: \(instanceId)")
         }
         advertiseService(port: actualPort)
+
+        // Prevent the screen from locking while InsideMan is running
+        UIApplication.shared.isIdleTimerDisabled = true
 
         startAccessibilityObservation()
         startLifecycleObservation()
@@ -188,6 +198,9 @@ public final class InsideMan: ElementStore {
         muscle.sendToClient = { [weak server] data, clientId in server?.send(data, to: clientId) }
         muscle.markClientAuthenticated = { [weak server] clientId in server?.markAuthenticated(clientId) }
         muscle.disconnectClient = { [weak server] clientId in server?.disconnect(clientId: clientId) }
+        muscle.disconnectClientsForSession = { [weak server] clientIds in
+            for clientId in clientIds { server?.disconnect(clientId: clientId) }
+        }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
@@ -304,38 +317,60 @@ public final class InsideMan: ElementStore {
         case .waitForIdle(let target):
             await handleWaitForIdle(target, respond: respond)
 
+        // Recording
+        case .startRecording(let config):
+            handleStartRecording(config, respond: respond)
+        case .stopRecording:
+            handleStopRecording(respond: respond)
+
         // Interaction dispatch — TheSafecracker handles all actions, gestures, and text entry
         case .activate(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeActivate(target) }
         case .increment(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeDecrement(target) }
         case .performCustomAction(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeEditAction(target) }
         case .resignFirstResponder:
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeResignFirstResponder() }
         case .touchTap(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeTap(target) }
         case .touchLongPress(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeLongPress(target) }
         case .touchSwipe(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeSwipe(target) }
         case .touchDrag(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeDrag(target) }
         case .touchPinch(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executePinch(target) }
         case .touchRotate(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeRotate(target) }
         case .touchTwoFingerTap(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeDrawPath(target) }
         case .touchDrawBezier(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
+            stakeout?.noteActivity()
             await performInteraction(respond: respond) { await self.theSafecracker.executeTypeText(target) }
         }
     }
@@ -405,6 +440,11 @@ public final class InsideMan: ElementStore {
         for clientId in subscribedClients {
             socketServer?.send(data, to: clientId)
         }
+    }
+
+    /// Send data to all connected clients (used for recording completion broadcasts).
+    func broadcastToAll(_ data: Data) {
+        socketServer?.broadcastToAll(data)
     }
 
     // MARK: - Accessibility Observation

@@ -1,6 +1,8 @@
 import Foundation
 import Darwin
+import Network
 import ButtonHeist
+import TheGoods
 
 // MARK: - Session Errors
 
@@ -23,13 +25,15 @@ final class SessionRunner {
     private var shouldExit = false
 
     init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
-         connectionTimeout: Double, format: OutputFormat) {
+         connectionTimeout: Double, format: OutputFormat, force: Bool = false) {
         self.directHost = host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
         self.directPort = port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         self.deviceFilter = deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.connectionTimeout = connectionTimeout
         self.format = format
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.forceSession = force
+        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = false
     }
 
@@ -208,6 +212,7 @@ final class SessionRunner {
                 "two_finger_tap", "draw_path", "draw_bezier",
                 "activate", "increment", "decrement", "perform_custom_action",
                 "type_text", "edit_action", "dismiss_keyboard",
+                "start_recording", "stop_recording",
             ]
             return .help(commands: commands)
 
@@ -462,6 +467,42 @@ final class SessionRunner {
 
         case "dismiss_keyboard":
             return try await sendAction(.resignFirstResponder)
+
+        // MARK: Recording
+
+        case "start_recording":
+            guard client.connectionState == .connected else {
+                throw SessionError.notConnected
+            }
+            let config = RecordingConfig(
+                fps: intArg(args, "fps"),
+                scale: doubleArg(args, "scale"),
+                inactivityTimeout: doubleArg(args, "inactivity_timeout"),
+                maxDuration: doubleArg(args, "max_duration")
+            )
+            client.send(.startRecording(config))
+            return .ok(message: "Recording started")
+
+        case "stop_recording":
+            guard client.connectionState == .connected else {
+                throw SessionError.notConnected
+            }
+            client.send(.stopRecording)
+            do {
+                let recording = try await client.waitForRecording(timeout: 30)
+                if let outputPath = stringArg(args, "output") {
+                    guard let videoData = Data(base64Encoded: recording.videoData) else {
+                        return .error("Failed to decode video data")
+                    }
+                    try videoData.write(to: URL(fileURLWithPath: outputPath))
+                    return .recording(path: outputPath, payload: recording)
+                } else {
+                    return .recordingData(payload: recording)
+                }
+            } catch {
+                client.forceDisconnect()
+                throw SessionError.actionTimeout
+            }
 
         default:
             return .error("Unknown command: \(command). Send {\"command\":\"help\"} for available commands.")

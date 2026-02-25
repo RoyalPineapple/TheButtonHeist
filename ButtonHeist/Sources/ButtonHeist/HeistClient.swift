@@ -18,6 +18,7 @@ public final class HeistClient {
     public private(set) var serverInfo: ServerInfo?
     public private(set) var currentInterface: Interface?
     public private(set) var currentScreen: ScreenPayload?
+    public private(set) var isRecording: Bool = false
     public private(set) var isDiscovering: Bool = false
     public private(set) var connectionState: ConnectionState = .disconnected
 
@@ -37,11 +38,23 @@ public final class HeistClient {
     public var onInterfaceUpdate: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
+    public var onRecordingStarted: (() -> Void)?
+    public var onRecording: ((RecordingPayload) -> Void)?
+    public var onRecordingError: ((String) -> Void)?
     /// Called when a token is received via UI approval (store for future reconnections)
     public var onTokenReceived: ((String) -> Void)?
+    /// Called when the server rejects the connection because another driver holds the session
+    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
 
     /// Auth token to send during connection handshake
     public var token: String?
+
+    /// When true, force-takeover the session during the next connection
+    public var forceSession: Bool = false
+
+    /// Driver identity for session locking. Set via BUTTONHEIST_DRIVER_ID env var.
+    /// When set, the server uses this to distinguish drivers sharing the same auth token.
+    public var driverId: String?
 
     /// When true (default), automatically sends .subscribe, .requestInterface, and .requestScreen
     /// after connecting. Set to false for session-style usage where you request data explicitly.
@@ -121,7 +134,7 @@ public final class HeistClient {
         disconnect()
 
         connectionState = .connecting
-        connection = DeviceConnection(device: device, token: token)
+        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: driverId)
 
         connection?.onConnected = { [weak self] in
             self?.connectedDevice = device
@@ -129,12 +142,19 @@ public final class HeistClient {
         }
 
         connection?.onDisconnected = { [weak self] error in
-            self?.connectionState = .disconnected
-            self?.connectedDevice = nil
-            self?.serverInfo = nil
-            self?.currentInterface = nil
-            self?.currentScreen = nil
-            self?.onDisconnected?(error)
+            guard let self else { return }
+            // Preserve .failed state (e.g., from sessionLocked) — don't overwrite with .disconnected
+            if case .failed = self.connectionState {
+                // keep .failed
+            } else {
+                self.connectionState = .disconnected
+            }
+            self.connectedDevice = nil
+            self.serverInfo = nil
+            self.currentInterface = nil
+            self.currentScreen = nil
+            self.isRecording = false
+            self.onDisconnected?(error)
         }
 
         connection?.onServerInfo = { [weak self] info in
@@ -162,6 +182,19 @@ public final class HeistClient {
             self?.onScreen?(payload)
         }
 
+        connection?.onRecordingStarted = { [weak self] in
+            self?.isRecording = true
+            self?.onRecordingStarted?()
+        }
+        connection?.onRecording = { [weak self] payload in
+            self?.isRecording = false
+            self?.onRecording?(payload)
+        }
+        connection?.onRecordingError = { [weak self] message in
+            self?.isRecording = false
+            self?.onRecordingError?(message)
+        }
+
         connection?.onError = { [weak self] message in
             self?.connectionState = .failed(message)
         }
@@ -169,6 +202,11 @@ public final class HeistClient {
         connection?.onAuthApproved = { [weak self] approvedToken in
             self?.token = approvedToken
             self?.onTokenReceived?(approvedToken)
+        }
+
+        connection?.onSessionLocked = { [weak self] payload in
+            self?.connectionState = .failed(payload.message)
+            self?.onSessionLocked?(payload)
         }
 
         connection?.connect()
@@ -184,6 +222,7 @@ public final class HeistClient {
         serverInfo = nil
         currentInterface = nil
         currentScreen = nil
+        isRecording = false
     }
 
     // MARK: - Commands
@@ -241,6 +280,46 @@ public final class HeistClient {
                     timeoutTask.cancel()
                     continuation.resume(returning: payload)
                 }
+            }
+        }
+    }
+
+    /// Wait for a recording result with timeout
+    public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                if !didResume {
+                    didResume = true
+                    continuation.resume(throwing: ActionError.timeout)
+                }
+            }
+
+            onRecording = { payload in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(returning: payload)
+                }
+            }
+
+            onRecordingError = { message in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(throwing: RecordingError.serverError(message))
+                }
+            }
+        }
+    }
+
+    public enum RecordingError: Error, LocalizedError {
+        case serverError(String)
+        public var errorDescription: String? {
+            switch self {
+            case .serverError(let msg): return "Recording failed: \(msg)"
             }
         }
     }

@@ -7,8 +7,10 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 ## Features
 
 - **MCP server** — AI agents like Claude drive any iOS app through native tool calls
+- **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
 - **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
 - **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
+- **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
 - **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
 - **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
@@ -71,7 +73,7 @@ AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → HeistCl
 | **Wheelman** | iOS + macOS | TCP server/client, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (HeistClient); re-exports TheGoods + Wheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — AI agents drive iOS apps via Model Context Protocol | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, watch, action, touch, type, screenshot, session | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **buttonheist** | macOS | CLI tool: list, watch, action, touch, type, screenshot, record, session | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
@@ -160,9 +162,10 @@ buttonheist touch tap --x 100 --y 200               # Tap coordinates
 buttonheist touch swipe --identifier list --direction up  # Swipe a list
 buttonheist type --text "Hello" --identifier nameField    # Type text
 buttonheist screenshot --output screen.png          # Capture screenshot
+buttonheist record --output demo.mp4                # Record screen (auto-stops on inactivity)
 ```
 
-Full CLI reference with all 7 subcommands and 9 touch gestures: **[ButtonHeistCLI/](ButtonHeistCLI/)**
+Full CLI reference with all 8 subcommands and 9 touch gestures: **[ButtonHeistCLI/](ButtonHeistCLI/)**
 
 ### 4. Connect over USB
 
@@ -234,7 +237,7 @@ ButtonHeist/
 **Technical docs:**
 - [Architecture](docs/ARCHITECTURE.md) — System design and data flow diagrams
 - [API Reference](docs/API.md) — Complete API for all modules
-- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v3.0 specification
+- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v3.1 specification
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 
 **Project:**
