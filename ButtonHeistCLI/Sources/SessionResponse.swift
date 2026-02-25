@@ -1,6 +1,6 @@
 import Foundation
 import ButtonHeist
-import TheGoods
+import TheScore
 
 // MARK: - Session Response
 

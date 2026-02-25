@@ -1,6 +1,6 @@
 import XCTest
 import Network
-import TheGoods
+import TheScore
 @testable import Wheelman
 
 /// Integration tests for the auth flow over real TCP connections.

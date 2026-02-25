@@ -3,7 +3,7 @@ import ButtonHeist
 
 @MainActor
 final class DeviceConnector {
-    let client = HeistClient()
+    let client = TheClient()
     private let deviceFilter: String?
     private let quiet: Bool
     private let discoveryTimeout: UInt64

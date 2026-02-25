@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import TheGoods
+import TheScore
 
 extension InsideJob {
 

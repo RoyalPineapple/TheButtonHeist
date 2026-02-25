@@ -23,13 +23,13 @@ let project = Project(
     targets: [
         // MARK: - Shared Protocol Types (cross-platform)
         .target(
-            name: "TheGoods",
+            name: "TheScore",
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
-            bundleId: "com.buttonheist.thegoods",
+            bundleId: "com.buttonheist.thescore",
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Sources/TheGoods/**"],
+            sources: ["ButtonHeist/Sources/TheScore/**"],
             scripts: [swiftlintScript],
             settings: .settings(base: [
                 "SWIFT_VERSION": "5.0",
@@ -38,7 +38,7 @@ let project = Project(
         ),
 
         // MARK: - iOS Server Framework (embeds in iOS apps)
-        // Includes InsideJobLoader for automatic initialization via ObjC +load
+        // Includes ThePlant for automatic initialization via ObjC +load
         .target(
             name: "InsideJob",
             destinations: [.iPhone, .iPad],
@@ -48,14 +48,14 @@ let project = Project(
             infoPlist: .default,
             sources: [
                 "ButtonHeist/Sources/InsideJob/**",
-                "ButtonHeist/Sources/InsideJobLoader/**",
+                "ButtonHeist/Sources/ThePlant/**",
             ],
             headers: .headers(
-                public: ["ButtonHeist/Sources/InsideJobLoader/include/**"]
+                public: ["ButtonHeist/Sources/ThePlant/include/**"]
             ),
             scripts: [swiftlintScript],
             dependencies: [
-                .target(name: "TheGoods"),
+                .target(name: "TheScore"),
                 .target(name: "Wheelman"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
@@ -72,7 +72,7 @@ let project = Project(
             sources: ["ButtonHeist/Sources/Wheelman/**"],
             scripts: [swiftlintScript],
             dependencies: [
-                .target(name: "TheGoods"),
+                .target(name: "TheScore"),
             ],
             settings: .settings(base: [
                 "SWIFT_VERSION": "5.0",
@@ -91,22 +91,22 @@ let project = Project(
             sources: ["ButtonHeist/Sources/ButtonHeist/**"],
             scripts: [swiftlintScript],
             dependencies: [
-                .target(name: "TheGoods"),
+                .target(name: "TheScore"),
                 .target(name: "Wheelman"),
             ]
         ),
 
-        // MARK: - TheGoods Tests
+        // MARK: - TheScore Tests
         .target(
-            name: "TheGoodsTests",
+            name: "TheScoreTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "com.buttonheist.thegoods.tests",
+            bundleId: "com.buttonheist.thescore.tests",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Tests/TheGoodsTests/**"],
+            sources: ["ButtonHeist/Tests/TheScoreTests/**"],
             dependencies: [
-                .target(name: "TheGoods"),
+                .target(name: "TheScore"),
             ]
         ),
 
@@ -121,7 +121,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/WheelmanTests/**"],
             dependencies: [
                 .target(name: "Wheelman"),
-                .target(name: "TheGoods"),
+                .target(name: "TheScore"),
             ]
         ),
 
@@ -141,13 +141,13 @@ let project = Project(
     ],
     schemes: [
         .scheme(
-            name: "TheGoodsTests",
+            name: "TheScoreTests",
             buildAction: .buildAction(targets: [
-                .target("TheGoodsTests"),
-                .target("TheGoods"),
+                .target("TheScoreTests"),
+                .target("TheScore"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("TheGoodsTests")),
+                .testableTarget(target: .target("TheScoreTests")),
             ])
         ),
         .scheme(
@@ -155,7 +155,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("WheelmanTests"),
                 .target("Wheelman"),
-                .target("TheGoods"),
+                .target("TheScore"),
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("WheelmanTests")),
@@ -167,7 +167,7 @@ let project = Project(
                 .target("ButtonHeistTests"),
                 .target("ButtonHeist"),
                 .target("Wheelman"),
-                .target("TheGoods"),
+                .target("TheScore"),
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ButtonHeistTests")),
