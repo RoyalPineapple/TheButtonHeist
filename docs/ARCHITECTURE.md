@@ -226,7 +226,9 @@ TheSafecracker (stateful, @MainActor)
 - UI approval flow (present UIAlertController, handle allow/deny)
 - Track authenticated client count and IDs
 - Manage pending approval state
-- Session locking: single-driver exclusivity with configurable release timeout
+- Session locking: single-driver exclusivity with dual-timer release
+  - **Disconnect timer** (`INSIDEMAN_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
+  - **Lease timer** (`INSIDEMAN_SESSION_LEASE`, default 60s): resets on each client ping, releases session if no pings received (handles hung connections)
 - Track active session driver identity and connections
 - Force-takeover handling (evict existing session on `forceSession`)
 
@@ -466,7 +468,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Protocol version: 3.1
 - Transport: TCP socket (Network framework NWListener/NWConnection)
 - Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
-- Session locking: Single-driver exclusivity with configurable release timeout and force-takeover
+- Session locking: Single-driver exclusivity with dual-timer release (disconnect + heartbeat lease) and force-takeover
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: 1455 (configurable via Info.plist)
@@ -527,7 +529,8 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 | `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
-| `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds (min: 1) | 30 |
+| `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
+| `INSIDEMAN_SESSION_LEASE` | Session lease timeout in seconds — releases session if no pings received (min: 10) | 60 |
 
 ### Info.plist Keys (fallback)
 ```xml

@@ -158,3 +158,16 @@ Before pushing any commit, verify the following:
 - Follow the **Simulator Quick Start** section above to build, install, and launch the test app.
 - After making code changes, rebuild and reinstall using those same steps.
 - Verify changes via CLI commands (`buttonheist watch --once`, `buttonheist action`, `buttonheist screenshot`, etc.) — not manual GUI inspection.
+
+## Recording and Demo Commands
+
+Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with InsideMan embedded.
+
+| Command | Description |
+|---------|-------------|
+| `/record` | Start a background screen recording |
+| `/stop-recording` | Stop an in-progress recording and save the file |
+| `/screenshot` | Capture a screenshot and display it inline |
+| `/demo [feature]` | Create a polished 3-act feature demo video |
+
+Recordings are saved to `demos/` with timestamped filenames. Default settings: `--fps 8 --scale 0.5 --inactivity-timeout 60`.

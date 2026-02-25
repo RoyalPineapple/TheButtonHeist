@@ -102,11 +102,9 @@ public final class InsideMan: ElementStore {
         ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
     }
 
-    private var shouldBindToLoopback: Bool {
-        let bindAllOverride = ProcessInfo.processInfo.environment["INSIDEMAN_BIND_ALL"]
-            .map { ["true", "1", "yes"].contains($0.lowercased()) } ?? false
-        return isSimulator && !bindAllOverride
-    }
+    /// Always bind to all interfaces — loopback binding breaks Bonjour-resolved
+    /// connections which may arrive on non-loopback interfaces.
+    private var shouldBindToLoopback: Bool { false }
 
     /// Simulators share localhost — use random port to avoid collisions.
     /// Fixed ports are only useful on physical devices (for USB tunneling).
@@ -127,11 +125,7 @@ public final class InsideMan: ElementStore {
         self.socketServer = server
         isRunning = true
 
-        if shouldBindToLoopback {
-            serverLog("Server listening on loopback port \(actualPort) (simulator)")
-        } else {
-            serverLog("Server listening on port \(actualPort)")
-        }
+        serverLog("Server listening on port \(actualPort)\(isSimulator ? " (simulator)" : "")")
         serverLog("Auth token: \(muscle.authToken)")
         if let instanceId {
             serverLog("Instance ID: \(instanceId)")
@@ -311,6 +305,7 @@ public final class InsideMan: ElementStore {
             subscribedClients.remove(clientId)
             serverLog("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
         case .ping:
+            muscle.noteClientActivity(clientId)
             sendMessage(.pong, respond: respond)
         case .requestScreen:
             handleScreen(respond: respond)
