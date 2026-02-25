@@ -66,6 +66,7 @@ final class CLIRunner {
     init(options: CLIOptions) {
         self.options = options
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.forceSession = options.force
     }
 
     func run() async throws {

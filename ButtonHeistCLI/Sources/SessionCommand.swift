@@ -42,11 +42,15 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @MainActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
         let runner = SessionRunner(deviceFilter: device, host: host, port: port,
-                                   connectionTimeout: timeout, format: effectiveFormat)
+                                   connectionTimeout: timeout, format: effectiveFormat,
+                                   force: force)
         try await runner.run()
     }
 }
@@ -65,13 +69,14 @@ final class SessionRunner {
     private var shouldExit = false
 
     init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
-         connectionTimeout: Double, format: OutputFormat) {
+         connectionTimeout: Double, format: OutputFormat, force: Bool = false) {
         self.directHost = host ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
         self.directPort = port ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         self.deviceFilter = deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.connectionTimeout = connectionTimeout
         self.format = format
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.forceSession = force
         self.client.autoSubscribe = false
     }
 
