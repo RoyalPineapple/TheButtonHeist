@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import Wheelman
-import TheGoods
+import TheScore
 import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "client")
@@ -9,7 +9,7 @@ private let logger = Logger(subsystem: "com.buttonheist", category: "client")
 /// Client for discovering and connecting to iOS apps running InsideJob
 @Observable
 @MainActor
-public final class HeistClient {
+public final class TheClient {
 
     // MARK: - Observable State
 

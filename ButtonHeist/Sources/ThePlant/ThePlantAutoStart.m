@@ -3,10 +3,10 @@
 
 extern void InsideJob_autoStartFromLoad(void);
 
-@interface InsideJobAutoStart : NSObject
+@interface ThePlantAutoStart : NSObject
 @end
 
-@implementation InsideJobAutoStart
+@implementation ThePlantAutoStart
 
 + (void)load {
     dispatch_async(dispatch_get_main_queue(), ^{

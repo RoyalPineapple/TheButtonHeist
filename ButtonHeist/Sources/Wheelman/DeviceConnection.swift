@@ -1,6 +1,6 @@
 import Foundation
 import Network
-import TheGoods
+import TheScore
 
 private func debug(_ message: String) {
     fputs("[DeviceConnection] \(message)\n", stderr)

@@ -74,7 +74,7 @@ Before pushing any commit, verify the following:
 ### 1. Build Verification
 - **All targets must build successfully.** Run the full build:
   ```bash
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build
@@ -89,7 +89,7 @@ Before pushing any commit, verify the following:
 ### 2. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoodsTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
   ```

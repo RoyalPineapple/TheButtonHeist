@@ -6,7 +6,7 @@ This document describes the internal architecture of ButtonHeist and how its com
 
 ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
-1. **TheGoods** - Cross-platform shared types (messages, models)
+1. **TheScore** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **InsideJob** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
@@ -17,7 +17,7 @@ graph TB
     subgraph mac["macOS"]
         Agent["AI Agent<br>(Claude Code)"] -->|Bash tool calls| CLI
         Scripts["Python/Shell<br>Scripts"] -->|Bash tool calls| CLI
-        CLI["buttonheist CLI"] --> HC["ButtonHeist<br>HeistClient"]
+        CLI["buttonheist CLI"] --> HC["ButtonHeist<br>TheClient"]
         HC --> DD["Device Discovery<br>(Wheelman)"]
         HC --> DC["Device Connection<br>(Wheelman)"]
         HC --> Socket["Socket Client<br>(Wheelman)"]
@@ -35,7 +35,7 @@ graph TB
 
 ## Component Details
 
-### TheGoods
+### TheScore
 
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
@@ -102,9 +102,9 @@ InsideJob (singleton, @MainActor) — coordinator split across extension files:
 InsideJob uses ObjC `+load` for automatic initialization:
 
 ```
-InsideJobLoader/
-├── InsideJobAutoStart.h  (public header)
-└── InsideJobAutoStart.m  (+load implementation → InsideJob_autoStartFromLoad)
+ThePlant/
+├── ThePlantAutoStart.h  (public header)
+└── ThePlantAutoStart.m  (+load implementation → InsideJob_autoStartFromLoad)
 ```
 
 When the framework loads:
@@ -240,13 +240,13 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
+**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides the high-level `TheClient` class.
 
-**Usage**: `import ButtonHeist` gives access to all types (HeistClient, HeistElement, Interface, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (TheClient, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
-HeistClient (ObservableObject, @MainActor)
+TheClient (ObservableObject, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
@@ -266,7 +266,7 @@ HeistClient (ObservableObject, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, HeistClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
+**Auto-Subscribe on Connect**: When a connection is established, TheClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
 
 **Connection State Machine**:
 ```mermaid
@@ -316,7 +316,7 @@ sequenceDiagram
     participant IJ as InsideJob
     participant SS as SimpleSocketServer
     participant NS as NetService (Bonjour)
-    participant HC as HeistClient
+    participant HC as TheClient
     participant NB as NWBrowser
 
     IJ->>SS: start(port: 0)
@@ -346,7 +346,7 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 
 ```mermaid
 sequenceDiagram
-    participant HC as HeistClient
+    participant HC as TheClient
     participant IJ as InsideJob
     participant TM as TheMuscle
 
@@ -489,7 +489,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Message handling dispatched to main
 - Interface updates debounced by 300ms
 
-### HeistClient (macOS)
+### TheClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
 - NWConnection for data transport

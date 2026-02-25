@@ -6,32 +6,32 @@ The core frameworks that power ButtonHeist. Four modules spanning iOS and macOS 
 
 | Module | Platform | What It Does |
 |--------|----------|-------------|
-| **TheGoods** (shared types) | iOS + macOS | Wire protocol messages, UI element models, constants |
+| **TheScore** (shared types) | iOS + macOS | Wire protocol messages, UI element models, constants |
 | **InsideJob** (iOS server) | iOS | Embeds in your app. Parses accessibility hierarchy, executes gestures, serves it all over TCP |
 | **Wheelman** (networking) | iOS + macOS | TCP server/client, Bonjour discovery, BSD socket transport |
-| **ButtonHeist** (macOS client) | macOS | `HeistClient` class for macOS consumers. Re-exports TheGoods + Wheelman |
+| **ButtonHeist** (macOS client) | macOS | `TheClient` class for macOS consumers. Re-exports TheScore + Wheelman |
 
 ## How They Connect
 
 ```mermaid
 graph LR
     subgraph ios["iOS App"]
-        IJ["InsideJob<br>(uses TheGoods + Wheelman)"]
+        IJ["InsideJob<br>(uses TheScore + Wheelman)"]
     end
 
     IJ <-->|"TCP over WiFi (Bonjour)<br>or USB (IPv6)"| BH
 
     subgraph macos["macOS"]
-        BH["ButtonHeist framework<br>(HeistClient, re-exports TheGoods + Wheelman)"]
+        BH["ButtonHeist framework<br>(TheClient, re-exports TheScore + Wheelman)"]
         BH --> Consumers["CLI, MCP server, or your own tools"]
     end
 ```
 
 ---
 
-## TheGoods — Shared Types
+## TheScore — Shared Types
 
-**Location**: `Sources/TheGoods/`
+**Location**: `Sources/TheScore/`
 
 The cross-platform type library. No UIKit or AppKit imports — just pure `Codable` + `Sendable` types.
 
@@ -62,7 +62,7 @@ The server that runs inside the iOS app. A `@MainActor` singleton that auto-star
 
 InsideJob starts automatically when the framework loads — no code changes needed in your app.
 
-1. **`InsideJobAutoStart.m`** (in `Sources/InsideJobLoader/`) implements ObjC `+load`
+1. **`ThePlantAutoStart.m`** (in `Sources/ThePlant/`) implements ObjC `+load`
 2. `+load` dispatches to the main queue and calls `InsideJob_autoStartFromLoad()`
 3. That function reads config from environment variables (highest priority) or Info.plist
 4. Creates the server on the configured port, starts Bonjour advertisement, begins polling
@@ -114,12 +114,12 @@ Cross-platform networking used by both iOS (server-side) and macOS (client-side)
 
 **Location**: `Sources/ButtonHeist/`
 
-Single-import macOS framework. `import ButtonHeist` gives you `HeistClient` plus all types from TheGoods and Wheelman.
+Single-import macOS framework. `import ButtonHeist` gives you `TheClient` plus all types from TheScore and Wheelman.
 
 | File | What It Does |
 |------|-------------|
-| `HeistClient.swift` | `@Observable @MainActor` client. Discovery, connection, sending commands, receiving results. Three API styles: reactive (SwiftUI), callbacks, async/await |
-| `Exports.swift` | `@_exported import TheGoods` + `@_exported import Wheelman` |
+| `TheClient.swift` | `@Observable @MainActor` client. Discovery, connection, sending commands, receiving results. Three API styles: reactive (SwiftUI), callbacks, async/await |
+| `Exports.swift` | `@_exported import TheScore` + `@_exported import Wheelman` |
 
 ## Further Reading
 
