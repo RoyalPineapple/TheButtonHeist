@@ -67,27 +67,6 @@ timeout 5 dns-sd -B _buttonheist._tcp .
 
 Should show an `Add` entry with the app name. The CLI commands (`buttonheist watch --once`, `buttonheist action`, etc.) should now work.
 
-### Tip: Skip Bonjour Discovery
-
-For simulators, the InsideMan server always listens on `127.0.0.1:1455`. Set environment variables to skip the ~2s Bonjour discovery on every command:
-
-```bash
-export BUTTONHEIST_HOST=127.0.0.1
-export BUTTONHEIST_PORT=1455
-```
-
-Or pass `--host` and `--port` flags directly:
-
-```bash
-buttonheist watch --once --host 127.0.0.1 --port 1455
-```
-
-**If direct connection fails:**
-- Verify the app is running: `buttonheist list` (uses Bonjour, works without host/port)
-- Both `BUTTONHEIST_HOST` and `BUTTONHEIST_PORT` must be set — if only one is set, it falls back to Bonjour
-- After an app relaunch, wait 2-3 seconds for the server to start
-- To reset: `unset BUTTONHEIST_HOST BUTTONHEIST_PORT`
-
 ## Pre-Commit Checklist
 
 Before pushing any commit, verify the following:

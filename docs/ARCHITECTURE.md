@@ -140,7 +140,6 @@ When the framework loads:
 1. `+load` is called automatically by the runtime
 2. Reads configuration from environment variables or Info.plist:
    - `INSIDEMAN_DISABLE` / `InsideManDisableAutoStart` - skip startup
-   - `INSIDEMAN_PORT` / `InsideManPort` - server port (default: 0 = auto)
    - `INSIDEMAN_POLLING_INTERVAL` / `InsideManPollingInterval` - update interval (default: 1.0s, min: 0.5s)
 3. Creates a Task on MainActor to configure and start InsideMan singleton
 4. Begins polling for interface changes
@@ -154,8 +153,8 @@ When the framework loads:
 **TCP Server (SimpleSocketServer)**:
 - Network framework implementation using `NWListener` and `NWConnection`
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
-- Loopback-only binding on simulators (`::1`), all-interfaces on devices (`::`)
-- Fixed port from configuration (default: 1455 on devices; simulators always use port 0/auto-assign)
+- Binds to all interfaces (`::`) for Bonjour compatibility
+- OS-assigned port (advertised via Bonjour)
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
 - Token-based authentication with session locking (v3.1)
@@ -228,7 +227,7 @@ TheSafecracker (stateful, @MainActor)
 - Manage pending approval state
 - Session locking: single-driver exclusivity with dual-timer release
   - **Disconnect timer** (`INSIDEMAN_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
-  - **Lease timer** (`INSIDEMAN_SESSION_LEASE`, default 60s): resets on each client ping, releases session if no pings received (handles hung connections)
+  - **Lease timer** (`INSIDEMAN_SESSION_LEASE`, default 30s): resets on each client ping, releases session and invalidates token if no pings received (handles hung connections)
 - Track active session driver identity and connections
 - Force-takeover handling (evict existing session on `forceSession`)
 
@@ -310,38 +309,38 @@ disconnected ──connect()──► connecting ──success──► connecte
 
 ### CLI Agent Flow
 
-The CLI is the primary interface for AI agents. Agents use the Bash tool to run `buttonheist` commands directly. With `--host`/`--port` (or `BUTTONHEIST_HOST`/`BUTTONHEIST_PORT` env vars), commands skip Bonjour discovery and connect directly — reducing per-command latency from ~2s to ~50ms.
+The CLI is the primary interface for AI agents. Agents use the Bash tool to run `buttonheist` commands directly. Device discovery is handled via Bonjour.
 
 ```
 1. Agent reads the UI hierarchy
-   └── Bash: buttonheist --host 127.0.0.1 --port 1455 watch --once --format json
-   └── CLI: TCP connect → requestInterface → print JSON → exit
+   └── Bash: buttonheist watch --once --format json
+   └── CLI: Bonjour discover → TCP connect → requestInterface → print JSON → exit
 
 2. Agent captures a screenshot
-   └── Bash: buttonheist --host 127.0.0.1 --port 1455 screenshot --output /tmp/screen.png
-   └── CLI: TCP connect → requestScreen → save PNG → exit
+   └── Bash: buttonheist screenshot --output /tmp/screen.png
+   └── CLI: Bonjour discover → TCP connect → requestScreen → save PNG → exit
 
 3. Agent taps a button
-   └── Bash: buttonheist --host 127.0.0.1 --port 1455 touch tap --identifier loginButton --format json
-   └── CLI: TCP connect → touchTap → print ActionResult JSON → exit
+   └── Bash: buttonheist touch tap --identifier loginButton --format json
+   └── CLI: Bonjour discover → TCP connect → touchTap → print ActionResult JSON → exit
    └── JSON includes delta (noChange, valuesChanged, elementsChanged, screenChanged)
 
 4. Agent types text
-   └── Bash: buttonheist --host 127.0.0.1 --port 1455 type --text "hello" --identifier emailField --format json
-   └── CLI: TCP connect → typeText → print result JSON → exit
+   └── Bash: buttonheist type --text "hello" --identifier emailField --format json
+   └── CLI: Bonjour discover → TCP connect → typeText → print result JSON → exit
 
 5. Agent verifies the result
-   └── Bash: buttonheist --host 127.0.0.1 --port 1455 watch --once --format json
+   └── Bash: buttonheist watch --once --format json
    └── Agent compares new hierarchy to previous state
 ```
 
-Each CLI invocation is stateless — it connects, performs the operation, and exits. With direct host/port, there is no discovery overhead. Without host/port, Bonjour discovery adds ~1-2s per command.
+Each CLI invocation is stateless — it discovers via Bonjour, connects, performs the operation, and exits.
 
 ### Discovery Flow
 
 ```
 1. InsideMan loads (ObjC +load)
-   └── SimpleSocketServer.start(port: 1455)
+   └── SimpleSocketServer.start(port: 0)  // OS-assigned
    └── NetService.publish("_buttonheist._tcp")
    │     Service name: "{AppName}#{instanceId}"
    │     instanceId = INSIDEMAN_ID env var, or first 8 chars of per-launch UUID
@@ -469,9 +468,9 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Transport: TCP socket (Network framework NWListener/NWConnection)
 - Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
 - Session locking: Single-driver exclusivity with dual-timer release (disconnect + heartbeat lease) and force-takeover
-- Discovery: Bonjour/mDNS (`_buttonheist._tcp`) or USB IPv6 tunnel
+- Discovery: Bonjour/mDNS (`_buttonheist._tcp`)
 - Encoding: Newline-delimited JSON (UTF-8)
-- Port: 1455 (configurable via Info.plist)
+- Port: OS-assigned (advertised via Bonjour)
 
 ## Connection Methods
 
@@ -479,12 +478,6 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Service advertised via mDNS
 - Client discovers via NWBrowser
 - TCP connection to advertised endpoint
-
-### USB (CoreDevice IPv6 Tunnel)
-- macOS creates IPv6 tunnel for USB-connected devices
-- Device address: `fd{prefix}::1` (e.g., `fd9a:6190:eed7::1`)
-- Direct TCP connection to port 1455
-- Bypasses WiFi/VPN issues
 
 ## Threading Considerations
 
@@ -530,12 +523,10 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 | `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
-| `INSIDEMAN_SESSION_LEASE` | Session lease timeout in seconds — releases session if no pings received (min: 10) | 60 |
+| `INSIDEMAN_SESSION_LEASE` | Session lease timeout in seconds — releases session and invalidates token if no pings received (min: 10) | 30 |
 
 ### Info.plist Keys (fallback)
 ```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
 <key>InsideManPollingInterval</key>
 <real>1.0</real>
 <key>InsideManDisableAutoStart</key>

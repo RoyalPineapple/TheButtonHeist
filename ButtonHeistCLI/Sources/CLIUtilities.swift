@@ -46,6 +46,7 @@ enum ExitCode: Int32 {
     case connectionFailed = 1
     case noDeviceFound = 2
     case timeout = 3
+    case authFailed = 4
     case unknown = 99
 }
 

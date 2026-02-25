@@ -76,12 +76,7 @@ Proceed? (waiting for confirmation)
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` (via Bash) — confirm device is connected
-3. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection:
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-4. **Load nav graph**: Read `references/nav-graph.md` for route planning
+3. **Load nav graph**: Read `references/nav-graph.md` for route planning
 3. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
 4. If already on the finding's screen, skip navigation steps
 5. If not on the expected starting screen, **plan a route** from current screen to the finding's screen using the nav graph and `## Transitions`

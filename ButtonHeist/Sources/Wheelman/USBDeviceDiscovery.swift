@@ -20,8 +20,8 @@ public final class USBDeviceDiscovery {
     public var onDeviceFound: ((DiscoveredDevice) -> Void)?
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
 
-    /// - Parameter port: The InsideMan port to connect to (default 1455, configured in Info.plist)
-    public init(port: UInt16 = 1455) {
+    /// - Parameter port: The InsideMan port to connect to
+    public init(port: UInt16) {
         self.port = port
     }
 

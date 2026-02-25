@@ -8,20 +8,15 @@ import TheGoods
 ///
 /// Token resolution order:
 /// 1. Explicit token (from INSIDEMAN_TOKEN env var or InsideManToken plist key)
-/// 2. Persisted token (from UserDefaults — survives app relaunch)
-/// 3. New auto-generated UUID (stored in UserDefaults for next launch)
+/// 2. New auto-generated UUID (fresh each launch, logged to console)
 ///
 /// Auth behavior is determined per-connection by the incoming token:
-/// - Token matches → authenticated immediately
+/// - Token matches → authenticated immediately (no UI prompt)
 /// - Empty token → UI approval prompt (Allow/Deny), approved clients receive the token
 /// - Wrong token → rejected with hint to retry without a token for a fresh session
 /// - Any connection while a session is active from a different driver → busy signal
 @MainActor
 final class TheMuscle {
-
-    // MARK: - Constants
-
-    private static let tokenKey = "InsideManAuthToken"
 
     // MARK: - Properties
 
@@ -72,7 +67,7 @@ final class TheMuscle {
            let parsed = TimeInterval(envLease) {
             self.sessionLeaseTimeout = max(10.0, parsed)
         } else {
-            self.sessionLeaseTimeout = 60.0
+            self.sessionLeaseTimeout = 30.0
         }
     }
 
@@ -82,12 +77,7 @@ final class TheMuscle {
         if let explicit {
             return explicit
         }
-        if let stored = UserDefaults.standard.string(forKey: tokenKey), !stored.isEmpty {
-            return stored
-        }
-        let generated = UUID().uuidString
-        UserDefaults.standard.set(generated, forKey: tokenKey)
-        return generated
+        return UUID().uuidString
     }
 
     // MARK: - Public API
@@ -209,10 +199,8 @@ final class TheMuscle {
     }
 
     func invalidateToken() {
-        let newToken = UUID().uuidString
-        UserDefaults.standard.set(newToken, forKey: TheMuscle.tokenKey)
-        authToken = newToken
-        NSLog("[TheMuscle] Token invalidated, new token generated")
+        authToken = UUID().uuidString
+        NSLog("[TheMuscle] Token invalidated, new token: \(authToken)")
     }
 
     // MARK: - Session Lock
@@ -301,6 +289,8 @@ final class TheMuscle {
     private func expireSessionLease() {
         let evictedClients = Array(activeSessionConnections)
         releaseSession()
+        invalidateToken()
+        NSLog("[TheMuscle] Token invalidated after lease expiry")
         if !evictedClients.isEmpty {
             disconnectClientsForSession?(evictedClients)
         }

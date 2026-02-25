@@ -26,12 +26,6 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
-
     @Option(name: .shortAndLong, help: "Connection timeout in seconds")
     var timeout: Double = 30.0
 
@@ -41,12 +35,15 @@ struct SessionCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Force-takeover session from another driver")
     var force: Bool = false
 
+    @Option(name: .long, help: "Auth token from a previous connection")
+    var token: String?
+
     @MainActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
-        let runner = SessionRunner(deviceFilter: device, host: host, port: port,
+        let runner = SessionRunner(deviceFilter: device,
                                    connectionTimeout: timeout, format: effectiveFormat,
-                                   force: force)
+                                   force: force, token: token)
         try await runner.run()
     }
 }

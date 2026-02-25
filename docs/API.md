@@ -16,7 +16,7 @@ InsideMan automatically starts when your app loads via ObjC `+load`. No manual i
 
 When the InsideMan framework loads:
 1. Reads configuration from environment variables or Info.plist
-2. Creates a TCP server on the configured port (default: auto-assign, recommended: 1455)
+2. Creates a TCP server on an OS-assigned port
 3. Begins Bonjour advertisement as `_buttonheist._tcp`
 4. Starts polling for UI element snapshot changes
 
@@ -24,7 +24,6 @@ When the InsideMan framework loads:
 
 **Environment variables (highest priority):**
 ```bash
-INSIDEMAN_PORT=1455                  # Server port (0 = auto-assign)
 INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEMAN_DISABLE=true               # Disable auto-start
 INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated and persisted in UserDefaults if not set)
@@ -34,8 +33,6 @@ INSIDEMAN_SESSION_TIMEOUT=30         # Session release timeout in seconds (defau
 
 **Info.plist (fallback):**
 ```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
 <key>InsideManPollingInterval</key>
 <real>1.0</real>
 <key>InsideManDisableAutoStart</key>
@@ -902,18 +899,12 @@ All subcommands that connect to a device accept these connection options:
 | Option | Description |
 |--------|-------------|
 | `--device <filter>` | Target a specific device by name, ID prefix, simulator UDID, or vendor ID |
-| `--host <address>` | Direct host address — skips Bonjour discovery |
-| `--port <number>` | Direct port number — skips Bonjour discovery |
 | `--force` | Force-takeover session from another driver |
-
-When `--host` and `--port` are both provided, the CLI connects directly via TCP without Bonjour discovery, reducing latency from ~2s to ~50ms per command.
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `BUTTONHEIST_HOST` | Default host address (overridden by `--host`) |
-| `BUTTONHEIST_PORT` | Default port number (overridden by `--port`) |
 | `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
 | `BUTTONHEIST_TOKEN` | Auth token for InsideMan |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking (distinguishes drivers sharing the same token) |
@@ -948,8 +939,6 @@ OPTIONS:
   -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
   -v, --verbose           Show verbose output
   --device <filter>       Target a specific device
-  --host <address>        Direct host address (skip Bonjour)
-  --port <number>         Direct port number (skip Bonjour)
 ```
 
 In watch mode, keyboard commands are available:
@@ -1131,8 +1120,6 @@ struct MyApp: App {
 
 **Info.plist:**
 ```xml
-<key>InsideManPort</key>
-<integer>1455</integer>
 <key>NSLocalNetworkUsageDescription</key>
 <string>element inspector connection.</string>
 <key>NSBonjourServices</key>

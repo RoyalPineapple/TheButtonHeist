@@ -24,12 +24,7 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
 2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
 3. If no devices found: stop and tell the user to launch the app and try again
 4. Print the connected device name and app name for confirmation
-5. **Set up fast connections**: If `BUTTONHEIST_HOST` is not already set, export env vars for direct connection (skips ~2s Bonjour discovery per command):
-   ```bash
-   export BUTTONHEIST_HOST=127.0.0.1
-   export BUTTONHEIST_PORT=1455
-   ```
-6. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
+5. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
 5. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
 6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
 

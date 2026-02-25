@@ -8,17 +8,10 @@ final class DeviceConnector {
     private let quiet: Bool
     private let discoveryTimeout: UInt64
     private let connectionTimeout: UInt64
-    private let directHost: String?
-    private let directPort: UInt16?
 
-    init(deviceFilter: String?, host: String? = nil, port: UInt16? = nil,
+    init(deviceFilter: String?,
          token: String? = nil, quiet: Bool = false, force: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
-        // Flags override env vars
-        self.directHost = host
-            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_HOST"]
-        self.directPort = port
-            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_PORT"].flatMap { UInt16($0) }
         self.deviceFilter = deviceFilter
             ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.quiet = quiet
@@ -30,26 +23,8 @@ final class DeviceConnector {
         self.client.autoSubscribe = false
     }
 
-    /// Connect to a device — direct if host/port are set, otherwise via Bonjour discovery.
+    /// Connect to a device via Bonjour discovery.
     func connect() async throws {
-        warnIfPartialDirectConfig(host: directHost, port: directPort, quiet: quiet)
-
-        if let host = directHost, let port = directPort {
-            // Direct connection — skip Bonjour entirely
-            if !quiet { logStatus("Connecting to \(host):\(port)...") }
-            let device = DiscoveredDevice(host: host, port: port)
-            do {
-                try await connectToDevice(device)
-            } catch {
-                if !quiet {
-                    await discoverAndReport(client: client)
-                }
-                throw error
-            }
-            return
-        }
-
-        // Bonjour discovery path
         if !quiet { logStatus("Searching for iOS devices...") }
         client.startDiscovery()
 
@@ -91,11 +66,12 @@ final class DeviceConnector {
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
         client.onDisconnected = { error in connectionError = error }
-        client.onTokenReceived = { [quiet] token in
-            if !quiet {
-                logStatus("Received auth token from device")
-                logStatus("Set BUTTONHEIST_TOKEN=\(token) for future connections")
-            }
+        client.onTokenReceived = { token in
+            // Always output — callers parse this for session reuse
+            logStatus("BUTTONHEIST_TOKEN=\(token)")
+        }
+        client.onAuthFailed = { reason in
+            connectionError = CLIError.authFailed(reason)
         }
         client.onSessionLocked = { payload in
             connectionError = CLIError.sessionLocked(payload.message)
@@ -111,7 +87,7 @@ final class DeviceConnector {
         }
 
         if let error = connectionError {
-            throw CLIError.connectionFailed(error.localizedDescription)
+            throw error
         }
 
         if !quiet { logStatus("Connected") }
@@ -129,6 +105,7 @@ enum CLIError: Error, CustomStringConvertible {
     case connectionTimeout
     case connectionFailed(String)
     case sessionLocked(String)
+    case authFailed(String)
 
     var description: String {
         switch self {
@@ -140,19 +117,12 @@ enum CLIError: Error, CustomStringConvertible {
         case .connectionTimeout:
             return """
                 Connection timed out
-                  Hint: Verify the host address is correct and the app is running.
+                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
                 """
         case .connectionFailed(let msg):
-            let lower = msg.lowercased()
-            if lower.contains("refused") {
-                return """
-                    Connection failed: \(msg)
-                      Hint: Connection refused usually means wrong port or the app isn't running.
-                    """
-            }
             return """
                 Connection failed: \(msg)
-                  Hint: Check that the host and port are correct and the app is running.
+                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
                 """
         case .sessionLocked(let msg):
             return """
@@ -160,43 +130,21 @@ enum CLIError: Error, CustomStringConvertible {
                   Another driver is currently connected. Wait for it to finish,
                   or use --force to take over the session.
                 """
+        case .authFailed(let msg):
+            return """
+                Auth failed: \(msg)
+                  Retry without --token to request a fresh session.
+                """
         }
     }
-}
 
-/// Run a quick Bonjour scan and log any discovered devices to stderr.
-/// Call after a direct connection failure to give the user immediate context.
-@MainActor
-func discoverAndReport(client: HeistClient, seconds: UInt64 = 3) async {
-    logStatus("  Scanning for devices via Bonjour...")
-    client.startDiscovery()
-    try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
-    let devices = client.discoveredDevices
-    client.stopDiscovery()
-
-    if devices.isEmpty {
-        logStatus("  No devices found via Bonjour either — is the app running?")
-    } else {
-        logStatus("  Devices found via Bonjour:")
-        for device in devices {
-            let name = device.deviceName.isEmpty
-                ? device.appName
-                : "\(device.appName) on \(device.deviceName)"
-            logStatus("    - \(name)")
+    var exitCode: Int32 {
+        switch self {
+        case .authFailed: return ExitCode.authFailed.rawValue
+        case .sessionLocked: return ExitCode.connectionFailed.rawValue
+        case .noDeviceFound, .noMatchingDevice: return ExitCode.noDeviceFound.rawValue
+        case .connectionTimeout: return ExitCode.timeout.rawValue
+        case .connectionFailed: return ExitCode.connectionFailed.rawValue
         }
-        logStatus("  Try connecting without --host/--port to use Bonjour discovery.")
-    }
-}
-
-/// Emit a stderr warning when only one of host/port is configured.
-/// Call before the `if let host, let port` branch in each connection path.
-func warnIfPartialDirectConfig(host: String?, port: UInt16?, quiet: Bool) {
-    guard !quiet else { return }
-    if host != nil && port == nil {
-        logStatus("Warning: --host is set but --port is missing. Falling back to Bonjour discovery.")
-        logStatus("  Hint: Set both BUTTONHEIST_HOST and BUTTONHEIST_PORT for direct connection.")
-    } else if host == nil && port != nil {
-        logStatus("Warning: --port is set but --host is missing. Falling back to Bonjour discovery.")
-        logStatus("  Hint: Set both BUTTONHEIST_HOST and BUTTONHEIST_PORT for direct connection.")
     }
 }
