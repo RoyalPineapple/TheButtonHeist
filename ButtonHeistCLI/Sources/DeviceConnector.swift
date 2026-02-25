@@ -1,5 +1,4 @@
 import Foundation
-import Network
 import ButtonHeist
 
 @MainActor
@@ -36,15 +35,7 @@ final class DeviceConnector {
         if let host = directHost, let port = directPort {
             // Direct connection — skip Bonjour entirely
             if !quiet { logStatus("Connecting to \(host):\(port)...") }
-            let endpoint = NWEndpoint.hostPort(
-                host: NWEndpoint.Host(host),
-                port: NWEndpoint.Port(integerLiteral: port)
-            )
-            let device = DiscoveredDevice(
-                id: "\(host):\(port)",
-                name: "\(host):\(port)",
-                endpoint: endpoint
-            )
+            let device = DiscoveredDevice(host: host, port: port)
             do {
                 try await connectToDevice(device)
             } catch {

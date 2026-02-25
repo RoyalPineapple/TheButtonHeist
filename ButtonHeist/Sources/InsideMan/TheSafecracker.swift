@@ -124,7 +124,7 @@ final class TheSafecracker {
 
             // Find which segment this distance falls on
             var accumulated: CGFloat = 0
-            var point = points.last!
+            var point = points[points.count - 1]
             for i in 0..<segmentLengths.count {
                 let segLen = segmentLengths[i]
                 if accumulated + segLen >= targetDist {
@@ -268,7 +268,8 @@ final class TheSafecracker {
 
     private func findInputHostFrame(in view: UIView) -> CGRect? {
         let className = String(describing: type(of: view))
-        if className == "UIInputSetHostView" && view.frame.height > 100 && !view.isHidden {
+        let minimumKeyboardHeight: CGFloat = 100
+        if className == "UIInputSetHostView" && view.frame.height > minimumKeyboardHeight && !view.isHidden {
             return view.convert(view.bounds, to: nil)
         }
         for sub in view.subviews {
@@ -399,7 +400,7 @@ final class TheSafecracker {
     private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard let window = windowForPoint(points[0]) else {
-            print("[TheSafecracker] No window found for point \(points[0])")
+            serverLog("[TheSafecracker] No window found for point \(points[0])")
             return false
         }
 
@@ -409,13 +410,13 @@ final class TheSafecracker {
         for point in points {
             let windowPoint = window.convert(point, from: nil)
             guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                print("[TheSafecracker] No view at point \(point)")
+                serverLog("[TheSafecracker] No view at point \(point)")
                 return false
             }
             guard let touch = SyntheticTouchFactory.createTouch(
                 at: windowPoint, in: window, view: hitView, phase: .began
             ) else {
-                print("[TheSafecracker] Failed to create touch")
+                serverLog("[TheSafecracker] Failed to create touch")
                 return false
             }
             touches.append(touch)
@@ -430,7 +431,7 @@ final class TheSafecracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
-            print("[TheSafecracker] Failed to create began event")
+            serverLog("[TheSafecracker] Failed to create began event")
             return false
         }
 
@@ -491,7 +492,7 @@ final class TheSafecracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
-            print("[TheSafecracker] Failed to create ended event")
+            serverLog("[TheSafecracker] Failed to create ended event")
             return false
         }
 

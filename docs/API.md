@@ -94,15 +94,12 @@ Configure the shared instance with a specific port, auth token, and instance ide
 ##### start()
 
 ```swift
-public func start(port: UInt16 = 0) throws
+public func start() throws
 ```
 
 Start the TCP server and begin Bonjour advertisement.
 
 **Note**: Called automatically on framework load. Manual calls are rarely needed.
-
-**Parameters**:
-- `port`: Port to listen on. Use `0` for automatic port selection.
 
 **Throws**: Network errors if the listener fails to start.
 
@@ -190,19 +187,20 @@ On successful tap, a `TapVisualizerView` overlay shows a 40pt white circle at th
 
 ### HeistClient
 
-Main client class. Conforms to `ObservableObject` for SwiftUI integration.
+Main client class. Uses the `@Observable` macro for SwiftUI integration.
 
 ```swift
+@Observable
 @MainActor
-public final class HeistClient: ObservableObject
+public final class HeistClient
 ```
 
-#### Published Properties
+#### Observable Properties
 
 ##### discoveredDevices
 
 ```swift
-@Published public private(set) var discoveredDevices: [DiscoveredDevice]
+public private(set) var discoveredDevices: [DiscoveredDevice]
 ```
 
 Devices found via Bonjour discovery. Updated automatically when discovery is active.
@@ -210,7 +208,7 @@ Devices found via Bonjour discovery. Updated automatically when discovery is act
 ##### connectedDevice
 
 ```swift
-@Published public private(set) var connectedDevice: DiscoveredDevice?
+public private(set) var connectedDevice: DiscoveredDevice?
 ```
 
 Currently connected device, or nil if disconnected.
@@ -218,7 +216,7 @@ Currently connected device, or nil if disconnected.
 ##### connectionState
 
 ```swift
-@Published public private(set) var connectionState: ConnectionState
+public private(set) var connectionState: ConnectionState
 ```
 
 Current connection state. See `ConnectionState` enum.
@@ -226,7 +224,7 @@ Current connection state. See `ConnectionState` enum.
 ##### currentInterface
 
 ```swift
-@Published public private(set) var currentInterface: Interface?
+public private(set) var currentInterface: Interface?
 ```
 
 Most recent UI element snapshot received from the connected device.
@@ -234,7 +232,7 @@ Most recent UI element snapshot received from the connected device.
 ##### currentScreen
 
 ```swift
-@Published public private(set) var currentScreen: ScreenPayload?
+public private(set) var currentScreen: ScreenPayload?
 ```
 
 Most recent screenshot received from the connected device.
@@ -242,7 +240,7 @@ Most recent screenshot received from the connected device.
 ##### serverInfo
 
 ```swift
-@Published public private(set) var serverInfo: ServerInfo?
+public private(set) var serverInfo: ServerInfo?
 ```
 
 Server information received after connecting.
@@ -250,7 +248,7 @@ Server information received after connecting.
 ##### isDiscovering
 
 ```swift
-@Published public private(set) var isDiscovering: Bool
+public private(set) var isDiscovering: Bool
 ```
 
 Whether Bonjour discovery is currently active.
@@ -423,7 +421,6 @@ Compute a display name for a device. Returns just the app name if unique among d
 ```swift
 public enum ActionError: Error, LocalizedError {
     case timeout
-    case notConnected
 }
 ```
 
@@ -969,7 +966,7 @@ import ButtonHeist
 import TheGoods
 
 struct InspectorView: View {
-    @StateObject private var client = HeistClient()
+    @State private var client = HeistClient()
 
     var body: some View {
         NavigationSplitView {
