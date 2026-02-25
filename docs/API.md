@@ -1043,6 +1043,19 @@ OPTIONS:
   --device <filter>           Target a specific device
 ```
 
+### buttonheist stop-recording
+
+Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `record` process (running in background) receives it and writes the file.
+
+```
+USAGE: buttonheist stop-recording [OPTIONS]
+
+OPTIONS:
+  --timeout <seconds>     Connection timeout (default: 10)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
 ---
 
 ## Usage Examples

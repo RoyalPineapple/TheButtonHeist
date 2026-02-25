@@ -736,15 +736,19 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         stakeout?.captureActionFrame()
     }
 
-    /// If recording, note an interaction point so Stakeout composites a fingerprint into frames.
+    /// If recording, note interaction points so Stakeout composites fingerprints into frames.
     private func noteInteraction(at point: CGPoint) {
         stakeout?.noteInteraction(at: point)
     }
 
+    private func noteInteraction(at points: [CGPoint]) {
+        stakeout?.noteInteraction(at: points)
+    }
+
     /// Wire up the gesture move callback for recording overlay during continuous gestures.
     private func wireGestureTracking() {
-        theSafecracker.onGestureMove = { [weak self] point in
-            self?.stakeout?.updateInteractionPosition(point)
+        theSafecracker.onGestureMove = { [weak self] points in
+            self?.stakeout?.updateInteractionPositions(points)
         }
     }
 
@@ -1391,11 +1395,14 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let spread = target.spread ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
+        let angle: CGFloat = .pi / 4
+        let p1 = CGPoint(x: center.x + cos(angle) * CGFloat(spread), y: center.y + sin(angle) * CGFloat(spread))
+        let p2 = CGPoint(x: center.x - cos(angle) * CGFloat(spread), y: center.y - sin(angle) * CGFloat(spread))
         wireGestureTracking()
         let success = await theSafecracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
         clearGestureTracking()
         if success {
-            noteInteraction(at: center)
+            noteInteraction(at: [p1, p2])
         }
         let result = await actionResultWithDelta(success: success, method: .syntheticPinch, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1408,11 +1415,13 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let radius = target.radius ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
+        let p1 = CGPoint(x: center.x + CGFloat(radius), y: center.y)
+        let p2 = CGPoint(x: center.x - CGFloat(radius), y: center.y)
         wireGestureTracking()
         let success = await theSafecracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
         clearGestureTracking()
         if success {
-            noteInteraction(at: center)
+            noteInteraction(at: [p1, p2])
         }
         let result = await actionResultWithDelta(success: success, method: .syntheticRotate, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
@@ -1424,12 +1433,14 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 40.0
+        let halfSpread = CGFloat(spread) / 2
+        let p1 = CGPoint(x: center.x - halfSpread, y: center.y)
+        let p2 = CGPoint(x: center.x + halfSpread, y: center.y)
         let success = theSafecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         if success {
-            let halfSpread = CGFloat(spread) / 2
-            theSafecracker.showFingerprint(at: CGPoint(x: center.x - halfSpread, y: center.y))
-            theSafecracker.showFingerprint(at: CGPoint(x: center.x + halfSpread, y: center.y))
-            noteInteraction(at: center)
+            theSafecracker.showFingerprint(at: p1)
+            theSafecracker.showFingerprint(at: p2)
+            noteInteraction(at: [p1, p2])
         }
         let result = await actionResultWithDelta(success: success, method: .syntheticTwoFingerTap, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)

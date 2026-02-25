@@ -26,7 +26,6 @@ final class Stakeout {
     private var fps: Int = 8
     private var inactivityTimeout: TimeInterval = 5.0
     private var maxDuration: TimeInterval = 60.0
-
     // AVAssetWriter pipeline
     private var assetWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
@@ -45,8 +44,7 @@ final class Stakeout {
     private var inactivityCheckTask: Task<Void, Never>?
 
     // Interaction overlay — composited into frames for a short window
-    private var lastInteractionPoint: CGPoint?
-    private var lastInteractionTime: Date?
+    private var activeInteractions: [(point: CGPoint, time: Date)] = []
     private static let interactionOverlayDuration: TimeInterval = 0.5
     private static let overlayDiameter: CGFloat = 40.0
 
@@ -67,7 +65,6 @@ final class Stakeout {
         fps = max(1, min(15, config.fps ?? 8))
         inactivityTimeout = max(1.0, config.inactivityTimeout ?? 5.0)
         maxDuration = max(1.0, config.maxDuration ?? 60.0)
-
         // Determine output dimensions from screen.
         // Default: 1x point resolution (native pixels / screen scale).
         // If caller provides scale, use that fraction of native resolution.
@@ -169,20 +166,24 @@ final class Stakeout {
         lastActivityTime = Date()
     }
 
-    /// Record an interaction point to overlay on captured frames.
+    /// Record interaction points to overlay on captured frames.
     /// The overlay persists for 0.5s so the regular capture timer picks it up.
-    func noteInteraction(at point: CGPoint) {
-        lastInteractionPoint = point
-        lastInteractionTime = Date()
-        // Also capture a bonus frame immediately to guarantee the overlay appears
+    func noteInteraction(at points: [CGPoint]) {
+        let now = Date()
+        activeInteractions = points.map { (point: $0, time: now) }
         captureActionFrame()
     }
 
-    /// Update the interaction overlay position without capturing a bonus frame.
+    /// Single-point convenience for taps and single-finger actions.
+    func noteInteraction(at point: CGPoint) {
+        noteInteraction(at: [point])
+    }
+
+    /// Update the interaction overlay positions without capturing a bonus frame.
     /// Used during continuous gestures where the regular capture timer picks up the overlay.
-    func updateInteractionPosition(_ point: CGPoint) {
-        lastInteractionPoint = point
-        lastInteractionTime = Date()
+    func updateInteractionPositions(_ points: [CGPoint]) {
+        let now = Date()
+        activeInteractions = points.map { (point: $0, time: now) }
     }
 
     /// Capture an extra frame outside the regular timer cadence.
@@ -263,11 +264,13 @@ final class Stakeout {
         // Draw the image scaled into the pixel buffer
         context.draw(cgImage, in: screenBounds)
 
-        // Composite fingerprint overlay if there's a recent interaction
-        if let point = lastInteractionPoint,
-           let time = lastInteractionTime,
-           Date().timeIntervalSince(time) < Self.interactionOverlayDuration {
-            drawFingerprint(in: context, at: point, elapsed: Date().timeIntervalSince(time))
+        // Composite fingerprint overlays for all active interactions
+        let now = Date()
+        for interaction in activeInteractions {
+            let elapsed = now.timeIntervalSince(interaction.time)
+            if elapsed < Self.interactionOverlayDuration {
+                drawFingerprint(in: context, at: interaction.point, elapsed: elapsed)
+            }
         }
 
         return buffer
@@ -393,6 +396,8 @@ final class Stakeout {
         assetWriter = nil
         videoInput = nil
         pixelBufferAdaptor = nil
+
+        activeInteractions = []
 
         // Clean up temp file
         if let url = outputURL {

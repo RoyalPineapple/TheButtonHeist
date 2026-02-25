@@ -155,9 +155,12 @@ For each action in the demo script:
    - Start of Act 3 (the finding's screen, before triggering)
    - After the triggering action (the bug state)
 
-### Collect Recording
+### Stop and Collect Recording
+
+After executing the last action and the final hold pause, explicitly stop the recording:
 
 ```bash
+buttonheist stop-recording --quiet
 wait $RECORD_PID
 ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4
 ```
