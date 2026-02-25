@@ -9,7 +9,7 @@ private func stakeoutLog(_ message: String) {
     NSLog("[Stakeout] %@", message)
 }
 
-/// Screen recording engine. Captures frames using InsideMan's window compositing
+/// Screen recording engine. Captures frames using InsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
 @MainActor
 final class Stakeout {
@@ -48,7 +48,7 @@ final class Stakeout {
     private static let interactionOverlayDuration: TimeInterval = 0.5
     private static let overlayDiameter: CGFloat = 40.0
 
-    // Frame provider closure — set by InsideMan to provide captureScreenForRecording()
+    // Frame provider closure — set by InsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
 
     // Completion handler — called when recording finishes for any reason

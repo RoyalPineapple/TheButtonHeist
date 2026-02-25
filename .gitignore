@@ -18,3 +18,7 @@ xcshareddata/
 # macOS
 .DS_Store
 __pycache__
+
+# Internal working directories
+thoughts/
+.rp1/

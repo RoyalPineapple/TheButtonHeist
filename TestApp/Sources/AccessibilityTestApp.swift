@@ -1,9 +1,9 @@
 import SwiftUI
-import InsideMan
+import InsideJob
 
 @main
 struct AccessibilityTestApp: App {
-    // InsideMan auto-starts via ObjC +load with port from Info.plist
+    // InsideJob auto-starts via ObjC +load with port from Info.plist
     @State private var settings = AppSettings()
 
     var body: some Scene {

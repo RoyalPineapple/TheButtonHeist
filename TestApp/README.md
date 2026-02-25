@@ -1,8 +1,8 @@
 # Test Applications
 
-Two sample iOS apps that serve as integration targets for ButtonHeist. They exercise every gesture type, control variant, and accessibility pattern that InsideMan supports.
+Two sample iOS apps that serve as integration targets for ButtonHeist. They exercise every gesture type, control variant, and accessibility pattern that InsideJob supports.
 
-Both apps embed InsideMan — it auto-starts when the app launches, no code changes needed.
+Both apps embed InsideJob — it auto-starts when the app launches, no code changes needed.
 
 ## SwiftUI Test App — "A11y SwiftUI"
 

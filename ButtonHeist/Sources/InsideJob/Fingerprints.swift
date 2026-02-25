@@ -2,7 +2,7 @@
 #if DEBUG
 import UIKit
 
-/// Passthrough window for fingerprint overlay (internal so InsideMan can filter it from traversal)
+/// Passthrough window for fingerprint overlay (internal so InsideJob can filter it from traversal)
 @MainActor
 class FingerprintWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
