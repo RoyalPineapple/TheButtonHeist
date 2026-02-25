@@ -54,14 +54,7 @@ export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
 
 ### Connection Speed
 
-Each command does Bonjour discovery by default (~2s overhead). For faster connections, set environment variables at session start:
-
-```bash
-export BUTTONHEIST_HOST=127.0.0.1
-export BUTTONHEIST_PORT=1455
-```
-
-Or pass `--host` and `--port` flags on any command. With direct connection, each command completes in ~50ms instead of ~2s.
+Each command does Bonjour discovery by default (~2s overhead). For faster repeated connections, use the `buttonheist session` command which maintains a persistent connection.
 
 ### Commands
 

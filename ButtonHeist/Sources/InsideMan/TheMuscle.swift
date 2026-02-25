@@ -8,22 +8,19 @@ import TheGoods
 ///
 /// Token resolution order:
 /// 1. Explicit token (from INSIDEMAN_TOKEN env var or InsideManToken plist key)
-/// 2. Persisted token (from UserDefaults — survives app relaunch)
-/// 3. New auto-generated UUID (stored in UserDefaults for next launch)
+/// 2. New auto-generated UUID (fresh each launch, logged to console)
 ///
-/// When the token is auto-generated (not explicitly set), `requiresUIApproval` is true
-/// and clients can request on-device Allow/Deny approval by sending an empty token.
+/// Auth behavior is determined per-connection by the incoming token:
+/// - Token matches → authenticated immediately (no UI prompt)
+/// - Empty token → UI approval prompt (Allow/Deny), approved clients receive the token
+/// - Wrong token → rejected with hint to retry without a token for a fresh session
+/// - Any connection while a session is active from a different driver → busy signal
 @MainActor
 final class TheMuscle {
-
-    // MARK: - Constants
-
-    private static let tokenKey = "InsideManAuthToken"
 
     // MARK: - Properties
 
     private(set) var authToken: String
-    let requiresUIApproval: Bool
     private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
     private(set) var authenticatedClientCount: Int = 0
     private(set) var authenticatedClientIDs: Set<Int> = []
@@ -42,6 +39,10 @@ final class TheMuscle {
     private var sessionReleaseTimer: Task<Void, Never>?
     /// Timeout before releasing a session after all connections disconnect
     private let sessionReleaseTimeout: TimeInterval
+    /// Timer that fires to release the session if no pings are received
+    private var sessionLeaseTimer: Task<Void, Never>?
+    /// Lease duration — session released if no pings within this window
+    private let sessionLeaseTimeout: TimeInterval
 
     // MARK: - Callbacks (set by InsideMan)
 
@@ -55,29 +56,28 @@ final class TheMuscle {
     // MARK: - Init
 
     init(explicitToken: String?) {
-        let resolved = TheMuscle.resolveToken(explicit: explicitToken)
-        self.authToken = resolved.token
-        self.requiresUIApproval = resolved.needsApproval
+        self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
         if let envTimeout = ProcessInfo.processInfo.environment["INSIDEMAN_SESSION_TIMEOUT"],
            let parsed = TimeInterval(envTimeout) {
             self.sessionReleaseTimeout = max(1.0, parsed)
         } else {
             self.sessionReleaseTimeout = 30.0
         }
+        if let envLease = ProcessInfo.processInfo.environment["INSIDEMAN_SESSION_LEASE"],
+           let parsed = TimeInterval(envLease) {
+            self.sessionLeaseTimeout = max(10.0, parsed)
+        } else {
+            self.sessionLeaseTimeout = 30.0
+        }
     }
 
     // MARK: - Token Resolution
 
-    private static func resolveToken(explicit: String?) -> (token: String, needsApproval: Bool) {
+    private static func resolveToken(explicit: String?) -> String {
         if let explicit {
-            return (explicit, false)
+            return explicit
         }
-        if let stored = UserDefaults.standard.string(forKey: tokenKey), !stored.isEmpty {
-            return (stored, true)
-        }
-        let generated = UUID().uuidString
-        UserDefaults.standard.set(generated, forKey: tokenKey)
-        return (generated, true)
+        return UUID().uuidString
     }
 
     // MARK: - Public API
@@ -85,6 +85,13 @@ final class TheMuscle {
     func sendAuthRequired(clientId: Int) {
         guard let data = try? JSONEncoder().encode(ServerMessage.authRequired) else { return }
         sendToClient?(data, clientId)
+    }
+
+    /// Called when a ping is received from an authenticated client.
+    /// Resets the session lease timer if the client belongs to the active session.
+    func noteClientActivity(_ clientId: Int) {
+        guard activeSessionConnections.contains(clientId) else { return }
+        resetLeaseTimer()
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
@@ -95,9 +102,9 @@ final class TheMuscle {
             return
         }
 
-        // Empty token + UI approval mode → show approval alert
-        if payload.token.isEmpty && requiresUIApproval {
-            NSLog("[TheMuscle] Client \(clientId) requesting UI approval")
+        if payload.token.isEmpty {
+            // No token → request UI approval (Allow/Deny prompt on device)
+            NSLog("[TheMuscle] Client \(clientId) requesting UI approval (no token)")
             pendingApprovalClients[clientId] = respond
             showApprovalAlert(
                 clientId: clientId,
@@ -108,8 +115,9 @@ final class TheMuscle {
         }
 
         guard payload.token == authToken else {
-            sendMessage(.authFailed("Invalid token"), respond: respond)
-            NSLog("[TheMuscle] Client \(clientId) failed auth")
+            // Wrong token → reject with guidance to retry without a token
+            sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
+            NSLog("[TheMuscle] Client \(clientId) sent invalid token, rejected")
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 self?.disconnectClient?(clientId)
@@ -117,14 +125,14 @@ final class TheMuscle {
             return
         }
 
-        // Session lock check
+        // Token matches → authenticate and acquire session
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, forceSession: payload.forceSession == true, respond: respond) {
             return
         }
 
         markClientAuthenticated?(clientId)
-        NSLog("[TheMuscle] Client \(clientId) authenticated")
+        NSLog("[TheMuscle] Client \(clientId) authenticated with token")
         authenticatedClientIDs.insert(clientId)
         clientDriverIds[clientId] = driverIdentity
         updateAuthenticatedCount(delta: 1)
@@ -142,6 +150,8 @@ final class TheMuscle {
         activeSessionConnections.remove(clientId)
         if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
             NSLog("[TheMuscle] All session connections gone, starting \(sessionReleaseTimeout)s release timer")
+            sessionLeaseTimer?.cancel()
+            sessionLeaseTimer = nil
             sessionReleaseTimer?.cancel()
             sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
                 try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))
@@ -184,15 +194,15 @@ final class TheMuscle {
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
+        sessionLeaseTimer?.cancel()
+        sessionLeaseTimer = nil
         releaseSession()
         dismissAlert()
     }
 
     func invalidateToken() {
-        let newToken = UUID().uuidString
-        UserDefaults.standard.set(newToken, forKey: TheMuscle.tokenKey)
-        authToken = newToken
-        NSLog("[TheMuscle] Token invalidated, new token generated")
+        authToken = UUID().uuidString
+        NSLog("[TheMuscle] Token invalidated, new token: \(authToken)")
     }
 
     // MARK: - Session Lock
@@ -213,6 +223,7 @@ final class TheMuscle {
                 // Same driver — allow, cancel any pending release timer
                 sessionReleaseTimer?.cancel()
                 sessionReleaseTimer = nil
+                resetLeaseTimer()
                 activeSessionConnections.insert(clientId)
                 NSLog("[TheMuscle] Client \(clientId) joined existing session")
                 return true
@@ -250,6 +261,7 @@ final class TheMuscle {
         activeSessionConnections = [clientId]
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
+        resetLeaseTimer()
         NSLog("[TheMuscle] Session claimed by client \(clientId)")
     }
 
@@ -259,8 +271,30 @@ final class TheMuscle {
         activeSessionConnections.removeAll()
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
+        sessionLeaseTimer?.cancel()
+        sessionLeaseTimer = nil
         if hadSession {
             NSLog("[TheMuscle] Session released")
+        }
+    }
+
+    private func resetLeaseTimer() {
+        sessionLeaseTimer?.cancel()
+        sessionLeaseTimer = Task { [weak self, sessionLeaseTimeout] in
+            try? await Task.sleep(nanoseconds: UInt64(sessionLeaseTimeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            NSLog("[TheMuscle] Session lease expired (no pings for \(sessionLeaseTimeout)s)")
+            self?.expireSessionLease()
+        }
+    }
+
+    private func expireSessionLease() {
+        let evictedClients = Array(activeSessionConnections)
+        releaseSession()
+        invalidateToken()
+        NSLog("[TheMuscle] Token invalidated after lease expiry")
+        if !evictedClients.isEmpty {
+            disconnectClientsForSession?(evictedClients)
         }
     }
 

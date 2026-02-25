@@ -339,7 +339,7 @@ final class SessionResponseTests: XCTestCase {
         DiscoveredDevice(
             id: UUID().uuidString,
             name: name,
-            endpoint: .hostPort(host: "127.0.0.1", port: 1455),
+            endpoint: .hostPort(host: "127.0.0.1", port: 9999),
             simulatorUDID: simulatorUDID
         )
     }
