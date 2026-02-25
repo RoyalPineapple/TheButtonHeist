@@ -37,7 +37,12 @@ These files contain detailed specifications loaded on demand. Don't read them al
 | `references/recording-guide.md` | When recording a finding reproduction | Recording workflow, duration estimation, background recording pattern |
 | `references/trace-format.md` | When writing trace entries | Trace entry format, field definitions, examples |
 | `references/troubleshooting.md` | When encountering errors | Error recovery procedures |
+| `references/execution-protocol.md` | When delegating execution to Haiku | Execution plan format, delta handling, event model, return protocol |
 | `references/strategies/*.md` | Session start (when strategy is specified) | Strategy-specific element selection, action ordering, anomaly focus |
+
+## Delegation
+
+For mechanical execution, delegate action batches to a Haiku agent via the Task tool (`model: "haiku"`). Opus plans (gap analysis, screen intent, models, batch design, yield). Haiku executes (CLI commands, delta classification, session notes, trace). Read `references/execution-protocol.md` for the execution plan format and event handling protocol.
 
 ## CLI Quick Reference
 
@@ -51,6 +56,27 @@ The CLI must be built and on PATH. Run this at the start of each session from th
 cd ButtonHeistCLI && swift build -c release && cd ..
 export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
 ```
+
+### Auth Token Reuse
+
+After first auth approval, ButtonHeist prints a reusable token line:
+
+```bash
+BUTTONHEIST_TOKEN=<uuid>
+```
+
+Capture this value once and reuse it for every later command in the same session:
+
+```bash
+buttonheist watch --once --format json --quiet --token "$AUTH_TOKEN"
+# or
+BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist watch --once --format json --quiet
+```
+
+If you see auth prompts repeatedly or hit auth timeout, the token is missing/stale:
+1. Run one command without `--token` to re-auth and capture the new token.
+2. Replace the in-memory token immediately.
+3. Continue using the new token on all subsequent commands.
 
 ### Connection Speed
 
@@ -528,15 +554,6 @@ Include:
 - **Handle errors gracefully** — if an action fails, that's data. Record it, read `references/troubleshooting.md`, and move on.
 - **Test text fields thoroughly** — use `buttonheist type --format json` with values from at least 3 categories in `references/interesting-values.md` (boundary numbers, unicode, injection strings). Use `--delete` to clear and retype. Verify the returned value.
 - **Keep moving** — if you've tried everything on a screen, navigate away. If you can't navigate, report it and try a different approach.
-
-## What NOT to Do
-
-- Don't assume app structure — you don't know this app. Discover everything dynamically.
-- Don't skip the observation step — you cannot reason about what you haven't observed.
-- Don't repeat work — always check your session notes `## Coverage` before acting.
-- Don't ignore errors — a failed action is a finding, not a setback.
-- Don't over-navigate — avoid long navigation chains to reach a distant screen when a nearby screen also has untested elements.
-- Don't guess element behavior from identifiers or labels — only observation reveals what an element actually does.
 
 ## REMEMBER: You are an explorer, not a user
 

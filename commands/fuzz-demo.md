@@ -16,6 +16,7 @@ Unlike `/fuzz-reproduce` (which verifies reproducibility with multiple attempts 
 - This is a PRESENTATION tool, not a verification tool — prioritize watchability over speed
 - ALWAYS add deliberate pauses (`sleep 3-5`) between actions so a human viewer can follow
 - ALWAYS start from the app's main/launch screen for context
+- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - ALWAYS show the happy path first (what SHOULD happen), then the bug — unless there is no meaningful happy path (e.g., crash on launch)
 - DO NOT attempt multiple reproduction tries — one clean take
 - DO NOT use divergence detection — if the bug doesn't appear, report it and stop
@@ -115,8 +116,10 @@ Proceed? (waiting for confirmation)
    export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
    ```
 2. Run `buttonheist list --format json` — confirm device is connected
-3. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
-5. If not on the app's main/launch screen, navigate there using the nav graph or Back actions
+3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for this demo run
+4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
+5. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
+6. If not on the app's main/launch screen, navigate there using the nav graph or Back actions
 
 ## Step 4: Execute the Demo with Recording
 
