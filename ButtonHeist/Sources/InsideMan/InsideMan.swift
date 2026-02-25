@@ -54,6 +54,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     private var isRunning = false
     private var isSuspended = false
 
+    // Screen recording
+    private var stakeout: Stakeout?
+
     // Debounce for hierarchy updates
     private var updateDebounceTask: Task<Void, Never>?
     private let updateDebounceInterval: UInt64 = 300_000_000 // 300ms in nanoseconds
@@ -105,6 +108,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             serverLog("Instance ID: \(instanceId)")
         }
         advertiseService(port: actualPort)
+
+        // Prevent the screen from locking while InsideMan is running
+        UIApplication.shared.isIdleTimerDisabled = true
 
         startAccessibilityObservation()
         startLifecycleObservation()
@@ -273,45 +279,68 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         case .ping:
             sendMessage(.pong, respond: respond)
 
-        // Action handling
+        // Action handling — notify stakeout of real interactions (not pings/subscribes/queries)
         case .activate(let target):
+            stakeout?.noteActivity()
             await handleActivate(target, respond: respond)
         case .increment(let target):
+            stakeout?.noteActivity()
             await handleIncrement(target, respond: respond)
         case .decrement(let target):
+            stakeout?.noteActivity()
             await handleDecrement(target, respond: respond)
         case .performCustomAction(let target):
+            stakeout?.noteActivity()
             await handleCustomAction(target, respond: respond)
         case .requestScreen:
             handleScreen(respond: respond)
 
         // Touch gesture handling
         case .touchTap(let target):
+            stakeout?.noteActivity()
             await handleTouchTap(target, respond: respond)
         case .touchLongPress(let target):
+            stakeout?.noteActivity()
             await handleTouchLongPress(target, respond: respond)
         case .touchSwipe(let target):
+            stakeout?.noteActivity()
             await handleTouchSwipe(target, respond: respond)
         case .touchDrag(let target):
+            stakeout?.noteActivity()
             await handleTouchDrag(target, respond: respond)
         case .touchPinch(let target):
+            stakeout?.noteActivity()
             await handleTouchPinch(target, respond: respond)
         case .touchRotate(let target):
+            stakeout?.noteActivity()
             await handleTouchRotate(target, respond: respond)
         case .touchTwoFingerTap(let target):
+            stakeout?.noteActivity()
             await handleTouchTwoFingerTap(target, respond: respond)
         case .touchDrawPath(let target):
+            stakeout?.noteActivity()
             await handleTouchDrawPath(target, respond: respond)
         case .touchDrawBezier(let target):
+            stakeout?.noteActivity()
             await handleTouchDrawBezier(target, respond: respond)
         case .typeText(let target):
+            stakeout?.noteActivity()
             await handleTypeText(target, respond: respond)
         case .editAction(let target):
+            stakeout?.noteActivity()
             await handleEditAction(target, respond: respond)
         case .resignFirstResponder:
+            stakeout?.noteActivity()
             await handleResignFirstResponder(respond: respond)
         case .waitForIdle(let target):
+            stakeout?.noteActivity()
             await handleWaitForIdle(target, respond: respond)
+
+        // Recording
+        case .startRecording(let config):
+            handleStartRecording(config, respond: respond)
+        case .stopRecording:
+            handleStopRecording(respond: respond)
         }
     }
 
@@ -363,7 +392,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
     /// Returns all windows that should be included in the accessibility traversal,
     /// sorted by windowLevel descending (frontmost first).
-    /// Excludes our own overlay windows (TapVisualizerView).
+    /// Excludes our own overlay windows (FingerprintWindow).
     private func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
@@ -372,7 +401,7 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         return windowScene.windows
             .filter { window in
-                !(window is TapOverlayWindow) &&
+                !(window is FingerprintWindow) &&
                 !window.isHidden &&
                 window.bounds.size != .zero
             }
@@ -587,6 +616,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             // Also broadcast screen when hierarchy changes
             broadcastScreen()
 
+            // Notify stakeout of screen change (for inactivity timeout)
+            stakeout?.noteScreenChange()
+
             serverLog("Polling detected change, broadcast to \(subscribedClients.count) subscriber(s)")
         }
     }
@@ -628,6 +660,105 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         for clientId in subscribedClients {
             socketServer?.send(data, to: clientId)
         }
+    }
+
+    // MARK: - Screen Recording
+
+    /// Capture the screen including the fingerprint overlay (for recordings).
+    /// Unlike captureScreen(), this includes FingerprintWindow so
+    /// tap/swipe indicators are visible in the video.
+    private func captureScreenForRecording() -> UIImage? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            return nil
+        }
+
+        let allWindows = windowScene.windows
+            .filter { !$0.isHidden && $0.bounds.size != .zero }
+            .sorted { $0.windowLevel < $1.windowLevel }
+
+        guard let background = allWindows.first else { return nil }
+        let bounds = background.bounds
+
+        let renderer = UIGraphicsImageRenderer(bounds: bounds)
+        return renderer.image { _ in
+            for window in allWindows {
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+            }
+        }
+    }
+
+    private func handleStartRecording(_ config: RecordingConfig, respond: @escaping (Data) -> Void) {
+        if stakeout?.state == .recording {
+            sendMessage(.recordingError("Recording already in progress"), respond: respond)
+            return
+        }
+
+        let recorder = Stakeout()
+        recorder.captureFrame = { [weak self] in
+            self?.captureScreenForRecording()
+        }
+        recorder.onRecordingComplete = { [weak self] result in
+            switch result {
+            case .success(let payload):
+                if let data = try? JSONEncoder().encode(ServerMessage.recording(payload)) {
+                    self?.socketServer?.broadcastToAll(data)
+                }
+            case .failure(let error):
+                if let data = try? JSONEncoder().encode(ServerMessage.recordingError(error.localizedDescription)) {
+                    self?.socketServer?.broadcastToAll(data)
+                }
+            }
+            self?.stakeout = nil
+        }
+
+        stakeout = recorder
+        do {
+            try recorder.startRecording(config: config)
+            sendMessage(.recordingStarted, respond: respond)
+        } catch {
+            sendMessage(.recordingError(error.localizedDescription), respond: respond)
+            stakeout = nil
+        }
+    }
+
+    private func handleStopRecording(respond: @escaping (Data) -> Void) {
+        guard let stakeout else {
+            sendMessage(.recordingError("No recording in progress"), respond: respond)
+            return
+        }
+        if stakeout.state == .recording {
+            stakeout.stopRecording(reason: .manual)
+        }
+        // If .finalizing, recording is already stopping (inactivity/maxDuration) —
+        // the broadcast is on its way. Acknowledge in both cases.
+        sendMessage(.recordingStopped, respond: respond)
+    }
+
+    /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
+    private func captureActionFrame() {
+        stakeout?.captureActionFrame()
+    }
+
+    /// If recording, note interaction points so Stakeout composites fingerprints into frames.
+    private func noteInteraction(at point: CGPoint) {
+        stakeout?.noteInteraction(at: point)
+    }
+
+    private func noteInteraction(at points: [CGPoint]) {
+        stakeout?.noteInteraction(at: points)
+    }
+
+    /// Wire up the gesture move callback for recording overlay during continuous gestures.
+    private func wireGestureTracking() {
+        theSafecracker.onGestureMove = { [weak self] points in
+            self?.stakeout?.updateInteractionPositions(points)
+        }
+    }
+
+    /// Clear the gesture move callback after a continuous gesture completes.
+    private func clearGestureTracking() {
+        theSafecracker.onGestureMove = nil
     }
 
     // MARK: - Accessibility Data Refresh
@@ -814,6 +945,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
             afterElements = snapshotElements()
             delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
         }
+
+        // Capture a recording frame after the action completes
+        captureActionFrame()
 
         return ActionResult(
             success: true,
@@ -1023,7 +1157,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Try accessibilityActivate via the live object reference
         if activate(elementAt: index) {
-            TapVisualizerView.showTap(at: point)
+            theSafecracker.showFingerprint(at: point)
+            noteInteraction(at: point)
             let result = await actionResultWithDelta(success: true, method: .activate, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
             return
@@ -1031,7 +1166,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Fall back to synthetic touch injection
         if theSafecracker.tap(at: point) {
-            TapVisualizerView.showTap(at: point)
+            theSafecracker.showFingerprint(at: point)
+            noteInteraction(at: point)
             let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
             return
@@ -1064,7 +1200,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         increment(elementAt: index)
-        TapVisualizerView.showTap(at: element.activationPoint)
+        theSafecracker.showFingerprint(at: element.activationPoint)
+        noteInteraction(at: element.activationPoint)
         let result = await actionResultWithDelta(success: true, method: .increment, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1089,7 +1226,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         }
 
         decrement(elementAt: index)
-        TapVisualizerView.showTap(at: element.activationPoint)
+        theSafecracker.showFingerprint(at: element.activationPoint)
+        noteInteraction(at: element.activationPoint)
         let result = await actionResultWithDelta(success: true, method: .decrement, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1170,7 +1308,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         if let elementTarget = target.elementTarget,
            let index = resolveTraversalIndex(for: elementTarget),
            activate(elementAt: index) {
-            TapVisualizerView.showTap(at: point)
+            theSafecracker.showFingerprint(at: point)
+            noteInteraction(at: point)
             let result = await actionResultWithDelta(success: true, method: .activate, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
             return
@@ -1178,7 +1317,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         // Fall back to synthetic tap
         if theSafecracker.tap(at: point) {
-            TapVisualizerView.showTap(at: point)
+            theSafecracker.showFingerprint(at: point)
+            noteInteraction(at: point)
             let result = await actionResultWithDelta(success: true, method: .syntheticTap, beforeElements: beforeElements)
             sendMessage(.actionResult(result), respond: respond)
             return
@@ -1192,8 +1332,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         if target.elementTarget == nil { refreshAccessibilityData() }
         let beforeElements = snapshotElements()
 
+        wireGestureTracking()
         let success = await theSafecracker.longPress(at: point, duration: clampDuration(target.duration))
-        if success { TapVisualizerView.showTap(at: point) }
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: point)
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticLongPress, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1222,7 +1366,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = clampDuration(target.duration ?? 0.15)
 
+        wireGestureTracking()
         let success = await theSafecracker.swipe(from: startPoint, to: endPoint, duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: endPoint)
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticSwipe, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1233,7 +1382,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let duration = clampDuration(target.duration ?? 0.5)
+        wireGestureTracking()
         let success = await theSafecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: target.endPoint)
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticDrag, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1245,7 +1399,15 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let spread = target.spread ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
+        let angle: CGFloat = .pi / 4
+        let p1 = CGPoint(x: center.x + cos(angle) * CGFloat(spread), y: center.y + sin(angle) * CGFloat(spread))
+        let p2 = CGPoint(x: center.x - cos(angle) * CGFloat(spread), y: center.y - sin(angle) * CGFloat(spread))
+        wireGestureTracking()
         let success = await theSafecracker.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: [p1, p2])
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticPinch, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1257,7 +1419,14 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
 
         let radius = target.radius ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
+        let p1 = CGPoint(x: center.x + CGFloat(radius), y: center.y)
+        let p2 = CGPoint(x: center.x - CGFloat(radius), y: center.y)
+        wireGestureTracking()
         let success = await theSafecracker.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: [p1, p2])
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticRotate, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1268,7 +1437,15 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
 
         let spread = target.spread ?? 40.0
+        let halfSpread = CGFloat(spread) / 2
+        let p1 = CGPoint(x: center.x - halfSpread, y: center.y)
+        let p2 = CGPoint(x: center.x + halfSpread, y: center.y)
         let success = theSafecracker.twoFingerTap(at: center, spread: CGFloat(spread))
+        if success {
+            theSafecracker.showFingerprint(at: p1)
+            theSafecracker.showFingerprint(at: p2)
+            noteInteraction(at: [p1, p2])
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticTwoFingerTap, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1289,7 +1466,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
+        wireGestureTracking()
         let success = await theSafecracker.drawPath(points: cgPoints, duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: cgPoints.last ?? cgPoints[0])
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1325,7 +1507,12 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         let beforeElements = snapshotElements()
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
 
+        wireGestureTracking()
         let success = await theSafecracker.drawPath(points: cgPoints, duration: duration)
+        clearGestureTracking()
+        if success {
+            noteInteraction(at: cgPoints.last ?? cgPoints[0])
+        }
         let result = await actionResultWithDelta(success: success, method: .syntheticDrawPath, beforeElements: beforeElements)
         sendMessage(.actionResult(result), respond: respond)
     }
@@ -1362,7 +1549,8 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
                 )), respond: respond)
                 return
             }
-            TapVisualizerView.showTap(at: point)
+            theSafecracker.showFingerprint(at: point)
+            noteInteraction(at: point)
 
             // Wait for keyboard to appear (up to 2 seconds)
             var keyboardAppeared = false

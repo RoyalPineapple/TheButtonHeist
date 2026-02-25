@@ -82,6 +82,14 @@ public enum ClientMessage: Codable {
 
     /// Request a capture of the current screen
     case requestScreen
+
+    // MARK: - Recording Commands
+
+    /// Start recording the screen
+    case startRecording(RecordingConfig)
+
+    /// Stop an in-progress recording
+    case stopRecording
 }
 
 // MARK: - Action Targets
@@ -454,6 +462,20 @@ public enum ServerMessage: Codable {
 
     /// Screen capture response with PNG data
     case screen(ScreenPayload)
+
+    // MARK: - Recording Responses
+
+    /// Recording has started
+    case recordingStarted
+
+    /// Recording stop acknowledged — payload arrives via broadcast
+    case recordingStopped
+
+    /// Recording complete with video data
+    case recording(RecordingPayload)
+
+    /// Recording failed or was not active
+    case recordingError(String)
 }
 
 // MARK: - Action Results
@@ -564,6 +586,84 @@ public struct ScreenPayload: Codable, Sendable {
         self.width = width
         self.height = height
         self.timestamp = timestamp
+    }
+}
+
+/// Configuration for screen recording
+public struct RecordingConfig: Codable, Sendable {
+    /// Frames per second (default: 8, range: 1-15)
+    public let fps: Int?
+    /// Resolution scale relative to native pixels (0.25-1.0).
+    /// Default: nil — uses 1x point resolution (native pixels / screen scale).
+    /// 1.0 = full native resolution (no reduction).
+    public let scale: Double?
+    /// Inactivity timeout in seconds — auto-stop when no screen changes
+    /// and no commands received for this duration (default: 5.0)
+    public let inactivityTimeout: Double?
+    /// Maximum recording duration in seconds as a hard safety cap (default: 60.0)
+    public let maxDuration: Double?
+
+    public init(
+        fps: Int? = nil,
+        scale: Double? = nil,
+        inactivityTimeout: Double? = nil,
+        maxDuration: Double? = nil
+    ) {
+        self.fps = fps
+        self.scale = scale
+        self.inactivityTimeout = inactivityTimeout
+        self.maxDuration = maxDuration
+    }
+}
+
+/// Payload containing screen recording video data
+public struct RecordingPayload: Codable, Sendable {
+    /// Base64-encoded MP4 video data (H.264)
+    public let videoData: String
+    /// Video width in pixels
+    public let width: Int
+    /// Video height in pixels
+    public let height: Int
+    /// Recording duration in seconds
+    public let duration: Double
+    /// Number of frames captured
+    public let frameCount: Int
+    /// Frames per second used during recording
+    public let fps: Int
+    /// Timestamp when recording started
+    public let startTime: Date
+    /// Timestamp when recording ended
+    public let endTime: Date
+    /// Reason recording stopped
+    public let stopReason: StopReason
+
+    public enum StopReason: String, Codable, Sendable {
+        case manual
+        case inactivity
+        case maxDuration
+        case fileSizeLimit
+    }
+
+    public init(
+        videoData: String,
+        width: Int,
+        height: Int,
+        duration: Double,
+        frameCount: Int,
+        fps: Int,
+        startTime: Date,
+        endTime: Date,
+        stopReason: StopReason
+    ) {
+        self.videoData = videoData
+        self.width = width
+        self.height = height
+        self.duration = duration
+        self.frameCount = frameCount
+        self.fps = fps
+        self.startTime = startTime
+        self.endTime = endTime
+        self.stopReason = stopReason
     }
 }
 

@@ -20,7 +20,7 @@ struct ButtonHeist: AsyncParsableCommand {
         version: "2.1.0",
         subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
-                       SessionCommand.self,
+                       RecordCommand.self, StopRecordingCommand.self, SessionCommand.self,
                        CopyCommand.self, PasteCommand.self, CutCommand.self,
                        SelectCommand.self, SelectAllCommand.self,
                        DismissKeyboardCommand.self],

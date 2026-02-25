@@ -1,5 +1,6 @@
 import XCTest
 @testable import ButtonHeist
+import TheGoods
 
 @MainActor
 final class HeistClientTests: XCTestCase {
@@ -46,5 +47,76 @@ final class HeistClientTests: XCTestCase {
         client.disconnect()
 
         XCTAssertEqual(client.connectionState, .disconnected)
+    }
+
+    // MARK: - waitForRecording
+
+    func testWaitForRecordingSuccess() async throws {
+        let client = HeistClient()
+        let expectedPayload = makeRecordingPayload(stopReason: .manual)
+
+        let task = Task {
+            try await client.waitForRecording(timeout: 5.0)
+        }
+
+        // Allow the task to install its callbacks
+        await Task.yield()
+
+        client.onRecording?(expectedPayload)
+
+        let result = try await task.value
+        XCTAssertEqual(result.frameCount, expectedPayload.frameCount)
+        XCTAssertEqual(result.stopReason, .manual)
+    }
+
+    func testWaitForRecordingServerError() async throws {
+        let client = HeistClient()
+
+        let task = Task {
+            try await client.waitForRecording(timeout: 5.0)
+        }
+
+        await Task.yield()
+
+        client.onRecordingError?("AVAssetWriter failed")
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected RecordingError.serverError to be thrown")
+        } catch let error as HeistClient.RecordingError {
+            if case .serverError(let message) = error {
+                XCTAssertEqual(message, "AVAssetWriter failed")
+            } else {
+                XCTFail("Expected serverError, got \(error)")
+            }
+        }
+    }
+
+    func testWaitForRecordingTimeout() async throws {
+        let client = HeistClient()
+
+        do {
+            _ = try await client.waitForRecording(timeout: 0.05)
+            XCTFail("Expected ActionError.timeout to be thrown")
+        } catch is HeistClient.ActionError {
+            // Expected
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func makeRecordingPayload(stopReason: RecordingPayload.StopReason) -> RecordingPayload {
+        let start = Date()
+        return RecordingPayload(
+            videoData: "AAAAIGZ0eXBpc29t",
+            width: 390,
+            height: 844,
+            duration: 5.0,
+            frameCount: 40,
+            fps: 8,
+            startTime: start,
+            endTime: start.addingTimeInterval(5.0),
+            stopReason: stopReason
+        )
     }
 }
