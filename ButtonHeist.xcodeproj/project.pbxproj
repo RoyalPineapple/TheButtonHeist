@@ -19,6 +19,7 @@
 		267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
 		292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */; };
+		B7A1F3E2D4C5689A1E2F0B73 /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D2E4F5A6B7890C1D3E5F7A /* AuthFailureTests.swift */; };
 		319F0EE2BDDEAEA018814D63 /* TheGoodsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */; };
 		38B66D610D649E6F0A63A510 /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B71D54592688B9D702D11E /* ServerInfoTests.swift */; };
 		3F0160DDC8D1D3067EE9DC93 /* TheSafecracker+Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A8661AEFC133A969D5B63A /* TheSafecracker+Elements.swift */; };
@@ -242,6 +243,7 @@
 		9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
+		C3D2E4F5A6B7890C1D3E5F7A /* AuthFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFailureTests.swift; sourceTree = "<group>"; };
 		A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
 		A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InsideManAutoStart.h; sourceTree = "<group>"; };
 		AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
@@ -512,6 +514,7 @@
 		F5A6CBAA90C77D981D32BACA /* WheelmanTests */ = {
 			isa = PBXGroup;
 			children = (
+				C3D2E4F5A6B7890C1D3E5F7A /* AuthFailureTests.swift */,
 				A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
 				9068F44DC10C400D19A6F84C /* SessionLockTests.swift */,
@@ -865,6 +868,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7A1F3E2D4C5689A1E2F0B73 /* AuthFailureTests.swift in Sources */,
 				292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
 				73DE29791CDA8BF7D55C5825 /* SessionLockTests.swift in Sources */,

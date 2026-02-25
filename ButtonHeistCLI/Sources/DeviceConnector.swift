@@ -65,7 +65,7 @@ final class DeviceConnector {
         var connected = false
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
-        client.onDisconnected = { error in connectionError = error }
+        client.onDisconnected = { error in if connectionError == nil { connectionError = error } }
         client.onTokenReceived = { token in
             // Always output — callers parse this for session reuse
             logStatus("BUTTONHEIST_TOKEN=\(token)")

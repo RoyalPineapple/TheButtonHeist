@@ -150,6 +150,8 @@ final class TheMuscle {
         activeSessionConnections.remove(clientId)
         if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
             NSLog("[TheMuscle] All session connections gone, starting \(sessionReleaseTimeout)s release timer")
+            sessionLeaseTimer?.cancel()
+            sessionLeaseTimer = nil
             sessionReleaseTimer?.cancel()
             sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
                 try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))

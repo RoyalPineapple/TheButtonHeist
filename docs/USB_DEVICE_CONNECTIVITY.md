@@ -22,18 +22,18 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 ### Automatic Discovery
 
-`USBDeviceDiscovery` (in the Wheelman framework) runs alongside Bonjour discovery:
+> **Note:** `USBDeviceDiscovery` (in the Wheelman framework) is defined but not currently wired into `HeistClient`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
+
+The `USBDeviceDiscovery` class implements this flow:
 
 1. Polls `xcrun devicectl list devices` to find connected devices
 2. Parses `lsof -i -P -n` output to locate the CoreDevice IPv6 tunnel address
-3. Constructs an `NWEndpoint` with the IPv6 address and the Bonjour-advertised port
+3. Constructs an `NWEndpoint` with the IPv6 address and port
 4. Produces a `DiscoveredDevice` — identical to Bonjour-discovered devices
-
-USB devices appear in the device list with a `(USB)` suffix.
 
 ### Port Discovery
 
-InsideMan uses an OS-assigned port advertised via Bonjour. USB discovery resolves the port automatically through the same Bonjour service advertisement used for WiFi.
+InsideMan uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
 
 ### Requirements
 
