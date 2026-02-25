@@ -26,9 +26,10 @@ When the InsideMan framework loads:
 ```bash
 INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEMAN_DISABLE=true               # Disable auto-start
-INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated and persisted in UserDefaults if not set)
+INSIDEMAN_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
 INSIDEMAN_ID=my-instance             # Human-readable instance identifier
 INSIDEMAN_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
+INSIDEMAN_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
 ```
 
 **Info.plist (fallback):**

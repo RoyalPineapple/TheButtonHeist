@@ -1075,6 +1075,12 @@ The session release timeout (time after last connection disconnects before the s
 - **Environment variable**: `INSIDEMAN_SESSION_TIMEOUT` (in seconds)
 - **Default**: 30 seconds
 
+The session lease timeout (time without any pings before the session is released and the token invalidated) is separately configurable:
+
+- **Environment variable**: `INSIDEMAN_SESSION_LEASE` (in seconds)
+- **Default**: 30 seconds
+- **Minimum**: 10 seconds
+
 ### UI Approval Flow
 
 When the token is auto-generated (not explicitly set), InsideMan supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:

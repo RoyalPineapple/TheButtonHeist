@@ -101,7 +101,13 @@ final class SessionRunner {
         var connected = false
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
-        client.onDisconnected = { error in connectionError = error }
+        client.onDisconnected = { error in if connectionError == nil { connectionError = error } }
+        client.onAuthFailed = { reason in
+            connectionError = CLIError.authFailed(reason)
+        }
+        client.onTokenReceived = { token in
+            logStatus("BUTTONHEIST_TOKEN=\(token)")
+        }
         client.connect(to: device)
 
         let connStart = DispatchTime.now().uptimeNanoseconds
@@ -114,7 +120,7 @@ final class SessionRunner {
         }
 
         if let error = connectionError {
-            throw CLIError.connectionFailed(error.localizedDescription)
+            throw (error as? CLIError) ?? CLIError.connectionFailed(error.localizedDescription)
         }
 
         logStatus("Connected to \(client.displayName(for: device))")
