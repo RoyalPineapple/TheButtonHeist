@@ -18,6 +18,9 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -29,7 +32,7 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet)
+        let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client

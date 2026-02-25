@@ -122,6 +122,9 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
         muscle.sendToClient = { [weak server] data, clientId in server?.send(data, to: clientId) }
         muscle.markClientAuthenticated = { [weak server] clientId in server?.markAuthenticated(clientId) }
         muscle.disconnectClient = { [weak server] clientId in server?.disconnect(clientId: clientId) }
+        muscle.disconnectClientsForSession = { [weak server] clientIds in
+            for clientId in clientIds { server?.disconnect(clientId: clientId) }
+        }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }

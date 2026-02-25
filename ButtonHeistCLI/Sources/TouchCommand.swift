@@ -63,6 +63,9 @@ struct TapSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -86,7 +89,7 @@ struct TapSubcommand: AsyncParsableCommand {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -119,6 +122,9 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -142,7 +148,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -187,6 +193,9 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -226,7 +235,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -265,6 +274,9 @@ struct DragSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -290,7 +302,7 @@ struct DragSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -329,6 +341,9 @@ struct PinchSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -352,7 +367,7 @@ struct PinchSubcommand: AsyncParsableCommand {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -391,6 +406,9 @@ struct RotateSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -414,7 +432,7 @@ struct RotateSubcommand: AsyncParsableCommand {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -447,6 +465,9 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -470,7 +491,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -511,6 +532,9 @@ struct DrawPathSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -542,7 +566,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
             velocity: velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 
     private func parseInlinePoints(_ str: String) throws -> [PathPoint] {
@@ -610,6 +634,9 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -637,17 +664,17 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
             velocity: velocity ?? target.velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
 // MARK: - Shared Connection Helper
 
 @MainActor
-private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool,
+private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool, force: Bool = false,
                               device: String? = nil, host: String? = nil, port: UInt16? = nil,
                               format: OutputFormat? = nil) async throws {
-    let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet)
+    let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client

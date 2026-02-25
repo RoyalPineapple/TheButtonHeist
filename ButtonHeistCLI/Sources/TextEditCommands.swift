@@ -20,6 +20,9 @@ struct CopyCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -31,7 +34,7 @@ struct CopyCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("copy", timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendEditAction("copy", timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -52,6 +55,9 @@ struct PasteCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -63,7 +69,7 @@ struct PasteCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("paste", timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendEditAction("paste", timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -84,6 +90,9 @@ struct CutCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -95,7 +104,7 @@ struct CutCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("cut", timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendEditAction("cut", timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -116,6 +125,9 @@ struct SelectCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -127,7 +139,7 @@ struct SelectCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("select", timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendEditAction("select", timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
@@ -148,6 +160,9 @@ struct SelectAllCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
@@ -159,17 +174,17 @@ struct SelectAllCommand: AsyncParsableCommand {
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("selectAll", timeout: timeout, quiet: quiet, device: device, host: host, port: port, format: format)
+        try await sendEditAction("selectAll", timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
     }
 }
 
 // MARK: - Shared Helper
 
 @MainActor
-private func sendEditAction(_ action: String, timeout: Double, quiet: Bool,
+private func sendEditAction(_ action: String, timeout: Double, quiet: Bool, force: Bool = false,
                              device: String?, host: String? = nil, port: UInt16? = nil,
                              format: OutputFormat? = nil) async throws {
-    let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet)
+    let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client

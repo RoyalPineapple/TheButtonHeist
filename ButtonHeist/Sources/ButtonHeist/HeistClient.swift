@@ -43,9 +43,18 @@ public final class HeistClient {
     public var onRecordingError: ((String) -> Void)?
     /// Called when a token is received via UI approval (store for future reconnections)
     public var onTokenReceived: ((String) -> Void)?
+    /// Called when the server rejects the connection because another driver holds the session
+    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
 
     /// Auth token to send during connection handshake
     public var token: String?
+
+    /// When true, force-takeover the session during the next connection
+    public var forceSession: Bool = false
+
+    /// Driver identity for session locking. Set via BUTTONHEIST_DRIVER_ID env var.
+    /// When set, the server uses this to distinguish drivers sharing the same auth token.
+    public var driverId: String?
 
     /// When true (default), automatically sends .subscribe, .requestInterface, and .requestScreen
     /// after connecting. Set to false for session-style usage where you request data explicitly.
@@ -125,7 +134,7 @@ public final class HeistClient {
         disconnect()
 
         connectionState = .connecting
-        connection = DeviceConnection(device: device, token: token)
+        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: driverId)
 
         connection?.onConnected = { [weak self] in
             self?.connectedDevice = device
@@ -133,13 +142,19 @@ public final class HeistClient {
         }
 
         connection?.onDisconnected = { [weak self] error in
-            self?.connectionState = .disconnected
-            self?.connectedDevice = nil
-            self?.serverInfo = nil
-            self?.currentInterface = nil
-            self?.currentScreen = nil
-            self?.isRecording = false
-            self?.onDisconnected?(error)
+            guard let self else { return }
+            // Preserve .failed state (e.g., from sessionLocked) — don't overwrite with .disconnected
+            if case .failed = self.connectionState {
+                // keep .failed
+            } else {
+                self.connectionState = .disconnected
+            }
+            self.connectedDevice = nil
+            self.serverInfo = nil
+            self.currentInterface = nil
+            self.currentScreen = nil
+            self.isRecording = false
+            self.onDisconnected?(error)
         }
 
         connection?.onServerInfo = { [weak self] info in
@@ -187,6 +202,11 @@ public final class HeistClient {
         connection?.onAuthApproved = { [weak self] approvedToken in
             self?.token = approvedToken
             self?.onTokenReceived?(approvedToken)
+        }
+
+        connection?.onSessionLocked = { [weak self] payload in
+            self?.connectionState = .failed(payload.message)
+            self?.onSessionLocked?(payload)
         }
 
         connection?.connect()

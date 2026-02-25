@@ -5,7 +5,7 @@ import CoreGraphics
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "3.0"
+public let protocolVersion = "3.1"
 
 // MARK: - Client -> Server Messages
 
@@ -419,7 +419,27 @@ public struct WaitForIdleTarget: Codable, Sendable {
 /// Payload for authenticate message
 public struct AuthenticatePayload: Codable, Sendable {
     public let token: String
-    public init(token: String) { self.token = token }
+    /// When true, forcibly take over the active session (disconnects existing session holder)
+    public let forceSession: Bool?
+    /// Unique driver identity for session locking. When set, the server uses this
+    /// (instead of the auth token) to distinguish drivers. Set via BUTTONHEIST_DRIVER_ID.
+    public let driverId: String?
+    public init(token: String, forceSession: Bool? = nil, driverId: String? = nil) {
+        self.token = token
+        self.forceSession = forceSession
+        self.driverId = driverId
+    }
+}
+
+/// Information about the active session that is blocking this connection
+public struct SessionLockedPayload: Codable, Sendable {
+    public let message: String
+    public let activeConnections: Int
+
+    public init(message: String, activeConnections: Int) {
+        self.message = message
+        self.activeConnections = activeConnections
+    }
 }
 
 /// Payload sent when a connection is approved via the on-device UI
@@ -462,6 +482,9 @@ public enum ServerMessage: Codable {
 
     /// Screen capture response with PNG data
     case screen(ScreenPayload)
+
+    /// Session is locked by another driver (sent before disconnect)
+    case sessionLocked(SessionLockedPayload)
 
     // MARK: - Recording Responses
 

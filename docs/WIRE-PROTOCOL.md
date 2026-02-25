@@ -1,6 +1,6 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 3.0
+**Version**: 3.1
 
 This document specifies the communication protocol between InsideMan (iOS) and clients (Wheelman, CLI, Python scripts).
 
@@ -40,11 +40,13 @@ Client                                    Server
    │                                         │
    │──────── TCP Connect ────────────────────►│
    │                                         │
-   │◄─────── authRequired ──────────────────│  (v3.0: auth challenge)
+   │◄─────── authRequired ──────────────────│  (auth challenge)
    │──────── authenticate(token) ───────────►│
-   │◄─────── info ──────────────────────────│  (on successful auth)
+   │◄─────── info ──────────────────────────│  (on successful auth + session acquired)
    │           OR                              │
    │◄─────── authFailed ───────────────────│  (bad token → disconnect)
+   │           OR                              │
+   │◄─────── sessionLocked ────────────────│  (v3.1: session held by another driver → disconnect)
    │                                         │
    │──────── subscribe ──────────────────────►│  (enable auto-updates)
    │──────── requestInterface ──────────────►│
@@ -78,6 +80,18 @@ Authenticate with the server. Must be the first message sent after receiving `au
 ```json
 {"authenticate":{"_0":{"token":"your-secret-token"}}}
 ```
+
+**With force session takeover** (v3.1):
+```json
+{"authenticate":{"_0":{"token":"your-secret-token","forceSession":true}}}
+```
+
+**With driver identity** (v3.1):
+```json
+{"authenticate":{"_0":{"token":"your-secret-token","driverId":"agent-1"}}}
+```
+
+The optional `forceSession` field requests immediate takeover of any existing session held by a different driver. The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
 
 ### requestInterface
 
@@ -378,13 +392,26 @@ Sent when a connection is approved via the on-device UI (see [UI Approval Flow](
 
 After receiving `authApproved`, the client should store the token and use it for future `authenticate` messages to skip the approval flow.
 
+### sessionLocked
+
+Sent when the server's session is held by a different driver. The server disconnects the client shortly after sending this message. See [Session Locking](#session-locking).
+
+```json
+{"sessionLocked":{"_0":{"message":"Session is locked by another driver","activeConnections":1}}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `String` | Human-readable description of why the session is locked |
+| `activeConnections` | `Int` | Number of active connections in the current session |
+
 ### info
 
 Sent after successful authentication. Contains device and app metadata.
 
 ```json
 {"info":{"_0":{
-  "protocolVersion":"3.0",
+  "protocolVersion":"3.1",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -578,7 +605,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "3.0") |
+| `protocolVersion` | `String` | Protocol version (e.g., "3.1") |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
@@ -869,14 +896,14 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 ```
 # Client connects to fd9a:6190:eed7::1:1455
 
-# Server sends auth challenge (v3.0)
+# Server sends auth challenge
 {"authRequired":{}}
 
 # Client authenticates
 {"authenticate":{"_0":{"token":"my-secret-token"}}}
 
 # Server sends info after successful auth
-{"info":{"_0":{"protocolVersion":"3.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
+{"info":{"_0":{"protocolVersion":"3.1","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":1455,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
@@ -953,18 +980,99 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 {"screen":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
 ```
 
+### AuthenticatePayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | `String` | Auth token for driver identification |
+| `forceSession` | `Bool?` | When `true`, forcibly takes over any existing session (v3.1). Omitted or `null` for normal auth. |
+| `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
+
+### SessionLockedPayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `message` | `String` | Human-readable description |
+| `activeConnections` | `Int` | Number of active connections in the current session |
+
 ## Implementation Notes
 
 ### Authentication
 
-Protocol v3.0 requires token-based authentication for all connections:
+Token-based authentication is required for all connections:
 
 1. Server sends `authRequired` immediately on TCP connect
 2. Client must respond with `authenticate` containing the correct token
-3. On success, server sends `info` and the session proceeds normally
-4. On failure, server sends `authFailed` and disconnects after a brief delay
+3. On success and session acquired, server sends `info` and the session proceeds normally
+4. On auth failure, server sends `authFailed` and disconnects after a brief delay
+5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
 
 The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+
+### Session Locking
+
+Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control an InsideMan host at a time.
+
+**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` and `watch` maintain persistent connections. The session concept spans multiple sequential connections from the same driver.
+
+**Driver Identity**: The server identifies drivers using a two-tier approach:
+1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var
+2. `token` as fallback (when `driverId` is absent) — all same-token connections are one "driver"
+
+This maintains backward compatibility: existing clients without `driverId` use token-based identity. Setting `BUTTONHEIST_DRIVER_ID` enables multiple drivers sharing the same auth token to be distinguished.
+
+#### Session Lifecycle
+
+1. **Claim** — The first authenticated client's driver identity becomes the active session
+2. **Join** — Subsequent connections with the **same driver identity** are allowed (same driver, different commands)
+3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected
+4. **Release timer** — When the last connection from the session holder disconnects, a configurable timer starts (default: 30 seconds)
+5. **Release** — Timer fires → session clears → next driver can claim
+6. **Cancel timer** — Same-token reconnect within the timeout window cancels the release timer
+7. **Force takeover** — `forceSession: true` in the auth payload evicts the current session holder immediately
+
+```
+Driver A (token: "abc")                Server                    Driver B (token: "xyz")
+   │                                     │                              │
+   │── authenticate(token:"abc") ───────►│                              │
+   │◄── info (session claimed) ─────────│                              │
+   │                                     │                              │
+   │                                     │◄── authenticate(token:"xyz") │
+   │                                     │── sessionLocked ────────────►│
+   │                                     │── disconnect ───────────────►│
+   │                                     │                              │
+   │── TCP Close ──────────────────────►│                              │
+   │                       [30s timer starts]                           │
+   │                       [30s timer fires → session released]         │
+   │                                     │                              │
+   │                                     │◄── authenticate(token:"xyz") │
+   │                                     │── info (session claimed) ───►│
+```
+
+#### Force Takeover
+
+A client can force-take a session by sending `forceSession: true` in the authenticate payload. This immediately evicts all connections from the current session holder and claims the session.
+
+```
+Driver A (token: "abc")                Server                    Driver B (token: "xyz")
+   │   [active session]                  │                              │
+   │                                     │◄── authenticate(forceSession:true, token:"xyz")
+   │◄── [TCP disconnected] ────────────│                              │
+   │                                     │── info (session claimed) ───►│
+```
+
+From the CLI, use the `--force` flag on any command:
+```bash
+buttonheist action --identifier loginButton --force
+buttonheist session --force
+```
+
+#### Configuration
+
+The session release timeout (time after last connection disconnects before the session is released) is configurable:
+
+- **Environment variable**: `INSIDEMAN_SESSION_TIMEOUT` (in seconds)
+- **Default**: 30 seconds
 
 ### UI Approval Flow
 

@@ -235,7 +235,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
             }
         }
 
-        server.onDataReceived = { _, _ in
+        server.onDataReceived = { _, _, _ in
             // This callback means the client is authenticated and can send messages
             authenticatedMessageReceived.fulfill()
         }
