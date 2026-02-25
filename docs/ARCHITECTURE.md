@@ -90,14 +90,25 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 **Architecture**:
 ```
-InsideMan (singleton, @MainActor)
+InsideMan (singleton, @MainActor) — coordinator split across extension files:
+│   InsideMan.swift              — core server lifecycle, client dispatch
+│   InsideMan+Accessibility.swift — hierarchy parsing, element conversion, delta computation
+│   InsideMan+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
+│   InsideMan+AutoStart.swift    — ObjC +load auto-start bridge
+│   InsideMan+Polling.swift      — polling loop, interface broadcasting
+│   InsideMan+Screen.swift       — screen capture and broadcasting
+│
 ├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
-├── Interactive Object Cache (weak references to accessibility nodes, keyed by traversal index)
-├── TheSafecracker (gesture simulation + text input, used as fallback)
+├── ElementStore protocol (exposes cachedElements + interactiveObjects to TheSafecracker)
+├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
+│   │   TheSafecracker.swift             — touch primitives, keyboard helpers
+│   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures
+│   │   TheSafecracker+Elements.swift    — element resolution, point resolution
+│   │   TheSafecracker+TextEntry.swift   — text typing and deletion
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
@@ -238,12 +249,12 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 
 **Architecture**:
 ```
-HeistClient (ObservableObject, @MainActor)
+HeistClient (@Observable, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
 │   └── NWConnection (service resolution + data transport)
-└── Published Properties
+└── Observable Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
@@ -254,7 +265,7 @@ HeistClient (ObservableObject, @MainActor)
 
 **Dual API Design**:
 
-1. **SwiftUI (Reactive)**: `@Published` properties trigger view updates
+1. **SwiftUI (Reactive)**: `@Observable` properties trigger view updates automatically
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
@@ -375,50 +386,34 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
    └── Capture and broadcast screen
 ```
 
-### Action Flow (accessibility actions)
+### Action Flow (all interactions)
+
+All interactions (accessibility actions, touch gestures, text entry) follow the same
+`performInteraction` pattern in InsideMan:
 
 ```
-1. Client sends activate / increment / decrement / customAction message
+1. Client sends action/gesture/text message
 
-2. InsideMan receives message
+2. InsideMan.performInteraction()
    └── refreshAccessibilityData() → re-parse hierarchy + rebuild interactive cache
-   └── Find element by identifier or order index
-   └── Resolve traversal index → look up live NSObject in interactiveObjects cache
+   └── snapshotElements() → capture before-state for delta computation
+   └── Delegate to TheSafecracker.execute*() → returns InteractionResult
 
-3. Dispatch via live object reference
-   └── activate:  object.accessibilityActivate()
-   └── increment: object.accessibilityIncrement()
-   └── decrement: object.accessibilityDecrement()
-   └── custom:    find UIAccessibilityCustomAction by name → call handler or target/selector
+3. TheSafecracker resolves target and executes
+   └── Reads element cache via ElementStore protocol (weak back-reference to InsideMan)
+   └── For accessibility actions (activate, increment, decrement, customAction):
+   │     Resolve element → call accessibilityActivate/Increment/Decrement on live NSObject
+   │     Activate fallback: if accessibilityActivate() returns false → synthetic tap
+   └── For touch gestures (tap, longPress, swipe, drag, pinch, rotate, etc.):
+   │     Resolve target point (from element activation point or explicit coordinates)
+   │     touchTap with element target: try accessibilityActivate() first, fall back to synthetic
+   │     Dispatch UITouch + IOHIDEvent via UIApplication.sendEvent()
+   └── For text entry (typeText):
+         Inject text via UIKeyboardImpl → refresh elements → read back field value
 
-4. Fallback (activate only): if accessibilityActivate() returns false
-   └── TheSafecracker.tap(at: activationPoint) → synthetic touch injection
-
-5. InsideMan sends actionResult
-   └── success: true/false
-   └── method: activate / increment / decrement / customAction / syntheticTap
-   └── Show TapVisualizerView overlay on success
-```
-
-### Action Flow (touch gestures)
-
-```
-1. Client sends touch gesture message (touchTap, touchDrag, touchPinch, etc.)
-
-2. InsideMan receives message
-   └── Resolve target point (from element activation point or explicit coordinates)
-   └── For element targets: refreshAccessibilityData(), find element, get activation point
-   └── touchTap with element target: try accessibilityActivate() first, fall back to synthetic
-
-3. TheSafecracker performs gesture
-   └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
-   └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
-   └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()
-
-4. InsideMan sends actionResult
-   └── success: true/false
-   └── method: activate / syntheticTap / syntheticDrag / syntheticPinch / etc.
-   └── message: optional error description
+4. InsideMan wraps InteractionResult with InterfaceDelta
+   └── Compute delta (noChange / valuesChanged / elementsChanged / screenChanged)
+   └── Send actionResult to client
    └── Show TapVisualizerView overlay on successful taps
 ```
 
@@ -457,7 +452,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Interface updates debounced by 300ms
 
 ### HeistClient (macOS)
-- `@MainActor` for SwiftUI `@Published` properties
+- `@MainActor` for SwiftUI `@Observable` properties
 - NWBrowser for discovery on main queue
 - NWConnection for data transport
 - Message processing dispatched to main actor

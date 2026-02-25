@@ -23,6 +23,31 @@ extension InsideMan {
         return (image, bounds)
     }
 
+    // MARK: - Screen Request Handler
+
+    func handleScreen(respond: @escaping (Data) -> Void) {
+        serverLog("Screen requested")
+
+        guard let (image, bounds) = captureScreen() else {
+            sendMessage(.error("Could not access app window"), respond: respond)
+            return
+        }
+
+        guard let pngData = image.pngData() else {
+            sendMessage(.error("Failed to encode screen as PNG"), respond: respond)
+            return
+        }
+
+        let payload = ScreenPayload(
+            pngData: pngData.base64EncodedString(),
+            width: bounds.width,
+            height: bounds.height
+        )
+
+        sendMessage(.screen(payload), respond: respond)
+        serverLog("Screen sent: \(pngData.count) bytes")
+    }
+
     func broadcastScreen() {
         guard !subscribedClients.isEmpty else { return }
         guard let (image, bounds) = captureScreen(),

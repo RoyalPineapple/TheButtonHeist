@@ -30,7 +30,9 @@
 		6EAB437364F814A6FA04C159 /* ServerMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E28C5885B806613473337AE /* ServerMessageTests.swift */; };
 		739C806ACE0F65800CB24918 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		7665B7DBD2FFA0E0398E24E0 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD7FEDBFBAA5496825E0A9F /* ServerMessages.swift */; };
-		797BE2FD8AB6B95E8BB89612 /* InsideMan+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E75E8C5B37D2F0AF2B4BE5 /* InsideMan+Actions.swift */; };
+		AA1B0001AAAA000100000001 /* TheSafecracker+Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */; };
+		AA1B0001AAAA000100000002 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */; };
+		AA1B0001AAAA000100000003 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
 		7AA7540D74C2A550ABD18739 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */; };
@@ -52,8 +54,6 @@
 		CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */; };
 		CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */; };
 		D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* TapVisualizerView.swift */; };
-		D863FE964F383465EFFEF739 /* InsideMan+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1B0392B45E39649F1C67D4 /* InsideMan+TextEntry.swift */; };
-		E66B78022863C6DA4383437D /* InsideMan+Gestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30F75CBAD8595E17408072A6 /* InsideMan+Gestures.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D27D93EA5484662C986D92 /* TheSafecracker.swift */; };
 		F373FAE739EC513AF5B57332 /* InsideMan+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCED02415445147118474E0D /* InsideMan+Screen.swift */; };
@@ -210,11 +210,12 @@
 		20E3B7E8282516E4675C42F5 /* InsideMan+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+AutoStart.swift"; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
 		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		30F75CBAD8595E17408072A6 /* InsideMan+Gestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Gestures.swift"; sourceTree = "<group>"; };
+		AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Elements.swift"; sourceTree = "<group>"; };
+		AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
+		AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
 		338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
 		3C1F25ADDEF86D35E12406EB /* HeistClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClient.swift; sourceTree = "<group>"; };
 		40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
-		47E75E8C5B37D2F0AF2B4BE5 /* InsideMan+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Actions.swift"; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -230,7 +231,6 @@
 		8B7BC6F50889828C130CFD1A /* ButtonHeist-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeist-Info.plist"; sourceTree = "<group>"; };
 		8BE7185BD37A782C3D7CCC0A /* InsideMan-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "InsideMan-Info.plist"; sourceTree = "<group>"; };
 		8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
-		8E1B0392B45E39649F1C67D4 /* InsideMan+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+TextEntry.swift"; sourceTree = "<group>"; };
 		8E28C5885B806613473337AE /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
 		9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
 		96B4860B52B50A1AF596A086 /* TheGoods.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheGoods.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -403,19 +403,19 @@
 			children = (
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
 				D95B0A93097A3389641F9A72 /* InsideMan+Accessibility.swift */,
-				47E75E8C5B37D2F0AF2B4BE5 /* InsideMan+Actions.swift */,
 				C1D930F31F463F91F6BEDB9F /* InsideMan+Animation.swift */,
 				20E3B7E8282516E4675C42F5 /* InsideMan+AutoStart.swift */,
-				30F75CBAD8595E17408072A6 /* InsideMan+Gestures.swift */,
 				776F389A8B76ABE14AD9AE77 /* InsideMan+Polling.swift */,
 				BCED02415445147118474E0D /* InsideMan+Screen.swift */,
-				8E1B0392B45E39649F1C67D4 /* InsideMan+TextEntry.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
 				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
 				CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */,
 				13D27D93EA5484662C986D92 /* TheSafecracker.swift */,
+				AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */,
+				AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */,
+				AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */,
 			);
 			path = InsideMan;
 			sourceTree = "<group>";
@@ -897,19 +897,19 @@
 			files = (
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
 				B57AD00DD05292C8585253D6 /* InsideMan+Accessibility.swift in Sources */,
-				797BE2FD8AB6B95E8BB89612 /* InsideMan+Actions.swift in Sources */,
 				7BE4C74AF0BEF0500EBAD37F /* InsideMan+Animation.swift in Sources */,
 				919A35A31290DCADBBB4FD3C /* InsideMan+AutoStart.swift in Sources */,
-				E66B78022863C6DA4383437D /* InsideMan+Gestures.swift in Sources */,
 				0B24A1918B577BF6F3A21215 /* InsideMan+Polling.swift in Sources */,
 				F373FAE739EC513AF5B57332 /* InsideMan+Screen.swift in Sources */,
-				D863FE964F383465EFFEF739 /* InsideMan+TextEntry.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
 				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
 				CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */,
 				EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */,
+				AA1B0001AAAA000100000001 /* TheSafecracker+Elements.swift in Sources */,
+				AA1B0001AAAA000100000002 /* TheSafecracker+Actions.swift in Sources */,
+				AA1B0001AAAA000100000003 /* TheSafecracker+TextEntry.swift in Sources */,
 				5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

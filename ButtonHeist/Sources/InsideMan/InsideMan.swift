@@ -12,10 +12,25 @@ func serverLog(_ message: String) {
     NSLog("[InsideMan] %@", message)
 }
 
+/// Weak reference wrapper for interactive accessibility objects.
+struct WeakObject {
+    weak var object: NSObject?
+}
+
+/// Provides access to the parsed accessibility element cache.
+/// InsideMan owns the data; TheSafecracker reads it to resolve interaction targets
+/// and can trigger a refresh when it needs fresh data (e.g. after typing).
+@MainActor
+protocol ElementStore: AnyObject {
+    var cachedElements: [AccessibilityElement] { get }
+    var interactiveObjects: [Int: WeakObject] { get }
+    @discardableResult func refreshElements() -> Bool
+}
+
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor
-public final class InsideMan {
+public final class InsideMan: ElementStore {
 
     // MARK: - Singleton
 
@@ -40,12 +55,6 @@ public final class InsideMan {
     let theSafecracker = TheSafecracker()
     var cachedElements: [AccessibilityElement] = []
 
-    // MARK: - Interactive Object Storage
-
-    struct WeakObject {
-        weak var object: NSObject?
-    }
-
     /// Weak references to interactive accessibility objects from the last parse,
     /// keyed by traversal index.
     var interactiveObjects: [Int: WeakObject] = [:]
@@ -69,6 +78,13 @@ public final class InsideMan {
         self.port = port
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
+        self.theSafecracker.elementStore = self
+    }
+
+    // MARK: - ElementStore Conformance
+
+    func refreshElements() -> Bool {
+        refreshAccessibilityData() != nil
     }
 
     // MARK: - Public Methods
@@ -283,46 +299,76 @@ public final class InsideMan {
             serverLog("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
         case .ping:
             sendMessage(.pong, respond: respond)
-
-        // Action handling
-        case .activate(let target):
-            await handleActivate(target, respond: respond)
-        case .increment(let target):
-            await handleIncrement(target, respond: respond)
-        case .decrement(let target):
-            await handleDecrement(target, respond: respond)
-        case .performCustomAction(let target):
-            await handleCustomAction(target, respond: respond)
         case .requestScreen:
             handleScreen(respond: respond)
-
-        // Touch gesture handling
-        case .touchTap(let target):
-            await handleTouchTap(target, respond: respond)
-        case .touchLongPress(let target):
-            await handleTouchLongPress(target, respond: respond)
-        case .touchSwipe(let target):
-            await handleTouchSwipe(target, respond: respond)
-        case .touchDrag(let target):
-            await handleTouchDrag(target, respond: respond)
-        case .touchPinch(let target):
-            await handleTouchPinch(target, respond: respond)
-        case .touchRotate(let target):
-            await handleTouchRotate(target, respond: respond)
-        case .touchTwoFingerTap(let target):
-            await handleTouchTwoFingerTap(target, respond: respond)
-        case .touchDrawPath(let target):
-            await handleTouchDrawPath(target, respond: respond)
-        case .touchDrawBezier(let target):
-            await handleTouchDrawBezier(target, respond: respond)
-        case .typeText(let target):
-            await handleTypeText(target, respond: respond)
-        case .editAction(let target):
-            await handleEditAction(target, respond: respond)
-        case .resignFirstResponder:
-            await handleResignFirstResponder(respond: respond)
         case .waitForIdle(let target):
             await handleWaitForIdle(target, respond: respond)
+
+        // Interaction dispatch — TheSafecracker handles all actions, gestures, and text entry
+        case .activate(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeActivate(target) }
+        case .increment(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeIncrement(target) }
+        case .decrement(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeDecrement(target) }
+        case .performCustomAction(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeCustomAction(target) }
+        case .editAction(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeEditAction(target) }
+        case .resignFirstResponder:
+            await performInteraction(respond: respond) { self.theSafecracker.executeResignFirstResponder() }
+        case .touchTap(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeTap(target) }
+        case .touchLongPress(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeLongPress(target) }
+        case .touchSwipe(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeSwipe(target) }
+        case .touchDrag(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrag(target) }
+        case .touchPinch(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executePinch(target) }
+        case .touchRotate(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeRotate(target) }
+        case .touchTwoFingerTap(let target):
+            await performInteraction(respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
+        case .touchDrawPath(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawPath(target) }
+        case .touchDrawBezier(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
+        case .typeText(let target):
+            await performInteraction(respond: respond) { await self.theSafecracker.executeTypeText(target) }
+        }
+    }
+
+    // MARK: - Interaction Dispatch
+
+    /// Standard interaction pattern: refresh → snapshot → execute → delta → respond
+    /// TheSafecracker handles all interaction concerns (touch visualization, element refresh for read-back).
+    private func performInteraction(
+        respond: @escaping (Data) -> Void,
+        interaction: () async -> TheSafecracker.InteractionResult
+    ) async {
+        refreshAccessibilityData()
+        let beforeElements = snapshotElements()
+
+        let result = await interaction()
+
+        if result.success {
+            let actionResult = await actionResultWithDelta(
+                success: true,
+                method: result.method,
+                message: result.message,
+                value: result.value,
+                beforeElements: beforeElements
+            )
+            sendMessage(.actionResult(actionResult), respond: respond)
+        } else {
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: result.method,
+                message: result.message,
+                value: result.value
+            )), respond: respond)
         }
     }
 

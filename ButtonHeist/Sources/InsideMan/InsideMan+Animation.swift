@@ -54,6 +54,35 @@ extension InsideMan {
         return false
     }
 
+    // MARK: - Wait For Idle Handler
+
+    func handleWaitForIdle(_ target: WaitForIdleTarget, respond: @escaping (Data) -> Void) async {
+        let timeout = min(target.timeout ?? 5.0, 60.0)
+        let settled = await waitForAnimationsToSettle(timeout: timeout)
+
+        guard let hierarchyTree = refreshAccessibilityData() else {
+            sendMessage(.error("Could not access root view"), respond: respond)
+            return
+        }
+
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+
+        let result = ActionResult(
+            success: true,
+            method: .waitForIdle,
+            message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: elements.count,
+                newInterface: payload
+            ),
+            animating: settled ? nil : true
+        )
+        sendMessage(.actionResult(result), respond: respond)
+    }
+
     // MARK: - Action Result with Delta
 
     /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
