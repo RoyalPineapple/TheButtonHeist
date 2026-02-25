@@ -24,6 +24,9 @@ public final class DeviceConnection {
     public var onInterface: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
+    public var onRecordingStarted: (() -> Void)?
+    public var onRecording: ((RecordingPayload) -> Void)?
+    public var onRecordingError: ((String) -> Void)?
     public var onError: ((String) -> Void)?
     public var onAuthApproved: ((String) -> Void)?
 
@@ -180,6 +183,17 @@ public final class DeviceConnection {
         case .screen(let payload):
             debug("Received screen: \(payload.pngData.count) chars base64")
             onScreen?(payload)
+        case .recordingStarted:
+            debug("Recording started")
+            onRecordingStarted?()
+        case .recordingStopped:
+            debug("Recording stop acknowledged")
+        case .recording(let payload):
+            debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
+            onRecording?(payload)
+        case .recordingError(let message):
+            debug("Recording error: \(message)")
+            onRecordingError?(message)
         }
     }
 }
