@@ -48,6 +48,9 @@ final class Stakeout {
     private static let interactionOverlayDuration: TimeInterval = 0.5
     private static let overlayDiameter: CGFloat = 40.0
 
+    // Interaction recording — wire-level command/result log
+    private(set) var interactionLog: [InteractionEvent] = []
+
     // Frame provider closure — set by InsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
 
@@ -131,6 +134,7 @@ final class Stakeout {
         startTime = Date()
         lastFrameTime = .zero
         lastActivityTime = Date()
+        interactionLog = []
         state = .recording
 
         stakeoutLog("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
@@ -191,6 +195,18 @@ final class Stakeout {
     func captureActionFrame() {
         guard state == .recording else { return }
         captureAndAppendFrame()
+    }
+
+    /// Elapsed time since recording started, in seconds.
+    var recordingElapsed: Double {
+        guard let start = startTime else { return 0 }
+        return Date().timeIntervalSince(start)
+    }
+
+    /// Append an interaction event to the recording log.
+    func recordInteraction(event: InteractionEvent) {
+        guard state == .recording else { return }
+        interactionLog.append(event)
     }
 
     // MARK: - Frame Capture
@@ -344,6 +360,7 @@ final class Stakeout {
         let width = Int(screenBounds.width)
         let height = Int(screenBounds.height)
         let url = outputURL
+        let interactions = self.interactionLog
 
         writer.finishWriting { [weak self] in
             DispatchQueue.main.async {
@@ -372,7 +389,8 @@ final class Stakeout {
                     fps: fps,
                     startTime: startTime,
                     endTime: endTime,
-                    stopReason: reason
+                    stopReason: reason,
+                    interactionLog: interactions.isEmpty ? nil : interactions
                 )
 
                 stakeoutLog("Recording complete: \(frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")
@@ -398,6 +416,7 @@ final class Stakeout {
         pixelBufferAdaptor = nil
 
         activeInteractions = []
+        interactionLog = []
 
         // Clean up temp file
         if let url = outputURL {

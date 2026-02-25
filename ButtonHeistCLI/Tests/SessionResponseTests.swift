@@ -333,6 +333,43 @@ final class SessionResponseTests: XCTestCase {
         XCTAssertEqual(dict["stopReason"] as? String, "fileSizeLimit")
     }
 
+    // MARK: - Interaction Count Tests
+
+    func testRecordingWithInteractionsHumanFormatting() {
+        let payload = makeRecordingPayloadWithInteractions(count: 5)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let output = response.humanFormatted()
+        XCTAssertTrue(output.contains("Interactions: 5"))
+    }
+
+    func testRecordingDataWithInteractionsHumanFormatting() {
+        let payload = makeRecordingPayloadWithInteractions(count: 3)
+        let response = SessionResponse.recordingData(payload: payload)
+        let output = response.humanFormatted()
+        XCTAssertTrue(output.contains("Interactions: 3"))
+    }
+
+    func testRecordingWithoutInteractionsNoInteractionLine() {
+        let payload = makeRecordingPayload(stopReason: .manual)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let output = response.humanFormatted()
+        XCTAssertFalse(output.contains("Interactions:"))
+    }
+
+    func testRecordingJsonInteractionCount() {
+        let payload = makeRecordingPayloadWithInteractions(count: 7)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()!
+        XCTAssertEqual(dict["interactionCount"] as? Int, 7)
+    }
+
+    func testRecordingJsonZeroInteractionCount() {
+        let payload = makeRecordingPayload(stopReason: .manual)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()!
+        XCTAssertEqual(dict["interactionCount"] as? Int, 0)
+    }
+
     // MARK: - Helpers
 
     private func makeDevice(name: String, simulatorUDID: String? = nil) -> DiscoveredDevice {
@@ -356,6 +393,31 @@ final class SessionResponseTests: XCTestCase {
             startTime: start,
             endTime: start.addingTimeInterval(5.0),
             stopReason: stopReason
+        )
+    }
+
+    private func makeRecordingPayloadWithInteractions(count: Int) -> RecordingPayload {
+        let start = Date()
+        let events = (0..<count).map { i in
+            InteractionEvent(
+                timestamp: Double(i),
+                command: .activate(ActionTarget(order: i)),
+                result: ActionResult(success: true, method: .activate),
+                interfaceBefore: Interface(timestamp: start, elements: []),
+                interfaceAfter: Interface(timestamp: start, elements: [])
+            )
+        }
+        return RecordingPayload(
+            videoData: "AAAAIGZ0eXBpc29t",
+            width: 390,
+            height: 844,
+            duration: 5.0,
+            frameCount: 40,
+            fps: 8,
+            startTime: start,
+            endTime: start.addingTimeInterval(5.0),
+            stopReason: .manual,
+            interactionLog: events
         )
     }
 }
@@ -416,16 +478,24 @@ enum SessionResponse {
 
         case .recording(let path, let payload):
             let dur = String(format: "%.1f", payload.duration)
-            return "✓ Recording saved: \(path)  " +
+            var out = "✓ Recording saved: \(path)  " +
                 "(\(payload.width)×\(payload.height), \(dur)s, " +
                 "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                out += "\n  Interactions: \(log.count)"
+            }
+            return out
 
         case .recordingData(let payload):
             let sizeKB = payload.videoData.count * 3 / 4 / 1024
             let dur = String(format: "%.1f", payload.duration)
-            return "✓ Recording captured " +
+            var out = "✓ Recording captured " +
                 "(\(payload.width)×\(payload.height), \(dur)s, " +
                 "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                out += "\n  Interactions: \(log.count)"
+            }
+            return out
         }
     }
 
@@ -528,7 +598,7 @@ enum SessionResponse {
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
 
         case .recording(let path, let payload):
-            return [
+            var d: [String: Any] = [
                 "status": "ok",
                 "path": path,
                 "width": payload.width,
@@ -538,9 +608,11 @@ enum SessionResponse {
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
             ]
+            d["interactionCount"] = payload.interactionLog?.count ?? 0
+            return d
 
         case .recordingData(let payload):
-            return [
+            var d: [String: Any] = [
                 "status": "ok",
                 "videoData": payload.videoData,
                 "width": payload.width,
@@ -550,6 +622,8 @@ enum SessionResponse {
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
             ]
+            d["interactionCount"] = payload.interactionLog?.count ?? 0
+            return d
         }
     }
 

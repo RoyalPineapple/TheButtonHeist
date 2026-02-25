@@ -191,4 +191,130 @@ final class RecordingPayloadTests: XCTestCase {
             XCTFail("Expected recordingError, got \(decoded)")
         }
     }
+
+    // MARK: - InteractionEvent
+
+    func testInteractionEventActivateRoundTrip() throws {
+        let event = InteractionEvent(
+            timestamp: 1.5,
+            command: .activate(ActionTarget(identifier: "loginButton")),
+            result: ActionResult(success: true, method: .activate),
+            interfaceBefore: Interface(timestamp: Date(), elements: []),
+            interfaceAfter: Interface(timestamp: Date(), elements: [])
+        )
+
+        let data = try JSONEncoder().encode(event)
+        let decoded = try JSONDecoder().decode(InteractionEvent.self, from: data)
+
+        XCTAssertEqual(decoded.timestamp, 1.5)
+        if case .activate(let target) = decoded.command {
+            XCTAssertEqual(target.identifier, "loginButton")
+        } else {
+            XCTFail("Expected activate command")
+        }
+        XCTAssertTrue(decoded.result.success)
+        XCTAssertEqual(decoded.result.method, .activate)
+    }
+
+    func testInteractionEventTouchTapRoundTrip() throws {
+        let element = HeistElement(
+            order: 0, description: "Button", label: "OK", value: nil,
+            identifier: "okBtn", hint: nil, traits: ["button"],
+            frameX: 10, frameY: 20, frameWidth: 80, frameHeight: 44,
+            activationPointX: 50, activationPointY: 42,
+            respondsToUserInteraction: true, customContent: nil, actions: [.activate]
+        )
+        let event = InteractionEvent(
+            timestamp: 3.2,
+            command: .touchTap(TouchTapTarget(elementTarget: ActionTarget(identifier: "okBtn"))),
+            result: ActionResult(success: true, method: .syntheticTap),
+            interfaceBefore: Interface(timestamp: Date(), elements: [element]),
+            interfaceAfter: Interface(timestamp: Date(), elements: [element])
+        )
+
+        let data = try JSONEncoder().encode(event)
+        let decoded = try JSONDecoder().decode(InteractionEvent.self, from: data)
+
+        XCTAssertEqual(decoded.timestamp, 3.2)
+        XCTAssertEqual(decoded.result.method, .syntheticTap)
+        XCTAssertEqual(decoded.interfaceBefore.elements.count, 1)
+        XCTAssertEqual(decoded.interfaceBefore.elements.first?.identifier, "okBtn")
+    }
+
+    func testRecordingPayloadWithInteractionLog() throws {
+        let start = Date()
+        let end = start.addingTimeInterval(5.0)
+        let event = InteractionEvent(
+            timestamp: 1.0,
+            command: .activate(ActionTarget(order: 3)),
+            result: ActionResult(success: true, method: .activate),
+            interfaceBefore: Interface(timestamp: start, elements: []),
+            interfaceAfter: Interface(timestamp: start, elements: [])
+        )
+        let payload = RecordingPayload(
+            videoData: "AAAAIGZ0eXBpc29t",
+            width: 390, height: 844,
+            duration: 5.0, frameCount: 40, fps: 8,
+            startTime: start, endTime: end,
+            stopReason: .manual,
+            interactionLog: [event]
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(payload)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(RecordingPayload.self, from: data)
+
+        XCTAssertNotNil(decoded.interactionLog)
+        XCTAssertEqual(decoded.interactionLog?.count, 1)
+        XCTAssertEqual(decoded.interactionLog?.first?.timestamp, 1.0)
+    }
+
+    func testRecordingPayloadNilInteractionLog() throws {
+        let start = Date()
+        let end = start.addingTimeInterval(5.0)
+        let payload = RecordingPayload(
+            videoData: "AAAAIGZ0eXBpc29t",
+            width: 390, height: 844,
+            duration: 5.0, frameCount: 40, fps: 8,
+            startTime: start, endTime: end,
+            stopReason: .manual
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(payload)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(RecordingPayload.self, from: data)
+
+        XCTAssertNil(decoded.interactionLog)
+    }
+
+    func testRecordingPayloadBackwardCompatDecoding() throws {
+        // Simulate JSON from an older server that doesn't include interactionLog
+        let json = """
+        {
+            "videoData": "AAAAIGZ0eXBpc29t",
+            "width": 390,
+            "height": 844,
+            "duration": 5.0,
+            "frameCount": 40,
+            "fps": 8,
+            "startTime": 0,
+            "endTime": 5,
+            "stopReason": "manual"
+        }
+        """
+        let data = json.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(RecordingPayload.self, from: data)
+
+        XCTAssertEqual(decoded.videoData, "AAAAIGZ0eXBpc29t")
+        XCTAssertEqual(decoded.width, 390)
+        XCTAssertNil(decoded.interactionLog)
+    }
 }
