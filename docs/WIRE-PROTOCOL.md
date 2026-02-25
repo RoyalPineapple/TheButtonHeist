@@ -672,6 +672,7 @@ Container types:
 - `"list"` - List container (affects rotor navigation)
 - `"landmark"` - Landmark container (affects rotor navigation)
 - `"dataTable"` - Data table container
+- `"tabBar"` - Tab bar container
 
 ### ActionTarget
 

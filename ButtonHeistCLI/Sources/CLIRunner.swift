@@ -1,54 +1,6 @@
 import Foundation
 import Darwin
-import Network
 import ButtonHeist
-
-// MARK: - Output Helpers
-
-/// Write to stderr (status messages)
-func logStatus(_ message: String) {
-    fputs("\(message)\n", stderr)
-}
-
-/// Write to stdout (data output)
-func writeOutput(_ message: String) {
-    print(message)
-    fflush(stdout)
-}
-
-/// Format an ActionResult as a JSON string matching the session protocol format.
-func formatActionResultJSON(_ result: ActionResult) -> String {
-    var d: [String: Any] = [
-        "status": result.success ? "ok" : "error",
-        "method": result.method.rawValue,
-    ]
-    if let msg = result.message { d["message"] = msg }
-    if let value = result.value { d["value"] = value }
-    if result.animating == true { d["animating"] = true }
-    if let delta = result.interfaceDelta {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        if let data = try? encoder.encode(delta),
-           let deltaObj = try? JSONSerialization.jsonObject(with: data) {
-            d["delta"] = deltaObj
-        }
-    }
-    if let data = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
-       let json = String(data: data, encoding: .utf8) {
-        return json
-    }
-    return "{\"status\":\"error\",\"message\":\"Serialization failed\"}"
-}
-
-// MARK: - Exit Codes
-
-enum ExitCode: Int32 {
-    case success = 0
-    case connectionFailed = 1
-    case noDeviceFound = 2
-    case timeout = 3
-    case unknown = 99
-}
 
 // MARK: - CLI Runner
 
@@ -85,15 +37,7 @@ final class CLIRunner {
             if !options.quiet {
                 logStatus("Connecting to \(host):\(port)...")
             }
-            let endpoint = NWEndpoint.hostPort(
-                host: NWEndpoint.Host(host),
-                port: NWEndpoint.Port(integerLiteral: port)
-            )
-            let device = DiscoveredDevice(
-                id: "\(host):\(port)",
-                name: "\(host):\(port)",
-                endpoint: endpoint
-            )
+            let device = DiscoveredDevice(host: host, port: port)
             client.connect(to: device)
         } else {
             if !options.quiet {

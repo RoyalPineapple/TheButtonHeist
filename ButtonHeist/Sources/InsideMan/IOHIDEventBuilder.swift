@@ -156,7 +156,7 @@ private func loadIOHIDFunctions() {
     ioHIDFunctionsLoaded = true
 
     guard let handle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW) else {
-        print("[IOHIDEventBuilder] Failed to load IOKit")
+        serverLog("[IOHIDEventBuilder] Failed to load IOKit")
         return
     }
 
