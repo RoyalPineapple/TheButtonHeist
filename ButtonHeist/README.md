@@ -51,7 +51,7 @@ The server that runs inside the iOS app. A `@MainActor` singleton that auto-star
 | `SyntheticTouchFactory.swift` | Creates `UITouch` instances by calling private UIKit methods via direct IMP invocation |
 | `SyntheticEventFactory.swift` | Creates fresh `UIEvent` objects per touch phase (iOS 26 compatible) |
 | `IOHIDEventBuilder.swift` | Low-level IOKit HID event creation via `dlsym`-loaded C function pointers |
-| `TapVisualizerView.swift` | Visual feedback overlay — shows a white circle at tap points that scales and fades |
+| `Fingerprints.swift` | Visual interaction feedback — fingerprint circles for taps and continuous gesture tracking (multi-finger) |
 
 ### Auto-Start
 
