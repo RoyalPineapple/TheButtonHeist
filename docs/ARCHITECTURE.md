@@ -6,65 +6,36 @@ This document describes the internal architecture of ButtonHeist and how its com
 
 ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
-1. **TheGoods** - Cross-platform shared types (messages, models)
+1. **TheScore** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
-3. **InsideMan** - iOS framework embedded in the app being inspected
+3. **InsideJob** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
 5. **buttonheist CLI** - Command-line tool for driving iOS apps (used by AI agents via Bash)
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                              macOS                                   │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐                                │
-│  │  AI Agent    │  │ Python/Shell │                                │
-│  │(Claude Code) │  │   Scripts    │                                │
-│  └──────┬───────┘  └──────┬───────┘                                │
-│         │ Bash tool calls  │                                        │
-│         └──────────────────┘                                        │
-│                  │                                                   │
-│         ┌────────┴────────┐                                         │
-│         │  buttonheist    │  CLI tool (per-command or session)      │
-│         │     (CLI)       │                                         │
-│         └────────┬────────┘                                         │
-│                  │                                                   │
-│         ┌────────┴────────┐                                         │
-│         │   ButtonHeist   │ (import ButtonHeist)                    │
-│         │   HeistClient   │                                         │
-│         └────────┬────────┘                                         │
-│                  │                                                   │
-│    ┌─────────────┼──────────────┐                                   │
-│    │             │              │                                   │
-│  ┌─┴───────┐  ┌─┴───────┐  ┌──┴────────┐                          │
-│  │ Device  │  │ Device  │  │   BSD     │                          │
-│  │Discovery│  │Connectn │  │  Socket   │                          │
-│  │(Browser)│  │  Mgmt   │  │  Client   │                          │
-│  └─────────┘  └─────────┘  └─────┬─────┘                          │
-│                Wheelman (networking)│                                │
-└────────────────────────────────────┼────────────────────────────────┘
-                                     │
-              WiFi (Bonjour + TCP) or USB (IPv6 + TCP)
-                                     │
-┌────────────────────────────────────┼────────────────────────────────┐
-│                     ┌──────────────┴──────────────┐                 │
-│                     │         InsideMan           │                 │
-│                     │        (Framework)          │                 │
-│                     └──────────────┬──────────────┘                 │
-│                                    │                                │
-│         ┌──────────────┬───────────┼───────────────┐                │
-│         │              │           │               │                │
-│   ┌─────┴─────┐  ┌────┴──────┐  ┌┴──────────┐  ┌─┴─────────┐      │
-│   │ NetService│  │SimpleSocket│  │   A11y   │  │TheSafecracker│      │
-│   │ (Bonjour) │  │Server(TCP)│  │  Parser  │  │(Gestures) │      │
-│   └───────────┘  └───────────┘  └──────────┘  └───────────┘      │
-│                Wheelman (networking)                                 │
-│                            iOS Device                                │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph mac["macOS"]
+        Agent["AI Agent<br>(Claude Code)"] -->|Bash tool calls| CLI
+        Scripts["Python/Shell<br>Scripts"] -->|Bash tool calls| CLI
+        CLI["buttonheist CLI"] --> HC["ButtonHeist<br>TheClient"]
+        HC --> DD["Device Discovery<br>(Wheelman)"]
+        HC --> DC["Device Connection<br>(Wheelman)"]
+        HC --> Socket["Socket Client<br>(Wheelman)"]
+    end
+
+    Socket <-->|"WiFi (Bonjour + TCP)<br>or USB (IPv6 + TCP)"| IJ
+
+    subgraph ios["iOS Device"]
+        IJ["InsideJob<br>Framework"] --> NS["NetService<br>(Bonjour)"]
+        IJ --> SS["SimpleSocketServer<br>(TCP)"]
+        IJ --> A11y["A11y Parser"]
+        IJ --> TSC["TheSafecracker<br>(Gestures)"]
+    end
 ```
 
 ## Component Details
 
-### TheGoods
+### TheScore
 
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
@@ -86,19 +57,19 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 - No platform-specific imports (UIKit/AppKit)
 - Protocol version 3.1 with token-based authentication and session locking
 
-### InsideMan
+### InsideJob
 
 **Purpose**: iOS server that captures and broadcasts UI element interface and handles remote interaction.
 
 **Architecture**:
 ```
-InsideMan (singleton, @MainActor) — coordinator split across extension files:
-│   InsideMan.swift              — core server lifecycle, client dispatch
-│   InsideMan+Accessibility.swift — hierarchy parsing, element conversion, delta computation
-│   InsideMan+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
-│   InsideMan+AutoStart.swift    — ObjC +load auto-start bridge
-│   InsideMan+Polling.swift      — polling loop, interface broadcasting
-│   InsideMan+Screen.swift       — screen capture, broadcasting, recording management
+InsideJob (singleton, @MainActor) — coordinator split across extension files:
+│   InsideJob.swift              — core server lifecycle, client dispatch
+│   InsideJob+Accessibility.swift — hierarchy parsing, element conversion, delta computation
+│   InsideJob+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
+│   InsideJob+AutoStart.swift    — ObjC +load auto-start bridge
+│   InsideJob+Polling.swift      — polling loop, interface broadcasting
+│   InsideJob+Screen.swift       — screen capture, broadcasting, recording management
 │
 ├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
@@ -128,20 +99,20 @@ InsideMan (singleton, @MainActor) — coordinator split across extension files:
 
 **Auto-Start Mechanism**:
 
-InsideMan uses ObjC `+load` for automatic initialization:
+InsideJob uses ObjC `+load` for automatic initialization:
 
 ```
-InsideManLoader/
-├── InsideManAutoStart.h  (public header)
-└── InsideManAutoStart.m  (+load implementation → InsideMan_autoStartFromLoad)
+ThePlant/
+├── ThePlantAutoStart.h  (public header)
+└── ThePlantAutoStart.m  (+load implementation → InsideJob_autoStartFromLoad)
 ```
 
 When the framework loads:
 1. `+load` is called automatically by the runtime
 2. Reads configuration from environment variables or Info.plist:
-   - `INSIDEMAN_DISABLE` / `InsideManDisableAutoStart` - skip startup
-   - `INSIDEMAN_POLLING_INTERVAL` / `InsideManPollingInterval` - update interval (default: 1.0s, min: 0.5s)
-3. Creates a Task on MainActor to configure and start InsideMan singleton
+   - `INSIDEJOB_DISABLE` / `InsideJobDisableAutoStart` - skip startup
+   - `INSIDEJOB_POLLING_INTERVAL` / `InsideJobPollingInterval` - update interval (default: 1.0s, min: 0.5s)
+3. Creates a Task on MainActor to configure and start InsideJob singleton
 4. Begins polling for interface changes
 
 **Threading Model**:
@@ -213,9 +184,9 @@ TheSafecracker (stateful, @MainActor)
 
 ### TheMuscle (Authentication & Connection Approval)
 
-**Purpose**: Manages client authentication, token persistence, and UI-based connection approval. Extracted from InsideMan to isolate auth concerns.
+**Purpose**: Manages client authentication, token persistence, and UI-based connection approval. Extracted from InsideJob to isolate auth concerns.
 
-**Token Persistence**: Auto-generated tokens are stored in UserDefaults (`InsideManAuthToken` key) so they survive app relaunches. Previously approved clients can reconnect without re-approval. When an explicit token is provided via `INSIDEMAN_TOKEN` or `InsideManToken` plist key, UserDefaults is not used.
+**Token Persistence**: Auto-generated tokens are stored in UserDefaults (`InsideJobAuthToken` key) so they survive app relaunches. Previously approved clients can reconnect without re-approval. When an explicit token is provided via `INSIDEJOB_TOKEN` or `InsideJobToken` plist key, UserDefaults is not used.
 
 **Token Invalidation**: `invalidateToken()` generates a new token and stores it in UserDefaults. All previously approved clients lose access and must re-authenticate.
 
@@ -226,16 +197,16 @@ TheSafecracker (stateful, @MainActor)
 - Track authenticated client count and IDs
 - Manage pending approval state
 - Session locking: single-driver exclusivity with dual-timer release
-  - **Disconnect timer** (`INSIDEMAN_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
-  - **Lease timer** (`INSIDEMAN_SESSION_LEASE`, default 30s): resets on each client ping, releases session and invalidates token if no pings received (handles hung connections)
+  - **Disconnect timer** (`INSIDEJOB_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
+  - **Lease timer** (`INSIDEJOB_SESSION_LEASE`, default 30s): resets on each client ping, releases session and invalidates token if no pings received (handles hung connections)
 - Track active session driver identity and connections
 - Force-takeover handling (evict existing session on `forceSession`)
 
-**Integration**: TheMuscle communicates back to InsideMan via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
+**Integration**: TheMuscle communicates back to InsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
 ### Screen Capture
 
-InsideMan captures the screen using `UIGraphicsImageRenderer`:
+InsideJob captures the screen using `UIGraphicsImageRenderer`:
 1. Finds the foreground window scene
 2. Uses `drawHierarchy(in:afterScreenUpdates:)` to capture the full visual hierarchy (including SwiftUI)
 3. Encodes as PNG, then base64
@@ -247,7 +218,7 @@ InsideMan captures the screen using `UIGraphicsImageRenderer`:
 The `Stakeout` class provides on-device screen recording as H.264/MP4:
 
 1. Client sends `startRecording` with optional configuration (fps, scale, timeouts)
-2. InsideMan creates a `Stakeout` instance with a frame capture closure
+2. InsideJob creates a `Stakeout` instance with a frame capture closure
 3. Stakeout uses `AVAssetWriter` with H.264 codec, encoding frames from `drawHierarchy` compositing
 4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video. Additionally, `Stakeout` composites fingerprint circles directly into frames via CGContext for interactions that complete between frame captures.
 5. Frames are captured at the configured FPS (default 8, range 1-15) using `afterScreenUpdates: false` to reduce main thread impact
@@ -262,20 +233,20 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 **Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
 
 **Key Types**:
-- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by InsideMan on iOS
+- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by InsideJob on iOS
 - `DeviceConnection` - TCP client with NWConnection service resolution and data transport
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier, tokenHash, instanceId)
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports TheGoods and Wheelman, provides the high-level `HeistClient` class.
+**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides the high-level `TheClient` class.
 
-**Usage**: `import ButtonHeist` gives access to all types (HeistClient, HeistElement, Interface, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (TheClient, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
-HeistClient (ObservableObject, @MainActor)
+TheClient (ObservableObject, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
@@ -295,14 +266,16 @@ HeistClient (ObservableObject, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, HeistClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
+**Auto-Subscribe on Connect**: When a connection is established, TheClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
 
 **Connection State Machine**:
-```
-disconnected ──connect()──► connecting ──success──► connected
-     ▲                          │                      │
-     │                          │                      │
-     └────────────disconnect()──┴──────────failure─────┘
+```mermaid
+stateDiagram-v2
+    [*] --> disconnected
+    disconnected --> connecting: connect()
+    connecting --> connected: success
+    connecting --> disconnected: failure
+    connected --> disconnected: disconnect() / failure
 ```
 
 ## Data Flow
@@ -338,28 +311,32 @@ Each CLI invocation is stateless — it discovers via Bonjour, connects, perform
 
 ### Discovery Flow
 
-```
-1. InsideMan loads (ObjC +load)
-   └── SimpleSocketServer.start(port: 0)  // OS-assigned
-   └── NetService.publish("_buttonheist._tcp")
-   │     Service name: "{AppName}#{instanceId}"
-   │     instanceId = INSIDEMAN_ID env var, or first 8 chars of per-launch UUID
-   └── NetService.setTXTRecord()
-         TXT keys: "simudid" (SIMULATOR_UDID), "tokenhash" (SHA256 prefix), "instanceid"
+```mermaid
+sequenceDiagram
+    participant IJ as InsideJob
+    participant SS as SimpleSocketServer
+    participant NS as NetService (Bonjour)
+    participant HC as TheClient
+    participant NB as NWBrowser
 
-2. HeistClient.startDiscovery()
-   └── NWBrowser.start(for: "_buttonheist._tcp")
+    IJ->>SS: start(port: 0)
+    Note over SS: OS-assigned port
+    IJ->>NS: publish("_buttonheist._tcp")
+    Note over NS: Service name: "{AppName}#{instanceId}"<br>instanceId = INSIDEJOB_ID or UUID prefix
+    IJ->>NS: setTXTRecord()
+    Note over NS: simudid, tokenhash, instanceid
 
-3. NWBrowser finds service
-   └── Extract TXT record: .bonjour(let txtRecord) → simulatorUDID, vendorIdentifier
-   └── HeistClient.discoveredDevices.append(device)
+    HC->>NB: start(for: "_buttonheist._tcp")
+    NB-->>HC: service found
+    Note over HC: Extract TXT record →<br>simulatorUDID, vendorIdentifier
+    HC->>HC: discoveredDevices.append(device)
 ```
 
 ### Multi-Instance Discovery
 
 When running multiple instances (e.g., multiple simulators), each instance has a unique identity:
 
-- **Instance ID**: Configurable via `INSIDEMAN_ID` env var, or defaults to first 8 chars of a per-launch UUID. Appears in the Bonjour service name (e.g., `MyApp#a1b2c3d4`) and TXT record.
+- **Instance ID**: Configurable via `INSIDEJOB_ID` env var, or defaults to first 8 chars of a per-launch UUID. Appears in the Bonjour service name (e.g., `MyApp#a1b2c3d4`) and TXT record.
 - **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
 - **Token Hash**: SHA256 hash prefix of the auth token. Published in the TXT record under key `tokenhash` for pre-connection filtering.
 
@@ -367,96 +344,120 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 
 ### Connection Flow
 
-```
-1. HeistClient.connect(to: device)
-   └── NWConnection resolves Bonjour service and connects
+```mermaid
+sequenceDiagram
+    participant HC as TheClient
+    participant IJ as InsideJob
+    participant TM as TheMuscle
 
-2. TCP connection established
-   └── InsideMan sends ServerMessage.authRequired
+    HC->>IJ: connect(to: device)
+    Note over HC,IJ: TCP connection established (NWConnection)
+    IJ-->>HC: authRequired
 
-3. HeistClient receives authRequired
-   └── Sends: authenticate(token)
+    HC->>IJ: authenticate(token)
 
-4. InsideMan validates token
-   └── On success: sends ServerMessage.info
-   └── On failure: sends ServerMessage.authFailed, disconnects
-   └── On empty token (auto-generated mode): triggers UI approval flow
+    alt Valid token
+        IJ-->>HC: info(ServerInfo)
+    else Invalid token
+        IJ-->>HC: authFailed
+        IJ-xHC: disconnect
+    else Empty token (auto-generated mode)
+        IJ->>TM: present approval UI
+        alt User taps Allow
+            TM-->>IJ: approved
+            IJ-->>HC: authApproved(token)
+            IJ-->>HC: info(ServerInfo)
+        else User taps Deny
+            TM-->>IJ: denied
+            IJ-->>HC: authFailed
+            IJ-xHC: disconnect
+        end
+    end
 
-4b. UI Approval Flow (when token is auto-generated and client sends empty token)
-   └── TheMuscle presents UIAlertController with Allow/Deny prompt
-   └── User taps Allow: sends ServerMessage.authApproved(token), then ServerMessage.info
-   └── User taps Deny: sends ServerMessage.authFailed, disconnects
-
-5. HeistClient receives info
-   └── serverInfo = info
-   └── connectionState = .connected
-   └── Sends: subscribe, requestInterface, requestScreen
+    Note over HC: connectionState = .connected
+    HC->>IJ: subscribe
+    HC->>IJ: requestInterface
+    HC->>IJ: requestScreen
 ```
 
 ### Interface Update Flow
 
-```
-1. Polling timer fires (configurable interval, default 1.0s)
-
-2. InsideMan.refreshAccessibilityData()
-   └── parser.parseAccessibilityHierarchy(in: rootView, elementVisitor: { ... })
-   │     elementVisitor captures weak refs to interactive objects (keyed by index)
-   └── flattenToElements() → AccessibilityMarker[]
-   └── Update interactiveObjects cache
-   └── Convert markers to HeistElement[] (actions derived from interactive cache)
-   └── Compute hash of elements array
-
-3. If hash changed:
-   └── Create Interface(timestamp, elements, tree)
-   └── Broadcast interface to all connected clients
-   └── Capture and broadcast screen
+```mermaid
+flowchart TD
+    A["Polling timer fires<br>(configurable, default 1.0s)"] --> B["refreshAccessibilityData()"]
+    B --> C["parseAccessibilityHierarchy()<br>elementVisitor captures weak refs"]
+    C --> D["flattenToElements() → AccessibilityMarker[]"]
+    D --> E["Update interactiveObjects cache"]
+    E --> F["Convert markers to HeistElement[]"]
+    F --> G["Compute hash of elements array"]
+    G --> H{"Hash changed?"}
+    H -->|No| A
+    H -->|Yes| I["Create Interface(timestamp, elements, tree)"]
+    I --> J["Broadcast interface to all clients"]
+    J --> K["Capture & broadcast screen"]
+    K --> A
 ```
 
 ### Action Flow (accessibility actions)
 
-```
-1. Client sends activate / increment / decrement / customAction message
+```mermaid
+sequenceDiagram
+    participant Client
+    participant IJ as InsideJob
+    participant TSC as TheSafecracker
 
-2. InsideMan receives message
-   └── refreshAccessibilityData() → re-parse hierarchy + rebuild interactive cache
-   └── Find element by identifier or order index
-   └── Resolve traversal index → look up live NSObject in interactiveObjects cache
+    Client->>IJ: activate / increment / decrement / customAction
+    IJ->>IJ: refreshAccessibilityData()
+    IJ->>IJ: Find element by identifier or order
+    IJ->>IJ: Resolve live NSObject from cache
 
-3. Dispatch via live object reference
-   └── activate:  object.accessibilityActivate()
-   └── increment: object.accessibilityIncrement()
-   └── decrement: object.accessibilityDecrement()
-   └── custom:    find UIAccessibilityCustomAction by name → call handler or target/selector
+    alt activate
+        IJ->>IJ: object.accessibilityActivate()
+        alt Returns false (fallback)
+            IJ->>TSC: tap(at: activationPoint)
+            Note over TSC: Synthetic touch injection
+        end
+    else increment
+        IJ->>IJ: object.accessibilityIncrement()
+    else decrement
+        IJ->>IJ: object.accessibilityDecrement()
+    else customAction
+        IJ->>IJ: Find UIAccessibilityCustomAction by name
+        IJ->>IJ: Call handler or target/selector
+    end
 
-4. Fallback (activate only): if accessibilityActivate() returns false
-   └── TheSafecracker.tap(at: activationPoint) → synthetic touch injection
-
-5. InsideMan sends actionResult
-   └── success: true/false
-   └── method: activate / increment / decrement / customAction / syntheticTap
-   └── Show fingerprint overlay on success
+    IJ-->>Client: actionResult(success, method)
+    Note over IJ: Show fingerprint overlay on success
 ```
 
 ### Action Flow (touch gestures)
 
-```
-1. Client sends touch gesture message (touchTap, touchDrag, touchPinch, etc.)
+```mermaid
+sequenceDiagram
+    participant Client
+    participant IJ as InsideJob
+    participant TSC as TheSafecracker
+    participant App as UIApplication
 
-2. InsideMan receives message
-   └── Resolve target point (from element activation point or explicit coordinates)
-   └── For element targets: refreshAccessibilityData(), find element, get activation point
-   └── touchTap with element target: try accessibilityActivate() first, fall back to synthetic
+    Client->>IJ: touchTap / touchDrag / touchPinch / etc.
+    IJ->>IJ: Resolve target point
+    Note over IJ: From element activation point<br>or explicit coordinates
 
-3. TheSafecracker performs gesture
-   └── tap(at:) / longPress(at:) / swipe(from:to:) / drag(from:to:)
-   └── pinch(center:scale:) / rotate(center:angle:) / twoFingerTap(at:)
-   └── Each dispatches UITouch + IOHIDEvent via UIApplication.sendEvent()
+    alt touchTap with element target
+        IJ->>IJ: Try accessibilityActivate()
+        alt Returns false
+            IJ->>TSC: Synthetic touch fallback
+        end
+    else Coordinate target or other gesture
+        IJ->>TSC: Perform gesture
+    end
 
-4. InsideMan sends actionResult
-   └── success: true/false
-   └── method: activate / syntheticTap / syntheticDrag / syntheticPinch / etc.
-   └── message: optional error description
-   └── Show fingerprint overlay; continuous gestures show tracking fingerprints
+    Note over TSC: tap / longPress / swipe / drag<br>pinch / rotate / twoFingerTap
+    TSC->>TSC: Create UITouch + IOHIDEvent
+    TSC->>App: sendEvent()
+
+    IJ-->>Client: actionResult(success, method, message)
+    Note over IJ: Show fingerprint overlay<br>Continuous gestures show tracking
 ```
 
 ## Network Protocol
@@ -481,14 +482,14 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 ## Threading Considerations
 
-### InsideMan (iOS)
+### InsideJob (iOS)
 - `@MainActor` for UIKit compatibility
 - Parser must run on main thread
 - Socket accept/read on GCD queues
 - Message handling dispatched to main
 - Interface updates debounced by 300ms
 
-### HeistClient (macOS)
+### TheClient (macOS)
 - `@MainActor` for SwiftUI `@Published` properties
 - NWBrowser for discovery on main queue
 - NWConnection for data transport
@@ -517,23 +518,23 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 ### Environment Variables (highest priority)
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `INSIDEMAN_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
-| `INSIDEMAN_PORT` | Fixed port number, 0 = auto | 0 |
-| `INSIDEMAN_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
-| `INSIDEMAN_TOKEN` | Auth token for client authentication | auto-generated UUID |
-| `INSIDEMAN_ID` | Human-readable instance identifier | first 8 chars of session UUID |
-| `INSIDEMAN_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
-| `INSIDEMAN_SESSION_LEASE` | Session lease timeout in seconds — releases session and invalidates token if no pings received (min: 10) | 30 |
+| `INSIDEJOB_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
+| `INSIDEJOB_PORT` | Fixed port number, 0 = auto | 0 |
+| `INSIDEJOB_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
+| `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
+| `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
+| `INSIDEJOB_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
+| `INSIDEJOB_SESSION_LEASE` | Session lease timeout in seconds — releases session and invalidates token if no pings received (min: 10) | 30 |
 
 ### Info.plist Keys (fallback)
 ```xml
-<key>InsideManPollingInterval</key>
+<key>InsideJobPollingInterval</key>
 <real>1.0</real>
-<key>InsideManDisableAutoStart</key>
+<key>InsideJobDisableAutoStart</key>
 <false/>
-<key>InsideManToken</key>
+<key>InsideJobToken</key>
 <string>my-secret-token</string>
-<key>InsideManInstanceId</key>
+<key>InsideJobInstanceId</key>
 <string>my-instance</string>
 <key>NSLocalNetworkUsageDescription</key>
 <string>element inspector connection.</string>

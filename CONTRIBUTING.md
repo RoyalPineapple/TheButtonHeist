@@ -22,9 +22,9 @@ Thank you for your interest in contributing to ButtonHeist!
 
 | Directory | Description |
 |-----------|-------------|
-| `ButtonHeist/Sources/TheGoods/` | Shared types and protocol messages |
-| `ButtonHeist/Sources/InsideMan/` | iOS server framework (server, touch injection, tap visualization) |
-| `ButtonHeist/Sources/InsideManLoader/` | ObjC auto-start via +load |
+| `ButtonHeist/Sources/TheScore/` | Shared types and protocol messages |
+| `ButtonHeist/Sources/InsideJob/` | iOS server framework (server, touch injection, tap visualization) |
+| `ButtonHeist/Sources/ThePlant/` | ObjC auto-start via +load |
 | `ButtonHeist/Sources/Wheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | `ButtonHeistCLI/` | Command-line tool (list, watch, action, touch, type, screenshot, session) |
 | `ButtonHeistMCP/` | MCP server for AI agent integration |
@@ -81,8 +81,8 @@ Write clear, concise commit messages:
 tuist generate
 
 # Build frameworks
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGoods build
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideMan \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
 
@@ -102,13 +102,13 @@ cd ButtonHeistCLI && swift build
 
 ## Module Guidelines
 
-### TheGoods
+### TheScore
 
 - Keep types `Codable` and cross-platform compatible
 - Avoid UIKit/AppKit imports
 - Document all public types
 
-### InsideMan
+### InsideJob
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`

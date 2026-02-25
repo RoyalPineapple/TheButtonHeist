@@ -20,7 +20,7 @@ public final class USBDeviceDiscovery {
     public var onDeviceFound: ((DiscoveredDevice) -> Void)?
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
 
-    /// - Parameter port: The InsideMan port to connect to
+    /// - Parameter port: The InsideJob port to connect to
     public init(port: UInt16) {
         self.port = port
     }

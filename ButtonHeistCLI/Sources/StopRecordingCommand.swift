@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 import ButtonHeist
-import TheGoods
+import TheScore
 
 struct StopRecordingCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(

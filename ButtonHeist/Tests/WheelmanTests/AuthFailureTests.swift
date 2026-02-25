@@ -1,6 +1,6 @@
 import XCTest
 import Network
-import TheGoods
+import TheScore
 @testable import Wheelman
 
 /// Tests for auth failure handling over real TCP connections.

@@ -1,6 +1,6 @@
 import XCTest
 import Network
-import TheGoods
+import TheScore
 @testable import Wheelman
 
 /// Tests for session locking behavior over real TCP connections.

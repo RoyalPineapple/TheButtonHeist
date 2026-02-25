@@ -1,7 +1,7 @@
 import ArgumentParser
 import Foundation
 import ButtonHeist
-import TheGoods
+import TheScore
 
 struct RecordCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(

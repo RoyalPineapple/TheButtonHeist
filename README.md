@@ -2,7 +2,38 @@
 
 **Let AI agents drive iOS apps.**
 
-ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed InsideMan in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
+ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed InsideJob in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
+
+## Meet the Crew
+
+Every heist needs a team. ButtonHeist is built around a crew of specialists, each with a role to play.
+
+### The Inside Team (iOS)
+
+| Character | Role | What They Do |
+|-----------|------|-------------|
+| **InsideJob** | The Inside Operative | The embedded server running inside your iOS app. Coordinates the entire operation: manages the TCP socket, Bonjour advertisement, accessibility hierarchy, and dispatches commands to the crew. |
+| **TheMuscle** | The Bouncer | Handles authentication, session locking, and the on-device Allow/Deny UI. Decides who gets in and ensures only one driver controls the operation at a time. |
+| **TheSafecracker** | The Specialist | Performs all physical interactions with the app's UI: taps, long presses, swipes, drags, pinches, rotations, text entry, and accessibility actions. Cracks open any interface element. |
+| **Stakeout** | The Lookout | Captures H.264/MP4 screen recordings. Watches the scene, records everything, and composites fingerprint overlays so gestures are visible in the video. |
+| **Fingerprints** | The Evidence | Visual touch indicators — glowing circles that appear and fade on screen during gestures. Visible on-device and composited into recordings by Stakeout. |
+| **ThePlant** | The Advance Man | Tiny ObjC `+load` hook that boots InsideJob before any Swift code runs. Just link the framework — no app code needed. |
+
+### The Outside Team (macOS)
+
+| Character | Role | What They Do |
+|-----------|------|-------------|
+| **Wheelman** | The Getaway Driver | The networking layer. Runs the TCP server (inside the app) and client-side discovery + connection (on macOS). Gets everyone to and from the job. |
+| **TheClient** | The Outside Coordinator | The macOS client API. Wraps discovery, connection, and typed callbacks into an Observable-friendly facade for building tools. |
+| **TheScore** | The Score | The shared protocol types — all wire messages, element types, and constants. The contract that both sides of the operation understand. |
+
+### Supporting Cast
+
+Not every crew member has a code name. These are the specialists behind the scenes:
+
+- **SyntheticTouchFactory** / **SyntheticEventFactory** / **IOHIDEventBuilder** — Low-level touch injection plumbing used by TheSafecracker to forge UITouch and UIEvent objects via private APIs
+- **BezierSampler** — Math utility for converting bezier curves to evenly-spaced polylines
+- **CLI commands** (`buttonheist action`, `touch`, `type`, `screenshot`, `session`, etc.) — The tools the outside crew uses to issue orders
 
 ## Features
 
@@ -14,80 +45,70 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed Insid
 - **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
 - **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
-- **Auto-start** — InsideMan starts automatically when your app launches (ObjC `+load`, DEBUG only)
+- **Auto-start** — InsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
 - **Multi-device** — Run many instances on many simulators with stable identifiers
 - **USB auto-discovery** — USB devices discovered automatically alongside WiFi via Bonjour
 - **Multiple interfaces** — MCP server, CLI, or build your own
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           Your Mac                                   │
-│                                                                      │
-│  ┌──────────────────┐                                               │
-│  │  AI Agent        │  (Claude, or any MCP client)                  │
-│  │  (e.g. Claude)   │                                               │
-│  └────────┬─────────┘                                               │
-│           │ MCP (JSON-RPC over stdio)                                │
-│  ┌────────┴─────────┐                                               │
-│  │ buttonheist-mcp  │  ← Thin proxy, exposes single `run` tool      │
-│  │  (MCP server)    │                                               │
-│  └────────┬─────────┘                                               │
-│           │ spawns subprocess                                        │
-│  ┌────────┴─────────────────┐                                       │
-│  │  buttonheist session     │                                       │
-│  │  (persistent CLI session)│                                       │
-│  └────────┬─────────────────┘                                       │
-│           │                                                          │
-│  ┌────────┴────────┐                                                │
-│  │   ButtonHeist   │  ← Bonjour + USB auto-discovery                │
-│  │  (HeistClient)  │                                                │
-│  └────────┬────────┘                                                │
-└───────────┼──────────────────────────────────────────────────────────┘
-            │ Local Network / USB (IPv6)
-┌───────────┼──────────────────────────────────────────────────────────┐
-│  ┌────────┴────────┐                                                │
-│  │    InsideMan    │  ← Auto-starts on load                         │
-│  │   (framework)   │    Bonjour                                     │
-│  └────────┬────────┘                                                │
-│           │                                                          │
-│  ┌────────┴────────┐                                                │
-│  │  Your iOS App   │                                                │
-│  └─────────────────┘                                                │
-│                           iOS Device                                 │
-└──────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    AI["AI Agent<br/>(Claude, any MCP client)"]
+    MCP["buttonheist-mcp<br/>(MCP server)"]
+    Session["buttonheist session<br/>(persistent CLI)"]
+    Client["TheClient<br/>(ButtonHeist framework)"]
+    IJ["InsideJob<br/>(embedded framework)"]
+    App["Your iOS App"]
+
+    AI -->|"MCP (JSON-RPC over stdio)"| MCP
+    MCP -->|"spawns subprocess"| Session
+    Session --> Client
+    Client -->|"TCP over WiFi / USB"| IJ
+    IJ --> App
+
+    subgraph Mac["Your Mac"]
+        AI
+        MCP
+        Session
+        Client
+    end
+
+    subgraph Device["iOS Device"]
+        IJ
+        App
+    end
 ```
 
 **End-to-end:**
 ```
-AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → HeistClient → TCP → InsideMan
+AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheClient → TCP → InsideJob
 ```
 
 ## Modules
 
 | Module | Platform | Description | Details |
 |--------|----------|-------------|---------|
-| **TheGoods** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
-| **InsideMan** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
+| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
+| **InsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **Wheelman** | iOS + macOS | TCP server/client, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (HeistClient); re-exports TheGoods + Wheelman | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheClient); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — AI agents drive iOS apps via Model Context Protocol | [ButtonHeistMCP/](ButtonHeistMCP/) |
 | **buttonheist** | macOS | CLI tool: list, watch, action, touch, type, screenshot, record, session | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
-### 1. Add InsideMan to Your iOS App
+### 1. Add InsideJob to Your iOS App
 
-Import InsideMan. It auto-starts via ObjC `+load` — no code changes needed beyond the import.
+Import InsideJob. It auto-starts via ObjC `+load` — no code changes needed beyond the import.
 
 ```swift
 import SwiftUI
-import InsideMan
+import InsideJob
 
 @main
 struct MyApp: App {
-    // InsideMan auto-starts on framework load
+    // InsideJob auto-starts on framework load
 
     var body: some Scene {
         WindowGroup {
@@ -192,7 +213,7 @@ open ButtonHeist.xcworkspace
 
 ```
 ButtonHeist/
-├── ButtonHeist/Sources/          # Core frameworks (TheGoods, InsideMan, Wheelman, ButtonHeist)
+├── ButtonHeist/Sources/          # Core frameworks (TheScore, InsideJob, Wheelman, ButtonHeist)
 ├── ButtonHeistMCP/               # MCP server (Swift Package)
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
@@ -206,7 +227,7 @@ ButtonHeist/
 ### Device not appearing (WiFi)
 
 1. Ensure both devices are on the same network
-2. Check that InsideMan framework is linked
+2. Check that InsideJob framework is linked
 3. Verify Info.plist has the Bonjour service entry
 4. On iOS, accept the local network permission prompt
 
@@ -224,7 +245,7 @@ ButtonHeist/
 ## Documentation
 
 **Frameworks and tools:**
-- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheGoods, InsideMan, Wheelman, client
+- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, InsideJob, Wheelman, client
 - [MCP Server](ButtonHeistMCP/) — AI agent integration via Model Context Protocol
 - [CLI Reference](ButtonHeistCLI/) — Full command-line documentation
 - [Test Apps](TestApp/) — Sample iOS applications for testing
@@ -233,6 +254,7 @@ ButtonHeist/
 - [Architecture](docs/ARCHITECTURE.md) — System design and data flow diagrams
 - [API Reference](docs/API.md) — Complete API for all modules
 - [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v3.1 specification
+- [Authentication](docs/AUTH.md) — Token auth, session locking, UI approval
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 
 **Project:**

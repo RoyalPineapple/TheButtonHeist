@@ -22,7 +22,7 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 ### Automatic Discovery
 
-> **Note:** `USBDeviceDiscovery` (in the Wheelman framework) is defined but not currently wired into `HeistClient`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
+> **Note:** `USBDeviceDiscovery` (in the Wheelman framework) is defined but not currently wired into `TheClient`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
 
 The `USBDeviceDiscovery` class implements this flow:
 
@@ -33,13 +33,13 @@ The `USBDeviceDiscovery` class implements this flow:
 
 ### Port Discovery
 
-InsideMan uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
+InsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
 
 ### Requirements
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
-2. **InsideMan must use IPv6 dual-stack** (enabled by default)
-3. **App must be running** on the device with InsideMan started
+2. **InsideJob must use IPv6 dual-stack** (enabled by default)
+3. **App must be running** on the device with InsideJob started
 4. **Xcode command line tools** installed (`xcrun` must be available)
 
 ## Usage
@@ -120,7 +120,7 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 
 ### Manual Connection (for debugging)
 
-**Note**: Protocol v3.0 requires token authentication before any commands are accepted.
+**Note**: Protocol v3.1 requires token authentication before any commands are accepted.
 
 ```bash
 # Using netcat (must authenticate first)
@@ -133,7 +133,7 @@ nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format js
 
 ## Message Protocol
 
-Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. Protocol v3.0 requires authentication before any commands are accepted.
+Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. Protocol v3.1 requires authentication before any commands are accepted.
 
 ### Authenticate
 ```json
@@ -179,7 +179,7 @@ parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(r
 let listener = try NWListener(using: parameters)
 ```
 
-On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. Override with `INSIDEMAN_BIND_ALL=true`.
+On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. Override with `INSIDEJOB_BIND_ALL=true`.
 
 This allows:
 - Simulator connections via `127.0.0.1` (loopback)
@@ -197,7 +197,7 @@ Common issues that USB bypasses:
 ## Troubleshooting
 
 ### "Connection refused"
-- App not running or InsideMan not started
+- App not running or InsideJob not started
 - Wrong port (verify Info.plist has correct port)
 - Device went to sleep/background
 
