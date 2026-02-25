@@ -264,6 +264,7 @@ final class SessionRunner {
                 "two_finger_tap", "draw_path", "draw_bezier",
                 "activate", "increment", "decrement", "perform_custom_action",
                 "type_text", "edit_action", "dismiss_keyboard",
+                "start_recording", "stop_recording",
             ]
             return .help(commands: commands)
 
@@ -519,6 +520,42 @@ final class SessionRunner {
         case "dismiss_keyboard":
             return try await sendAction(.resignFirstResponder)
 
+        // MARK: Recording
+
+        case "start_recording":
+            guard client.connectionState == .connected else {
+                throw SessionError.notConnected
+            }
+            let config = RecordingConfig(
+                fps: intArg(args, "fps"),
+                scale: doubleArg(args, "scale"),
+                inactivityTimeout: doubleArg(args, "inactivity_timeout"),
+                maxDuration: doubleArg(args, "max_duration")
+            )
+            client.send(.startRecording(config))
+            return .ok(message: "Recording started")
+
+        case "stop_recording":
+            guard client.connectionState == .connected else {
+                throw SessionError.notConnected
+            }
+            client.send(.stopRecording)
+            do {
+                let recording = try await client.waitForRecording(timeout: 30)
+                if let outputPath = stringArg(args, "output") {
+                    guard let videoData = Data(base64Encoded: recording.videoData) else {
+                        return .error("Failed to decode video data")
+                    }
+                    try videoData.write(to: URL(fileURLWithPath: outputPath))
+                    return .recording(path: outputPath, payload: recording)
+                } else {
+                    return .recordingData(payload: recording)
+                }
+            } catch {
+                client.forceDisconnect()
+                throw SessionError.actionTimeout
+            }
+
         default:
             return .error("Unknown command: \(command). Send {\"command\":\"help\"} for available commands.")
         }
@@ -631,6 +668,8 @@ private enum SessionResponse {
     case action(result: ActionResult)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
+    case recording(path: String, payload: RecordingPayload)
+    case recordingData(payload: RecordingPayload)
 
     // MARK: Human formatting
 
@@ -672,6 +711,19 @@ private enum SessionResponse {
 
         case .screenshotData(let pngData, let width, let height):
             return "✓ Screenshot captured (\(Int(width)) × \(Int(height))) — base64 PNG follows\n\(pngData)"
+
+        case .recording(let path, let payload):
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording saved: \(path)  " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+
+        case .recordingData(let payload):
+            let sizeKB = payload.videoData.count * 3 / 4 / 1024
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording captured " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
         }
     }
 
@@ -813,6 +865,30 @@ private enum SessionResponse {
 
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
+
+        case .recording(let path, let payload):
+            return [
+                "status": "ok",
+                "path": path,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
+
+        case .recordingData(let payload):
+            return [
+                "status": "ok",
+                "videoData": payload.videoData,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
         }
     }
 }

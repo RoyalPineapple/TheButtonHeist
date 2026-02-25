@@ -191,6 +191,27 @@ Print a brief progress update every 10 actions:
 
 If any ERROR or ANOMALY findings were discovered during the main loop:
 
+### Pre-refinement: Prepare Recording
+
+Before verifying findings, set up recording to capture video evidence:
+
+1. Read `references/recording-guide.md` for the recording workflow (if not already loaded)
+2. Create the recordings directory: `mkdir -p .fuzzer-data/recordings`
+
+### For each finding:
+
+**Start recording** before attempting reproduction:
+1. Estimate duration for this finding's verification: `15 × 10 + 15 = 165` seconds (covers 3 reproduction attempts + variations)
+2. Start background recording:
+   ```bash
+   buttonheist record \
+     --output .fuzzer-data/recordings/F-N-refinement.mp4 \
+     --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet &
+   RECORD_PID=$!
+   sleep 2
+   ```
+
+**Verify the finding:**
 1. **Navigate to finding's screen**: Use the navigation graph (`## Transitions` + `references/nav-graph.md`) to plan a route to each finding's screen
 2. **Confirm**: Attempt to reproduce the exact same action 3 times
 3. **Vary**: Try variations of the triggering action:
@@ -201,11 +222,17 @@ If any ERROR or ANOMALY findings were discovered during the main loop:
    - **Reproducible**: Triggered on 2+ of 3 attempts
    - **Intermittent**: Triggered on 1 of 3 attempts
    - **Not reproduced**: Could not trigger again (may have been transient)
+
+**Collect recording** after verification:
+1. Wait for background recording: `wait $RECORD_PID`
+2. Add recording to finding: `**Recording**: .fuzzer-data/recordings/F-N-refinement.mp4`
+3. Update `## Recordings` in session notes
+
 5. Remove findings that were "Not reproduced" from the main findings (mention them in a "Transient observations" section instead)
 
 If no ERROR or ANOMALY findings, skip this step.
 
-**Update session notes**: Update `## Status` to `refinement`, update finding confidence levels, update `## Next Actions`.
+**Update session notes**: Update `## Status` to `refinement`, update finding confidence levels, update `## Recordings`, update `## Next Actions`.
 
 ## Step 6: Generate Report
 
@@ -239,7 +266,12 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 
 ### Findings
 
-[Each finding in the format from SKILL.md]
+[Each finding in the format from SKILL.md — include **Recording** field if video was captured]
+
+### Recordings
+| Finding | File | Duration | Notes |
+|---------|------|----------|-------|
+| F-1 | .fuzzer-data/recordings/F-1-refinement.mp4 | 12.3s | Reproduction confirmed |
 
 ### Screen Map
 [List of screens visited and transitions between them]

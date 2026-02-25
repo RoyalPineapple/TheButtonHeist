@@ -34,6 +34,7 @@ These files contain detailed specifications loaded on demand. Don't read them al
 | `references/interesting-values.md` | When testing text fields | Context-aware value generation, value categories, mutation techniques |
 | `references/action-patterns.md` | When planning action batches | Composable interaction sequences, pattern composition, mutation |
 | `references/examples.md` | Session start (for response interpretation) | Annotated CLI response examples, intent-driven testing demos |
+| `references/recording-guide.md` | When recording a finding reproduction | Recording workflow, duration estimation, background recording pattern |
 | `references/trace-format.md` | When writing trace entries | Trace entry format, field definitions, examples |
 | `references/troubleshooting.md` | When encountering errors | Error recovery procedures |
 | `references/strategies/*.md` | Session start (when strategy is specified) | Strategy-specific element selection, action ordering, anomaly focus |
@@ -69,6 +70,7 @@ Or pass `--host` and `--port` flags on any command. With direct connection, each
 | List devices | `buttonheist list --format json` |
 | Get interface | `buttonheist watch --once --format json --quiet` |
 | Screenshot | `buttonheist screenshot --output /tmp/bh-screen.png` then Read the PNG |
+| Record screen | `buttonheist record --output /tmp/bh-recording.mp4 --max-duration 30 --inactivity-timeout 60 --fps 8 --scale 0.5` |
 | Activate element | `buttonheist action --identifier ID --format json` |
 | Activate by index | `buttonheist action --index N --format json` |
 | Increment/Decrement | `buttonheist action --identifier ID --type increment --format json` |
@@ -232,6 +234,7 @@ When you discover something, record it in this format:
 **Action**: [exact CLI command that triggered it] [trace #Y]
 **Expected**: [what you expected to happen]
 **Actual**: [what actually happened]
+**Recording**: [path to MP4 if recorded, omit if not]
 **Steps to Reproduce**:
 1. [navigation steps to reach the screen]
 2. [the triggering action]
