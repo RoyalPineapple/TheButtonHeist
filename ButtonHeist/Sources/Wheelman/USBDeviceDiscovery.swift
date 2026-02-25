@@ -63,9 +63,13 @@ public final class USBDeviceDiscovery {
             currentIDs.insert(id)
 
             if knownDevices[id] == nil {
+                guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+                    logger.error("Invalid port number: \(self.port)")
+                    return
+                }
                 let endpoint = NWEndpoint.hostPort(
                     host: NWEndpoint.Host(ipv6Address),
-                    port: NWEndpoint.Port(rawValue: port)!
+                    port: nwPort
                 )
                 let device = DiscoveredDevice(
                     id: id,
