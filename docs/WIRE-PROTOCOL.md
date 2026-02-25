@@ -2,7 +2,7 @@
 
 **Version**: 3.1
 
-This document specifies the communication protocol between InsideMan (iOS) and clients (Wheelman, CLI, Python scripts).
+This document specifies the communication protocol between InsideJob (iOS) and clients (Wheelman, CLI, Python scripts).
 
 ## Transport
 
@@ -16,10 +16,10 @@ This document specifies the communication protocol between InsideMan (iOS) and c
 ## Discovery Methods
 
 ### WiFi (Bonjour)
-InsideMan advertises itself using Bonjour:
+InsideJob advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
-- **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEMAN_ID` env var, or first 8 chars of a per-launch UUID)
+- **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
 - **TXT Record**:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
   - `tokenhash` — SHA256 hash prefix of the auth token (first 8 bytes, hex-encoded). Used for pre-connection filtering.
@@ -35,36 +35,39 @@ When connected via USB, macOS creates an IPv6 tunnel:
 
 ## Connection Lifecycle
 
-```
-Client                                    Server
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │                                         │
-   │◄─────── authRequired ──────────────────│  (auth challenge)
-   │──────── authenticate(token) ───────────►│
-   │◄─────── info ──────────────────────────│  (on successful auth + session acquired)
-   │           OR                              │
-   │◄─────── authFailed ───────────────────│  (bad token → disconnect)
-   │           OR                              │
-   │◄─────── sessionLocked ────────────────│  (v3.1: session held by another driver → disconnect)
-   │                                         │
-   │──────── subscribe ──────────────────────►│  (enable auto-updates)
-   │──────── requestInterface ──────────────►│
-   │──────── requestScreen ──────────────────►│
-   │◄─────── interface ─────────────────────│
-   │◄─────── screen ────────────────────────│
-   │                                         │
-   │──────── activate/touchTap/touchDrag... ──►│
-   │◄─────── actionResult ───────────────────│
-   │                                         │
-   │◄─────── interface ─────────────────────│  (auto-pushed on change)
-   │◄─────── screen ────────────────────────│  (auto-pushed on change)
-   │                                         │
-   │──────── ping ───────────────────────────►│
-   │◄─────── pong ───────────────────────────│
-   │                                         │
-   │──────── TCP Close ──────────────────────►│
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: TCP Connect
+    Server-->>Client: authRequired (auth challenge)
+    Client->>Server: authenticate(token)
+
+    alt Success + session acquired
+        Server-->>Client: info
+    else Bad token
+        Server-->>Client: authFailed → disconnect
+    else v3.1: session held by another driver
+        Server-->>Client: sessionLocked → disconnect
+    end
+
+    Client->>Server: subscribe (enable auto-updates)
+    Client->>Server: requestInterface
+    Client->>Server: requestScreen
+    Server-->>Client: interface
+    Server-->>Client: screen
+
+    Client->>Server: activate / touchTap / touchDrag ...
+    Server-->>Client: actionResult
+
+    Server-->>Client: interface (auto-pushed on change)
+    Server-->>Client: screen (auto-pushed on change)
+
+    Client->>Server: ping
+    Server-->>Client: pong
+
+    Client->>Server: TCP Close
 ```
 
 ## Message Format
@@ -613,7 +616,7 @@ Error message.
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
 | `instanceId` | `String?` | Per-launch session UUID (nil for servers < v2.1) |
-| `instanceIdentifier` | `String?` | Human-readable instance identifier from `INSIDEMAN_ID` env var (falls back to shortId) |
+| `instanceIdentifier` | `String?` | Human-readable instance identifier from `INSIDEJOB_ID` env var (falls back to shortId) |
 | `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
 | `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
 | `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
@@ -1008,11 +1011,11 @@ Token-based authentication is required for all connections:
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
 
-The token is configured via `INSIDEMAN_TOKEN` env var or `InsideManToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### Session Locking
 
-Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control an InsideMan host at a time.
+Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control an InsideJob host at a time.
 
 **Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` and `watch` maintain persistent connections. The session concept spans multiple sequential connections from the same driver.
 
@@ -1032,34 +1035,41 @@ This maintains backward compatibility: existing clients without `driverId` use t
 6. **Cancel timer** — Same-token reconnect within the timeout window cancels the release timer
 7. **Force takeover** — `forceSession: true` in the auth payload evicts the current session holder immediately
 
-```
-Driver A (token: "abc")                Server                    Driver B (token: "xyz")
-   │                                     │                              │
-   │── authenticate(token:"abc") ───────►│                              │
-   │◄── info (session claimed) ─────────│                              │
-   │                                     │                              │
-   │                                     │◄── authenticate(token:"xyz") │
-   │                                     │── sessionLocked ────────────►│
-   │                                     │── disconnect ───────────────►│
-   │                                     │                              │
-   │── TCP Close ──────────────────────►│                              │
-   │                       [30s timer starts]                           │
-   │                       [30s timer fires → session released]         │
-   │                                     │                              │
-   │                                     │◄── authenticate(token:"xyz") │
-   │                                     │── info (session claimed) ───►│
+```mermaid
+sequenceDiagram
+    participant A as Driver A (token: "abc")
+    participant S as Server
+    participant B as Driver B (token: "xyz")
+
+    A->>S: authenticate(token:"abc")
+    S-->>A: info (session claimed)
+
+    B->>S: authenticate(token:"xyz")
+    S-->>B: sessionLocked
+    S-xB: disconnect
+
+    A->>S: TCP Close
+    Note over S: 30s timer starts
+    Note over S: 30s timer fires → session released
+
+    B->>S: authenticate(token:"xyz")
+    S-->>B: info (session claimed)
 ```
 
 #### Force Takeover
 
 A client can force-take a session by sending `forceSession: true` in the authenticate payload. This immediately evicts all connections from the current session holder and claims the session.
 
-```
-Driver A (token: "abc")                Server                    Driver B (token: "xyz")
-   │   [active session]                  │                              │
-   │                                     │◄── authenticate(forceSession:true, token:"xyz")
-   │◄── [TCP disconnected] ────────────│                              │
-   │                                     │── info (session claimed) ───►│
+```mermaid
+sequenceDiagram
+    participant A as Driver A (token: "abc")
+    participant S as Server
+    participant B as Driver B (token: "xyz")
+
+    Note over A,S: Active session
+    B->>S: authenticate(forceSession:true, token:"xyz")
+    S-xA: TCP disconnected (evicted)
+    S-->>B: info (session claimed)
 ```
 
 From the CLI, use the `--force` flag on any command:
@@ -1072,18 +1082,18 @@ buttonheist session --force
 
 The session release timeout (time after last connection disconnects before the session is released) is configurable:
 
-- **Environment variable**: `INSIDEMAN_SESSION_TIMEOUT` (in seconds)
+- **Environment variable**: `INSIDEJOB_SESSION_TIMEOUT` (in seconds)
 - **Default**: 30 seconds
 
 The session lease timeout (time without any pings before the session is released and the token invalidated) is separately configurable:
 
-- **Environment variable**: `INSIDEMAN_SESSION_LEASE` (in seconds)
+- **Environment variable**: `INSIDEJOB_SESSION_LEASE` (in seconds)
 - **Default**: 30 seconds
 - **Minimum**: 10 seconds
 
 ### UI Approval Flow
 
-When the token is auto-generated (not explicitly set), InsideMan supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
+When the token is auto-generated (not explicitly set), InsideJob supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
 
 1. Server starts with auto-generated token — a floating overlay appears showing "Waiting for connection"
 2. Client connects and sends `authenticate` with an empty token (`""`)
@@ -1091,29 +1101,30 @@ When the token is auto-generated (not explicitly set), InsideMan supports an int
 4. **If approved**: Server sends `authApproved` with the token, then `info` — the session proceeds normally
 5. **If denied**: Server sends `authFailed("Connection denied by user")` and disconnects
 
-```
-Client                                    Server (UI approval mode)
-   │                                         │
-   │──────── TCP Connect ────────────────────►│
-   │◄─────── authRequired ──────────────────│
-   │──────── authenticate(token:"") ────────►│  (empty token)
-   │                                         │  [Overlay: "Allow / Deny"]
-   │                                         │  ... user taps Allow ...
-   │◄─────── authApproved(token) ───────────│  (token for future use)
-   │◄─────── info ──────────────────────────│
-   │                                         │
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as Server (UI approval mode)
+
+    Client->>Server: TCP Connect
+    Server-->>Client: authRequired
+    Client->>Server: authenticate(token:"") (empty token)
+    Note over Server: Overlay: "Allow / Deny"
+    Note over Server: ... user taps Allow ...
+    Server-->>Client: authApproved(token) (token for future use)
+    Server-->>Client: info
 ```
 
 The client stores the received token and uses it for subsequent connections, which will authenticate normally without requiring approval.
 
-This flow is **only active** when the token is auto-generated. If `INSIDEMAN_TOKEN` or `InsideManToken` is explicitly set, the standard token-based flow is used and no overlay is shown.
+This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOKEN` or `InsideJobToken` is explicitly set, the standard token-based flow is used and no overlay is shown.
 
 ### Security Limits
 
 - **Max connections**: 5 concurrent TCP connections
 - **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
 - **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Loopback binding**: On iOS Simulator, the server binds to `::1` (loopback only) by default. Override with `INSIDEMAN_BIND_ALL=true`.
+- **Loopback binding**: On iOS Simulator, the server binds to `::1` (loopback only) by default. Override with `INSIDEJOB_BIND_ALL=true`.
 
 ### Port Configuration
 
@@ -1138,7 +1149,7 @@ If the TCP connection is lost, clients should:
 
 ### Hierarchy Change Detection
 
-InsideMan uses hash-based change detection during polling:
+InsideJob uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast

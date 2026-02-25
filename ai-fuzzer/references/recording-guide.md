@@ -16,7 +16,7 @@ Record during **targeted, pre-planned action sequences** — not during routine 
 
 ## How Inactivity Timeout Works
 
-The recording engine (`Stakeout`) has an inactivity timer that auto-stops recording when no real activity occurs. Only **real interactions** reset this timer — actions, taps, swipes, typing, etc. **Pings and keepalive messages do NOT reset the timer.**
+The recording engine has an inactivity timer that auto-stops recording when no real activity occurs. Only **real interactions** reset this timer — actions, taps, swipes, typing, etc. **Pings and keepalive messages do NOT reset the timer.**
 
 This means:
 - `buttonheist record` running in the background will **not** stay alive indefinitely — pings don't count
@@ -165,7 +165,7 @@ Before starting a recording, verify:
 ### Recording stopped before all actions completed
 - **Inactivity timeout fired**: Your think time between actions exceeded `--inactivity-timeout`. Increase the value (try `90` or `120`).
 - **File size limit (7MB)**: Use lower `--fps` or `--scale`.
-- **App crashed**: Recording stops when InsideMan goes down.
+- **App crashed**: Recording stops when InsideJob goes down.
 
 ### Recording file is empty or missing
 - The device may have disconnected. Check `buttonheist list` first.

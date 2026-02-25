@@ -1,11 +1,11 @@
 import UIKit
-import InsideMan
+import InsideJob
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // InsideMan auto-starts via ObjC +load with port from Info.plist
+        // InsideJob auto-starts via ObjC +load with port from Info.plist
         return true
     }
 

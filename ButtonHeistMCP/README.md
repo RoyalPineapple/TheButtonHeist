@@ -4,14 +4,12 @@ Model Context Protocol server that gives AI agents eyes and hands for iOS apps. 
 
 ## How It Works
 
-```
-AI Agent (Claude Code, Claude Desktop, any MCP client)
-    │ MCP (JSON-RPC 2.0 over stdio)
-buttonheist-mcp
-    │ spawns persistent subprocess
-buttonheist session --format json
-    │ TCP connection (stays open for the whole session)
-InsideMan (embedded in your iOS app)
+```mermaid
+graph TB
+    Agent["AI Agent<br>(Claude Code, Claude Desktop, any MCP client)"]
+    Agent -->|"MCP (JSON-RPC 2.0 over stdio)"| MCP["buttonheist-mcp"]
+    MCP -->|"spawns persistent subprocess"| Session["buttonheist session --format json"]
+    Session -->|"TCP connection (stays open)"| IJ["InsideJob<br>(embedded in your iOS app)"]
 ```
 
 The MCP server is a **thin proxy**. All device logic lives in the CLI's `session` command — the server just routes tool calls through a subprocess pipe. This means the CLI and MCP server always have identical capabilities.
