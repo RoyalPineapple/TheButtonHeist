@@ -92,14 +92,25 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 **Architecture**:
 ```
-InsideMan (singleton, @MainActor)
+InsideMan (singleton, @MainActor) — coordinator split across extension files:
+│   InsideMan.swift              — core server lifecycle, client dispatch
+│   InsideMan+Accessibility.swift — hierarchy parsing, element conversion, delta computation
+│   InsideMan+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
+│   InsideMan+AutoStart.swift    — ObjC +load auto-start bridge
+│   InsideMan+Polling.swift      — polling loop, interface broadcasting
+│   InsideMan+Screen.swift       — screen capture, broadcasting, recording management
+│
 ├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
-├── Interactive Object Cache (weak references to accessibility nodes, keyed by traversal index)
-├── TheSafecracker (gesture simulation + text input, used as fallback)
+├── ElementStore protocol (exposes cachedElements + interactiveObjects to TheSafecracker)
+├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
+│   │   TheSafecracker.swift             — touch primitives, keyboard helpers
+│   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures
+│   │   TheSafecracker+Elements.swift    — element resolution, point resolution
+│   │   TheSafecracker+TextEntry.swift   — text typing and deletion
 │   ├── SyntheticTouchFactory (UITouch creation via private APIs)
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)

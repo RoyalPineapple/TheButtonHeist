@@ -27,6 +27,15 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.instanceId = instanceId
     }
 
+    /// Convenience init for direct host:port connections (no Bonjour).
+    public init(host: String, port: UInt16) {
+        let endpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host(host),
+            port: NWEndpoint.Port(integerLiteral: port)
+        )
+        self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
+    }
+
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }

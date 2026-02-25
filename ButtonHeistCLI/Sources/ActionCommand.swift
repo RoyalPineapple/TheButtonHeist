@@ -29,35 +29,21 @@ struct ActionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Custom action name (when type is 'custom')")
     var customAction: String?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
-
     @MainActor
-    // swiftlint:disable:next cyclomatic_complexity
     mutating func run() async throws {
         guard identifier != nil || index != nil else {
             throw ValidationError("Must specify --identifier or --index")
         }
 
-        let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
+        let connector = DeviceConnector(deviceFilter: connection.device, host: connection.host, port: connection.port, quiet: connection.quiet, force: connection.force)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
@@ -86,33 +72,13 @@ struct ActionCommand: AsyncParsableCommand {
             throw ValidationError("Unknown action type: \(type). Valid types: activate, increment, decrement, custom")
         }
 
-        if !quiet {
+        if !connection.quiet {
             logStatus("Sending action...")
         }
 
         client.send(message)
 
-        // Wait for result
         let result = try await client.waitForActionResult(timeout: timeout)
-
-        switch format ?? .auto {
-        case .json:
-            writeOutput(formatActionResultJSON(result))
-            if !result.success { Darwin.exit(1) }
-        case .human:
-            if result.success {
-                if !quiet {
-                    logStatus("Action succeeded (method: \(result.method.rawValue))")
-                }
-                writeOutput("success")
-            } else {
-                let errorMessage = result.message ?? result.method.rawValue
-                if !quiet {
-                    logStatus("Action failed: \(errorMessage)")
-                }
-                writeOutput("failed: \(errorMessage)")
-                Darwin.exit(1)
-            }
-        }
+        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Action")
     }
 }

@@ -11,32 +11,20 @@ struct ScreenshotCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output file path (default: stdout as raw PNG)")
     var output: String?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
-
     @MainActor
     func run() async throws {
-        let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
+        let connector = DeviceConnector(deviceFilter: connection.device, host: connection.host,
+                                        port: connection.port, quiet: connection.quiet, force: connection.force)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
 
-        if !quiet {
+        if !connection.quiet {
             logStatus("Requesting screenshot...")
         }
 
@@ -51,7 +39,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
         if let outputPath = output {
             let url = URL(fileURLWithPath: outputPath)
             try pngData.write(to: url)
-            if !quiet {
+            if !connection.quiet {
                 logStatus("Screenshot saved to: \(outputPath)")
             }
         } else {

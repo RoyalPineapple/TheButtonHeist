@@ -54,26 +54,13 @@ struct TapSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Y coordinate")
     var y: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -89,7 +76,7 @@ struct TapSubcommand: AsyncParsableCommand {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -113,26 +100,13 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Press duration in seconds (default 0.5)")
     var duration: Double = 0.5
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -148,7 +122,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -184,26 +158,13 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Duration in seconds (default 0.15)")
     var duration: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -235,7 +196,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -265,26 +226,13 @@ struct DragSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Duration in seconds (default 0.5)")
     var duration: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -302,7 +250,7 @@ struct DragSubcommand: AsyncParsableCommand {
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -332,26 +280,13 @@ struct PinchSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Duration in seconds (default 0.5)")
     var duration: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -367,7 +302,7 @@ struct PinchSubcommand: AsyncParsableCommand {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -397,26 +332,13 @@ struct RotateSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Duration in seconds (default 0.5)")
     var duration: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -432,7 +354,7 @@ struct RotateSubcommand: AsyncParsableCommand {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -456,26 +378,13 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Distance between fingers in points (default 40)")
     var spread: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -491,7 +400,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
         }
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
@@ -523,26 +432,13 @@ struct DrawPathSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Speed in points per second")
     var velocity: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -566,7 +462,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
             velocity: velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 
     private func parseInlinePoints(_ str: String) throws -> [PathPoint] {
@@ -625,26 +521,13 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Speed in points per second")
     var velocity: Double?
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
-
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
-    var device: String?
-
-    @Option(name: .long, help: "Direct host address (skip Bonjour discovery)")
-    var host: String?
-
-    @Option(name: .long, help: "Direct port number (skip Bonjour discovery)")
-    var port: UInt16?
 
     @MainActor
     mutating func run() async throws {
@@ -664,46 +547,27 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
             velocity: velocity ?? target.velocity
         ))
 
-        try await sendTouchGesture(message: message, timeout: timeout, quiet: quiet, force: force, device: device, host: host, port: port, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
     }
 }
 
 // MARK: - Shared Connection Helper
 
 @MainActor
-private func sendTouchGesture(message: ClientMessage, timeout: Double, quiet: Bool, force: Bool = false,
-                              device: String? = nil, host: String? = nil, port: UInt16? = nil,
-                              format: OutputFormat? = nil) async throws {
-    let connector = DeviceConnector(deviceFilter: device, host: host, port: port, quiet: quiet, force: force)
+private func sendTouchGesture(message: ClientMessage, connection: ConnectionOptions,
+                              timeout: Double, format: OutputFormat?) async throws {
+    let connector = DeviceConnector(deviceFilter: connection.device, host: connection.host,
+                                    port: connection.port, quiet: connection.quiet, force: connection.force)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client
 
-    if !quiet {
+    if !connection.quiet {
         logStatus("Sending gesture...")
     }
 
     client.send(message)
 
     let result = try await client.waitForActionResult(timeout: timeout)
-
-    switch format ?? .auto {
-    case .json:
-        writeOutput(formatActionResultJSON(result))
-        if !result.success { Darwin.exit(1) }
-    case .human:
-        if result.success {
-            if !quiet {
-                logStatus("Gesture succeeded (method: \(result.method.rawValue))")
-            }
-            writeOutput("success")
-        } else {
-            let errorMessage = result.message ?? result.method.rawValue
-            if !quiet {
-                logStatus("Gesture failed: \(errorMessage)")
-            }
-            writeOutput("failed: \(errorMessage)")
-            Darwin.exit(1)
-        }
-    }
+    outputActionResult(result, format: format, quiet: connection.quiet, verb: "Gesture")
 }
