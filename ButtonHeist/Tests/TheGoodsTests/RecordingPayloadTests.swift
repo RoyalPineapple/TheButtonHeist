@@ -132,6 +132,18 @@ final class RecordingPayloadTests: XCTestCase {
         }
     }
 
+    func testRecordingStoppedEncodeDecode() throws {
+        let message = ServerMessage.recordingStopped
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .recordingStopped = decoded {
+            // Success
+        } else {
+            XCTFail("Expected recordingStopped, got \(decoded)")
+        }
+    }
+
     func testRecordingEncodeDecode() throws {
         let start = Date()
         let end = start.addingTimeInterval(10.0)

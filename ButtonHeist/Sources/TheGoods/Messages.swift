@@ -468,6 +468,9 @@ public enum ServerMessage: Codable {
     /// Recording has started
     case recordingStarted
 
+    /// Recording stop acknowledged — payload arrives via broadcast
+    case recordingStopped
+
     /// Recording complete with video data
     case recording(RecordingPayload)
 

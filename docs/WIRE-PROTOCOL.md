@@ -526,6 +526,14 @@ Acknowledgement that recording has begun.
 {"recordingStarted":{}}
 ```
 
+### recordingStopped
+
+Acknowledgement that the `stopRecording` command was received. The actual video payload will follow as a `recording` broadcast. Also sent if recording was already auto-stopping (inactivity or max duration).
+
+```json
+{"recordingStopped":{}}
+```
+
 ### recording
 
 Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
@@ -927,6 +935,9 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 
 # Client stops recording
 {"stopRecording":{}}
+
+# Server acknowledges stop command
+{"recordingStopped":{}}
 
 # Server sends completed recording
 {"recording":{"_0":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}}

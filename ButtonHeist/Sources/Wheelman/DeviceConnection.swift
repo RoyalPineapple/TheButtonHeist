@@ -186,6 +186,8 @@ public final class DeviceConnection {
         case .recordingStarted:
             debug("Recording started")
             onRecordingStarted?()
+        case .recordingStopped:
+            debug("Recording stop acknowledged")
         case .recording(let payload):
             debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
             onRecording?(payload)

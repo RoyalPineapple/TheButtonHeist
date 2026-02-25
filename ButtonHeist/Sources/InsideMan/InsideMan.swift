@@ -723,12 +723,16 @@ public final class InsideMan { // swiftlint:disable:this type_body_length
     }
 
     private func handleStopRecording(respond: @escaping (Data) -> Void) {
-        guard let stakeout, stakeout.state == .recording else {
+        guard let stakeout else {
             sendMessage(.recordingError("No recording in progress"), respond: respond)
             return
         }
-        stakeout.stopRecording(reason: .manual)
-        // Response comes asynchronously via onRecordingComplete
+        if stakeout.state == .recording {
+            stakeout.stopRecording(reason: .manual)
+        }
+        // If .finalizing, recording is already stopping (inactivity/maxDuration) —
+        // the broadcast is on its way. Acknowledge in both cases.
+        sendMessage(.recordingStopped, respond: respond)
     }
 
     /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
