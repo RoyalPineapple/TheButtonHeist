@@ -38,11 +38,15 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
+    @Flag(name: .long, help: "Force-takeover session from another driver")
+    var force: Bool = false
+
     @MainActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
         let runner = SessionRunner(deviceFilter: device, host: host, port: port,
-                                   connectionTimeout: timeout, format: effectiveFormat)
+                                   connectionTimeout: timeout, format: effectiveFormat,
+                                   force: force)
         try await runner.run()
     }
 }

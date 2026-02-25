@@ -123,6 +123,11 @@ If no `in_progress` session is found, start a fresh one.
 **Actual**: No change
 **Confidence**: pending
 
+## Recordings
+| Finding | File | Duration | Size | Notes |
+|---------|------|----------|------|-------|
+| F-1 | .fuzzer-data/recordings/F-1-refinement.mp4 | 12.3s | 245KB | Reproduction confirmed |
+
 ## Action Log (last 10)
 1. [trace #42] activate(identifier: "settings") on Main Menu → navigated to Settings
 2. [trace #43] get_interface on Settings — 12 elements

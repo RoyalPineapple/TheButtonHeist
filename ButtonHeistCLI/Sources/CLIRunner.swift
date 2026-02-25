@@ -18,6 +18,8 @@ final class CLIRunner {
     init(options: CLIOptions) {
         self.options = options
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.client.forceSession = options.force
+        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
     }
 
     func run() async throws {

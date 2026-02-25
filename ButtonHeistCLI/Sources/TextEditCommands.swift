@@ -119,7 +119,7 @@ struct SelectAllCommand: AsyncParsableCommand {
 private func sendEditAction(_ action: String, connection: ConnectionOptions,
                              timeout: Double, format: OutputFormat?) async throws {
     let connector = DeviceConnector(deviceFilter: connection.device, host: connection.host,
-                                    port: connection.port, quiet: connection.quiet)
+                                    port: connection.port, quiet: connection.quiet, force: connection.force)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client

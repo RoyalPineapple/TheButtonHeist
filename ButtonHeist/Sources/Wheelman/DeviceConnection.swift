@@ -24,12 +24,23 @@ public final class DeviceConnection {
     public var onInterface: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
+    public var onRecordingStarted: (() -> Void)?
+    public var onRecording: ((RecordingPayload) -> Void)?
+    public var onRecordingError: ((String) -> Void)?
     public var onError: ((String) -> Void)?
     public var onAuthApproved: ((String) -> Void)?
+    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
 
-    public init(device: DiscoveredDevice, token: String? = nil) {
+    /// When true, send forceSession in the auth handshake to take over an existing session
+    public var forceSession: Bool
+    /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
+    public var driverId: String?
+
+    public init(device: DiscoveredDevice, token: String? = nil, forceSession: Bool = false, driverId: String? = nil) {
         self.device = device
         self.token = token
+        self.forceSession = forceSession
+        self.driverId = driverId
     }
 
     public func connect() {
@@ -153,7 +164,11 @@ public final class DeviceConnection {
         case .authRequired:
             debug("Auth required, sending token")
             // Send token if available, otherwise send empty token to request UI approval
-            send(.authenticate(AuthenticatePayload(token: token ?? "")))
+            send(.authenticate(AuthenticatePayload(
+                token: token ?? "",
+                forceSession: forceSession ? true : nil,
+                driverId: driverId
+            )))
         case .authFailed(let reason):
             debug("Auth failed: \(reason)")
             disconnect()
@@ -180,6 +195,22 @@ public final class DeviceConnection {
         case .screen(let payload):
             debug("Received screen: \(payload.pngData.count) chars base64")
             onScreen?(payload)
+        case .sessionLocked(let payload):
+            debug("Session locked: \(payload.message)")
+            onSessionLocked?(payload)
+            disconnect()
+            onDisconnected?(nil)
+        case .recordingStarted:
+            debug("Recording started")
+            onRecordingStarted?()
+        case .recordingStopped:
+            debug("Recording stop acknowledged")
+        case .recording(let payload):
+            debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
+            onRecording?(payload)
+        case .recordingError(let message):
+            debug("Recording error: \(message)")
+            onRecordingError?(message)
         }
     }
 }

@@ -124,6 +124,9 @@ extension InsideMan {
             delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
         }
 
+        // Capture a recording frame after the action completes
+        captureActionFrame()
+
         return ActionResult(
             success: true,
             method: method,

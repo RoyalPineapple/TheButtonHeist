@@ -86,7 +86,26 @@ Proceed? (waiting for confirmation)
 4. If already on the finding's screen, skip navigation steps
 5. If not on the expected starting screen, **plan a route** from current screen to the finding's screen using the nav graph and `## Transitions`
 
-## Step 4: Execute with Divergence Detection
+## Step 4: Execute with Recording + Divergence Detection
+
+### Pre-execution: Start Recording
+
+Before executing the reproduction sequence, start a background recording to capture video evidence:
+
+1. Read `references/recording-guide.md` for the full recording workflow
+2. Estimate duration: `(number of actions in reproduction plan) × 10 + 15` seconds
+3. Create the recordings directory and start recording:
+   ```bash
+   mkdir -p .fuzzer-data/recordings
+   buttonheist record \
+     --output .fuzzer-data/recordings/F-N-reproduce.mp4 \
+     --max-duration <estimated_duration> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet &
+   RECORD_PID=$!
+   sleep 2
+   ```
+4. The recording runs independently in the background with a 60-second inactivity timeout — each of your CLI interactions resets the timer, keeping the recording alive between actions
+
+### Execute Actions
 
 For each action in the reproduction sequence:
 
@@ -124,6 +143,16 @@ similarity = len(overlap) / max(len(expected), len(actual))
    - **ERROR**: Did the same error occur?
    - **ANOMALY**: Does the post-action state show the same anomalous behavior described in the finding?
 
+### Post-execution: Collect Recording
+
+After completing all actions for this attempt:
+
+1. Wait for background recording to finish: `wait $RECORD_PID`
+2. Verify the recording file exists: `ls -la .fuzzer-data/recordings/F-N-reproduce.mp4`
+3. Note the file path for the report
+
+For subsequent attempts (Step 5), start a new recording with a numbered suffix (e.g., `F-N-reproduce-2.mp4`). Use the best recording (the one where the finding reproduced) in the final report.
+
 ## Step 5: Multiple Attempts
 
 Try the reproduction up to 3 times:
@@ -143,6 +172,7 @@ Print a structured result:
 
 **Finding**: F-3 [ANOMALY] Toggle doesn't respond to activate
 **Original session**: fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md
+**Recording**: .fuzzer-data/recordings/F-3-reproduce.mp4
 **Actions replayed**: 5
 
 ### Result: REPRODUCED

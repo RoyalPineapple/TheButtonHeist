@@ -9,10 +9,10 @@
 /* Begin PBXBuildFile section */
 		00882646C6DD0E6E11E0BEC2 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		00B4F92C5BC3735FFD8D27D4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */; };
+		03E45308C67E30638290BC36 /* Stakeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 607CA99EFBB7CC8AB397E5D1 /* Stakeout.swift */; };
 		071AA9B18FA57C01D4A360C0 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		07BFA5FF9C20EA99328799EF /* HeistClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */; };
 		0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */; };
-		0B24A1918B577BF6F3A21215 /* InsideMan+Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 776F389A8B76ABE14AD9AE77 /* InsideMan+Polling.swift */; };
 		13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */; };
 		2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */; };
 		267113026CEBFFBDEB87A0A6 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
@@ -20,47 +20,50 @@
 		292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */; };
 		319F0EE2BDDEAEA018814D63 /* TheGoodsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */; };
 		38B66D610D649E6F0A63A510 /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B71D54592688B9D702D11E /* ServerInfoTests.swift */; };
+		40C3B253271DA9EBB264CB80 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D734AD549893C0988511EEE /* RecordingPayloadTests.swift */; };
 		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
 		4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */; };
+		4F3765FF5A040DA7F0FA8BCA /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */; };
 		529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */; };
-		56CFD7B41D87D40281387EC6 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AB9382AAC62DFCBFB6028CF /* ClientMessages.swift */; };
 		5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = F20BB761FA684C7D90336187 /* InsideManAutoStart.m */; };
 		679CA47F948203471BC84765 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */; };
 		697FAF594BD1F255084B7692 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */; };
 		6EAB437364F814A6FA04C159 /* ServerMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E28C5885B806613473337AE /* ServerMessageTests.swift */; };
 		739C806ACE0F65800CB24918 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
-		7665B7DBD2FFA0E0398E24E0 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD7FEDBFBAA5496825E0A9F /* ServerMessages.swift */; };
-		AA1B0001AAAA000100000001 /* TheSafecracker+Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */; };
-		AA1B0001AAAA000100000002 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */; };
-		AA1B0001AAAA000100000003 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
 		7AA7540D74C2A550ABD18739 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */; };
-		7BE4C74AF0BEF0500EBAD37F /* InsideMan+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D930F31F463F91F6BEDB9F /* InsideMan+Animation.swift */; };
 		812D56C0F322065CF4966D1B /* HeistClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1F25ADDEF86D35E12406EB /* HeistClient.swift */; };
 		8184581FABD6CE3C5A82A2B4 /* TheGoods.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B4860B52B50A1AF596A086 /* TheGoods.framework */; };
 		861D5E1B49C53414C4059C48 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */; };
 		8EA793CB9AC27195C48ED73F /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		91938587DB774C0C39F979EC /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
-		919A35A31290DCADBBB4FD3C /* InsideMan+AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20E3B7E8282516E4675C42F5 /* InsideMan+AutoStart.swift */; };
 		92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B993E5FA5DA80654F9CC03 /* Exports.swift */; };
 		9786FBD1E5F2D76AEAC81662 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */; };
 		AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */; };
-		B57AD00DD05292C8585253D6 /* InsideMan+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = D95B0A93097A3389641F9A72 /* InsideMan+Accessibility.swift */; };
 		BA4019B6EA6DC5489D884944 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5F3CA420333318E833FBFB9 /* AuthMessageTests.swift */; };
 		BCE808EA3B411F92813C0389 /* InsideManAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		CA44F5E8F22D9E1C90F6DEA0 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */; };
-		CAB0E7D0F65360832E0F0977 /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5DC449C2B7460A38F419F86 /* Elements.swift */; };
 		CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */; };
 		CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */; };
-		D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* TapVisualizerView.swift */; };
+		D3AD735B2678B2DE1CCF627E /* Fingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75522D9885B156F5F719FDEA /* Fingerprints.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13D27D93EA5484662C986D92 /* TheSafecracker.swift */; };
-		F373FAE739EC513AF5B57332 /* InsideMan+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCED02415445147118474E0D /* InsideMan+Screen.swift */; };
 		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
 		F73B2CA4EB09C26A552FFDB3 /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */; };
 		FCF386C3B7AAB9659383354C /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 746D54E3D34B0FB2631A3F2C /* BezierSamplerTests.swift */; };
 		FE4BF8C6D4DBC62E742EEDDA /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
+		A1B2C3D4E5F60001A1B2C3D4 /* InsideMan+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60011A1B2C3D4 /* InsideMan+Accessibility.swift */; };
+		A1B2C3D4E5F60002A1B2C3D4 /* InsideMan+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60012A1B2C3D4 /* InsideMan+Animation.swift */; };
+		A1B2C3D4E5F60003A1B2C3D4 /* InsideMan+AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60013A1B2C3D4 /* InsideMan+AutoStart.swift */; };
+		A1B2C3D4E5F60004A1B2C3D4 /* InsideMan+Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60014A1B2C3D4 /* InsideMan+Polling.swift */; };
+		A1B2C3D4E5F60005A1B2C3D4 /* InsideMan+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60015A1B2C3D4 /* InsideMan+Screen.swift */; };
+		A1B2C3D4E5F60006A1B2C3D4 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60016A1B2C3D4 /* TheSafecracker+Actions.swift */; };
+		A1B2C3D4E5F60007A1B2C3D4 /* TheSafecracker+Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60017A1B2C3D4 /* TheSafecracker+Elements.swift */; };
+		A1B2C3D4E5F60008A1B2C3D4 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60018A1B2C3D4 /* TheSafecracker+TextEntry.swift */; };
+		B1C2D3E4F5060019B1C2D3E4 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F506001AB1C2D3E4 /* ClientMessages.swift */; };
+		B1C2D3E4F506001BB1C2D3E4 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F506001CB1C2D3E4 /* ServerMessages.swift */; };
+		B1C2D3E4F506001DB1C2D3E4 /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F506001EB1C2D3E4 /* Elements.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -207,23 +210,19 @@
 		13D27D93EA5484662C986D92 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
 		1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
-		20E3B7E8282516E4675C42F5 /* InsideMan+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+AutoStart.swift"; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
 		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Elements.swift"; sourceTree = "<group>"; };
-		AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
-		AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
 		338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
 		3C1F25ADDEF86D35E12406EB /* HeistClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClient.swift; sourceTree = "<group>"; };
 		40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		607CA99EFBB7CC8AB397E5D1 /* Stakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stakeout.swift; sourceTree = "<group>"; };
+		6D734AD549893C0988511EEE /* RecordingPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPayloadTests.swift; sourceTree = "<group>"; };
+		75522D9885B156F5F719FDEA /* Fingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fingerprints.swift; sourceTree = "<group>"; };
 		746D54E3D34B0FB2631A3F2C /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
-		75522D9885B156F5F719FDEA /* TapVisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapVisualizerView.swift; sourceTree = "<group>"; };
-		776F389A8B76ABE14AD9AE77 /* InsideMan+Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Polling.swift"; sourceTree = "<group>"; };
 		783E23C6F9978C0F33983C50 /* TheGoodsTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheGoodsTests-Info.plist"; sourceTree = "<group>"; };
-		7AB9382AAC62DFCBFB6028CF /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
 		816E500336496E10A79B40CA /* InsideMan.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InsideMan.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		81A0B6E97DD609FEC142C359 /* TheGoods-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheGoods-Info.plist"; sourceTree = "<group>"; };
 		84B993E5FA5DA80654F9CC03 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
@@ -242,19 +241,15 @@
 		A96A1EF9D6560311BC896DD7 /* InsideManAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = InsideManAutoStart.h; sourceTree = "<group>"; };
 		AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		AB8F37C85DC1FEF475F41A50 /* TheGoodsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGoodsTests.swift; sourceTree = "<group>"; };
-		ABD7FEDBFBAA5496825E0A9F /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
 		AE55E0F0D9FB1C2C3F63B712 /* HeistClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistClientTests.swift; sourceTree = "<group>"; };
-		BCED02415445147118474E0D /* InsideMan+Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Screen.swift"; sourceTree = "<group>"; };
-		C1D930F31F463F91F6BEDB9F /* InsideMan+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Animation.swift"; sourceTree = "<group>"; };
 		C3B71D54592688B9D702D11E /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
 		C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideMan.swift; sourceTree = "<group>"; };
 		CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
 		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
-		D5DC449C2B7460A38F419F86 /* Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Elements.swift; sourceTree = "<group>"; };
 		D8B2AE37A7F6B6E86A00B4C4 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
-		D95B0A93097A3389641F9A72 /* InsideMan+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Accessibility.swift"; sourceTree = "<group>"; };
 		DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
+		E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		F20BB761FA684C7D90336187 /* InsideManAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = InsideManAutoStart.m; sourceTree = "<group>"; };
@@ -262,6 +257,17 @@
 		F5F3CA420333318E833FBFB9 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
 		F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WheelmanTests.swift; sourceTree = "<group>"; };
 		F9C1708416E311A34CD2AD74 /* TheGoodsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheGoodsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F60011A1B2C3D4 /* InsideMan+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Accessibility.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60012A1B2C3D4 /* InsideMan+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Animation.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60013A1B2C3D4 /* InsideMan+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+AutoStart.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60014A1B2C3D4 /* InsideMan+Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Polling.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60015A1B2C3D4 /* InsideMan+Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideMan+Screen.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60016A1B2C3D4 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60017A1B2C3D4 /* TheSafecracker+Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Elements.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60018A1B2C3D4 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
+		B1C2D3E4F506001AB1C2D3E4 /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
+		B1C2D3E4F506001CB1C2D3E4 /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
+		B1C2D3E4F506001EB1C2D3E4 /* Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Elements.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -402,20 +408,21 @@
 			isa = PBXGroup;
 			children = (
 				C596D8F99CB5805B0A2D0BD3 /* InsideMan.swift */,
-				D95B0A93097A3389641F9A72 /* InsideMan+Accessibility.swift */,
-				C1D930F31F463F91F6BEDB9F /* InsideMan+Animation.swift */,
-				20E3B7E8282516E4675C42F5 /* InsideMan+AutoStart.swift */,
-				776F389A8B76ABE14AD9AE77 /* InsideMan+Polling.swift */,
-				BCED02415445147118474E0D /* InsideMan+Screen.swift */,
 				DE2235085BFDF65C7B83A35C /* IOHIDEventBuilder.swift */,
+				75522D9885B156F5F719FDEA /* Fingerprints.swift */,
+				607CA99EFBB7CC8AB397E5D1 /* Stakeout.swift */,
 				F4D872EFBB581DBD793EFCAF /* SyntheticEventFactory.swift */,
 				1B77034DD7899CA445918899 /* SyntheticTouchFactory.swift */,
-				75522D9885B156F5F719FDEA /* TapVisualizerView.swift */,
 				CAC03ADECE0DEE78D8323A23 /* TheMuscle.swift */,
 				13D27D93EA5484662C986D92 /* TheSafecracker.swift */,
-				AA1B0002AAAA000200000001 /* TheSafecracker+Elements.swift */,
-				AA1B0002AAAA000200000002 /* TheSafecracker+Actions.swift */,
-				AA1B0002AAAA000200000003 /* TheSafecracker+TextEntry.swift */,
+				A1B2C3D4E5F60011A1B2C3D4 /* InsideMan+Accessibility.swift */,
+				A1B2C3D4E5F60012A1B2C3D4 /* InsideMan+Animation.swift */,
+				A1B2C3D4E5F60013A1B2C3D4 /* InsideMan+AutoStart.swift */,
+				A1B2C3D4E5F60014A1B2C3D4 /* InsideMan+Polling.swift */,
+				A1B2C3D4E5F60015A1B2C3D4 /* InsideMan+Screen.swift */,
+				A1B2C3D4E5F60016A1B2C3D4 /* TheSafecracker+Actions.swift */,
+				A1B2C3D4E5F60017A1B2C3D4 /* TheSafecracker+Elements.swift */,
+				A1B2C3D4E5F60018A1B2C3D4 /* TheSafecracker+TextEntry.swift */,
 			);
 			path = InsideMan;
 			sourceTree = "<group>";
@@ -454,10 +461,10 @@
 			isa = PBXGroup;
 			children = (
 				183B8DDB1A591EEEFB7024E0 /* BezierSampler.swift */,
-				7AB9382AAC62DFCBFB6028CF /* ClientMessages.swift */,
-				D5DC449C2B7460A38F419F86 /* Elements.swift */,
+				B1C2D3E4F506001AB1C2D3E4 /* ClientMessages.swift */,
+				B1C2D3E4F506001EB1C2D3E4 /* Elements.swift */,
 				A2BDA2AFBF2CEE4BA63BA321 /* Messages.swift */,
-				ABD7FEDBFBAA5496825E0A9F /* ServerMessages.swift */,
+				B1C2D3E4F506001CB1C2D3E4 /* ServerMessages.swift */,
 			);
 			path = TheGoods;
 			sourceTree = "<group>";
@@ -471,6 +478,7 @@
 				8DBAE1B16C8AC234339FC5E0 /* ClientMessageTests.swift */,
 				AA4A3E5D9169ABD0F9311E50 /* ConstantsTests.swift */,
 				338A11E3F6CD1E69EE0D7695 /* HierarchyPayloadTests.swift */,
+				6D734AD549893C0988511EEE /* RecordingPayloadTests.swift */,
 				9CD5376EA03EA0B94E4A4274 /* ScreenshotPayloadTests.swift */,
 				C3B71D54592688B9D702D11E /* ServerInfoTests.swift */,
 				8E28C5885B806613473337AE /* ServerMessageTests.swift */,
@@ -507,6 +515,7 @@
 				A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */,
 				9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */,
 				F964CFEC4F01DCF47ED67954 /* WheelmanTests.swift */,
+				E82099FC101EE8DF0C9EDEDC /* SessionLockTests.swift */,
 			);
 			path = WheelmanTests;
 			sourceTree = "<group>";
@@ -551,8 +560,6 @@
 				EFC08AE5F154BAB591313A74 /* PBXTargetDependency */,
 			);
 			name = ButtonHeist;
-			packageProductDependencies = (
-			);
 			productName = ButtonHeist;
 			productReference = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */;
 			productType = "com.apple.product-type.framework";
@@ -573,8 +580,6 @@
 				B0E19EDA4C4B97A87C8FD5F0 /* PBXTargetDependency */,
 			);
 			name = Wheelman;
-			packageProductDependencies = (
-			);
 			productName = Wheelman;
 			productReference = 5606B65675665A31CFB80D72 /* Wheelman.framework */;
 			productType = "com.apple.product-type.framework";
@@ -594,8 +599,6 @@
 				A76FE0BA3CBA9E1CA7C11501 /* PBXTargetDependency */,
 			);
 			name = TheGoodsTests;
-			packageProductDependencies = (
-			);
 			productName = TheGoodsTests;
 			productReference = F9C1708416E311A34CD2AD74 /* TheGoodsTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -616,8 +619,6 @@
 				864CE9CCEF3B0A8F84871CA7 /* PBXTargetDependency */,
 			);
 			name = WheelmanTests;
-			packageProductDependencies = (
-			);
 			productName = WheelmanTests;
 			productReference = EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -640,8 +641,6 @@
 				186ABBA8DDE0347593950896 /* PBXTargetDependency */,
 			);
 			name = InsideMan;
-			packageProductDependencies = (
-			);
 			productName = InsideMan;
 			productReference = 816E500336496E10A79B40CA /* InsideMan.framework */;
 			productType = "com.apple.product-type.framework";
@@ -661,8 +660,6 @@
 				4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */,
 			);
 			name = ButtonHeistTests;
-			packageProductDependencies = (
-			);
 			productName = ButtonHeistTests;
 			productReference = 2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -682,8 +679,6 @@
 			dependencies = (
 			);
 			name = TheGoods;
-			packageProductDependencies = (
-			);
 			productName = TheGoods;
 			productReference = 96B4860B52B50A1AF596A086 /* TheGoods.framework */;
 			productType = "com.apple.product-type.framework";
@@ -859,6 +854,7 @@
 				292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */,
 				79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */,
 				13D3E3742E47D74EFCD62431 /* WheelmanTests.swift in Sources */,
+				4F3765FF5A040DA7F0FA8BCA /* SessionLockTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -872,6 +868,7 @@
 				9786FBD1E5F2D76AEAC81662 /* ClientMessageTests.swift in Sources */,
 				00B4F92C5BC3735FFD8D27D4 /* ConstantsTests.swift in Sources */,
 				679CA47F948203471BC84765 /* HierarchyPayloadTests.swift in Sources */,
+				40C3B253271DA9EBB264CB80 /* RecordingPayloadTests.swift in Sources */,
 				861D5E1B49C53414C4059C48 /* ScreenshotPayloadTests.swift in Sources */,
 				38B66D610D649E6F0A63A510 /* ServerInfoTests.swift in Sources */,
 				6EAB437364F814A6FA04C159 /* ServerMessageTests.swift in Sources */,
@@ -896,21 +893,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				529B1F74FA0266F78F5B3143 /* IOHIDEventBuilder.swift in Sources */,
-				B57AD00DD05292C8585253D6 /* InsideMan+Accessibility.swift in Sources */,
-				7BE4C74AF0BEF0500EBAD37F /* InsideMan+Animation.swift in Sources */,
-				919A35A31290DCADBBB4FD3C /* InsideMan+AutoStart.swift in Sources */,
-				0B24A1918B577BF6F3A21215 /* InsideMan+Polling.swift in Sources */,
-				F373FAE739EC513AF5B57332 /* InsideMan+Screen.swift in Sources */,
 				2348B2B642753AB38EE5945A /* InsideMan.swift in Sources */,
+				D3AD735B2678B2DE1CCF627E /* Fingerprints.swift in Sources */,
+				03E45308C67E30638290BC36 /* Stakeout.swift in Sources */,
 				AF0086C9F5465CCF8589C442 /* SyntheticEventFactory.swift in Sources */,
 				CFE5DBCE917139FED9618C91 /* SyntheticTouchFactory.swift in Sources */,
-				D3AD735B2678B2DE1CCF627E /* TapVisualizerView.swift in Sources */,
 				CCF519A206E64A408464B6F5 /* TheMuscle.swift in Sources */,
 				EC469C4B5BCA273D8E5E7E14 /* TheSafecracker.swift in Sources */,
-				AA1B0001AAAA000100000001 /* TheSafecracker+Elements.swift in Sources */,
-				AA1B0001AAAA000100000002 /* TheSafecracker+Actions.swift in Sources */,
-				AA1B0001AAAA000100000003 /* TheSafecracker+TextEntry.swift in Sources */,
 				5DB4ED2FC64BDF290FBA4273 /* InsideManAutoStart.m in Sources */,
+				A1B2C3D4E5F60001A1B2C3D4 /* InsideMan+Accessibility.swift in Sources */,
+				A1B2C3D4E5F60002A1B2C3D4 /* InsideMan+Animation.swift in Sources */,
+				A1B2C3D4E5F60003A1B2C3D4 /* InsideMan+AutoStart.swift in Sources */,
+				A1B2C3D4E5F60004A1B2C3D4 /* InsideMan+Polling.swift in Sources */,
+				A1B2C3D4E5F60005A1B2C3D4 /* InsideMan+Screen.swift in Sources */,
+				A1B2C3D4E5F60006A1B2C3D4 /* TheSafecracker+Actions.swift in Sources */,
+				A1B2C3D4E5F60007A1B2C3D4 /* TheSafecracker+Elements.swift in Sources */,
+				A1B2C3D4E5F60008A1B2C3D4 /* TheSafecracker+TextEntry.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -919,10 +917,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				F73B2CA4EB09C26A552FFDB3 /* BezierSampler.swift in Sources */,
-				56CFD7B41D87D40281387EC6 /* ClientMessages.swift in Sources */,
-				CAB0E7D0F65360832E0F0977 /* Elements.swift in Sources */,
+				B1C2D3E4F5060019B1C2D3E4 /* ClientMessages.swift in Sources */,
+				B1C2D3E4F506001DB1C2D3E4 /* Elements.swift in Sources */,
 				CA44F5E8F22D9E1C90F6DEA0 /* Messages.swift in Sources */,
-				7665B7DBD2FFA0E0398E24E0 /* ServerMessages.swift in Sources */,
+				B1C2D3E4F506001BB1C2D3E4 /* ServerMessages.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1027,10 +1025,7 @@
 				PRODUCT_NAME = ButtonHeist;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1052,10 +1047,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.tests;
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -1075,10 +1067,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thegoods.tests;
 				PRODUCT_NAME = TheGoodsTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -1256,18 +1245,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) DEBUG";
 				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
@@ -1311,11 +1291,7 @@
 					"$(inherited)",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insideman;
 				PRODUCT_NAME = InsideMan;
 				SDKROOT = iphoneos;
@@ -1323,10 +1299,7 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1361,11 +1334,7 @@
 					"$(inherited)",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
+				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insideman;
 				PRODUCT_NAME = InsideMan;
 				SDKROOT = iphoneos;
@@ -1489,18 +1458,9 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = "$(inherited) DEBUG";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = "$(inherited) DEBUG";
 				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
 				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
@@ -1593,10 +1553,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman.tests;
 				PRODUCT_NAME = WheelmanTests;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};

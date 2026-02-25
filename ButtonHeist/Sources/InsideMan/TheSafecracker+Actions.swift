@@ -26,13 +26,13 @@ extension TheSafecracker {
 
         // Try accessibilityActivate via the live object reference
         if activate(elementAt: index) {
-            TapVisualizerView.showTap(at: point)
+            showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
         // Fall back to synthetic touch injection
         if tap(at: point) {
-            TapVisualizerView.showTap(at: point)
+            showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
         }
 
@@ -50,7 +50,7 @@ extension TheSafecracker {
         }
 
         increment(elementAt: index)
-        TapVisualizerView.showTap(at: element.activationPoint)
+        showFingerprint(at: element.activationPoint)
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
@@ -65,7 +65,7 @@ extension TheSafecracker {
         }
 
         decrement(elementAt: index)
-        TapVisualizerView.showTap(at: element.activationPoint)
+        showFingerprint(at: element.activationPoint)
         return InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
@@ -117,13 +117,13 @@ extension TheSafecracker {
             if let elementTarget = target.elementTarget,
                let index = resolveTraversalIndex(for: elementTarget),
                activate(elementAt: index) {
-                TapVisualizerView.showTap(at: point)
+                showFingerprint(at: point)
                 return InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
 
             // Fall back to synthetic tap
             if tap(at: point) {
-                TapVisualizerView.showTap(at: point)
+                showFingerprint(at: point)
                 return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
 
@@ -137,7 +137,7 @@ extension TheSafecracker {
             return result
         case .success(let point):
             let success = await longPress(at: point, duration: clampDuration(target.duration))
-            if success { TapVisualizerView.showTap(at: point) }
+            if success { showFingerprint(at: point) }
             return InteractionResult(success: success, method: .syntheticLongPress, message: nil, value: nil)
         }
     }
@@ -210,7 +210,7 @@ extension TheSafecracker {
         case .success(let center):
             let spread = target.spread ?? 40.0
             let success = twoFingerTap(at: center, spread: CGFloat(spread))
-            if success { TapVisualizerView.showTap(at: center) }
+            if success { showFingerprint(at: center) }
             return InteractionResult(success: success, method: .syntheticTwoFingerTap, message: nil, value: nil)
         }
     }

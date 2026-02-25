@@ -59,7 +59,7 @@ extension InsideMan {
 
     /// Returns all windows that should be included in the accessibility traversal,
     /// sorted by windowLevel descending (frontmost first).
-    /// Excludes our own overlay windows (TapVisualizerView).
+    /// Excludes our own overlay windows (FingerprintWindow).
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
@@ -68,7 +68,7 @@ extension InsideMan {
 
         return windowScene.windows
             .filter { window in
-                !(window is TapOverlayWindow) &&
+                !(window is FingerprintWindow) &&
                 !window.isHidden &&
                 window.bounds.size != .zero
             }
