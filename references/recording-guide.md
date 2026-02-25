@@ -114,7 +114,18 @@ Run your pre-planned CLI commands normally. Each command creates its own connect
 
 **Important**: Execute actions within 60 seconds of each other (the inactivity timeout). If you need to think longer, the recording will auto-stop — which is fine, since extended gaps mean the interesting part is over.
 
-### Step 5: Wait for recording to finish
+### Step 5: Stop the recording
+
+**Option A: Explicit stop (preferred for demos)**
+
+```bash
+buttonheist stop-recording --quiet
+wait $RECORD_PID
+```
+
+Use `buttonheist stop-recording` to end the recording at exactly the right moment. The stop signal tells the server to finalize the video, which is then received by the background `record` process. The `wait` ensures the file is written before you continue.
+
+**Option B: Let inactivity timeout handle it**
 
 ```bash
 wait $RECORD_PID
