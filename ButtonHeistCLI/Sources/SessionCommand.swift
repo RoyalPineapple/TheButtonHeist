@@ -77,6 +77,7 @@ final class SessionRunner {
         self.format = format
         self.client.token = ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
         self.client.forceSession = force
+        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = false
     }
 

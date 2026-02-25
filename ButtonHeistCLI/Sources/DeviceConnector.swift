@@ -27,6 +27,7 @@ final class DeviceConnector {
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
         self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
         self.client.forceSession = force
+        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = false
     }
 

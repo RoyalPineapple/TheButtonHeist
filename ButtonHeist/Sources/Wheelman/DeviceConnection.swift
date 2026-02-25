@@ -30,11 +30,14 @@ public final class DeviceConnection {
 
     /// When true, send forceSession in the auth handshake to take over an existing session
     public var forceSession: Bool
+    /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
+    public var driverId: String?
 
-    public init(device: DiscoveredDevice, token: String? = nil, forceSession: Bool = false) {
+    public init(device: DiscoveredDevice, token: String? = nil, forceSession: Bool = false, driverId: String? = nil) {
         self.device = device
         self.token = token
         self.forceSession = forceSession
+        self.driverId = driverId
     }
 
     public func connect() {
@@ -160,7 +163,8 @@ public final class DeviceConnection {
             // Send token if available, otherwise send empty token to request UI approval
             send(.authenticate(AuthenticatePayload(
                 token: token ?? "",
-                forceSession: forceSession ? true : nil
+                forceSession: forceSession ? true : nil,
+                driverId: driverId
             )))
         case .authFailed(let reason):
             debug("Auth failed: \(reason)")

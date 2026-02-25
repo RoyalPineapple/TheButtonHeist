@@ -29,6 +29,7 @@ INSIDEMAN_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEMAN_DISABLE=true               # Disable auto-start
 INSIDEMAN_TOKEN=my-secret-token      # Auth token (auto-generated and persisted in UserDefaults if not set)
 INSIDEMAN_ID=my-instance             # Human-readable instance identifier
+INSIDEMAN_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
 ```
 
 **Info.plist (fallback):**
@@ -323,6 +324,30 @@ public var onTokenReceived: ((String) -> Void)?
 
 Called when a token is received via on-device UI approval. The client should store this token and set it as `client.token` for future connections to skip the approval flow. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
+##### onSessionLocked
+
+```swift
+public var onSessionLocked: ((SessionLockedPayload) -> Void)?
+```
+
+Called when the server rejects the connection because another driver holds the active session. The `connectionState` will be set to `.failed` with the payload message. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking) for details.
+
+##### forceSession
+
+```swift
+public var forceSession: Bool
+```
+
+When `true`, the next connection sends `forceSession: true` in the auth handshake, forcibly taking over any existing session. Default: `false`.
+
+##### driverId
+
+```swift
+public var driverId: String?
+```
+
+Driver identity for session locking. When set, the server uses this to distinguish drivers that share the same auth token. Read from `BUTTONHEIST_DRIVER_ID` environment variable. When `nil`, the auth token is used as driver identity (backward-compatible).
+
 #### Methods
 
 ##### init()
@@ -439,7 +464,7 @@ public enum ActionError: Error, LocalizedError {
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "3.0"  // Protocol v3.0 with token auth
+public let protocolVersion = "3.1"  // Protocol v3.1 with token auth and session locking
 ```
 
 ### ConnectionState
@@ -532,6 +557,30 @@ Messages sent from server to client.
 - `error(String)` - Error description
 - `actionResult(ActionResult)` - Action outcome
 - `screen(ScreenPayload)` - Base64-encoded PNG
+- `sessionLocked(SessionLockedPayload)` - Session locked by another driver (sent before disconnect). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking).
+
+### AuthenticatePayload
+
+```swift
+public struct AuthenticatePayload: Codable, Sendable
+```
+
+#### Properties
+
+- `token: String` - Auth token for authentication
+- `forceSession: Bool?` - When `true`, forcibly takes over any existing session (v3.1)
+- `driverId: String?` - Driver identity for session locking (v3.1). When set, used instead of token for session identity.
+
+### SessionLockedPayload
+
+```swift
+public struct SessionLockedPayload: Codable, Sendable
+```
+
+#### Properties
+
+- `message: String` - Human-readable description of why the session is locked
+- `activeConnections: Int` - Number of active connections in the current session
 
 ### ActionTarget
 
@@ -757,6 +806,7 @@ All subcommands that connect to a device accept these connection options:
 | `--device <filter>` | Target a specific device by name, ID prefix, simulator UDID, or vendor ID |
 | `--host <address>` | Direct host address — skips Bonjour discovery |
 | `--port <number>` | Direct port number — skips Bonjour discovery |
+| `--force` | Force-takeover session from another driver |
 
 When `--host` and `--port` are both provided, the CLI connects directly via TCP without Bonjour discovery, reducing latency from ~2s to ~50ms per command.
 
@@ -768,6 +818,7 @@ When `--host` and `--port` are both provided, the CLI connects directly via TCP 
 | `BUTTONHEIST_PORT` | Default port number (overridden by `--port`) |
 | `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
 | `BUTTONHEIST_TOKEN` | Auth token for InsideMan |
+| `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking (distinguishes drivers sharing the same token) |
 
 Flags always take precedence over environment variables.
 
