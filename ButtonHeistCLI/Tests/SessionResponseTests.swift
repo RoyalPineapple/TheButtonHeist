@@ -128,6 +128,27 @@ final class SessionResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("abc123"))
     }
 
+    func testRecordingHumanFormatting() {
+        let payload = makeRecordingPayload(stopReason: .inactivity)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let output = response.humanFormatted()
+        XCTAssertTrue(output.contains("/tmp/rec.mp4"))
+        XCTAssertTrue(output.contains("390×844"))
+        XCTAssertTrue(output.contains("5.0s"))
+        XCTAssertTrue(output.contains("40 frames"))
+        XCTAssertTrue(output.contains("inactivity"))
+    }
+
+    func testRecordingDataHumanFormatting() {
+        let payload = makeRecordingPayload(stopReason: .manual)
+        let response = SessionResponse.recordingData(payload: payload)
+        let output = response.humanFormatted()
+        XCTAssertTrue(output.contains("390×844"))
+        XCTAssertTrue(output.contains("5.0s"))
+        XCTAssertTrue(output.contains("40 frames"))
+        XCTAssertTrue(output.contains("manual"))
+    }
+
     // MARK: - Delta Formatting Tests
 
     func testDeltaNoChangeFormatting() {
@@ -288,6 +309,30 @@ final class SessionResponseTests: XCTestCase {
         XCTAssertEqual(dict["pngData"] as? String, "base64data")
     }
 
+    func testRecordingJsonFormatting() {
+        let payload = makeRecordingPayload(stopReason: .maxDuration)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()!
+        XCTAssertEqual(dict["status"] as? String, "ok")
+        XCTAssertEqual(dict["path"] as? String, "/tmp/rec.mp4")
+        XCTAssertEqual(dict["width"] as? Int, 390)
+        XCTAssertEqual(dict["height"] as? Int, 844)
+        XCTAssertEqual(dict["duration"] as? Double, 5.0)
+        XCTAssertEqual(dict["frameCount"] as? Int, 40)
+        XCTAssertEqual(dict["fps"] as? Int, 8)
+        XCTAssertEqual(dict["stopReason"] as? String, "maxDuration")
+    }
+
+    func testRecordingDataJsonFormatting() {
+        let payload = makeRecordingPayload(stopReason: .fileSizeLimit)
+        let response = SessionResponse.recordingData(payload: payload)
+        let dict = response.jsonDict()!
+        XCTAssertEqual(dict["status"] as? String, "ok")
+        XCTAssertEqual(dict["videoData"] as? String, "AAAAIGZ0eXBpc29t")
+        XCTAssertEqual(dict["width"] as? Int, 390)
+        XCTAssertEqual(dict["stopReason"] as? String, "fileSizeLimit")
+    }
+
     // MARK: - Helpers
 
     private func makeDevice(name: String, simulatorUDID: String? = nil) -> DiscoveredDevice {
@@ -296,6 +341,21 @@ final class SessionResponseTests: XCTestCase {
             name: name,
             endpoint: .hostPort(host: "127.0.0.1", port: 1455),
             simulatorUDID: simulatorUDID
+        )
+    }
+
+    private func makeRecordingPayload(stopReason: RecordingPayload.StopReason) -> RecordingPayload {
+        let start = Date()
+        return RecordingPayload(
+            videoData: "AAAAIGZ0eXBpc29t",
+            width: 390,
+            height: 844,
+            duration: 5.0,
+            frameCount: 40,
+            fps: 8,
+            startTime: start,
+            endTime: start.addingTimeInterval(5.0),
+            stopReason: stopReason
         )
     }
 }
@@ -312,6 +372,8 @@ enum SessionResponse {
     case action(result: ActionResult)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
+    case recording(path: String, payload: RecordingPayload)
+    case recordingData(payload: RecordingPayload)
 
     func humanFormatted() -> String {
         switch self {
@@ -351,6 +413,19 @@ enum SessionResponse {
 
         case .screenshotData(let pngData, let width, let height):
             return "✓ Screenshot captured (\(Int(width)) × \(Int(height))) — base64 PNG follows\n\(pngData)"
+
+        case .recording(let path, let payload):
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording saved: \(path)  " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+
+        case .recordingData(let payload):
+            let sizeKB = payload.videoData.count * 3 / 4 / 1024
+            let dur = String(format: "%.1f", payload.duration)
+            return "✓ Recording captured " +
+                "(\(payload.width)×\(payload.height), \(dur)s, " +
+                "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
         }
     }
 
@@ -451,6 +526,30 @@ enum SessionResponse {
             return ["status": "ok", "path": path, "width": width, "height": height]
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
+
+        case .recording(let path, let payload):
+            return [
+                "status": "ok",
+                "path": path,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
+
+        case .recordingData(let payload):
+            return [
+                "status": "ok",
+                "videoData": payload.videoData,
+                "width": payload.width,
+                "height": payload.height,
+                "duration": payload.duration,
+                "frameCount": payload.frameCount,
+                "fps": payload.fps,
+                "stopReason": payload.stopReason.rawValue,
+            ]
         }
     }
 

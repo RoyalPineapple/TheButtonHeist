@@ -299,6 +299,31 @@ Request a PNG capture of the current screen.
 {"requestScreen":{}}
 ```
 
+### startRecording
+
+Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). Recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the inactivity timeout. Pings and keepalive messages do not reset the inactivity timer.
+
+```json
+{"startRecording":{"_0":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}}
+```
+
+All fields are optional — defaults are applied server-side.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fps` | `Int?` | Frames per second (1-15, default: 8) |
+| `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
+| `inactivityTimeout` | `Double?` | Seconds of no activity before auto-stop (default: 5.0) |
+| `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
+
+### stopRecording
+
+Stop an active recording. The server finalizes the video and sends a `recording` message.
+
+```json
+{"stopRecording":{}}
+```
+
 ### editAction
 
 Perform a standard edit action via the responder chain.
@@ -518,6 +543,52 @@ Response to `ping`.
 
 ```json
 {"pong":{}}
+```
+
+### recordingStarted
+
+Acknowledgement that recording has begun.
+
+```json
+{"recordingStarted":{}}
+```
+
+### recordingStopped
+
+Acknowledgement that the `stopRecording` command was received. The actual video payload will follow as a `recording` broadcast. Also sent if recording was already auto-stopping (inactivity or max duration).
+
+```json
+{"recordingStopped":{}}
+```
+
+### recording
+
+Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
+
+```json
+{"recording":{"_0":{
+  "videoData":"AAAAIGZ0eXBpc29t...",
+  "width":390,
+  "height":844,
+  "duration":5.2,
+  "frameCount":42,
+  "fps":8,
+  "startTime":"2026-02-24T10:30:00.000Z",
+  "endTime":"2026-02-24T10:30:05.200Z",
+  "stopReason":"inactivity"
+}}}
+```
+
+The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding.
+
+Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
+
+### recordingError
+
+Recording failed with an error.
+
+```json
+{"recordingError":{"_0":"AVAssetWriter failed to start"}}
 ```
 
 ### error
@@ -797,6 +868,29 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | `height` | `Double` | Screen height in points |
 | `timestamp` | `ISO8601 Date` | When screen was captured |
 
+### RecordingConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fps` | `Int?` | Frames per second (1-15, default: 8) |
+| `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
+| `inactivityTimeout` | `Double?` | Seconds of inactivity before auto-stop (default: 5.0) |
+| `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
+
+### RecordingPayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `videoData` | `String` | Base64-encoded H.264/MP4 video data |
+| `width` | `Int` | Video width in pixels |
+| `height` | `Int` | Video height in pixels |
+| `duration` | `Double` | Recording duration in seconds |
+| `frameCount` | `Int` | Number of frames captured |
+| `fps` | `Int` | Frames per second used during recording |
+| `startTime` | `ISO8601 Date` | When recording started |
+| `endTime` | `ISO8601 Date` | When recording ended |
+| `stopReason` | `String` | `"manual"`, `"inactivity"`, `"maxDuration"`, or `"fileSizeLimit"` |
+
 ## Example Session
 
 ```
@@ -855,6 +949,25 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 
 # Server confirms correction
 {"actionResult":{"_0":{"success":true,"method":"typeText","value":"Hello World"}}}
+
+# Client starts recording
+{"startRecording":{"_0":{"fps":8}}}
+
+# Server acknowledges
+{"recordingStarted":{}}
+
+# Client interacts while recording...
+{"activate":{"_0":{"identifier":"loginButton"}}}
+{"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}
+
+# Client stops recording
+{"stopRecording":{}}
+
+# Server acknowledges stop command
+{"recordingStopped":{}}
+
+# Server sends completed recording
+{"recording":{"_0":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}}
 
 # Client sends keepalive
 {"ping":{}}

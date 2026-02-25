@@ -18,6 +18,7 @@ public final class HeistClient {
     public private(set) var serverInfo: ServerInfo?
     public private(set) var currentInterface: Interface?
     public private(set) var currentScreen: ScreenPayload?
+    public private(set) var isRecording: Bool = false
     public private(set) var isDiscovering: Bool = false
     public private(set) var connectionState: ConnectionState = .disconnected
 
@@ -37,6 +38,9 @@ public final class HeistClient {
     public var onInterfaceUpdate: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
+    public var onRecordingStarted: (() -> Void)?
+    public var onRecording: ((RecordingPayload) -> Void)?
+    public var onRecordingError: ((String) -> Void)?
     /// Called when a token is received via UI approval (store for future reconnections)
     public var onTokenReceived: ((String) -> Void)?
     /// Called when the server rejects the connection because another driver holds the session
@@ -149,6 +153,7 @@ public final class HeistClient {
             self.serverInfo = nil
             self.currentInterface = nil
             self.currentScreen = nil
+            self.isRecording = false
             self.onDisconnected?(error)
         }
 
@@ -175,6 +180,19 @@ public final class HeistClient {
         connection?.onScreen = { [weak self] payload in
             self?.currentScreen = payload
             self?.onScreen?(payload)
+        }
+
+        connection?.onRecordingStarted = { [weak self] in
+            self?.isRecording = true
+            self?.onRecordingStarted?()
+        }
+        connection?.onRecording = { [weak self] payload in
+            self?.isRecording = false
+            self?.onRecording?(payload)
+        }
+        connection?.onRecordingError = { [weak self] message in
+            self?.isRecording = false
+            self?.onRecordingError?(message)
         }
 
         connection?.onError = { [weak self] message in
@@ -204,6 +222,7 @@ public final class HeistClient {
         serverInfo = nil
         currentInterface = nil
         currentScreen = nil
+        isRecording = false
     }
 
     // MARK: - Commands
@@ -261,6 +280,46 @@ public final class HeistClient {
                     timeoutTask.cancel()
                     continuation.resume(returning: payload)
                 }
+            }
+        }
+    }
+
+    /// Wait for a recording result with timeout
+    public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                if !didResume {
+                    didResume = true
+                    continuation.resume(throwing: ActionError.timeout)
+                }
+            }
+
+            onRecording = { payload in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(returning: payload)
+                }
+            }
+
+            onRecordingError = { message in
+                if !didResume {
+                    didResume = true
+                    timeoutTask.cancel()
+                    continuation.resume(throwing: RecordingError.serverError(message))
+                }
+            }
+        }
+    }
+
+    public enum RecordingError: Error, LocalizedError {
+        case serverError(String)
+        public var errorDescription: String? {
+            switch self {
+            case .serverError(let msg): return "Recording failed: \(msg)"
             }
         }
     }

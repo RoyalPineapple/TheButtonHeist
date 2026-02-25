@@ -175,11 +175,26 @@ Text input uses the same private API approach as KIF (Keep It Functional). The i
 - All private API calls use direct IMP invocation (`method(for:)` + `@convention(c)`) to avoid `perform(_:with:)` boxing non-object types
 - IOKit function pointers loaded via `dlsym` use `@convention(c)` types for correct 8-byte pointer size
 - Multi-touch events use unique finger identity/index per finger for proper tracking
-- `getKeyWindow()` filters overlay windows by `windowLevel <= .normal`
+- `windowForPoint()` filters out `FingerprintWindow` instances by type check
 
-### Tap Visualization
+### Fingerprint Tracking
 
-On successful tap, a `TapVisualizerView` overlay shows a 40pt white circle at the tap point that scales up and fades out over 0.8 seconds. The overlay is passthrough (does not intercept touches).
+Visual interaction feedback for taps and continuous gestures. All overlays are displayed via a passthrough `FingerprintWindow` (does not intercept touches) and composited into recordings by `Stakeout`.
+
+**Instant fingerprints** (`showFingerprint(at:)`):
+- On successful tap/activate, a 40pt white circle appears at the interaction point
+- Scales up to 1.5x and fades out over 0.8 seconds
+
+**Continuous gesture tracking** (`beginTrackingFingerprints` / `updateTrackingFingerprints` / `endTrackingFingerprints`):
+- Active during swipe, drag, long press, pinch, rotate, and draw path gestures
+- Shows one circle per finger (e.g., 2 circles for pinch/rotate)
+- Fast animate in: 0.12 seconds (scale from 0.1x to 1.0x)
+- Circles follow touch positions in real-time via `TheSafecracker.onGestureMove` callback
+- Slow animate out: 0.6 seconds (scale to 1.5x + fade)
+
+**Dual overlay system**:
+- `FingerprintWindow`: Live UIView-based overlay for on-device display (window level `statusBar + 100`)
+- `Stakeout` CGContext compositing: Draws fingerprint circles directly into recorded video frames via `drawFingerprint(in:at:elapsed:)` so interactions are visible in MP4 recordings
 
 ---
 
@@ -256,6 +271,14 @@ Server information received after connecting.
 
 Whether Bonjour discovery is currently active.
 
+##### isRecording
+
+```swift
+public private(set) var isRecording: Bool
+```
+
+Whether a screen recording is currently in progress.
+
 #### Callback Properties
 
 For non-SwiftUI usage, set these callbacks to receive events.
@@ -307,6 +330,30 @@ public var onScreen: ((ScreenPayload) -> Void)?
 ```
 
 Called when a screenshot is received.
+
+##### onRecordingStarted
+
+```swift
+public var onRecordingStarted: (() -> Void)?
+```
+
+Called when recording has begun.
+
+##### onRecording
+
+```swift
+public var onRecording: ((RecordingPayload) -> Void)?
+```
+
+Called when a completed recording is received.
+
+##### onRecordingError
+
+```swift
+public var onRecordingError: ((String) -> Void)?
+```
+
+Called when recording fails.
 
 ##### onDisconnected
 
@@ -435,6 +482,19 @@ Wait asynchronously for a screenshot with timeout.
 
 **Throws**: `ActionError.timeout` if no screenshot received within timeout.
 
+##### waitForRecording(timeout:)
+
+```swift
+public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload
+```
+
+Wait asynchronously for a recording to complete with timeout.
+
+**Parameters**:
+- `timeout`: Maximum wait time in seconds (default: 120).
+
+**Throws**: `ActionError.timeout` if no recording received within timeout, or `RecordingError.serverError` if recording fails.
+
 ##### displayName(for:)
 
 ```swift
@@ -537,6 +597,8 @@ Messages sent from client to server.
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot
+- `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
+- `stopRecording` - Stop active screen recording
 
 ### ServerMessage
 
@@ -558,6 +620,10 @@ Messages sent from server to client.
 - `actionResult(ActionResult)` - Action outcome
 - `screen(ScreenPayload)` - Base64-encoded PNG
 - `sessionLocked(SessionLockedPayload)` - Session locked by another driver (sent before disconnect). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking).
+- `recordingStarted` - Recording has begun
+- `recordingStopped` - Recording stop acknowledged
+- `recording(RecordingPayload)` - Completed recording (H.264/MP4 as base64)
+- `recordingError(String)` - Recording failed
 
 ### AuthenticatePayload
 
@@ -792,6 +858,41 @@ Screen capture payload.
 - `height: Double` - Screen height in points
 - `timestamp: Date` - When screenshot was captured
 
+### RecordingConfig
+
+```swift
+public struct RecordingConfig: Codable, Sendable
+```
+
+Recording configuration sent with `startRecording`.
+
+#### Properties
+
+- `fps: Int?` - Frames per second (default: 8, range: 1-15)
+- `scale: Double?` - Resolution scale factor (default: 1.0, range: 0.25-1.0)
+- `inactivityTimeout: Double?` - Seconds of inactivity before auto-stop (default: 5.0)
+- `maxDuration: Double?` - Maximum recording duration in seconds (default: 60.0)
+
+### RecordingPayload
+
+```swift
+public struct RecordingPayload: Codable, Sendable
+```
+
+Completed recording payload.
+
+#### Properties
+
+- `videoData: String` - Base64-encoded H.264/MP4 video data
+- `width: Int` - Video width in pixels
+- `height: Int` - Video height in pixels
+- `duration: Double` - Recording duration in seconds
+- `frameCount: Int` - Total frames captured
+- `fps: Int` - Frames per second used during recording
+- `startTime: Date` - When recording started
+- `endTime: Date` - When recording ended
+- `stopReason: StopReason` - Why recording stopped (`.manual`, `.inactivity`, `.maxDuration`, `.fileSizeLimit`)
+
 ---
 
 ## CLI Reference
@@ -972,6 +1073,37 @@ USAGE: buttonheist screenshot [OPTIONS]
 OPTIONS:
   -o, --output <path>     Output file path (default: stdout as raw PNG)
   -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+### buttonheist record
+
+Record the screen as H.264/MP4 video. Recording auto-stops on inactivity.
+
+```
+USAGE: buttonheist record [OPTIONS]
+
+OPTIONS:
+  -o, --output <path>         Output file path (default: recording.mp4)
+  --fps <n>                   Frames per second (default: 8, range: 1-15)
+  --scale <factor>            Resolution scale (default: 1.0, range: 0.25-1.0)
+  --max-duration <seconds>    Maximum recording duration (default: 60)
+  --inactivity-timeout <secs> Auto-stop after N seconds of inactivity (default: 5)
+  -t, --timeout <seconds>     Timeout waiting for recording to complete (default: 120)
+  -q, --quiet                 Suppress status messages
+  --device <filter>           Target a specific device
+```
+
+### buttonheist stop-recording
+
+Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `record` process (running in background) receives it and writes the file.
+
+```
+USAGE: buttonheist stop-recording [OPTIONS]
+
+OPTIONS:
+  --timeout <seconds>     Connection timeout (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
