@@ -1,5 +1,58 @@
 # CLAUDE.md
 
+## Tuist Project Generation
+
+This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are checked into git, so you don't need to run `tuist generate` after a fresh clone.
+
+### Project structure
+
+| File | Purpose |
+|------|---------|
+| `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
+| `Project.swift` | Root project: TheScore, InsideJob, Wheelman, ButtonHeist frameworks + tests |
+| `TestApp/Project.swift` | Demo apps: AccessibilityTestApp (SwiftUI) and UIKitTestApp (UIKit) |
+| `Tuist.swift` | Tuist configuration (default) |
+| `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
+| `Tuist/ProjectDescriptionHelpers/` | Reusable helpers for framework/app target templates |
+
+### When to regenerate
+
+Re-run `tuist generate` after changing any `Project.swift`, `Workspace.swift`, or `Tuist/Package.swift`:
+
+```bash
+# Install external dependencies (needed after changing Tuist/Package.swift)
+tuist install
+
+# Regenerate Xcode projects and workspace
+tuist generate
+```
+
+**Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
+
+### Adding a dependency
+
+1. Add the package to `Tuist/Package.swift`
+2. Run `tuist install` to fetch it
+3. Reference it in the relevant target with `.external(name: "PackageName")`
+4. Run `tuist generate`
+
+### Adding a new target
+
+Use the helpers in `Tuist/ProjectDescriptionHelpers/Project+Templates.swift`:
+- `.framework(name:destinations:dependencies:)` for multi-platform frameworks (iOS 17.0 + macOS 14.0)
+- `.app(name:destinations:deploymentTargets:sources:resources:dependencies:)` for apps
+
+Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
+
+### Demo app details
+
+The two test apps in `TestApp/Project.swift` both embed InsideJob and TheScore:
+
+- **AccessibilityTestApp** (`com.buttonheist.testapp`) — SwiftUI, sources in `TestApp/Sources/`
+- **UIKitTestApp** (`com.buttonheist.uikittestapp`) — UIKit, sources in `TestApp/UIKitSources/`
+
+Both include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
+
 ## Simulator Quick Start
 
 Build and deploy the test app to an iOS Simulator for end-to-end testing.
