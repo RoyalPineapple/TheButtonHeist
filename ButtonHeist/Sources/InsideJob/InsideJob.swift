@@ -308,83 +308,37 @@ public final class InsideJob: ElementStore {
 
         // Interaction dispatch — TheSafecracker handles all actions, gestures, and text entry
         case .activate(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeActivate(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeActivate(target) }
         case .increment(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeIncrement(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeDecrement(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeDecrement(target) }
         case .performCustomAction(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeCustomAction(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeEditAction(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeEditAction(target) }
         case .resignFirstResponder:
-            stakeout?.noteActivity()
             await performInteraction(respond: respond) { self.theSafecracker.executeResignFirstResponder() }
         case .touchTap(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeTap(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeTap(target) }
         case .touchLongPress(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeLongPress(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeLongPress(target) }
         case .touchSwipe(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeSwipe(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeSwipe(target) }
         case .touchDrag(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeDrag(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrag(target) }
         case .touchPinch(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executePinch(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executePinch(target) }
         case .touchRotate(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeRotate(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                self.theSafecracker.executeTwoFingerTap(target)
-            }
+            await performInteraction(respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeDrawPath(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeDrawBezier(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
-            stakeout?.noteActivity()
-            await performInteraction(respond: respond) {
-                await self.theSafecracker.executeTypeText(target)
-            }
+            await performInteraction(respond: respond) { await self.theSafecracker.executeTypeText(target) }
         }
     }
 
@@ -396,6 +350,7 @@ public final class InsideJob: ElementStore {
         respond: @escaping (Data) -> Void,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
+        stakeout?.noteActivity()
         refreshAccessibilityData()
         let beforeElements = snapshotElements()
 

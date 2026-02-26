@@ -65,7 +65,7 @@ extension InsideJob {
             return
         }
 
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let elements = snapshotElements()
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
 

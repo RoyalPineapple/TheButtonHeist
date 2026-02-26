@@ -301,12 +301,12 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 
 **Architecture**:
 ```
-TheClient (ObservableObject, @MainActor)
+TheClient (@Observable, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
 │   └── NWConnection (service resolution + data transport)
-└── Published Properties
+└── Observable Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
@@ -317,7 +317,7 @@ TheClient (ObservableObject, @MainActor)
 
 **Dual API Design**:
 
-1. **SwiftUI (Reactive)**: `@Published` properties trigger view updates
+1. **SwiftUI (Reactive)**: `@Observable` properties trigger view updates
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
@@ -576,7 +576,6 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `INSIDEJOB_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
-| `INSIDEJOB_PORT` | Fixed port number, 0 = auto | 0 |
 | `INSIDEJOB_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 | `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
