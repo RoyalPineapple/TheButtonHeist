@@ -3,7 +3,7 @@ import Network
 import TheScore
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "discovery")
+private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "discovery")
 
 @MainActor
 public final class DeviceDiscovery {
@@ -60,12 +60,10 @@ public final class DeviceDiscovery {
                 if case let .service(name, _, _, _) = result.endpoint {
                     // Extract TXT record identifiers if available
                     var simUDID: String?
-                    var vendorId: String?
                     var tokenHash: String?
                     var instanceId: String?
                     if case .bonjour(let txtRecord) = result.metadata {
                         simUDID = txtRecord["simudid"]
-                        vendorId = txtRecord["vendorid"]
                         tokenHash = txtRecord["tokenhash"]
                         instanceId = txtRecord["instanceid"]
                     }
@@ -74,7 +72,6 @@ public final class DeviceDiscovery {
                         name: name,
                         endpoint: result.endpoint,
                         simulatorUDID: simUDID,
-                        vendorIdentifier: vendorId,
                         tokenHash: tokenHash,
                         instanceId: instanceId
                     )

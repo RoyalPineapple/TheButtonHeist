@@ -636,7 +636,6 @@ enum SessionResponse {
             ]
             if let sid = d.shortId { info["shortId"] = sid }
             if let udid = d.simulatorUDID { info["simulatorUDID"] = udid }
-            if let vid = d.vendorIdentifier { info["vendorIdentifier"] = vid }
             return info
         }
         return ["status": "ok", "devices": infos]
