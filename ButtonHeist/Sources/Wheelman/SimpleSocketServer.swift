@@ -1,8 +1,11 @@
 import Foundation
 import Network
+import os.log
 
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
+private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "server")
+
 public final class SimpleSocketServer: @unchecked Sendable {
     public typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
@@ -63,11 +66,11 @@ public final class SimpleSocketServer: @unchecked Sendable {
                     self?.lock.lock()
                     self?._listeningPort = actualPort
                     self?.lock.unlock()
-                    NSLog("[SimpleSocketServer] Listening on port \(actualPort)")
+                    logger.info("Listening on port \(actualPort)")
                 }
                 readySemaphore.signal()
             case .failed(let error):
-                NSLog("[SimpleSocketServer] Listener failed: \(error)")
+                logger.error("Listener failed: \(error)")
                 readySemaphore.signal()
             default:
                 break
@@ -106,7 +109,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
             conn.cancel()
         }
         l?.cancel()
-        NSLog("[SimpleSocketServer] Server stopped")
+        logger.info("Server stopped")
     }
 
     public func send(_ data: Data, to clientId: Int) {
@@ -124,7 +127,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
 
         connection.send(content: dataToSend, completion: .contentProcessed { error in
             if let error {
-                NSLog("[SimpleSocketServer] Send error to client \(clientId): \(error)")
+                logger.error("Send error to client \(clientId): \(error)")
             }
         })
     }
@@ -163,7 +166,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
         lock.unlock()
 
         if currentCount >= Self.maxConnections {
-            NSLog("[SimpleSocketServer] Max connections (\(Self.maxConnections)) reached, rejecting")
+            logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
             connection.cancel()
             return
         }
@@ -177,10 +180,10 @@ public final class SimpleSocketServer: @unchecked Sendable {
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
-                NSLog("[SimpleSocketServer] Client \(clientId) connected")
+                logger.info("Client \(clientId) connected")
                 self?.onClientConnected?(clientId)
             case .failed(let error):
-                NSLog("[SimpleSocketServer] Client \(clientId) failed: \(error)")
+                logger.error("Client \(clientId) failed: \(error)")
                 self?.removeClient(clientId)
             case .cancelled:
                 self?.removeClient(clientId)
@@ -227,7 +230,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
             guard let self else { return }
 
             if let error {
-                NSLog("[SimpleSocketServer] Receive error from client \(clientId): \(error)")
+                logger.error("Receive error from client \(clientId): \(error)")
                 self.removeClient(clientId)
                 return
             }
@@ -238,7 +241,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
             }
 
             if messageBuffer.count > Self.maxBufferSize {
-                NSLog("[SimpleSocketServer] Client \(clientId) exceeded max buffer size, disconnecting")
+                logger.error("Client \(clientId) exceeded max buffer size, disconnecting")
                 self.removeClient(clientId)
                 return
             }
@@ -251,7 +254,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
                 if !messageData.isEmpty {
                     if self.isAuthenticated(clientId) {
                         if self.isRateLimited(clientId) {
-                            NSLog("[SimpleSocketServer] Client \(clientId) rate limited, dropping message")
+                            logger.warning("Client \(clientId) rate limited, dropping message")
                         } else {
                             self.onDataReceived?(clientId, messageData) { response in
                                 self.send(response, to: clientId)
@@ -259,7 +262,7 @@ public final class SimpleSocketServer: @unchecked Sendable {
                         }
                     } else {
                         if self.isRateLimited(clientId) {
-                            NSLog("[SimpleSocketServer] Unauthenticated client \(clientId) rate limited, dropping message")
+                            logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
                         } else {
                             self.onUnauthenticatedData?(clientId, messageData) { response in
                                 self.send(response, to: clientId)

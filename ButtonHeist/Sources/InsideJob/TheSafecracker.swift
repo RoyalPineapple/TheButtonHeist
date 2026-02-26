@@ -456,7 +456,7 @@ final class TheSafecracker {
     private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard let window = windowForPoint(points[0]) else {
-            serverLog("[TheSafecracker] No window found for point \(points[0])")
+            insideJobLogger.error("No window found for point \(points[0])")
             return false
         }
 
@@ -466,13 +466,13 @@ final class TheSafecracker {
         for point in points {
             let windowPoint = window.convert(point, from: nil)
             guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                serverLog("[TheSafecracker] No view at point \(point)")
+                insideJobLogger.error("No view at point \(point)")
                 return false
             }
             guard let touch = SyntheticTouchFactory.createTouch(
                 at: windowPoint, in: window, view: hitView, phase: .began
             ) else {
-                serverLog("[TheSafecracker] Failed to create touch")
+                insideJobLogger.error("Failed to create touch")
                 return false
             }
             touches.append(touch)
@@ -487,7 +487,7 @@ final class TheSafecracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
-            serverLog("[TheSafecracker] Failed to create began event")
+            insideJobLogger.error("Failed to create began event")
             return false
         }
 
@@ -548,7 +548,7 @@ final class TheSafecracker {
         }
 
         guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
-            serverLog("[TheSafecracker] Failed to create ended event")
+            insideJobLogger.error("Failed to create ended event")
             return false
         }
 

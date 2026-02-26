@@ -34,7 +34,7 @@ extension InsideJob {
             broadcastToSubscribed(data)
         }
 
-        serverLog("Broadcast hierarchy update to \(subscribedClients.count) subscriber(s)")
+        insideJobLogger.debug("Broadcast hierarchy update to \(subscribedClients.count) subscriber(s)")
     }
 
     // MARK: - Polling
@@ -77,7 +77,7 @@ extension InsideJob {
             // Notify stakeout of screen change (for inactivity timeout)
             stakeout?.noteScreenChange()
 
-            serverLog("Polling detected change, broadcast to \(subscribedClients.count) subscriber(s)")
+            insideJobLogger.debug("Polling detected change, broadcast to \(subscribedClients.count) subscriber(s)")
         }
     }
 

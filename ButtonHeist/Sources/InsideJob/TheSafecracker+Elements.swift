@@ -34,7 +34,7 @@ extension TheSafecracker {
                                    element.traits.contains(.keyboardKey)
 
         if staticTraitsOnly && !hasInteractiveTraits && element.customActions.isEmpty {
-            serverLog("Warning: Element '\(element.description)' has only static traits, tap may not work")
+            insideJobLogger.warning("Element '\(element.description)' has only static traits, tap may not work")
         }
 
         return nil

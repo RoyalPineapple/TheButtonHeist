@@ -2,6 +2,7 @@
 #if DEBUG
 import Foundation
 import UIKit
+import os.log
 import TheScore
 
 /// Manages client authentication, token validation, and UI-based connection approval.
@@ -15,6 +16,8 @@ import TheScore
 /// - Empty token → UI approval prompt (Allow/Deny), approved clients receive the token
 /// - Wrong token → rejected with hint to retry without a token for a fresh session
 /// - Any connection while a session is active from a different driver → busy signal
+private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "auth")
+
 @MainActor
 final class TheMuscle {
 
@@ -97,14 +100,14 @@ final class TheMuscle {
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
               case .authenticate(let payload) = message else {
-            NSLog("[TheMuscle] Client \(clientId) sent non-auth message before authenticating, disconnecting")
+            logger.warning("Client \(clientId) sent non-auth message before authenticating, disconnecting")
             disconnectClient?(clientId)
             return
         }
 
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
-            NSLog("[TheMuscle] Client \(clientId) requesting UI approval (no token)")
+            logger.info("Client \(clientId) requesting UI approval (no token)")
             pendingApprovalClients[clientId] = respond
             showApprovalAlert(
                 clientId: clientId,
@@ -117,7 +120,7 @@ final class TheMuscle {
         guard payload.token == authToken else {
             // Wrong token → reject with guidance to retry without a token
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
-            NSLog("[TheMuscle] Client \(clientId) sent invalid token, rejected")
+            logger.warning("Client \(clientId) sent invalid token, rejected")
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 self?.disconnectClient?(clientId)
@@ -132,7 +135,7 @@ final class TheMuscle {
         }
 
         markClientAuthenticated?(clientId)
-        NSLog("[TheMuscle] Client \(clientId) authenticated with token")
+        logger.info("Client \(clientId) authenticated with token")
         authenticatedClientIDs.insert(clientId)
         clientDriverIds[clientId] = driverIdentity
         updateAuthenticatedCount(delta: 1)
@@ -149,7 +152,7 @@ final class TheMuscle {
         // Session tracking
         activeSessionConnections.remove(clientId)
         if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
-            NSLog("[TheMuscle] All session connections gone, starting \(sessionReleaseTimeout)s release timer")
+            logger.info("All session connections gone, starting \(sessionReleaseTimeout)s release timer")
             sessionLeaseTimer?.cancel()
             sessionLeaseTimer = nil
             sessionReleaseTimer?.cancel()
@@ -171,7 +174,7 @@ final class TheMuscle {
         }
 
         markClientAuthenticated?(clientId)
-        NSLog("[TheMuscle] Client \(clientId) approved via UI")
+        logger.info("Client \(clientId) approved via UI")
         authenticatedClientIDs.insert(clientId)
         clientDriverIds[clientId] = driverIdentity
         sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
@@ -182,7 +185,7 @@ final class TheMuscle {
     func denyClient(_ clientId: Int) {
         guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
         sendMessage(.authFailed("Connection denied by user"), respond: respond)
-        NSLog("[TheMuscle] Client \(clientId) denied via UI")
+        logger.info("Client \(clientId) denied via UI")
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 100_000_000)
             self?.disconnectClient?(clientId)
@@ -202,7 +205,7 @@ final class TheMuscle {
 
     func invalidateToken() {
         authToken = UUID().uuidString
-        NSLog("[TheMuscle] Token invalidated, new token: \(authToken)")
+        logger.info("Token invalidated, new token: \(authToken)")
     }
 
     // MARK: - Session Lock
@@ -225,12 +228,12 @@ final class TheMuscle {
                 sessionReleaseTimer = nil
                 resetLeaseTimer()
                 activeSessionConnections.insert(clientId)
-                NSLog("[TheMuscle] Client \(clientId) joined existing session")
+                logger.info("Client \(clientId) joined existing session")
                 return true
             } else if forceSession {
                 // Force takeover — evict existing session
                 let evictedClients = Array(activeSessionConnections)
-                NSLog("[TheMuscle] Client \(clientId) force-taking session, evicting \(evictedClients.count) connection(s)")
+                logger.warning("Client \(clientId) force-taking session, evicting \(evictedClients.count) connection(s)")
                 releaseSession()
                 disconnectClientsForSession?(evictedClients)
                 claimSession(driverIdentity: driverIdentity, clientId: clientId)
@@ -242,7 +245,7 @@ final class TheMuscle {
                     activeConnections: activeSessionConnections.count
                 )
                 sendMessage(.sessionLocked(payload), respond: respond)
-                NSLog("[TheMuscle] Client \(clientId) rejected — session locked (\(activeSessionConnections.count) active connection(s))")
+                logger.warning("Client \(clientId) rejected — session locked (\(activeSessionConnections.count) active connection(s))")
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     self?.disconnectClient?(clientId)
@@ -262,7 +265,7 @@ final class TheMuscle {
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
         resetLeaseTimer()
-        NSLog("[TheMuscle] Session claimed by client \(clientId)")
+        logger.info("Session claimed by client \(clientId)")
     }
 
     private func releaseSession() {
@@ -274,7 +277,7 @@ final class TheMuscle {
         sessionLeaseTimer?.cancel()
         sessionLeaseTimer = nil
         if hadSession {
-            NSLog("[TheMuscle] Session released")
+            logger.info("Session released")
         }
     }
 
@@ -283,7 +286,7 @@ final class TheMuscle {
         sessionLeaseTimer = Task { [weak self, sessionLeaseTimeout] in
             try? await Task.sleep(nanoseconds: UInt64(sessionLeaseTimeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            NSLog("[TheMuscle] Session lease expired (no pings for \(sessionLeaseTimeout)s)")
+            logger.warning("Session lease expired (no pings for \(sessionLeaseTimeout)s)")
             self?.expireSessionLease()
         }
     }
@@ -292,7 +295,7 @@ final class TheMuscle {
         let evictedClients = Array(activeSessionConnections)
         releaseSession()
         invalidateToken()
-        NSLog("[TheMuscle] Token invalidated after lease expiry")
+        logger.info("Token invalidated after lease expiry")
         if !evictedClients.isEmpty {
             disconnectClientsForSession?(evictedClients)
         }
@@ -348,7 +351,7 @@ final class TheMuscle {
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
         guard let data = try? JSONEncoder().encode(message) else {
-            NSLog("[TheMuscle] Failed to encode message")
+            logger.error("Failed to encode message")
             return
         }
         respond(data)
