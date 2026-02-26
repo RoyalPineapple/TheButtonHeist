@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
- import ButtonHeist
+import ButtonHeist
 
 final class ActionCommandTests: XCTestCase {
 
