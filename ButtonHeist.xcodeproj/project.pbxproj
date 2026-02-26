@@ -68,6 +68,7 @@
 		F8BF6A4A452617B8F596081A /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */; };
 		FCFBD502755AAEA15B44025F /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A1C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -238,6 +239,7 @@
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
 		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
 		121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
+		B2A1C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		13BFD7949B07EB311587CE2D /* Stakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stakeout.swift; sourceTree = "<group>"; };
 		16D22AA8BFD4E7485F5D5C57 /* MastermindCommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MastermindCommandCatalog.swift; sourceTree = "<group>"; };
 		1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
@@ -509,6 +511,7 @@
 			isa = PBXGroup;
 			children = (
 				121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */,
+				B2A1C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift */,
 			);
 			path = InsideJobTests;
 			sourceTree = "<group>";
@@ -1000,6 +1003,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FCFBD502755AAEA15B44025F /* BezierSamplerTests.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

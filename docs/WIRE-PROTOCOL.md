@@ -84,17 +84,12 @@ Authenticate with the server. Must be the first message sent after receiving `au
 {"authenticate":{"_0":{"token":"your-secret-token"}}}
 ```
 
-**With force session takeover** (v3.1):
-```json
-{"authenticate":{"_0":{"token":"your-secret-token","forceSession":true}}}
-```
-
 **With driver identity** (v3.1):
 ```json
 {"authenticate":{"_0":{"token":"your-secret-token","driverId":"agent-1"}}}
 ```
 
-The optional `forceSession` field requests immediate takeover of any existing session held by a different driver. The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
+The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
 
 ### requestInterface
 
@@ -1011,7 +1006,6 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
-| `forceSession` | `Bool?` | When `true`, forcibly takes over any existing session (v3.1). Omitted or `null` for normal auth. |
 | `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
@@ -1033,7 +1027,7 @@ Token-based authentication is required for all connections:
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
 
-The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### Session Locking
 
@@ -1051,11 +1045,12 @@ This maintains backward compatibility: existing clients without `driverId` use t
 
 1. **Claim** — The first authenticated client's driver identity becomes the active session
 2. **Join** — Subsequent connections with the **same driver identity** are allowed (same driver, different commands)
-3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected
-4. **Release timer** — When the last connection from the session holder disconnects, a configurable timer starts (default: 30 seconds)
+3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected. The busy signal includes the inactivity timeout so the client knows how long to wait.
+4. **Inactivity timer** — When the last connection from the session holder disconnects, a single inactivity timer starts (default: 30 seconds)
 5. **Release** — Timer fires → session clears → next driver can claim
-6. **Cancel timer** — Same-token reconnect within the timeout window cancels the release timer
-7. **Force takeover** — `forceSession: true` in the auth payload evicts the current session holder immediately
+6. **Cancel timer** — Same-driver reconnect within the timeout window cancels the timer
+
+There is only one timer (inactivity). There is no separate "lease" timer. The token is **not** invalidated when the session expires — it remains valid for future connections.
 
 ```mermaid
 sequenceDiagram
@@ -1071,47 +1066,19 @@ sequenceDiagram
     S-xB: disconnect
 
     A->>S: TCP Close
-    Note over S: 30s timer starts
+    Note over S: 30s inactivity timer starts
     Note over S: 30s timer fires → session released
 
     B->>S: authenticate(token:"xyz")
     S-->>B: info (session claimed)
 ```
 
-#### Force Takeover
-
-A client can force-take a session by sending `forceSession: true` in the authenticate payload. This immediately evicts all connections from the current session holder and claims the session.
-
-```mermaid
-sequenceDiagram
-    participant A as Driver A (token: "abc")
-    participant S as Server
-    participant B as Driver B (token: "xyz")
-
-    Note over A,S: Active session
-    B->>S: authenticate(forceSession:true, token:"xyz")
-    S-xA: TCP disconnected (evicted)
-    S-->>B: info (session claimed)
-```
-
-From the CLI, use the `--force` flag on any command:
-```bash
-buttonheist action --identifier loginButton --force
-buttonheist session --force
-```
-
 #### Configuration
 
-The session release timeout (time after last connection disconnects before the session is released) is configurable:
+The session inactivity timeout (time after last connection disconnects before the session is released) is configurable:
 
 - **Environment variable**: `INSIDEJOB_SESSION_TIMEOUT` (in seconds)
 - **Default**: 30 seconds
-
-The session lease timeout (time without any pings before the session is released and the token invalidated) is separately configurable:
-
-- **Environment variable**: `INSIDEJOB_SESSION_LEASE` (in seconds)
-- **Default**: 30 seconds
-- **Minimum**: 10 seconds
 
 ### UI Approval Flow
 
