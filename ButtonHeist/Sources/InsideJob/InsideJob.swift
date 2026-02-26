@@ -56,7 +56,7 @@ public final class InsideJob {
     private var isSuspended = false
 
     // Screen recording
-    var stakeout: Stakeout?
+    var stakeout: TheStakeout?
 
     // MARK: - Timing Constants
 
@@ -81,10 +81,6 @@ public final class InsideJob {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.theSafecracker.bagman = self.bagman
-        // Wire gesture tracking so Stakeout can overlay finger positions in recordings
-        self.theSafecracker.onGestureMove = { [weak self] points in
-            self?.stakeout?.updateInteractionPositions(points)
-        }
     }
 
     // MARK: - Public Methods
@@ -328,7 +324,6 @@ public final class InsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeTimestamp = Date()
         let beforeElements = bagman.snapshotElements()
 
         let result = await interaction()
@@ -351,18 +346,14 @@ public final class InsideJob {
             )
         }
 
-        // Record interaction to Stakeout if recording is active
+        // Record interaction to TheStakeout if recording is active.
+        // Uses the delta already computed in actionResult to avoid duplicating full interface snapshots.
         if let stakeout, stakeout.state == .recording {
-            if !result.success {
-                bagman.refreshAccessibilityData()
-            }
-            let afterElements = bagman.snapshotElements()
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
                 result: actionResult,
-                interfaceBefore: Interface(timestamp: beforeTimestamp, elements: beforeElements),
-                interfaceAfter: Interface(timestamp: Date(), elements: afterElements)
+                interfaceDelta: actionResult.interfaceDelta
             )
             stakeout.recordInteraction(event: event)
         }

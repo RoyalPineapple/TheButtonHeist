@@ -24,10 +24,10 @@ Audit all wire types for efficiency. Fix the `InteractionEvent` to use diffs. Fi
 
 **Per Stakeout plan:** Replace full `Interface` snapshots with `InterfaceDelta`.
 
-- [ ] **Simplify `InteractionEvent`** — remove `interfaceBefore`/`interfaceAfter`, rely on `result.interfaceDelta`
-- [ ] **Update `ServerMessages.swift`**
-- [ ] **Update `RecordingPayloadTests.swift`**
-- [ ] **Build passes** after phase
+- [x] **Simplify `InteractionEvent`** — remove `interfaceBefore`/`interfaceAfter`, rely on `result.interfaceDelta`
+- [x] **Update `ServerMessages.swift`**
+- [x] **Update `RecordingPayloadTests.swift`**
+- [x] **Build passes** after phase
 
 ## Phase 3: Fix ElementAction Codable Edge Case
 
@@ -39,11 +39,11 @@ Audit all wire types for efficiency. Fix the `InteractionEvent` to use diffs. Fi
 
 ## Phase 4: Fix ActionMethod Test Coverage
 
-- [ ] **Add `.typeText` test case**
-- [ ] **Add `.editAction` test case**
-- [ ] **Add `.resignFirstResponder` test case**
-- [ ] **Add `.waitForIdle` test case**
-- [ ] **Tests pass**
+- [x] **Add `.typeText` test case**
+- [x] **Add `.editAction` test case**
+- [x] **Add `.resignFirstResponder` test case**
+- [x] **Add `.waitForIdle` test case**
+- [x] **Tests pass** (pre-existing SPM build issue in SimpleSocketServer.swift prevents `swift test`; xcodebuild schemes all pass)
 
 ### Files affected:
 - `ButtonHeistCLI/Tests/ActionCommandTests.swift`
@@ -62,8 +62,8 @@ No changes needed. Current string version `"3.1"` is fine.
 
 ## Verification
 
-- [ ] `InteractionEvent` no longer contains full `Interface` snapshots
-- [ ] `ElementAction` edge case documented or fixed
-- [ ] All `ActionMethod` cases tested
+- [x] `InteractionEvent` no longer contains full `Interface` snapshots
+- [x] `ElementAction` edge case documented or fixed
+- [x] All `ActionMethod` cases tested
 - [ ] API.md and WIRE-PROTOCOL.md match implementation
-- [ ] Tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test`
+- [x] Tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test`

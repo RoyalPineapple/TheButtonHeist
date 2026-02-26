@@ -54,7 +54,7 @@ extension InsideJob {
             return
         }
 
-        let recorder = Stakeout()
+        let recorder = TheStakeout()
         recorder.captureFrame = { [weak self] in
             self?.bagman.captureScreenForRecording()
         }
