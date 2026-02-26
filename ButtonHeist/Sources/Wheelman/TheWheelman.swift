@@ -32,7 +32,7 @@ public final class TheWheelman {
     // MARK: - Connection Callbacks
 
     public var onConnected: ((ServerInfo) -> Void)?
-    public var onDisconnected: ((Error?) -> Void)?
+    public var onDisconnected: ((DisconnectReason) -> Void)?
     public var onInterface: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
@@ -110,12 +110,12 @@ public final class TheWheelman {
             self?.startKeepalive()
         }
 
-        connection?.onDisconnected = { [weak self] error in
+        connection?.onDisconnected = { [weak self] reason in
             guard let self else { return }
             self.isConnected = false
             self.connectedDevice = nil
             self.serverInfo = nil
-            self.onDisconnected?(error)
+            self.onDisconnected?(reason)
         }
 
         connection?.onServerInfo = { [weak self] info in
@@ -187,7 +187,7 @@ public final class TheWheelman {
         guard isConnected else { return }
         logger.warning("Force-disconnecting stale connection")
         disconnect()
-        onDisconnected?(nil)
+        onDisconnected?(.localDisconnect)
     }
 
     // MARK: - Commands
@@ -255,11 +255,11 @@ public final class TheWheelman {
             connected = true
             savedOnConnected?(info)
         }
-        onDisconnected = { error in
+        onDisconnected = { reason in
             if connectionError == nil {
-                connectionError = error
+                connectionError = reason
             }
-            savedOnDisconnected?(error)
+            savedOnDisconnected?(reason)
         }
         onAuthFailed = { reason in
             connectionError = ConnectionError.authFailed(reason)
@@ -296,7 +296,7 @@ public final class TheWheelman {
             if let wheelmanError = connectionError as? ConnectionError {
                 throw wheelmanError
             }
-            throw ConnectionError.connectionFailed(connectionError.localizedDescription)
+            throw ConnectionError.connectionFailed("\(type(of: connectionError)): \(connectionError.localizedDescription)")
         }
 
         onStatus?("Connected to \(displayName(for: device))")
@@ -308,8 +308,8 @@ public final class TheWheelman {
         guard !autoReconnectInstalled else { return }
         autoReconnectInstalled = true
         let savedOnDisconnected = onDisconnected
-        onDisconnected = { [weak self] error in
-            savedOnDisconnected?(error)
+        onDisconnected = { [weak self] reason in
+            savedOnDisconnected?(reason)
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
