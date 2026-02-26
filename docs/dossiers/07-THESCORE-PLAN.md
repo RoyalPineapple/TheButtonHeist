@@ -33,9 +33,9 @@ Audit all wire types for efficiency. Fix the `InteractionEvent` to use diffs. Fi
 
 **Bug:** A custom action named `"activate"` decodes as built-in `.activate`.
 
-- [ ] **Fix Codable implementation** — use tagged encoding for custom actions or document constraint
-- [ ] **Update `Elements.swift`**
-- [ ] **Build passes** after phase
+- [x] **Fix Codable implementation** — use tagged encoding for custom actions ({"custom":"name"})
+- [x] **Update `Elements.swift`**
+- [x] **Build passes** after phase
 
 ## Phase 4: Fix ActionMethod Test Coverage
 

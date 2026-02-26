@@ -38,10 +38,10 @@ public func insideJobAutoStartFromLoad() { ... }
 }
 ```
 
-- [ ] **Replace `@_cdecl` function** with `@objc` class `InsideJobAutoStarter`
-- [ ] **Update `ThePlantAutoStart.m`** to call `[InsideJobAutoStarter autoStart]`
+- [x] **Replace `@_cdecl` function** with `@objc` class `InsideJobAutoStarter`
+- [x] **Update `ThePlantAutoStart.m`** to call `[InsideJobAutoStarter autoStart]` (via runtime lookup)
 - [ ] **Verify app still auto-starts** InsideJob on framework load
-- [ ] **Build passes**
+- [x] **Build passes**
 
 ## Phase 2: No Other Changes
 
@@ -50,7 +50,7 @@ public func insideJobAutoStartFromLoad() { ... }
 
 ## Verification
 
-- [ ] `@_cdecl` removed from codebase
-- [ ] `@objc` class method used instead
+- [x] `@_cdecl` removed from codebase
+- [x] `@objc` class method used instead
 - [ ] App still auto-starts InsideJob on framework load
-- [ ] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp -destination 'platform=iOS Simulator,name=iPhone 16' build`
+- [x] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp -destination 'platform=iOS Simulator,name=iPhone 16' build`

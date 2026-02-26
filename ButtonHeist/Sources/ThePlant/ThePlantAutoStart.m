@@ -1,7 +1,7 @@
 #ifdef DEBUG
 #import <Foundation/Foundation.h>
-
-extern void InsideJob_autoStartFromLoad(void);
+#import <objc/runtime.h>
+#import <objc/message.h>
 
 @interface ThePlantAutoStart : NSObject
 @end
@@ -10,7 +10,14 @@ extern void InsideJob_autoStartFromLoad(void);
 
 + (void)load {
     dispatch_async(dispatch_get_main_queue(), ^{
-        InsideJob_autoStartFromLoad();
+        // Look up the Swift class at runtime to avoid generated header dependency
+        Class cls = NSClassFromString(@"InsideJobAutoStarter");
+        if (cls) {
+            SEL sel = NSSelectorFromString(@"autoStart");
+            if ([cls respondsToSelector:sel]) {
+                ((void (*)(id, SEL))objc_msgSend)(cls, sel);
+            }
+        }
     });
 }
 
