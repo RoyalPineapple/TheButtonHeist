@@ -7,10 +7,7 @@ import TheScore
 import Wheelman
 import os.log
 
-/// Debug logging helper - uses NSLog for maximum visibility
-func serverLog(_ message: String) {
-    NSLog("[InsideJob] %@", message)
-}
+let insideJobLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "server")
 
 /// Weak reference wrapper for interactive accessibility objects.
 struct WeakObject {
@@ -104,7 +101,7 @@ public final class InsideJob: ElementStore {
     public func start() throws {
         guard !isRunning else { return }
 
-        serverLog("Starting InsideJob with SimpleSocketServer...")
+        insideJobLogger.info("Starting InsideJob with SimpleSocketServer...")
 
         let server = SimpleSocketServer()
         wireServer(server)
@@ -113,10 +110,10 @@ public final class InsideJob: ElementStore {
         self.socketServer = server
         isRunning = true
 
-        serverLog("Server listening on port \(actualPort)")
-        serverLog("Auth token: \(muscle.authToken)")
+        insideJobLogger.info("Server listening on port \(actualPort)")
+        insideJobLogger.info("Auth token: \(muscle.authToken)")
         if let instanceId {
-            serverLog("Instance ID: \(instanceId)")
+            insideJobLogger.info("Instance ID: \(instanceId)")
         }
         advertiseService(port: actualPort)
 
@@ -126,7 +123,7 @@ public final class InsideJob: ElementStore {
         startAccessibilityObservation()
         startLifecycleObservation()
 
-        serverLog("Server started successfully")
+        insideJobLogger.info("Server started successfully")
     }
 
     /// Stop the server
@@ -147,7 +144,7 @@ public final class InsideJob: ElementStore {
         stopAccessibilityObservation()
         stopLifecycleObservation()
 
-        serverLog("Server stopped")
+        insideJobLogger.info("Server stopped")
     }
 
     /// Notify the bridge that the UI has changed and subscribers should receive an update.
@@ -164,7 +161,7 @@ public final class InsideJob: ElementStore {
         pollingInterval = UInt64(clampedInterval * 1_000_000_000)
         isPollingEnabled = true
         startPollingLoop()
-        serverLog("Polling enabled (interval: \(clampedInterval)s)")
+        insideJobLogger.info("Polling enabled (interval: \(clampedInterval)s)")
     }
 
     /// Disable polling for automatic updates
@@ -189,14 +186,14 @@ public final class InsideJob: ElementStore {
 
         server.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
-                serverLog("Client \(clientId) connected, awaiting auth")
+                insideJobLogger.info("Client \(clientId) connected, awaiting auth")
                 self?.muscle.sendAuthRequired(clientId: clientId)
             }
         }
 
         server.onClientDisconnected = { [weak self] clientId in
             Task { @MainActor in
-                serverLog("Client \(clientId) disconnected")
+                insideJobLogger.info("Client \(clientId) disconnected")
                 self?.subscribedClients.remove(clientId)
                 self?.muscle.handleClientDisconnected(clientId)
             }
@@ -259,7 +256,7 @@ public final class InsideJob: ElementStore {
 
         netService = service
         netService?.publish()
-        serverLog("Advertising as '\(serviceName)' on port \(port)")
+        insideJobLogger.info("Advertising as '\(serviceName)' on port \(port)")
     }
 
     // MARK: - Client Handling
@@ -271,27 +268,27 @@ public final class InsideJob: ElementStore {
     // swiftlint:disable:next cyclomatic_complexity
     private func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
-            serverLog("Failed to decode client message")
+            insideJobLogger.error("Failed to decode client message")
             if String(data: data, encoding: .utf8) != nil {
-                serverLog("Unparsable message: \(data.count) bytes")
+                insideJobLogger.debug("Unparsable message: \(data.count) bytes")
             }
             return
         }
 
-        serverLog("Received from client \(clientId): \(String(describing: message).prefix(40))")
+        insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
         switch message {
         case .authenticate:
             break // Already authenticated via onUnauthenticatedData path
         case .requestInterface:
-            serverLog("Interface requested by client \(clientId)")
+            insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(respond: respond)
         case .subscribe:
             subscribedClients.insert(clientId)
-            serverLog("Client \(clientId) subscribed (\(subscribedClients.count) subscribers)")
+            insideJobLogger.info("Client \(clientId) subscribed (\(subscribedClients.count) subscribers)")
         case .unsubscribe:
             subscribedClients.remove(clientId)
-            serverLog("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
+            insideJobLogger.info("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
         case .ping:
             muscle.noteClientActivity(clientId)
             sendMessage(.pong, respond: respond)
@@ -411,10 +408,10 @@ public final class InsideJob: ElementStore {
 
     func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
         guard let data = try? JSONEncoder().encode(message) else {
-            serverLog("Failed to encode message")
+            insideJobLogger.error("Failed to encode message")
             return
         }
-        serverLog("Sending \(data.count) bytes")
+        insideJobLogger.debug("Sending \(data.count) bytes")
         respond(data)
     }
 
@@ -495,12 +492,12 @@ public final class InsideJob: ElementStore {
     }
 
     @objc private func appDidEnterBackground() {
-        serverLog("App entering background, suspending server")
+        insideJobLogger.info("App entering background, suspending server")
         suspend()
     }
 
     @objc private func appWillEnterForeground() {
-        serverLog("App entering foreground, resuming server")
+        insideJobLogger.info("App entering foreground, resuming server")
         resume()
     }
 
@@ -529,14 +526,14 @@ public final class InsideJob: ElementStore {
         interactiveObjects.removeAll()
         lastHierarchyHash = 0
 
-        serverLog("Server suspended")
+        insideJobLogger.info("Server suspended")
     }
 
     private func resume() {
         guard isRunning, isSuspended else { return }
         isSuspended = false
 
-        serverLog("Resuming server...")
+        insideJobLogger.info("Resuming server...")
 
         do {
             let server = SimpleSocketServer()
@@ -545,7 +542,7 @@ public final class InsideJob: ElementStore {
             let actualPort = try server.start(port: 0, bindToLoopback: shouldBindToLoopback)
             self.socketServer = server
 
-            serverLog("Server resumed on port \(actualPort)")
+            insideJobLogger.info("Server resumed on port \(actualPort)")
             advertiseService(port: actualPort)
 
             startAccessibilityObservation()
@@ -554,9 +551,9 @@ public final class InsideJob: ElementStore {
                 startPollingLoop()
             }
 
-            serverLog("Server resume complete")
+            insideJobLogger.info("Server resume complete")
         } catch {
-            serverLog("Failed to resume server: \(error)")
+            insideJobLogger.error("Failed to resume server: \(error)")
             isRunning = false
             isSuspended = false
         }
