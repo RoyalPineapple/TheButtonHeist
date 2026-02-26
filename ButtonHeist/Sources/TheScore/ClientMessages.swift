@@ -68,6 +68,15 @@ public enum ClientMessage: Codable, Sendable {
     /// Perform a standard edit action (copy, paste, cut, select, selectAll) on the first responder
     case editAction(EditActionTarget)
 
+    /// Scroll via accessibility scroll action (bubbles up to nearest scroll view)
+    case scroll(ScrollTarget)
+
+    /// Scroll the nearest scroll view ancestor until the target element is visible
+    case scrollToVisible(ActionTarget)
+
+    /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)
+    case scrollToEdge(ScrollToEdgeTarget)
+
     /// Resign first responder (dismiss keyboard)
     case resignFirstResponder
 
@@ -466,4 +475,40 @@ public struct RecordingConfig: Codable, Sendable {
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
+}
+
+/// Direction for accessibility scroll actions
+public enum ScrollDirection: String, Codable, Sendable {
+    case up, down, left, right, next, previous
+}
+
+/// Target for accessibility scroll command
+public struct ScrollTarget: Codable, Sendable {
+    /// Element to scroll from (accessibilityScroll bubbles up to nearest scroll view)
+    public let elementTarget: ActionTarget?
+    /// Scroll direction
+    public let direction: ScrollDirection
+
+    public init(elementTarget: ActionTarget? = nil, direction: ScrollDirection) {
+        self.elementTarget = elementTarget
+        self.direction = direction
+    }
+}
+
+/// Edge for scroll-to-edge commands
+public enum ScrollEdge: String, Codable, Sendable {
+    case top, bottom, left, right
+}
+
+/// Target for scroll-to-edge command
+public struct ScrollToEdgeTarget: Codable, Sendable {
+    /// Element whose nearest scroll view ancestor to scroll
+    public let elementTarget: ActionTarget?
+    /// Which edge to scroll to
+    public let edge: ScrollEdge
+
+    public init(elementTarget: ActionTarget? = nil, edge: ScrollEdge) {
+        self.elementTarget = elementTarget
+        self.edge = edge
+    }
 }

@@ -6,6 +6,68 @@ import TheScore
 
 extension TheSafecracker {
 
+    // MARK: - Accessibility Scroll
+
+    func executeScroll(_ target: ScrollTarget) -> InteractionResult {
+        guard let elementTarget = target.elementTarget else {
+            return .failure(.accessibilityScroll, message: "Element target required for scroll")
+        }
+
+        guard let index = resolveTraversalIndex(for: elementTarget) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll target")
+        }
+
+        let uiDirection: UIAccessibilityScrollDirection
+        switch target.direction {
+        case .up:       uiDirection = .up
+        case .down:     uiDirection = .down
+        case .left:     uiDirection = .left
+        case .right:    uiDirection = .right
+        case .next:     uiDirection = .next
+        case .previous: uiDirection = .previous
+        }
+
+        let success = scroll(elementAt: index, direction: uiDirection)
+        return InteractionResult(
+            success: success,
+            method: .accessibilityScroll,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
+    func executeScrollToEdge(_ target: ScrollToEdgeTarget) -> InteractionResult {
+        guard let elementTarget = target.elementTarget else {
+            return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
+        }
+
+        guard let index = resolveTraversalIndex(for: elementTarget) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll_to_edge target")
+        }
+
+        let success = scrollToEdge(elementAt: index, edge: target.edge)
+        return InteractionResult(
+            success: success,
+            method: .scrollToEdge,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
+    func executeScrollToVisible(_ target: ActionTarget) -> InteractionResult {
+        guard let index = resolveTraversalIndex(for: target) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll_to_visible target")
+        }
+
+        let success = scrollToVisible(elementAt: index)
+        return InteractionResult(
+            success: success,
+            method: .scrollToVisible,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ActionTarget) -> InteractionResult {

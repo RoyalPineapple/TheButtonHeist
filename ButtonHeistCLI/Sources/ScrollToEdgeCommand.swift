@@ -1,0 +1,64 @@
+import ArgumentParser
+import Foundation
+import Darwin
+import ButtonHeist
+
+struct ScrollToEdgeCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "scroll-to-edge",
+        abstract: "Scroll to the edge of a scroll view",
+        discussion: """
+            Finds the nearest scroll view ancestor of the target element and
+            scrolls it all the way to the specified edge.
+
+            Examples:
+              buttonheist scroll-to-edge --identifier "buttonheist.longList.item-5" --edge bottom
+              buttonheist scroll-to-edge --index 3 --edge top
+            """
+    )
+
+    @Option(name: .long, help: "Element identifier (finds nearest scroll view ancestor)")
+    var identifier: String?
+
+    @Option(name: .long, help: "Element index")
+    var index: Int?
+
+    @Option(name: .long, help: "Edge to scroll to: top, bottom, left, right")
+    var edge: String
+
+    @OptionGroup var connection: ConnectionOptions
+
+    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
+    var format: OutputFormat?
+
+    @Option(name: .shortAndLong, help: "Timeout in seconds")
+    var timeout: Double = 10.0
+
+    @MainActor
+    mutating func run() async throws {
+        guard identifier != nil || index != nil else {
+            throw ValidationError("Must specify --identifier or --index")
+        }
+
+        guard let scrollEdge = ScrollEdge(rawValue: edge.lowercased()) else {
+            throw ValidationError("Invalid edge '\(edge)'. Valid: top, bottom, left, right")
+        }
+
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        try await connector.connect()
+        defer { connector.disconnect() }
+        let client = connector.client
+
+        let target = ActionTarget(identifier: identifier, order: index)
+        let message = ClientMessage.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: scrollEdge))
+
+        if !connection.quiet {
+            logStatus("Sending scroll_to_edge...")
+        }
+
+        client.send(message)
+
+        let result = try await client.waitForActionResult(timeout: timeout)
+        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Scroll to edge")
+    }
+}

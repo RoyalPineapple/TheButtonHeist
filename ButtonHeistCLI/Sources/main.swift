@@ -18,7 +18,7 @@ struct ButtonHeist: AsyncParsableCommand {
               buttonheist touch tap --x 100 --y 200
             """,
         version: "2.1.0",
-        subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self,
+        subcommands: [ListCommand.self, WatchCommand.self, ActionCommand.self, ScrollCommand.self, ScrollToVisibleCommand.self, ScrollToEdgeCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
                        SessionCommand.self,
                        RecordCommand.self, StopRecordingCommand.self,
