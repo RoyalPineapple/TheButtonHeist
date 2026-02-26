@@ -9,7 +9,7 @@ extension TheSafecracker {
     // MARK: - Text Entry
 
     func executeTypeText(_ target: TypeTextTarget) async -> InteractionResult {
-        let interKeyDelay: UInt64 = 30_000_000 // 30ms
+        let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {

@@ -26,6 +26,7 @@ When the InsideJob framework loads:
 ```bash
 INSIDEJOB_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
 INSIDEJOB_DISABLE=true               # Disable auto-start
+INSIDEJOB_DISABLE_FINGERPRINTS=true  # Suppress visual tap/gesture indicators
 INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
@@ -37,6 +38,8 @@ INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within
 <key>InsideJobPollingInterval</key>
 <real>1.0</real>
 <key>InsideJobDisableAutoStart</key>
+<false/>
+<key>InsideJobDisableFingerprints</key>
 <false/>
 <key>InsideJobToken</key>
 <string>my-secret-token</string>
@@ -139,12 +142,29 @@ public func notifyChange()
 
 Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 300ms debounce to prevent update spam.
 
+### Interaction Philosophy: Activation-First
+
+InsideJob follows an **activation-first** strategy for all element interactions:
+
+1. **Try `accessibilityActivate()` first** -- TheBagman calls the element's native accessibility activation method via the live object reference. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
+
+2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
+
+The same pattern applies to `increment`/`decrement` (native accessibility API first) and `tap` commands (activation attempted when an element target is provided, synthetic tap as fallback).
+
+**Why activation-first matters:**
+- Native activation respects custom `accessibilityActivate()` overrides
+- It works correctly with complex controls (e.g., custom toggle implementations)
+- Synthetic taps can miss if the coordinate is occluded by an overlay or the view hierarchy has changed
+
+When a synthetic tap fallback occurs, a debug log is emitted so the behavior is observable.
+
 ### Touch Gesture & Text Input System (TheSafecracker)
 
-InsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl.
+InsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only InsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBagman.
 
 **Supported gestures:**
-- `tap` - Single tap at a point
+- `tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
 - `longPress` - Long press with configurable duration
 - `swipe` - Quick swipe between two points
 - `drag` - Slow drag between two points (for sliders, reordering)

@@ -33,7 +33,7 @@ final class TheSafecracker {
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
     /// InsideJob wraps this with InterfaceDelta to produce the wire ActionResult.
-    struct InteractionResult: Error {
+    struct InteractionResult {
         let success: Bool
         let method: ActionMethod
         let message: String?
@@ -43,6 +43,22 @@ final class TheSafecracker {
             InteractionResult(success: false, method: method, message: message, value: nil)
         }
     }
+
+    /// Result of resolving a screen coordinate from an element target or explicit point.
+    /// Uses a custom enum instead of `Result` so `InteractionResult` doesn't need `Error` conformance.
+    enum PointResolution {
+        case success(CGPoint)
+        case failure(InteractionResult)
+    }
+
+    // MARK: - Timing Constants
+
+    /// Default inter-key delay for text injection (30ms). Single source of truth
+    /// for typeText and deleteText default parameters.
+    static let defaultInterKeyDelay: UInt64 = 30_000_000
+
+    /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
+    static let maxInterKeyDelay: UInt64 = 500_000_000
 
     // MARK: - Internal Touch State
 
@@ -209,7 +225,7 @@ final class TheSafecracker {
     /// - Parameters:
     ///   - text: The text to type, character by character
     ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
-    func typeText(_ text: String, interKeyDelay: UInt64 = 30_000_000) async -> Bool {
+    func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard let impl = getKeyboardImpl() else { return false }
         let sel = NSSelectorFromString("addInputString:")
         for char in text {
@@ -224,7 +240,7 @@ final class TheSafecracker {
     /// - Parameters:
     ///   - count: Number of characters to delete
     ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
-    func deleteText(count: Int, interKeyDelay: UInt64 = 30_000_000) async -> Bool {
+    func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
         guard let impl = getKeyboardImpl() else { return false }
         let sel = NSSelectorFromString("deleteFromInput")

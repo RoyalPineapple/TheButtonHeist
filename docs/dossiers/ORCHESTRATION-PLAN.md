@@ -187,9 +187,9 @@ Build verify: Full build after each phase. All 4 framework schemes + tests.
 ```
 
 ### Batch 3 Gate
-- [ ] Merge branch to main
-- [ ] Run: Full framework build + ALL tests (InsideJob, Wheelman, TheScore, ButtonHeist)
-- [ ] Commit: "Batch 3: InsideJob extraction — TheBagman created, networking to Wheelman, subscriptions to Muscle"
+- [x] Merge branch to main — committed directly as 83512b0
+- [x] Run: Full framework build + ALL tests (InsideJob, Wheelman, TheScore, ButtonHeist)
+- [x] Commit: "Batch 3: InsideJob extraction — TheBagman created, networking to Wheelman, subscriptions to Muscle"
 
 ---
 

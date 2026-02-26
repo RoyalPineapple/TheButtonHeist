@@ -19,6 +19,26 @@ final class TheFingerprints {
     private var trackingCircles: [UIView] = []
     private let fingerprintDiameter: CGFloat = 40.0
 
+    // MARK: - Configuration
+
+    /// When `true`, all fingerprint indicators are suppressed (no-op).
+    /// Checked once at init from `INSIDEJOB_DISABLE_FINGERPRINTS` env var
+    /// or `InsideJobDisableFingerprints` Info.plist key.
+    let isDisabled: Bool
+
+    init() {
+        // Environment variable takes priority
+        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_DISABLE_FINGERPRINTS"],
+           ["1", "true", "yes"].contains(envValue.lowercased()) {
+            self.isDisabled = true
+        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobDisableFingerprints") as? Bool,
+                  plistValue {
+            self.isDisabled = true
+        } else {
+            self.isDisabled = false
+        }
+    }
+
     // MARK: - Timing Constants
 
     private static let minimumDisplayDuration: TimeInterval = 0.5
@@ -74,6 +94,7 @@ final class TheFingerprints {
     /// Show a fingerprint indicator at the given point (for taps and instant actions).
     /// Appears at full size, holds for `minimumDisplayDuration`, then fades out.
     func showFingerprint(at point: CGPoint) {
+        guard !isDisabled else { return }
         guard let rootView = ensureFingerprintRootView() else { return }
 
         let circle = createCircleView(at: point)
@@ -99,6 +120,7 @@ final class TheFingerprints {
     /// Begin tracking fingerprints during a continuous gesture.
     /// Pass one point per finger. Animates in quickly from zero scale.
     func beginTrackingFingerprints(at points: [CGPoint]) {
+        guard !isDisabled else { return }
         guard let rootView = ensureFingerprintRootView() else { return }
 
         trackingCircles.forEach { $0.removeFromSuperview() }
@@ -118,6 +140,7 @@ final class TheFingerprints {
 
     /// Move tracking fingerprints to follow touch positions (one point per finger).
     func updateTrackingFingerprints(to points: [CGPoint]) {
+        guard !isDisabled else { return }
         for (circle, point) in zip(trackingCircles, points) {
             circle.center = point
         }
@@ -126,6 +149,7 @@ final class TheFingerprints {
     /// End tracking and fade out all fingerprint circles.
     /// Enforces the minimum display duration before starting the fade.
     func endTrackingFingerprints() {
+        guard !isDisabled else { return }
         let circles = trackingCircles
         trackingCircles = []
 

@@ -33,7 +33,9 @@ extension TheSafecracker {
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
-        // Fall back to synthetic touch injection
+        // Fall back to synthetic touch injection (activation-first philosophy:
+        // accessibilityActivate is always tried before synthetic tap)
+        insideJobLogger.debug("accessibilityActivate failed, falling back to synthetic tap at (\(point.x), \(point.y))")
         if tap(at: point) {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
@@ -136,7 +138,8 @@ extension TheSafecracker {
                 return InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
 
-            // Fall back to synthetic tap
+            // Fall back to synthetic tap (low-level escape hatch)
+            insideJobLogger.debug("Using synthetic tap fallback at (\(point.x), \(point.y))")
             if tap(at: point) {
                 fingerprints.showFingerprint(at: point)
                 return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
@@ -284,8 +287,18 @@ extension TheSafecracker {
 
     // MARK: - Duration Helpers
 
+    /// Default gesture duration when none is specified (0.5s).
+    private static let defaultGestureDuration: Double = 0.5
+
+    /// Minimum allowed gesture duration (10ms).
+    private static let minGestureDuration: Double = 0.01
+
+    /// Maximum allowed gesture duration (60s). Prevents runaway gestures
+    /// from holding the main thread for unreasonable periods.
+    private static let maxGestureDuration: Double = 60.0
+
     func clampDuration(_ value: Double?) -> Double {
-        min(max(value ?? 0.5, 0.01), 60.0)
+        min(max(value ?? Self.defaultGestureDuration, Self.minGestureDuration), Self.maxGestureDuration)
     }
 
     func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
@@ -301,7 +314,7 @@ extension TheSafecracker {
             }
             result = totalLength / velocity
         } else {
-            result = 0.5
+            result = Self.defaultGestureDuration
         }
         return clampDuration(result)
     }

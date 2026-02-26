@@ -8,6 +8,14 @@ import UIKit
 /// All private API methods are invoked via direct IMP calls with @convention(c)
 /// typed function pointers. Using perform(_:with:) for non-object parameters
 /// (Int, Bool, Double) would pass NSNumber object pointers instead of raw values.
+///
+/// **Private API surface** (requires monitoring across iOS releases):
+/// - `UITouch.setWindow:` / `setView:` / `setPhase:` / `setTapCount:` / `setTimestamp:`
+/// - `UITouch._setIsFirstTouchForView:` / `setIsTap:`
+/// - `UITouch._setLocationInWindow:resetPrevious:`
+/// - `UITouch._setHidEvent:`
+///
+/// Last verified: iOS 17.0 -- iOS 18.2 (Xcode 16.2) and iOS 26 beta (Xcode 26.2)
 @MainActor
 final class SyntheticTouchFactory {
 

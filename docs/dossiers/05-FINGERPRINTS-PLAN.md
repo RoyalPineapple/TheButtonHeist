@@ -35,9 +35,9 @@ private static let fadeOutDuration: TimeInterval = 0.5
 
 ## Phase 4: Add Configuration to Disable Fingerprints
 
-- [ ] **Add env var:** `INSIDEJOB_DISABLE_FINGERPRINTS`
-- [ ] **Add plist key:** `InsideJobDisableFingerprints`
-- [ ] **No-op when disabled**
+- [x] **Add env var:** `INSIDEJOB_DISABLE_FINGERPRINTS`
+- [x] **Add plist key:** `InsideJobDisableFingerprints`
+- [x] **No-op when disabled**
 
 ## Phase 5: Passthrough Window Accessibility
 
@@ -51,7 +51,7 @@ private static let fadeOutDuration: TimeInterval = 0.5
 - [x] Class renamed to `TheFingerprints`
 - [x] All indicators visible for minimum 0.5s before fade
 - [x] Fade-out duration is 0.5s for all indicator types
-- [ ] `INSIDEJOB_DISABLE_FINGERPRINTS` env var supported
+- [x] `INSIDEJOB_DISABLE_FINGERPRINTS` env var supported
 - [ ] Passthrough window has `accessibilityElementsHidden = true`
 - [ ] No compositing code references TheFingerprints
 - [ ] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build`
