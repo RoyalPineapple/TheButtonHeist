@@ -50,7 +50,8 @@ graph TB
 - `ActionResult` - Action outcome with method, optional message, interface delta, and animation state
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 - `RecordingConfig` - Recording configuration (fps, scale, inactivity timeout, max duration)
-- `RecordingPayload` - Completed recording with base64 H.264/MP4 video and metadata
+- `RecordingPayload` - Completed recording with base64 H.264/MP4 video, metadata, and optional interaction log
+- `InteractionEvent` - Single recorded interaction with command, result, and before/after interface snapshots
 
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
@@ -90,6 +91,7 @@ InsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   ├── AVAssetWriter (H.264/MP4 encoding)
 │   ├── Frame capture via drawHierarchy + CGContext fingerprint compositing
 │   ├── Inactivity monitor (screen hash + command tracking)
+│   ├── Interaction log (in-memory [InteractionEvent] array)
 │   └── File size guard (7MB cap for wire protocol)
 ├── TheMuscle (authentication, token persistence, connection approval UI)
 ├── Fingerprints (FingerprintWindow overlay + TheSafecracker gesture tracking)
@@ -223,10 +225,11 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video. Additionally, `Stakeout` composites fingerprint circles directly into frames via CGContext for interactions that complete between frame captures.
 5. Frames are captured at the configured FPS (default 8, range 1-15) using `afterScreenUpdates: false` to reduce main thread impact
 6. Action-triggered bonus frames are captured after each successful action completes
-7. An inactivity monitor checks every second — recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the configured timeout. Pings and keepalive messages do not reset the inactivity timer.
-8. File size is capped at 7MB to stay within the wire protocol's 10MB buffer limit after base64 encoding
-9. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native
-10. On completion, the video is base64-encoded and sent as a `recording(RecordingPayload)` message
+7. During recording, each interaction through `performInteraction` captures the `ClientMessage`, before/after `Interface` snapshots, and `ActionResult` as an `InteractionEvent`, appended to Stakeout's in-memory interaction log
+8. An inactivity monitor checks every second — recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the configured timeout. Pings and keepalive messages do not reset the inactivity timer.
+9. File size is capped at 7MB to stay within the wire protocol's 10MB buffer limit after base64 encoding
+10. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native
+11. On completion, the video is base64-encoded and the interaction log (if non-empty) is included in the `recording(RecordingPayload)` message
 
 ### Wheelman
 
