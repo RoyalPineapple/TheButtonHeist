@@ -189,7 +189,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | Rate limit | 30 msg/sec | Per-client, sliding 1-second window |
 | Receive buffer | 10 MB | Per-client; exceeded → disconnect |
 | Auth failure delay | 100 ms | Allows `authFailed` to arrive before TCP close |
-| Bind address (simulator) | `::1` (loopback) | Override with `INSIDEJOB_BIND_ALL=true` |
+| Bind address (simulator) | `::1` (loopback) | Controlled by `bindToLoopback` parameter |
 | Bind address (device) | `::` (all interfaces) | Accepts WiFi and USB connections |
 
 ## Component Responsibilities

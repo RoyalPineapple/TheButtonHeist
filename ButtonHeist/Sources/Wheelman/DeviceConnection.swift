@@ -3,7 +3,7 @@ import Network
 import os.log
 import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "connection")
+private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
 
 /// Connection client using Network framework.
 @MainActor

@@ -9,12 +9,42 @@ class FingerprintWindow: UIWindow {
 }
 
 /// Visual interaction indicators for tap and gesture tracking.
-extension TheSafecracker {
+///
+/// Extracted from a TheSafecracker extension so it can be used as a
+/// standalone collaborator and eventually configured independently.
+@MainActor
+final class TheFingerprints {
 
-    private static var fingerprintWindow: FingerprintWindow?
-    private static var trackingCircles: [UIView] = []
-    private static let fingerprintDiameter: CGFloat = 40.0
-    private static let fingerprintAnimationDuration: TimeInterval = 0.8
+    private var fingerprintWindow: FingerprintWindow?
+    private var trackingCircles: [UIView] = []
+    private let fingerprintDiameter: CGFloat = 40.0
+
+    // MARK: - Configuration
+
+    /// When `true`, all fingerprint indicators are suppressed (no-op).
+    /// Checked once at init from `INSIDEJOB_DISABLE_FINGERPRINTS` env var
+    /// or `InsideJobDisableFingerprints` Info.plist key.
+    let isDisabled: Bool
+
+    init() {
+        // Environment variable takes priority
+        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_DISABLE_FINGERPRINTS"],
+           ["1", "true", "yes"].contains(envValue.lowercased()) {
+            self.isDisabled = true
+        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobDisableFingerprints") as? Bool,
+                  plistValue {
+            self.isDisabled = true
+        } else {
+            self.isDisabled = false
+        }
+    }
+
+    // MARK: - Timing Constants
+
+    private static let minimumDisplayDuration: TimeInterval = 0.5
+    private static let fadeOutDuration: TimeInterval = 0.5
+
+    // MARK: - Root View
 
     private func ensureFingerprintRootView() -> UIView? {
         guard let windowScene = UIApplication.shared.connectedScenes
@@ -23,7 +53,7 @@ extension TheSafecracker {
             return nil
         }
 
-        if Self.fingerprintWindow == nil || Self.fingerprintWindow?.windowScene !== windowScene {
+        if fingerprintWindow == nil || fingerprintWindow?.windowScene !== windowScene {
             let window = FingerprintWindow(windowScene: windowScene)
             window.frame = windowScene.screen.bounds
             window.backgroundColor = .clear
@@ -34,17 +64,21 @@ extension TheSafecracker {
             vc.view = v
             window.rootViewController = vc
             window.isUserInteractionEnabled = false
+            window.isAccessibilityElement = false
+            window.accessibilityElementsHidden = true
             window.isHidden = false
-            Self.fingerprintWindow = window
+            fingerprintWindow = window
         }
 
-        return Self.fingerprintWindow?.rootViewController?.view
+        return fingerprintWindow?.rootViewController?.view
     }
 
+    // MARK: - Circle Factory
+
     private func createCircleView(at point: CGPoint) -> UIView {
-        let radius = Self.fingerprintDiameter / 2
+        let radius = fingerprintDiameter / 2
         let circle = UIView(frame: CGRect(x: point.x - radius, y: point.y - radius,
-                                          width: Self.fingerprintDiameter, height: Self.fingerprintDiameter))
+                                          width: fingerprintDiameter, height: fingerprintDiameter))
         circle.backgroundColor = UIColor.white.withAlphaComponent(0.5)
         circle.layer.cornerRadius = radius
         circle.layer.borderWidth = 2
@@ -57,28 +91,42 @@ extension TheSafecracker {
         return circle
     }
 
-    /// Show a fingerprint animation at the given point (for taps and instant actions).
+    // MARK: - Instant Fingerprints (Taps)
+
+    /// Show a fingerprint indicator at the given point (for taps and instant actions).
+    /// Appears at full size, holds for `minimumDisplayDuration`, then fades out.
     func showFingerprint(at point: CGPoint) {
+        guard !isDisabled else { return }
         guard let rootView = ensureFingerprintRootView() else { return }
 
         let circle = createCircleView(at: point)
         rootView.addSubview(circle)
 
-        UIView.animate(withDuration: Self.fingerprintAnimationDuration, delay: 0, options: .curveEaseOut) {
-            circle.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+        UIView.animate(
+            withDuration: Self.fadeOutDuration,
+            delay: Self.minimumDisplayDuration,
+            options: .curveEaseOut
+        ) {
             circle.alpha = 0
         } completion: { _ in
             circle.removeFromSuperview()
         }
     }
 
+    // MARK: - Continuous Gesture Tracking
+
+    /// Timestamp when tracking circles became fully visible, used to
+    /// enforce the minimum display duration before fade-out.
+    private var trackingStartTime: CFTimeInterval = 0
+
     /// Begin tracking fingerprints during a continuous gesture.
     /// Pass one point per finger. Animates in quickly from zero scale.
     func beginTrackingFingerprints(at points: [CGPoint]) {
+        guard !isDisabled else { return }
         guard let rootView = ensureFingerprintRootView() else { return }
 
-        Self.trackingCircles.forEach { $0.removeFromSuperview() }
-        Self.trackingCircles = points.map { point in
+        trackingCircles.forEach { $0.removeFromSuperview() }
+        trackingCircles = points.map { point in
             let circle = createCircleView(at: point)
             circle.transform = CGAffineTransform(scaleX: 0.1, y: 0.1)
             circle.alpha = 0
@@ -89,21 +137,33 @@ extension TheSafecracker {
             }
             return circle
         }
+        trackingStartTime = CACurrentMediaTime()
     }
 
     /// Move tracking fingerprints to follow touch positions (one point per finger).
     func updateTrackingFingerprints(to points: [CGPoint]) {
-        for (circle, point) in zip(Self.trackingCircles, points) {
+        guard !isDisabled else { return }
+        for (circle, point) in zip(trackingCircles, points) {
             circle.center = point
         }
     }
 
-    /// End tracking and slowly fade out all fingerprint circles.
+    /// End tracking and fade out all fingerprint circles.
+    /// Enforces the minimum display duration before starting the fade.
     func endTrackingFingerprints() {
-        let circles = Self.trackingCircles
-        Self.trackingCircles = []
+        guard !isDisabled else { return }
+        let circles = trackingCircles
+        trackingCircles = []
+
+        let elapsed = CACurrentMediaTime() - trackingStartTime
+        let remainingHold = max(Self.minimumDisplayDuration - elapsed, 0)
+
         for circle in circles {
-            UIView.animate(withDuration: 0.6, delay: 0, options: .curveEaseOut) {
+            UIView.animate(
+                withDuration: Self.fadeOutDuration,
+                delay: remainingHold,
+                options: .curveEaseOut
+            ) {
                 circle.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
                 circle.alpha = 0
             } completion: { _ in

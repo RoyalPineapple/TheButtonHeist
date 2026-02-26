@@ -21,6 +21,9 @@ private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "a
 @MainActor
 final class TheMuscle {
 
+    /// Grace period (100ms) before disconnecting a rejected client, giving them time to read the error.
+    private static let disconnectGracePeriod: UInt64 = 100_000_000
+
     // MARK: - Properties
 
     private(set) var authToken: String
@@ -28,6 +31,14 @@ final class TheMuscle {
     private(set) var authenticatedClientCount: Int = 0
     private(set) var authenticatedClientIDs: Set<Int> = []
     private weak var presentedAlert: UIAlertController?
+
+    // MARK: - Subscription Tracking
+
+    /// Clients that have opted in to receive hierarchy update broadcasts.
+    private(set) var subscribedClients: Set<Int> = []
+
+    /// True when at least one client is subscribed.
+    var hasSubscribers: Bool { !subscribedClients.isEmpty }
 
     // MARK: - Session Lock State
 
@@ -38,14 +49,10 @@ final class TheMuscle {
     private(set) var activeSessionConnections: Set<Int> = []
     /// Maps each authenticated client to their effective driver identity
     private var clientDriverIds: [Int: String] = [:]
-    /// Timer that fires to release the session after all connections disconnect
+    /// Timer that fires to release the session after inactivity (no connections and no heartbeat)
     private var sessionReleaseTimer: Task<Void, Never>?
-    /// Timeout before releasing a session after all connections disconnect
+    /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
-    /// Timer that fires to release the session if no pings are received
-    private var sessionLeaseTimer: Task<Void, Never>?
-    /// Lease duration — session released if no pings within this window
-    private let sessionLeaseTimeout: TimeInterval
 
     // MARK: - Callbacks (set by InsideJob)
 
@@ -55,6 +62,8 @@ final class TheMuscle {
     var onClientAuthenticated: ((_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     /// Called during force-takeover to disconnect all clients from the evicted session
     var disconnectClientsForSession: ((_ clientIds: [Int]) -> Void)?
+    /// Called when the session active state changes (true = session claimed, false = released)
+    var onSessionActiveChanged: ((_ isActive: Bool) -> Void)?
 
     // MARK: - Init
 
@@ -65,12 +74,6 @@ final class TheMuscle {
             self.sessionReleaseTimeout = max(1.0, parsed)
         } else {
             self.sessionReleaseTimeout = 30.0
-        }
-        if let envLease = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_LEASE"],
-           let parsed = TimeInterval(envLease) {
-            self.sessionLeaseTimeout = max(10.0, parsed)
-        } else {
-            self.sessionLeaseTimeout = 30.0
         }
     }
 
@@ -91,10 +94,31 @@ final class TheMuscle {
     }
 
     /// Called when a ping is received from an authenticated client.
-    /// Resets the session lease timer if the client belongs to the active session.
+    /// Resets the session inactivity timer if the client belongs to the active session.
     func noteClientActivity(_ clientId: Int) {
         guard activeSessionConnections.contains(clientId) else { return }
-        resetLeaseTimer()
+        resetInactivityTimer()
+    }
+
+    // MARK: - Subscription Management
+
+    /// Register a client for hierarchy update broadcasts.
+    func subscribe(clientId: Int) {
+        subscribedClients.insert(clientId)
+        logger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
+    }
+
+    /// Remove a client from hierarchy update broadcasts.
+    func unsubscribe(clientId: Int) {
+        subscribedClients.remove(clientId)
+        logger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
+    }
+
+    /// Send data to all subscribed clients.
+    func broadcastToSubscribed(_ data: Data) {
+        for clientId in subscribedClients {
+            sendToClient?(data, clientId)
+        }
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
@@ -122,7 +146,7 @@ final class TheMuscle {
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected")
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return
@@ -145,6 +169,7 @@ final class TheMuscle {
     func handleClientDisconnected(_ clientId: Int) {
         pendingApprovalClients.removeValue(forKey: clientId)
         clientDriverIds.removeValue(forKey: clientId)
+        subscribedClients.remove(clientId)
         if authenticatedClientIDs.remove(clientId) != nil {
             updateAuthenticatedCount(delta: -1)
         }
@@ -153,14 +178,7 @@ final class TheMuscle {
         activeSessionConnections.remove(clientId)
         if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
             logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
-            sessionLeaseTimer?.cancel()
-            sessionLeaseTimer = nil
-            sessionReleaseTimer?.cancel()
-            sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
-                try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                self?.releaseSession()
-            }
+            startReleaseTimer()
         }
     }
 
@@ -187,7 +205,7 @@ final class TheMuscle {
         sendMessage(.authFailed("Connection denied by user"), respond: respond)
         logger.info("Client \(clientId) denied via UI")
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
             self?.disconnectClient?(clientId)
         }
     }
@@ -197,8 +215,7 @@ final class TheMuscle {
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
-        sessionLeaseTimer?.cancel()
-        sessionLeaseTimer = nil
+        subscribedClients.removeAll()
         releaseSession()
         dismissAlert()
     }
@@ -220,34 +237,30 @@ final class TheMuscle {
     }
 
     /// Attempt to acquire the session for a client. Returns true if acquired, false if rejected.
+    ///
+    /// Session rules:
+    /// - No active session → claim it
+    /// - Active session, same driver → rejoin (cancel release timer)
+    /// - Active session, different driver → busy signal (no force takeover)
     private func acquireSession(driverIdentity: String, clientId: Int, forceSession: Bool, respond: @escaping @Sendable (Data) -> Void) -> Bool {
         if let activeId = activeSessionDriverId {
             if driverIdentity == activeId {
                 // Same driver — allow, cancel any pending release timer
                 sessionReleaseTimer?.cancel()
                 sessionReleaseTimer = nil
-                resetLeaseTimer()
                 activeSessionConnections.insert(clientId)
                 logger.info("Client \(clientId) joined existing session")
                 return true
-            } else if forceSession {
-                // Force takeover — evict existing session
-                let evictedClients = Array(activeSessionConnections)
-                logger.warning("Client \(clientId) force-taking session, evicting \(evictedClients.count) connection(s)")
-                releaseSession()
-                disconnectClientsForSession?(evictedClients)
-                claimSession(driverIdentity: driverIdentity, clientId: clientId)
-                return true
             } else {
-                // Different driver, no force — reject
+                // Different driver — busy signal, no force takeover
                 let payload = SessionLockedPayload(
-                    message: "Session is locked by another driver",
+                    message: "Session is locked by another driver. Session will time out after \(Int(sessionReleaseTimeout))s of inactivity.",
                     activeConnections: activeSessionConnections.count
                 )
                 sendMessage(.sessionLocked(payload), respond: respond)
                 logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return false
@@ -264,8 +277,8 @@ final class TheMuscle {
         activeSessionConnections = [clientId]
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
-        resetLeaseTimer()
         logger.info("Session claimed by client \(clientId)")
+        onSessionActiveChanged?(true)
     }
 
     private func releaseSession() {
@@ -274,31 +287,30 @@ final class TheMuscle {
         activeSessionConnections.removeAll()
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
-        sessionLeaseTimer?.cancel()
-        sessionLeaseTimer = nil
         if hadSession {
             logger.info("Session released")
+            onSessionActiveChanged?(false)
         }
     }
 
-    private func resetLeaseTimer() {
-        sessionLeaseTimer?.cancel()
-        sessionLeaseTimer = Task { [weak self, sessionLeaseTimeout] in
-            try? await Task.sleep(nanoseconds: UInt64(sessionLeaseTimeout * 1_000_000_000))
+    /// Start the single inactivity timer. Fires after `sessionReleaseTimeout` to release the session.
+    private func startReleaseTimer() {
+        sessionReleaseTimer?.cancel()
+        sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
+            try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            logger.warning("Session lease expired (no pings for \(sessionLeaseTimeout)s)")
-            self?.expireSessionLease()
+            self?.releaseSession()
         }
     }
 
-    private func expireSessionLease() {
-        let evictedClients = Array(activeSessionConnections)
-        releaseSession()
-        invalidateToken()
-        logger.info("Token invalidated after lease expiry")
-        if !evictedClients.isEmpty {
-            disconnectClientsForSession?(evictedClients)
+    /// Reset the inactivity timer (called on heartbeat/ping from active session client).
+    private func resetInactivityTimer() {
+        guard activeSessionDriverId != nil else { return }
+        if activeSessionConnections.isEmpty {
+            // No connections — restart the release countdown
+            startReleaseTimer()
         }
+        // If there are active connections, no timer needed — timer starts on last disconnect
     }
 
     // MARK: - Private

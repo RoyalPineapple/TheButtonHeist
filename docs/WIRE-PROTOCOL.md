@@ -84,17 +84,12 @@ Authenticate with the server. Must be the first message sent after receiving `au
 {"authenticate":{"_0":{"token":"your-secret-token"}}}
 ```
 
-**With force session takeover** (v3.1):
-```json
-{"authenticate":{"_0":{"token":"your-secret-token","forceSession":true}}}
-```
-
 **With driver identity** (v3.1):
 ```json
 {"authenticate":{"_0":{"token":"your-secret-token","driverId":"agent-1"}}}
 ```
 
-The optional `forceSession` field requests immediate takeover of any existing session held by a different driver. The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
+The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
 
 ### requestInterface
 
@@ -584,14 +579,13 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
       "timestamp":1.2,
       "command":{"activate":{"_0":{"identifier":"loginButton"}}},
       "result":{"success":true,"method":"syntheticTap"},
-      "interfaceBefore":{"timestamp":"2026-02-24T10:30:01.200Z","elements":[...]},
-      "interfaceAfter":{"timestamp":"2026-02-24T10:30:02.100Z","elements":[...]}
+      "interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}
     }
   ]
 }}}
 ```
 
-The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and before/after interface state during the recording. It is `null` or absent when no interactions occurred.
+The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and interface delta during the recording. It is `null` or absent when no interactions occurred.
 
 Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
 
@@ -914,8 +908,7 @@ A single recorded interaction event captured during a Stakeout recording.
 | `timestamp` | `Double` | Time offset from recording start in seconds |
 | `command` | `ClientMessage` | The command that triggered this interaction |
 | `result` | `ActionResult` | The result returned to the client |
-| `interfaceBefore` | `Interface` | Interface state before the interaction (elements only, no tree) |
-| `interfaceAfter` | `Interface` | Interface state after the interaction (elements only, no tree) |
+| `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed in the hierarchy |
 
 ## Example Session
 
@@ -1011,7 +1004,6 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
-| `forceSession` | `Bool?` | When `true`, forcibly takes over any existing session (v3.1). Omitted or `null` for normal auth. |
 | `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
@@ -1033,7 +1025,7 @@ Token-based authentication is required for all connections:
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
 
-The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated on first launch, persisted in UserDefaults, and reused across app relaunches. This means clients approved via the UI approval flow retain access after the app is restarted. The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
+The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### Session Locking
 
@@ -1051,11 +1043,12 @@ This maintains backward compatibility: existing clients without `driverId` use t
 
 1. **Claim** — The first authenticated client's driver identity becomes the active session
 2. **Join** — Subsequent connections with the **same driver identity** are allowed (same driver, different commands)
-3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected
-4. **Release timer** — When the last connection from the session holder disconnects, a configurable timer starts (default: 30 seconds)
+3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected. The busy signal includes the inactivity timeout so the client knows how long to wait.
+4. **Inactivity timer** — When the last connection from the session holder disconnects, a single inactivity timer starts (default: 30 seconds)
 5. **Release** — Timer fires → session clears → next driver can claim
-6. **Cancel timer** — Same-token reconnect within the timeout window cancels the release timer
-7. **Force takeover** — `forceSession: true` in the auth payload evicts the current session holder immediately
+6. **Cancel timer** — Same-driver reconnect within the timeout window cancels the timer
+
+There is only one timer (inactivity). There is no separate "lease" timer. The token is **not** invalidated when the session expires — it remains valid for future connections.
 
 ```mermaid
 sequenceDiagram
@@ -1071,47 +1064,19 @@ sequenceDiagram
     S-xB: disconnect
 
     A->>S: TCP Close
-    Note over S: 30s timer starts
+    Note over S: 30s inactivity timer starts
     Note over S: 30s timer fires → session released
 
     B->>S: authenticate(token:"xyz")
     S-->>B: info (session claimed)
 ```
 
-#### Force Takeover
-
-A client can force-take a session by sending `forceSession: true` in the authenticate payload. This immediately evicts all connections from the current session holder and claims the session.
-
-```mermaid
-sequenceDiagram
-    participant A as Driver A (token: "abc")
-    participant S as Server
-    participant B as Driver B (token: "xyz")
-
-    Note over A,S: Active session
-    B->>S: authenticate(forceSession:true, token:"xyz")
-    S-xA: TCP disconnected (evicted)
-    S-->>B: info (session claimed)
-```
-
-From the CLI, use the `--force` flag on any command:
-```bash
-buttonheist action --identifier loginButton --force
-buttonheist session --force
-```
-
 #### Configuration
 
-The session release timeout (time after last connection disconnects before the session is released) is configurable:
+The session inactivity timeout (time after last connection disconnects before the session is released) is configurable:
 
 - **Environment variable**: `INSIDEJOB_SESSION_TIMEOUT` (in seconds)
 - **Default**: 30 seconds
-
-The session lease timeout (time without any pings before the session is released and the token invalidated) is separately configurable:
-
-- **Environment variable**: `INSIDEJOB_SESSION_LEASE` (in seconds)
-- **Default**: 30 seconds
-- **Minimum**: 10 seconds
 
 ### UI Approval Flow
 
@@ -1146,7 +1111,7 @@ This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOK
 - **Max connections**: 5 concurrent TCP connections
 - **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
 - **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Loopback binding**: On iOS Simulator, the server binds to `::1` (loopback only) by default. Override with `INSIDEJOB_BIND_ALL=true`.
+- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The caller (InsideJob) decides based on the runtime environment.
 
 ### Port Configuration
 
@@ -1160,7 +1125,7 @@ The server binds to `::` (IPv6 any) on physical devices or `::1` (loopback) on s
 
 ### Keepalive
 
-Clients should send `ping` messages periodically (recommended: every 30 seconds) to detect connection loss.
+Clients should send `ping` messages periodically (recommended: every 3 seconds) to detect connection loss. The 3-second interval is appropriate given the 30-second session lease timeout.
 
 ### Error Recovery
 
