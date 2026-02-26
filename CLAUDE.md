@@ -217,3 +217,10 @@ Slash commands for capturing recordings and demos from the connected iOS app. Al
 | `/demo [feature]` | Create a polished 3-act feature demo video |
 
 Recordings are saved to `demos/` with timestamped filenames. Default settings: `--fps 8 --scale 0.5 --inactivity-timeout 60`.
+
+## Dossier Maintenance
+
+Crew member dossiers live in `docs/dossiers/`. When a PR changes a crew member's responsibilities, adds/removes types, or changes architecture:
+- Update the relevant dossier file
+- Update `00-OVERVIEW.md` if module dependencies change
+- Keep diagrams current

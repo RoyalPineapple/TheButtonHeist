@@ -289,10 +289,10 @@ Build verify: cd ButtonHeistMCP && swift build -c release
 ```
 
 ### Batch 6 Gate
-- [ ] Merge Agent 6A branch (CLI)
-- [ ] Merge Agent 6B branch (MCP)
-- [ ] Run: CLI build + MCP build + full framework build + ALL tests
-- [ ] Commit: "Batch 6: CLI watch mode removed + MCP validation and TheFence alignment"
+- [x] Merge Agent 6A branch (CLI) — committed directly as 7596066
+- [x] Merge Agent 6B branch (MCP) — committed directly
+- [x] Run: CLI build + MCP build + full framework build + ALL tests
+- [x] Commit: "Batch 6: CLI watch mode removed + MCP validation and TheFence alignment"
 
 ---
 

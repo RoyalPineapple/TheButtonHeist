@@ -105,7 +105,7 @@ sequenceDiagram
 
 These issues span multiple crew members and warrant holistic review:
 
-1. **Documentation drift** - Some API.md inaccuracies remain (configure() port param, isRunning visibility, INSIDEJOB_BIND_ALL, token persistence)
+1. ~~**Documentation drift**~~ - Fixed: configure() port param removed, isRunning visibility corrected, INSIDEJOB_BIND_ALL removed, token persistence clarified, InteractionEvent updated to use interfaceDelta
 2. **Duplicate error types** - `MastermindError` vs `CLIError` with overlapping cases
 3. **Inconsistent timeouts** - 15s for actions, 30s for type_text/screenshots, 10s for interface requests
 4. **`vendorid` TXT key** - Published nowhere but read in DeviceDiscovery (always nil)
