@@ -5,19 +5,31 @@ import ButtonHeist
 @MainActor
 final class SessionRunner {
     private let format: OutputFormat
-    private let mastermind: TheMastermind
+    private let fence: TheFence
+    private let sessionTimeout: TimeInterval
     private var isRunning = true
     private var shouldExit = false
+    private nonisolated(unsafe) var lastCommandTime = ContinuousClock.now
+    private var timeoutTask: Task<Void, Never>?
 
     init(
         deviceFilter: String?,
         connectionTimeout: Double,
         format: OutputFormat,
         force: Bool = false,
-        token: String? = nil
+        token: String? = nil,
+        sessionTimeout: Double = 0
     ) {
         self.format = format
-        self.mastermind = TheMastermind(
+        if sessionTimeout > 0 {
+            self.sessionTimeout = sessionTimeout
+        } else if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
+                  let parsed = Double(envValue), parsed > 0 {
+            self.sessionTimeout = parsed
+        } else {
+            self.sessionTimeout = 0
+        }
+        self.fence = TheFence(
             configuration: .init(
                 deviceFilter: deviceFilter,
                 connectionTimeout: connectionTimeout,
@@ -26,20 +38,28 @@ final class SessionRunner {
                 autoReconnect: true
             )
         )
-        self.mastermind.onStatus = { message in
+        self.fence.onStatus = { message in
             logStatus(message)
         }
     }
 
     func run() async throws {
-        try await mastermind.start()
+        try await fence.start()
 
         let isTTY = isatty(STDIN_FILENO) != 0
         if isTTY {
             logStatus("Session started. Send JSON commands or {\"command\":\"quit\"} to exit.")
+            if sessionTimeout > 0 {
+                logStatus("Idle timeout: \(Int(sessionTimeout))s")
+            }
         }
 
         signal(SIGINT) { _ in Darwin.exit(0) }
+
+        lastCommandTime = .now
+        if sessionTimeout > 0 {
+            startTimeoutMonitor()
+        }
 
         while isRunning {
             if isTTY {
@@ -51,6 +71,8 @@ final class SessionRunner {
                 break
             }
 
+            lastCommandTime = .now
+
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
 
@@ -60,10 +82,27 @@ final class SessionRunner {
             if shouldExit { break }
         }
 
-        mastermind.stop()
+        timeoutTask?.cancel()
+        fence.stop()
     }
 
-    private func processLine(_ line: String) async -> (MastermindResponse, Any?) {
+    private func startTimeoutMonitor() {
+        timeoutTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(SessionDefaults.timeoutCheckInterval))
+                guard !Task.isCancelled, let self else { return }
+                let elapsed = ContinuousClock.now - self.lastCommandTime
+                if elapsed > .seconds(self.sessionTimeout) {
+                    logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
+                    self.isRunning = false
+                    close(STDIN_FILENO)
+                    return
+                }
+            }
+        }
+    }
+
+    private func processLine(_ line: String) async -> (FenceResponse, Any?) {
         guard
             let data = line.data(using: .utf8),
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -75,21 +114,21 @@ final class SessionRunner {
         let requestId = object["id"]
 
         do {
-            let response = try await mastermind.execute(request: object)
+            let response = try await fence.execute(request: object)
             if command == "quit" || command == "exit" {
                 shouldExit = true
                 isRunning = false
             }
             return (response, requestId)
         } catch {
-            if let mastermindError = error as? MastermindError, let message = mastermindError.errorDescription {
+            if let fenceError = error as? FenceError, let message = fenceError.errorDescription {
                 return (.error(message), requestId)
             }
             return (.error("Internal error: \(error.localizedDescription)"), requestId)
         }
     }
 
-    private func outputResponse(_ response: MastermindResponse, id: Any?) {
+    private func outputResponse(_ response: FenceResponse, id: Any?) {
         switch format {
         case .human:
             writeOutput(response.humanFormatted())

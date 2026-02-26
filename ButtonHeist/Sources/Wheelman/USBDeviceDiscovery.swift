@@ -3,18 +3,20 @@ import Foundation
 import Network
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "usb-discovery")
+private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "usb-discovery")
 
 /// Discovers iOS devices connected over USB via CoreDevice IPv6 tunnels.
 ///
 /// Polls periodically using `xcrun devicectl` and `lsof` to find connected devices
 /// and their IPv6 tunnel addresses. Produces `DiscoveredDevice` instances that work
 /// identically to Bonjour-discovered devices — same wire protocol, same connection path.
+///
+/// Subprocess execution runs off the main thread to avoid blocking the UI.
 @MainActor
 public final class USBDeviceDiscovery {
 
     private let port: UInt16
-    private var timer: Timer?
+    private var pollTask: Task<Void, Never>?
     private var knownDevices: [String: DiscoveredDevice] = [:]
 
     public var onDeviceFound: ((DiscoveredDevice) -> Void)?
@@ -27,26 +29,37 @@ public final class USBDeviceDiscovery {
 
     public func start() {
         logger.info("Starting USB device discovery (port \(self.port))")
-        // Run immediately, then poll
-        poll()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.poll()
-            }
-        }
+        // Run immediately, then poll every 3 seconds
+        startPolling()
     }
 
     public func stop() {
-        timer?.invalidate()
-        timer = nil
+        pollTask?.cancel()
+        pollTask = nil
         knownDevices.removeAll()
     }
 
     // MARK: - Private
 
-    private func poll() {
-        let connectedDevices = discoverConnectedDevices()
-        guard let ipv6Address = findIPv6Tunnel() else {
+    private func startPolling() {
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.poll()
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            }
+        }
+    }
+
+    private func poll() async {
+        // Run subprocess work off the main thread
+        let (connectedDevices, ipv6Address) = await Task.detached { [port] () -> ([String], String?) in
+            let devices = Self.discoverConnectedDevices()
+            let address = Self.findIPv6Tunnel()
+            return (devices, address)
+        }.value
+
+        // Back on @MainActor — safe to update state and fire callbacks
+        guard let ipv6Address else {
             // No tunnel — remove all USB devices
             for (id, device) in knownDevices {
                 knownDevices.removeValue(forKey: id)
@@ -91,7 +104,8 @@ public final class USBDeviceDiscovery {
     }
 
     /// Run `xcrun devicectl list devices` and return names of connected devices.
-    private func discoverConnectedDevices() -> [String] {
+    /// Runs on the calling thread — call from a background context.
+    nonisolated private static func discoverConnectedDevices() -> [String] {
         guard let output = runProcess("/usr/bin/xcrun", arguments: ["devicectl", "list", "devices"], timeout: 10) else {
             return []
         }
@@ -115,7 +129,8 @@ public final class USBDeviceDiscovery {
 
     /// Run `lsof -i -P -n` and extract the CoreDevice IPv6 tunnel address.
     /// Returns an address like `fd9a:6190:eed7::1` or nil.
-    private func findIPv6Tunnel() -> String? {
+    /// Runs on the calling thread — call from a background context.
+    nonisolated private static func findIPv6Tunnel() -> String? {
         guard let output = runProcess("/usr/sbin/lsof", arguments: ["-i", "-P", "-n"], timeout: 5) else {
             return nil
         }
@@ -134,7 +149,8 @@ public final class USBDeviceDiscovery {
     }
 
     /// Run a subprocess and return its stdout, or nil on failure.
-    private func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
+    /// Blocking — must be called from a background context, never the main thread.
+    nonisolated private static func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
@@ -150,7 +166,7 @@ public final class USBDeviceDiscovery {
             return nil
         }
 
-        // Read output with timeout
+        // Read output (blocking)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 

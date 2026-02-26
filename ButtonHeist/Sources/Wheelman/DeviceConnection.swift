@@ -3,7 +3,34 @@ import Network
 import os.log
 import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "connection")
+private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
+
+/// Structured reason for why a connection was closed.
+public enum DisconnectReason: Error, LocalizedError {
+    case networkError(Error)
+    case bufferOverflow
+    case serverClosed
+    case authFailed(String)
+    case sessionLocked(String)
+    case localDisconnect
+
+    public var errorDescription: String? {
+        switch self {
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .bufferOverflow:
+            return "Server exceeded max buffer size"
+        case .serverClosed:
+            return "Connection closed by server"
+        case .authFailed(let reason):
+            return "Auth failed: \(reason)"
+        case .sessionLocked(let message):
+            return "Session locked: \(message)"
+        case .localDisconnect:
+            return "Disconnected by client"
+        }
+    }
+}
 
 /// Connection client using Network framework.
 @MainActor
@@ -18,7 +45,7 @@ public final class DeviceConnection {
     private var isConnected = false
 
     public var onConnected: (() -> Void)?
-    public var onDisconnected: ((Error?) -> Void)?
+    public var onDisconnected: ((DisconnectReason) -> Void)?
     public var onServerInfo: ((ServerInfo) -> Void)?
     public var onInterface: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
@@ -67,7 +94,10 @@ public final class DeviceConnection {
 
     public func send(_ message: ClientMessage) {
         guard let connection, isConnected else { return }
-        guard var data = try? JSONEncoder().encode(message) else { return }
+        guard var data = try? JSONEncoder().encode(message) else {
+            logger.error("Failed to encode message: \(String(describing: message).prefix(100))")
+            return
+        }
         data.append(0x0A)
 
         connection.send(content: data, completion: .contentProcessed { error in
@@ -90,7 +120,7 @@ public final class DeviceConnection {
         case .failed(let error):
             logger.error("Connection failed: \(error)")
             isConnected = false
-            onDisconnected?(error)
+            onDisconnected?(.networkError(error))
         case .cancelled:
             logger.info("Connection cancelled")
             isConnected = false
@@ -112,7 +142,7 @@ public final class DeviceConnection {
                 if let error {
                     logger.error("Receive error: \(error)")
                     self.isConnected = false
-                    self.onDisconnected?(error)
+                    self.onDisconnected?(.networkError(error))
                     return
                 }
 
@@ -122,7 +152,7 @@ public final class DeviceConnection {
                     if self.receiveBuffer.count > Self.maxBufferSize {
                         logger.error("Server exceeded max buffer size, disconnecting")
                         self.disconnect()
-                        self.onDisconnected?(nil)
+                        self.onDisconnected?(.bufferOverflow)
                         return
                     }
 
@@ -132,7 +162,7 @@ public final class DeviceConnection {
                 if isComplete {
                     logger.info("Connection closed by server")
                     self.isConnected = false
-                    self.onDisconnected?(nil)
+                    self.onDisconnected?(.serverClosed)
                 } else {
                     self.receiveNext(connection: connection)
                 }
@@ -157,6 +187,7 @@ public final class DeviceConnection {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
+            onError?("Failed to decode server message")
             return
         }
 
@@ -173,7 +204,7 @@ public final class DeviceConnection {
             logger.error("Auth failed: \(reason)")
             onAuthFailed?(reason)
             disconnect()
-            onDisconnected?(nil)
+            onDisconnected?(.authFailed(reason))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token
@@ -200,7 +231,7 @@ public final class DeviceConnection {
             logger.warning("Session locked: \(payload.message)")
             onSessionLocked?(payload)
             disconnect()
-            onDisconnected?(nil)
+            onDisconnected?(.sessionLocked(payload.message))
         case .recordingStarted:
             logger.info("Recording started")
             onRecordingStarted?()

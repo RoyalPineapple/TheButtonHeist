@@ -4,6 +4,14 @@ import UIKit
 
 /// Factory for creating and manipulating UIEvent instances for touch injection.
 /// Based on KIF's UIView-KIFAdditions.m implementation.
+///
+/// **Private API surface** (requires monitoring across iOS releases):
+/// - `UIApplication._touchesEvent` (returns singleton UIEvent for touches)
+/// - `UIEvent._clearTouches` (resets touch list on the event)
+/// - `UIEvent._addTouch:forDelayedDelivery:` (attaches a UITouch to the event)
+/// - `UIEvent._setHIDEvent:` (attaches the IOHIDEvent backing pointer)
+///
+/// Last verified: iOS 17.0 -- iOS 18.2 (Xcode 16.2) and iOS 26 beta (Xcode 26.2)
 @MainActor
 final class SyntheticEventFactory {
 

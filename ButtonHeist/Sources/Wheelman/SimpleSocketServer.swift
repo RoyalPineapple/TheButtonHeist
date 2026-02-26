@@ -4,17 +4,17 @@ import os.log
 
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
-private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "server")
+/// Actor-isolated — all mutable state is protected by Swift concurrency.
+private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "server")
 
-public final class SimpleSocketServer: @unchecked Sendable {
+public actor SimpleSocketServer {
     public typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
     private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
     private static let maxMessagesPerSecond = 30
 
-    // All mutable state protected by this lock
-    private let lock = NSLock()
+    // Actor-isolated mutable state — no locks needed
     private var listener: NWListener?
     private var connections: [Int: NWConnection] = [:]
     private var clientCounter = 0
@@ -22,32 +22,35 @@ public final class SimpleSocketServer: @unchecked Sendable {
     private var authenticatedClients: Set<Int> = []
     private var clientMessageTimestamps: [Int: [Date]] = [:]
 
-    public var listeningPort: UInt16 {
-        lock.lock()
-        defer { lock.unlock() }
-        return _listeningPort
+    // nonisolated(unsafe) allows sync read from any context.
+    // Written exactly once during start(), before any concurrent access.
+    nonisolated(unsafe) private var _syncListeningPort: UInt16 = 0
+
+    public nonisolated var listeningPort: UInt16 {
+        _syncListeningPort
     }
 
-    public var onClientConnected: (@Sendable (Int) -> Void)?
-    public var onClientDisconnected: (@Sendable (Int) -> Void)?
-    public var onDataReceived: DataHandler?
+    // Callbacks — set before start(), not mutated after.
+    // nonisolated(unsafe) so callers can set them synchronously.
+    nonisolated(unsafe) public var onClientConnected: (@Sendable (Int) -> Void)?
+    nonisolated(unsafe) public var onClientDisconnected: (@Sendable (Int) -> Void)?
+    nonisolated(unsafe) public var onDataReceived: DataHandler?
     /// Called for messages from unauthenticated clients (before auth succeeds)
-    public var onUnauthenticatedData: ((_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    nonisolated(unsafe) public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
-    private let queue = DispatchQueue(label: "com.buttonheist.wheelman.server")
+    private let queue = DispatchQueue(label: "com.buttonheist.thewheelman.server")
 
     public init() {}
 
-    deinit {
-        stop()
-    }
+    // MARK: - Public API (async, actor-isolated)
 
-    /// Start the server on the specified port.
+    /// Start the server on the specified port (async version).
+    /// Uses structured concurrency to wait for the listener to become ready.
     /// - Parameters:
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     /// - Returns: Actual port number bound
-    public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
+    public func startAsync(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
         let parameters = NWParameters.tcp
         let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
         parameters.requiredLocalEndpoint = .hostPort(
@@ -57,53 +60,52 @@ public final class SimpleSocketServer: @unchecked Sendable {
 
         let newListener = try NWListener(using: parameters)
 
-        let readySemaphore = DispatchSemaphore(value: 0)
-
-        newListener.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                if let actualPort = self?.listener?.port?.rawValue {
-                    self?.lock.lock()
-                    self?._listeningPort = actualPort
-                    self?.lock.unlock()
-                    logger.info("Listening on port \(actualPort)")
+        let actualPort: UInt16 = try await withCheckedThrowingContinuation { continuation in
+            nonisolated(unsafe) var resumed = false
+            newListener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    guard !resumed else { return }
+                    resumed = true
+                    if let port = newListener.port?.rawValue {
+                        logger.info("Listening on port \(port)")
+                        continuation.resume(returning: port)
+                    } else {
+                        continuation.resume(throwing: ServerError.failedToBindPort)
+                    }
+                case .failed(let error):
+                    guard !resumed else { return }
+                    resumed = true
+                    logger.error("Listener failed: \(error)")
+                    continuation.resume(throwing: error)
+                default:
+                    break
                 }
-                readySemaphore.signal()
-            case .failed(let error):
-                logger.error("Listener failed: \(error)")
-                readySemaphore.signal()
-            default:
-                break
             }
-        }
 
-        newListener.newConnectionHandler = { [weak self] connection in
-            self?.handleNewConnection(connection)
+            newListener.newConnectionHandler = { [weak self] connection in
+                guard let self else { return }
+                Task { await self.handleNewConnection(connection) }
+            }
+
+            newListener.start(queue: self.queue)
         }
 
         self.listener = newListener
-        newListener.start(queue: queue)
+        self._listeningPort = actualPort
+        self._syncListeningPort = actualPort
 
-        // Wait for the listener to become ready (up to 5 seconds)
-        _ = readySemaphore.wait(timeout: .now() + 5)
-
-        lock.lock()
-        if let actualPort = newListener.port?.rawValue {
-            _listeningPort = actualPort
-        }
-        let result = _listeningPort
-        lock.unlock()
-
-        return result
+        return actualPort
     }
 
-    public func stop() {
-        lock.lock()
+    /// Stop the server (actor-isolated).
+    private func _stop() {
         let conns = connections
         connections.removeAll()
+        authenticatedClients.removeAll()
+        clientMessageTimestamps.removeAll()
         let l = listener
         listener = nil
-        lock.unlock()
 
         for (_, conn) in conns {
             conn.cancel()
@@ -112,13 +114,9 @@ public final class SimpleSocketServer: @unchecked Sendable {
         logger.info("Server stopped")
     }
 
-    public func send(_ data: Data, to clientId: Int) {
-        lock.lock()
-        guard let connection = connections[clientId] else {
-            lock.unlock()
-            return
-        }
-        lock.unlock()
+    /// Send data to a specific client (actor-isolated).
+    private func _send(_ data: Data, to clientId: Int) {
+        guard let connection = connections[clientId] else { return }
 
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
@@ -132,38 +130,94 @@ public final class SimpleSocketServer: @unchecked Sendable {
         })
     }
 
-    public func disconnect(clientId: Int) {
+    /// Remove a client and clean up (actor-isolated).
+    private func _disconnect(clientId: Int) {
         removeClient(clientId)
     }
 
-    public func markAuthenticated(_ clientId: Int) {
-        lock.lock()
+    /// Mark a client as authenticated (actor-isolated).
+    private func _markAuthenticated(_ clientId: Int) {
         authenticatedClients.insert(clientId)
-        lock.unlock()
     }
 
-    public func isAuthenticated(_ clientId: Int) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return authenticatedClients.contains(clientId)
+    /// Check if a client is authenticated (actor-isolated).
+    private func _isAuthenticated(_ clientId: Int) -> Bool {
+        authenticatedClients.contains(clientId)
     }
 
-    public func broadcastToAll(_ data: Data) {
-        lock.lock()
+    /// Broadcast data to all authenticated clients (actor-isolated).
+    private func _broadcastToAll(_ data: Data) {
         let clientIds = Array(connections.keys).filter { authenticatedClients.contains($0) }
-        lock.unlock()
-
         for clientId in clientIds {
-            send(data, to: clientId)
+            _send(data, to: clientId)
         }
+    }
+
+    // MARK: - Public API (nonisolated, for synchronous callers)
+    // These dispatch to the actor via Task for fire-and-forget operations.
+
+    /// Start the server on the specified port (synchronous version).
+    /// Bridges to async start using a semaphore (acceptable for one-time startup).
+    /// - Parameters:
+    ///   - port: Port to listen on (0 = any available)
+    ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
+    /// - Returns: Actual port number bound
+    nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
+        let semaphore = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: Result<UInt16, Error>?
+        let server = self
+        let portValue = port
+        let loopback = bindToLoopback
+        Task.detached { @Sendable in
+            do {
+                let port = try await server.startAsync(port: portValue, bindToLoopback: loopback)
+                result = .success(port)
+            } catch {
+                result = .failure(error)
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        switch result! {
+        case .success(let port): return port
+        case .failure(let error): throw error
+        }
+    }
+
+    /// Stop the server. Dispatches to actor isolation.
+    nonisolated public func stop() {
+        Task { await self._stop() }
+    }
+
+    /// Send data to a specific client. Dispatches to actor isolation.
+    nonisolated public func send(_ data: Data, to clientId: Int) {
+        Task { await self._send(data, to: clientId) }
+    }
+
+    /// Disconnect a client. Dispatches to actor isolation.
+    nonisolated public func disconnect(clientId: Int) {
+        Task { await self._disconnect(clientId: clientId) }
+    }
+
+    /// Mark a client as authenticated. Dispatches to actor isolation.
+    nonisolated public func markAuthenticated(_ clientId: Int) {
+        Task { await self._markAuthenticated(clientId) }
+    }
+
+    /// Check if a client is authenticated.
+    public func isAuthenticated(_ clientId: Int) -> Bool {
+        _isAuthenticated(clientId)
+    }
+
+    /// Broadcast data to all authenticated clients. Dispatches to actor isolation.
+    nonisolated public func broadcastToAll(_ data: Data) {
+        Task { await self._broadcastToAll(data) }
     }
 
     // MARK: - Private
 
     private func handleNewConnection(_ connection: NWConnection) {
-        lock.lock()
         let currentCount = connections.count
-        lock.unlock()
 
         if currentCount >= Self.maxConnections {
             logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
@@ -171,22 +225,21 @@ public final class SimpleSocketServer: @unchecked Sendable {
             return
         }
 
-        lock.lock()
         clientCounter += 1
         let clientId = clientCounter
         connections[clientId] = connection
-        lock.unlock()
 
         connection.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
             switch state {
             case .ready:
                 logger.info("Client \(clientId) connected")
-                self?.onClientConnected?(clientId)
+                self.onClientConnected?(clientId)
             case .failed(let error):
                 logger.error("Client \(clientId) failed: \(error)")
-                self?.removeClient(clientId)
+                Task { await self.removeClient(clientId) }
             case .cancelled:
-                self?.removeClient(clientId)
+                Task { await self.removeClient(clientId) }
             default:
                 break
             }
@@ -197,18 +250,15 @@ public final class SimpleSocketServer: @unchecked Sendable {
     }
 
     private func removeClient(_ clientId: Int) {
-        lock.lock()
         let conn = connections.removeValue(forKey: clientId)
         authenticatedClients.remove(clientId)
         clientMessageTimestamps.removeValue(forKey: clientId)
-        lock.unlock()
 
         conn?.cancel()
-        self.onClientDisconnected?(clientId)
+        onClientDisconnected?(clientId)
     }
 
     private func isRateLimited(_ clientId: Int) -> Bool {
-        lock.lock()
         let now = Date()
         var timestamps = clientMessageTimestamps[clientId] ?? []
         timestamps = timestamps.filter { now.timeIntervalSince($0) < 1.0 }
@@ -217,7 +267,6 @@ public final class SimpleSocketServer: @unchecked Sendable {
             timestamps.append(now)
         }
         clientMessageTimestamps[clientId] = timestamps
-        lock.unlock()
         return limited
     }
 
@@ -228,54 +277,87 @@ public final class SimpleSocketServer: @unchecked Sendable {
     private func receiveNextChunk(clientId: Int, connection: NWConnection, buffer: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
             guard let self else { return }
+            Task { await self.handleReceivedData(
+                clientId: clientId,
+                connection: connection,
+                content: content,
+                isComplete: isComplete,
+                error: error,
+                buffer: buffer
+            )}
+        }
+    }
 
-            if let error {
-                logger.error("Receive error from client \(clientId): \(error)")
-                self.removeClient(clientId)
-                return
-            }
+    /// Process received data within actor isolation.
+    private func handleReceivedData(
+        clientId: Int,
+        connection: NWConnection,
+        content: Data?,
+        isComplete: Bool,
+        error: NWError?,
+        buffer: Data
+    ) {
+        if let error {
+            logger.error("Receive error from client \(clientId): \(error)")
+            removeClient(clientId)
+            return
+        }
 
-            var messageBuffer = buffer
-            if let content {
-                messageBuffer.append(content)
-            }
+        var messageBuffer = buffer
+        if let content {
+            messageBuffer.append(content)
+        }
 
-            if messageBuffer.count > Self.maxBufferSize {
-                logger.error("Client \(clientId) exceeded max buffer size, disconnecting")
-                self.removeClient(clientId)
-                return
-            }
+        if messageBuffer.count > Self.maxBufferSize {
+            logger.error("Client \(clientId) exceeded max buffer size, disconnecting")
+            removeClient(clientId)
+            return
+        }
 
-            // Process newline-delimited messages
-            while let newlineIndex = messageBuffer.firstIndex(of: 0x0A) {
-                let messageData = Data(messageBuffer.prefix(upTo: newlineIndex))
-                messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
+        // Process newline-delimited messages
+        while let newlineIndex = messageBuffer.firstIndex(of: 0x0A) {
+            let messageData = Data(messageBuffer.prefix(upTo: newlineIndex))
+            messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
 
-                if !messageData.isEmpty {
-                    if self.isAuthenticated(clientId) {
-                        if self.isRateLimited(clientId) {
-                            logger.warning("Client \(clientId) rate limited, dropping message")
-                        } else {
-                            self.onDataReceived?(clientId, messageData) { response in
-                                self.send(response, to: clientId)
-                            }
-                        }
+            if !messageData.isEmpty {
+                if _isAuthenticated(clientId) {
+                    if isRateLimited(clientId) {
+                        logger.warning("Client \(clientId) rate limited, dropping message")
                     } else {
-                        if self.isRateLimited(clientId) {
-                            logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
-                        } else {
-                            self.onUnauthenticatedData?(clientId, messageData) { response in
-                                self.send(response, to: clientId)
-                            }
+                        onDataReceived?(clientId, messageData) { [weak self] response in
+                            guard let self else { return }
+                            Task { await self._send(response, to: clientId) }
+                        }
+                    }
+                } else {
+                    if isRateLimited(clientId) {
+                        logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
+                    } else {
+                        onUnauthenticatedData?(clientId, messageData) { [weak self] response in
+                            guard let self else { return }
+                            Task { await self._send(response, to: clientId) }
                         }
                     }
                 }
             }
+        }
 
-            if isComplete {
-                self.removeClient(clientId)
-            } else {
-                self.receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
+        if isComplete {
+            removeClient(clientId)
+        } else {
+            receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
+        }
+    }
+
+    // MARK: - Errors
+
+    enum ServerError: Error, LocalizedError {
+        case failedToBindPort
+
+        var errorDescription: String? {
+            switch self {
+            case .failedToBindPort:
+                return "Server failed to bind to a port"
             }
         }
     }

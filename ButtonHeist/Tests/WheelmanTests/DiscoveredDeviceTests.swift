@@ -123,19 +123,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(device.simulatorUDID, "DEADBEEF-1234-5678-9ABC-DEF012345678")
-        XCTAssertNil(device.vendorIdentifier)
-    }
-
-    func testVendorIdentifier() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
-            endpoint: endpoint,
-            vendorIdentifier: "CAFE0000-BABE-FACE-DEAD-BEEF12345678"
-        )
-
-        XCTAssertNil(device.simulatorUDID)
-        XCTAssertEqual(device.vendorIdentifier, "CAFE0000-BABE-FACE-DEAD-BEEF12345678")
     }
 
     func testDefaultIdentifiersNil() {
@@ -143,6 +130,148 @@ final class DiscoveredDeviceTests: XCTestCase {
         let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
 
         XCTAssertNil(device.simulatorUDID)
-        XCTAssertNil(device.vendorIdentifier)
+        XCTAssertNil(device.tokenHash)
+        XCTAssertNil(device.instanceId)
+        XCTAssertNil(device.sessionActive)
+    }
+
+    func testAllTXTRecordFields() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone#abc",
+            endpoint: endpoint,
+            simulatorUDID: "SIM-UUID",
+            tokenHash: "deadbeef",
+            instanceId: "my-instance",
+            sessionActive: true
+        )
+
+        XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
+        XCTAssertEqual(device.tokenHash, "deadbeef")
+        XCTAssertEqual(device.instanceId, "my-instance")
+        XCTAssertEqual(device.sessionActive, true)
+    }
+
+    func testSessionActiveFalse() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone",
+            endpoint: endpoint,
+            sessionActive: false
+        )
+
+        XCTAssertEqual(device.sessionActive, false)
+    }
+
+    // MARK: - Filter Matching
+
+    func testMatchesByName() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#abc123", endpoint: endpoint)
+
+        XCTAssertTrue(device.matches(filter: "TestApp"))
+        XCTAssertTrue(device.matches(filter: "iPhone"))
+        XCTAssertTrue(device.matches(filter: "testapp")) // case-insensitive
+    }
+
+    func testMatchesByAppName() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "MyApp-iPhone#abc", endpoint: endpoint)
+
+        XCTAssertTrue(device.matches(filter: "MyApp"))
+        XCTAssertTrue(device.matches(filter: "myapp"))
+        XCTAssertFalse(device.matches(filter: "OtherApp"))
+    }
+
+    func testMatchesByDeviceName() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#abc", endpoint: endpoint)
+
+        XCTAssertTrue(device.matches(filter: "iPhone 16"))
+        XCTAssertTrue(device.matches(filter: "iphone 16 pro"))
+    }
+
+    func testMatchesByShortIdPrefix() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#abc123", endpoint: endpoint)
+
+        XCTAssertTrue(device.matches(filter: "abc"))
+        XCTAssertTrue(device.matches(filter: "abc123"))
+        // "123" still matches via name.contains (full name includes "abc123")
+        XCTAssertTrue(device.matches(filter: "123"))
+    }
+
+    func testMatchesByInstanceIdPrefix() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone",
+            endpoint: endpoint,
+            instanceId: "my-instance-42"
+        )
+
+        XCTAssertTrue(device.matches(filter: "my-instance"))
+        XCTAssertFalse(device.matches(filter: "instance-42"))
+    }
+
+    func testMatchesBySimulatorUDIDPrefix() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone",
+            endpoint: endpoint,
+            simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
+        )
+
+        XCTAssertTrue(device.matches(filter: "DEADBEEF"))
+        XCTAssertTrue(device.matches(filter: "deadbeef"))
+        XCTAssertFalse(device.matches(filter: "1234-5678"))
+    }
+
+    func testNoMatch() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#abc", endpoint: endpoint)
+
+        XCTAssertFalse(device.matches(filter: "Android"))
+        XCTAssertFalse(device.matches(filter: "zzzzz"))
+    }
+
+    // MARK: - Array first(matching:)
+
+    func testArrayFirstMatchingNilFilter() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let devices = [
+            DiscoveredDevice(id: "a", name: "First-iPhone", endpoint: endpoint),
+            DiscoveredDevice(id: "b", name: "Second-iPad", endpoint: endpoint),
+        ]
+
+        XCTAssertEqual(devices.first(matching: nil)?.id, "a")
+    }
+
+    func testArrayFirstMatchingWithFilter() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let devices = [
+            DiscoveredDevice(id: "a", name: "First-iPhone", endpoint: endpoint),
+            DiscoveredDevice(id: "b", name: "Second-iPad", endpoint: endpoint),
+        ]
+
+        XCTAssertEqual(devices.first(matching: "iPad")?.id, "b")
+        XCTAssertNil(devices.first(matching: "Mac"))
+    }
+
+    func testArrayFirstMatchingEmpty() {
+        let devices: [DiscoveredDevice] = []
+
+        XCTAssertNil(devices.first(matching: nil))
+        XCTAssertNil(devices.first(matching: "anything"))
+    }
+
+    // MARK: - Host:Port Init
+
+    func testHostPortInit() {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 8080)
+
+        XCTAssertEqual(device.id, "127.0.0.1:8080")
+        XCTAssertEqual(device.name, "127.0.0.1:8080")
+        XCTAssertNil(device.simulatorUDID)
+        XCTAssertNil(device.sessionActive)
     }
 }

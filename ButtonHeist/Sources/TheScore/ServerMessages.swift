@@ -216,7 +216,8 @@ public struct RecordingPayload: Codable, Sendable {
     }
 }
 
-/// A single recorded interaction event captured during a Stakeout recording.
+/// A single recorded interaction event captured during a TheStakeout recording.
+/// Uses `InterfaceDelta` instead of full before/after `Interface` snapshots to minimize payload size.
 public struct InteractionEvent: Codable, Sendable {
     /// Time offset from recording start in seconds
     public let timestamp: Double
@@ -224,23 +225,19 @@ public struct InteractionEvent: Codable, Sendable {
     public let command: ClientMessage
     /// The result returned to the client
     public let result: ActionResult
-    /// Interface state before the interaction (elements only, no tree)
-    public let interfaceBefore: Interface
-    /// Interface state after the interaction (elements only, no tree)
-    public let interfaceAfter: Interface
+    /// Compact delta describing what changed in the hierarchy (from result.interfaceDelta)
+    public let interfaceDelta: InterfaceDelta?
 
     public init(
         timestamp: Double,
         command: ClientMessage,
         result: ActionResult,
-        interfaceBefore: Interface,
-        interfaceAfter: Interface
+        interfaceDelta: InterfaceDelta? = nil
     ) {
         self.timestamp = timestamp
         self.command = command
         self.result = result
-        self.interfaceBefore = interfaceBefore
-        self.interfaceAfter = interfaceAfter
+        self.interfaceDelta = interfaceDelta
     }
 }
 
