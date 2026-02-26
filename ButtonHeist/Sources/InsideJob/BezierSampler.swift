@@ -1,17 +1,13 @@
+#if canImport(UIKit)
+#if DEBUG
 import Foundation
 import CoreGraphics
+import TheScore
 
 /// Converts cubic bezier curves into evenly-spaced polyline samples.
-public enum BezierSampler {
+enum BezierSampler {
 
     /// Sample a cubic bezier curve into a polyline.
-    /// - Parameters:
-    ///   - p0: Start point
-    ///   - p1: First control point
-    ///   - p2: Second control point
-    ///   - p3: End point
-    ///   - sampleCount: Number of points to generate (minimum 2)
-    /// - Returns: Array of PathPoint samples along the curve
     static func sampleCubicBezier(
         p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint,
         sampleCount: Int = 20
@@ -25,13 +21,7 @@ public enum BezierSampler {
     }
 
     /// Sample a sequence of cubic bezier segments into a single polyline.
-    /// Uses `BezierSegment` from the wire protocol directly.
-    /// - Parameters:
-    ///   - startPoint: Starting point of the path
-    ///   - segments: Array of BezierSegment (from wire protocol)
-    ///   - samplesPerSegment: Samples per bezier segment (default 20)
-    /// - Returns: Combined polyline as PathPoint array
-    public static func sampleBezierPath(
+    static func sampleBezierPath(
         startPoint: CGPoint,
         segments: [BezierSegment],
         samplesPerSegment: Int = 20
@@ -70,3 +60,5 @@ public enum BezierSampler {
         )
     }
 }
+#endif
+#endif

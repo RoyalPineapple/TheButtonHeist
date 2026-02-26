@@ -3,11 +3,10 @@
 #if DEBUG
 import UIKit
 import AVFoundation
+import os.log
 import TheScore
 
-private func stakeoutLog(_ message: String) {
-    NSLog("[Stakeout] %@", message)
-}
+private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "recording")
 
 /// Screen recording engine. Captures frames using InsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
@@ -137,7 +136,7 @@ final class Stakeout {
         interactionLog = []
         state = .recording
 
-        stakeoutLog("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
+        logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(self.fps)fps, effectiveScale=\(effectiveScale)")
 
         // Start frame capture timer
         startCaptureTimer()
@@ -150,7 +149,7 @@ final class Stakeout {
         guard state == .recording else { return }
         state = .finalizing
 
-        stakeoutLog("Stopping recording: reason=\(reason.rawValue), frames=\(frameCount)")
+        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(self.frameCount)")
 
         captureTimer?.cancel()
         captureTimer = nil
@@ -233,14 +232,14 @@ final class Stakeout {
         if let url = outputURL,
            let fileSize = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int,
            fileSize > 7_000_000 {
-            stakeoutLog("File size limit reached: \(fileSize) bytes")
+            logger.warning("File size limit reached: \(fileSize) bytes")
             stopRecording(reason: .fileSizeLimit)
             return
         }
 
         // Check max duration
         if let start = startTime, Date().timeIntervalSince(start) >= maxDuration {
-            stakeoutLog("Max duration reached")
+            logger.warning("Max duration reached")
             stopRecording(reason: .maxDuration)
             return
         }
@@ -335,7 +334,7 @@ final class Stakeout {
 
                 let elapsed = Date().timeIntervalSince(self.lastActivityTime)
                 if elapsed >= self.inactivityTimeout {
-                    stakeoutLog("Inactivity timeout: \(elapsed)s since last activity")
+                    logger.info("Inactivity timeout: \(elapsed)s since last activity")
                     self.stopRecording(reason: .inactivity)
                     return
                 }
@@ -393,14 +392,14 @@ final class Stakeout {
                     interactionLog: interactions.isEmpty ? nil : interactions
                 )
 
-                stakeoutLog("Recording complete: \(frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")
+                logger.info("Recording complete: \(frameCount) frames, \(String(format: "%.1f", duration))s, \(videoData.count) bytes")
                 self.onRecordingComplete?(.success(payload))
             }
         }
     }
 
     private func deliverError(_ error: StakeoutError) {
-        stakeoutLog("Recording error: \(error)")
+        logger.error("Recording error: \(error)")
         onRecordingComplete?(.failure(error))
         cleanup()
     }

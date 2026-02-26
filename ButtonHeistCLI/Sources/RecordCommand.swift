@@ -1,13 +1,14 @@
 import ArgumentParser
 import Foundation
 import ButtonHeist
-import TheScore
 
 struct RecordCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "record",
         abstract: "Record the screen of the connected device"
     )
+
+    @OptionGroup var connection: ConnectionOptions
 
     @Option(name: .shortAndLong, help: "Output file path (default: recording.mp4)")
     var output: String = "recording.mp4"
@@ -27,20 +28,17 @@ struct RecordCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index")
-    var device: String?
-
     @MainActor
     func run() async throws {
-        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        let connector = DeviceConnector(
+            deviceFilter: connection.device, token: connection.token,
+            quiet: connection.quiet, force: connection.force
+        )
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
 
-        if !quiet { logStatus("Starting recording...") }
+        if !connection.quiet { logStatus("Starting recording...") }
 
         let config = RecordingConfig(
             fps: fps,
@@ -59,7 +57,7 @@ struct RecordCommand: AsyncParsableCommand {
         let url = URL(fileURLWithPath: output)
         try videoData.write(to: url)
 
-        if !quiet {
+        if !connection.quiet {
             logStatus("Recording saved: \(output)")
             logStatus("  Duration: \(String(format: "%.1f", payload.duration))s")
             logStatus("  Frames: \(payload.frameCount)")

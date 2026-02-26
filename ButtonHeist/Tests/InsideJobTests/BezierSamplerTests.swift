@@ -1,6 +1,7 @@
 import XCTest
 import CoreGraphics
-@testable import TheScore
+import TheScore
+@testable import InsideJob
 
 final class BezierSamplerTests: XCTestCase {
 

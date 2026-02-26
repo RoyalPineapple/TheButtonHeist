@@ -26,7 +26,7 @@ extension InsideJob {
     // MARK: - Screen Request Handler
 
     func handleScreen(respond: @escaping (Data) -> Void) {
-        serverLog("Screen requested")
+        insideJobLogger.debug("Screen requested")
 
         guard let (image, bounds) = captureScreen() else {
             sendMessage(.error("Could not access app window"), respond: respond)
@@ -45,7 +45,7 @@ extension InsideJob {
         )
 
         sendMessage(.screen(payload), respond: respond)
-        serverLog("Screen sent: \(pngData.count) bytes")
+        insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
 
     func broadcastScreen() {
