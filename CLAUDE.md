@@ -163,6 +163,7 @@ Before pushing any commit, verify the following:
 - **Always ensure code builds before committing.** Never commit code that doesn't compile or pass basic build checks.
 - Run `xcodebuild` to verify the project builds successfully before staging changes.
 - Keep commits atomic and focused on a single logical change.
+- **Squash merge PRs into main.** When merging a PR to `main`, use squash merge with a single descriptive commit message that summarizes the entire change.
 
 ## CLI-First Development
 
