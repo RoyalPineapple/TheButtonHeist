@@ -597,6 +597,43 @@ public final class TheMastermind {
             }
             return try await sendAction(message)
 
+        case "scroll":
+            guard let directionValue = stringArg(args, "direction") else {
+                return .error("direction is required for scroll. Valid: up, down, left, right, next, previous")
+            }
+            guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
+                return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right, next, previous")
+            }
+            guard elementTarget(args) != nil else {
+                return .error("Must specify element (identifier or order) for scroll")
+            }
+            return try await sendAction(
+                .scroll(
+                    ScrollTarget(
+                        elementTarget: elementTarget(args),
+                        direction: direction
+                    )
+                )
+            )
+
+        case "scroll_to_visible":
+            guard let target = elementTarget(args) else {
+                return .error("Must specify element (identifier or order) for scroll_to_visible")
+            }
+            return try await sendAction(.scrollToVisible(target))
+
+        case "scroll_to_edge":
+            guard let edgeValue = stringArg(args, "edge") else {
+                return .error("edge is required for scroll_to_edge. Valid: top, bottom, left, right")
+            }
+            guard let edge = ScrollEdge(rawValue: edgeValue.lowercased()) else {
+                return .error("Invalid edge '\(edgeValue)'. Valid: top, bottom, left, right")
+            }
+            guard let target = elementTarget(args) else {
+                return .error("Must specify element (identifier or order) for scroll_to_edge")
+            }
+            return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
+
         case "swipe":
             let directionValue = stringArg(args, "direction")
             var direction: SwipeDirection?

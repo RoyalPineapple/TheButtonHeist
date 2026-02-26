@@ -261,6 +261,9 @@ public enum ActionMethod: String, Codable, Sendable {
     case editAction
     case resignFirstResponder
     case waitForIdle
+    case accessibilityScroll
+    case scrollToVisible
+    case scrollToEdge
     case elementNotFound
     case elementDeallocated
 }

@@ -9,7 +9,7 @@ import os.log
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "server")
 
-/// Weak reference wrapper for interactive accessibility objects.
+/// Weak reference wrapper for accessibility objects.
 struct WeakObject {
     weak var object: NSObject?
 }
@@ -20,7 +20,7 @@ struct WeakObject {
 @MainActor
 protocol ElementStore: AnyObject {
     var cachedElements: [AccessibilityElement] { get }
-    var interactiveObjects: [Int: WeakObject] { get }
+    var elementObjects: [Int: WeakObject] { get }
     @discardableResult func refreshElements() -> Bool
 }
 
@@ -51,9 +51,8 @@ public final class InsideJob: ElementStore {
     let theSafecracker = TheSafecracker()
     var cachedElements: [AccessibilityElement] = []
 
-    /// Weak references to interactive accessibility objects from the last parse,
-    /// keyed by traversal index.
-    var interactiveObjects: [Int: WeakObject] = [:]
+    /// Weak references to accessibility objects from the last parse, keyed by traversal index.
+    var elementObjects: [Int: WeakObject] = [:]
 
     private var isRunning = false
     private var isSuspended = false
@@ -336,6 +335,12 @@ public final class InsideJob: ElementStore {
             await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
             await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeTypeText(target) }
+        case .scroll(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScroll(target) }
+        case .scrollToVisible(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
+        case .scrollToEdge(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
         }
     }
 
@@ -529,7 +534,7 @@ public final class InsideJob: ElementStore {
         stopAccessibilityObservation()
 
         cachedElements.removeAll()
-        interactiveObjects.removeAll()
+        elementObjects.removeAll()
         lastHierarchyHash = 0
 
         insideJobLogger.info("Server suspended")
