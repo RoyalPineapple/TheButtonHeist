@@ -18,11 +18,11 @@ import TheScore
 @MainActor
 final class TheSafecracker {
 
-    // MARK: - Element Store
+    // MARK: - TheBagman Reference
 
-    /// Back-reference to the element cache owner (InsideJob).
+    /// Back-reference to the element cache and UI observation owner.
     /// Used by extension files to resolve interaction targets.
-    weak var elementStore: (any ElementStore)?
+    weak var bagman: TheBagman?
 
     // MARK: - Fingerprints
 
