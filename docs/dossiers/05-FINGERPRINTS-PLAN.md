@@ -6,11 +6,11 @@ Rename to TheFingerprints. Enforce minimum 0.5s display time for all indicators.
 
 ## Phase 1: Rename to TheFingerprints
 
-- [ ] **Rename class** from `Fingerprints` to `TheFingerprints`
-- [ ] **Update references in `InsideJob.swift`**
-- [ ] **Update references in `TheSafecracker.swift`**
-- [ ] **Update references in `Stakeout.swift`**
-- [ ] **Build passes** after phase
+- [x] **Rename class** from `Fingerprints` to `TheFingerprints`
+- [x] **Update references in `InsideJob.swift`**
+- [x] **Update references in `TheSafecracker.swift`**
+- [x] **Update references in `Stakeout.swift`**
+- [x] **Build passes** after phase
 
 ## Phase 2: Enforce Minimum Display Duration
 
@@ -21,11 +21,11 @@ private static let minimumDisplayDuration: TimeInterval = 0.5
 private static let fadeOutDuration: TimeInterval = 0.5
 ```
 
-- [ ] **Tap:** 0.5s visible → 0.5s fade (1.0s total)
-- [ ] **Long press:** visible for duration (min 0.5s) → 0.5s fade
-- [ ] **Swipe/drag:** visible for duration → 0.5s fade
-- [ ] **Pinch/rotate:** visible for duration → 0.5s fade
-- [ ] **Build passes** after phase
+- [x] **Tap:** 0.5s visible → 0.5s fade (1.0s total)
+- [x] **Long press:** visible for duration (min 0.5s) → 0.5s fade
+- [x] **Swipe/drag:** visible for duration → 0.5s fade
+- [x] **Pinch/rotate:** visible for duration → 0.5s fade
+- [x] **Build passes** after phase
 
 ## Phase 3: Coordinate with TheStakeout on Compositing Elimination
 
@@ -48,9 +48,9 @@ private static let fadeOutDuration: TimeInterval = 0.5
 
 ## Verification
 
-- [ ] Class renamed to `TheFingerprints`
-- [ ] All indicators visible for minimum 0.5s before fade
-- [ ] Fade-out duration is 0.5s for all indicator types
+- [x] Class renamed to `TheFingerprints`
+- [x] All indicators visible for minimum 0.5s before fade
+- [x] Fade-out duration is 0.5s for all indicator types
 - [ ] `INSIDEJOB_DISABLE_FINGERPRINTS` env var supported
 - [ ] Passthrough window has `accessibilityElementsHidden = true`
 - [ ] No compositing code references TheFingerprints

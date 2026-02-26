@@ -58,7 +58,7 @@
 		D3C2801A88967C48FFA5D1AE /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */; };
 		D5B498E73725F15EE96B9B56 /* TheMastermind.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45F0E59651997924336C554 /* TheMastermind.swift */; };
 		E23744BEB11389FDD146E471 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0ED247952BD22150C078646 /* TheSafecracker+TextEntry.swift */; };
-		E539BAE11A4FD45F5090050A /* Fingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E31C5B2C86BFB010F3B3678 /* Fingerprints.swift */; };
+		E539BAE11A4FD45F5090050A /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E31C5B2C86BFB010F3B3678 /* TheFingerprints.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		EB70E312ACAB369A26299111 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */; };
 		EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */; };
@@ -253,7 +253,7 @@
 		4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
 		4AF4A85B1445CDB6D88AECE8 /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
-		4E31C5B2C86BFB010F3B3678 /* Fingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fingerprints.swift; sourceTree = "<group>"; };
+		4E31C5B2C86BFB010F3B3678 /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		54E469DB190D1F9C3057ED0C /* InsideJobTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "InsideJobTests-Info.plist"; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B6243A7F04F92B72588A7B5 /* InsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJob.swift; sourceTree = "<group>"; };
@@ -473,7 +473,7 @@
 			isa = PBXGroup;
 			children = (
 				DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */,
-				4E31C5B2C86BFB010F3B3678 /* Fingerprints.swift */,
+				4E31C5B2C86BFB010F3B3678 /* TheFingerprints.swift */,
 				5B6243A7F04F92B72588A7B5 /* InsideJob.swift */,
 				7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */,
 				BFA324EDADD27714491303D6 /* InsideJob+Animation.swift */,
@@ -1028,7 +1028,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D3C2801A88967C48FFA5D1AE /* BezierSampler.swift in Sources */,
-				E539BAE11A4FD45F5090050A /* Fingerprints.swift in Sources */,
+				E539BAE11A4FD45F5090050A /* TheFingerprints.swift in Sources */,
 				7EFFE0E7E04E84649421EE37 /* IOHIDEventBuilder.swift in Sources */,
 				4733ABACD507734FA6EF732C /* InsideJob+Accessibility.swift in Sources */,
 				BC85CCD2AA0AC32EA60D7867 /* InsideJob+Animation.swift in Sources */,

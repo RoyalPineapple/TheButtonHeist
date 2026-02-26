@@ -21,7 +21,7 @@ extension TheSafecracker {
             if !tap(at: point) {
                 return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
             }
-            showFingerprint(at: point)
+            fingerprints.showFingerprint(at: point)
 
             var keyboardAppeared = false
             for _ in 0..<20 {
