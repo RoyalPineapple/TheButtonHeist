@@ -322,6 +322,47 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 {"stopRecording":{}}
 ```
 
+### scroll
+
+Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation.
+
+**By identifier:**
+```json
+{"scroll":{"_0":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}}
+```
+
+**By traversal index:**
+```json
+{"scroll":{"_0":{"elementTarget":{"order":10},"direction":"down"}}}
+```
+
+Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
+
+### scrollToVisible
+
+Scroll the nearest scroll view ancestor until the target element's accessibility frame is fully within the viewport.
+
+**By identifier:**
+```json
+{"scrollToVisible":{"_0":{"identifier":"buttonheist.longList.last"}}}
+```
+
+**By traversal index:**
+```json
+{"scrollToVisible":{"_0":{"order":99}}}
+```
+
+### scrollToEdge
+
+Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
+
+**By identifier:**
+```json
+{"scrollToEdge":{"_0":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}}
+```
+
+Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
+
 ### editAction
 
 Perform a standard edit action via the responder chain.
@@ -472,7 +513,7 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `tap`, `increment`, `decrement`, `typeText`, or `performCustomAction` commands.
+Response to `activate`, `tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
 
 ```json
 {"actionResult":{"_0":{
@@ -508,6 +549,9 @@ Possible methods:
 - `editAction` - Edit action performed via responder chain
 - `resignFirstResponder` - First responder resigned (keyboard dismissed)
 - `waitForIdle` - Wait-for-idle completed
+- `scroll` - Scroll view scrolled by one page
+- `scrollToVisible` - Scroll view adjusted to make element visible
+- `scrollToEdge` - Scroll view scrolled to an edge
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 
@@ -820,6 +864,35 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | Field | Type | Description |
 |-------|------|-------------|
 | `action` | `String` | Edit action: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"` |
+
+### ScrollDirection
+
+Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
+
+- `up` — Scroll up to reveal content above the current viewport
+- `down` — Scroll down to reveal content below the current viewport
+- `left` — Scroll left to reveal content to the left
+- `right` — Scroll right to reveal content to the right
+- `next` — Scroll to next page (equivalent to down for vertical content)
+- `previous` — Scroll to previous page (equivalent to up for vertical content)
+
+### ScrollTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Element to scroll from (bubbles up to nearest scroll view ancestor) |
+| `direction` | `ScrollDirection` | Scroll direction |
+
+### ScrollEdge
+
+Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
+
+### ScrollToEdgeTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `elementTarget` | `ActionTarget?` | Element whose nearest scroll view ancestor to scroll |
+| `edge` | `ScrollEdge` | Which edge to scroll to |
 
 ### WaitForIdleTarget
 

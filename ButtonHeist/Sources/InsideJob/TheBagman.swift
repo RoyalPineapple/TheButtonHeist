@@ -17,9 +17,9 @@ final class TheBagman {
     /// Parsed accessibility elements from the last hierarchy refresh.
     private(set) var cachedElements: [AccessibilityElement] = []
 
-    /// Weak references to interactive accessibility objects from the last parse,
-    /// keyed by traversal index.
-    private(set) var interactiveObjects: [Int: WeakObject] = [:]
+    /// Weak references to accessibility objects from the last parse,
+    /// keyed by the parsed element.
+    private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
@@ -31,34 +31,45 @@ final class TheBagman {
 
     // MARK: - Element Access
 
+    /// Look up the live NSObject for an element at a given traversal index.
+    func object(at index: Int) -> NSObject? {
+        guard index >= 0, index < cachedElements.count else { return nil }
+        return elementObjects[cachedElements[index]]?.object
+    }
+
     /// Check if an interactive object exists at the given traversal index.
     func hasInteractiveObject(at index: Int) -> Bool {
-        interactiveObjects[index]?.object != nil
+        guard let obj = object(at: index) else { return false }
+        let el = cachedElements[index]
+        return el.respondsToUserInteraction
+            || el.traits.contains(.adjustable)
+            || !el.customActions.isEmpty
+            || obj.accessibilityRespondsToUserInteraction
     }
 
     /// Return custom action names for the interactive object at the given index.
     func customActionNames(elementAt index: Int) -> [String] {
-        interactiveObjects[index]?.object?.accessibilityCustomActions?.map { $0.name } ?? []
+        object(at: index)?.accessibilityCustomActions?.map { $0.name } ?? []
     }
 
     /// Perform accessibilityActivate on the object at the given index.
     func activate(elementAt index: Int) -> Bool {
-        interactiveObjects[index]?.object?.accessibilityActivate() ?? false
+        object(at: index)?.accessibilityActivate() ?? false
     }
 
     /// Perform accessibilityIncrement on the object at the given index.
     func increment(elementAt index: Int) {
-        interactiveObjects[index]?.object?.accessibilityIncrement()
+        object(at: index)?.accessibilityIncrement()
     }
 
     /// Perform accessibilityDecrement on the object at the given index.
     func decrement(elementAt index: Int) {
-        interactiveObjects[index]?.object?.accessibilityDecrement()
+        object(at: index)?.accessibilityDecrement()
     }
 
     /// Perform a named custom action on the object at the given index.
     func performCustomAction(named name: String, elementAt index: Int) -> Bool {
-        guard let actions = interactiveObjects[index]?.object?.accessibilityCustomActions else {
+        guard let actions = object(at: index)?.accessibilityCustomActions else {
             return false
         }
         for action in actions where action.name == name {
@@ -146,7 +157,7 @@ final class TheBagman {
     /// Clear all cached element data (used on suspend).
     func clearCache() {
         cachedElements.removeAll()
-        interactiveObjects.removeAll()
+        elementObjects.removeAll()
         lastHierarchyHash = 0
     }
 
@@ -161,18 +172,13 @@ final class TheBagman {
         guard !windows.isEmpty else { return nil }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var newInteractiveObjects: [Int: WeakObject] = [:]
+        var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
         for (window, rootView) in windows {
             let baseIndex = allElements.count
-            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { _, index, object in
-                let globalIndex = baseIndex + index
-                if object.accessibilityRespondsToUserInteraction
-                    || object.accessibilityTraits.contains(.adjustable)
-                    || !(object.accessibilityCustomActions ?? []).isEmpty {
-                    newInteractiveObjects[globalIndex] = WeakObject(object: object)
-                }
+            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { element, _, object in
+                newElementObjects[element] = WeakObject(object: object)
             }
             let windowElements = windowTree.flattenToElements()
 
@@ -196,7 +202,7 @@ final class TheBagman {
             allElements.append(contentsOf: windowElements)
         }
 
-        interactiveObjects = newInteractiveObjects
+        elementObjects = newElementObjects
         cachedElements = allElements
         return allHierarchy
     }

@@ -9,7 +9,7 @@ import os.log
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "server")
 
-/// Weak reference wrapper for interactive accessibility objects.
+/// Weak reference wrapper for accessibility objects.
 struct WeakObject {
     weak var object: NSObject?
 }
@@ -311,6 +311,12 @@ public final class InsideJob {
             await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
             await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeTypeText(target) }
+        case .scroll(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScroll(target) }
+        case .scrollToVisible(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
+        case .scrollToEdge(let target):
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
         default:
             insideJobLogger.error("Unhandled message type in dispatchInteraction")
             sendMessage(.actionResult(ActionResult(

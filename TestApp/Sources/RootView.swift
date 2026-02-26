@@ -24,6 +24,17 @@ struct RootView: View {
                 NavigationLink("Settings") {
                     SettingsView()
                 }
+
+                Section("Scroll Tests") {
+                    NavigationLink("Long List") {
+                        LongListView()
+                    }
+                    .accessibilityIdentifier("buttonheist.root.longList")
+                    NavigationLink("Corner Scroll") {
+                        CornerScrollView()
+                    }
+                    .accessibilityIdentifier("buttonheist.root.cornerScroll")
+                }
             }
             .navigationTitle("ButtonHeist Test App")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)

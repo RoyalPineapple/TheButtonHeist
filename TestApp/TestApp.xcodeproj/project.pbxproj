@@ -41,11 +41,13 @@
 		BBCDE07C34B4141E1373FF8A /* TheScore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C5DCE8138771A3FA9B3E9A3C /* AdjustableControlsDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */; };
 		D2985988AB6E8AFB376EB2D1 /* DisplayDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */; };
+		D764F43BCDD8A2B20B50EE16 /* LongListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */; };
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
 		E3376FECA536A8AAA171C294 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */; };
 		EA78FA2AA8AB39C21DACFC8B /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		EFF4E3FA1EDE832D8A2EE75C /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1E33E92F9049326D6B7919 /* AppSettings.swift */; };
 		F44ED5C500A24FED0E4AC1CE /* Wheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 58296904D156AED07299DF88 /* Wheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F554FBE08E15170E15FBDC3D /* CornerScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D55E96F64A552EA4B0C5D12 /* CornerScrollView.swift */; };
 		F72D8F1D2B784116A32F363B /* TodoListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7D07E273A0048DA7FE282A3 /* TodoListView.swift */; };
 		F8653ABF476DECEF4671858E /* TuistBundle+AccessibilityTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E724C266432DF64AF26AFB6E /* TuistBundle+AccessibilityTestApp.swift */; };
 /* End PBXBuildFile section */
@@ -89,6 +91,7 @@
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0BBA351D3F6A6BDB494F9572 /* InsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		229C794D786BCDA692A6A11C /* TuistAssets+AccessibilityTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+AccessibilityTestApp.swift"; sourceTree = "<group>"; };
+		2D55E96F64A552EA4B0C5D12 /* CornerScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CornerScrollView.swift; sourceTree = "<group>"; };
 		3C83CD8B9B8895CCCF58B8FB /* UIKitTestApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "UIKitTestApp-Info.plist"; sourceTree = "<group>"; };
 		3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonsActionsDemo.swift; sourceTree = "<group>"; };
 		484B42EBF5AEA433BA605F9B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -104,6 +107,7 @@
 		8B1E33E92F9049326D6B7919 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		8B3440EB87568A6CD7D69264 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongListView.swift; sourceTree = "<group>"; };
 		B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertsSheetDemo.swift; sourceTree = "<group>"; };
 		B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsDemoView.swift; sourceTree = "<group>"; };
 		B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInputDemo.swift; sourceTree = "<group>"; };
@@ -154,8 +158,10 @@
 				3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */,
 				DFBC26E435BAE4472EEAEAB2 /* CalculatorView.swift */,
 				B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */,
+				2D55E96F64A552EA4B0C5D12 /* CornerScrollView.swift */,
 				7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */,
 				FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */,
+				98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
 				7EB069D6039881E065A92F23 /* RootView.swift */,
 				ED3E93AE1108866F17601CB8 /* SettingsView.swift */,
@@ -418,8 +424,10 @@
 				6CD11C258BD8A5FDA8CDC91B /* ButtonsActionsDemo.swift in Sources */,
 				80C51014DFAF47520993D24E /* CalculatorView.swift in Sources */,
 				BA06AC07DEFEA59F05F3BAA5 /* ControlsDemoView.swift in Sources */,
+				F554FBE08E15170E15FBDC3D /* CornerScrollView.swift in Sources */,
 				5ADD7EE878F11746F33810CA /* DisclosureGroupingDemo.swift in Sources */,
 				D2985988AB6E8AFB376EB2D1 /* DisplayDemo.swift in Sources */,
+				D764F43BCDD8A2B20B50EE16 /* LongListView.swift in Sources */,
 				41BCD5493551504A86D47AB5 /* NotesView.swift in Sources */,
 				BA04B66749F873353950DA7A /* RootView.swift in Sources */,
 				3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */,

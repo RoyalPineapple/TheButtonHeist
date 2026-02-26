@@ -19,6 +19,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             """,
         version: buttonHeistVersion,
         subcommands: [ActivateCommand.self, ListCommand.self, ActionCommand.self,
+                       ScrollCommand.self, ScrollToVisibleCommand.self, ScrollToEdgeCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
                        SessionCommand.self,
                        RecordCommand.self, StopRecordingCommand.self,

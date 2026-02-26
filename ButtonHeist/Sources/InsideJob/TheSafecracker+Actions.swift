@@ -6,6 +6,234 @@ import TheScore
 
 extension TheSafecracker {
 
+    // MARK: - Scroll
+
+    func executeScroll(_ target: ScrollTarget) -> InteractionResult {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let elementTarget = target.elementTarget else {
+            return .failure(.scroll, message: "Element target required for scroll")
+        }
+
+        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll target")
+        }
+
+        let uiDirection: UIAccessibilityScrollDirection
+        switch target.direction {
+        case .up:       uiDirection = .up
+        case .down:     uiDirection = .down
+        case .left:     uiDirection = .left
+        case .right:    uiDirection = .right
+        case .next:     uiDirection = .next
+        case .previous: uiDirection = .previous
+        }
+
+        let success = scroll(elementAt: index, direction: uiDirection)
+        return InteractionResult(
+            success: success,
+            method: .scroll,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
+    func executeScrollToEdge(_ target: ScrollToEdgeTarget) -> InteractionResult {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let elementTarget = target.elementTarget else {
+            return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
+        }
+
+        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll_to_edge target")
+        }
+
+        let success = scrollToEdge(elementAt: index, edge: target.edge)
+        return InteractionResult(
+            success: success,
+            method: .scrollToEdge,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
+    func executeScrollToVisible(_ target: ActionTarget) -> InteractionResult {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let index = bagman.resolveTraversalIndex(for: target) else {
+            return .failure(.elementNotFound, message: "Element not found for scroll_to_visible target")
+        }
+
+        let success = scrollToVisible(elementAt: index)
+        return InteractionResult(
+            success: success,
+            method: .scrollToVisible,
+            message: success ? nil : "No scrollable ancestor found for element",
+            value: nil
+        )
+    }
+
+    // MARK: - Scroll Implementation
+
+    /// Walk the view/container hierarchy from an element to find the nearest
+    /// scrollable UIScrollView ancestor, then scroll it by one page via `setContentOffset`.
+    private func scroll(elementAt index: Int, direction: UIAccessibilityScrollDirection) -> Bool {
+        guard let object = bagman?.object(at: index) else { return false }
+
+        var current: NSObject? = object
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView,
+               scrollView.isScrollEnabled {
+                return scrollByPage(scrollView, direction: direction)
+            }
+            current = nextAncestor(of: candidate)
+        }
+        return false
+    }
+
+    /// Scroll a UIScrollView by approximately one page in the given direction.
+    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection) -> Bool {
+        let overlap: CGFloat = 44
+        let size = scrollView.frame.size
+        let offset = scrollView.contentOffset
+        let contentSize = scrollView.contentSize
+        let insets = scrollView.adjustedContentInset
+
+        var newOffset = offset
+
+        switch direction {
+        case .up:
+            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+        case .down:
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
+        case .left:
+            newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
+        case .right:
+            newOffset.x = min(offset.x + size.width - overlap,
+                             contentSize.width + insets.right - size.width)
+        case .next:
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
+        case .previous:
+            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+        @unknown default:
+            return false
+        }
+
+        if newOffset.x == offset.x && newOffset.y == offset.y { return false }
+        scrollView.setContentOffset(newOffset, animated: true)
+        return true
+    }
+
+    /// Scroll the nearest UIScrollView ancestor so the element's accessibility frame
+    /// is fully visible within the scroll view's viewport.
+    private func scrollToVisible(elementAt index: Int) -> Bool {
+        guard let object = bagman?.object(at: index) else { return false }
+
+        let elementFrame = object.accessibilityFrame
+        guard !elementFrame.isNull && !elementFrame.isEmpty else { return false }
+
+        var current: NSObject? = object
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView,
+               scrollView.isScrollEnabled {
+                return scrollToMakeVisible(elementFrame, in: scrollView)
+            }
+            current = nextAncestor(of: candidate)
+        }
+        return false
+    }
+
+    private func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView) -> Bool {
+        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
+
+        let visibleRect = CGRect(
+            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
+            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
+            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
+        )
+
+        if visibleRect.contains(targetInScrollView) { return true }
+
+        var newOffset = scrollView.contentOffset
+
+        if targetInScrollView.minX < visibleRect.minX {
+            newOffset.x -= visibleRect.minX - targetInScrollView.minX
+        } else if targetInScrollView.maxX > visibleRect.maxX {
+            newOffset.x += targetInScrollView.maxX - visibleRect.maxX
+        }
+
+        if targetInScrollView.minY < visibleRect.minY {
+            newOffset.y -= visibleRect.minY - targetInScrollView.minY
+        } else if targetInScrollView.maxY > visibleRect.maxY {
+            newOffset.y += targetInScrollView.maxY - visibleRect.maxY
+        }
+
+        let insets = scrollView.adjustedContentInset
+        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
+        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
+
+        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
+            return true
+        }
+
+        scrollView.setContentOffset(newOffset, animated: true)
+        return true
+    }
+
+    /// Scroll the nearest UIScrollView ancestor to an edge.
+    private func scrollToEdge(elementAt index: Int, edge: ScrollEdge) -> Bool {
+        guard let object = bagman?.object(at: index) else { return false }
+
+        var current: NSObject? = object
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView,
+               scrollView.isScrollEnabled {
+                let insets = scrollView.adjustedContentInset
+                var newOffset = scrollView.contentOffset
+
+                switch edge {
+                case .top:
+                    newOffset.y = -insets.top
+                case .bottom:
+                    newOffset.y = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+                case .left:
+                    newOffset.x = -insets.left
+                case .right:
+                    newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
+                }
+
+                if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
+                    return true
+                }
+                scrollView.setContentOffset(newOffset, animated: true)
+                return true
+            }
+            current = nextAncestor(of: candidate)
+        }
+        return false
+    }
+
+    /// Walk up one level in the view/container hierarchy.
+    private func nextAncestor(of candidate: NSObject) -> NSObject? {
+        if let view = candidate as? UIView {
+            return view.superview
+        } else if let element = candidate as? UIAccessibilityElement {
+            return element.accessibilityContainer as? NSObject
+        } else if candidate.responds(to: Selector(("accessibilityContainer"))) {
+            return candidate.value(forKey: "accessibilityContainer") as? NSObject
+        }
+        return nil
+    }
+
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ActionTarget) -> InteractionResult {
