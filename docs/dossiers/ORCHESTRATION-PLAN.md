@@ -160,11 +160,11 @@ Build verify: xcodebuild ... -scheme InsideJob -destination 'generic/platform=iO
 ```
 
 ### Batch 2 Gate
-- [ ] Merge Agent 2A branch (TheMuscle)
-- [ ] Merge Agent 2B branch (TheWheelman)
-- [ ] Merge Agent 2C branch (TheFingerprints)
-- [ ] Run: Full framework build (all 4 schemes) + Wheelman tests + TheScore tests
-- [ ] Commit: "Batch 2: TheMuscle session simplification + TheWheelman actor rewrite + TheFingerprints rename"
+- [x] Merge Agent 2A branch (TheMuscle) — committed directly as 16e2e0f
+- [x] Merge Agent 2B branch (TheWheelman) — committed directly as 47b9d38
+- [x] Merge Agent 2C branch (TheFingerprints) — committed directly as 13c475a
+- [x] Run: Full framework build (all 4 schemes) + Wheelman tests + TheScore tests
+- [x] Commit: "Batch 2: TheMuscle session simplification + TheWheelman actor rewrite + TheFingerprints rename"
 
 ---
 

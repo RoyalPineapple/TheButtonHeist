@@ -32,6 +32,14 @@ final class TheMuscle {
     private(set) var authenticatedClientIDs: Set<Int> = []
     private weak var presentedAlert: UIAlertController?
 
+    // MARK: - Subscription Tracking
+
+    /// Clients that have opted in to receive hierarchy update broadcasts.
+    private(set) var subscribedClients: Set<Int> = []
+
+    /// True when at least one client is subscribed.
+    var hasSubscribers: Bool { !subscribedClients.isEmpty }
+
     // MARK: - Session Lock State
 
     /// Driver identity that currently holds the session (nil = no active session).
@@ -90,6 +98,27 @@ final class TheMuscle {
         resetInactivityTimer()
     }
 
+    // MARK: - Subscription Management
+
+    /// Register a client for hierarchy update broadcasts.
+    func subscribe(clientId: Int) {
+        subscribedClients.insert(clientId)
+        logger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
+    }
+
+    /// Remove a client from hierarchy update broadcasts.
+    func unsubscribe(clientId: Int) {
+        subscribedClients.remove(clientId)
+        logger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
+    }
+
+    /// Send data to all subscribed clients.
+    func broadcastToSubscribed(_ data: Data) {
+        for clientId in subscribedClients {
+            sendToClient?(data, clientId)
+        }
+    }
+
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
               case .authenticate(let payload) = message else {
@@ -138,6 +167,7 @@ final class TheMuscle {
     func handleClientDisconnected(_ clientId: Int) {
         pendingApprovalClients.removeValue(forKey: clientId)
         clientDriverIds.removeValue(forKey: clientId)
+        subscribedClients.remove(clientId)
         if authenticatedClientIDs.remove(clientId) != nil {
             updateAuthenticatedCount(delta: -1)
         }
@@ -183,6 +213,7 @@ final class TheMuscle {
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
+        subscribedClients.removeAll()
         releaseSession()
         dismissAlert()
     }
