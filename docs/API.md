@@ -373,10 +373,10 @@ Called when recording fails.
 ##### onDisconnected
 
 ```swift
-public var onDisconnected: ((Error?) -> Void)?
+public var onDisconnected: ((DisconnectReason) -> Void)?
 ```
 
-Called when disconnected. Error is nil for clean disconnections.
+Called when disconnected. The `DisconnectReason` indicates why the connection was closed (see [DisconnectReason](#disconnectreason)).
 
 ##### onTokenReceived
 
@@ -651,6 +651,26 @@ public enum FenceError: Error, LocalizedError
 | `authFailed(_:)` | Authentication failed |
 | `notConnected` | Not connected to device |
 | `actionTimeout` | Action timed out, connection lost |
+| `actionFailed(_:)` | Action failed with server error message |
+
+### DisconnectReason
+
+```swift
+public enum DisconnectReason: Error, LocalizedError
+```
+
+Structured reason for why a connection was closed. Passed to `onDisconnected` callbacks on `DeviceConnection`, `TheWheelman`, and `TheMastermind`.
+
+#### Cases
+
+| Case | Description |
+|------|-------------|
+| `networkError(_:)` | Underlying network error (wraps the original `Error`) |
+| `bufferOverflow` | Server exceeded max buffer size |
+| `serverClosed` | Connection closed by server |
+| `authFailed(_:)` | Authentication failed with reason |
+| `sessionLocked(_:)` | Session locked by another driver |
+| `localDisconnect` | Disconnected by client |
 
 ---
 
@@ -1470,12 +1490,8 @@ class Inspector {
             print("Screenshot: \(screenshot.width)x\(screenshot.height)")
         }
 
-        client.onDisconnected = { error in
-            if let error {
-                print("Disconnected with error: \(error)")
-            } else {
-                print("Disconnected")
-            }
+        client.onDisconnected = { reason in
+            print("Disconnected: \(reason)")
         }
     }
 

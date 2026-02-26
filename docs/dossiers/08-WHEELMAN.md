@@ -13,6 +13,7 @@ Wheelman handles all transport:
 3. **TCP server** (`SimpleSocketServer`) - accepts client connections on the iOS side
 4. **USB tunneling** (`USBDeviceDiscovery`) - discovers USB-connected devices via CoreDevice
 5. **Device model** (`DiscoveredDevice`) - represents a found InsideJob instance
+6. **Disconnect reasons** (`DisconnectReason`) - structured enum for why a connection closed (networkError, bufferOverflow, serverClosed, authFailed, sessionLocked, localDisconnect)
 
 ## Architecture Diagram
 
@@ -137,7 +138,7 @@ flowchart TD
         NWRecv --> Buffer --> Split --> Decode --> Dispatch
 
         Dispatch --> AuthReq["authRequired → send authenticate"]
-        Dispatch --> AuthFail["authFailed → onAuthFailed, disconnect"]
+        Dispatch --> AuthFail["authFailed → onAuthFailed, disconnect, onDisconnected(.authFailed)"]
         Dispatch --> AuthOk["authApproved → onAuthApproved"]
         Dispatch --> Info["info → onServerInfo, onConnected"]
         Dispatch --> Interface["interface → onInterface"]
@@ -183,11 +184,8 @@ _ = readySemaphore.wait(timeout: .now() + 5)
 - `xcrun devicectl` has a 10-second timeout, `lsof` has 5-second timeout
 - Should be moved to a background queue
 
-**10MB buffer guard disconnects without error message** (`DeviceConnection.swift:12`)
-```swift
-private let maxBufferSize = 10_000_000
-```
-- When buffer exceeds 10MB, `disconnect()` is called
+**10MB buffer guard disconnects with `.bufferOverflow` reason** (`DeviceConnection.swift`)
+- When buffer exceeds 10MB, `disconnect()` is called and `onDisconnected?(.bufferOverflow)` fires
 - No error message is sent to the server/client before disconnecting
 - The other end sees a silent TCP close
 
