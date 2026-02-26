@@ -255,7 +255,7 @@ Build verify: ALL schemes + CLI build + MCP build + ALL tests
 ```
 
 ### Batch 5 Gate
-- [ ] Merge branch to main
+- [x] Merge branch to main — committed directly as 3bbf409
 - [x] Run: Full build (all 4 framework schemes + CLI + MCP) + ALL tests
 - [x] Commit: "Batch 5: TheClient → TheMastermind, TheMastermind → TheFence"
 
