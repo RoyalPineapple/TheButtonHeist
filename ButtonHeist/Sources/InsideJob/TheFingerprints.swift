@@ -64,6 +64,8 @@ final class TheFingerprints {
             vc.view = v
             window.rootViewController = vc
             window.isUserInteractionEnabled = false
+            window.isAccessibilityElement = false
+            window.accessibilityElementsHidden = true
             window.isHidden = false
             fingerprintWindow = window
         }

@@ -12,16 +12,20 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let tokenHash: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     public let instanceId: String?
+    /// Whether the device has an active session (from Bonjour TXT record)
+    public let sessionActive: Bool?
 
     public init(id: String, name: String, endpoint: NWEndpoint,
                 simulatorUDID: String? = nil,
-                tokenHash: String? = nil, instanceId: String? = nil) {
+                tokenHash: String? = nil, instanceId: String? = nil,
+                sessionActive: Bool? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
         self.tokenHash = tokenHash
         self.instanceId = instanceId
+        self.sessionActive = sessionActive
     }
 
     /// Convenience init for direct host:port connections (no Bonjour).

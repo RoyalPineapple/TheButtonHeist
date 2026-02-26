@@ -27,6 +27,9 @@ public final class ServerTransport {
     /// The Bonjour service, if advertising.
     private var netService: NetService?
 
+    /// Current TXT record entries (preserved across updates).
+    private var currentTXT: [String: Data] = [:]
+
     // MARK: - Callbacks (set before start)
 
     /// Called when a new client connects.
@@ -130,6 +133,7 @@ public final class ServerTransport {
             }
         }
 
+        currentTXT = txtDict
         service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
 
         netService = service
@@ -138,6 +142,7 @@ public final class ServerTransport {
     }
 
     /// Update the TXT record of the currently advertised service.
+    /// Merges entries into the existing TXT record (preserving keys not in `entries`).
     /// - Parameter entries: Key-value pairs to set in the TXT record.
     public func updateTXTRecord(_ entries: [String: String]) {
         guard let service = netService else {
@@ -145,13 +150,12 @@ public final class ServerTransport {
             return
         }
 
-        var txtDict: [String: Data] = [:]
         for (key, value) in entries {
             if let data = value.data(using: .utf8) {
-                txtDict[key] = data
+                currentTXT[key] = data
             }
         }
-        service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
+        service.setTXTRecord(NetService.data(fromTXTRecord: currentTXT))
     }
 
     /// Stop Bonjour advertisement without stopping the TCP server.

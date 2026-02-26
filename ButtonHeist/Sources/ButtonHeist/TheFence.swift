@@ -399,7 +399,9 @@ public final class TheFence {
 
     public static let supportedCommands = CommandCatalog.all
 
-    public var onStatus: ((String) -> Void)?
+    public var onStatus: ((String) -> Void)? {
+        didSet { client.wheelman.onStatus = onStatus }
+    }
     public var onTokenReceived: ((String) -> Void)?
 
     private let config: Configuration
@@ -412,6 +414,10 @@ public final class TheFence {
         self.client.forceSession = configuration.forceSession
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = false
+        self.client.onTokenReceived = { [weak self] token in
+            self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
+            self?.onTokenReceived?(token)
+        }
     }
 
     public func start() async throws {
@@ -421,7 +427,8 @@ public final class TheFence {
 
         try await connect()
         if config.autoReconnect {
-            setupAutoReconnect()
+            let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+            client.wheelman.setupAutoReconnect(filter: filter)
         }
         isStarted = true
     }
@@ -455,98 +462,13 @@ public final class TheFence {
 
     private func connect() async throws {
         let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
-        onStatus?("Searching for iOS devices...")
-        client.startDiscovery()
-
-        let discoveryTimeout = UInt64(max(config.connectionTimeout, 5) * 1_000_000_000)
-        let discoveryStart = DispatchTime.now().uptimeNanoseconds
-        while client.discoveredDevices.first(matching: filter) == nil {
-            if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryTimeout {
-                if let filter {
-                    throw FenceError.noMatchingDevice(
-                        filter: filter,
-                        available: client.discoveredDevices.map(\.name)
-                    )
-                }
-                throw FenceError.noDeviceFound
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        guard let device = client.discoveredDevices.first(matching: filter) else {
-            throw FenceError.noDeviceFound
-        }
-
-        onStatus?("Found: \(client.displayName(for: device))")
-        onStatus?("Connecting...")
-
-        var connected = false
-        var connectionError: Error?
-
-        client.onConnected = { _ in connected = true }
-        client.onDisconnected = { error in
-            if connectionError == nil {
-                connectionError = error
-            }
-        }
-        client.onAuthFailed = { reason in
-            connectionError = FenceError.authFailed(reason)
-        }
-        client.onSessionLocked = { payload in
-            connectionError = FenceError.sessionLocked(payload.message)
-        }
-        client.onTokenReceived = { [weak self] token in
-            self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
-            self?.onTokenReceived?(token)
-        }
-
-        client.connect(to: device)
-
-        let connectionStart = DispatchTime.now().uptimeNanoseconds
-        let connectionTimeout = UInt64(max(config.connectionTimeout, 5) * 1_000_000_000)
-        while !connected && connectionError == nil {
-            if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
-                throw FenceError.connectionTimeout
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        if let connectionError {
-            if let mastermindError = connectionError as? FenceError {
-                throw mastermindError
-            }
-            throw FenceError.connectionFailed(connectionError.localizedDescription)
-        }
-
-        onStatus?("Connected to \(client.displayName(for: device))")
-    }
-
-    private func setupAutoReconnect() {
-        let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
-        client.onDisconnected = { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.onStatus?("Device disconnected — watching for reconnection...")
-                for _ in 0..<60 {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if let device = self.client.discoveredDevices.first(matching: filter) {
-                        self.onStatus?("Reconnecting to \(device.name)...")
-                        self.client.connect(to: device)
-                        let deadline = Date().addingTimeInterval(10)
-                        while self.client.connectionState != .connected {
-                            if Date() > deadline { break }
-                            if case .failed = self.client.connectionState { break }
-                            try? await Task.sleep(nanoseconds: 100_000_000)
-                        }
-                        if self.client.connectionState == .connected {
-                            self.onStatus?("Reconnected to \(device.name)")
-                            return
-                        }
-                    }
-                }
-                self.onStatus?("Auto-reconnect gave up after 60 attempts")
-            }
+        do {
+            try await client.wheelman.connectWithDiscovery(
+                filter: filter,
+                timeout: config.connectionTimeout
+            )
+        } catch let error as TheWheelman.ConnectionError {
+            throw error.asFenceError()
         }
     }
 
@@ -912,5 +834,26 @@ public final class TheFence {
         let order = intArg(dictionary, "order")
         guard identifier != nil || order != nil else { return nil }
         return ActionTarget(identifier: identifier, order: order)
+    }
+}
+
+// MARK: - ConnectionError → FenceError Bridge
+
+extension TheWheelman.ConnectionError {
+    func asFenceError() -> FenceError {
+        switch self {
+        case .noDeviceFound:
+            return .noDeviceFound
+        case .noMatchingDevice(let filter, let available):
+            return .noMatchingDevice(filter: filter, available: available)
+        case .connectionTimeout:
+            return .connectionTimeout
+        case .connectionFailed(let message):
+            return .connectionFailed(message)
+        case .sessionLocked(let message):
+            return .sessionLocked(message)
+        case .authFailed(let message):
+            return .authFailed(message)
+        }
     }
 }

@@ -62,6 +62,8 @@ final class TheMuscle {
     var onClientAuthenticated: ((_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     /// Called during force-takeover to disconnect all clients from the evicted session
     var disconnectClientsForSession: ((_ clientIds: [Int]) -> Void)?
+    /// Called when the session active state changes (true = session claimed, false = released)
+    var onSessionActiveChanged: ((_ isActive: Bool) -> Void)?
 
     // MARK: - Init
 
@@ -276,6 +278,7 @@ final class TheMuscle {
         sessionReleaseTimer?.cancel()
         sessionReleaseTimer = nil
         logger.info("Session claimed by client \(clientId)")
+        onSessionActiveChanged?(true)
     }
 
     private func releaseSession() {
@@ -286,6 +289,7 @@ final class TheMuscle {
         sessionReleaseTimer = nil
         if hadSession {
             logger.info("Session released")
+            onSessionActiveChanged?(false)
         }
     }
 

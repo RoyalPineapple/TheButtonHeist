@@ -12,13 +12,13 @@ struct ButtonHeistApp: AsyncParsableCommand {
             hierarchy, performing actions, and automating SwiftUI/UIKit apps.
 
             Examples:
-              buttonheist list                          # Show available devices
-              buttonheist session                       # Interactive session
-              buttonheist action --identifier "myButton"
-              buttonheist touch tap --x 100 --y 200
+              buttonheist activate --identifier "myButton"  # Activate element
+              buttonheist list                              # Show available devices
+              buttonheist session                           # Interactive session
+              buttonheist touch tap --x 100 --y 200         # Low-level tap
             """,
         version: buttonHeistVersion,
-        subcommands: [ListCommand.self, ActionCommand.self,
+        subcommands: [ActivateCommand.self, ListCommand.self, ActionCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
                        SessionCommand.self,
                        RecordCommand.self, StopRecordingCommand.self,
