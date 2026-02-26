@@ -28,49 +28,49 @@ Simplify session management to a single-session model with clear rules. Fix the 
 - 30 seconds without any interaction or heartbeat → session released
 - Single timer, not dual. The lease timer concept is removed.
 
-- [ ] **Remove `sessionReleaseTimer`** (disconnect timer) — only keep one inactivity/heartbeat timer
-- [ ] **Remove `sessionLeaseTimer`** — replaced by the single timeout
-- [ ] **Simplify `acquireSession` / `releaseSession`** to match the rules above
-- [ ] **Remove `forceSession` flag** (no force-takeover; wait for timeout)
-- [ ] **Build passes** after phase
+- [x] **Remove `sessionReleaseTimer`** (disconnect timer) — only keep one inactivity/heartbeat timer
+- [x] **Remove `sessionLeaseTimer`** — replaced by the single timeout
+- [x] **Simplify `acquireSession` / `releaseSession`** to match the rules above
+- [x] **Remove `forceSession` flag** (no force-takeover; wait for timeout)
+- [x] **Build passes** after phase
 
 ### Files affected:
 - `TheMuscle.swift` — rewrite session logic to match the state machine above
 
 ## Phase 2: Fix Token Lifecycle Bug
 
-- [ ] **Remove `invalidateToken()` call from `releaseSession()`** — token has the same lifecycle as the app
-- [ ] **Token only invalidated on explicit user action** (if ever), not on timer expiry
-- [ ] **Build passes** after phase
+- [x] **Remove `invalidateToken()` call from `releaseSession()`** — token has the same lifecycle as the app
+- [x] **Token only invalidated on explicit user action** (if ever), not on timer expiry
+- [x] **Build passes** after phase
 
 ### Files affected:
 - `TheMuscle.swift` — remove `invalidateToken()` call from session release path
 
 ## Phase 3: Update Documentation
 
-- [ ] **Update WIRE-PROTOCOL.md** — remove claim about UserDefaults persistence
-- [ ] **Document that tokens are ephemeral** unless `INSIDEJOB_TOKEN` is set explicitly
+- [x] **Update WIRE-PROTOCOL.md** — remove claim about UserDefaults persistence
+- [x] **Document that tokens are ephemeral** unless `INSIDEJOB_TOKEN` is set explicitly
 
 ### Files affected:
 - `docs/WIRE-PROTOCOL.md`
 
 ## Phase 4: Fix Repeated Magic Numbers
 
-- [ ] **Replace `100_000_000` with named constant:**
+- [x] **Replace `100_000_000` with named constant:**
    ```swift
    private static let disconnectGracePeriod: UInt64 = 100_000_000  // 100ms
    ```
-- [ ] **All three instances updated** (`TheMuscle.swift:125, 189, 249`)
+- [x] **All three instances updated** (`TheMuscle.swift:125, 189, 249`)
 
 ### Files affected:
 - `TheMuscle.swift`
 
 ## Phase 5: Add Unit Tests
 
-- [ ] **Auth flow tests:** valid token → authenticated, invalid → rejected, empty → pending
-- [ ] **Session rules tests:** no session + valid → acquired, same driver → allowed, different driver → busy, timeout after 30s
-- [ ] **Token lifecycle tests:** token survives session release, stable across multiple cycles
-- [ ] **Tests pass**
+- [x] **Auth flow tests:** valid token → authenticated, invalid → rejected, empty → pending
+- [x] **Session rules tests:** no session + valid → acquired, same driver → allowed, different driver → busy, timeout after 30s
+- [x] **Token lifecycle tests:** token survives session release, stable across multiple cycles
+- [x] **Tests pass**
 
 ### Files:
 - New: `ButtonHeist/Tests/InsideJobTests/TheMuscleTests.swift`
@@ -102,9 +102,9 @@ Low priority — only if it simplifies the code.
 
 ## Verification
 
-- [ ] Dual timer system removed — single 30-second inactivity timer only
-- [ ] `invalidateToken()` not called from session release
-- [ ] WIRE-PROTOCOL.md updated for token behavior
-- [ ] Magic `100_000_000` replaced with named constant
-- [ ] Unit tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test`
-- [ ] No `swiftlint:disable` in TheMuscle.swift
+- [x] Dual timer system removed — single 30-second inactivity timer only
+- [x] `invalidateToken()` not called from session release
+- [x] WIRE-PROTOCOL.md updated for token behavior
+- [x] Magic `100_000_000` replaced with named constant
+- [x] Unit tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test`
+- [x] No `swiftlint:disable` in TheMuscle.swift
