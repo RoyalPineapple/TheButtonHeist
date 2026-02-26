@@ -138,6 +138,21 @@ let project = Project(
                 .target(name: "ButtonHeist"),
             ]
         ),
+
+        // MARK: - InsideJob Tests (iOS Simulator)
+        .target(
+            name: "InsideJobTests",
+            destinations: [.iPhone, .iPad],
+            product: .unitTests,
+            bundleId: "com.buttonheist.insidejob.tests",
+            deploymentTargets: .iOS("17.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/InsideJobTests/**"],
+            dependencies: [
+                .target(name: "InsideJob"),
+                .target(name: "TheScore"),
+            ]
+        ),
     ],
     schemes: [
         .scheme(
@@ -171,6 +186,18 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ButtonHeistTests")),
+            ])
+        ),
+        .scheme(
+            name: "InsideJobTests",
+            buildAction: .buildAction(targets: [
+                .target("InsideJobTests"),
+                .target("InsideJob"),
+                .target("Wheelman"),
+                .target("TheScore"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("InsideJobTests")),
             ])
         ),
     ]

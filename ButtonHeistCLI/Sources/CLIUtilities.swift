@@ -15,8 +15,8 @@ func writeOutput(_ message: String) {
     fflush(stdout)
 }
 
-/// Format an ActionResult as a JSON string matching the session protocol format.
-func formatActionResultJSON(_ result: ActionResult) -> String {
+/// Build a JSON-compatible dictionary from an ActionResult.
+func actionResultDict(_ result: ActionResult) -> [String: Any] {
     var d: [String: Any] = [
         "status": result.success ? "ok" : "error",
         "method": result.method.rawValue,
@@ -32,6 +32,12 @@ func formatActionResultJSON(_ result: ActionResult) -> String {
             d["delta"] = deltaObj
         }
     }
+    return d
+}
+
+/// Format an ActionResult as a JSON string matching the session protocol format.
+func formatActionResultJSON(_ result: ActionResult) -> String {
+    let d = actionResultDict(result)
     if let data = try? JSONSerialization.data(withJSONObject: d, options: [.sortedKeys]),
        let json = String(data: data, encoding: .utf8) {
         return json

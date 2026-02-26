@@ -41,8 +41,6 @@ The cross-platform type library. No UIKit or AppKit imports — just pure `Codab
   - Target structs: `ActionTarget`, `TouchTapTarget`, `SwipeTarget`, `PinchTarget`, `DrawBezierTarget`, etc.
   - Response types: `ServerInfo`, `Interface`, `HeistElement`, `ActionResult`, `InterfaceDelta`, `ScreenPayload`
   - Constants: `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"3.1"`)
-- **`BezierSampler.swift`** — Converts cubic bezier curves into polyline point arrays for the `touchDrawBezier` command
-
 ## InsideJob — iOS Server
 
 **Location**: `Sources/InsideJob/`
@@ -57,6 +55,7 @@ The server that runs inside the iOS app. A `@MainActor` singleton that auto-star
 | `SyntheticEventFactory.swift` | Creates fresh `UIEvent` objects per touch phase (iOS 26 compatible) |
 | `IOHIDEventBuilder.swift` | Low-level IOKit HID event creation via `dlsym`-loaded C function pointers |
 | `Fingerprints.swift` | Visual interaction feedback — fingerprint circles for taps and continuous gesture tracking (multi-finger) |
+| `BezierSampler.swift` | Converts cubic bezier curves into polyline point arrays for the `touchDrawBezier` command |
 
 ### Auto-Start
 
