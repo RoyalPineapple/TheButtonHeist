@@ -93,19 +93,7 @@ APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-### 4. Known issue: resource bundle crash
-
-Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` into the app. If the app crashes at launch with a `Bundle.module` assertion, copy the bundle manually:
-
-```bash
-INSTALLED=$(xcrun simctl get_app_container "$SIM_UDID" com.buttonheist.testapp)
-BUNDLE=$(find ~/Library/Developer/Xcode/DerivedData -name "AccessibilitySnapshot_AccessibilitySnapshotParser.bundle" -path "*/Debug-iphonesimulator/*" | head -1)
-cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
-APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
-SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
-```
-
-### 5. Build the CLI and add to PATH
+### 4. Build the CLI and add to PATH
 
 ```bash
 cd ButtonHeistCLI && swift build -c release && cd ..
@@ -114,7 +102,7 @@ export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
 
 This uses the repo-relative path so it works in any workspace.
 
-### 6. Verify
+### 5. Verify
 
 ```bash
 timeout 5 dns-sd -B _buttonheist._tcp .
