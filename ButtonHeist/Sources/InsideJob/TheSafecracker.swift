@@ -24,6 +24,11 @@ final class TheSafecracker {
     /// Used by extension files to resolve interaction targets.
     weak var elementStore: (any ElementStore)?
 
+    // MARK: - Fingerprints
+
+    /// Visual interaction indicators for taps and gesture tracking.
+    lazy var fingerprints = TheFingerprints()
+
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
@@ -64,10 +69,10 @@ final class TheSafecracker {
     ///   - duration: How long to hold the press (seconds, default 0.5)
     func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
         guard touchDown(at: point) else { return false }
-        beginTrackingFingerprints(at: [point])
+        fingerprints.beginTrackingFingerprints(at: [point])
         onGestureMove?([point])
         try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchUp()
     }
 
@@ -78,7 +83,7 @@ final class TheSafecracker {
     ///   - duration: Duration of the swipe (seconds, default 0.15)
     func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
         guard touchDown(at: start) else { return false }
-        beginTrackingFingerprints(at: [start])
+        fingerprints.beginTrackingFingerprints(at: [start])
         onGestureMove?([start])
 
         let stepDelay: TimeInterval = 0.01 // 10ms between phases (matches KIF)
@@ -91,12 +96,12 @@ final class TheSafecracker {
                 y: start.y + progress * (end.y - start.y)
             )
             moveTo(point)
-            updateTrackingFingerprints(to: [point])
+            fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
         }
 
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchUp()
     }
 
@@ -108,7 +113,7 @@ final class TheSafecracker {
     ///   - duration: Duration of the drag (seconds, default 0.5)
     func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
         guard touchDown(at: start) else { return false }
-        beginTrackingFingerprints(at: [start])
+        fingerprints.beginTrackingFingerprints(at: [start])
         onGestureMove?([start])
 
         let stepDelay: TimeInterval = 0.01
@@ -121,12 +126,12 @@ final class TheSafecracker {
                 y: start.y + progress * (end.y - start.y)
             )
             moveTo(point)
-            updateTrackingFingerprints(to: [point])
+            fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
         }
 
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchUp()
     }
 
@@ -138,7 +143,7 @@ final class TheSafecracker {
         guard points.count >= 2 else { return false }
 
         guard touchDown(at: points[0]) else { return false }
-        beginTrackingFingerprints(at: [points[0]])
+        fingerprints.beginTrackingFingerprints(at: [points[0]])
         onGestureMove?([points[0]])
 
         // Calculate total path length for even speed distribution
@@ -153,7 +158,7 @@ final class TheSafecracker {
         }
 
         guard totalLength > 0 else {
-            endTrackingFingerprints()
+            fingerprints.endTrackingFingerprints()
             return touchUp()
         }
 
@@ -182,12 +187,12 @@ final class TheSafecracker {
             }
 
             moveTo(point)
-            updateTrackingFingerprints(to: [point])
+            fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
         }
 
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchUp()
     }
 
@@ -349,7 +354,7 @@ final class TheSafecracker {
         )
 
         guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        beginTrackingFingerprints(at: [finger1Start, finger2Start])
+        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
         onGestureMove?([finger1Start, finger2Start])
 
         let stepDelay: TimeInterval = 0.01
@@ -368,12 +373,12 @@ final class TheSafecracker {
                 y: center.y - sin(angle) * currentSpread
             )
             moveTouches(to: [p1, p2])
-            updateTrackingFingerprints(to: [p1, p2])
+            fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
         }
 
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchesUp()
     }
 
@@ -396,7 +401,7 @@ final class TheSafecracker {
         )
 
         guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        beginTrackingFingerprints(at: [finger1Start, finger2Start])
+        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
         onGestureMove?([finger1Start, finger2Start])
 
         let stepDelay: TimeInterval = 0.01
@@ -415,12 +420,12 @@ final class TheSafecracker {
                 y: center.y + sin(currentAngle + .pi) * radius
             )
             moveTouches(to: [p1, p2])
-            updateTrackingFingerprints(to: [p1, p2])
+            fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
         }
 
-        endTrackingFingerprints()
+        fingerprints.endTrackingFingerprints()
         return touchesUp()
     }
 
