@@ -1,10 +1,9 @@
 import Foundation
 import Network
+import os.log
 import TheScore
 
-private func debug(_ message: String) {
-    fputs("[DeviceConnection] \(message)\n", stderr)
-}
+private let logger = Logger(subsystem: "com.buttonheist.wheelman", category: "connection")
 
 /// Connection client using Network framework.
 @MainActor
@@ -45,7 +44,7 @@ public final class DeviceConnection {
     }
 
     public func connect() {
-        debug("Connecting to \(device.name)...")
+        logger.info("Connecting to \(self.device.name)...")
 
         let conn = NWConnection(to: device.endpoint, using: .tcp)
 
@@ -73,7 +72,7 @@ public final class DeviceConnection {
 
         connection.send(content: data, completion: .contentProcessed { error in
             if let error {
-                debug("Send error: \(error)")
+                logger.error("Send error: \(error)")
             }
         })
     }
@@ -83,17 +82,17 @@ public final class DeviceConnection {
     private func handleStateChange(_ state: NWConnection.State) {
         switch state {
         case .ready:
-            debug("Connected")
+            logger.info("Connected")
             isConnected = true
             startReceiving()
             // Don't fire onConnected yet — wait for auth to complete.
             // onConnected is fired when we receive the server info message (post-auth).
         case .failed(let error):
-            debug("Connection failed: \(error)")
+            logger.error("Connection failed: \(error)")
             isConnected = false
             onDisconnected?(error)
         case .cancelled:
-            debug("Connection cancelled")
+            logger.info("Connection cancelled")
             isConnected = false
         default:
             break
@@ -111,7 +110,7 @@ public final class DeviceConnection {
                 guard let self else { return }
 
                 if let error {
-                    debug("Receive error: \(error)")
+                    logger.error("Receive error: \(error)")
                     self.isConnected = false
                     self.onDisconnected?(error)
                     return
@@ -121,7 +120,7 @@ public final class DeviceConnection {
                     self.receiveBuffer.append(content)
 
                     if self.receiveBuffer.count > Self.maxBufferSize {
-                        debug("Server exceeded max buffer size, disconnecting")
+                        logger.error("Server exceeded max buffer size, disconnecting")
                         self.disconnect()
                         self.onDisconnected?(nil)
                         return
@@ -131,7 +130,7 @@ public final class DeviceConnection {
                 }
 
                 if isComplete {
-                    debug("Connection closed by server")
+                    logger.info("Connection closed by server")
                     self.isConnected = false
                     self.onDisconnected?(nil)
                 } else {
@@ -153,17 +152,17 @@ public final class DeviceConnection {
     }
 
     private func handleMessage(_ data: Data) {
-        debug("Parsing message: \(data.count) bytes")
+        logger.debug("Parsing message: \(data.count) bytes")
         guard let message = try? JSONDecoder().decode(ServerMessage.self, from: data) else {
             if let str = String(data: data, encoding: .utf8) {
-                debug("Failed to decode: \(str.prefix(200))")
+                logger.error("Failed to decode: \(str.prefix(200))")
             }
             return
         }
 
         switch message {
         case .authRequired:
-            debug("Auth required, sending token")
+            logger.info("Auth required, sending token")
             // Send token if available, otherwise send empty token to request UI approval
             send(.authenticate(AuthenticatePayload(
                 token: token ?? "",
@@ -171,47 +170,47 @@ public final class DeviceConnection {
                 driverId: driverId
             )))
         case .authFailed(let reason):
-            debug("Auth failed: \(reason)")
+            logger.error("Auth failed: \(reason)")
             onAuthFailed?(reason)
             disconnect()
             onDisconnected?(nil)
         case .authApproved(let payload):
-            debug("Auth approved via UI, received token")
+            logger.info("Auth approved via UI, received token")
             token = payload.token
             onAuthApproved?(payload.token)
         case .info(let info):
-            debug("Received server info: \(info.appName)")
+            logger.info("Received server info: \(info.appName)")
             onServerInfo?(info)
             onConnected?()
         case .interface(let payload):
-            debug("Received interface: \(payload.elements.count) elements")
+            logger.debug("Received interface: \(payload.elements.count) elements")
             onInterface?(payload)
         case .actionResult(let result):
-            debug("Received action result: \(result.success)")
+            logger.debug("Received action result: \(result.success)")
             onActionResult?(result)
         case .error(let errorMessage):
-            debug("Received error: \(errorMessage)")
+            logger.error("Received error: \(errorMessage)")
             onError?(errorMessage)
         case .pong:
-            debug("Received pong")
+            logger.debug("Received pong")
         case .screen(let payload):
-            debug("Received screen: \(payload.pngData.count) chars base64")
+            logger.debug("Received screen: \(payload.pngData.count) chars base64")
             onScreen?(payload)
         case .sessionLocked(let payload):
-            debug("Session locked: \(payload.message)")
+            logger.warning("Session locked: \(payload.message)")
             onSessionLocked?(payload)
             disconnect()
             onDisconnected?(nil)
         case .recordingStarted:
-            debug("Recording started")
+            logger.info("Recording started")
             onRecordingStarted?()
         case .recordingStopped:
-            debug("Recording stop acknowledged")
+            logger.debug("Recording stop acknowledged")
         case .recording(let payload):
-            debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
+            logger.debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
             onRecording?(payload)
         case .recordingError(let message):
-            debug("Recording error: \(message)")
+            logger.error("Recording error: \(message)")
             onRecordingError?(message)
         }
     }

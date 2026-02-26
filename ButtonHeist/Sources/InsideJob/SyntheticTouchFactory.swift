@@ -60,7 +60,7 @@ final class SyntheticTouchFactory {
     static func setHIDEvent(_ touch: UITouch, event: UnsafeMutableRawPointer) {
         let selector = NSSelectorFromString("_setHidEvent:")
         guard touch.responds(to: selector) else {
-            serverLog("[SyntheticTouchFactory] UITouch doesn't respond to _setHidEvent:")
+            insideJobLogger.error("UITouch doesn't respond to _setHidEvent:")
             return
         }
         if let imp = touch.method(for: selector) {
