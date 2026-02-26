@@ -21,7 +21,7 @@ extension InsideJob {
         guard !subscribedClients.isEmpty else { return }
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let elements = snapshotElements()
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -55,7 +55,7 @@ extension InsideJob {
         guard !subscribedClients.isEmpty else { return }
         guard let hierarchyTree = refreshAccessibilityData() else { return }
 
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let elements = snapshotElements()
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
@@ -94,7 +94,7 @@ extension InsideJob {
             return
         }
 
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let elements = snapshotElements()
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)

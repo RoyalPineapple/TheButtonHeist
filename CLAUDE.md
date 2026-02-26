@@ -92,6 +92,7 @@ Before pushing any commit, verify the following:
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
