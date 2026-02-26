@@ -2,7 +2,7 @@
 
 ## Keep Dossiers in Repo
 
-- [ ] **Add dossier maintenance section to `CLAUDE.md`** — instruct agents to keep `docs/dossiers/` up to date when making architectural changes
+- [x] **Add dossier maintenance section to `CLAUDE.md`** — instruct agents to keep `docs/dossiers/` up to date when making architectural changes
 
 ## Code Philosophy (Applies to ALL Crew Members)
 

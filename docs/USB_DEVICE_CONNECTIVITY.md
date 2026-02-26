@@ -179,7 +179,7 @@ parameters.requiredLocalEndpoint = .hostPort(host: host, port: NWEndpoint.Port(r
 let listener = try NWListener(using: parameters)
 ```
 
-On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. Override with `INSIDEJOB_BIND_ALL=true`.
+On simulators, the server binds to loopback only (`::1`) by default. On physical devices, it binds to all interfaces (`::`) to accept USB tunnel connections. The bind address is controlled by the `bindToLoopback` parameter on `ServerTransport.start()`.
 
 This allows:
 - Simulator connections via `127.0.0.1` (loopback)

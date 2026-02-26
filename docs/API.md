@@ -71,23 +71,22 @@ Singleton instance. Automatically initialized on framework load.
 ##### isRunning
 
 ```swift
-public private(set) var isRunning: Bool
+private var isRunning: Bool
 ```
 
-Whether the server is currently running.
+Whether the server is currently running. This property is private; external code should not need to check server state directly.
 
 #### Methods
 
-##### configure(port:token:instanceId:)
+##### configure(token:instanceId:)
 
 ```swift
-public static func configure(port: UInt16, token: String? = nil, instanceId: String? = nil)
+public static func configure(token: String? = nil, instanceId: String? = nil)
 ```
 
-Configure the shared instance with a specific port, auth token, and instance identifier. Must be called before `start()` if not using Info.plist/environment variables.
+Configure the shared instance with an auth token and instance identifier. Must be called before `start()` if not using Info.plist/environment variables.
 
 **Parameters**:
-- `port`: Port to listen on. Use `0` for automatic port selection.
 - `token`: Auth token for client authentication. If nil, auto-generated at startup.
 - `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
 
@@ -1096,8 +1095,7 @@ A single recorded interaction event captured during a Stakeout recording.
 - `timestamp: Double` - Time offset from recording start in seconds
 - `command: ClientMessage` - The command that triggered this interaction
 - `result: ActionResult` - The result returned to the client
-- `interfaceBefore: Interface` - Interface state before the interaction (elements only, no tree)
-- `interfaceAfter: Interface` - Interface state after the interaction (elements only, no tree)
+- `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed in the hierarchy (from result.interfaceDelta)
 
 ---
 

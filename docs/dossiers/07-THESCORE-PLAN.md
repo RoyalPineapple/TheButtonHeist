@@ -50,11 +50,11 @@ Audit all wire types for efficiency. Fix the `InteractionEvent` to use diffs. Fi
 
 ## Phase 5: Update Documentation
 
-- [ ] **`docs/API.md:81`** — remove non-existent `port` parameter from `configure()`
-- [ ] **`docs/API.md:70`** — fix `isRunning` visibility (private, not public)
-- [ ] **`docs/WIRE-PROTOCOL.md:1127`** — remove `INSIDEJOB_BIND_ALL` documentation
-- [ ] **`docs/WIRE-PROTOCOL.md:1014`** — fix token persistence claim (ephemeral)
-- [ ] **`docs/WIRE-PROTOCOL.md:1141`** — fix ping interval (3s, not 30s)
+- [x] **`docs/API.md:81`** — remove non-existent `port` parameter from `configure()`
+- [x] **`docs/API.md:70`** — fix `isRunning` visibility (private, not public)
+- [x] **`docs/WIRE-PROTOCOL.md:1127`** — remove `INSIDEJOB_BIND_ALL` documentation
+- [x] **`docs/WIRE-PROTOCOL.md:1014`** — fix token persistence claim (ephemeral) — already fixed in Batch 2A
+- [x] **`docs/WIRE-PROTOCOL.md:1141`** — fix ping interval (3s, not 30s) — already fixed in Batch 5
 
 ## Phase 6: Protocol Version
 
@@ -65,5 +65,5 @@ No changes needed. Current string version `"3.1"` is fine.
 - [x] `InteractionEvent` no longer contains full `Interface` snapshots
 - [x] `ElementAction` edge case documented or fixed
 - [x] All `ActionMethod` cases tested
-- [ ] API.md and WIRE-PROTOCOL.md match implementation
+- [x] API.md and WIRE-PROTOCOL.md match implementation
 - [x] Tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test`

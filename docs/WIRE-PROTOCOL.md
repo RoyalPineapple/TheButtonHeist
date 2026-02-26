@@ -579,14 +579,13 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
       "timestamp":1.2,
       "command":{"activate":{"_0":{"identifier":"loginButton"}}},
       "result":{"success":true,"method":"syntheticTap"},
-      "interfaceBefore":{"timestamp":"2026-02-24T10:30:01.200Z","elements":[...]},
-      "interfaceAfter":{"timestamp":"2026-02-24T10:30:02.100Z","elements":[...]}
+      "interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}
     }
   ]
 }}}
 ```
 
-The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and before/after interface state during the recording. It is `null` or absent when no interactions occurred.
+The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and interface delta during the recording. It is `null` or absent when no interactions occurred.
 
 Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
 
@@ -909,8 +908,7 @@ A single recorded interaction event captured during a Stakeout recording.
 | `timestamp` | `Double` | Time offset from recording start in seconds |
 | `command` | `ClientMessage` | The command that triggered this interaction |
 | `result` | `ActionResult` | The result returned to the client |
-| `interfaceBefore` | `Interface` | Interface state before the interaction (elements only, no tree) |
-| `interfaceAfter` | `Interface` | Interface state after the interaction (elements only, no tree) |
+| `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed in the hierarchy |
 
 ## Example Session
 
@@ -1113,7 +1111,7 @@ This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOK
 - **Max connections**: 5 concurrent TCP connections
 - **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
 - **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Loopback binding**: On iOS Simulator, the server binds to `::1` (loopback only) by default. Override with `INSIDEJOB_BIND_ALL=true`.
+- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The caller (InsideJob) decides based on the runtime environment.
 
 ### Port Configuration
 
