@@ -1,4 +1,4 @@
-public enum MastermindCommandCatalog {
+public enum CommandCatalog {
     public static let all: [String] = [
         "help",
         "status",

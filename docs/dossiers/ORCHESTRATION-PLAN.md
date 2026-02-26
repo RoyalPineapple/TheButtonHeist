@@ -222,10 +222,10 @@ Build verify: Full build + TheScore tests + InsideJob tests
 ```
 
 ### Batch 4 Gate
-- [ ] Merge Agent 4A branch (TheSafecracker)
-- [ ] Merge Agent 4B branch (TheStakeout + TheScore)
-- [ ] Run: Full framework build + ALL tests
-- [ ] Commit: "Batch 4: TheSafecracker pure fingers + TheStakeout rename + InteractionEvent diffs"
+- [x] Merge Agent 4A branch (TheSafecracker) — committed directly
+- [x] Merge Agent 4B branch (TheStakeout + TheScore) — committed directly
+- [x] Run: Full framework build + ALL tests (TheScoreTests + ButtonHeistTests pass)
+- [x] Commit: "Batch 4: TheSafecracker pure fingers + TheStakeout rename + InteractionEvent diffs"
 
 ---
 
@@ -256,8 +256,8 @@ Build verify: ALL schemes + CLI build + MCP build + ALL tests
 
 ### Batch 5 Gate
 - [ ] Merge branch to main
-- [ ] Run: Full build (all 4 framework schemes + CLI + MCP) + ALL tests
-- [ ] Commit: "Batch 5: TheClient → TheMastermind, TheMastermind → TheFence"
+- [x] Run: Full build (all 4 framework schemes + CLI + MCP) + ALL tests
+- [x] Commit: "Batch 5: TheClient → TheMastermind, TheMastermind → TheFence"
 
 ---
 

@@ -8,13 +8,13 @@ Rename TheClient to **TheMastermind**. Audit responsibilities — it's doing too
 
 **Decision:** Rename to **TheMastermind**. The old TheMastermind type is being renamed to TheFence (see `10-THEFENCE-PLAN.md`), freeing this name.
 
-- [ ] **Rename `TheClient.swift` → `TheMastermind`** class
-- [ ] **Update all references** in ButtonHeist framework, CLI, MCP, tests, docs
-- [ ] **Build passes** after phase
+- [x] **Rename `TheClient.swift` → `TheMastermind.swift`** class
+- [x] **Update all references** in ButtonHeist framework, CLI, MCP, tests, docs
+- [x] **Build passes** after phase
 
 ## Phase 2: Move Device Discovery to TheWheelman
 
-**Current:** TheClient owns `DeviceDiscovery` and wraps it with `startDiscovery()` / `stopDiscovery()`.
+**Current:** TheMastermind owns `DeviceDiscovery` and wraps it with `startDiscovery()` / `stopDiscovery()`.
 
 - [ ] **Move `DeviceDiscovery` ownership** to TheWheelman
 - [ ] **Move `discoveredDevices` management** to TheWheelman
@@ -23,8 +23,10 @@ Rename TheClient to **TheMastermind**. Audit responsibilities — it's doing too
 - [ ] **Build passes** after phase
 
 ### Files affected:
-- `TheClient.swift` — remove discovery ownership
+- `TheMastermind.swift` — remove discovery ownership
 - Wheelman types — expose discovery API
+
+> **Deferred:** Should be done together with Plan 10 Phase 2 to avoid double-move.
 
 ## Phase 3: Move Connection Management
 
@@ -34,14 +36,17 @@ Rename TheClient to **TheMastermind**. Audit responsibilities — it's doing too
 - [ ] **TheMastermind keeps:** `@Observable` connection state, callback API, thin `send()` passthrough
 - [ ] **Build passes** after phase
 
+> **Deferred:** Should be done together with Plan 10 Phase 2.
+
 ## Phase 4: Fix `didResume` Race Condition
 
 **Bug:** `waitForActionResult`, `waitForScreen`, `waitForRecording` use `var didResume = false` accessed from both MainActor callback and potentially off-MainActor timeout Task.
 
-- [ ] **Add `@MainActor` to timeout Task** in `waitForActionResult`
-- [ ] **Add `@MainActor` to timeout Task** in `waitForScreen`
-- [ ] **Add `@MainActor` to timeout Task** in `waitForRecording`
-- [ ] **Build passes** after phase
+- [x] **Add `@MainActor` to timeout Task** in `waitForActionResult`
+- [x] **Add `@MainActor` to timeout Task** in `waitForScreen`
+- [x] **Add `@MainActor` to timeout Task** in `waitForRecording`
+- [x] **Also fixed in new `waitForInterface` method**
+- [x] **Build passes** after phase
 
 ## Phase 5: Remaining Responsibilities Audit
 
@@ -53,16 +58,17 @@ After Phases 2-3, what's left forms a coherent "observable session view" type:
 - [ ] **Verify callback API** — `onConnected`, `onInterfaceUpdate`, etc.
 - [ ] **Confirm TheMastermind is the SwiftUI-friendly API surface**
 
+> Blocked on Phases 2-3 completion.
+
 ## Phase 6: Fix Keepalive Interval Documentation
 
-- [ ] **Update WIRE-PROTOCOL.md** — document actual 3s interval (not 30s)
-- [ ] **Or update code** to match docs — but 3s is more appropriate for 30s lease
+- [x] **Update WIRE-PROTOCOL.md** — document actual 3s interval (not 30s)
 
 ## Verification
 
-- [ ] Type renamed to TheMastermind throughout codebase
-- [ ] Device discovery owned by TheWheelman, not TheMastermind
-- [ ] Connection lifecycle owned by TheWheelman
-- [ ] `didResume` race fixed with `@MainActor` on timeout Tasks
-- [ ] WIRE-PROTOCOL.md keepalive interval matches implementation
-- [ ] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build`
+- [x] Type renamed to TheMastermind throughout codebase
+- [ ] Device discovery owned by TheWheelman, not TheMastermind (deferred)
+- [ ] Connection lifecycle owned by TheWheelman (deferred)
+- [x] `didResume` race fixed with `@MainActor` on timeout Tasks
+- [x] WIRE-PROTOCOL.md keepalive interval matches implementation
+- [x] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build`

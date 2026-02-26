@@ -5,7 +5,7 @@ import ButtonHeist
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
-        let mastermind = TheMastermind(
+        let fence = TheFence(
             configuration: .init(
                 deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
                 connectionTimeout: 30,
@@ -26,7 +26,7 @@ struct ButtonHeistMCPServer {
         }
 
         await server.withMethodHandler(CallTool.self) { params in
-            await handleToolCall(params, mastermind: mastermind)
+            await handleToolCall(params, fence: fence)
         }
 
         try await server.start(transport: StdioTransport())
@@ -36,7 +36,7 @@ struct ButtonHeistMCPServer {
     @MainActor
     private static func handleToolCall(
         _ params: CallTool.Parameters,
-        mastermind: TheMastermind
+        fence: TheFence
     ) async -> CallTool.Result {
         guard params.name == "run" else {
             return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
@@ -48,7 +48,7 @@ struct ButtonHeistMCPServer {
                 return .init(content: [.text("Missing required parameter: command")], isError: true)
             }
 
-            let response = try await mastermind.execute(request: request)
+            let response = try await fence.execute(request: request)
             return try renderResponse(response)
         } catch {
             return .init(content: [.text(errorMessage(error))], isError: true)
@@ -89,7 +89,7 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    private static func renderResponse(_ response: MastermindResponse) throws -> CallTool.Result {
+    private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
         var content: [Tool.Content] = []
         var payload = response.jsonDict() ?? [:]
 
