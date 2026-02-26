@@ -62,10 +62,14 @@ public final class DeviceDiscovery {
                     var simUDID: String?
                     var tokenHash: String?
                     var instanceId: String?
+                    var sessionActive: Bool?
                     if case .bonjour(let txtRecord) = result.metadata {
                         simUDID = txtRecord["simudid"]
                         tokenHash = txtRecord["tokenhash"]
                         instanceId = txtRecord["instanceid"]
+                        if let val = txtRecord["sessionactive"] {
+                            sessionActive = val == "1"
+                        }
                     }
                     let device = DiscoveredDevice(
                         id: name,
@@ -73,7 +77,8 @@ public final class DeviceDiscovery {
                         endpoint: result.endpoint,
                         simulatorUDID: simUDID,
                         tokenHash: tokenHash,
-                        instanceId: instanceId
+                        instanceId: instanceId,
+                        sessionActive: sessionActive
                     )
                     discoveredDevices[name] = device
                     logger.info("Device found: \(name)")

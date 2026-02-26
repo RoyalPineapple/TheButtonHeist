@@ -12,9 +12,9 @@ import TheScore
 /// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
 /// instead of reusing the same event.
 ///
-/// This is a last-resort mechanism — higher-level activation methods
-/// (accessibilityActivate) should be attempted first by the caller,
-/// since synthetic touch injection cannot confirm that the gesture was handled.
+/// The `activate` command handles accessibilityActivate → synthetic tap
+/// fallback internally. The `tap` command is a low-level escape hatch
+/// for fuzzing and debugging — it bypasses accessibilityActivate entirely.
 @MainActor
 final class TheSafecracker {
 

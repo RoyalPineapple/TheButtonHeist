@@ -130,21 +130,10 @@ extension TheSafecracker {
         case .failure(let result):
             return result
         case .success(let point):
-            // If we have an element target, try activation via live object first
-            if let elementTarget = target.elementTarget,
-               let index = bagman.resolveTraversalIndex(for: elementTarget),
-               bagman.activate(elementAt: index) {
-                fingerprints.showFingerprint(at: point)
-                return InteractionResult(success: true, method: .activate, message: nil, value: nil)
-            }
-
-            // Fall back to synthetic tap (low-level escape hatch)
-            insideJobLogger.debug("Using synthetic tap fallback at (\(point.x), \(point.y))")
             if tap(at: point) {
                 fingerprints.showFingerprint(at: point)
                 return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
-
             return .failure(.syntheticTap, message: "Touch tap failed")
         }
     }

@@ -1,6 +1,6 @@
 # ButtonHeist API Reference
 
-Complete API documentation for InsideJob (iOS), TheClient (macOS), and the CLI.
+Complete API documentation for InsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
 
 ## InsideJob
 
@@ -149,7 +149,7 @@ InsideJob follows an **activation-first** strategy for all element interactions:
 
 2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
 
-The same pattern applies to `increment`/`decrement` (native accessibility API first) and `tap` commands (activation attempted when an element target is provided, synthetic tap as fallback).
+The same pattern applies to `increment`/`decrement` (native accessibility API first). The `tap` command is a pure synthetic tap with no activation-first logic — it is a low-level escape hatch for when coordinate-precise touch injection is needed.
 
 **Why activation-first matters:**
 - Native activation respects custom `accessibilityActivate()` overrides
@@ -212,20 +212,20 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 
 ---
 
-## ButtonHeist (macOS Client)
+## TheMastermind (macOS Client)
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/ButtonHeist/TheClient.swift`
+**Location**: `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
 
-### TheClient
+### TheMastermind
 
 Main client class. Uses the `@Observable` macro for SwiftUI integration.
 
 ```swift
 @Observable
 @MainActor
-public final class TheClient
+public final class TheMastermind
 ```
 
 #### Observable Properties
@@ -528,21 +528,21 @@ public enum ActionError: Error, LocalizedError {
 
 ---
 
-## TheMastermind (Orchestration Layer)
+## TheFence (Orchestration Layer)
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
+**Location**: `ButtonHeist/Sources/ButtonHeist/TheFence.swift`
 
 ### Overview
 
-TheMastermind is the shared orchestration layer for all command dispatch. Both the CLI (`buttonheist session`) and the MCP server (`buttonheist-mcp`) are thin wrappers over it.
+TheFence is the shared orchestration layer for all command dispatch. Both the CLI (`buttonheist session`) and the MCP server (`buttonheist-mcp`) are thin wrappers over it.
 
-### TheMastermind Class
+### TheFence Class
 
 ```swift
 @MainActor
-public final class TheMastermind
+public final class TheFence
 ```
 
 #### Configuration
@@ -561,7 +561,7 @@ public struct Configuration {
 
 ##### supportedCommands
 ```swift
-public static let supportedCommands: [String]  // From MastermindCommandCatalog.all
+public static let supportedCommands: [String]  // From CommandCatalog.all
 ```
 
 ##### onStatus
@@ -592,26 +592,26 @@ Disconnect and stop discovery.
 
 ##### execute(request:)
 ```swift
-public func execute(request: [String: Any]) async throws -> MastermindResponse
+public func execute(request: [String: Any]) async throws -> FenceResponse
 ```
-Execute a command. The `request` dictionary must contain a `command` key. Auto-connects if not already connected. Returns a typed `MastermindResponse`.
+Execute a command. The `request` dictionary must contain a `command` key. Auto-connects if not already connected. Returns a typed `FenceResponse`.
 
-### MastermindCommandCatalog
+### CommandCatalog
 
 ```swift
-public enum MastermindCommandCatalog {
+public enum CommandCatalog {
     public static let all: [String]
 }
 ```
 
 Single source of truth for the 27 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`.
 
-**Location**: `ButtonHeist/Sources/ButtonHeist/MastermindCommandCatalog.swift`
+**Location**: `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`
 
-### MastermindResponse
+### FenceResponse
 
 ```swift
-public enum MastermindResponse
+public enum FenceResponse
 ```
 
 Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String: Any]?` serialization.
@@ -632,10 +632,10 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `recording(path:payload:)` | Recording saved to path |
 | `recordingData(payload:)` | Recording as base64 video |
 
-### MastermindError
+### FenceError
 
 ```swift
-public enum MastermindError: Error, LocalizedError
+public enum FenceError: Error, LocalizedError
 ```
 
 #### Cases
@@ -662,28 +662,55 @@ public enum MastermindError: Error, LocalizedError
 
 ### Overview
 
-Standalone MCP server that exposes a single `run` tool backed by TheMastermind. Build with:
+MCP server exposing 11 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
 ```
 
-### Tool: `run`
+### Tools
 
-Execute one session command through TheMastermind.
+| Tool | Description | Key Parameters |
+|------|-------------|----------------|
+| `get_interface` | Get UI element hierarchy | — |
+| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern) | `identifier`, `order` |
+| `type_text` | Type text / delete characters | `text`, `deleteCount`, `identifier`, `order` |
+| `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY` |
+| `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
+| `wait_for_idle` | Wait for animations to settle | `timeout` |
+| `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
+| `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
+| `list_devices` | List discovered iOS devices | — |
+| `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier` |
+| `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard` |
 
-**Parameters**:
+All tools use strict schemas (`additionalProperties: false`) — only documented parameters are accepted.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `command` | string | yes | Command name (from MastermindCommandCatalog) |
-| `identifier` | string | no | Target accessibility identifier |
-| `order` | integer | no | Target element order index |
-| `x`, `y` | number | no | Coordinates |
-| `text` | string | no | Text for type_text |
-| `output` | string | no | Output path for screenshot/recording |
+#### activate
 
-Additional command-specific parameters are passed through (`additionalProperties: true`).
+The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide `identifier` or `order` from `get_interface`.
+
+#### gesture
+
+Low-level touch gesture escape hatch. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
+
+- `one_finger_tap` — Synthetic tap at x/y coordinates (maps to TheFence `tap` command)
+- `drag` — Requires `endX`, `endY`
+- `long_press` — Optional `duration` (seconds, default 1.0)
+- `pinch` — Requires `scale` (>1 zoom in, <1 zoom out)
+- `rotate` — Requires `angle` (radians)
+- `two_finger_tap` — Two-finger tap
+- `draw_path` — Requires `points` array of `{x, y}` objects
+- `draw_bezier` — Requires `curves` array of bezier curve objects
+
+#### accessibility_action
+
+Specialized accessibility actions. For general element interaction, use `activate` instead. The `type` field selects the action:
+
+- `increment` / `decrement` — For sliders, steppers. Requires `identifier` or `order`
+- `perform_custom_action` — Requires `identifier`/`order` and `actionName`
+- `edit_action` — Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`
+- `dismiss_keyboard` — No additional params
 
 ### Environment Variables
 
@@ -693,6 +720,7 @@ Additional command-specific parameters are passed through (`additionalProperties
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_FORCE` | Set to `1` to force session takeover |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
+| `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout in seconds (default: 60). Disconnects from device after inactivity; next tool call auto-reconnects |
 
 ### Response Handling
 
@@ -1118,6 +1146,7 @@ All subcommands that connect to a device accept these connection options:
 | `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
 | `BUTTONHEIST_TOKEN` | Auth token for InsideJob |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking (distinguishes drivers sharing the same token) |
+| `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout in seconds for `buttonheist session` (overridden by `--session-timeout`) |
 
 Flags always take precedence over environment variables.
 
@@ -1161,9 +1190,31 @@ Exit codes:
 - `2` - No device found
 - `3` - Timeout
 
+### buttonheist activate
+
+Activate a UI element — the primary interaction command. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, then falls back to synthetic tap at the element's activation point. This is the most reliable way to interact with buttons, links, and controls.
+
+```
+USAGE: buttonheist activate [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element accessibility identifier
+  --index <n>             Element traversal order index
+  -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+Examples:
+```bash
+buttonheist activate --identifier loginButton
+buttonheist activate --index 3
+```
+
 ### buttonheist action
 
-Perform actions on UI elements.
+Perform accessibility actions on UI elements. For activating elements (buttons, links, controls), use `buttonheist activate` instead.
 
 ```
 USAGE: buttonheist action [OPTIONS]
@@ -1241,17 +1292,24 @@ Start a persistent interactive session that accepts JSON commands on stdin and e
 USAGE: buttonheist session [OPTIONS]
 
 OPTIONS:
-  -f, --format <format>   Output format: human, json (default: human)
-  -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
-  -q, --quiet             Suppress status messages
-  --device <filter>       Target a specific device
+  -f, --format <format>           Output format: human, json (default: human)
+  -t, --timeout <seconds>         Timeout waiting for device (default: 0 = no timeout)
+  --session-timeout <seconds>     Idle timeout — exit if no command received (0 = disabled)
+  --force                         Force-takeover session from another driver
+  --token <token>                 Auth token from a previous connection
+  --device <filter>               Target a specific device
 ```
+
+The `--session-timeout` flag exits the session if no commands are received within the specified period. This prevents abandoned agent processes from holding sessions indefinitely. Also configurable via the `BUTTONHEIST_SESSION_TIMEOUT` environment variable.
 
 In `--format json` mode, each line of stdin is parsed as a JSON object with a `command` field. Each command produces exactly one JSON response line on stdout.
 
 ```bash
 # Start an interactive session
 buttonheist session --format json
+
+# Start a session with a 5-minute idle timeout (for agent use)
+buttonheist session --format json --session-timeout 300
 
 # Commands are sent as JSON lines; responses come back as JSON lines
 echo '{"command":"get_interface"}' | buttonheist session --format json --once
@@ -1346,7 +1404,7 @@ import ButtonHeist
 import TheScore
 
 struct InspectorView: View {
-    @State private var client = TheClient()
+    @State private var client = TheMastermind()
 
     var body: some View {
         NavigationSplitView {
@@ -1385,7 +1443,7 @@ import ButtonHeist
 import TheScore
 
 class Inspector {
-    let client = TheClient()
+    let client = TheMastermind()
 
     init() {
         client.onDeviceDiscovered = { [weak self] device in
@@ -1456,22 +1514,19 @@ buttonheist --device DEADBEEF-1234 screenshot --output screen.png
 # Get hierarchy as JSON
 buttonheist --format json --once > hierarchy.json
 
-# Activate a button
-buttonheist action --identifier loginButton
+# Activate a button (primary interaction command)
+buttonheist activate --identifier loginButton
+buttonheist activate --index 3
 
-# Increment a slider
+# Accessibility actions (increment, decrement, custom)
 buttonheist action --type increment --identifier volumeSlider
-
-# Tap at coordinates
-buttonheist action --type tap --x 196.5 --y 659
+buttonheist action --type decrement --identifier volumeSlider
+buttonheist action --type custom --identifier myCell --custom-action "Delete"
 
 # Capture screenshot
 buttonheist screenshot --output screen.png
 
-# Perform custom action
-buttonheist action --type custom --identifier myCell --custom-action "Delete"
-
-# Touch gestures
+# Touch gestures (low-level escape hatches)
 buttonheist touch tap --x 100 --y 200
 buttonheist touch tap --identifier loginButton
 buttonheist touch longpress --identifier myButton --duration 1.0

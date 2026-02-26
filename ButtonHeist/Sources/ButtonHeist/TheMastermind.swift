@@ -6,7 +6,11 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "mastermind")
 
-/// Observable session orchestrator for discovering and connecting to iOS apps running InsideJob
+/// Observable session orchestrator for discovering and connecting to iOS apps running InsideJob.
+///
+/// Thin @Observable wrapper over TheWheelman. Provides the SwiftUI-friendly API surface
+/// with published state and callback hooks. All discovery, connection, keepalive, and
+/// reconnect logic lives in TheWheelman.
 @Observable
 @MainActor
 public final class TheMastermind {
@@ -41,89 +45,67 @@ public final class TheMastermind {
     public var onRecordingStarted: (() -> Void)?
     public var onRecording: ((RecordingPayload) -> Void)?
     public var onRecordingError: ((String) -> Void)?
-    /// Called when a token is received via UI approval (store for future reconnections)
     public var onTokenReceived: ((String) -> Void)?
-    /// Called when the server rejects the connection because another driver holds the session
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
-    /// Called when the server rejects the auth token (reason string from server)
     public var onAuthFailed: ((String) -> Void)?
 
-    /// Auth token to send during connection handshake
-    public var token: String?
+    // MARK: - Configuration (forwarded to TheWheelman)
 
-    /// When true, force-takeover the session during the next connection
-    public var forceSession: Bool = false
+    public var token: String? {
+        get { wheelman.token }
+        set { wheelman.token = newValue }
+    }
 
-    /// Driver identity for session locking. Set via BUTTONHEIST_DRIVER_ID env var.
-    /// When set, the server uses this to distinguish drivers sharing the same auth token.
-    public var driverId: String?
+    public var forceSession: Bool {
+        get { wheelman.forceSession }
+        set { wheelman.forceSession = newValue }
+    }
 
-    /// When true (default), automatically sends .subscribe, .requestInterface, and .requestScreen
-    /// after connecting. Set to false for session-style usage where you request data explicitly.
-    public var autoSubscribe: Bool = true
+    public var driverId: String? {
+        get { wheelman.driverId }
+        set { wheelman.driverId = newValue }
+    }
 
-    // MARK: - Private
+    public var autoSubscribe: Bool {
+        get { wheelman.autoSubscribe }
+        set { wheelman.autoSubscribe = newValue }
+    }
 
-    private var discovery: DeviceDiscovery?
-    private var connection: DeviceConnection?
-    private var keepaliveTask: Task<Void, Never>?
+    // MARK: - The Wheelman
+
+    public let wheelman = TheWheelman()
 
     // MARK: - Init
 
-    public init() {}
-
-    // MARK: - Discovery
-
-    public func startDiscovery() {
-        logger.info("startDiscovery called, isDiscovering=\(self.isDiscovering)")
-        guard !isDiscovering else {
-            logger.info("Already discovering, skipping")
-            return
-        }
-
-        discoveredDevices.removeAll()
-        discovery = DeviceDiscovery()
-        discovery?.onDeviceFound = { [weak self] device in
-            logger.info("Device found callback: \(device.name)")
-            self?.discoveredDevices.append(device)
-            self?.onDeviceDiscovered?(device)
-        }
-        discovery?.onDeviceLost = { [weak self] device in
-            logger.info("Device lost callback: \(device.name)")
-            self?.discoveredDevices.removeAll { $0.id == device.id }
-            self?.onDeviceLost?(device)
-        }
-        discovery?.onStateChange = { [weak self] isReady in
-            logger.info("Discovery state changed: isReady=\(isReady)")
-            self?.isDiscovering = isReady
-        }
-        discovery?.start()
-
-        logger.info("Discovery started")
+    public init() {
+        wireUpWheelman()
     }
 
-    public func stopDiscovery() {
-        discovery?.stop()
-        discovery = nil
-        isDiscovering = false
-    }
-
-    // MARK: - Connection
-
-    public func connect(to device: DiscoveredDevice) {
-        disconnect()
-
-        connectionState = .connecting
-        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: driverId)
-
-        connection?.onConnected = { [weak self] in
-            self?.connectedDevice = device
-            self?.startKeepalive()
-        }
-
-        connection?.onDisconnected = { [weak self] error in
+    private func wireUpWheelman() {
+        wheelman.onDeviceFound = { [weak self] device in
             guard let self else { return }
-            // Preserve .failed state (e.g., from sessionLocked) — don't overwrite with .disconnected
+            self.discoveredDevices = self.wheelman.discoveredDevices
+            self.isDiscovering = self.wheelman.isDiscovering
+            self.onDeviceDiscovered?(device)
+        }
+
+        wheelman.onDeviceLost = { [weak self] device in
+            guard let self else { return }
+            self.discoveredDevices = self.wheelman.discoveredDevices
+            self.onDeviceLost?(device)
+        }
+
+        wheelman.onConnected = { [weak self] info in
+            guard let self else { return }
+            self.connectionState = .connected
+            self.connectedDevice = self.wheelman.connectedDevice
+            self.serverInfo = info
+            self.onConnected?(info)
+        }
+
+        wheelman.onDisconnected = { [weak self] error in
+            guard let self else { return }
+            // Preserve .failed state (e.g., from sessionLocked)
             if case .failed = self.connectionState {
                 // keep .failed
             } else {
@@ -137,71 +119,74 @@ public final class TheMastermind {
             self.onDisconnected?(error)
         }
 
-        connection?.onServerInfo = { [weak self] info in
-            self?.connectionState = .connected
-            self?.serverInfo = info
-            if self?.autoSubscribe == true {
-                self?.connection?.send(.subscribe)
-                self?.connection?.send(.requestInterface)
-                self?.connection?.send(.requestScreen)
-            }
-            self?.onConnected?(info)
-        }
-
-        connection?.onInterface = { [weak self] payload in
+        wheelman.onInterface = { [weak self] payload in
             self?.currentInterface = payload
             self?.onInterfaceUpdate?(payload)
         }
 
-        connection?.onActionResult = { [weak self] result in
+        wheelman.onActionResult = { [weak self] result in
             self?.onActionResult?(result)
         }
 
-        connection?.onScreen = { [weak self] payload in
+        wheelman.onScreen = { [weak self] payload in
             self?.currentScreen = payload
             self?.onScreen?(payload)
         }
 
-        connection?.onRecordingStarted = { [weak self] in
+        wheelman.onRecordingStarted = { [weak self] in
             self?.isRecording = true
             self?.onRecordingStarted?()
         }
-        connection?.onRecording = { [weak self] payload in
+        wheelman.onRecording = { [weak self] payload in
             self?.isRecording = false
             self?.onRecording?(payload)
         }
-        connection?.onRecordingError = { [weak self] message in
+        wheelman.onRecordingError = { [weak self] message in
             self?.isRecording = false
             self?.onRecordingError?(message)
         }
 
-        connection?.onError = { [weak self] message in
+        wheelman.onError = { [weak self] message in
             self?.connectionState = .failed(message)
         }
 
-        connection?.onAuthApproved = { [weak self] approvedToken in
-            self?.token = approvedToken
+        wheelman.onAuthApproved = { [weak self] approvedToken in
             self?.onTokenReceived?(approvedToken)
         }
 
-        connection?.onSessionLocked = { [weak self] payload in
+        wheelman.onSessionLocked = { [weak self] payload in
             self?.connectionState = .failed(payload.message)
             self?.onSessionLocked?(payload)
         }
 
-        connection?.onAuthFailed = { [weak self] reason in
+        wheelman.onAuthFailed = { [weak self] reason in
             self?.connectionState = .failed(reason)
             self?.onAuthFailed?(reason)
         }
+    }
 
-        connection?.connect()
+    // MARK: - Discovery (delegated)
+
+    public func startDiscovery() {
+        wheelman.startDiscovery()
+        isDiscovering = wheelman.isDiscovering
+    }
+
+    public func stopDiscovery() {
+        wheelman.stopDiscovery()
+        isDiscovering = false
+        discoveredDevices = []
+    }
+
+    // MARK: - Connection (delegated)
+
+    public func connect(to device: DiscoveredDevice) {
+        connectionState = .connecting
+        wheelman.connect(to: device)
     }
 
     public func disconnect() {
-        keepaliveTask?.cancel()
-        keepaliveTask = nil
-        connection?.disconnect()
-        connection = nil
+        wheelman.disconnect()
         connectionState = .disconnected
         connectedDevice = nil
         serverInfo = nil
@@ -213,20 +198,27 @@ public final class TheMastermind {
     // MARK: - Commands
 
     public func requestInterface() {
-        connection?.send(.requestInterface)
+        wheelman.send(.requestInterface)
     }
 
-    /// Send a message to the connected device
     public func send(_ message: ClientMessage) {
-        connection?.send(message)
+        wheelman.send(message)
     }
 
-    /// Wait for an action result with timeout
+    /// Force-close the connection, triggering the onDisconnected callback.
+    public func forceDisconnect() {
+        guard connectionState == .connected else { return }
+        logger.warning("Force-disconnecting stale connection")
+        disconnect()
+        onDisconnected?(ActionError.timeout)
+    }
+
+    // MARK: - Async Wait Methods
+
     public func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult {
         try await withCheckedThrowingContinuation { continuation in
             var didResume = false
 
-            // Timeout Task runs on MainActor to avoid data race on didResume
             let timeoutTask = Task { @MainActor in
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 if !didResume {
@@ -245,7 +237,6 @@ public final class TheMastermind {
         }
     }
 
-    /// Wait for an interface update with timeout
     public func waitForInterface(timeout: TimeInterval = 10.0) async throws -> Interface {
         try await withCheckedThrowingContinuation { continuation in
             var didResume = false
@@ -268,7 +259,6 @@ public final class TheMastermind {
         }
     }
 
-    /// Wait for a screen capture response with timeout
     public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
         try await withCheckedThrowingContinuation { continuation in
             var didResume = false
@@ -291,7 +281,6 @@ public final class TheMastermind {
         }
     }
 
-    /// Wait for a recording result with timeout
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         try await withCheckedThrowingContinuation { continuation in
             var didResume = false
@@ -331,60 +320,21 @@ public final class TheMastermind {
         }
     }
 
-    /// Force-close the connection, triggering the onDisconnected callback.
-    /// Use when a timeout suggests the connection is dead but TCP hasn't noticed yet.
-    public func forceDisconnect() {
-        guard connectionState == .connected else { return }
-        logger.warning("Force-disconnecting stale connection")
-        disconnect()
-        onDisconnected?(ActionError.timeout)
-    }
-
-    // MARK: - Keepalive
-
-    private func startKeepalive() {
-        keepaliveTask?.cancel()
-        keepaliveTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
-                guard !Task.isCancelled else { break }
-                self?.connection?.send(.ping)
-            }
-        }
-    }
-
     public enum ActionError: Error, LocalizedError {
         case timeout
         public var errorDescription: String? {
             switch self {
-            case .timeout:
-                return "Action timed out"
+            case .timeout: return "Action timed out"
             }
         }
     }
 
-    // MARK: - Display Names
+    // MARK: - Display Names (delegated)
 
-    /// Compute display name for a device, with disambiguation if multiple devices have the same app
-    /// Prefers app name, appends device name in parentheses only when needed
     public func displayName(for device: DiscoveredDevice) -> String {
-        let appName = device.appName
-
-        // Check if disambiguation is needed (multiple devices with same app name)
-        let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
-
-        if sameAppDevices.count > 1 {
-            let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == device.deviceName }
-            if sameAppAndDevice.count > 1, let shortId = device.shortId {
-                return "\(appName) (\(device.deviceName)) [\(shortId)]"
-            }
-            return "\(appName) (\(device.deviceName))"
-        } else {
-            return appName
-        }
+        wheelman.displayName(for: device)
     }
 
-    /// Display name for the currently connected device
     public var connectedDeviceDisplayName: String? {
         guard let device = connectedDevice else { return nil }
         return displayName(for: device)

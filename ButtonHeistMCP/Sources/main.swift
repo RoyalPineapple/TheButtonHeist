@@ -2,6 +2,16 @@ import Foundation
 import MCP
 import ButtonHeist
 
+/// Idle timeout before disconnecting from the device (seconds).
+/// `BUTTONHEIST_SESSION_TIMEOUT` env var overrides the default.
+private let sessionTimeout: TimeInterval = {
+    if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
+       let parsed = Double(envValue), parsed > 0 {
+        return parsed
+    }
+    return 60.0
+}()
+
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
@@ -15,6 +25,8 @@ struct ButtonHeistMCPServer {
             )
         )
 
+        let idleMonitor = IdleMonitor(fence: fence, timeout: sessionTimeout)
+
         let server = Server(
             name: "buttonheist",
             version: buttonHeistVersion,
@@ -22,11 +34,11 @@ struct ButtonHeistMCPServer {
         )
 
         await server.withMethodHandler(ListTools.self) { _ in
-            ListTools.Result(tools: [ToolDefinitions.run])
+            ListTools.Result(tools: ToolDefinitions.all)
         }
 
         await server.withMethodHandler(CallTool.self) { params in
-            await handleToolCall(params, fence: fence)
+            await handleToolCall(params, fence: fence, idleMonitor: idleMonitor)
         }
 
         try await server.start(transport: StdioTransport())
@@ -36,100 +48,44 @@ struct ButtonHeistMCPServer {
     @MainActor
     private static func handleToolCall(
         _ params: CallTool.Parameters,
-        fence: TheFence
+        fence: TheFence,
+        idleMonitor: IdleMonitor
     ) async -> CallTool.Result {
-        guard params.name == "run" else {
-            return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
-        }
-
         do {
-            let request = try decodeArguments(params.arguments)
-            guard let command = request["command"] as? String else {
-                return .init(content: [.text("Missing required parameter: command")], isError: true)
-            }
+            var request = try decodeArguments(params.arguments)
 
-            if let validationError = validateArgs(command: command, args: request) {
-                return .init(content: [.text(validationError)], isError: true)
+            // Route tool name → TheFence command
+            switch params.name {
+            // Direct 1:1 tools — tool name IS the command
+            case "get_interface", "activate", "type_text", "swipe", "get_screen",
+                 "wait_for_idle", "start_recording", "stop_recording", "list_devices":
+                request["command"] = params.name
+
+            // Grouped tools — "type" field becomes the command
+            case "gesture":
+                guard let type = request.removeValue(forKey: "type") as? String else {
+                    return .init(content: [.text("Missing required parameter: type")], isError: true)
+                }
+                // one_finger_tap maps to TheFence "tap" command
+                request["command"] = (type == "one_finger_tap") ? "tap" : type
+
+            case "accessibility_action":
+                guard let type = request.removeValue(forKey: "type") as? String else {
+                    return .init(content: [.text("Missing required parameter: type")], isError: true)
+                }
+                request["command"] = type
+
+            default:
+                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
             }
 
             let response = try await fence.execute(request: request)
+            idleMonitor.resetTimer()
             return try renderResponse(response)
         } catch {
+            idleMonitor.resetTimer()
             return .init(content: [.text(errorMessage(error))], isError: true)
         }
-    }
-
-    // MARK: - Per-command argument validation
-    // Validates required parameters before dispatching to TheFence, so callers
-    // get a clear error message immediately instead of a generic dispatch failure.
-
-    private static func validateArgs(command: String, args: [String: Any]) -> String? {
-        // Commands that require an element target (identifier or order)
-        let needsTarget: Set<String> = ["tap", "activate", "increment", "decrement", "perform_custom_action"]
-
-        if needsTarget.contains(command) {
-            let hasIdentifier = args["identifier"] is String
-            let hasOrder = args["order"] != nil
-            let hasCoordinates = args["x"] != nil && args["y"] != nil
-
-            // tap can use coordinates instead of an element target
-            if command == "tap" && (hasIdentifier || hasOrder || hasCoordinates) {
-                return nil
-            }
-
-            if !hasIdentifier && !hasOrder {
-                return "Missing required parameter for '\(command)': provide 'identifier' (accessibility identifier) or 'order' (element index). Run get_interface first to discover available elements."
-            }
-        }
-
-        // type_text needs at least text or deleteCount
-        if command == "type_text" {
-            let hasText = args["text"] is String
-            let hasDeleteCount = args["deleteCount"] != nil
-            if !hasText && !hasDeleteCount {
-                return "Missing required parameter for 'type_text': provide 'text', 'deleteCount', or both."
-            }
-        }
-
-        // swipe: if using coordinates, need start and end points
-        // (direction-based swipe on an element is handled by TheFence)
-
-        // drag requires endX and endY
-        if command == "drag" {
-            if args["endX"] == nil || args["endY"] == nil {
-                return "Missing required parameters for 'drag': 'endX' and 'endY' are required."
-            }
-        }
-
-        // pinch requires scale
-        if command == "pinch" {
-            if args["scale"] == nil {
-                return "Missing required parameter for 'pinch': 'scale' is required."
-            }
-        }
-
-        // rotate requires angle
-        if command == "rotate" {
-            if args["angle"] == nil {
-                return "Missing required parameter for 'rotate': 'angle' is required."
-            }
-        }
-
-        // perform_custom_action requires actionName
-        if command == "perform_custom_action" {
-            if !(args["actionName"] is String) {
-                return "Missing required parameter for 'perform_custom_action': 'actionName' is required."
-            }
-        }
-
-        // edit_action requires action
-        if command == "edit_action" {
-            if !(args["action"] is String) {
-                return "Missing required parameter for 'edit_action': 'action' is required (copy, paste, cut, select, selectAll)."
-            }
-        }
-
-        return nil
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) throws -> [String: Any] {
@@ -198,5 +154,31 @@ struct ButtonHeistMCPServer {
             return description
         }
         return error.localizedDescription
+    }
+}
+
+// MARK: - Idle Timeout
+
+/// Disconnects the fence after a period of inactivity.
+/// The next tool call will auto-reconnect via `TheFence.execute()`.
+@MainActor
+private final class IdleMonitor {
+    private let fence: TheFence
+    private let timeout: TimeInterval
+    private var timeoutTask: Task<Void, Never>?
+
+    init(fence: TheFence, timeout: TimeInterval) {
+        self.fence = fence
+        self.timeout = timeout
+    }
+
+    func resetTimer() {
+        timeoutTask?.cancel()
+        guard timeout > 0 else { return }
+        timeoutTask = Task { [weak self, timeout] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard !Task.isCancelled, let self else { return }
+            self.fence.stop()
+        }
     }
 }

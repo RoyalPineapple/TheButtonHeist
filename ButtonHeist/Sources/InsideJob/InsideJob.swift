@@ -167,6 +167,9 @@ public final class InsideJob {
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
+        muscle.onSessionActiveChanged = { [weak t] isActive in
+            t?.updateTXTRecord(["sessionactive": isActive ? "1" : "0"])
+        }
 
         t.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
