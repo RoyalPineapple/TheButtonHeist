@@ -25,7 +25,18 @@ extension ElementAction: CustomStringConvertible {
 }
 
 extension ElementAction: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case custom
+    }
+
     public init(from decoder: Decoder) throws {
+        // Try tagged object first: {"custom":"name"}
+        if let keyed = try? decoder.container(keyedBy: CodingKeys.self),
+           let name = try? keyed.decode(String.self, forKey: .custom) {
+            self = .custom(name)
+            return
+        }
+        // Fall back to plain string for built-in actions and legacy custom actions
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         switch value {
@@ -37,12 +48,13 @@ extension ElementAction: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
         switch self {
-        case .activate: try container.encode("activate")
-        case .increment: try container.encode("increment")
-        case .decrement: try container.encode("decrement")
-        case .custom(let name): try container.encode(name)
+        case .activate, .increment, .decrement:
+            var container = encoder.singleValueContainer()
+            try container.encode(description)
+        case .custom(let name):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(name, forKey: .custom)
         }
     }
 }

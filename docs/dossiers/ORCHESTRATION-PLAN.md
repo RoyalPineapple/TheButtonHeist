@@ -114,9 +114,9 @@ Build verify: xcodebuild ... -scheme TheScore build && xcodebuild ... -scheme Th
 ```
 
 ### Batch 1 Gate
-- [ ] Merge Agent 1A branch
-- [ ] Merge Agent 1B branch
-- [ ] Run: InsideJob build + TheScore build + TheScore tests
+- [x] Merge Agent 1A branch (implemented directly — worktree permissions issue)
+- [x] Merge Agent 1B branch (implemented directly — worktree permissions issue)
+- [x] Run: InsideJob build + TheScore build + TheScore tests
 - [ ] Commit: "Batch 1: ThePlant @objc migration + TheScore Codable fix"
 
 ---
