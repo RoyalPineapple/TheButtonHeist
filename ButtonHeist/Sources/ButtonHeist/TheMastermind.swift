@@ -38,7 +38,7 @@ public final class TheMastermind {
     public var onDeviceDiscovered: ((DiscoveredDevice) -> Void)?
     public var onDeviceLost: ((DiscoveredDevice) -> Void)?
     public var onConnected: ((ServerInfo) -> Void)?
-    public var onDisconnected: ((Error?) -> Void)?
+    public var onDisconnected: ((DisconnectReason) -> Void)?
     public var onInterfaceUpdate: ((Interface) -> Void)?
     public var onActionResult: ((ActionResult) -> Void)?
     public var onScreen: ((ScreenPayload) -> Void)?
@@ -103,7 +103,7 @@ public final class TheMastermind {
             self.onConnected?(info)
         }
 
-        wheelman.onDisconnected = { [weak self] error in
+        wheelman.onDisconnected = { [weak self] reason in
             guard let self else { return }
             // Preserve .failed state (e.g., from sessionLocked)
             if case .failed = self.connectionState {
@@ -116,7 +116,7 @@ public final class TheMastermind {
             self.currentInterface = nil
             self.currentScreen = nil
             self.isRecording = false
-            self.onDisconnected?(error)
+            self.onDisconnected?(reason)
         }
 
         wheelman.onInterface = { [weak self] payload in
@@ -210,7 +210,7 @@ public final class TheMastermind {
         guard connectionState == .connected else { return }
         logger.warning("Force-disconnecting stale connection")
         disconnect()
-        onDisconnected?(ActionError.timeout)
+        onDisconnected?(.localDisconnect)
     }
 
     // MARK: - Async Wait Methods

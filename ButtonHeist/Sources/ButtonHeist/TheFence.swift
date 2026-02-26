@@ -12,6 +12,7 @@ public enum FenceError: Error, LocalizedError {
     case authFailed(String)
     case notConnected
     case actionTimeout
+    case actionFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -47,6 +48,8 @@ public enum FenceError: Error, LocalizedError {
             return "Not connected to device"
         case .actionTimeout:
             return "Action timed out — connection lost, reconnecting..."
+        case .actionFailed(let message):
+            return "Action failed: \(message)"
         }
     }
 }
@@ -518,7 +521,7 @@ public final class TheFence {
             return try await client.waitForInterface(timeout: Timeouts.actionSeconds)
         } catch {
             client.forceDisconnect()
-            throw FenceError.actionTimeout
+            throw mapCaughtError(error)
         }
     }
 
@@ -539,7 +542,7 @@ public final class TheFence {
             return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
         } catch {
             client.forceDisconnect()
-            throw FenceError.actionTimeout
+            throw mapCaughtError(error)
         }
     }
 
@@ -749,7 +752,7 @@ public final class TheFence {
             return .action(result: result)
         } catch {
             client.forceDisconnect()
-            throw FenceError.actionTimeout
+            throw mapCaughtError(error)
         }
     }
 
@@ -771,7 +774,7 @@ public final class TheFence {
             maxDuration: doubleArg(args, "max_duration")
         )
         client.send(.startRecording(config))
-        return .ok(message: "Recording started")
+        return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
     }
 
     private func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
@@ -789,7 +792,7 @@ public final class TheFence {
             return .recordingData(payload: recording)
         } catch {
             client.forceDisconnect()
-            throw FenceError.actionTimeout
+            throw mapCaughtError(error)
         }
     }
 
@@ -803,8 +806,22 @@ public final class TheFence {
             return .action(result: result)
         } catch {
             client.forceDisconnect()
-            throw FenceError.actionTimeout
+            throw mapCaughtError(error)
         }
+    }
+
+    /// Map a caught error to an appropriate FenceError, preserving detail.
+    private func mapCaughtError(_ error: Error) -> FenceError {
+        if error is TheMastermind.ActionError {
+            return .actionTimeout
+        }
+        if let recordingError = error as? TheMastermind.RecordingError {
+            switch recordingError {
+            case .serverError(let message):
+                return .actionFailed(message)
+            }
+        }
+        return .actionFailed(error.localizedDescription)
     }
 
     private func stringArg(_ dictionary: [String: Any], _ key: String) -> String? {

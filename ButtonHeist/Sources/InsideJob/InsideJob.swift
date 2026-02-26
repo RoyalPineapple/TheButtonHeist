@@ -236,6 +236,7 @@ public final class InsideJob {
             if String(data: data, encoding: .utf8) != nil {
                 insideJobLogger.debug("Unparsable message: \(data.count) bytes")
             }
+            sendMessage(.error("Malformed message — could not decode"), respond: respond)
             return
         }
 
@@ -312,6 +313,11 @@ public final class InsideJob {
             await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         default:
             insideJobLogger.error("Unhandled message type in dispatchInteraction")
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .activate,
+                message: "Unhandled command"
+            )), respond: respond)
         }
     }
 
