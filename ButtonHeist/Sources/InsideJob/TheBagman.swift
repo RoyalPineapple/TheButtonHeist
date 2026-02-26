@@ -27,7 +27,7 @@ final class TheBagman {
     let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
-    weak var stakeout: Stakeout?
+    weak var stakeout: TheStakeout?
 
     // MARK: - Element Access
 

@@ -6,10 +6,10 @@ Rename to TheStakeout. Investigate eliminating fingerprint compositing. Fix the 
 
 ## Phase 1: Rename to TheStakeout
 
-- [ ] **Rename class** from `Stakeout` to `TheStakeout`
-- [ ] **Update all references** in `InsideJob.swift`, `InsideJob+Screen.swift`, etc.
-- [ ] **Update dossier and documentation references**
-- [ ] **Build passes** after phase
+- [x] **Rename class** from `Stakeout` to `TheStakeout`
+- [x] **Update all references** in `InsideJob.swift`, `InsideJob+Screen.swift`, etc.
+- [x] **Update dossier and documentation references**
+- [x] **Build passes** after phase
 
 ## Phase 2: Eliminate Fingerprint Compositing
 
@@ -17,11 +17,11 @@ Rename to TheStakeout. Investigate eliminating fingerprint compositing. Fix the 
 
 ### Prerequisite: TheFingerprints guarantees minimum 0.5s display time (Batch 2)
 
-- [ ] **Remove CGContext fingerprint drawing** from `createPixelBuffer(from:)`
-- [ ] **Remove `activeInteractions` tracking array**
-- [ ] **Remove `interactionOverlayDuration` and `overlayDiameter` constants**
-- [ ] **Verify bonus frame after interaction** still captures the fingerprint indicator
-- [ ] **Build passes** after phase
+- [x] **Remove CGContext fingerprint drawing** from `createPixelBuffer(from:)`
+- [x] **Remove `activeInteractions` tracking array**
+- [x] **Remove `interactionOverlayDuration` and `overlayDiameter` constants**
+- [x] **Verify bonus frame after interaction** still captures the fingerprint indicator
+- [x] **Build passes** after phase
 
 ### Alternative approach (if natural capture is insufficient):
 - TheFingerprints signals TheStakeout "ready for picture" after placing indicators
@@ -34,15 +34,15 @@ Rename to TheStakeout. Investigate eliminating fingerprint compositing. Fix the 
 
 Real-world data: largest recording 802KB (34.5s), typical 200-400KB. H.264 at ~10-23 KB/sec for UI content. The 7MB cap will never be hit in practice.
 
-- [ ] **No code changes needed** — documented decision
+- [x] **No code changes needed** — documented decision
 
 ## Phase 4: Minimize Interaction Log Payloads
 
-- [ ] **Replace `interfaceBefore`/`interfaceAfter` with `interfaceDelta: InterfaceDelta`** in `InteractionEvent`
-- [ ] **Add max interaction count** (e.g., 500 events) with truncation note
-- [ ] **Update `InsideJob.swift`** — pass delta instead of full snapshots
-- [ ] **Update `RecordingPayloadTests.swift`**
-- [ ] **Build passes** after phase
+- [x] **Replace `interfaceBefore`/`interfaceAfter` with `interfaceDelta: InterfaceDelta`** in `InteractionEvent`
+- [x] **Add max interaction count** (e.g., 500 events) with truncation note
+- [x] **Update `InsideJob.swift`** — pass delta instead of full snapshots
+- [x] **Update `RecordingPayloadTests.swift`**
+- [x] **Build passes** after phase
 
 ### Files affected:
 - `ServerMessages.swift` — modify `InteractionEvent` to use `InterfaceDelta`
@@ -52,21 +52,21 @@ Real-world data: largest recording 802KB (34.5s), typical 200-400KB. H.264 at ~1
 
 ## Phase 5: Address High Priority Lint Issues
 
-- [ ] **Remove `swiftlint:disable file_length`** — after compositing removal, file should be shorter
-- [ ] **If still over limit**, extract AVAssetWriter pipeline into a helper type
+- [x] **Remove `swiftlint:disable file_length`** — after compositing removal, file should be shorter (387 lines)
+- [x] **If still over limit**, extract AVAssetWriter pipeline into a helper type — not needed, well under 600
 
 ## Phase 6: Address Medium Priority Items
 
-- [ ] **Document inactivity detection** behavior — screen hashing means subtle animations keep recording active (intentional)
-- [ ] **Document even-dimension rounding** H.264 requirement in code comment
+- [x] **Document inactivity detection** behavior — screen hashing means subtle animations keep recording active (intentional)
+- [x] **Document even-dimension rounding** H.264 requirement in code comment
 - [ ] **Consider sending recording only to initiating client** — requires tracking which client started
 
 ## Verification
 
-- [ ] Class renamed to `TheStakeout` throughout codebase
-- [ ] No CGContext fingerprint compositing in frame capture
-- [ ] `swiftlint:disable file_length` removed
-- [ ] File size limit documented alongside `maxBufferSize`
-- [ ] `InteractionEvent` uses `InterfaceDelta` not full `Interface`
-- [ ] Interaction log has a max event count
-- [ ] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build`
+- [x] Class renamed to `TheStakeout` throughout codebase
+- [x] No CGContext fingerprint compositing in frame capture
+- [x] `swiftlint:disable file_length` removed
+- [x] File size limit documented alongside `maxBufferSize`
+- [x] `InteractionEvent` uses `InterfaceDelta` not full `Interface`
+- [x] Interaction log has a max event count
+- [x] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build`
