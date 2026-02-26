@@ -9,30 +9,35 @@ extension TheSafecracker {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ActionTarget) -> InteractionResult {
-        guard let element = findElement(for: target) else {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let element = bagman.findElement(for: target) else {
             return .failure(.elementNotFound, message: "Element not found for target")
         }
 
-        if let interactivityError = checkElementInteractivity(element) {
+        if let interactivityError = bagman.checkElementInteractivity(element) {
             return .failure(.elementNotFound, message: interactivityError)
         }
 
         let point = element.activationPoint
 
-        guard let index = resolveTraversalIndex(for: target),
-              hasInteractiveObject(at: index) else {
+        guard let index = bagman.resolveTraversalIndex(for: target),
+              bagman.hasInteractiveObject(at: index) else {
             return .failure(.activate, message: "Element does not support activation")
         }
 
         // Try accessibilityActivate via the live object reference
-        if activate(elementAt: index) {
-            showFingerprint(at: point)
+        if bagman.activate(elementAt: index) {
+            fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
-        // Fall back to synthetic touch injection
+        // Fall back to synthetic touch injection (activation-first philosophy:
+        // accessibilityActivate is always tried before synthetic tap)
+        insideJobLogger.debug("accessibilityActivate failed, falling back to synthetic tap at (\(point.x), \(point.y))")
         if tap(at: point) {
-            showFingerprint(at: point)
+            fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
         }
 
@@ -40,46 +45,55 @@ extension TheSafecracker {
     }
 
     func executeIncrement(_ target: ActionTarget) -> InteractionResult {
-        guard let element = findElement(for: target) else {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let element = bagman.findElement(for: target) else {
             return .failure(.elementNotFound, message: "Element not found")
         }
 
-        guard let index = resolveTraversalIndex(for: target),
-              hasInteractiveObject(at: index) else {
+        guard let index = bagman.resolveTraversalIndex(for: target),
+              bagman.hasInteractiveObject(at: index) else {
             return .failure(.increment, message: "Element does not support increment")
         }
 
-        increment(elementAt: index)
-        showFingerprint(at: element.activationPoint)
+        bagman.increment(elementAt: index)
+        fingerprints.showFingerprint(at: element.activationPoint)
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
     func executeDecrement(_ target: ActionTarget) -> InteractionResult {
-        guard let element = findElement(for: target) else {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard let element = bagman.findElement(for: target) else {
             return .failure(.elementNotFound, message: "Element not found")
         }
 
-        guard let index = resolveTraversalIndex(for: target),
-              hasInteractiveObject(at: index) else {
+        guard let index = bagman.resolveTraversalIndex(for: target),
+              bagman.hasInteractiveObject(at: index) else {
             return .failure(.decrement, message: "Element does not support decrement")
         }
 
-        decrement(elementAt: index)
-        showFingerprint(at: element.activationPoint)
+        bagman.decrement(elementAt: index)
+        fingerprints.showFingerprint(at: element.activationPoint)
         return InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
     func executeCustomAction(_ target: CustomActionTarget) -> InteractionResult {
-        guard findElement(for: target.elementTarget) != nil else {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        guard bagman.findElement(for: target.elementTarget) != nil else {
             return .failure(.elementNotFound, message: "Element not found")
         }
 
-        guard let index = resolveTraversalIndex(for: target.elementTarget),
-              hasInteractiveObject(at: index) else {
+        guard let index = bagman.resolveTraversalIndex(for: target.elementTarget),
+              bagman.hasInteractiveObject(at: index) else {
             return .failure(.customAction, message: "Element does not support custom actions")
         }
 
-        let success = performCustomAction(named: target.actionName, elementAt: index)
+        let success = bagman.performCustomAction(named: target.actionName, elementAt: index)
         return InteractionResult(
             success: success, method: .customAction,
             message: success ? nil : "Action '\(target.actionName)' not found",
@@ -109,41 +123,40 @@ extension TheSafecracker {
     // MARK: - Touch Gestures
 
     func executeTap(_ target: TouchTapTarget) -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
         case .failure(let result):
             return result
         case .success(let point):
-            // If we have an element target, try activation via live object first
-            if let elementTarget = target.elementTarget,
-               let index = resolveTraversalIndex(for: elementTarget),
-               activate(elementAt: index) {
-                showFingerprint(at: point)
-                return InteractionResult(success: true, method: .activate, message: nil, value: nil)
-            }
-
-            // Fall back to synthetic tap
             if tap(at: point) {
-                showFingerprint(at: point)
+                fingerprints.showFingerprint(at: point)
                 return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
-
             return .failure(.syntheticTap, message: "Touch tap failed")
         }
     }
 
     func executeLongPress(_ target: LongPressTarget) async -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
         case .failure(let result):
             return result
         case .success(let point):
             let success = await longPress(at: point, duration: clampDuration(target.duration))
-            if success { showFingerprint(at: point) }
+            if success { fingerprints.showFingerprint(at: point) }
             return InteractionResult(success: success, method: .syntheticLongPress, message: nil, value: nil)
         }
     }
 
     func executeSwipe(_ target: SwipeTarget) async -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result):
             return result
         case .success(let startPoint):
@@ -169,7 +182,10 @@ extension TheSafecracker {
     }
 
     func executeDrag(_ target: DragTarget) async -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result):
             return result
         case .success(let startPoint):
@@ -180,7 +196,10 @@ extension TheSafecracker {
     }
 
     func executePinch(_ target: PinchTarget) async -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result):
             return result
         case .success(let center):
@@ -192,7 +211,10 @@ extension TheSafecracker {
     }
 
     func executeRotate(_ target: RotateTarget) async -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result):
             return result
         case .success(let center):
@@ -204,13 +226,16 @@ extension TheSafecracker {
     }
 
     func executeTwoFingerTap(_ target: TwoFingerTapTarget) -> InteractionResult {
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        guard let bagman else {
+            return .failure(.elementNotFound, message: "No element store available")
+        }
+        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result):
             return result
         case .success(let center):
             let spread = target.spread ?? 40.0
             let success = twoFingerTap(at: center, spread: CGFloat(spread))
-            if success { showFingerprint(at: center) }
+            if success { fingerprints.showFingerprint(at: center) }
             return InteractionResult(success: success, method: .syntheticTwoFingerTap, message: nil, value: nil)
         }
     }
@@ -251,8 +276,18 @@ extension TheSafecracker {
 
     // MARK: - Duration Helpers
 
+    /// Default gesture duration when none is specified (0.5s).
+    private static let defaultGestureDuration: Double = 0.5
+
+    /// Minimum allowed gesture duration (10ms).
+    private static let minGestureDuration: Double = 0.01
+
+    /// Maximum allowed gesture duration (60s). Prevents runaway gestures
+    /// from holding the main thread for unreasonable periods.
+    private static let maxGestureDuration: Double = 60.0
+
     func clampDuration(_ value: Double?) -> Double {
-        min(max(value ?? 0.5, 0.01), 60.0)
+        min(max(value ?? Self.defaultGestureDuration, Self.minGestureDuration), Self.maxGestureDuration)
     }
 
     func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
@@ -268,7 +303,7 @@ extension TheSafecracker {
             }
             result = totalLength / velocity
         } else {
-            result = 0.5
+            result = Self.defaultGestureDuration
         }
         return clampDuration(result)
     }

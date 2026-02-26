@@ -8,23 +8,24 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let endpoint: NWEndpoint
     /// Simulator UDID from Bonjour TXT record (nil on physical devices)
     public let simulatorUDID: String?
-    /// Vendor identifier from Bonjour TXT record
-    public let vendorIdentifier: String?
     /// Token hash from Bonjour TXT record (for pre-connection filtering)
     public let tokenHash: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     public let instanceId: String?
+    /// Whether the device has an active session (from Bonjour TXT record)
+    public let sessionActive: Bool?
 
     public init(id: String, name: String, endpoint: NWEndpoint,
-                simulatorUDID: String? = nil, vendorIdentifier: String? = nil,
-                tokenHash: String? = nil, instanceId: String? = nil) {
+                simulatorUDID: String? = nil,
+                tokenHash: String? = nil, instanceId: String? = nil,
+                sessionActive: Bool? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
-        self.vendorIdentifier = vendorIdentifier
         self.tokenHash = tokenHash
         self.instanceId = instanceId
+        self.sessionActive = sessionActive
     }
 
     /// Convenience init for direct host:port connections (no Bonjour).
@@ -83,7 +84,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     }
 
     /// Check if this device matches a filter string.
-    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/instanceId/simulatorUDID/vendorIdentifier.
+    /// Matches case-insensitively: contains on name/appName/deviceName, prefix on shortId/instanceId/simulatorUDID.
     public func matches(filter: String) -> Bool {
         let low = filter.lowercased()
         return name.lowercased().contains(low) ||
@@ -91,8 +92,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             deviceName.lowercased().contains(low) ||
             (shortId?.lowercased().hasPrefix(low) ?? false) ||
             (instanceId?.lowercased().hasPrefix(low) ?? false) ||
-            (simulatorUDID?.lowercased().hasPrefix(low) ?? false) ||
-            (vendorIdentifier?.lowercased().hasPrefix(low) ?? false)
+            (simulatorUDID?.lowercased().hasPrefix(low) ?? false)
     }
 }
 

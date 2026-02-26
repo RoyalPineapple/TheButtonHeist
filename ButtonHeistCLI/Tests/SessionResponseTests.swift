@@ -403,8 +403,7 @@ final class SessionResponseTests: XCTestCase {
                 timestamp: Double(i),
                 command: .activate(ActionTarget(order: i)),
                 result: ActionResult(success: true, method: .activate),
-                interfaceBefore: Interface(timestamp: start, elements: []),
-                interfaceAfter: Interface(timestamp: start, elements: [])
+                interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0)
             )
         }
         return RecordingPayload(
@@ -636,7 +635,6 @@ enum SessionResponse {
             ]
             if let sid = d.shortId { info["shortId"] = sid }
             if let udid = d.simulatorUDID { info["simulatorUDID"] = udid }
-            if let vid = d.vendorIdentifier { info["vendorIdentifier"] = vid }
             return info
         }
         return ["status": "ok", "devices": infos]

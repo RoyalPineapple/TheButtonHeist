@@ -1,0 +1,116 @@
+# ButtonHeist Crew Dossiers - Overview
+
+## The Heist Metaphor
+
+ButtonHeist is a remote iOS UI automation system structured as a heist crew. An iOS framework (InsideJob) embeds inside a target app as a TCP server, while macOS tooling discovers, connects, and sends commands to interact with the app's UI programmatically.
+
+## Crew Roster
+
+### Inside Team (iOS - runs in-process)
+| Crew Member | Alias | Primary Role |
+|-------------|-------|-------------|
+| [InsideJob](01-INSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling |
+| [TheMuscle](02-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
+| [TheSafecracker](03-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
+| [Stakeout](04-STAKEOUT.md) | The Lookout | Screen recording, video encoding |
+| [Fingerprints](05-FINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay compositing |
+| [ThePlant](06-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
+
+### Outside Team (macOS - CLI/MCP/Client)
+| Crew Member | Alias | Primary Role |
+|-------------|-------|-------------|
+| [TheScore](07-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
+| [Wheelman](08-WHEELMAN.md) | The Getaway Driver | TCP networking, Bonjour discovery, USB tunneling |
+| [TheMastermind](09-THECLIENT.md) | The Outside Coordinator | Observable macOS client API (wraps TheWheelman) |
+| [TheFence](10-THEMASTERMIND.md) | The Boss | Centralized command dispatch for CLI/MCP |
+| [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
+| [ButtonHeistMCP](12-MCP.md) | The MCP Server | AI agent tool interface |
+
+## Module Dependency Graph
+
+```mermaid
+graph TD
+    TheScore["TheScore - (Shared Protocol)"]
+    Wheelman["Wheelman - (Networking)"]
+    InsideJob["InsideJob - (iOS Server)"]
+    ThePlant["ThePlant - (Auto-Start)"]
+    ButtonHeist["ButtonHeist - (macOS Client Framework)"]
+    CLI["ButtonHeistCLI - (CLI)"]
+    MCP["ButtonHeistMCP - (MCP Server)"]
+    TestApp["AccessibilityTestApp"]
+
+    TheScore --> Wheelman
+    TheScore --> InsideJob
+    Wheelman --> InsideJob
+    Wheelman --> ButtonHeist
+    TheScore --> ButtonHeist
+    ButtonHeist --> CLI
+    ButtonHeist --> MCP
+    InsideJob --> ThePlant
+    InsideJob --> TestApp
+    ThePlant --> TestApp
+end
+```
+
+## End-to-End Data Flow
+
+```mermaid
+sequenceDiagram
+    participant CLI as CLI / MCP
+    participant TF as TheFence
+    participant TM as TheMastermind
+    participant TW as TheWheelman
+    participant DC as DeviceConnection
+    participant SS as SimpleSocketServer
+    participant IJ as InsideJob
+    participant TM2 as TheMuscle
+    participant TS as TheSafecracker
+
+    CLI->>TF: execute({"command":"activate","identifier":"btn"})
+    TF->>TW: connectWithDiscovery()
+    TW->>DC: connect(to: device)
+    DC->>SS: TCP connect
+    SS->>TM2: onClientConnected
+    TM2-->>DC: authRequired
+    DC->>SS: authenticate(token)
+    TM2-->>DC: info(ServerInfo)
+    TM->>DC: send(.activate(target))
+    DC->>SS: JSON + newline
+    SS->>IJ: handleClientMessage
+    IJ->>IJ: bagman.refreshAccessibilityData()
+    IJ->>IJ: bagman.snapshotElements() (before)
+    IJ->>TS: executeActivation(target)
+    TS->>TS: resolve element, activate/tap
+    TS-->>IJ: InteractionResult
+    IJ->>IJ: computeDelta(before, after)
+    IJ-->>DC: actionResult(delta)
+    DC-->>TM: onActionResult
+    TM-->>TF: .action(result)
+    TF-->>CLI: response JSON
+```
+
+## Recent Changes (from main)
+
+**Activate-first surface refactor** — Primary interaction pattern shifted to activation-first:
+- **MCP**: Single `run` tool replaced with 11 purpose-built tools (`activate` as primary, `gesture` and `accessibility_action` grouped)
+- **CLI**: New top-level `buttonheist activate` command; `WatchCommand` removed
+- **TheFence**: New command dispatcher (renamed from TheMastermind), owns `FenceError`, `FenceResponse`, and all command dispatch
+- **TheMastermind**: Now a thin `@Observable` wrapper over TheWheelman (absorbed former TheClient)
+- **TheWheelman**: New session manager owning discovery, connection, keepalive, and auto-reconnect
+- **TheBagman**: New accessibility data owner extracted from InsideJob (element cache, hierarchy parsing, animation detection)
+- **TheFingerprints**: Renamed from Fingerprints, now excludes itself from accessibility hierarchy
+- **InteractionEvent**: Uses `InterfaceDelta` instead of full before/after snapshots
+- **Session idle timeout**: CLI and MCP auto-disconnect after configurable inactivity period
+
+## Cross-Cutting Review Concerns
+
+These issues span multiple crew members and warrant holistic review:
+
+1. ~~**Documentation drift**~~ - Fixed: configure() port param removed, isRunning visibility corrected, INSIDEJOB_BIND_ALL removed, token persistence clarified, InteractionEvent updated to use interfaceDelta
+2. ~~**Duplicate error types**~~ - Fixed: `CLIError` removed, `FenceError` is the single error type
+3. **Inconsistent timeouts** - 15s for actions, 30s for type_text/screenshots, 10s for interface requests
+4. ~~**`vendorid` TXT key**~~ - Fixed: removed from DiscoveredDevice and DeviceDiscovery
+5. **Token logged in plaintext** - InsideJob.swift logs full auth token at info level
+6. **No InsideJob unit tests** - TheMuscleTests added; TheBagman and InsideJob server-side logic still untested
+7. **USBDeviceDiscovery blocks main thread** - Subprocess calls in @MainActor context
+8. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses InterfaceDelta instead of full snapshots

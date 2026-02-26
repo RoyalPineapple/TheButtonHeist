@@ -18,23 +18,23 @@ extension InsideJob {
     }
 
     private func broadcastHierarchyUpdate() {
-        guard !subscribedClients.isEmpty else { return }
-        guard let hierarchyTree = refreshAccessibilityData() else { return }
+        guard muscle.hasSubscribers else { return }
+        guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
-        let elements = snapshotElements()
-        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+        let elements = bagman.snapshotElements()
+        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
         let message = ServerMessage.interface(payload)
 
         // Update hash for polling comparison
-        lastHierarchyHash = elements.hashValue
+        bagman.lastHierarchyHash = elements.hashValue
 
         if let data = try? JSONEncoder().encode(message) {
             broadcastToSubscribed(data)
         }
 
-        insideJobLogger.debug("Broadcast hierarchy update to \(self.subscribedClients.count) subscriber(s)")
+        insideJobLogger.debug("Broadcast hierarchy update to \(self.muscle.subscribedClients.count) subscriber(s)")
     }
 
     // MARK: - Polling
@@ -52,18 +52,18 @@ extension InsideJob {
     }
 
     private func checkForChanges() {
-        guard !subscribedClients.isEmpty else { return }
-        guard let hierarchyTree = refreshAccessibilityData() else { return }
+        guard muscle.hasSubscribers else { return }
+        guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
-        let elements = snapshotElements()
-        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+        let elements = bagman.snapshotElements()
+        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
         let currentHash = elements.hashValue
 
         // Only broadcast if hierarchy changed
-        if currentHash != lastHierarchyHash {
-            lastHierarchyHash = currentHash
+        if currentHash != bagman.lastHierarchyHash {
+            bagman.lastHierarchyHash = currentHash
 
             // Broadcast hierarchy with tree
             let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
@@ -77,7 +77,7 @@ extension InsideJob {
             // Notify stakeout of screen change (for inactivity timeout)
             stakeout?.noteScreenChange()
 
-            insideJobLogger.debug("Polling detected change, broadcast to \(self.subscribedClients.count) subscriber(s)")
+            insideJobLogger.debug("Polling detected change, broadcast to \(self.muscle.subscribedClients.count) subscriber(s)")
         }
     }
 
@@ -85,17 +85,17 @@ extension InsideJob {
 
     func sendInterface(respond: @escaping (Data) -> Void) async {
         // If animating, wait briefly for fast animations to end.
-        if hasActiveAnimations() {
-            _ = await waitForAnimationsToSettle(timeout: 0.5)
+        if bagman.hasActiveAnimations() {
+            _ = await bagman.waitForAnimationsToSettle(timeout: 0.5)
         }
 
-        guard let hierarchyTree = refreshAccessibilityData() else {
+        guard let hierarchyTree = bagman.refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), respond: respond)
             return
         }
 
-        let elements = snapshotElements()
-        let tree = hierarchyTree.map { convertHierarchyNode($0) }
+        let elements = bagman.snapshotElements()
+        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
         sendMessage(.interface(payload), respond: respond)

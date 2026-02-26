@@ -1,3 +1,3 @@
 import ButtonHeist
 
-typealias SessionResponse = MastermindResponse
+typealias SessionResponse = FenceResponse

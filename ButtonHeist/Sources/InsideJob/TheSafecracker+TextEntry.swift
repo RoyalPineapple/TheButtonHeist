@@ -9,11 +9,11 @@ extension TheSafecracker {
     // MARK: - Text Entry
 
     func executeTypeText(_ target: TypeTextTarget) async -> InteractionResult {
-        let interKeyDelay: UInt64 = 30_000_000 // 30ms
+        let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
-            guard let element = findElement(for: elementTarget) else {
+            guard let element = bagman?.findElement(for: elementTarget) else {
                 return .failure(.elementNotFound, message: "Target element not found")
             }
 
@@ -21,7 +21,7 @@ extension TheSafecracker {
             if !tap(at: point) {
                 return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
             }
-            showFingerprint(at: point)
+            fingerprints.showFingerprint(at: point)
 
             var keyboardAppeared = false
             for _ in 0..<20 {
@@ -57,11 +57,11 @@ extension TheSafecracker {
 
         // Step 4: Refresh accessibility data and read back value
         try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-        elementStore?.refreshElements()
+        bagman?.refreshElements()
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let element = findElement(for: elementTarget) {
+            if let element = bagman?.findElement(for: elementTarget) {
                 fieldValue = element.value
             }
         }

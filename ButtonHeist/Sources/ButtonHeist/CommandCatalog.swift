@@ -1,4 +1,8 @@
-public enum MastermindCommandCatalog {
+/// Canonical version string shared by CLI, MCP, and any other clients.
+/// Update this constant when cutting a new release.
+public let buttonHeistVersion = "2.1.0"
+
+public enum CommandCatalog {
     public static let all: [String] = [
         "help",
         "status",

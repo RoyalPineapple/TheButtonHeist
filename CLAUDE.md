@@ -173,10 +173,10 @@ Before pushing any commit, verify the following:
 
 ## CLI/MCP Sync Contract
 
-- `buttonheist session` and `buttonheist-mcp run` are thin interfaces over `TheMastermind`.
-- The command source of truth is `ButtonHeist/Sources/ButtonHeist/MastermindCommandCatalog.swift`.
-- Any command add/remove/rename must update `MastermindCommandCatalog` in the same change.
-- Keep MCP `run` tool descriptions aligned with `MastermindCommandCatalog.all`; do not hardcode a separate command list.
+- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 11 purpose-built tools that each dispatch to `TheFence`.
+- The command source of truth is `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`.
+- Any command add/remove/rename must update `CommandCatalog` in the same change.
+- MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `CommandCatalog.all`.
 - For rapid MCP driving: prefer action `delta` responses and only call `get_interface` when context is stale.
 - When mastermind/session behavior changes, validate both builds in the same branch:
   - `cd ButtonHeistCLI && swift build -c release`
@@ -206,3 +206,10 @@ Slash commands for capturing recordings and demos from the connected iOS app. Al
 | `/demo [feature]` | Create a polished 3-act feature demo video |
 
 Recordings are saved to `demos/` with timestamped filenames. Default settings: `--fps 8 --scale 0.5 --inactivity-timeout 60`.
+
+## Dossier Maintenance
+
+Crew member dossiers live in `docs/dossiers/`. When a PR changes a crew member's responsibilities, adds/removes types, or changes architecture:
+- Update the relevant dossier file
+- Update `00-OVERVIEW.md` if module dependencies change
+- Keep diagrams current

@@ -195,12 +195,12 @@ final class RecordingPayloadTests: XCTestCase {
     // MARK: - InteractionEvent
 
     func testInteractionEventActivateRoundTrip() throws {
+        let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
         let event = InteractionEvent(
             timestamp: 1.5,
             command: .activate(ActionTarget(identifier: "loginButton")),
-            result: ActionResult(success: true, method: .activate),
-            interfaceBefore: Interface(timestamp: Date(), elements: []),
-            interfaceAfter: Interface(timestamp: Date(), elements: [])
+            result: ActionResult(success: true, method: .activate, interfaceDelta: delta),
+            interfaceDelta: delta
         )
 
         let data = try JSONEncoder().encode(event)
@@ -214,22 +214,21 @@ final class RecordingPayloadTests: XCTestCase {
         }
         XCTAssertTrue(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .activate)
+        XCTAssertEqual(decoded.interfaceDelta?.kind, .noChange)
+        XCTAssertEqual(decoded.interfaceDelta?.elementCount, 5)
     }
 
     func testInteractionEventTouchTapRoundTrip() throws {
-        let element = HeistElement(
-            order: 0, description: "Button", label: "OK", value: nil,
-            identifier: "okBtn", hint: nil, traits: ["button"],
-            frameX: 10, frameY: 20, frameWidth: 80, frameHeight: 44,
-            activationPointX: 50, activationPointY: 42,
-            respondsToUserInteraction: true, customContent: nil, actions: [.activate]
+        let delta = InterfaceDelta(
+            kind: .valuesChanged,
+            elementCount: 1,
+            valueChanges: [ValueChange(order: 0, identifier: "okBtn", oldValue: nil, newValue: "tapped")]
         )
         let event = InteractionEvent(
             timestamp: 3.2,
             command: .touchTap(TouchTapTarget(elementTarget: ActionTarget(identifier: "okBtn"))),
-            result: ActionResult(success: true, method: .syntheticTap),
-            interfaceBefore: Interface(timestamp: Date(), elements: [element]),
-            interfaceAfter: Interface(timestamp: Date(), elements: [element])
+            result: ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta),
+            interfaceDelta: delta
         )
 
         let data = try JSONEncoder().encode(event)
@@ -237,8 +236,26 @@ final class RecordingPayloadTests: XCTestCase {
 
         XCTAssertEqual(decoded.timestamp, 3.2)
         XCTAssertEqual(decoded.result.method, .syntheticTap)
-        XCTAssertEqual(decoded.interfaceBefore.elements.count, 1)
-        XCTAssertEqual(decoded.interfaceBefore.elements.first?.identifier, "okBtn")
+        XCTAssertNotNil(decoded.interfaceDelta)
+        XCTAssertEqual(decoded.interfaceDelta?.kind, .valuesChanged)
+        XCTAssertEqual(decoded.interfaceDelta?.valueChanges?.first?.identifier, "okBtn")
+    }
+
+    func testInteractionEventNilDelta() throws {
+        // Failed actions have no delta
+        let event = InteractionEvent(
+            timestamp: 2.0,
+            command: .activate(ActionTarget(identifier: "missing")),
+            result: ActionResult(success: false, method: .elementNotFound, message: "Element not found")
+        )
+
+        let data = try JSONEncoder().encode(event)
+        let decoded = try JSONDecoder().decode(InteractionEvent.self, from: data)
+
+        XCTAssertEqual(decoded.timestamp, 2.0)
+        XCTAssertFalse(decoded.result.success)
+        XCTAssertEqual(decoded.result.method, .elementNotFound)
+        XCTAssertNil(decoded.interfaceDelta)
     }
 
     func testRecordingPayloadWithInteractionLog() throws {
@@ -248,8 +265,7 @@ final class RecordingPayloadTests: XCTestCase {
             timestamp: 1.0,
             command: .activate(ActionTarget(order: 3)),
             result: ActionResult(success: true, method: .activate),
-            interfaceBefore: Interface(timestamp: start, elements: []),
-            interfaceAfter: Interface(timestamp: start, elements: [])
+            interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0)
         )
         let payload = RecordingPayload(
             videoData: "AAAAIGZ0eXBpc29t",

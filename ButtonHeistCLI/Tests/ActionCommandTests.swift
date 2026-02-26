@@ -1,6 +1,6 @@
 import XCTest
 import Foundation
- import ButtonHeist
+import ButtonHeist
 
 final class ActionCommandTests: XCTestCase {
 
@@ -498,7 +498,11 @@ final class ActionCommandTests: XCTestCase {
             .syntheticRotate,
             .syntheticTwoFingerTap,
             .syntheticDrawPath,
+            .typeText,
             .customAction,
+            .editAction,
+            .resignFirstResponder,
+            .waitForIdle,
             .elementNotFound,
             .elementDeallocated
         ]
@@ -509,5 +513,145 @@ final class ActionCommandTests: XCTestCase {
             let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
             XCTAssertEqual(decoded.method, method)
         }
+    }
+
+    // MARK: - TypeText Tests
+
+    func testTypeTextTargetEncoding() throws {
+        let target = TypeTextTarget(text: "hello", elementTarget: ActionTarget(identifier: "textField"))
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
+
+        XCTAssertEqual(decoded.text, "hello")
+        XCTAssertNil(decoded.deleteCount)
+        XCTAssertEqual(decoded.elementTarget?.identifier, "textField")
+    }
+
+    func testTypeTextTargetWithDeleteCountEncoding() throws {
+        let target = TypeTextTarget(text: "world", deleteCount: 5, elementTarget: ActionTarget(identifier: "input"))
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
+
+        XCTAssertEqual(decoded.text, "world")
+        XCTAssertEqual(decoded.deleteCount, 5)
+        XCTAssertEqual(decoded.elementTarget?.identifier, "input")
+    }
+
+    func testClientMessageTypeTextEncoding() throws {
+        let message = ClientMessage.typeText(TypeTextTarget(text: "abc", elementTarget: ActionTarget(identifier: "field")))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .typeText(let target) = decoded {
+            XCTAssertEqual(target.text, "abc")
+            XCTAssertEqual(target.elementTarget?.identifier, "field")
+        } else {
+            XCTFail("Expected typeText message")
+        }
+    }
+
+    func testTypeTextActionResult() throws {
+        let result = ActionResult(success: true, method: .typeText, value: "hello world")
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertTrue(decoded.success)
+        XCTAssertEqual(decoded.method, .typeText)
+        XCTAssertEqual(decoded.value, "hello world")
+    }
+
+    // MARK: - EditAction Tests
+
+    func testEditActionTargetEncoding() throws {
+        let target = EditActionTarget(action: "copy")
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(EditActionTarget.self, from: data)
+
+        XCTAssertEqual(decoded.action, "copy")
+    }
+
+    func testClientMessageEditActionEncoding() throws {
+        let message = ClientMessage.editAction(EditActionTarget(action: "paste"))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .editAction(let target) = decoded {
+            XCTAssertEqual(target.action, "paste")
+        } else {
+            XCTFail("Expected editAction message")
+        }
+    }
+
+    func testEditActionResult() throws {
+        let result = ActionResult(success: true, method: .editAction, message: "Pasted")
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertTrue(decoded.success)
+        XCTAssertEqual(decoded.method, .editAction)
+        XCTAssertEqual(decoded.message, "Pasted")
+    }
+
+    // MARK: - ResignFirstResponder Tests
+
+    func testClientMessageResignFirstResponderEncoding() throws {
+        let message = ClientMessage.resignFirstResponder
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .resignFirstResponder = decoded {
+            // Success
+        } else {
+            XCTFail("Expected resignFirstResponder message")
+        }
+    }
+
+    func testResignFirstResponderActionResult() throws {
+        let result = ActionResult(success: true, method: .resignFirstResponder)
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertTrue(decoded.success)
+        XCTAssertEqual(decoded.method, .resignFirstResponder)
+    }
+
+    // MARK: - WaitForIdle Tests
+
+    func testWaitForIdleTargetEncoding() throws {
+        let target = WaitForIdleTarget(timeout: 10.0)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitForIdleTarget.self, from: data)
+
+        XCTAssertEqual(decoded.timeout, 10.0)
+    }
+
+    func testWaitForIdleTargetDefaultTimeout() throws {
+        let target = WaitForIdleTarget()
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(WaitForIdleTarget.self, from: data)
+
+        XCTAssertNil(decoded.timeout)
+    }
+
+    func testClientMessageWaitForIdleEncoding() throws {
+        let message = ClientMessage.waitForIdle(WaitForIdleTarget(timeout: 5.0))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .waitForIdle(let target) = decoded {
+            XCTAssertEqual(target.timeout, 5.0)
+        } else {
+            XCTFail("Expected waitForIdle message")
+        }
+    }
+
+    func testWaitForIdleActionResult() throws {
+        let result = ActionResult(success: true, method: .waitForIdle, message: "UI is idle")
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+
+        XCTAssertTrue(decoded.success)
+        XCTAssertEqual(decoded.method, .waitForIdle)
+        XCTAssertEqual(decoded.message, "UI is idle")
     }
 }
