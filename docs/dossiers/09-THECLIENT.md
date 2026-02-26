@@ -1,28 +1,29 @@
-# TheClient - The Outside Coordinator
+# TheMastermind - The Outside Coordinator
 
-> **File:** `ButtonHeist/Sources/ButtonHeist/TheClient.swift`
+> **File:** `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
 > **Platform:** macOS 14.0+
-> **Role:** High-level observable macOS client API for discovery and device control
+> **Role:** Observable macOS client API wrapping TheWheelman for SwiftUI and callback consumers
 
 ## Responsibilities
 
-TheClient is the macOS-side counterpart to InsideJob:
+TheMastermind is the macOS-side counterpart to InsideJob:
 
-1. **Device discovery** via `DeviceDiscovery` (wraps NWBrowser)
-2. **Connection management** with auto-subscribe and keepalive
-3. **Observable state** for SwiftUI integration (`@Observable`)
-4. **Async wait methods** for action results, screenshots, recordings
-5. **Display name disambiguation** when multiple devices share names
-6. **Callback API** for non-SwiftUI consumers (CLI, MCP)
+1. **Observable state** for SwiftUI integration (`@Observable`) - mirrors TheWheelman's state
+2. **Callback API** for non-SwiftUI consumers (CLI, MCP) via typed closures
+3. **Configuration forwarding** - proxies `token`, `forceSession`, `driverId`, `autoSubscribe` to TheWheelman
+4. **Async wait methods** for action results, screenshots, interface, recordings
+5. **Display name disambiguation** when multiple devices share names (delegated to TheWheelman)
+6. **Discovery and connection** delegation to TheWheelman
+
+> **Note:** TheMastermind replaced the former `TheClient` class. It is a thin `@Observable` wrapper
+> that delegates all discovery, connection, keepalive, and reconnect logic to `TheWheelman`.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
-    subgraph TheClient["TheClient (@Observable, @MainActor)"]
-        Discovery["DeviceDiscovery - Bonjour browsing"]
-        Connection["DeviceConnection - TCP messaging"]
-        Keepalive["Keepalive Task - ping every 3s"]
+    subgraph TheMastermind["TheMastermind (@Observable, @MainActor)"]
+        Wheelman["TheWheelman - discovery, connection, keepalive"]
 
         subgraph ObservableState["Observable State"]
             Devices["discoveredDevices: [DiscoveredDevice]"]
@@ -46,11 +47,8 @@ graph TD
         end
     end
 
-    Discovery --> Devices
-    Connection --> Connected
-    Connection --> ConnState
-    Connection --> CurrentIF
-    Connection --> CurrentScreen
+    Wheelman --> ObservableState
+    Wheelman --> Callbacks
 ```
 
 ## Connection Lifecycle
@@ -78,26 +76,6 @@ stateDiagram-v2
     }
 ```
 
-## Auto-Subscribe Behavior
-
-```mermaid
-sequenceDiagram
-    participant TC as TheClient
-    participant DC as DeviceConnection
-
-    TC->>DC: connect(to: device)
-    DC-->>TC: onConnected
-
-    alt autoSubscribe = true (default)
-        TC->>DC: send(.subscribe)
-        TC->>DC: send(.requestInterface)
-        TC->>DC: send(.requestScreen)
-        TC->>TC: startKeepalive() (ping every 3s)
-    else autoSubscribe = false (session mode)
-        Note over TC: No auto-messages sent
-    end
-```
-
 ## Wait Method Pattern
 
 ```mermaid
@@ -105,7 +83,7 @@ flowchart TD
     Call["waitForActionResult(timeout: 15)"]
     Call --> Setup["withCheckedThrowingContinuation"]
     Setup --> Hook["Set onActionResult callback"]
-    Setup --> Timer["Start timeout Task"]
+    Setup --> Timer["Start timeout Task (@MainActor)"]
 
     Hook --> Result{"Result received?"}
     Result -->|yes| Check{"didResume?"}
@@ -118,53 +96,20 @@ flowchart TD
     Check2 -->|yes| Skip2["Skip (already resumed)"]
 ```
 
-## Items Flagged for Review
+## Delegation Pattern
 
-### HIGH PRIORITY
+TheMastermind delegates all core operations to TheWheelman:
 
-**`didResume` boolean potentially accessed off MainActor** (`TheClient.swift:227-246`)
-```swift
-var didResume = false  // local variable
-// Callback (MainActor):
-onActionResult = { result in
-    guard !didResume else { return }
-    didResume = true
-    continuation.resume(returning: result)
-}
-// Timeout Task (no explicit actor annotation):
-Task {
-    try? await Task.sleep(nanoseconds: ...)
-    guard !didResume else { return }
-    didResume = true
-    continuation.resume(throwing: ActionError.timeout)
-}
-```
-- The timeout `Task` is created without `@MainActor` annotation
-- It runs in the cooperative pool and could theoretically check/set `didResume` concurrently with the callback
-- Same pattern repeats for `waitForScreen` (line 251) and `waitForRecording` (line 273)
-- Risk: double-resume of continuation (crash)
+| TheMastermind method | Delegates to |
+|---------------------|-------------|
+| `startDiscovery()` | `wheelman.startDiscovery()` |
+| `stopDiscovery()` | `wheelman.stopDiscovery()` |
+| `connect(to:)` | `wheelman.connect(to:)` |
+| `disconnect()` | `wheelman.disconnect()` |
+| `send(_:)` | `wheelman.send(_:)` |
+| `requestInterface()` | `wheelman.send(.requestInterface)` |
+| `displayName(for:)` | `wheelman.displayName(for:)` |
+| `token` / `forceSession` / `driverId` / `autoSubscribe` | `wheelman.token` / etc. |
 
-### MEDIUM PRIORITY
-
-**`forceDisconnect()` fires timeout error** (`TheClient.swift`)
-- Called when an action timeout suggests the connection is dead
-- Fires `onDisconnected?(ActionError.timeout)` which may confuse consumers expecting a real disconnect reason
-- The name `forceDisconnect` doesn't indicate it synthesizes a timeout error
-
-**Display name deduplication logic** (`TheClient.swift:348`)
-- Complex string disambiguation with 3 tiers: app name only → app name (device) → app name (device) [shortId]
-- This runs on every call to `displayName(for:)` by scanning `discoveredDevices`
-- Performance is fine for small device counts but not cached
-
-**Keepalive interval hardcoded at 3 seconds** (`TheClient.swift:327`)
-- `try? await Task.sleep(nanoseconds: 3_000_000_000)`
-- Not configurable
-- Documentation (WIRE-PROTOCOL.md) recommends 30-second intervals
-- Mismatch: 3s actual vs 30s documented
-
-### LOW PRIORITY
-
-**`autoSubscribe` default behavior**
-- When `autoSubscribe = true` (default), connecting immediately sends 3 messages
-- TheMastermind sets `autoSubscribe = false` and manages subscription manually
-- The dual mode works but adds implicit behavior differences based on the flag
+The `wireUpWheelman()` method (called from `init`) connects all of TheWheelman's callbacks
+to update TheMastermind's observable state and forward to TheMastermind's own callbacks.

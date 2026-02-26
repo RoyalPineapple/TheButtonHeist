@@ -46,6 +46,7 @@ final class TheStakeout {
     /// Maximum number of interaction events to record. Beyond this, events are silently dropped
     /// and the log is capped to prevent unbounded memory growth in long recordings.
     private static let maxInteractionCount = 500
+    private var didLogCapWarning = false
 
     // Frame provider closure — set by InsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
@@ -185,7 +186,8 @@ final class TheStakeout {
     func recordInteraction(event: InteractionEvent) {
         guard state == .recording else { return }
         guard interactionLog.count < Self.maxInteractionCount else {
-            if interactionLog.count == Self.maxInteractionCount {
+            if !didLogCapWarning {
+                didLogCapWarning = true
                 logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
             }
             return
@@ -369,6 +371,7 @@ final class TheStakeout {
         pixelBufferAdaptor = nil
 
         interactionLog = []
+        didLogCapWarning = false
 
         // Clean up temp file
         if let url = outputURL {

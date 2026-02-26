@@ -56,6 +56,7 @@ public final class TheWheelman {
     private var discovery: DeviceDiscovery?
     private var connection: DeviceConnection?
     private var keepaliveTask: Task<Void, Never>?
+    private var autoReconnectInstalled = false
 
     // MARK: - Init
 
@@ -304,6 +305,8 @@ public final class TheWheelman {
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
     /// Makes 60 attempts at 1s intervals before giving up.
     public func setupAutoReconnect(filter: String?) {
+        guard !autoReconnectInstalled else { return }
+        autoReconnectInstalled = true
         let savedOnDisconnected = onDisconnected
         onDisconnected = { [weak self] error in
             savedOnDisconnected?(error)
