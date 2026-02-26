@@ -17,13 +17,13 @@ extension InsideJob {
         guard !windows.isEmpty else { return nil }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var newElementObjects: [Int: WeakObject] = [:]
+        var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
         for (window, rootView) in windows {
             let baseIndex = allElements.count
-            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { _, index, object in
-                newElementObjects[baseIndex + index] = WeakObject(object: object)
+            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { element, _, object in
+                newElementObjects[element] = WeakObject(object: object)
             }
             let windowElements = windowTree.flattenToElements()
 
