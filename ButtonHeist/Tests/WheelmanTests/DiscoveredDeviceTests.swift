@@ -123,19 +123,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(device.simulatorUDID, "DEADBEEF-1234-5678-9ABC-DEF012345678")
-        XCTAssertNil(device.vendorIdentifier)
-    }
-
-    func testVendorIdentifier() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
-            endpoint: endpoint,
-            vendorIdentifier: "CAFE0000-BABE-FACE-DEAD-BEEF12345678"
-        )
-
-        XCTAssertNil(device.simulatorUDID)
-        XCTAssertEqual(device.vendorIdentifier, "CAFE0000-BABE-FACE-DEAD-BEEF12345678")
     }
 
     func testDefaultIdentifiersNil() {
@@ -143,6 +130,5 @@ final class DiscoveredDeviceTests: XCTestCase {
         let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
 
         XCTAssertNil(device.simulatorUDID)
-        XCTAssertNil(device.vendorIdentifier)
     }
 }

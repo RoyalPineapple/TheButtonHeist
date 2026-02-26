@@ -69,6 +69,7 @@
 		FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */; };
 		FCFBD502755AAEA15B44025F /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */; };
 		A1B2C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2A1C3D4E5F6A7B8C9D0E1F2 /* TheMuscleTests.swift */; };
+		C3D4E5F6A7B8C9D0E1F2A3B4 /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* ServerTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -295,6 +296,7 @@
 		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
 		DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C9D0E1F2A3B4C5 /* ServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransport.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		EC05492CB1FE06597FF9D26B /* TheSafecracker+Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Elements.swift"; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -501,6 +503,7 @@
 				9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */,
 				40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */,
 				D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */,
+				D4E5F6A7B8C9D0E1F2A3B4C5 /* ServerTransport.swift */,
 				E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */,
 				F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */,
 			);
@@ -993,6 +996,7 @@
 				E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */,
 				0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */,
 				4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */,
+				C3D4E5F6A7B8C9D0E1F2A3B4 /* ServerTransport.swift in Sources */,
 				F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */,
 				7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */,
 			);

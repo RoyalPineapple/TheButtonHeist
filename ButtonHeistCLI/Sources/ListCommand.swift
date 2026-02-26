@@ -46,13 +46,11 @@ struct ListCommand: AsyncParsableCommand {
             let deviceName: String
             let shortId: String?
             let simulatorUDID: String?
-            let vendorIdentifier: String?
         }
         let infos = devices.map {
             DeviceInfo(name: $0.name, appName: $0.appName,
                        deviceName: $0.deviceName, shortId: $0.shortId,
-                       simulatorUDID: $0.simulatorUDID,
-                       vendorIdentifier: $0.vendorIdentifier)
+                       simulatorUDID: $0.simulatorUDID)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -71,9 +69,6 @@ struct ListCommand: AsyncParsableCommand {
             writeOutput("  [\(index)] \(id)  \(app)  (\(dev))")
             if let udid = device.simulatorUDID {
                 writeOutput("       Simulator: \(udid)")
-            }
-            if let vendor = device.vendorIdentifier {
-                writeOutput("       Vendor: \(vendor)")
             }
         }
         writeOutput("")

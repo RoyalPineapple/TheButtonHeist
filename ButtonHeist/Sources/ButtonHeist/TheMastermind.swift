@@ -132,7 +132,6 @@ public enum MastermindResponse {
                 ]
                 if let shortId = device.shortId { payload["shortId"] = shortId }
                 if let simulatorUDID = device.simulatorUDID { payload["simulatorUDID"] = simulatorUDID }
-                if let vendorIdentifier = device.vendorIdentifier { payload["vendorIdentifier"] = vendorIdentifier }
                 return payload
             }
             return ["status": "ok", "devices": info]

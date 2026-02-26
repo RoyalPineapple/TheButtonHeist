@@ -6,48 +6,48 @@ Rename. Rewrite SimpleSocketServer with Swift 6 strict concurrency. Fix USB disc
 
 ## Phase 1: Rename to TheWheelman
 
-- [ ] **Rename module references** throughout codebase and documentation
-- [ ] **Build passes** after phase
+- [x] **Rename module references** throughout codebase and documentation
+- [x] **Build passes** after phase
 
 ## Phase 2: Rewrite SimpleSocketServer with Swift 6 Concurrency
 
 **Goal:** Replace `@unchecked Sendable` + `NSLock` with proper Swift concurrency primitives.
 
-- [ ] **Convert `SimpleSocketServer` to `actor`** — remove manual locking
-- [ ] **Actor-isolate all mutable state** (`connections`, `authenticatedClients`, `messageTimes`)
-- [ ] **Use `AsyncStream` or structured concurrency** for connection handling
-- [ ] **Fix listener semaphore timeout** → `withCheckedThrowingContinuation`
-- [ ] **Fix rate limiting** → actor-isolated state
-- [ ] **No `@unchecked Sendable`** anywhere in Wheelman
-- [ ] **Build passes** after phase
+- [x] **Convert `SimpleSocketServer` to `actor`** — remove manual locking
+- [x] **Actor-isolate all mutable state** (`connections`, `authenticatedClients`, `messageTimes`)
+- [x] **Use `AsyncStream` or structured concurrency** for connection handling
+- [x] **Fix listener semaphore timeout** → `withCheckedThrowingContinuation`
+- [x] **Fix rate limiting** → actor-isolated state
+- [x] **No `@unchecked Sendable`** anywhere in Wheelman
+- [x] **Build passes** after phase
 
 ### Files affected:
 - `SimpleSocketServer.swift` — full rewrite as actor
 
 ## Phase 3: Fix USB Discovery
 
-- [ ] **Move subprocess execution to background context** — no main thread blocking
-- [ ] **Consider making `USBDeviceDiscovery` an actor**
+- [x] **Move subprocess execution to background context** — no main thread blocking
+- [x] **Consider making `USBDeviceDiscovery` an actor**
 - [ ] **Check GitHub issues for USB reliability** and address
-- [ ] **Build passes** after phase
+- [x] **Build passes** after phase
 
 ### Files affected:
 - `USBDeviceDiscovery.swift`
 
 ## Phase 4: Remove `vendorid` Ghost
 
-- [ ] **Check if `vendorIdentifier` is used anywhere downstream**
-- [ ] **Remove `vendorid` read from `DeviceDiscovery.swift:64,68`** (if unused)
-- [ ] **Remove `vendorIdentifier` from `DiscoveredDevice`** (if unused)
-- [ ] **Build passes** after phase
+- [x] **Check if `vendorIdentifier` is used anywhere downstream**
+- [x] **Remove `vendorid` read from `DeviceDiscovery.swift:64,68`** (if unused)
+- [x] **Remove `vendorIdentifier` from `DiscoveredDevice`** (if unused)
+- [x] **Build passes** after phase
 
 ## Phase 5: Absorb Server-Side Networking from InsideJob
 
-- [ ] **Create `ServerTransport` type** (or integrate into actor-based `SimpleSocketServer`)
-- [ ] **Move Bonjour `NetService` setup** from InsideJob
-- [ ] **Move port binding and advertisement** from InsideJob
-- [ ] **Provide message callbacks** to InsideJob
-- [ ] **Build passes** after phase
+- [x] **Create `ServerTransport` type** (or integrate into actor-based `SimpleSocketServer`)
+- [x] **Move Bonjour `NetService` setup** from InsideJob
+- [x] **Move port binding and advertisement** from InsideJob
+- [x] **Provide message callbacks** to InsideJob
+- [x] **Build passes** after phase
 
 ### Files affected:
 - New or modified Wheelman types
@@ -71,10 +71,10 @@ Rename. Rewrite SimpleSocketServer with Swift 6 strict concurrency. Fix USB disc
 
 ## Verification
 
-- [ ] Module renamed to TheWheelman
-- [ ] `SimpleSocketServer` is an `actor`, no `@unchecked Sendable`, no `NSLock`
-- [ ] USB discovery does not block main thread
-- [ ] `vendorid` ghost resolved
+- [x] Module renamed to TheWheelman
+- [x] `SimpleSocketServer` is an `actor`, no `@unchecked Sendable`, no `NSLock`
+- [x] USB discovery does not block main thread
+- [x] `vendorid` ghost resolved
 - [ ] Bonjour TXT record includes session state
 - [ ] No `swiftlint:disable` in Wheelman files
 - [ ] Tests pass: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test`
