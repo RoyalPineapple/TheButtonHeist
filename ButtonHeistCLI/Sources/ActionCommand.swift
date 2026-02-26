@@ -6,14 +6,15 @@ import ButtonHeist
 struct ActionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "action",
-        abstract: "Perform an action on a UI element",
+        abstract: "Perform accessibility actions (increment, decrement, custom)",
         discussion: """
-            Send action commands to elements in the connected iOS app.
+            For activating elements (buttons, links, controls), use \
+            `buttonheist activate` instead — it's simpler and more discoverable.
 
-            Examples:
-              buttonheist action --identifier "myButton"
-              buttonheist action --index 5 --type increment
-              buttonheist action --identifier "item" --type custom --custom-action "Delete"
+            This command handles accessibility action types:
+              buttonheist action --type increment --identifier volumeSlider
+              buttonheist action --type decrement --identifier volumeSlider
+              buttonheist action --type custom --identifier myCell --custom-action "Delete"
             """
     )
 

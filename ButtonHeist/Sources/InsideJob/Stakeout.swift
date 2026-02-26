@@ -1,4 +1,3 @@
-// swiftlint:disable file_length
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
@@ -11,7 +10,7 @@ private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "r
 /// Screen recording engine. Captures frames using InsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
 @MainActor
-final class Stakeout {
+final class TheStakeout {
 
     enum State {
         case idle
@@ -42,13 +41,12 @@ final class Stakeout {
     private var lastActivityTime: Date = Date()
     private var inactivityCheckTask: Task<Void, Never>?
 
-    // Interaction overlay — composited into frames for a short window
-    private var activeInteractions: [(point: CGPoint, time: Date)] = []
-    private static let interactionOverlayDuration: TimeInterval = 0.5
-    private static let overlayDiameter: CGFloat = 40.0
-
     // Interaction recording — wire-level command/result log
     private(set) var interactionLog: [InteractionEvent] = []
+    /// Maximum number of interaction events to record. Beyond this, events are silently dropped
+    /// and the log is capped to prevent unbounded memory growth in long recordings.
+    private static let maxInteractionCount = 500
+    private var didLogCapWarning = false
 
     // Frame provider closure — set by InsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
@@ -60,7 +58,7 @@ final class Stakeout {
 
     func startRecording(config: RecordingConfig) throws {
         guard state == .idle else {
-            throw StakeoutError.alreadyRecording
+            throw TheStakeoutError.alreadyRecording
         }
 
         // Apply config with clamping
@@ -82,7 +80,8 @@ final class Stakeout {
         }
         let width = Int(nativeWidth * effectiveScale)
         let height = Int(nativeHeight * effectiveScale)
-        // AVAssetWriter requires even dimensions
+        // H.264 requires even pixel dimensions — the codec operates on 16x16 macroblocks,
+        // and AVAssetWriter will reject odd-dimensioned buffers. Round up to the next even number.
         let evenWidth = width % 2 == 0 ? width : width + 1
         let evenHeight = height % 2 == 0 ? height : height + 1
         screenBounds = CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight)
@@ -122,7 +121,7 @@ final class Stakeout {
 
         writer.add(input)
         guard writer.startWriting() else {
-            throw StakeoutError.writerSetupFailed(writer.error?.localizedDescription ?? "Unknown error")
+            throw TheStakeoutError.writerSetupFailed(writer.error?.localizedDescription ?? "Unknown error")
         }
         writer.startSession(atSourceTime: .zero)
 
@@ -169,26 +168,6 @@ final class Stakeout {
         lastActivityTime = Date()
     }
 
-    /// Record interaction points to overlay on captured frames.
-    /// The overlay persists for 0.5s so the regular capture timer picks it up.
-    func noteInteraction(at points: [CGPoint]) {
-        let now = Date()
-        activeInteractions = points.map { (point: $0, time: now) }
-        captureActionFrame()
-    }
-
-    /// Single-point convenience for taps and single-finger actions.
-    func noteInteraction(at point: CGPoint) {
-        noteInteraction(at: [point])
-    }
-
-    /// Update the interaction overlay positions without capturing a bonus frame.
-    /// Used during continuous gestures where the regular capture timer picks up the overlay.
-    func updateInteractionPositions(_ points: [CGPoint]) {
-        let now = Date()
-        activeInteractions = points.map { (point: $0, time: now) }
-    }
-
     /// Capture an extra frame outside the regular timer cadence.
     /// Used to ensure actions are represented in the recording.
     func captureActionFrame() {
@@ -203,8 +182,16 @@ final class Stakeout {
     }
 
     /// Append an interaction event to the recording log.
+    /// Silently drops events beyond `maxInteractionCount` to prevent unbounded growth.
     func recordInteraction(event: InteractionEvent) {
         guard state == .recording else { return }
+        guard interactionLog.count < Self.maxInteractionCount else {
+            if !didLogCapWarning {
+                didLogCapWarning = true
+                logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
+            }
+            return
+        }
         interactionLog.append(event)
     }
 
@@ -276,55 +263,24 @@ final class Stakeout {
 
         guard let cgImage = image.cgImage else { return nil }
 
-        // Draw the image scaled into the pixel buffer
+        // Draw the image scaled into the pixel buffer.
+        // Fingerprint indicators are rendered by TheFingerprints (on-screen UIView overlay)
+        // and captured naturally via drawHierarchy — no CGContext compositing needed.
         context.draw(cgImage, in: screenBounds)
-
-        // Composite fingerprint overlays for all active interactions
-        let now = Date()
-        for interaction in activeInteractions {
-            let elapsed = now.timeIntervalSince(interaction.time)
-            if elapsed < Self.interactionOverlayDuration {
-                drawFingerprint(in: context, at: interaction.point, elapsed: elapsed)
-            }
-        }
 
         return buffer
     }
 
-    /// Draw a fingerprint circle directly into the frame's CGContext.
-    /// Point is in UIKit coordinates (origin top-left), context is in CG coordinates (origin bottom-left).
-    private func drawFingerprint(in context: CGContext, at point: CGPoint, elapsed: TimeInterval) {
-        let screen = UIScreen.main
-        // Convert point coordinates to pixel buffer coordinates
-        let scaleX = screenBounds.width / screen.bounds.width
-        let scaleY = screenBounds.height / screen.bounds.height
-        let px = point.x * scaleX
-        // Flip Y: CG origin is bottom-left, UIKit origin is top-left
-        let py = screenBounds.height - (point.y * scaleY)
-        let radius = (Self.overlayDiameter / 2) * scaleX
-
-        // Fade out over the overlay duration
-        let progress = elapsed / Self.interactionOverlayDuration
-        let alpha = CGFloat(max(0, 1.0 - progress))
-
-        let circleRect = CGRect(x: px - radius, y: py - radius, width: radius * 2, height: radius * 2)
-
-        context.saveGState()
-
-        // Shadow
-        context.setShadow(offset: .zero, blur: 4 * scaleX, color: UIColor.black.withAlphaComponent(0.4 * alpha).cgColor)
-
-        // White border circle
-        context.setStrokeColor(UIColor.white.withAlphaComponent(0.9 * alpha).cgColor)
-        context.setLineWidth(2 * scaleX)
-        context.setFillColor(UIColor.white.withAlphaComponent(0.5 * alpha).cgColor)
-        context.addEllipse(in: circleRect)
-        context.drawPath(using: .fillStroke)
-
-        context.restoreGState()
-    }
-
     // MARK: - Inactivity Detection
+    //
+    // Inactivity is tracked via `lastActivityTime`, updated by:
+    //   - `noteActivity()` — called on each incoming client command
+    //   - `noteScreenChange()` — called when TheBagman detects a hierarchy hash change
+    //
+    // Note: screen hashing operates on the accessibility hierarchy, not pixels.
+    // Subtle pixel-only animations (e.g. spinner rotation) do NOT count as activity,
+    // so they won't prevent inactivity timeout. This is intentional — we only extend
+    // recording when meaningful UI content changes.
 
     private func startInactivityMonitor() {
         inactivityCheckTask = Task { @MainActor [weak self] in
@@ -398,7 +354,7 @@ final class Stakeout {
         }
     }
 
-    private func deliverError(_ error: StakeoutError) {
+    private func deliverError(_ error: TheStakeoutError) {
         logger.error("Recording error: \(error)")
         onRecordingComplete?(.failure(error))
         cleanup()
@@ -414,8 +370,8 @@ final class Stakeout {
         videoInput = nil
         pixelBufferAdaptor = nil
 
-        activeInteractions = []
         interactionLog = []
+        didLogCapWarning = false
 
         // Clean up temp file
         if let url = outputURL {
@@ -424,7 +380,7 @@ final class Stakeout {
         outputURL = nil
     }
 
-    enum StakeoutError: Error, LocalizedError {
+    enum TheStakeoutError: Error, LocalizedError {
         case alreadyRecording
         case writerSetupFailed(String)
         case finalizationFailed(String)

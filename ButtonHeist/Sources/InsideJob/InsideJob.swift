@@ -14,99 +14,88 @@ struct WeakObject {
     weak var object: NSObject?
 }
 
-/// Provides access to the parsed accessibility element cache.
-/// InsideJob owns the data; TheSafecracker reads it to resolve interaction targets
-/// and can trigger a refresh when it needs fresh data (e.g. after typing).
-@MainActor
-protocol ElementStore: AnyObject {
-    var cachedElements: [AccessibilityElement] { get }
-    var elementObjects: [AccessibilityElement: WeakObject] { get }
-    @discardableResult func refreshElements() -> Bool
-}
-
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor
-public final class InsideJob: ElementStore {
+public final class InsideJob {
 
     // MARK: - Singleton
 
-    /// Shared instance - use `configure(token:instanceId:)` before first access
-    public static var shared: InsideJob = InsideJob()
+    /// Shared instance - use `configure(token:instanceId:)` before first access.
+    /// Once configured, subsequent calls to `configure()` are no-ops.
+    nonisolated(unsafe) private static var _shared: InsideJob?
 
-    /// Configure the shared instance. Must be called before start().
+    /// The shared InsideJob singleton. Lazily created on first access.
+    public static var shared: InsideJob {
+        if let existing = _shared { return existing }
+        let instance = InsideJob()
+        _shared = instance
+        return instance
+    }
+
+    /// Configure the shared instance. Must be called before `start()`.
+    /// Second and subsequent calls are no-ops.
     public static func configure(token: String? = nil, instanceId: String? = nil) {
-        shared = InsideJob(token: token, instanceId: instanceId)
+        if _shared != nil {
+            insideJobLogger.warning("InsideJob.configure() called after already created — ignoring")
+            return
+        }
+        _shared = InsideJob(token: token, instanceId: instanceId)
     }
 
     // MARK: - Properties
 
-    private var socketServer: SimpleSocketServer?
-    private var netService: NetService?
-    var subscribedClients: Set<Int> = []
-    private let muscle: TheMuscle
+    private var transport: ServerTransport?
+    let muscle: TheMuscle
     private let instanceId: String?
     private let sessionId = UUID()
-    let parser = AccessibilityHierarchyParser()
+    let bagman = TheBagman()
     let theSafecracker = TheSafecracker()
-    var cachedElements: [AccessibilityElement] = []
-
-    /// Weak references to accessibility objects from the last parse, keyed by the parsed element.
-    var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
     private var isRunning = false
     private var isSuspended = false
 
     // Screen recording
-    var stakeout: Stakeout?
+    var stakeout: TheStakeout?
+
+    // MARK: - Timing Constants
+
+    /// Debounce interval before broadcasting hierarchy updates (300ms).
+    private static let debounceInterval: UInt64 = 300_000_000
+
+    /// Default polling interval for automatic hierarchy updates (1s).
+    private static let defaultPollingInterval: UInt64 = 1_000_000_000
 
     // Debounce for hierarchy updates
     var updateDebounceTask: Task<Void, Never>?
-    let updateDebounceInterval: UInt64 = 300_000_000 // 300ms in nanoseconds
+    let updateDebounceInterval: UInt64 = InsideJob.debounceInterval
 
     // Polling for automatic updates (disabled by default)
     var pollingTask: Task<Void, Never>?
-    var pollingInterval: UInt64 = 1_000_000_000 // 1 second in nanoseconds
+    var pollingInterval: UInt64 = InsideJob.defaultPollingInterval
     var isPollingEnabled = false
-    var lastHierarchyHash: Int = 0
 
     // MARK: - Initialization
 
     public init(token: String? = nil, instanceId: String? = nil) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
-        self.theSafecracker.elementStore = self
-        // Wire gesture tracking so Stakeout can overlay finger positions in recordings
-        self.theSafecracker.onGestureMove = { [weak self] points in
-            self?.stakeout?.updateInteractionPositions(points)
-        }
-    }
-
-    // MARK: - ElementStore Conformance
-
-    func refreshElements() -> Bool {
-        refreshAccessibilityData() != nil
+        self.theSafecracker.bagman = self.bagman
     }
 
     // MARK: - Public Methods
-
-    // MARK: - Environment Helpers
-
-    /// Always bind to all interfaces — loopback binding breaks Bonjour-resolved
-    /// connections which may arrive on non-loopback interfaces.
-    private var shouldBindToLoopback: Bool { false }
 
     /// Start the server
     public func start() throws {
         guard !isRunning else { return }
 
-        insideJobLogger.info("Starting InsideJob with SimpleSocketServer...")
+        insideJobLogger.info("Starting InsideJob with ServerTransport...")
 
-        let server = SimpleSocketServer()
-        wireServer(server)
+        let t = ServerTransport()
+        wireTransport(t)
 
-        let actualPort = try server.start(port: 0, bindToLoopback: shouldBindToLoopback)
-        self.socketServer = server
+        let actualPort = try t.start()
+        self.transport = t
         isRunning = true
 
         insideJobLogger.info("Server listening on port \(actualPort)")
@@ -131,13 +120,9 @@ public final class InsideJob: ElementStore {
         isSuspended = false
         stopPolling()
 
-        socketServer?.stop()
-        socketServer = nil
+        transport?.stop()
+        transport = nil
 
-        netService?.stop()
-        netService = nil
-
-        subscribedClients.removeAll()
         muscle.tearDown()
 
         stopAccessibilityObservation()
@@ -170,41 +155,43 @@ public final class InsideJob: ElementStore {
         pollingTask = nil
     }
 
-    // MARK: - Server Wiring
+    // MARK: - Transport Wiring
 
-    private func wireServer(_ server: SimpleSocketServer) {
-        muscle.sendToClient = { [weak server] data, clientId in server?.send(data, to: clientId) }
-        muscle.markClientAuthenticated = { [weak server] clientId in server?.markAuthenticated(clientId) }
-        muscle.disconnectClient = { [weak server] clientId in server?.disconnect(clientId: clientId) }
-        muscle.disconnectClientsForSession = { [weak server] clientIds in
-            for clientId in clientIds { server?.disconnect(clientId: clientId) }
+    private func wireTransport(_ t: ServerTransport) {
+        muscle.sendToClient = { [weak t] data, clientId in t?.send(data, to: clientId) }
+        muscle.markClientAuthenticated = { [weak t] clientId in t?.markAuthenticated(clientId) }
+        muscle.disconnectClient = { [weak t] clientId in t?.disconnect(clientId: clientId) }
+        muscle.disconnectClientsForSession = { [weak t] clientIds in
+            for clientId in clientIds { t?.disconnect(clientId: clientId) }
         }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
+        muscle.onSessionActiveChanged = { [weak t] isActive in
+            t?.updateTXTRecord(["sessionactive": isActive ? "1" : "0"])
+        }
 
-        server.onClientConnected = { [weak self] clientId in
+        t.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
                 insideJobLogger.info("Client \(clientId) connected, awaiting auth")
                 self?.muscle.sendAuthRequired(clientId: clientId)
             }
         }
 
-        server.onClientDisconnected = { [weak self] clientId in
+        t.onClientDisconnected = { [weak self] clientId in
             Task { @MainActor in
                 insideJobLogger.info("Client \(clientId) disconnected")
-                self?.subscribedClients.remove(clientId)
                 self?.muscle.handleClientDisconnected(clientId)
             }
         }
 
-        server.onDataReceived = { [weak self] clientId, data, respond in
+        t.onDataReceived = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 await self?.handleClientMessage(clientId, data: data, respond: respond)
             }
         }
 
-        server.onUnauthenticatedData = { [weak self] clientId, data, respond in
+        t.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 self?.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
             }
@@ -225,37 +212,16 @@ public final class InsideJob: ElementStore {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
-        let service = NetService(
-            domain: "local.",
-            type: buttonHeistServiceType,
-            name: serviceName,
-            port: Int32(port)
-        )
-
-        // Publish identifiers in TXT record for pre-connection filtering
-        var txtDict: [String: Data] = [:]
-        if let simUDID = ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-           let data = simUDID.data(using: .utf8) {
-            txtDict["simudid"] = data
-        }
-
         // Token hash for pre-connection filtering (SHA256, first 8 bytes hex)
         let tokenHash = SHA256.hash(data: Data(muscle.authToken.utf8))
         let tokenHashPrefix = tokenHash.prefix(8).map { String(format: "%02x", $0) }.joined()
-        if let data = tokenHashPrefix.data(using: .utf8) {
-            txtDict["tokenhash"] = data
-        }
 
-        // Instance ID for human-readable identification
-        if let data = effectiveInstanceId.data(using: .utf8) {
-            txtDict["instanceid"] = data
-        }
-
-        service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
-
-        netService = service
-        netService?.publish()
-        insideJobLogger.info("Advertising as '\(serviceName)' on port \(port)")
+        transport?.advertise(
+            serviceName: serviceName,
+            simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
+            tokenHash: tokenHashPrefix,
+            instanceId: effectiveInstanceId
+        )
     }
 
     // MARK: - Client Handling
@@ -264,33 +230,34 @@ public final class InsideJob: ElementStore {
         sendServerInfo(respond: respond)
     }
 
-    // swiftlint:disable:next cyclomatic_complexity
     private func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
         guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
             insideJobLogger.error("Failed to decode client message")
             if String(data: data, encoding: .utf8) != nil {
                 insideJobLogger.debug("Unparsable message: \(data.count) bytes")
             }
+            sendMessage(.error("Malformed message — could not decode"), respond: respond)
             return
         }
 
         insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
         switch message {
+        // Protocol messages
         case .authenticate:
             break // Already authenticated via onUnauthenticatedData path
         case .requestInterface:
             insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(respond: respond)
         case .subscribe:
-            subscribedClients.insert(clientId)
-            insideJobLogger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
+            muscle.subscribe(clientId: clientId)
         case .unsubscribe:
-            subscribedClients.remove(clientId)
-            insideJobLogger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
+            muscle.unsubscribe(clientId: clientId)
         case .ping:
             muscle.noteClientActivity(clientId)
             sendMessage(.pong, respond: respond)
+
+        // Observation
         case .requestScreen:
             handleScreen(respond: respond)
         case .waitForIdle(let target):
@@ -302,7 +269,16 @@ public final class InsideJob: ElementStore {
         case .stopRecording:
             handleStopRecording(respond: respond)
 
-        // Interaction dispatch — TheSafecracker handles all actions, gestures, and text entry
+        // All interactions delegate to TheSafecracker via performInteraction
+        default:
+            await dispatchInteraction(message, respond: respond)
+        }
+    }
+
+    /// Route interaction messages to TheSafecracker through the standard
+    /// refresh-snapshot-execute-delta pipeline.
+    private func dispatchInteraction(_ message: ClientMessage, respond: @escaping (Data) -> Void) async {
+        switch message {
         case .activate(let target):
             await performInteraction(command: message, respond: respond) { self.theSafecracker.executeActivate(target) }
         case .increment(let target):
@@ -341,6 +317,13 @@ public final class InsideJob: ElementStore {
             await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
         case .scrollToEdge(let target):
             await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
+        default:
+            insideJobLogger.error("Unhandled message type in dispatchInteraction")
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .activate,
+                message: "Unhandled command"
+            )), respond: respond)
         }
     }
 
@@ -355,15 +338,14 @@ public final class InsideJob: ElementStore {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
         stakeout?.noteActivity()
-        refreshAccessibilityData()
-        let beforeTimestamp = Date()
-        let beforeElements = snapshotElements()
+        bagman.refreshAccessibilityData()
+        let beforeElements = bagman.snapshotElements()
 
         let result = await interaction()
 
         let actionResult: ActionResult
         if result.success {
-            actionResult = await actionResultWithDelta(
+            actionResult = await bagman.actionResultWithDelta(
                 success: true,
                 method: result.method,
                 message: result.message,
@@ -379,18 +361,14 @@ public final class InsideJob: ElementStore {
             )
         }
 
-        // Record interaction to Stakeout if recording is active
+        // Record interaction to TheStakeout if recording is active.
+        // Uses the delta already computed in actionResult to avoid duplicating full interface snapshots.
         if let stakeout, stakeout.state == .recording {
-            if !result.success {
-                refreshAccessibilityData()
-            }
-            let afterElements = snapshotElements()
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
                 result: actionResult,
-                interfaceBefore: Interface(timestamp: beforeTimestamp, elements: beforeElements),
-                interfaceAfter: Interface(timestamp: Date(), elements: afterElements)
+                interfaceDelta: actionResult.interfaceDelta
             )
             stakeout.recordInteraction(event: event)
         }
@@ -410,7 +388,7 @@ public final class InsideJob: ElementStore {
             screenHeight: screenBounds.height,
             instanceId: sessionId.uuidString,
             instanceIdentifier: effectiveInstanceId,
-            listeningPort: socketServer?.listeningPort,
+            listeningPort: transport?.listeningPort,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
             vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString
         )
@@ -428,14 +406,12 @@ public final class InsideJob: ElementStore {
 
     /// Send data only to clients that have explicitly subscribed.
     func broadcastToSubscribed(_ data: Data) {
-        for clientId in subscribedClients {
-            socketServer?.send(data, to: clientId)
-        }
+        muscle.broadcastToSubscribed(data)
     }
 
     /// Send data to all connected clients (used for recording completion broadcasts).
     func broadcastToAll(_ data: Data) {
-        socketServer?.broadcastToAll(data)
+        transport?.broadcastToAll(data)
     }
 
     // MARK: - Accessibility Observation
@@ -522,20 +498,14 @@ public final class InsideJob: ElementStore {
         updateDebounceTask?.cancel()
         updateDebounceTask = nil
 
-        socketServer?.stop()
-        socketServer = nil
+        transport?.stop()
+        transport = nil
 
-        netService?.stop()
-        netService = nil
-
-        subscribedClients.removeAll()
         muscle.tearDown()
 
         stopAccessibilityObservation()
 
-        cachedElements.removeAll()
-        elementObjects.removeAll()
-        lastHierarchyHash = 0
+        bagman.clearCache()
 
         insideJobLogger.info("Server suspended")
     }
@@ -547,11 +517,11 @@ public final class InsideJob: ElementStore {
         insideJobLogger.info("Resuming server...")
 
         do {
-            let server = SimpleSocketServer()
-            wireServer(server)
+            let t = ServerTransport()
+            wireTransport(t)
 
-            let actualPort = try server.start(port: 0, bindToLoopback: shouldBindToLoopback)
-            self.socketServer = server
+            let actualPort = try t.start()
+            self.transport = t
 
             insideJobLogger.info("Server resumed on port \(actualPort)")
             advertiseService(port: actualPort)

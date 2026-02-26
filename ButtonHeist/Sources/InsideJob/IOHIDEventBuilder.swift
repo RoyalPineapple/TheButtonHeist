@@ -4,6 +4,14 @@ import UIKit
 
 /// Creates IOHIDEvent structures for touch injection.
 /// Uses dynamic loading to access IOKit private APIs.
+///
+/// **Private API surface** (requires monitoring across iOS releases):
+/// - `IOHIDEventCreateDigitizerEvent` (IOKit.framework, loaded via dlsym)
+/// - `IOHIDEventCreateDigitizerFingerEventWithQuality` (IOKit.framework, loaded via dlsym)
+/// - `IOHIDEventAppendEvent` (IOKit.framework, loaded via dlsym)
+/// - `IOHIDEventSetFloatValue` (IOKit.framework, loaded via dlsym)
+///
+/// Last verified: iOS 17.0 -- iOS 18.2 (Xcode 16.2) and iOS 26 beta (Xcode 26.2)
 @MainActor
 final class IOHIDEventBuilder {
 

@@ -2,6 +2,12 @@ import ArgumentParser
 import Foundation
 import ButtonHeist
 
+enum SessionDefaults {
+    static let connectionTimeout: Double = 30.0
+    static let sessionTimeout: Double = 60.0
+    static let timeoutCheckInterval: Double = 5.0
+}
+
 struct SessionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "session",
@@ -26,8 +32,8 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Target device by name, ID prefix, or index from 'list'")
     var device: String?
 
-    @Option(name: .shortAndLong, help: "Connection timeout in seconds")
-    var timeout: Double = 30.0
+    @Option(name: .shortAndLong, help: "Connection timeout in seconds (default: \(Int(SessionDefaults.connectionTimeout)))")
+    var timeout: Double = SessionDefaults.connectionTimeout
 
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
@@ -38,12 +44,16 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Auth token from a previous connection")
     var token: String?
 
+    @Option(name: .long, help: "Idle timeout in seconds — exit if no command received (0 = disabled, default: \(Int(SessionDefaults.sessionTimeout)))")
+    var sessionTimeout: Double = SessionDefaults.sessionTimeout
+
     @MainActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
         let runner = SessionRunner(deviceFilter: device,
                                    connectionTimeout: timeout, format: effectiveFormat,
-                                   force: force, token: token)
+                                   force: force, token: token,
+                                   sessionTimeout: sessionTimeout)
         try await runner.run()
     }
 }

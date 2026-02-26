@@ -45,17 +45,6 @@ func formatActionResultJSON(_ result: ActionResult) -> String {
     return "{\"status\":\"error\",\"message\":\"Serialization failed\"}"
 }
 
-// MARK: - Exit Codes
-
-enum ExitCode: Int32 {
-    case success = 0
-    case connectionFailed = 1
-    case noDeviceFound = 2
-    case timeout = 3
-    case authFailed = 4
-    case unknown = 99
-}
-
 // MARK: - Action Result Output
 
 /// Shared output handler for action results used by action, touch, type, edit, and dismiss commands.
