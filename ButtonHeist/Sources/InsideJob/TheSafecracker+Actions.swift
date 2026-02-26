@@ -6,11 +6,11 @@ import TheScore
 
 extension TheSafecracker {
 
-    // MARK: - Accessibility Scroll
+    // MARK: - Scroll
 
     func executeScroll(_ target: ScrollTarget) -> InteractionResult {
         guard let elementTarget = target.elementTarget else {
-            return .failure(.accessibilityScroll, message: "Element target required for scroll")
+            return .failure(.scroll, message: "Element target required for scroll")
         }
 
         guard let index = resolveTraversalIndex(for: elementTarget) else {
@@ -30,7 +30,7 @@ extension TheSafecracker {
         let success = scroll(elementAt: index, direction: uiDirection)
         return InteractionResult(
             success: success,
-            method: .accessibilityScroll,
+            method: .scroll,
             message: success ? nil : "No scrollable ancestor found for element",
             value: nil
         )

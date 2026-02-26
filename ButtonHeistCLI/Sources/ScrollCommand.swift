@@ -6,11 +6,11 @@ import ButtonHeist
 struct ScrollCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "scroll",
-        abstract: "Scroll via accessibility scroll action",
+        abstract: "Scroll a scroll view by one page",
         discussion: """
-            Calls accessibilityScroll on a target element, which bubbles up
-            to the nearest scroll view ancestor. Scrolls approximately one
-            page per call.
+            Scrolls the nearest scroll view ancestor of a target element by
+            approximately one page in the given direction via direct content
+            offset manipulation.
 
             Examples:
               buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up

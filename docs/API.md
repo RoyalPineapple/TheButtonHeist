@@ -585,7 +585,7 @@ public enum MastermindCommandCatalog {
 }
 ```
 
-Single source of truth for the 27 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`.
+Single source of truth for the 30 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`, `scroll`, `scroll_to_visible`, `scroll_to_edge`.
 
 **Location**: `ButtonHeist/Sources/ButtonHeist/MastermindCommandCatalog.swift`
 
@@ -763,6 +763,9 @@ Messages sent from client to server.
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
 - `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection
 - `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
+- `scroll(ScrollTarget)` - Scroll the nearest scroll view ancestor by one page
+- `scrollToVisible(ActionTarget)` - Scroll until the target element is visible in the viewport
+- `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot
@@ -863,6 +866,56 @@ public struct CustomActionTarget: Codable, Sendable
 
 - `elementTarget: ActionTarget` - Target element
 - `actionName: String` - Name of the custom action
+
+### ScrollDirection
+
+```swift
+public enum ScrollDirection: String, Codable, Sendable
+```
+
+#### Cases
+
+- `up` - Scroll up (reveal content above)
+- `down` - Scroll down (reveal content below)
+- `left` - Scroll left (reveal content to the left)
+- `right` - Scroll right (reveal content to the right)
+- `next` - Scroll to next page (vertical)
+- `previous` - Scroll to previous page (vertical)
+
+### ScrollTarget
+
+```swift
+public struct ScrollTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `elementTarget: ActionTarget?` - Element to scroll from (bubbles up to nearest scroll view ancestor)
+- `direction: ScrollDirection` - Scroll direction
+
+### ScrollEdge
+
+```swift
+public enum ScrollEdge: String, Codable, Sendable
+```
+
+#### Cases
+
+- `top` - Scroll to top edge
+- `bottom` - Scroll to bottom edge
+- `left` - Scroll to left edge
+- `right` - Scroll to right edge
+
+### ScrollToEdgeTarget
+
+```swift
+public struct ScrollToEdgeTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll
+- `edge: ScrollEdge` - Which edge to scroll to
 
 ### ServerInfo
 
@@ -1009,6 +1062,9 @@ public enum ActionMethod: String, Codable, Sendable
 - `editAction` - Edit action via responder chain
 - `resignFirstResponder` - Keyboard dismissed
 - `waitForIdle` - Wait-for-idle completed
+- `scroll` - Scroll view scrolled by one page
+- `scrollToVisible` - Scroll view adjusted to make element visible
+- `scrollToEdge` - Scroll view scrolled to an edge
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
@@ -1213,6 +1269,56 @@ buttonheist type --delete 3 --identifier "nameField"
 # Delete and retype (correction)
 buttonheist type --delete 2 --text "llo World" --identifier "nameField"
 # Output: Hello World
+```
+
+### buttonheist scroll
+
+Scroll the nearest scroll view ancestor by one page.
+
+```
+USAGE: buttonheist scroll [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element identifier (scroll bubbles up to nearest scroll view)
+  --index <n>             Element index
+  --direction <dir>       Scroll direction: up, down, left, right, next, previous
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+### buttonheist scroll-to-visible
+
+Scroll until a target element is fully visible in the viewport.
+
+```
+USAGE: buttonheist scroll-to-visible [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element identifier
+  --index <n>             Element index
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+### buttonheist scroll-to-edge
+
+Scroll the nearest scroll view ancestor to an edge.
+
+```
+USAGE: buttonheist scroll-to-edge [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element identifier
+  --index <n>             Element index
+  --edge <edge>           Target edge: top, bottom, left, right
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
 ```
 
 ### buttonheist session
@@ -1466,4 +1572,10 @@ buttonheist touch two-finger-tap --identifier zoomControl
 # Text entry
 buttonheist type --text "Hello World" --identifier nameField
 buttonheist type --delete 5 --text "World!" --identifier nameField
+
+# Scroll commands
+buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
+buttonheist scroll --index 3 --direction down
+buttonheist scroll-to-visible --identifier "buttonheist.longList.last"
+buttonheist scroll-to-edge --identifier "buttonheist.longList.item-0" --edge bottom
 ```

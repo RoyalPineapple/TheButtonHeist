@@ -477,14 +477,14 @@ public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
 }
 
-/// Direction for accessibility scroll actions
+/// Direction for scroll actions
 public enum ScrollDirection: String, Codable, Sendable {
     case up, down, left, right, next, previous
 }
 
-/// Target for accessibility scroll command
+/// Target for scroll command
 public struct ScrollTarget: Codable, Sendable {
-    /// Element to scroll from (accessibilityScroll bubbles up to nearest scroll view)
+    /// Element to scroll from (bubbles up to nearest scroll view ancestor)
     public let elementTarget: ActionTarget?
     /// Scroll direction
     public let direction: ScrollDirection

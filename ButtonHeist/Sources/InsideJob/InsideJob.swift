@@ -20,7 +20,7 @@ struct WeakObject {
 @MainActor
 protocol ElementStore: AnyObject {
     var cachedElements: [AccessibilityElement] { get }
-    var elementObjects: [Int: WeakObject] { get }
+    var elementObjects: [AccessibilityElement: WeakObject] { get }
     @discardableResult func refreshElements() -> Bool
 }
 
@@ -51,8 +51,8 @@ public final class InsideJob: ElementStore {
     let theSafecracker = TheSafecracker()
     var cachedElements: [AccessibilityElement] = []
 
-    /// Weak references to accessibility objects from the last parse, keyed by traversal index.
-    var elementObjects: [Int: WeakObject] = [:]
+    /// Weak references to accessibility objects from the last parse, keyed by the parsed element.
+    var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
     private var isRunning = false
     private var isSuspended = false

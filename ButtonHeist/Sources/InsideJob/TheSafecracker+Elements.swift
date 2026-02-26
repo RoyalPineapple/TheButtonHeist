@@ -51,11 +51,20 @@ extension TheSafecracker {
         return nil
     }
 
+    // MARK: - Object Lookup
+
+    /// Look up the live NSObject for an element at a given traversal index.
+    private func object(at index: Int) -> NSObject? {
+        guard let store = elementStore,
+              index >= 0, index < store.cachedElements.count else { return nil }
+        return store.elementObjects[store.cachedElements[index]]?.object
+    }
+
     // MARK: - Interactive Object Access
 
     func hasInteractiveObject(at index: Int) -> Bool {
-        guard let store = elementStore,
-              store.elementObjects[index]?.object != nil,
+        guard object(at: index) != nil,
+              let store = elementStore,
               index >= 0, index < store.cachedElements.count else { return false }
         let el = store.cachedElements[index]
         return el.respondsToUserInteraction
@@ -64,25 +73,25 @@ extension TheSafecracker {
     }
 
     func customActionNames(elementAt index: Int) -> [String] {
-        elementStore?.elementObjects[index]?.object?.accessibilityCustomActions?.map { $0.name } ?? []
+        object(at: index)?.accessibilityCustomActions?.map { $0.name } ?? []
     }
 
     // MARK: - Direct Accessibility Actions
 
     func activate(elementAt index: Int) -> Bool {
-        elementStore?.elementObjects[index]?.object?.accessibilityActivate() ?? false
+        object(at: index)?.accessibilityActivate() ?? false
     }
 
     func increment(elementAt index: Int) {
-        elementStore?.elementObjects[index]?.object?.accessibilityIncrement()
+        object(at: index)?.accessibilityIncrement()
     }
 
     func decrement(elementAt index: Int) {
-        elementStore?.elementObjects[index]?.object?.accessibilityDecrement()
+        object(at: index)?.accessibilityDecrement()
     }
 
     func performCustomAction(named name: String, elementAt index: Int) -> Bool {
-        guard let actions = elementStore?.elementObjects[index]?.object?.accessibilityCustomActions else {
+        guard let actions = object(at: index)?.accessibilityCustomActions else {
             return false
         }
         for action in actions where action.name == name {
@@ -97,7 +106,7 @@ extension TheSafecracker {
         return false
     }
 
-    // MARK: - Accessibility Scroll
+    // MARK: - Scroll
 
     /// Walk the view/container hierarchy from an element to find the nearest
     /// scrollable UIScrollView ancestor, then scroll it by one page via `setContentOffset`.
@@ -105,7 +114,7 @@ extension TheSafecracker {
     /// SwiftUI overrides `accessibilityScroll` to return false on its internal
     /// collection/scroll views, so we use direct `setContentOffset` (KIF approach).
     func scroll(elementAt index: Int, direction: UIAccessibilityScrollDirection) -> Bool {
-        guard let object = elementStore?.elementObjects[index]?.object else {
+        guard let object = object(at: index) else {
             return false
         }
 
@@ -132,27 +141,27 @@ extension TheSafecracker {
 
         switch direction {
         case .up:
-            // Reveal content below: move content offset down
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
-        case .down:
             // Reveal content above: move content offset up
             newOffset.y = max(offset.y - (size.height - overlap),
                              -insets.top)
+        case .down:
+            // Reveal content below: move content offset down
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
         case .left:
-            // Reveal content to the right
-            newOffset.x = min(offset.x + size.width - overlap,
-                             contentSize.width + insets.right - size.width)
-        case .right:
             // Reveal content to the left
             newOffset.x = max(offset.x - (size.width - overlap),
                              -insets.left)
+        case .right:
+            // Reveal content to the right
+            newOffset.x = min(offset.x + size.width - overlap,
+                             contentSize.width + insets.right - size.width)
         case .next:
-            // Same as .up (reveal next page)
+            // Reveal next page (scroll down)
             newOffset.y = min(offset.y + size.height - overlap,
                              contentSize.height + insets.bottom - size.height)
         case .previous:
-            // Same as .down (reveal previous page)
+            // Reveal previous page (scroll up)
             newOffset.y = max(offset.y - (size.height - overlap),
                              -insets.top)
         @unknown default:
@@ -171,7 +180,7 @@ extension TheSafecracker {
     /// Scroll the nearest UIScrollView ancestor so the element's accessibility frame
     /// is fully visible within the scroll view's viewport.
     func scrollToVisible(elementAt index: Int) -> Bool {
-        guard let object = elementStore?.elementObjects[index]?.object else {
+        guard let object = object(at: index) else {
             return false
         }
 
@@ -244,7 +253,7 @@ extension TheSafecracker {
 
     /// Scroll the nearest UIScrollView ancestor to an edge.
     func scrollToEdge(elementAt index: Int, edge: ScrollEdge) -> Bool {
-        guard let object = elementStore?.elementObjects[index]?.object else {
+        guard let object = object(at: index) else {
             return false
         }
 
