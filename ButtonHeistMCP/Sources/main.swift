@@ -17,7 +17,7 @@ struct ButtonHeistMCPServer {
 
         let server = Server(
             name: "buttonheist",
-            version: "1.0.0",
+            version: buttonHeistVersion,
             capabilities: .init(tools: .init())
         )
 
@@ -44,8 +44,12 @@ struct ButtonHeistMCPServer {
 
         do {
             let request = try decodeArguments(params.arguments)
-            guard request["command"] is String else {
+            guard let command = request["command"] as? String else {
                 return .init(content: [.text("Missing required parameter: command")], isError: true)
+            }
+
+            if let validationError = validateArgs(command: command, args: request) {
+                return .init(content: [.text(validationError)], isError: true)
             }
 
             let response = try await fence.execute(request: request)
@@ -53,6 +57,79 @@ struct ButtonHeistMCPServer {
         } catch {
             return .init(content: [.text(errorMessage(error))], isError: true)
         }
+    }
+
+    // MARK: - Per-command argument validation
+    // Validates required parameters before dispatching to TheFence, so callers
+    // get a clear error message immediately instead of a generic dispatch failure.
+
+    private static func validateArgs(command: String, args: [String: Any]) -> String? {
+        // Commands that require an element target (identifier or order)
+        let needsTarget: Set<String> = ["tap", "activate", "increment", "decrement", "perform_custom_action"]
+
+        if needsTarget.contains(command) {
+            let hasIdentifier = args["identifier"] is String
+            let hasOrder = args["order"] != nil
+            let hasCoordinates = args["x"] != nil && args["y"] != nil
+
+            // tap can use coordinates instead of an element target
+            if command == "tap" && (hasIdentifier || hasOrder || hasCoordinates) {
+                return nil
+            }
+
+            if !hasIdentifier && !hasOrder {
+                return "Missing required parameter for '\(command)': provide 'identifier' (accessibility identifier) or 'order' (element index). Run get_interface first to discover available elements."
+            }
+        }
+
+        // type_text needs at least text or deleteCount
+        if command == "type_text" {
+            let hasText = args["text"] is String
+            let hasDeleteCount = args["deleteCount"] != nil
+            if !hasText && !hasDeleteCount {
+                return "Missing required parameter for 'type_text': provide 'text', 'deleteCount', or both."
+            }
+        }
+
+        // swipe: if using coordinates, need start and end points
+        // (direction-based swipe on an element is handled by TheFence)
+
+        // drag requires endX and endY
+        if command == "drag" {
+            if args["endX"] == nil || args["endY"] == nil {
+                return "Missing required parameters for 'drag': 'endX' and 'endY' are required."
+            }
+        }
+
+        // pinch requires scale
+        if command == "pinch" {
+            if args["scale"] == nil {
+                return "Missing required parameter for 'pinch': 'scale' is required."
+            }
+        }
+
+        // rotate requires angle
+        if command == "rotate" {
+            if args["angle"] == nil {
+                return "Missing required parameter for 'rotate': 'angle' is required."
+            }
+        }
+
+        // perform_custom_action requires actionName
+        if command == "perform_custom_action" {
+            if !(args["actionName"] is String) {
+                return "Missing required parameter for 'perform_custom_action': 'actionName' is required."
+            }
+        }
+
+        // edit_action requires action
+        if command == "edit_action" {
+            if !(args["action"] is String) {
+                return "Missing required parameter for 'edit_action': 'action' is required (copy, paste, cut, select, selectAll)."
+            }
+        }
+
+        return nil
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) throws -> [String: Any] {
@@ -89,6 +166,10 @@ struct ButtonHeistMCPServer {
         }
     }
 
+    // Video data is intentionally replaced with a size summary rather than passed through.
+    // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
+    // context window. Agents that need the actual file should pass "output" to stop_recording,
+    // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
     private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
         var content: [Tool.Content] = []
         var payload = response.jsonDict() ?? [:]
