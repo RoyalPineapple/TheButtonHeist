@@ -1,6 +1,5 @@
 import Foundation
 import ButtonHeist
-import TheScore
 
 // MARK: - Session Response
 
@@ -189,22 +188,7 @@ enum SessionResponse {
             return ["status": "ok", "interface": ifaceObj]
 
         case .action(let result):
-            var d: [String: Any] = [
-                "status": result.success ? "ok" : "error",
-                "method": result.method.rawValue,
-            ]
-            if let msg = result.message { d["message"] = msg }
-            if let value = result.value { d["value"] = value }
-            if result.animating == true { d["animating"] = true }
-            if let delta = result.interfaceDelta {
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.sortedKeys]
-                if let data = try? encoder.encode(delta),
-                   let deltaObj = try? JSONSerialization.jsonObject(with: data) {
-                    d["delta"] = deltaObj
-                }
-            }
-            return d
+            return actionResultDict(result)
 
         case .screenshot(let path, let width, let height):
             return ["status": "ok", "path": path, "width": width, "height": height]
