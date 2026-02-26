@@ -578,11 +578,20 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
   "fps":8,
   "startTime":"2026-02-24T10:30:00.000Z",
   "endTime":"2026-02-24T10:30:05.200Z",
-  "stopReason":"inactivity"
+  "stopReason":"inactivity",
+  "interactionLog":[
+    {
+      "timestamp":1.2,
+      "command":{"activate":{"_0":{"identifier":"loginButton"}}},
+      "result":{"success":true,"method":"syntheticTap"},
+      "interfaceBefore":{"timestamp":"2026-02-24T10:30:01.200Z","elements":[...]},
+      "interfaceAfter":{"timestamp":"2026-02-24T10:30:02.100Z","elements":[...]}
+    }
+  ]
 }}}
 ```
 
-The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding.
+The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and before/after interface state during the recording. It is `null` or absent when no interactions occurred.
 
 Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
 
@@ -894,6 +903,19 @@ At least `text` or `deleteCount` must be provided. If `elementTarget` is provide
 | `startTime` | `ISO8601 Date` | When recording started |
 | `endTime` | `ISO8601 Date` | When recording ended |
 | `stopReason` | `String` | `"manual"`, `"inactivity"`, `"maxDuration"`, or `"fileSizeLimit"` |
+| `interactionLog` | `[InteractionEvent]?` | Ordered log of interactions recorded during the session (nil if no interactions occurred) |
+
+### InteractionEvent
+
+A single recorded interaction event captured during a Stakeout recording.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `Double` | Time offset from recording start in seconds |
+| `command` | `ClientMessage` | The command that triggered this interaction |
+| `result` | `ActionResult` | The result returned to the client |
+| `interfaceBefore` | `Interface` | Interface state before the interaction (elements only, no tree) |
+| `interfaceAfter` | `Interface` | Interface state after the interaction (elements only, no tree) |
 
 ## Example Session
 

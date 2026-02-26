@@ -369,6 +369,7 @@ public final class InsideJob: ElementStore {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
         refreshAccessibilityData()
+        let beforeTimestamp = Date()
         let beforeElements = snapshotElements()
 
         let result = await interaction()
@@ -393,12 +394,15 @@ public final class InsideJob: ElementStore {
 
         // Record interaction to Stakeout if recording is active
         if let stakeout, stakeout.state == .recording {
+            if !result.success {
+                refreshAccessibilityData()
+            }
             let afterElements = snapshotElements()
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
                 result: actionResult,
-                interfaceBefore: Interface(timestamp: Date(), elements: beforeElements),
+                interfaceBefore: Interface(timestamp: beforeTimestamp, elements: beforeElements),
                 interfaceAfter: Interface(timestamp: Date(), elements: afterElements)
             )
             stakeout.recordInteraction(event: event)
