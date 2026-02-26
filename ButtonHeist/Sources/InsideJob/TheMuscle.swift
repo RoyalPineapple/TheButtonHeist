@@ -152,7 +152,7 @@ final class TheMuscle {
         // Session tracking
         activeSessionConnections.remove(clientId)
         if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
-            logger.info("All session connections gone, starting \(sessionReleaseTimeout)s release timer")
+            logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
             sessionLeaseTimer?.cancel()
             sessionLeaseTimer = nil
             sessionReleaseTimer?.cancel()
@@ -205,7 +205,7 @@ final class TheMuscle {
 
     func invalidateToken() {
         authToken = UUID().uuidString
-        logger.info("Token invalidated, new token: \(authToken)")
+        logger.info("Token invalidated, new token: \(self.authToken)")
     }
 
     // MARK: - Session Lock
@@ -245,7 +245,7 @@ final class TheMuscle {
                     activeConnections: activeSessionConnections.count
                 )
                 sendMessage(.sessionLocked(payload), respond: respond)
-                logger.warning("Client \(clientId) rejected — session locked (\(activeSessionConnections.count) active connection(s))")
+                logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     self?.disconnectClient?(clientId)

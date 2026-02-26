@@ -232,7 +232,7 @@
 		5B6243A7F04F92B72588A7B5 /* InsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJob.swift; sourceTree = "<group>"; };
 		5CDEEC655F80F022B649ECE5 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		63AC6F91794826DA59B5463F /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
+		63AC6F91794826DA59B5463F /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BezierSamplerTests.swift; path = ../InsideJobTests/BezierSamplerTests.swift; sourceTree = "<group>"; };
 		6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
 		7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+Accessibility.swift"; sourceTree = "<group>"; };
 		771B676C90A3B75EFDE19085 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
@@ -424,7 +424,6 @@
 		7CBEA3B65E7D5861F1EEE8C2 /* TheScore */ = {
 			isa = PBXGroup;
 			children = (
-				771B676C90A3B75EFDE19085 /* BezierSampler.swift */,
 				8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */,
 				88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */,
 				8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */,
@@ -436,6 +435,7 @@
 		817498F4760C61DBE0A051A8 /* InsideJob */ = {
 			isa = PBXGroup;
 			children = (
+				771B676C90A3B75EFDE19085 /* BezierSampler.swift */,
 				4E31C5B2C86BFB010F3B3678 /* Fingerprints.swift */,
 				5B6243A7F04F92B72588A7B5 /* InsideJob.swift */,
 				7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */,
@@ -507,7 +507,6 @@
 			children = (
 				46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */,
 				6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */,
-				63AC6F91794826DA59B5463F /* BezierSamplerTests.swift */,
 				F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */,
 				9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */,
 				3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */,
@@ -874,7 +873,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5FA7B1A2B9A0E96A49F65349 /* BezierSampler.swift in Sources */,
 				89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */,
 				90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */,
 				EB70E312ACAB369A26299111 /* Messages.swift in Sources */,
@@ -900,7 +898,6 @@
 			files = (
 				A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */,
 				2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */,
-				0F52AA030D6E65988C6DB7DD /* BezierSamplerTests.swift in Sources */,
 				04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */,
 				57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */,
 				72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */,
@@ -948,6 +945,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5FA7B1A2B9A0E96A49F65349 /* BezierSampler.swift in Sources */,
 				E539BAE11A4FD45F5090050A /* Fingerprints.swift in Sources */,
 				7EFFE0E7E04E84649421EE37 /* IOHIDEventBuilder.swift in Sources */,
 				4733ABACD507734FA6EF732C /* InsideJob+Accessibility.swift in Sources */,

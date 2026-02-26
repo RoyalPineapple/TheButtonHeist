@@ -64,6 +64,9 @@ struct RecordCommand: AsyncParsableCommand {
             logStatus("  Resolution: \(payload.width)x\(payload.height)")
             logStatus("  Size: \(videoData.count / 1024)KB")
             logStatus("  Stop reason: \(payload.stopReason.rawValue)")
+            if let log = payload.interactionLog {
+                logStatus("  Interactions: \(log.count)")
+            }
         }
     }
 }

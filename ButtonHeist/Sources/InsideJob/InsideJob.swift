@@ -111,7 +111,7 @@ public final class InsideJob: ElementStore {
         isRunning = true
 
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Auth token: \(muscle.authToken)")
+        insideJobLogger.info("Auth token: \(self.muscle.authToken)")
         if let instanceId {
             insideJobLogger.info("Instance ID: \(instanceId)")
         }
@@ -285,10 +285,10 @@ public final class InsideJob: ElementStore {
             await sendInterface(respond: respond)
         case .subscribe:
             subscribedClients.insert(clientId)
-            insideJobLogger.info("Client \(clientId) subscribed (\(subscribedClients.count) subscribers)")
+            insideJobLogger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
         case .unsubscribe:
             subscribedClients.remove(clientId)
-            insideJobLogger.info("Client \(clientId) unsubscribed (\(subscribedClients.count) subscribers)")
+            insideJobLogger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
         case .ping:
             muscle.noteClientActivity(clientId)
             sendMessage(.pong, respond: respond)
@@ -305,37 +305,37 @@ public final class InsideJob: ElementStore {
 
         // Interaction dispatch — TheSafecracker handles all actions, gestures, and text entry
         case .activate(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeActivate(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeActivate(target) }
         case .increment(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeIncrement(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeDecrement(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeDecrement(target) }
         case .performCustomAction(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeCustomAction(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeEditAction(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeEditAction(target) }
         case .resignFirstResponder:
-            await performInteraction(respond: respond) { self.theSafecracker.executeResignFirstResponder() }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
         case .touchTap(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeTap(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeTap(target) }
         case .touchLongPress(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeLongPress(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeLongPress(target) }
         case .touchSwipe(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeSwipe(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeSwipe(target) }
         case .touchDrag(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeDrag(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrag(target) }
         case .touchPinch(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executePinch(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executePinch(target) }
         case .touchRotate(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeRotate(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            await performInteraction(respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
+            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawPath(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
-            await performInteraction(respond: respond) { await self.theSafecracker.executeTypeText(target) }
+            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         }
     }
 
@@ -343,33 +343,54 @@ public final class InsideJob: ElementStore {
 
     /// Standard interaction pattern: refresh → snapshot → execute → delta → respond
     /// TheSafecracker handles all interaction concerns (touch visualization, element refresh for read-back).
+    /// When a recording is active, captures the command and before/after interface state.
     private func performInteraction(
+        command: ClientMessage,
         respond: @escaping (Data) -> Void,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
         stakeout?.noteActivity()
         refreshAccessibilityData()
+        let beforeTimestamp = Date()
         let beforeElements = snapshotElements()
 
         let result = await interaction()
 
+        let actionResult: ActionResult
         if result.success {
-            let actionResult = await actionResultWithDelta(
+            actionResult = await actionResultWithDelta(
                 success: true,
                 method: result.method,
                 message: result.message,
                 value: result.value,
                 beforeElements: beforeElements
             )
-            sendMessage(.actionResult(actionResult), respond: respond)
         } else {
-            sendMessage(.actionResult(ActionResult(
+            actionResult = ActionResult(
                 success: false,
                 method: result.method,
                 message: result.message,
                 value: result.value
-            )), respond: respond)
+            )
         }
+
+        // Record interaction to Stakeout if recording is active
+        if let stakeout, stakeout.state == .recording {
+            if !result.success {
+                refreshAccessibilityData()
+            }
+            let afterElements = snapshotElements()
+            let event = InteractionEvent(
+                timestamp: stakeout.recordingElapsed,
+                command: command,
+                result: actionResult,
+                interfaceBefore: Interface(timestamp: beforeTimestamp, elements: beforeElements),
+                interfaceAfter: Interface(timestamp: Date(), elements: afterElements)
+            )
+            stakeout.recordInteraction(event: event)
+        }
+
+        sendMessage(.actionResult(actionResult), respond: respond)
     }
 
     private func sendServerInfo(respond: @escaping (Data) -> Void) {

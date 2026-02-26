@@ -456,7 +456,7 @@ final class TheSafecracker {
     private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard let window = windowForPoint(points[0]) else {
-            insideJobLogger.error("No window found for point \(points[0])")
+            insideJobLogger.error("No window found for point \(String(describing: points[0]))")
             return false
         }
 
@@ -466,7 +466,7 @@ final class TheSafecracker {
         for point in points {
             let windowPoint = window.convert(point, from: nil)
             guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                insideJobLogger.error("No view at point \(point)")
+                insideJobLogger.error("No view at point \(String(describing: point))")
                 return false
             }
             guard let touch = SyntheticTouchFactory.createTouch(
