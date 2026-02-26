@@ -72,7 +72,6 @@ Only active in `#if DEBUG` builds — never ships in production.
 
 | Env Var | Info.plist Key | Default | Description |
 |---------|----------------|---------|-------------|
-| `INSIDEJOB_PORT` | `InsideJobPort` | `0` (auto) | Server port (0 = OS-assigned, advertised via Bonjour) |
 | `INSIDEJOB_TOKEN` | `InsideJobToken` | Auto-generated UUID | Auth token for client connections |
 | `INSIDEJOB_ID` | `InsideJobInstanceId` | Short UUID prefix | Human-readable instance identifier |
 | `INSIDEJOB_POLLING_INTERVAL` | `InsideJobPollingInterval` | `1.0` | UI change polling interval (min 0.5s) |
