@@ -24,46 +24,46 @@ InsideJob → TheBagman.activate(target) → success? done
                                       → failure? → TheSafecracker.tap(at: activationPoint)
 ```
 
-- [ ] **Delete `TheSafecracker+Elements.swift`**
-- [ ] **Modify `TheSafecracker+Actions.swift`** — remove element resolution, receive coordinates
-- [ ] **Modify `InsideJob.swift`** — orchestrate TheBagman → TheSafecracker fallback
-- [ ] **Build passes** after phase
+- [x] **Delete `TheSafecracker+Elements.swift`**
+- [x] **Modify `TheSafecracker+Actions.swift`** — remove element resolution, receive coordinates
+- [x] **Modify `InsideJob.swift`** — orchestrate TheBagman → TheSafecracker fallback
+- [x] **Build passes** after phase
 
 ## Phase 2: Enforce Activation-First Philosophy
 
-- [ ] **Update `docs/API.md`** — document activation-first with synthetic tap fallback
-- [ ] **Document `tap` as low-level escape hatch**
-- [ ] **Add debug log** in `executeTap` noting fallback path
+- [x] **Update `docs/API.md`** — document activation-first with synthetic tap fallback
+- [x] **Document `tap` as low-level escape hatch**
+- [x] **Add debug log** in `executeTap` noting fallback path
 
 ## Phase 3: Make TheSafecracker Fully Internal
 
-- [ ] **TheSafecracker class:** `internal` access level
-- [ ] **All methods:** `internal`
-- [ ] **Only InsideJob creates and holds** the instance
-- [ ] **Build passes** after phase
+- [x] **TheSafecracker class:** `internal` access level
+- [x] **All methods:** `internal`
+- [x] **Only InsideJob creates and holds** the instance
+- [x] **Build passes** after phase
 
 ## Phase 4: Fix Medium Priority Items
 
-- [ ] **Remove `Error` conformance on `InteractionResult`** (`TheSafecracker.swift:31`)
-- [ ] **Remove duplicate default durations** — defaults in one place only
-- [ ] **Add `interKeyDelay` clamping** to match gesture duration clamping
-- [ ] **Review 60-second max gesture duration**
+- [x] **Remove `Error` conformance on `InteractionResult`** (`TheSafecracker.swift:31`)
+- [x] **Remove duplicate default durations** — defaults in one place only
+- [x] **Add `interKeyDelay` clamping** to match gesture duration clamping
+- [x] **Review 60-second max gesture duration**
 
 ## Phase 5: Fix Low Priority Items
 
-- [ ] **Fingerprint disable configuration** — coordinate with TheFingerprints plan
+- [x] **Fingerprint disable configuration** — coordinate with TheFingerprints plan
 
 ## Phase 6: Private API Monitoring
 
-- [ ] **Add iOS version comment** to `SyntheticTouchFactory.swift`
-- [ ] **Add iOS version comment** to `IOHIDEventBuilder.swift`
-- [ ] **Add iOS version comment** to `SyntheticEventFactory.swift`
+- [x] **Add iOS version comment** to `SyntheticTouchFactory.swift`
+- [x] **Add iOS version comment** to `IOHIDEventBuilder.swift`
+- [x] **Add iOS version comment** to `SyntheticEventFactory.swift`
 
 ## Verification
 
-- [ ] `TheSafecracker+Elements.swift` deleted
-- [ ] TheSafecracker never imports or references `interactiveObjects`
-- [ ] All TheSafecracker types are `internal` access level
-- [ ] `InteractionResult` does not conform to `Error`
-- [ ] No duplicate default durations
-- [ ] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build`
+- [x] `TheSafecracker+Elements.swift` deleted
+- [x] TheSafecracker never imports or references `interactiveObjects`
+- [x] All TheSafecracker types are `internal` access level
+- [x] `InteractionResult` does not conform to `Error`
+- [x] No duplicate default durations
+- [x] Build passes: `xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build`

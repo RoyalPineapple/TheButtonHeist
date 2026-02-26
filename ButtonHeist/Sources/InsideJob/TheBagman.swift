@@ -121,7 +121,7 @@ final class TheBagman {
         from elementTarget: ActionTarget?,
         pointX: Double?,
         pointY: Double?
-    ) -> Result<CGPoint, TheSafecracker.InteractionResult> {
+    ) -> TheSafecracker.PointResolution {
         if let elementTarget {
             guard let element = findElement(for: elementTarget) else {
                 return .failure(.failure(.elementNotFound, message: "Element not found"))
