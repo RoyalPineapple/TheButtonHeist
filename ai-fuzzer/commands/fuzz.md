@@ -221,6 +221,7 @@ Before verifying findings, set up recording to capture video evidence:
    ```bash
    buttonheist record \
      --output .fuzzer-data/recordings/F-N-refinement.mp4 \
+     --action-log .fuzzer-data/recordings/F-N-refinement.actionlog.json \
      --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet &
    RECORD_PID=$!
    sleep 2
@@ -238,10 +239,15 @@ Before verifying findings, set up recording to capture video evidence:
    - **Intermittent**: Triggered on 1 of 3 attempts
    - **Not reproduced**: Could not trigger again (may have been transient)
 
-**Collect recording** after verification:
+**Collect recording and action log** after verification:
 1. Wait for background recording: `wait $RECORD_PID`
 2. Add recording to finding: `**Recording**: .fuzzer-data/recordings/F-N-refinement.mp4`
-3. Update `## Recordings` in session notes
+3. Read `.fuzzer-data/recordings/F-N-refinement.actionlog.json` and cross-check against trace entries:
+   - Verify `result.success` matches trace's `result.status`
+   - Verify `result.interfaceDelta.kind` matches trace's delta classification
+   - Note any discrepancies as "execution drift" in the finding
+4. Add action log to finding: `**Action log**: .fuzzer-data/recordings/F-N-refinement.actionlog.json`
+5. Update `## Recordings` in session notes with both MP4 and action log paths
 
 5. Remove findings that were "Not reproduced" from the main findings (mention them in a "Transient observations" section instead)
 
@@ -284,9 +290,9 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 [Each finding in the format from SKILL.md — include **Recording** field if video was captured]
 
 ### Recordings
-| Finding | File | Duration | Notes |
-|---------|------|----------|-------|
-| F-1 | .fuzzer-data/recordings/F-1-refinement.mp4 | 12.3s | Reproduction confirmed |
+| Finding | Video | Action Log | Duration | Notes |
+|---------|-------|------------|----------|-------|
+| F-1 | .fuzzer-data/recordings/F-1-refinement.mp4 | .fuzzer-data/recordings/F-1-refinement.actionlog.json | 12.3s | Reproduction confirmed |
 
 ### Screen Map
 [List of screens visited and transitions between them]

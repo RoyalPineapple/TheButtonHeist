@@ -119,8 +119,8 @@ After the finding's triggering action, verify whether the finding reproduces:
 Include this verification result in the return's Notes.
 
 **Recording setup** (include in the plan as first and last actions):
-- First: `mkdir -p .fuzzer-data/recordings && buttonheist record --output .fuzzer-data/recordings/F-N-reproduce.mp4 --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet >/tmp/fuzz-reproduce-record.log 2>&1 &` then `sleep 2`
-- Last: `ls -la .fuzzer-data/recordings/F-N-reproduce.mp4` (recording auto-stops on inactivity)
+- First: `mkdir -p .fuzzer-data/recordings && buttonheist record --output .fuzzer-data/recordings/F-N-reproduce.mp4 --action-log .fuzzer-data/recordings/F-N-reproduce.actionlog.json --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet >/tmp/fuzz-reproduce-record.log 2>&1 &` then `sleep 2`
+- Last: `ls -la .fuzzer-data/recordings/F-N-reproduce.mp4 .fuzzer-data/recordings/F-N-reproduce.actionlog.json` (recording auto-stops on inactivity)
 
 **Stop conditions**: Stop on crash. Stop on < 50% fingerprint similarity (major divergence). Stop on 3+ consecutive unexpected results.
 
@@ -167,6 +167,7 @@ Opus generates the report directly (not delegated):
 **Finding**: F-3 [ANOMALY] Toggle doesn't respond to activate
 **Original session**: fuzzsession-2026-02-17-1430-fuzz-systematic-traversal.md
 **Recording**: .fuzzer-data/recordings/F-3-reproduce.mp4
+**Action log**: .fuzzer-data/recordings/F-3-reproduce.actionlog.json
 **Actions replayed**: 5
 
 ### Result: REPRODUCED
@@ -181,6 +182,14 @@ Opus generates the report directly (not delegated):
 | Step | Trace Expected | Actual | Severity |
 |------|---------------|--------|----------|
 | 3 | Settings: 12 elements | Settings: 13 elements | minor drift |
+
+### Action Log Summary
+| # | Timestamp | Command | Result | Delta |
+|---|-----------|---------|--------|-------|
+| 1 | 0.0s | activate(identifier: "settings") | success (activate) | screenChanged |
+| 2 | 8.3s | activate(identifier: "darkModeToggle") | success (activate) | valuesChanged |
+
+Generated from action log — read `.fuzzer-data/recordings/F-N-reproduce.actionlog.json` after all attempts complete and build this table. Each row maps to one event: **#** = 1-based index, **Timestamp** = `event.timestamp`, **Command** = case name + key args, **Result** = success + method, **Delta** = `interfaceDelta.kind`.
 
 ### Haiku Execution Notes
 [Collate noteworthy events from all Haiku returns — element fallbacks, prediction mismatches, etc.]

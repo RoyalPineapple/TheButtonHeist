@@ -25,6 +25,9 @@ struct RecordCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Max recording duration in seconds (default: 60)")
     var maxDuration: Double = 60.0
 
+    @Option(name: .long, help: "Save interaction log as JSON to this path")
+    var actionLog: String?
+
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
@@ -56,6 +59,17 @@ struct RecordCommand: AsyncParsableCommand {
 
         let url = URL(fileURLWithPath: output)
         try videoData.write(to: url)
+
+        if let actionLogPath = actionLog, let log = payload.interactionLog, !log.isEmpty {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let logData = try encoder.encode(log)
+            try logData.write(to: URL(fileURLWithPath: actionLogPath))
+            if !connection.quiet {
+                logStatus("  Action log saved: \(actionLogPath) (\(log.count) events)")
+            }
+        }
 
         if !connection.quiet {
             logStatus("Recording saved: \(output)")

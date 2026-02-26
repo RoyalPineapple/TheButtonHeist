@@ -258,6 +258,7 @@ If status is `stopped`, also include:
 - This protocol file (once, at batch start)
 - Session notes file (once, at batch start — to know current state for appending)
 - Screenshots via `buttonheist screenshot` only when investigating a finding or arriving at a new screen
+- Action log JSON files (when provided in context block) — server-side interaction records for cross-checking trace accuracy
 
 ### What Haiku Writes
 
@@ -278,5 +279,6 @@ If status is `stopped`, also include:
 ### What Haiku Does NOT Write
 - `references/app-knowledge.md` — Opus merges knowledge at session end
 - `references/nav-graph.md` — Opus merges navigation data at session end
+- Action log JSON files — written automatically by `buttonheist record --action-log`, not by Haiku
 - Any new files — only write to paths given in the execution plan
 - Do not modify the execution plan itself
