@@ -184,10 +184,10 @@ Before pushing any commit, verify the following:
 
 ## CLI/MCP Sync Contract
 
-- `buttonheist session` and `buttonheist-mcp run` are thin interfaces over `TheFence`.
+- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 11 purpose-built tools that each dispatch to `TheFence`.
 - The command source of truth is `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`.
 - Any command add/remove/rename must update `CommandCatalog` in the same change.
-- Keep MCP `run` tool descriptions aligned with `CommandCatalog.all`; do not hardcode a separate command list.
+- MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `CommandCatalog.all`.
 - For rapid MCP driving: prefer action `delta` responses and only call `get_interface` when context is stale.
 - When mastermind/session behavior changes, validate both builds in the same branch:
   - `cd ButtonHeistCLI && swift build -c release`
