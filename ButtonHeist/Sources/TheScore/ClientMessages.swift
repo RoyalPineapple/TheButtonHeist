@@ -3,7 +3,7 @@ import CoreGraphics
 
 // MARK: - Client -> Server Messages
 
-public enum ClientMessage: Codable {
+public enum ClientMessage: Codable, Sendable {
     /// Authenticate with a token (must be first message sent)
     case authenticate(AuthenticatePayload)
 

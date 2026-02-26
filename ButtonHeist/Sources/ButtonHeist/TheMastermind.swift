@@ -95,11 +95,19 @@ public enum MastermindResponse {
             return "✓ Screenshot captured (\(Int(width)) × \(Int(height))) — base64 PNG follows\n\(pngData)"
         case .recording(let path, let payload):
             let duration = String(format: "%.1f", payload.duration)
-            return "✓ Recording saved: \(path)  (\(payload.width)×\(payload.height), \(duration)s, \(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+            var text = "✓ Recording saved: \(path)  (\(payload.width)×\(payload.height), \(duration)s, \(payload.frameCount) frames, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                text += "\n  Interactions: \(log.count)"
+            }
+            return text
         case .recordingData(let payload):
             let sizeKB = payload.videoData.count * 3 / 4 / 1024
             let duration = String(format: "%.1f", payload.duration)
-            return "✓ Recording captured (\(payload.width)×\(payload.height), \(duration)s, \(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
+            var text = "✓ Recording captured (\(payload.width)×\(payload.height), \(duration)s, \(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
+            if let log = payload.interactionLog {
+                text += "\n  Interactions: \(log.count)"
+            }
+            return text
         }
     }
 
@@ -147,7 +155,7 @@ public enum MastermindResponse {
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
         case .recording(let path, let payload):
-            return [
+            let dict: [String: Any] = [
                 "status": "ok",
                 "path": path,
                 "width": payload.width,
@@ -156,9 +164,11 @@ public enum MastermindResponse {
                 "frameCount": payload.frameCount,
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
+                "interactionCount": payload.interactionLog?.count ?? 0,
             ]
+            return dict
         case .recordingData(let payload):
-            return [
+            let dict: [String: Any] = [
                 "status": "ok",
                 "videoData": payload.videoData,
                 "width": payload.width,
@@ -167,7 +177,9 @@ public enum MastermindResponse {
                 "frameCount": payload.frameCount,
                 "fps": payload.fps,
                 "stopReason": payload.stopReason.rawValue,
+                "interactionCount": payload.interactionLog?.count ?? 0,
             ]
+            return dict
         }
     }
 

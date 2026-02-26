@@ -1061,6 +1061,23 @@ Completed recording payload.
 - `startTime: Date` - When recording started
 - `endTime: Date` - When recording ended
 - `stopReason: StopReason` - Why recording stopped (`.manual`, `.inactivity`, `.maxDuration`, `.fileSizeLimit`)
+- `interactionLog: [InteractionEvent]?` - Ordered log of interactions recorded during the session (nil if no interactions occurred)
+
+### InteractionEvent
+
+```swift
+public struct InteractionEvent: Codable, Sendable
+```
+
+A single recorded interaction event captured during a Stakeout recording.
+
+#### Properties
+
+- `timestamp: Double` - Time offset from recording start in seconds
+- `command: ClientMessage` - The command that triggered this interaction
+- `result: ActionResult` - The result returned to the client
+- `interfaceBefore: Interface` - Interface state before the interaction (elements only, no tree)
+- `interfaceAfter: Interface` - Interface state after the interaction (elements only, no tree)
 
 ---
 
