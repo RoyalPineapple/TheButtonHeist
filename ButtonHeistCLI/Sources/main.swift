@@ -1,8 +1,9 @@
 import ArgumentParser
+import ButtonHeist
 import Foundation
 
 @main
-struct ButtonHeist: AsyncParsableCommand {
+struct ButtonHeistApp: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "buttonheist",
         abstract: "Inspect and interact with iOS app UI elements.",
@@ -16,7 +17,7 @@ struct ButtonHeist: AsyncParsableCommand {
               buttonheist action --identifier "myButton"
               buttonheist touch tap --x 100 --y 200
             """,
-        version: "2.1.0",
+        version: buttonHeistVersion,
         subcommands: [ListCommand.self, ActionCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
                        SessionCommand.self,
