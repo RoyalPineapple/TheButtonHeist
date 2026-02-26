@@ -36,7 +36,8 @@ APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/D
 
 # Install and launch (bundle ID: com.buttonheist.testapp)
 xcrun simctl install "$SIM_UDID" "$APP"
-xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
 ### 4. Known issue: resource bundle crash
@@ -47,7 +48,8 @@ Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` in
 INSTALLED=$(xcrun simctl get_app_container "$SIM_UDID" com.buttonheist.testapp)
 BUNDLE=$(find ~/Library/Developer/Xcode/DerivedData -name "AccessibilitySnapshot_AccessibilitySnapshotParser.bundle" -path "*/Debug-iphonesimulator/*" | head -1)
 cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
-xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
 ### 5. Build the CLI and add to PATH
@@ -92,6 +94,7 @@ Before pushing any commit, verify the following:
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -125,6 +128,17 @@ Before pushing any commit, verify the following:
 - **The CLI is the canonical test client.** All features must be usable from the command line.
 - This enables a full feedback loop for agentic workflows where automated tools can exercise the entire feature set.
 - When adding new functionality, ensure corresponding CLI commands or flags are available.
+
+## CLI/MCP Sync Contract
+
+- `buttonheist session` and `buttonheist-mcp run` are thin interfaces over `TheMastermind`.
+- The command source of truth is `ButtonHeist/Sources/ButtonHeist/MastermindCommandCatalog.swift`.
+- Any command add/remove/rename must update `MastermindCommandCatalog` in the same change.
+- Keep MCP `run` tool descriptions aligned with `MastermindCommandCatalog.all`; do not hardcode a separate command list.
+- For rapid MCP driving: prefer action `delta` responses and only call `get_interface` when context is stale.
+- When mastermind/session behavior changes, validate both builds in the same branch:
+  - `cd ButtonHeistCLI && swift build -c release`
+  - `cd ButtonHeistMCP && swift build -c release`
 
 ## Feedback Loop Workflow
 

@@ -9,15 +9,20 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 1. **TheScore** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **InsideJob** - iOS framework embedded in the app being inspected
-4. **ButtonHeist** - macOS client framework (single import for Mac consumers)
-5. **buttonheist CLI** - Command-line tool for driving iOS apps (used by AI agents via Bash)
+4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheClient` and `TheMastermind`
+5. **TheMastermind** - Shared orchestration layer for device connection, session management, and command dispatch
+6. **buttonheist CLI** - Command-line tool for driving iOS apps (thin wrapper over TheMastermind)
+7. **ButtonHeistMCP** - MCP server for AI agent tool use (thin wrapper over TheMastermind)
 
 ```mermaid
 graph TB
     subgraph mac["macOS"]
-        Agent["AI Agent<br>(Claude Code)"] -->|Bash tool calls| CLI
+        Agent["AI Agent<br>(Claude Code)"] -->|MCP tool calls| MCP["ButtonHeistMCP<br>(MCP Server)"]
+        Agent -->|Bash tool calls| CLI["buttonheist CLI"]
         Scripts["Python/Shell<br>Scripts"] -->|Bash tool calls| CLI
-        CLI["buttonheist CLI"] --> HC["ButtonHeist<br>TheClient"]
+        MCP --> TM["TheMastermind<br>(Orchestration)"]
+        CLI --> TM
+        TM --> HC["ButtonHeist<br>TheClient"]
         HC --> DD["Device Discovery<br>(Wheelman)"]
         HC --> DC["Device Connection<br>(Wheelman)"]
         HC --> Socket["Socket Client<br>(Wheelman)"]
@@ -241,20 +246,70 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier, tokenHash, instanceId)
 
-### ButtonHeist (macOS Client Framework)
+### TheMastermind (Shared Orchestration Layer)
 
-**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides the high-level `TheClient` class.
+**Purpose**: Centralized command dispatch and session management. Both the CLI (`buttonheist session`) and the MCP server (`buttonheist-mcp run`) are thin wrappers over TheMastermind.
 
-**Usage**: `import ButtonHeist` gives access to all types (TheClient, HeistElement, Interface, DiscoveredDevice, etc.)
+**Location**: `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
 
 **Architecture**:
 ```
-TheClient (ObservableObject, @MainActor)
+TheMastermind (@MainActor)
+├── Configuration (deviceFilter, connectionTimeout, forceSession, token, autoReconnect)
+├── TheClient (from ButtonHeist)
+├── Device discovery + connection with configurable timeouts
+├── Auto-reconnect (up to 60 attempts, 1s interval)
+├── Command dispatch via execute(request:) → MastermindResponse
+└── MastermindCommandCatalog.all (27 supported commands)
+```
+
+**Key Types**:
+- `TheMastermind` - Main orchestrator class, `@MainActor`-isolated
+- `TheMastermind.Configuration` - Connection settings (device filter, timeout, force, token, auto-reconnect)
+- `MastermindResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, recording) with `humanFormatted()` and `jsonDict()` serialization
+- `MastermindError` - Error enum with human-readable `LocalizedError` descriptions
+- `MastermindCommandCatalog` - Single source of truth for the 27 supported commands
+
+**Command Flow**:
+1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
+2. TheMastermind auto-connects if not already connected
+3. Dispatches to the appropriate `TheClient` message
+4. Returns a typed `MastermindResponse`
+
+### ButtonHeistMCP (MCP Server)
+
+**Purpose**: Standalone MCP server that exposes a single `run` tool backed by TheMastermind. Allows AI agents to drive iOS apps via MCP tool calls.
+
+**Location**: `ButtonHeistMCP/`
+
+**Architecture**:
+```
+ButtonHeistMCP (Swift executable, macOS 14+)
+├── main.swift — Server setup, tool handler, response rendering
+├── ToolDefinitions.swift — run tool schema (commands from MastermindCommandCatalog)
+└── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
+```
+
+**Key Behaviors**:
+- Single `run` tool accepts `{command, ...params}` and delegates to `mastermind.execute(request:)`
+- Screenshots are returned as inline MCP image content items
+- Recording video data is replaced with a size summary to keep responses readable
+- Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_FORCE`
+
+### ButtonHeist (macOS Client Framework)
+
+**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides the high-level `TheClient` class and `TheMastermind` orchestration layer.
+
+**Usage**: `import ButtonHeist` gives access to all types (TheClient, TheMastermind, HeistElement, Interface, DiscoveredDevice, etc.)
+
+**Architecture**:
+```
+TheClient (@Observable, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
 │   └── NWConnection (service resolution + data transport)
-└── Published Properties
+└── Observable Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
     ├── connectionState: ConnectionState
@@ -265,7 +320,7 @@ TheClient (ObservableObject, @MainActor)
 
 **Dual API Design**:
 
-1. **SwiftUI (Reactive)**: `@Published` properties trigger view updates
+1. **SwiftUI (Reactive)**: `@Observable` properties trigger view updates
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
@@ -283,34 +338,36 @@ stateDiagram-v2
 
 ## Data Flow
 
-### CLI Agent Flow
+### Agent Flow (CLI and MCP)
 
-The CLI is the primary interface for AI agents. Agents use the Bash tool to run `buttonheist` commands directly. Device discovery is handled via Bonjour.
+AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the MCP server (`buttonheist-mcp`). Both are thin wrappers over `TheMastermind`, which handles device discovery, connection, and command dispatch.
 
+**Via MCP (preferred for AI agents)**:
 ```
-1. Agent reads the UI hierarchy
-   └── Bash: buttonheist watch --once --format json
-   └── CLI: Bonjour discover → TCP connect → requestInterface → print JSON → exit
+Agent → MCP tool call: run {command: "get_interface"}
+  └── ButtonHeistMCP → TheMastermind.execute() → TheClient → InsideJob
+  └── Response: JSON interface with elements
 
-2. Agent captures a screenshot
+Agent → MCP tool call: run {command: "tap", identifier: "loginButton"}
+  └── TheMastermind.execute() → touchTap → ActionResult with delta
+  └── Response: JSON with delta (noChange, valuesChanged, elementsChanged, screenChanged)
+```
+
+**Via CLI (Bash tool calls)**:
+```
+1. Stateless commands (one-shot, reconnects each time)
+   └── Bash: buttonheist watch --once --format json
    └── Bash: buttonheist screenshot --output /tmp/screen.png
-   └── CLI: Bonjour discover → TCP connect → requestScreen → save PNG → exit
+   └── Bash: buttonheist touch tap --identifier loginButton
 
-3. Agent taps a button
-   └── Bash: buttonheist touch tap --identifier loginButton --format json
-   └── CLI: Bonjour discover → TCP connect → touchTap → print ActionResult JSON → exit
-   └── JSON includes delta (noChange, valuesChanged, elementsChanged, screenChanged)
-
-4. Agent types text
-   └── Bash: buttonheist type --text "hello" --identifier emailField --format json
-   └── CLI: Bonjour discover → TCP connect → typeText → print result JSON → exit
-
-5. Agent verifies the result
-   └── Bash: buttonheist watch --once --format json
-   └── Agent compares new hierarchy to previous state
+2. Session mode (persistent connection, JSON lines on stdin/stdout)
+   └── Bash: buttonheist session --format json
+   └── stdin: {"command":"get_interface"}  → stdout: JSON response
+   └── stdin: {"command":"tap","identifier":"loginButton"}  → stdout: JSON response
+   └── TheMastermind maintains connection across commands
 ```
 
-Each CLI invocation is stateless — it discovers via Bonjour, connects, performs the operation, and exits.
+**Best practice for rapid interaction**: Use action `delta` responses and only call `get_interface` when context is stale.
 
 ### Discovery Flow
 
@@ -522,7 +579,6 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `INSIDEJOB_DISABLE` | "true"/"1"/"yes" to disable auto-start | not set |
-| `INSIDEJOB_PORT` | Fixed port number, 0 = auto | 0 |
 | `INSIDEJOB_POLLING_INTERVAL` | Polling interval in seconds | 1.0 |
 | `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |

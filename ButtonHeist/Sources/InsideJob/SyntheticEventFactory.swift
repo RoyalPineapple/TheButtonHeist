@@ -13,7 +13,7 @@ final class SyntheticEventFactory {
         let app = UIApplication.shared
         let selector = NSSelectorFromString("_touchesEvent")
         guard app.responds(to: selector) else {
-            serverLog("[SyntheticEventFactory] UIApplication doesn't respond to _touchesEvent")
+            insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
             return nil
         }
         return app.perform(selector)?.takeUnretainedValue() as? UIEvent
@@ -24,7 +24,7 @@ final class SyntheticEventFactory {
     static func clearTouches(from event: UIEvent) {
         let selector = NSSelectorFromString("_clearTouches")
         guard (event as NSObject).responds(to: selector) else {
-            serverLog("[SyntheticEventFactory] UIEvent doesn't respond to _clearTouches")
+            insideJobLogger.error("UIEvent doesn't respond to _clearTouches")
             return
         }
         _ = (event as NSObject).perform(selector)
@@ -38,7 +38,7 @@ final class SyntheticEventFactory {
     static func addTouch(_ touch: UITouch, to event: UIEvent, delayed: Bool = false) {
         let selector = NSSelectorFromString("_addTouch:forDelayedDelivery:")
         guard (event as NSObject).responds(to: selector) else {
-            serverLog("[SyntheticEventFactory] UIEvent doesn't respond to _addTouch:forDelayedDelivery:")
+            insideJobLogger.error("UIEvent doesn't respond to _addTouch:forDelayedDelivery:")
             return
         }
 
@@ -57,7 +57,7 @@ final class SyntheticEventFactory {
     static func setHIDEvent(_ hidEvent: UnsafeMutableRawPointer, on event: UIEvent) {
         let selector = NSSelectorFromString("_setHIDEvent:")
         guard (event as NSObject).responds(to: selector) else {
-            serverLog("[SyntheticEventFactory] UIEvent doesn't respond to _setHIDEvent:")
+            insideJobLogger.error("UIEvent doesn't respond to _setHIDEvent:")
             return
         }
         // Must use direct IMP invocation — perform(_:with:) boxes the raw pointer

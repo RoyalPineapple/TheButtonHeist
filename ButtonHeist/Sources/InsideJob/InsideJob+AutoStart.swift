@@ -1,6 +1,9 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import os.log
+
+private let autoStartLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "autostart")
 
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
@@ -10,21 +13,21 @@ import UIKit
 /// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
 @_cdecl("InsideJob_autoStartFromLoad")
 public func insideJobAutoStartFromLoad() {
-    NSLog("[InsideJob] ========== AUTO-START BEGIN ==========")
-    NSLog("[InsideJob] Bundle ID: %@", Bundle.main.bundleIdentifier ?? "unknown")
-    NSLog("[InsideJob] Device: %@", UIDevice.current.name)
-    NSLog("[InsideJob] System: %@ %@", UIDevice.current.systemName, UIDevice.current.systemVersion)
+    autoStartLogger.info("========== AUTO-START BEGIN ==========")
+    autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
+    autoStartLogger.info("Device: \(UIDevice.current.name)")
+    autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
 
     // Check INSIDEJOB_DISABLE environment variable
     if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_DISABLE"],
        ["true", "1", "yes"].contains(envValue.lowercased()) {
-        NSLog("[InsideJob] Auto-start disabled via INSIDEJOB_DISABLE")
+        autoStartLogger.info("Auto-start disabled via INSIDEJOB_DISABLE")
         return
     }
 
     // Check Info.plist InsideJobDisableAutoStart
     if let disable = Bundle.main.object(forInfoDictionaryKey: "InsideJobDisableAutoStart") as? Bool, disable {
-        NSLog("[InsideJob] Auto-start disabled via Info.plist")
+        autoStartLogger.info("Auto-start disabled via Info.plist")
         return
     }
 
@@ -53,17 +56,17 @@ public func insideJobAutoStartFromLoad() {
         instanceId = plistId
     }
 
-    NSLog("[InsideJob] Starting with polling interval: %f", interval)
+    autoStartLogger.info("Starting with polling interval: \(interval)")
 
     Task { @MainActor in
-        NSLog("[InsideJob] MainActor task executing...")
+        autoStartLogger.debug("MainActor task executing...")
         do {
             InsideJob.configure(token: token, instanceId: instanceId)
             try InsideJob.shared.start()
             InsideJob.shared.startPolling(interval: interval)
-            NSLog("[InsideJob] ========== AUTO-START SUCCESS ==========")
+            autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {
-            NSLog("[InsideJob] ========== AUTO-START FAILED: %@ ==========", String(describing: error))
+            autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")
         }
     }
 }

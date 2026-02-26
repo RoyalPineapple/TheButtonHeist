@@ -1,7 +1,6 @@
 import ArgumentParser
 import Foundation
 import ButtonHeist
-import TheScore
 
 struct StopRecordingCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -9,23 +8,22 @@ struct StopRecordingCommand: AsyncParsableCommand {
         abstract: "Stop an in-progress screen recording"
     )
 
+    @OptionGroup var connection: ConnectionOptions
+
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
-    @Flag(name: .shortAndLong, help: "Suppress status messages")
-    var quiet: Bool = false
-
-    @Option(name: .long, help: "Target device by name, ID prefix, or index")
-    var device: String?
-
     @MainActor
     func run() async throws {
-        let connector = DeviceConnector(deviceFilter: device, quiet: quiet)
+        let connector = DeviceConnector(
+            deviceFilter: connection.device, token: connection.token,
+            quiet: connection.quiet, force: connection.force
+        )
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
 
-        if !quiet { logStatus("Stopping recording...") }
+        if !connection.quiet { logStatus("Stopping recording...") }
         client.send(.stopRecording)
 
         // Wait briefly for the server to acknowledge — the recording payload
@@ -33,6 +31,6 @@ struct StopRecordingCommand: AsyncParsableCommand {
         // (running in background) receives it and writes the file.
         try? await Task.sleep(nanoseconds: 1_000_000_000)
 
-        if !quiet { logStatus("Stop signal sent") }
+        if !connection.quiet { logStatus("Stop signal sent") }
     }
 }

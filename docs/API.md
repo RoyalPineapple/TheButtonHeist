@@ -509,6 +509,180 @@ public enum ActionError: Error, LocalizedError {
 
 ---
 
+## TheMastermind (Orchestration Layer)
+
+**Import**: `import ButtonHeist`
+**Platform**: macOS 14.0+
+**Location**: `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
+
+### Overview
+
+TheMastermind is the shared orchestration layer for all command dispatch. Both the CLI (`buttonheist session`) and the MCP server (`buttonheist-mcp`) are thin wrappers over it.
+
+### TheMastermind Class
+
+```swift
+@MainActor
+public final class TheMastermind
+```
+
+#### Configuration
+
+```swift
+public struct Configuration {
+    public var deviceFilter: String?        // Target device by name/ID/UDID
+    public var connectionTimeout: TimeInterval // Default: 30
+    public var forceSession: Bool           // Force-takeover existing session
+    public var token: String?               // Auth token (falls back to BUTTONHEIST_TOKEN env)
+    public var autoReconnect: Bool          // Auto-reconnect on disconnect (default: true)
+}
+```
+
+#### Properties
+
+##### supportedCommands
+```swift
+public static let supportedCommands: [String]  // From MastermindCommandCatalog.all
+```
+
+##### onStatus
+```swift
+public var onStatus: ((String) -> Void)?
+```
+Called with status messages during connection lifecycle (searching, connecting, reconnecting).
+
+##### onTokenReceived
+```swift
+public var onTokenReceived: ((String) -> Void)?
+```
+Called when a token is received via on-device UI approval.
+
+#### Methods
+
+##### start()
+```swift
+public func start() async throws
+```
+Discover a device, connect, and set up auto-reconnect. Idempotent if already connected.
+
+##### stop()
+```swift
+public func stop()
+```
+Disconnect and stop discovery.
+
+##### execute(request:)
+```swift
+public func execute(request: [String: Any]) async throws -> MastermindResponse
+```
+Execute a command. The `request` dictionary must contain a `command` key. Auto-connects if not already connected. Returns a typed `MastermindResponse`.
+
+### MastermindCommandCatalog
+
+```swift
+public enum MastermindCommandCatalog {
+    public static let all: [String]
+}
+```
+
+Single source of truth for the 27 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`.
+
+**Location**: `ButtonHeist/Sources/ButtonHeist/MastermindCommandCatalog.swift`
+
+### MastermindResponse
+
+```swift
+public enum MastermindResponse
+```
+
+Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String: Any]?` serialization.
+
+#### Cases
+
+| Case | Description |
+|------|-------------|
+| `ok(message:)` | Generic success with message |
+| `error(_:)` | Error with message |
+| `help(commands:)` | List of supported commands |
+| `status(connected:deviceName:)` | Connection status |
+| `devices(_:)` | List of discovered devices |
+| `interface(_:)` | UI element snapshot |
+| `action(result:)` | Action outcome with delta |
+| `screenshot(path:width:height:)` | Screenshot saved to path |
+| `screenshotData(pngData:width:height:)` | Screenshot as base64 PNG |
+| `recording(path:payload:)` | Recording saved to path |
+| `recordingData(payload:)` | Recording as base64 video |
+
+### MastermindError
+
+```swift
+public enum MastermindError: Error, LocalizedError
+```
+
+#### Cases
+
+| Case | Description |
+|------|-------------|
+| `invalidRequest(_:)` | Invalid JSON or missing command |
+| `noDeviceFound` | No devices found within timeout |
+| `noMatchingDevice(filter:available:)` | No device matching the filter |
+| `connectionTimeout` | Connection timed out |
+| `connectionFailed(_:)` | Connection failed |
+| `sessionLocked(_:)` | Session held by another driver |
+| `authFailed(_:)` | Authentication failed |
+| `notConnected` | Not connected to device |
+| `actionTimeout` | Action timed out, connection lost |
+
+---
+
+## ButtonHeistMCP (MCP Server)
+
+**Location**: `ButtonHeistMCP/`
+**Binary**: `buttonheist-mcp`
+**Platform**: macOS 14.0+
+
+### Overview
+
+Standalone MCP server that exposes a single `run` tool backed by TheMastermind. Build with:
+
+```bash
+cd ButtonHeistMCP && swift build -c release
+```
+
+### Tool: `run`
+
+Execute one session command through TheMastermind.
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `command` | string | yes | Command name (from MastermindCommandCatalog) |
+| `identifier` | string | no | Target accessibility identifier |
+| `order` | integer | no | Target element order index |
+| `x`, `y` | number | no | Coordinates |
+| `text` | string | no | Text for type_text |
+| `output` | string | no | Output path for screenshot/recording |
+
+Additional command-specific parameters are passed through (`additionalProperties: true`).
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `BUTTONHEIST_DEVICE` | Default device filter |
+| `BUTTONHEIST_TOKEN` | Auth token |
+| `BUTTONHEIST_FORCE` | Set to `1` to force session takeover |
+| `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
+
+### Response Handling
+
+- Screenshots are returned as inline MCP image content items alongside the JSON payload.
+- Recording video data is replaced with a size summary to keep responses readable.
+- Error responses set `isError: true` on the MCP result.
+
+---
+
 ## TheScore Types
 
 **Import**: `import TheScore`

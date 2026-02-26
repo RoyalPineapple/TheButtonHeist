@@ -65,7 +65,7 @@ extension InsideJob {
             return
         }
 
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        let elements = snapshotElements()
         let tree = hierarchyTree.map { convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
 
@@ -101,12 +101,12 @@ extension InsideJob {
 
         // Quick check: if no animations, just yield briefly for the tree to update.
         if !hasActiveAnimations() {
-            try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
         } else {
             // Animations active — wait for them to end (fast for toggles/menus)
-            // or cap at 0.5s (avoids blocking on long simulator springs).
-            _ = await waitForAnimationsToSettle(timeout: 0.5)
-            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms layout
+            // or cap at 0.25s (avoids blocking on long simulator springs).
+            _ = await waitForAnimationsToSettle(timeout: 0.25)
+            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms layout
         }
 
         var afterTree = refreshAccessibilityData()
@@ -114,14 +114,34 @@ extension InsideJob {
         var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
 
         // If the screen changed and animations are still running (navigation push),
-        // the source screen is still sliding out. Wait a fixed 1s for the destination
-        // to fully appear, then re-snapshot. This is cheaper than polling
-        // refreshAccessibilityData() repeatedly during the transition.
+        // wait up to 350ms for the hierarchy to stabilize rather than sleeping a fixed 1s.
         if delta.kind != .noChange && hasActiveAnimations() {
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
-            afterTree = refreshAccessibilityData()
-            afterElements = snapshotElements()
-            delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
+            let pollInterval: UInt64 = 35_000_000 // 35ms
+            let maxWait: UInt64 = 350_000_000 // 350ms
+            var elapsed: UInt64 = 0
+            var stableSamples = 0
+            var lastSignature = hierarchySignature(afterElements)
+
+            while elapsed < maxWait {
+                try? await Task.sleep(nanoseconds: pollInterval)
+                elapsed += pollInterval
+
+                afterTree = refreshAccessibilityData()
+                afterElements = snapshotElements()
+                delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
+
+                let signature = hierarchySignature(afterElements)
+                if signature == lastSignature {
+                    stableSamples += 1
+                } else {
+                    stableSamples = 0
+                    lastSignature = signature
+                }
+
+                if !hasActiveAnimations() || stableSamples >= 2 {
+                    break
+                }
+            }
         }
 
         // Capture a recording frame after the action completes
@@ -134,6 +154,15 @@ extension InsideJob {
             value: value,
             interfaceDelta: delta
         )
+    }
+
+    private func hierarchySignature(_ elements: [HeistElement]) -> Int {
+        var hasher = Hasher()
+        hasher.combine(elements.count)
+        for element in elements {
+            hasher.combine(element)
+        }
+        return hasher.finalize()
     }
 }
 
