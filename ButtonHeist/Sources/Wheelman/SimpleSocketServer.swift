@@ -61,7 +61,7 @@ public actor SimpleSocketServer {
         let newListener = try NWListener(using: parameters)
 
         let actualPort: UInt16 = try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
+            nonisolated(unsafe) var resumed = false
             newListener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
@@ -165,9 +165,12 @@ public actor SimpleSocketServer {
     nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var result: Result<UInt16, Error>?
-        Task {
+        let server = self
+        let portValue = port
+        let loopback = bindToLoopback
+        Task.detached { @Sendable in
             do {
-                let port = try await self.startAsync(port: port, bindToLoopback: bindToLoopback)
+                let port = try await server.startAsync(port: portValue, bindToLoopback: loopback)
                 result = .success(port)
             } catch {
                 result = .failure(error)

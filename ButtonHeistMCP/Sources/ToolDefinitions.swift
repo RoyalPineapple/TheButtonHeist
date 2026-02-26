@@ -2,11 +2,11 @@ import MCP
 import ButtonHeist
 
 enum ToolDefinitions {
-    private static let supportedCommands = MastermindCommandCatalog.all.joined(separator: ", ")
+    private static let supportedCommands = CommandCatalog.all.joined(separator: ", ")
 
     static let run = Tool(
         name: "run",
-        description: "Send one command through TheMastermind session orchestrator. Supported commands: \(supportedCommands)",
+        description: "Send one command through TheFence session orchestrator. Supported commands: \(supportedCommands)",
         inputSchema: [
             "type": "object",
             "properties": [

@@ -1127,7 +1127,7 @@ The server binds to `::` (IPv6 any) on physical devices or `::1` (loopback) on s
 
 ### Keepalive
 
-Clients should send `ping` messages periodically (recommended: every 30 seconds) to detect connection loss.
+Clients should send `ping` messages periodically (recommended: every 3 seconds) to detect connection loss. The 3-second interval is appropriate given the 30-second session lease timeout.
 
 ### Error Recovery
 
