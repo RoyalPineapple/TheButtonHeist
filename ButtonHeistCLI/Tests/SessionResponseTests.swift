@@ -370,6 +370,22 @@ final class SessionResponseTests: XCTestCase {
         XCTAssertEqual(dict["interactionCount"] as? Int, 0)
     }
 
+    func testRecordingJsonIncludesInteractionLog() {
+        let payload = makeRecordingPayloadWithInteractions(count: 3)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()!
+        let log = dict["interactionLog"] as? [[String: Any]]
+        XCTAssertNotNil(log)
+        XCTAssertEqual(log?.count, 3)
+    }
+
+    func testRecordingJsonOmitsInteractionLogWhenNil() {
+        let payload = makeRecordingPayload(stopReason: .manual)
+        let response = SessionResponse.recording(path: "/tmp/rec.mp4", payload: payload)
+        let dict = response.jsonDict()!
+        XCTAssertNil(dict["interactionLog"])
+    }
+
     // MARK: - Helpers
 
     private func makeDevice(name: String, simulatorUDID: String? = nil) -> DiscoveredDevice {
@@ -608,6 +624,9 @@ enum SessionResponse {
                 "stopReason": payload.stopReason.rawValue,
             ]
             d["interactionCount"] = payload.interactionLog?.count ?? 0
+            if let logDicts = encodeInteractionLog(payload.interactionLog) {
+                d["interactionLog"] = logDicts
+            }
             return d
 
         case .recordingData(let payload):
@@ -622,8 +641,22 @@ enum SessionResponse {
                 "stopReason": payload.stopReason.rawValue,
             ]
             d["interactionCount"] = payload.interactionLog?.count ?? 0
+            if let logDicts = encodeInteractionLog(payload.interactionLog) {
+                d["interactionLog"] = logDicts
+            }
             return d
         }
+    }
+
+    private func encodeInteractionLog(_ events: [InteractionEvent]?) -> [[String: Any]]? {
+        guard let events, !events.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(events),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+        return array
     }
 
     private func devicesDict(_ devices: [DiscoveredDevice]) -> [String: Any] {

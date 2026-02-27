@@ -64,6 +64,7 @@ For fuzzer recordings, optimize for small file size and tolerance of agent think
 ```bash
 buttonheist record \
   --output .fuzzer-data/recordings/F-N-reproduce.mp4 \
+  --action-log .fuzzer-data/recordings/F-N-reproduce.actionlog.json \
   --max-duration 65 \
   --inactivity-timeout 60 \
   --fps 8 \
@@ -75,6 +76,7 @@ buttonheist record \
 |---------|-------|-----|
 | `--fps 8` | 8 frames/sec | Smooth enough to see interactions clearly; matches the default |
 | `--scale 0.5` | Half native | Readable for debugging, ~4x smaller than full resolution |
+| `--action-log` | JSON sidecar | Server-side interaction log — authoritative record of every command and result |
 | `--inactivity-timeout 60` | 60 seconds | Accommodates agent think time between actions (default 5s is too short) |
 | `--quiet` | Suppress status | Cleaner output when running in background |
 | `--max-duration` | Estimated | Set from duration estimation formula above |
@@ -96,6 +98,7 @@ mkdir -p .fuzzer-data/recordings
 ```bash
 buttonheist record \
   --output .fuzzer-data/recordings/F-1-reproduce.mp4 \
+  --action-log .fuzzer-data/recordings/F-1-reproduce.actionlog.json \
   --max-duration 65 --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet &
 RECORD_PID=$!
 ```
@@ -143,12 +146,13 @@ ls -la .fuzzer-data/recordings/F-1-reproduce.mp4
 
 ```
 .fuzzer-data/recordings/{FINDING_ID}-{context}.mp4
+.fuzzer-data/recordings/{FINDING_ID}-{context}.actionlog.json
 ```
 
 Examples:
-- `F-1-reproduce.mp4` — reproduction attempt for finding F-1
-- `F-3-refinement.mp4` — refinement pass verification for finding F-3
-- `F-5-investigation.mp4` — deviation investigation for finding F-5
+- `F-1-reproduce.mp4` + `F-1-reproduce.actionlog.json` — reproduction attempt for finding F-1
+- `F-3-refinement.mp4` + `F-3-refinement.actionlog.json` — refinement pass verification for finding F-3
+- `F-5-investigation.mp4` + `F-5-investigation.actionlog.json` — deviation investigation for finding F-5
 
 ## Pre-Planning Checklist
 
@@ -159,6 +163,78 @@ Before starting a recording, verify:
 3. **Output path is set**: Use the naming convention above
 4. **Device is connected**: `buttonheist list` shows the target device
 5. **Recordings directory exists**: `mkdir -p .fuzzer-data/recordings`
+
+## Action Log
+
+The `--action-log <path>` flag saves the stakeout's server-side interaction log as a JSON file alongside the MP4. This log is authoritative — it captures every command and result as seen by the server, with precise timestamps relative to recording start.
+
+**Always use `--action-log`** when recording during refinement, reproduction, or demo flows.
+
+### Format
+
+The action log is a JSON array of `InteractionEvent` objects:
+
+```json
+[
+  {
+    "timestamp": 1.234,
+    "command": {"activate": {"identifier": "loginButton", "order": null}},
+    "result": {
+      "success": true,
+      "method": "activate",
+      "message": null,
+      "value": null,
+      "interfaceDelta": {
+        "kind": "valuesChanged",
+        "elementCount": 12,
+        "valueChanges": [{"order": 3, "identifier": "loginButton", "oldValue": null, "newValue": "Loading..."}]
+      },
+      "animating": null
+    },
+    "interfaceDelta": { ... }
+  }
+]
+```
+
+Each event contains:
+- **`timestamp`**: Seconds since recording start (precise server-side timing)
+- **`command`**: The `ClientMessage` that triggered this interaction (discriminated union — key is the case name, value is the payload)
+- **`result`**: The `ActionResult` with success/failure, method used, value changes, and interface delta
+- **`interfaceDelta`**: Copy of `result.interfaceDelta` for convenience
+
+### What the Action Log Provides (vs Trace)
+
+| Data | Action Log | Trace |
+|------|-----------|-------|
+| Precise timestamps | Yes (server-side) | Approximate (client-side) |
+| Command + result | Yes (wire format) | Yes (human-readable) |
+| Interface deltas | Yes | Yes |
+| Screen fingerprints | No | Yes |
+| Element target details (label, order, actions) | No | Yes |
+| Predictions + validation | No | Yes |
+| Pre/post screen names | No | Yes |
+
+Use action logs for:
+- **Cross-checking traces**: Compare Haiku's trace entries against the action log to detect execution discrepancies
+- **Timestamped histories**: Exact timing between actions for performance analysis
+- **Authoritative results**: Server-side ground truth for what happened
+- **Reports**: Generate action log summary tables from the JSON
+
+### Reading the Action Log
+
+After the recording completes, read the JSON to get the interaction history:
+
+```bash
+# Check if action log was generated
+ls -la .fuzzer-data/recordings/F-N-reproduce.actionlog.json
+```
+
+Then use `Read` to parse the JSON and generate an Action Log Summary:
+
+| # | Timestamp | Command | Result | Delta |
+|---|-----------|---------|--------|-------|
+| 1 | 0.0s | activate(identifier: "settings") | success (activate) | screenChanged |
+| 2 | 8.3s | activate(identifier: "darkModeToggle") | success (activate) | valuesChanged |
 
 ## Troubleshooting
 

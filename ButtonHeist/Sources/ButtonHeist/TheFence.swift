@@ -157,7 +157,7 @@ public enum FenceResponse {
         case .screenshotData(let pngData, let width, let height):
             return ["status": "ok", "pngData": pngData, "width": width, "height": height]
         case .recording(let path, let payload):
-            let dict: [String: Any] = [
+            var dict: [String: Any] = [
                 "status": "ok",
                 "path": path,
                 "width": payload.width,
@@ -168,9 +168,12 @@ public enum FenceResponse {
                 "stopReason": payload.stopReason.rawValue,
                 "interactionCount": payload.interactionLog?.count ?? 0,
             ]
+            if let logDicts = encodeInteractionLog(payload.interactionLog) {
+                dict["interactionLog"] = logDicts
+            }
             return dict
         case .recordingData(let payload):
-            let dict: [String: Any] = [
+            var dict: [String: Any] = [
                 "status": "ok",
                 "videoData": payload.videoData,
                 "width": payload.width,
@@ -181,8 +184,22 @@ public enum FenceResponse {
                 "stopReason": payload.stopReason.rawValue,
                 "interactionCount": payload.interactionLog?.count ?? 0,
             ]
+            if let logDicts = encodeInteractionLog(payload.interactionLog) {
+                dict["interactionLog"] = logDicts
+            }
             return dict
         }
+    }
+
+    private func encodeInteractionLog(_ events: [InteractionEvent]?) -> [[String: Any]]? {
+        guard let events, !events.isEmpty else { return nil }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(events),
+              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return nil
+        }
+        return array
     }
 
     private func formatInterface(_ interface: Interface) -> String {

@@ -129,6 +129,7 @@ Proceed? (waiting for confirmation)
 mkdir -p .fuzzer-data/recordings
 buttonheist record \
   --output .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 \
+  --action-log .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json \
   --max-duration <estimated_duration> \
   --inactivity-timeout 60 \
   --fps 8 --scale 0.5 --quiet &
@@ -160,7 +161,7 @@ After executing the last action and the final hold pause, explicitly stop the re
 ```bash
 buttonheist stop-recording --quiet
 wait $RECORD_PID
-ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4
+ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json
 ```
 
 ## Step 5: Verify and Report
@@ -176,6 +177,7 @@ ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4
      | {FINDING_ID} | .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 | {duration}s | Demo video |
      ```
    - Add `**Demo**: .fuzzer-data/recordings/{FINDING_ID}-demo.mp4` to the finding entry
+   - If an action log was generated, add `**Action log**: .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json` to the finding entry
 
 4. Print the result:
 
@@ -184,6 +186,7 @@ ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4
 
 **Finding**: F-3 [ANOMALY] Toggle doesn't respond to activate
 **Recording**: .fuzzer-data/recordings/F-3-demo.mp4
+**Action log**: .fuzzer-data/recordings/F-3-demo.actionlog.json
 **Duration**: ~45s
 **Acts**: Context (home screen) → Happy path (wifi toggle works) → Bug (dark mode toggle fails)
 **Bug reproduced**: Yes
