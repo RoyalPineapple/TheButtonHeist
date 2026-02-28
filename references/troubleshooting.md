@@ -7,7 +7,7 @@ Common errors and how to recover from them during fuzzing.
 A command fails with "Connection timed out" or "Connection failed".
 
 **Causes & fixes:**
-- **App not running**: The app must be launched and InsideJob must be active. Verify with `buttonheist list` (which uses Bonjour discovery).
+- **App not running**: The app must be launched and TheInsideJob must be active. Verify with `buttonheist list` (which uses Bonjour discovery).
 - **App just relaunched**: The server uses an OS-assigned port advertised via Bonjour. After a relaunch, wait 2-3 seconds for the server to start and Bonjour to re-advertise.
 - **Token mismatch**: If the app requires authentication, set `BUTTONHEIST_TOKEN` or pass the correct token.
 
@@ -17,7 +17,7 @@ A command fails with "Connection timed out" or "Connection failed".
 
 `buttonheist list` returns empty or errors.
 
-- The iOS app must be running with InsideJob embedded
+- The iOS app must be running with TheInsideJob embedded
 - The simulator must be booted and the app must be in the foreground
 - The CLI discovers devices via Bonjour — give it 2-3 seconds after app launch
 - Try running `buttonheist list` again after a short wait
