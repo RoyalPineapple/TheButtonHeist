@@ -6,35 +6,39 @@ ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed TheIn
 
 ## Meet the Crew
 
-Every heist needs a team. ButtonHeist is built around a crew of specialists, each with a role to play.
+Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 ### The Inside Team (iOS)
 
-| Character | Role | What They Do |
-|-----------|------|-------------|
-| **TheInsideJob** | The Inside Operative | The embedded server running inside your iOS app. Coordinates the entire operation: manages the TCP socket, Bonjour advertisement, accessibility hierarchy, and dispatches commands to the crew. |
-| **TheMuscle** | The Bouncer | Handles authentication, session locking, and the on-device Allow/Deny UI. Decides who gets in and ensures only one driver controls the operation at a time. |
-| **TheSafecracker** | The Specialist | Performs all physical interactions with the app's UI: taps, long presses, swipes, drags, pinches, rotations, text entry, and accessibility actions. Cracks open any interface element. |
-<<<<<<< HEAD
-| **TheStakeout** | The Lookout | Captures H.264/MP4 screen recordings. Watches the scene, records everything, and composites fingerprint overlays so gestures are visible in the video. |
-| **TheFingerprints** | The Evidence | Visual touch indicators — glowing circles that appear and fade on screen during gestures. Visible on-device and composited into recordings by Stakeout. |
-| **ThePlant** | The Advance Man | Tiny ObjC `+load` hook that boots TheInsideJob before any Swift code runs. Just link the framework — no app code needed. |
+| Character | What they do |
+|-----------|--------------|
+| **TheInsideJob** | Inside operative. Runs in your iOS app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew. |
+| **TheMuscle** | Bouncer. Auth, session lock, on-device Allow/Deny. Keeps the door; only one driver at a time. |
+| **TheSafecracker** | Cracks the UI. Taps, long press, swipe, drag, pinch, rotate, text entry, accessibility actions — gets past any control. |
+| **TheStakeout** | Lookout. Captures H.264/MP4 screen recordings, composites fingerprint overlays so every gesture shows in the tape. |
+| **TheFingerprints** | Evidence. Touch indicators on screen during gestures; visible live and baked into Stakeout’s recordings. |
+| **ThePlant** | Advance man. ObjC `+load` hook that boots TheInsideJob before any Swift runs. Link the framework — no app code. |
 
 ### The Outside Team (macOS)
 
-| Character | Role | What They Do |
-|-----------|------|-------------|
-| **TheWheelman** | The Getaway Driver | The networking layer. Runs the TCP server (inside the app) and client-side discovery + connection (on macOS). Gets everyone to and from the job. |
-| **TheClient** | The Outside Coordinator | The macOS client API. Wraps discovery, connection, and typed callbacks into an Observable-friendly facade for building tools. |
-| **TheScore** | The Score | The shared protocol types — all wire messages, element types, and constants. The contract that both sides of the operation understand. |
+| Character | What they do |
+|-----------|--------------|
+| **TheWheelman** | Getaway driver. TCP server (in-app) and client-side discovery + connection. Gets the crew to and from the job. |
+| **TheClient** | Outside contact. Discovery, connection, typed callbacks — the API you use to talk to the inside crew. |
+| **TheScore** | The score. Shared wire types, element shapes, constants — the contract both sides speak. |
+| **TheMastermind** | Coordinator. @Observable over TheWheelman: discovery, connection, callbacks for SwiftUI and tools. |
+| **TheFence** | Boss. Command dispatch for CLI and MCP. Runs activate, gesture, get_interface, etc.; delegates connection to TheMastermind. |
+| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
+| **ButtonHeistMCP** | Agent interface. Eleven tools that call through TheFence so Claude (or any MCP client) can run the job. |
 
-### Supporting Cast
+### Supporting cast
 
-Not every crew member has a code name. These are the specialists behind the scenes:
+No code names — just the crew behind the crew:
 
-- **SyntheticTouchFactory** / **SyntheticEventFactory** / **IOHIDEventBuilder** — Low-level touch injection plumbing used by TheSafecracker to forge UITouch and UIEvent objects via private APIs
-- **BezierSampler** — Math utility for converting bezier curves to evenly-spaced polylines
-- **CLI commands** (`buttonheist action`, `touch`, `type`, `screenshot`, `session`, etc.) — The tools the outside crew uses to issue orders
+- **TheBagman** — Holds the goods inside TheInsideJob. Element cache, hierarchy, animation detection; live view pointers stay with TheBagman.
+- **SyntheticTouchFactory** / **SyntheticEventFactory** / **IOHIDEventBuilder** — Forges UITouch and UIEvent via private APIs so TheSafecracker can move fingers on glass.
+- **TheSafecracker.BezierSampler** — Cubic bezier → polyline sampling for drawBezier gestures.
+- **CLI commands** (`buttonheist action`, `touch`, `type`, `screenshot`, `session`, …) — How the outside crew issues orders.
 
 ## Features
 
@@ -58,7 +62,7 @@ graph TD
     AI["AI Agent<br/>(Claude, any MCP client)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
     Session["buttonheist session<br/>(persistent CLI)"]
-    Client["TheClient<br/>(ButtonHeist framework)"]
+    Client["TheFence / TheMastermind<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded framework)"]
     App["Your iOS App"]
 
@@ -83,7 +87,7 @@ graph TD
 
 **End-to-end:**
 ```
-AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheClient → TCP → TheInsideJob
+AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheFence → TheMastermind → TCP → TheInsideJob
 ```
 
 ## Modules
@@ -93,9 +97,9 @@ AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheClie
 | **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **Wheelman** | iOS + macOS | TCP server/client, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (TheClient); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeistMCP** | macOS | MCP server — AI agents drive iOS apps via Model Context Protocol | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, watch, action, touch, type, screenshot, record, session | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeistMCP** | macOS | MCP server — 11 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
+| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, session, scroll, edit, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
@@ -174,8 +178,8 @@ For device targeting, command reference, and internals: **[ButtonHeistMCP/](Butt
 
 ```bash
 buttonheist list                                    # Discover devices
-buttonheist --once                                  # Single hierarchy snapshot
-buttonheist action --identifier loginButton         # Activate a button
+buttonheist session                                 # Persistent session (get_interface, activate, etc.)
+buttonheist activate --identifier loginButton       # Activate a button
 buttonheist touch tap --x 100 --y 200               # Tap coordinates
 buttonheist touch swipe --identifier list --direction up  # Swipe a list
 buttonheist type --text "Hello" --identifier nameField    # Type text
@@ -183,7 +187,7 @@ buttonheist screenshot --output screen.png          # Capture screenshot
 buttonheist record --output demo.mp4                # Record screen (auto-stops on inactivity)
 ```
 
-Full CLI reference with all 8 subcommands and 9 touch gestures: **[ButtonHeistCLI/](ButtonHeistCLI/)**
+Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)** — list, activate, action, touch (9 gestures), type, screenshot, record, session, scroll, edit actions, dismiss-keyboard.
 
 ### 4. Connect over USB
 
