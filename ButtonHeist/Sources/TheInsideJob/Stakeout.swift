@@ -7,7 +7,7 @@ import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "recording")
 
-/// Screen recording engine. Captures frames using InsideJob's window compositing
+/// Screen recording engine. Captures frames using TheInsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
 @MainActor
 final class TheStakeout {
@@ -48,7 +48,7 @@ final class TheStakeout {
     private static let maxInteractionCount = 500
     private var didLogCapWarning = false
 
-    // Frame provider closure — set by InsideJob to provide captureScreenForRecording()
+    // Frame provider closure — set by TheInsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
 
     // Completion handler — called when recording finishes for any reason

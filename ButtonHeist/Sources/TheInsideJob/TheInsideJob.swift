@@ -7,7 +7,7 @@ import TheScore
 import Wheelman
 import os.log
 
-let insideJobLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "server")
+let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")
 
 /// Weak reference wrapper for accessibility objects.
 struct WeakObject {
@@ -17,18 +17,18 @@ struct WeakObject {
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor
-public final class InsideJob {
+public final class TheInsideJob {
 
     // MARK: - Singleton
 
     /// Shared instance - use `configure(token:instanceId:)` before first access.
     /// Once configured, subsequent calls to `configure()` are no-ops.
-    nonisolated(unsafe) private static var _shared: InsideJob?
+    nonisolated(unsafe) private static var _shared: TheInsideJob?
 
-    /// The shared InsideJob singleton. Lazily created on first access.
-    public static var shared: InsideJob {
+    /// The shared TheInsideJob singleton. Lazily created on first access.
+    public static var shared: TheInsideJob {
         if let existing = _shared { return existing }
-        let instance = InsideJob()
+        let instance = TheInsideJob()
         _shared = instance
         return instance
     }
@@ -37,10 +37,10 @@ public final class InsideJob {
     /// Second and subsequent calls are no-ops.
     public static func configure(token: String? = nil, instanceId: String? = nil) {
         if _shared != nil {
-            insideJobLogger.warning("InsideJob.configure() called after already created — ignoring")
+            insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
             return
         }
-        _shared = InsideJob(token: token, instanceId: instanceId)
+        _shared = TheInsideJob(token: token, instanceId: instanceId)
     }
 
     // MARK: - Properties
@@ -68,11 +68,11 @@ public final class InsideJob {
 
     // Debounce for hierarchy updates
     var updateDebounceTask: Task<Void, Never>?
-    let updateDebounceInterval: UInt64 = InsideJob.debounceInterval
+    let updateDebounceInterval: UInt64 = TheInsideJob.debounceInterval
 
     // Polling for automatic updates (disabled by default)
     var pollingTask: Task<Void, Never>?
-    var pollingInterval: UInt64 = InsideJob.defaultPollingInterval
+    var pollingInterval: UInt64 = TheInsideJob.defaultPollingInterval
     var isPollingEnabled = false
 
     // MARK: - Initialization
@@ -89,7 +89,7 @@ public final class InsideJob {
     public func start() throws {
         guard !isRunning else { return }
 
-        insideJobLogger.info("Starting InsideJob with ServerTransport...")
+        insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let t = ServerTransport()
         wireTransport(t)
@@ -105,7 +105,7 @@ public final class InsideJob {
         }
         advertiseService(port: actualPort)
 
-        // Prevent the screen from locking while InsideJob is running
+        // Prevent the screen from locking while TheInsideJob is running
         UIApplication.shared.isIdleTimerDisabled = true
 
         startAccessibilityObservation()

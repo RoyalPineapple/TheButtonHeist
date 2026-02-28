@@ -3,7 +3,7 @@
 import UIKit
 import TheScore
 
-extension InsideJob {
+extension TheInsideJob {
 
     // MARK: - Wait For Idle Handler
 

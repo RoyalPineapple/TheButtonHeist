@@ -1,7 +1,7 @@
 #ifdef DEBUG
 #import <Foundation/Foundation.h>
 
-extern void InsideJob_autoStartFromLoad(void);
+extern void TheInsideJob_autoStartFromLoad(void);
 
 @interface ThePlantAutoStart : NSObject
 @end
@@ -10,7 +10,7 @@ extern void InsideJob_autoStartFromLoad(void);
 
 + (void)load {
     dispatch_async(dispatch_get_main_queue(), ^{
-        InsideJob_autoStartFromLoad();
+        TheInsideJob_autoStartFromLoad();
     });
 }
 

@@ -1,6 +1,6 @@
 # TheMuscle - The Bouncer
 
-> **File:** `ButtonHeist/Sources/InsideJob/TheMuscle.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheMuscle.swift`
 > **Platform:** iOS 17.0+ (UIKit)
 > **Role:** Guards the perimeter - authentication, session locking, on-device approval
 

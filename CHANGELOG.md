@@ -6,8 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **InsideJob → TheInsideJob** - Renamed iOS server framework to TheInsideJob (framework/class only; plist keys and env vars unchanged).
+
 ### Added
-- **Heist rebrand** - Complete rename from Accra to ButtonHeist with heist film metaphor (TheScore, InsideJob, Wheelman, Stakeout)
+- **Heist rebrand** - Complete rename from Accra to ButtonHeist with heist film metaphor (TheScore, TheInsideJob, Wheelman, Stakeout)
 - **iOS 26 touch injection** - Synthetic UITouch + IOHIDEvent injection with iOS 26 compatibility (fresh UIEvent per touch phase)
 - **Touch injection fallback chain** - Three-level fallback: synthetic events, accessibilityActivate(), UIControl.sendActions()
 - **Interactivity validation** - Element trait-level and view-level checks before tap injection

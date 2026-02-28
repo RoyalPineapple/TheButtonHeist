@@ -241,7 +241,7 @@ Then use `Read` to parse the JSON and generate an Action Log Summary:
 ### Recording stopped before all actions completed
 - **Inactivity timeout fired**: Your think time between actions exceeded `--inactivity-timeout`. Increase the value (try `90` or `120`).
 - **File size limit (7MB)**: Use lower `--fps` or `--scale`.
-- **App crashed**: Recording stops when InsideJob goes down.
+- **App crashed**: Recording stops when TheInsideJob goes down.
 
 ### Recording file is empty or missing
 - The device may have disconnected. Check `buttonheist list` first.

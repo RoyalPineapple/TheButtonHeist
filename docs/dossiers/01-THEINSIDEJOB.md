@@ -1,12 +1,12 @@
-# InsideJob - The Inside Operative
+# TheInsideJob - The Inside Operative
 
-> **Module:** `ButtonHeist/Sources/InsideJob/`
+> **Module:** `ButtonHeist/Sources/TheInsideJob/`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Master coordinator of the entire iOS-side operation
 
 ## Responsibilities
 
-InsideJob is the central hub running inside the target iOS app. It:
+TheInsideJob is the central hub running inside the target iOS app. It:
 
 1. **Runs a TCP server** (`SimpleSocketServer`) listening for remote commands
 2. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
@@ -19,13 +19,13 @@ InsideJob is the central hub running inside the target iOS app. It:
 
 ```mermaid
 graph TD
-    subgraph InsideJob["InsideJob (Singleton, @MainActor)"]
-        Core["InsideJob.swift - Server lifecycle, message dispatch"]
-        Acc["InsideJob+Accessibility.swift - Hierarchy parsing, delta computation"]
-        Anim["InsideJob+Animation.swift - Animation detection, waitForIdle"]
-        Poll["InsideJob+Polling.swift - Periodic hash-change polling"]
-        Screen["InsideJob+Screen.swift - Screenshot capture, recording mgmt"]
-        Auto["InsideJob+AutoStart.swift - @_cdecl entry point for ThePlant"]
+    subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
+        Core["TheInsideJob.swift - Server lifecycle, message dispatch"]
+        Acc["TheInsideJob+Accessibility.swift - Hierarchy parsing, delta computation"]
+        Anim["TheInsideJob+Animation.swift - Animation detection, waitForIdle"]
+        Poll["TheInsideJob+Polling.swift - Periodic hash-change polling"]
+        Screen["TheInsideJob+Screen.swift - Screenshot capture, recording mgmt"]
+        Auto["TheInsideJob+AutoStart.swift - @_cdecl entry point for ThePlant"]
     end
 
     subgraph Crew["Crew Members (Owned)"]
@@ -56,12 +56,12 @@ graph TD
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `InsideJob.swift` | ~400 | Core lifecycle, server wiring, message dispatch |
-| `InsideJob+Accessibility.swift` | ~300 | Hierarchy parsing, element conversion, delta computation |
-| `InsideJob+Animation.swift` | ~180 | Animation detection, settle-waiting, post-action result |
-| `InsideJob+Polling.swift` | ~80 | Periodic poll loop, debounced broadcast |
-| `InsideJob+Screen.swift` | ~120 | Screen capture, recording start/stop |
-| `InsideJob+AutoStart.swift` | ~50 | `@_cdecl` bridge for ObjC auto-start |
+| `TheInsideJob.swift` | ~400 | Core lifecycle, server wiring, message dispatch |
+| `TheInsideJob+Accessibility.swift` | ~300 | Hierarchy parsing, element conversion, delta computation |
+| `TheInsideJob+Animation.swift` | ~180 | Animation detection, settle-waiting, post-action result |
+| `TheInsideJob+Polling.swift` | ~80 | Periodic poll loop, debounced broadcast |
+| `TheInsideJob+Screen.swift` | ~120 | Screen capture, recording start/stop |
+| `TheInsideJob+AutoStart.swift` | ~50 | `@_cdecl` bridge for ObjC auto-start |
 
 ## Message Dispatch Flow
 
@@ -125,19 +125,19 @@ Two paths trigger hierarchy broadcasts:
 
 ### HIGH PRIORITY
 
-**Auth token logged in plaintext** (`InsideJob.swift:114`)
+**Auth token logged in plaintext** (`TheInsideJob.swift:114`)
 ```swift
 insideJobLogger.info("Auth token: \(self.muscle.authToken)")
 ```
 The full UUID token is emitted to the system log at `info` level. Any process with log access can read it.
 
-**`handleClientMessage` cyclomatic complexity** (`InsideJob.swift:268`)
+**`handleClientMessage` cyclomatic complexity** (`TheInsideJob.swift:268`)
 - 22-case switch statement with `swiftlint:disable:next cyclomatic_complexity` suppression
 - Each case delegates to a helper, so the individual cases are thin, but the method is a dense routing table
 
 ### MEDIUM PRIORITY
 
-**`shouldBindToLoopback` always returns `false`** (`InsideJob.swift:98`)
+**`shouldBindToLoopback` always returns `false`** (`TheInsideJob.swift:98`)
 ```swift
 private var shouldBindToLoopback: Bool { false }
 ```
@@ -154,8 +154,8 @@ Dead computed property. The server always binds to all interfaces. The documente
 - On failed interactions, an extra `refreshAccessibilityData()` call is made for the after-snapshot
 - The `command: ClientMessage` parameter was added to `performInteraction` — all 16 call sites updated
 
-**No unit tests for InsideJob itself**
-- The delta computation logic in `InsideJob+Accessibility.swift:194-299` is pure data transformation
+**No unit tests for TheInsideJob itself**
+- The delta computation logic in `TheInsideJob+Accessibility.swift:194-299` is pure data transformation
 - It could be extracted and tested without UIKit dependency
 - Currently untested
 
@@ -168,6 +168,6 @@ Dead computed property. The server always binds to all interfaces. The documente
 - This is expected iOS behavior but worth understanding
 
 **Singleton pattern**
-- `InsideJob.shared` is a replaceable singleton via `configure()`
+- `TheInsideJob.shared` is a replaceable singleton via `configure()`
 - Multiple calls to `configure()` create a new instance, but `start()` on the old one isn't called
 - Safe in practice (ThePlant only calls once), but the API allows misuse

@@ -3,7 +3,7 @@
 import UIKit
 import os.log
 
-private let autoStartLogger = Logger(subsystem: "com.buttonheist.insidejob", category: "autostart")
+private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")
 
 /// Called from Objective-C +load method to auto-start the server.
 /// Configuration via environment variables (highest priority) or Info.plist:
@@ -11,8 +11,8 @@ private let autoStartLogger = Logger(subsystem: "com.buttonheist.insidejob", cat
 /// - INSIDEJOB_TOKEN / InsideJobToken: Auth token (auto-generated if not set)
 /// - INSIDEJOB_ID / InsideJobInstanceId: Human-readable instance identifier
 /// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
-@_cdecl("InsideJob_autoStartFromLoad")
-public func insideJobAutoStartFromLoad() {
+@_cdecl("TheInsideJob_autoStartFromLoad")
+public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
     autoStartLogger.info("Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
     autoStartLogger.info("Device: \(UIDevice.current.name)")
@@ -61,9 +61,9 @@ public func insideJobAutoStartFromLoad() {
     Task { @MainActor in
         autoStartLogger.debug("MainActor task executing...")
         do {
-            InsideJob.configure(token: token, instanceId: instanceId)
-            try InsideJob.shared.start()
-            InsideJob.shared.startPolling(interval: interval)
+            TheInsideJob.configure(token: token, instanceId: instanceId)
+            try TheInsideJob.shared.start()
+            TheInsideJob.shared.startPolling(interval: interval)
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {
             autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")

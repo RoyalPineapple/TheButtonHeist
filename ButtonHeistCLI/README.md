@@ -1,6 +1,6 @@
 # ButtonHeist CLI
 
-Command-line tool for inspecting and interacting with iOS apps running InsideJob. List devices, watch the UI hierarchy live, tap buttons, swipe lists, type text, capture screenshots — all from the terminal.
+Command-line tool for inspecting and interacting with iOS apps running TheInsideJob. List devices, watch the UI hierarchy live, tap buttons, swipe lists, type text, capture screenshots — all from the terminal.
 
 ## Building
 

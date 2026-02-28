@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 import TheScore
-@testable import InsideJob
+@testable import TheInsideJob
 
 @MainActor
 final class TheMuscleTests: XCTestCase {

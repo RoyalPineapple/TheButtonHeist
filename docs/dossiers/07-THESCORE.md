@@ -29,18 +29,18 @@ graph TD
     end
 
     subgraph Consumers["Consumers"]
-        InsideJob["InsideJob - (encodes ServerMessage, - decodes ClientMessage)"]
+        TheInsideJob["TheInsideJob - (encodes ServerMessage, - decodes ClientMessage)"]
         Wheelman["Wheelman - (encodes ClientMessage, - decodes ServerMessage)"]
         ButtonHeist["ButtonHeist - (re-exports TheScore)"]
     end
 
-    Messages --> InsideJob
+    Messages --> TheInsideJob
     Messages --> Wheelman
-    Client --> InsideJob
+    Client --> TheInsideJob
     Client --> Wheelman
     Server --> InsideJob
     Server --> Wheelman
-    Elements --> InsideJob
+    Elements --> TheInsideJob
     Elements --> Wheelman
     TheScore --> ButtonHeist
 ```

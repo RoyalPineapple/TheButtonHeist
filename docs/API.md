@@ -1,20 +1,20 @@
 # ButtonHeist API Reference
 
-Complete API documentation for InsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
+Complete API documentation for TheInsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
 
-## InsideJob
+## TheInsideJob
 
-**Import**: `import InsideJob`
+**Import**: `import TheInsideJob`
 **Platform**: iOS 17.0+
-**Location**: `ButtonHeist/Sources/InsideJob/InsideJob.swift`
+**Location**: `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift`
 
 ### Overview
 
-InsideJob automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
+TheInsideJob automatically starts when your app loads via ObjC `+load`. No manual initialization is required - just link the framework and configure your Info.plist.
 
 ### Auto-Start Behavior
 
-When the InsideJob framework loads:
+When the TheInsideJob framework loads:
 1. Reads configuration from environment variables or Info.plist
 2. Creates a TCP server on an OS-assigned port
 3. Begins Bonjour advertisement as `_buttonheist._tcp`
@@ -49,13 +49,13 @@ INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within
 
 **Client-side:** Set `BUTTONHEIST_TOKEN` environment variable to authenticate with the server.
 
-### InsideJob Class
+### TheInsideJob Class
 
 Main server class. Use the shared singleton instance.
 
 ```swift
 @MainActor
-public final class InsideJob
+public final class TheInsideJob
 ```
 
 #### Properties
@@ -63,7 +63,7 @@ public final class InsideJob
 ##### shared
 
 ```swift
-public static var shared: InsideJob
+public static var shared: TheInsideJob
 ```
 
 Singleton instance. Automatically initialized on framework load.
@@ -143,7 +143,7 @@ Manually trigger a debounced hierarchy broadcast to connected clients. Uses a 30
 
 ### Interaction Philosophy: Activation-First
 
-InsideJob follows an **activation-first** strategy for all element interactions:
+TheInsideJob follows an **activation-first** strategy for all element interactions:
 
 1. **Try `accessibilityActivate()` first** -- TheBagman calls the element's native accessibility activation method via the live object reference. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
 
@@ -160,7 +160,7 @@ When a synthetic tap fallback occurs, a debug log is emitted so the behavior is 
 
 ### Touch Gesture & Text Input System (TheSafecracker)
 
-InsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only InsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBagman.
+TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBagman.
 
 **Supported gestures:**
 - `tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
@@ -782,7 +782,7 @@ public enum ConnectionState: Equatable
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable
 ```
 
-Represents a discovered InsideJob device.
+Represents a discovered TheInsideJob device.
 
 #### Properties
 
@@ -1220,7 +1220,7 @@ All subcommands that connect to a device accept these connection options:
 | Variable | Description |
 |----------|-------------|
 | `BUTTONHEIST_DEVICE` | Default device filter (overridden by `--device`) |
-| `BUTTONHEIST_TOKEN` | Auth token for InsideJob |
+| `BUTTONHEIST_TOKEN` | Auth token for TheInsideJob |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking (distinguishes drivers sharing the same token) |
 | `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout in seconds for `buttonheist session` (overridden by `--session-timeout`) |
 
@@ -1498,11 +1498,11 @@ Just import the framework - it auto-starts:
 
 ```swift
 import SwiftUI
-import InsideJob
+import TheInsideJob
 
 @main
 struct MyApp: App {
-    // InsideJob auto-starts via ObjC +load
+    // TheInsideJob auto-starts via ObjC +load
 
     var body: some Scene {
         WindowGroup {

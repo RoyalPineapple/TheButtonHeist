@@ -23,7 +23,7 @@ Thank you for your interest in contributing to ButtonHeist!
 | Directory | Description |
 |-----------|-------------|
 | `ButtonHeist/Sources/TheScore/` | Shared types and protocol messages |
-| `ButtonHeist/Sources/InsideJob/` | iOS server framework (server, touch injection, tap visualization) |
+| `ButtonHeist/Sources/TheInsideJob/` | iOS server framework (server, touch injection, tap visualization) |
 | `ButtonHeist/Sources/ThePlant/` | ObjC auto-start via +load |
 | `ButtonHeist/Sources/Wheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | `ButtonHeistCLI/` | Command-line tool (list, watch, action, touch, type, screenshot, session) |
@@ -82,7 +82,7 @@ tuist generate
 
 # Build frameworks
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
 
@@ -108,7 +108,7 @@ cd ButtonHeistCLI && swift build
 - Avoid UIKit/AppKit imports
 - Document all public types
 
-### InsideJob
+### TheInsideJob
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`

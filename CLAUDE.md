@@ -9,7 +9,7 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 | File | Purpose |
 |------|---------|
 | `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
-| `Project.swift` | Root project: TheScore, InsideJob, Wheelman, ButtonHeist frameworks + tests |
+| `Project.swift` | Root project: TheScore, TheInsideJob, Wheelman, ButtonHeist frameworks + tests |
 | `TestApp/Project.swift` | Demo apps: AccessibilityTestApp (SwiftUI) and UIKitTestApp (UIKit) |
 | `Tuist.swift` | Tuist configuration (default) |
 | `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
@@ -46,7 +46,7 @@ Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
 
 ### Demo app details
 
-The two test apps in `TestApp/Project.swift` both embed InsideJob and TheScore:
+The two test apps in `TestApp/Project.swift` both embed TheInsideJob and TheScore:
 
 - **AccessibilityTestApp** (`com.buttonheist.testapp`) — SwiftUI, sources in `TestApp/Sources/`
 - **UIKitTestApp** (`com.buttonheist.uikittestapp`) — UIKit, sources in `TestApp/UIKitSources/`
@@ -79,7 +79,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 ```
 
-Use the `AccessibilityTestApp` scheme — this embeds InsideJob, Wheelman, and all frameworks. Building just the `InsideJob` scheme only produces the framework without the app.
+Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob, Wheelman, and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
 
 ### 3. Install and launch
 
@@ -120,7 +120,7 @@ Before pushing any commit, verify the following:
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJob -destination 'generic/platform=iOS' build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
   ```
 - For device builds, include signing:
   ```bash
@@ -135,7 +135,7 @@ Before pushing any commit, verify the following:
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme InsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -196,7 +196,7 @@ Before pushing any commit, verify the following:
 
 ## Recording and Demo Commands
 
-Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with InsideJob embedded.
+Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with TheInsideJob embedded.
 
 | Command | Description |
 |---------|-------------|

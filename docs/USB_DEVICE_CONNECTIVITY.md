@@ -33,12 +33,12 @@ The `USBDeviceDiscovery` class implements this flow:
 
 ### Port Discovery
 
-InsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
+TheInsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devices are reachable on the same port via the CoreDevice IPv6 tunnel.
 
 ### Requirements
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
-2. **InsideJob must use IPv6 dual-stack** (enabled by default)
+2. **TheInsideJob must use IPv6 dual-stack** (enabled by default)
 3. **App must be running** on the device with InsideJob started
 4. **Xcode command line tools** installed (`xcrun` must be available)
 
@@ -197,7 +197,7 @@ Common issues that USB bypasses:
 ## Troubleshooting
 
 ### "Connection refused"
-- App not running or InsideJob not started
+- App not running or TheInsideJob not started
 - Wrong port (verify Info.plist has correct port)
 - Device went to sleep/background
 

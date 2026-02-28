@@ -128,7 +128,7 @@ cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
 xcrun simctl launch <UDID> com.buttonheist.testapp
 ```
 
-### Verify InsideJob is advertising
+### Verify TheInsideJob is advertising
 
 ```bash
 # Look for Bonjour service

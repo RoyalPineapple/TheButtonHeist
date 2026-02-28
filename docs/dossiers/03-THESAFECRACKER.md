@@ -1,6 +1,6 @@
 # TheSafecracker - The Specialist
 
-> **Files:** `ButtonHeist/Sources/InsideJob/TheSafecracker*.swift`
+> **Files:** `ButtonHeist/Sources/TheInsideJob/TheSafecracker*.swift`
 > **Platform:** iOS 17.0+ (UIKit, private APIs)
 > **Role:** Performs all physical interactions with the UI - touch injection, text input, gestures
 

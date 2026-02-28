@@ -6,7 +6,7 @@
 
 ## Responsibilities
 
-TheMastermind is the macOS-side counterpart to InsideJob:
+TheMastermind is the macOS-side counterpart to TheInsideJob:
 
 1. **Observable state** for SwiftUI integration (`@Observable`) - mirrors TheWheelman's state
 2. **Callback API** for non-SwiftUI consumers (CLI, MCP) via typed closures
