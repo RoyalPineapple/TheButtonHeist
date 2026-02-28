@@ -12,6 +12,11 @@ import TheScore
 @MainActor
 final class TheBagman {
 
+    /// Weak reference wrapper for accessibility objects (element cache).
+    struct WeakObject {
+        weak var object: NSObject?
+    }
+
     // MARK: - Element Storage
 
     /// Parsed accessibility elements from the last hierarchy refresh.
@@ -209,7 +214,7 @@ final class TheBagman {
 
     /// Returns all windows that should be included in the accessibility traversal,
     /// sorted by windowLevel descending (frontmost first).
-    /// Excludes our own overlay windows (FingerprintWindow).
+    /// Excludes our own overlay windows (TheFingerprints.FingerprintWindow).
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
                 .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
@@ -218,7 +223,7 @@ final class TheBagman {
 
         return windowScene.windows
             .filter { window in
-                !(window is FingerprintWindow) &&
+                !(window is TheFingerprints.FingerprintWindow) &&
                 !window.isHidden &&
                 window.bounds.size != .zero
             }
@@ -598,7 +603,7 @@ final class TheBagman {
     }
 
     /// Capture the screen including the fingerprint overlay (for recordings).
-    /// Unlike captureScreen(), this includes FingerprintWindow so
+    /// Unlike captureScreen(), this includes TheFingerprints.FingerprintWindow so
     /// tap/swipe indicators are visible in the video.
     func captureScreenForRecording() -> UIImage? {
         guard let windowScene = UIApplication.shared.connectedScenes

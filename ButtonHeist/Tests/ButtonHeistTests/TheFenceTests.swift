@@ -7,7 +7,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - CommandCatalog
 
     func testCommandCatalogContainsExpectedCommands() {
-        let commands = CommandCatalog.all
+        let commands = TheFence.CommandCatalog.all
         XCTAssertTrue(commands.contains("help"))
         XCTAssertTrue(commands.contains("tap"))
         XCTAssertTrue(commands.contains("get_interface"))
@@ -19,7 +19,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testCommandCatalogHasNoDuplicates() {
-        let commands = CommandCatalog.all
+        let commands = TheFence.CommandCatalog.all
         let unique = Set(commands)
         XCTAssertEqual(commands.count, unique.count, "CommandCatalog should not have duplicate entries")
     }

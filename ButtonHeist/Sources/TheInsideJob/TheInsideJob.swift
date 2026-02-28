@@ -9,11 +9,6 @@ import os.log
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")
 
-/// Weak reference wrapper for accessibility objects.
-struct WeakObject {
-    weak var object: NSObject?
-}
-
 /// Server that exposes accessibility hierarchy over TCP
 /// Note: All access should be from the main thread
 @MainActor

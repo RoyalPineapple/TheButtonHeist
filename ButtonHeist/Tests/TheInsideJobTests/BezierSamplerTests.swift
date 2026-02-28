@@ -6,7 +6,7 @@ import TheScore
 final class BezierSamplerTests: XCTestCase {
 
     func testSampleCountMatchesRequested() {
-        let samples = BezierSampler.sampleCubicBezier(
+        let samples = TheSafecracker.BezierSampler.sampleCubicBezier(
             p0: .zero, p1: CGPoint(x: 0, y: 100),
             p2: CGPoint(x: 100, y: 100), p3: CGPoint(x: 100, y: 0),
             sampleCount: 10
@@ -17,7 +17,7 @@ final class BezierSamplerTests: XCTestCase {
     func testFirstAndLastPointMatchEndpoints() {
         let p0 = CGPoint(x: 10, y: 20)
         let p3 = CGPoint(x: 300, y: 400)
-        let samples = BezierSampler.sampleCubicBezier(
+        let samples = TheSafecracker.BezierSampler.sampleCubicBezier(
             p0: p0, p1: CGPoint(x: 50, y: 100),
             p2: CGPoint(x: 200, y: 300), p3: p3,
             sampleCount: 50
@@ -29,7 +29,7 @@ final class BezierSamplerTests: XCTestCase {
     }
 
     func testMinimumSampleCount() {
-        let samples = BezierSampler.sampleCubicBezier(
+        let samples = TheSafecracker.BezierSampler.sampleCubicBezier(
             p0: .zero, p1: .zero, p2: CGPoint(x: 100, y: 100), p3: CGPoint(x: 100, y: 100),
             sampleCount: 1
         )
@@ -37,7 +37,7 @@ final class BezierSamplerTests: XCTestCase {
     }
 
     func testStraightLineBezier() {
-        let samples = BezierSampler.sampleCubicBezier(
+        let samples = TheSafecracker.BezierSampler.sampleCubicBezier(
             p0: CGPoint(x: 0, y: 0),
             p1: CGPoint(x: 33, y: 0),
             p2: CGPoint(x: 66, y: 0),
@@ -55,7 +55,7 @@ final class BezierSamplerTests: XCTestCase {
     }
 
     func testMultiSegmentPath() {
-        let samples = BezierSampler.sampleBezierPath(
+        let samples = TheSafecracker.BezierSampler.sampleBezierPath(
             startPoint: CGPoint(x: 0, y: 0),
             segments: [
                 BezierSegment(cp1X: 33, cp1Y: 0, cp2X: 66, cp2Y: 0, endX: 100, endY: 0),
@@ -74,7 +74,7 @@ final class BezierSamplerTests: XCTestCase {
     }
 
     func testEmptySegments() {
-        let samples = BezierSampler.sampleBezierPath(
+        let samples = TheSafecracker.BezierSampler.sampleBezierPath(
             startPoint: CGPoint(x: 50, y: 50),
             segments: []
         )

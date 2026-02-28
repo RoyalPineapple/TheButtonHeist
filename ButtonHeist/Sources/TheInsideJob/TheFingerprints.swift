@@ -2,18 +2,17 @@
 #if DEBUG
 import UIKit
 
-/// Passthrough window for fingerprint overlay (internal so TheInsideJob can filter it from traversal)
-@MainActor
-class FingerprintWindow: UIWindow {
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
-}
-
 /// Visual interaction indicators for tap and gesture tracking.
 ///
 /// Extracted from a TheSafecracker extension so it can be used as a
 /// standalone collaborator and eventually configured independently.
 @MainActor
 final class TheFingerprints {
+
+    /// Passthrough window for fingerprint overlay (filtered from accessibility traversal).
+    class FingerprintWindow: UIWindow {
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+    }
 
     private var fingerprintWindow: FingerprintWindow?
     private var trackingCircles: [UIView] = []
