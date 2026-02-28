@@ -2,7 +2,7 @@
 
 **Version**: 3.1
 
-This document specifies the communication protocol between InsideJob (iOS) and clients (Wheelman, CLI, Python scripts).
+This document specifies the communication protocol between TheInsideJob (iOS) and clients (Wheelman, CLI, Python scripts).
 
 ## Transport
 
@@ -16,7 +16,7 @@ This document specifies the communication protocol between InsideJob (iOS) and c
 ## Discovery Methods
 
 ### WiFi (Bonjour)
-InsideJob advertises itself using Bonjour:
+TheInsideJob advertises itself using Bonjour:
 - **Domain**: `local.`
 - **Type**: `_buttonheist._tcp`
 - **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
@@ -1102,7 +1102,7 @@ The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.p
 
 ### Session Locking
 
-Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control an InsideJob host at a time.
+Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
 
 **Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` and `watch` maintain persistent connections. The session concept spans multiple sequential connections from the same driver.
 
@@ -1153,7 +1153,7 @@ The session inactivity timeout (time after last connection disconnects before th
 
 ### UI Approval Flow
 
-When the token is auto-generated (not explicitly set), InsideJob supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
+When the token is auto-generated (not explicitly set), TheInsideJob supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
 
 1. Server starts with auto-generated token — a floating overlay appears showing "Waiting for connection"
 2. Client connects and sends `authenticate` with an empty token (`""`)
@@ -1184,7 +1184,7 @@ This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOK
 - **Max connections**: 5 concurrent TCP connections
 - **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
 - **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The caller (InsideJob) decides based on the runtime environment.
+- **Loopback binding**: The `bindToLoopback` parameter on `ServerTransport.start()` controls whether the server binds to `::1` (loopback only) or `::` (all interfaces). The caller (TheInsideJob) decides based on the runtime environment.
 
 ### Port Configuration
 
@@ -1209,7 +1209,7 @@ If the TCP connection is lost, clients should:
 
 ### Hierarchy Change Detection
 
-InsideJob uses hash-based change detection during polling:
+TheInsideJob uses hash-based change detection during polling:
 1. Parse hierarchy at configurable interval (default: 1.0s)
 2. Compute hash of the flat elements array
 3. Only broadcast if hash differs from last broadcast

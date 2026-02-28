@@ -5,11 +5,11 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "transport")
 
-/// Server-side transport layer for InsideJob.
+/// Server-side transport layer for TheInsideJob.
 ///
 /// Combines `SimpleSocketServer` (TCP) with Bonjour `NetService` advertisement
-/// into a single type that InsideJob can delegate to for all networking concerns.
-/// This is the API that InsideJob will consume in Batch 3.
+/// into a single type that TheInsideJob can delegate to for all networking concerns.
+/// This is the API that TheInsideJob will consume in Batch 3.
 ///
 /// Usage:
 /// ```

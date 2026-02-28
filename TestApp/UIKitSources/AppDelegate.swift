@@ -1,5 +1,5 @@
 import UIKit
-import InsideJob
+import TheInsideJob
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {

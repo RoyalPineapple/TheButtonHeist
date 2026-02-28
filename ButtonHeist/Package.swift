@@ -9,8 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "TheScore", targets: ["TheScore"]),
-        // InsideJob with auto-start: includes both Swift implementation and ObjC loader
-        .library(name: "InsideJob", targets: ["InsideJob", "ThePlant"]),
+        // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
+        .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "Wheelman", targets: ["Wheelman"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
@@ -23,21 +23,21 @@ let package = Package(
             path: "Sources/TheScore",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
-        // Swift implementation of InsideJob
+        // Swift implementation of TheInsideJob
         .target(
-            name: "InsideJob",
+            name: "TheInsideJob",
             dependencies: [
                 "TheScore",
                 "Wheelman",
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
-            path: "Sources/InsideJob",
+            path: "Sources/TheInsideJob",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         // Objective-C loader that triggers auto-start via +load
         .target(
             name: "ThePlant",
-            dependencies: ["InsideJob"],
+            dependencies: ["TheInsideJob"],
             path: "Sources/ThePlant",
             publicHeadersPath: "include"
         ),

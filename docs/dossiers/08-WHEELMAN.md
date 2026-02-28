@@ -8,8 +8,8 @@
 
 Wheelman handles all transport:
 
-1. **Bonjour discovery** (`DeviceDiscovery`) - finds InsideJob instances on the network
-2. **TCP client** (`DeviceConnection`) - connects to and exchanges messages with InsideJob
+1. **Bonjour discovery** (`DeviceDiscovery`) - finds TheInsideJob instances on the network
+2. **TCP client** (`DeviceConnection`) - connects to and exchanges messages with TheInsideJob
 3. **TCP server** (`SimpleSocketServer`) - accepts client connections on the iOS side
 4. **USB tunneling** (`USBDeviceDiscovery`) - discovers USB-connected devices via CoreDevice
 5. **Device model** (`DiscoveredDevice`) - represents a found InsideJob instance
@@ -53,7 +53,7 @@ graph TD
 
 ```mermaid
 sequenceDiagram
-    participant IJ as InsideJob (iOS)
+    participant IJ as TheInsideJob (iOS)
     participant NS as NetService
     participant Bonjour as Bonjour mDNS
     participant NWB as NWBrowser (macOS)
@@ -156,7 +156,7 @@ flowchart TD
 var vendorId: String? = nil  // line 64
 vendorId = txtRecord["vendorid"]  // line 68 - key never published!
 ```
-- `InsideJob.swift:238-255` publishes TXT keys: `simudid`, `tokenhash`, `instanceid`
+- `TheInsideJob.swift:238-255` publishes TXT keys: `simudid`, `tokenhash`, `instanceid`
 - `DeviceDiscovery` reads `simudid`, `vendorid`, `tokenhash`, `instanceid`
 - The `vendorid` key is NEVER published in the TXT record
 - `DiscoveredDevice.vendorIdentifier` is always nil for Bonjour-discovered devices

@@ -16,7 +16,7 @@ import TheScore
 /// - Empty token → UI approval prompt (Allow/Deny), approved clients receive the token
 /// - Wrong token → rejected with hint to retry without a token for a fresh session
 /// - Any connection while a session is active from a different driver → busy signal
-private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "auth")
+private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
 @MainActor
 final class TheMuscle {
@@ -54,7 +54,7 @@ final class TheMuscle {
     /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
 
-    // MARK: - Callbacks (set by InsideJob)
+    // MARK: - Callbacks (set by TheInsideJob)
 
     var sendToClient: ((_ data: Data, _ clientId: Int) -> Void)?
     var markClientAuthenticated: ((_ clientId: Int) -> Void)?

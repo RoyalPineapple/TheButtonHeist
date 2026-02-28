@@ -3,7 +3,7 @@
 import UIKit
 import TheScore
 
-extension InsideJob {
+extension TheInsideJob {
 
     // MARK: - Screen Request Handler
 

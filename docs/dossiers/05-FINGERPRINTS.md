@@ -1,6 +1,6 @@
 # Fingerprints - The Evidence
 
-> **File:** `ButtonHeist/Sources/InsideJob/Fingerprints.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheFingerprints.swift`
 > **Platform:** iOS 17.0+ (UIKit)
 > **Role:** Visual touch indicators - shows where interactions happen, composited into recordings
 
@@ -33,7 +33,7 @@ graph TD
     subgraph Consumers["Consumers"]
         Safecracker["TheSafecracker - calls show/begin/update/end"]
         StakeoutComp["Stakeout - composites circles into video frames"]
-        Hierarchy["InsideJob+Accessibility - excludes window from traversal"]
+        Hierarchy["TheInsideJob+Accessibility - excludes window from traversal"]
     end
 
     Safecracker --> InstantFP

@@ -12,66 +12,66 @@
 		04D7A9C1624C711E92F3A799 /* TheWheelman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0549AE8F41626E5CC7567AFF /* TheWheelman.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
 		0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */; };
-		0C7145EA038C828219327A5E /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
-		0F8D31DEA08DD79A3EDFE5D0 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
-		25E85EEF5360302604E6FDAD /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
+		1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
+		210AAB80D5CA1866F3DC6698 /* TheInsideJob+AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */; };
+		25DCEA667ACA42C8EF77C553 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */; };
 		261B718EC40F620AF831DFD3 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
 		292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */; };
 		2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */; };
-		2B2804658417B71B7C50D81E /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 035BA0ECCE60862DED8CFB8A /* TheFingerprints.swift */; };
-		2ED83C478536244A2AE6C4DB /* InsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B6243A7F04F92B72588A7B5 /* InsideJob.swift */; };
-		358F0D3CA7C41CD85CBFD6FA /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
-		3681D724019E6F93DBAB8382 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B79F71D10F8F6F830671118C /* TheMuscleTests.swift */; };
+		2C3B3F133972C81677C1F142 /* Stakeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A00F053586DE24ED2FD0FB /* Stakeout.swift */; };
+		2ED3C2878EC47FD8005DF370 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB9B99DC73EB3071CD27B32 /* IOHIDEventBuilder.swift */; };
+		2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		3BB15F545AEF99A195AAFF4B /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F23CF2840E34CC68BD8FC797 /* ServerTransport.swift */; };
-		426B688D92D772ED09EA3E40 /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
-		43A82FB472BDB047D768E104 /* InsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 8071638C04ED533931C15878 /* InsideJob.framework */; };
-		4733ABACD507734FA6EF732C /* InsideJob+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */; };
+		3DEAB67322D82ECF897698D5 /* TheInsideJob+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */; };
+		43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
+		444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */; };
 		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
 		4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */; };
+		56171E6C62F897C61DCE7FA0 /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
-		6327FB0A3A92C42B522775C9 /* SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF4A85B1445CDB6D88AECE8 /* SyntheticEventFactory.swift */; };
 		674F25A2AE43B004B9BD49ED /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		6A855CBF2E2A25A0115F3021 /* TheMastermindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52109DAE44BD0E9A96B8047 /* TheMastermindTests.swift */; };
+		70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A7F8340C7B335C8033319 /* TheMuscleTests.swift */; };
 		72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */; };
-		7328ABDB7C865568037C0C89 /* InsideJob+AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A8AD7325B1B8EAF82D6618 /* InsideJob+AutoStart.swift */; };
 		73DE29791CDA8BF7D55C5825 /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9068F44DC10C400D19A6F84C /* SessionLockTests.swift */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
 		7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */; };
-		7EFFE0E7E04E84649421EE37 /* IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B4A92B075CDDD7A8570C507 /* IOHIDEventBuilder.swift */; };
-		7FAF4B0D3E907DD0A24C2287 /* InsideJob+Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66234651DA75BF3554243A5 /* InsideJob+Polling.swift */; };
-		8085411183D605B70A5D3315 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD7F165D23BE7F7873ADBD3 /* SyntheticTouchFactory.swift */; };
+		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
+		81727CE6D319AFAF72AFC727 /* SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E4258CEEC5A715D4FE479F /* SyntheticTouchFactory.swift */; };
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
 		8EA793CB9AC27195C48ED73F /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */; };
-		912FF5CD0E301B8230095321 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CDEEC655F80F022B649ECE5 /* TheSafecracker+Actions.swift */; };
 		91938587DB774C0C39F979EC /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B993E5FA5DA80654F9CC03 /* Exports.swift */; };
+		9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33FA97BFD66D89E91027A83 /* TheMuscle.swift */; };
 		9CB0A9F7774C4B5F577AA368 /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C58C3164AE07FDD51D10830 /* TheFence.swift */; };
-		A3995BBE40625DB8403ECD99 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41ED9DF8C1889447BD98E4E /* TheSafecracker.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
+		A74AB42D76A561F05EB3EA3B /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179DAF88825C7F500380DD4B /* TheFingerprints.swift */; };
 		A94F551D006FE92E2590111D /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DEA097281E0383C6F06276 /* AuthFailureTests.swift */; };
-		AC8A2B11590C86C27A4A1CD6 /* InsideJob+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C0A9A3116AA1CF282FF84CC /* InsideJob+Screen.swift */; };
+		AA9C3C4951AB133A139E704C /* TheBagman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */; };
+		AB275BCF9EB98EFA36ADDCBE /* TheInsideJob+Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */; };
 		BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
-		BC85CCD2AA0AC32EA60D7867 /* InsideJob+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA324EDADD27714491303D6 /* InsideJob+Animation.swift */; };
 		BCBD96904472CF97DC0FBA32 /* ServerMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */; };
+		C0B70592639D6A69986146F1 /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8168C7514F51ACFEF6B45ED /* BezierSampler.swift */; };
 		C23A54D8EE16D10E22F9DC02 /* TheScoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */; };
 		C886F912FCAED97E9B51AD3E /* CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D25B65FCD90855DF73A24C /* CommandCatalog.swift */; };
-		C8D89CC9A34F7A8EE2299185 /* TheBagman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F949AFF465DC93ED6B0BA7A /* TheBagman.swift */; };
-		D3C2801A88967C48FFA5D1AE /* BezierSampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */; };
 		D5B498E73725F15EE96B9B56 /* TheMastermind.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45F0E59651997924336C554 /* TheMastermind.swift */; };
-		E23744BEB11389FDD146E471 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0ED247952BD22150C078646 /* TheSafecracker+TextEntry.swift */; };
+		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
+		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
+		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		DCBB571A99DCD147CF850D67 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */; };
 		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		EB70E312ACAB369A26299111 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */; };
 		EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */; };
-		F1F85AA44017F7BCA49C9B16 /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9604B490E6B44173461DD8FE /* TheMuscle.swift */; };
-		F685DE3C421249D47A20C8D3 /* Stakeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13BFD7949B07EB311587CE2D /* Stakeout.swift */; };
+		F36D407CA9D8BAD08F68D72A /* SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A790E30C2A0655A156B25C0 /* SyntheticEventFactory.swift */; };
+		F40339DF2014B630EB7867F1 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */; };
+		F49D4C0E0545F88F2D815788 /* TheInsideJob+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */; };
 		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
-		F8BF6A4A452617B8F596081A /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		F889BCD9DA93158407863900 /* TheInsideJob+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */; };
 		FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */; };
-		FCFBD502755AAEA15B44025F /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,7 +82,14 @@
 			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
 			remoteInfo = TheScore;
 		};
-		384959D6091E933A5B836D7F /* PBXContainerItemProxy */ = {
+		1DB3FCA8E5828B803CD921A9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3319961F53E8E0656480630F;
+			remoteInfo = Wheelman;
+		};
+		44667F583C708BD53710BEC0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
 			proxyType = 1;
@@ -103,6 +110,13 @@
 			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
 			remoteInfo = TheScore;
 		};
+		9A57193D9ED424CFFB012FE4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
+			remoteInfo = TheScore;
+		};
 		A31CE25A82547AAD6D034E95 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
@@ -117,28 +131,7 @@
 			remoteGlobalIDString = 01AB9D7BD988A7ADF961852B;
 			remoteInfo = ButtonHeist;
 		};
-		AC6C6EA25551E8A85C71CF7D /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
-			remoteInfo = TheScore;
-		};
-		BF08A70B46333F32AF4ADBC1 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BE5A0293C8D24991DD6DD2BA;
-			remoteInfo = InsideJob;
-		};
 		C81CB836E3752A563B9796BF /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3319961F53E8E0656480630F;
-			remoteInfo = Wheelman;
-		};
-		D1D13ACA6443E514DF97FF2B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
 			proxyType = 1;
@@ -152,19 +145,16 @@
 			remoteGlobalIDString = DE504387EAB6C70F9E30849E;
 			remoteInfo = TheScore;
 		};
+		DAD54DEB8D8895599A2E2C2E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 05095CDD5321516AFB12077C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4966D1848821855A88573DCD;
+			remoteInfo = TheInsideJob;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		284EBBE2373B47502EC41293 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		558DEF781C764B5E61035B69 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -205,7 +195,7 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B0B02F87587EF4633CA8B9F6 /* Embed Frameworks */ = {
+		B222EB8197BAD28885AF5B5A /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -215,7 +205,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B222EB8197BAD28885AF5B5A /* Embed Frameworks */ = {
+		B99C06FF78D087099018B6FB /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0AA2894149AAA52F9267CBE /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -238,38 +238,36 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		035BA0ECCE60862DED8CFB8A /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		03DEA097281E0383C6F06276 /* AuthFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFailureTests.swift; sourceTree = "<group>"; };
 		0549AE8F41626E5CC7567AFF /* TheWheelman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheWheelman.swift; sourceTree = "<group>"; };
+		06D7913F56126CFD418986FA /* TheInsideJobTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJobTests-Info.plist"; sourceTree = "<group>"; };
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
+		0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJob.swift; sourceTree = "<group>"; };
 		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
-		121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
-		13BFD7949B07EB311587CE2D /* Stakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stakeout.swift; sourceTree = "<group>"; };
+		0DB9B99DC73EB3071CD27B32 /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
+		179DAF88825C7F500380DD4B /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
-		1B4A92B075CDDD7A8570C507 /* IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOHIDEventBuilder.swift; sourceTree = "<group>"; };
 		1C58C3164AE07FDD51D10830 /* TheFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFence.swift; sourceTree = "<group>"; };
-		1CD7F165D23BE7F7873ADBD3 /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
+		26A00F053586DE24ED2FD0FB /* Stakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stakeout.swift; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
 		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ThePlantAutoStart.m; sourceTree = "<group>"; };
+		3A790E30C2A0655A156B25C0 /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
+		3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		3F7FFF3C83178165F90D0E35 /* TheScore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScore-Info.plist"; sourceTree = "<group>"; };
 		3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
 		40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
 		4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
-		4AF4A85B1445CDB6D88AECE8 /* SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticEventFactory.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
-		54E469DB190D1F9C3057ED0C /* InsideJobTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "InsideJobTests-Info.plist"; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		5B6243A7F04F92B72588A7B5 /* InsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJob.swift; sourceTree = "<group>"; };
-		5CDEEC655F80F022B649ECE5 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
+		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
+		5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagman.swift; sourceTree = "<group>"; };
+		5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Polling.swift"; sourceTree = "<group>"; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
-		7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+Accessibility.swift"; sourceTree = "<group>"; };
-		7C0A9A3116AA1CF282FF84CC /* InsideJob+Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+Screen.swift"; sourceTree = "<group>"; };
 		7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceTests.swift; sourceTree = "<group>"; };
-		7F949AFF465DC93ED6B0BA7A /* TheBagman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagman.swift; sourceTree = "<group>"; };
-		8071638C04ED533931C15878 /* InsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = InsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
 		84B993E5FA5DA80654F9CC03 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		86CDDE2889D3D89BF1BB94A4 /* Wheelman-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Wheelman-Info.plist"; sourceTree = "<group>"; };
 		886C395B67A91072CBF2A507 /* TheScoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScoreTests-Info.plist"; sourceTree = "<group>"; };
@@ -280,34 +278,36 @@
 		8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPayloadTests.swift; sourceTree = "<group>"; };
 		8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
 		9068F44DC10C400D19A6F84C /* SessionLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
-		907EE8684250AD710F0C1EA8 /* InsideJobTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InsideJobTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
-		9604B490E6B44173461DD8FE /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
-		96A8AD7325B1B8EAF82D6618 /* InsideJob+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+AutoStart.swift"; sourceTree = "<group>"; };
 		9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		9A918FE0F8CB350A49C5A16C /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		A1D6EC7354256F6B4E4A125C /* InsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "InsideJob-Info.plist"; sourceTree = "<group>"; };
 		A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
 		A45F0E59651997924336C554 /* TheMastermind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMastermind.swift; sourceTree = "<group>"; };
+		A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Animation.swift"; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
+		B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Accessibility.swift"; sourceTree = "<group>"; };
 		B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
-		B41ED9DF8C1889447BD98E4E /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
-		B79F71D10F8F6F830671118C /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		B7D25B65FCD90855DF73A24C /* CommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCatalog.swift; sourceTree = "<group>"; };
-		BFA324EDADD27714491303D6 /* InsideJob+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+Animation.swift"; sourceTree = "<group>"; };
+		BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		C33FA97BFD66D89E91027A83 /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
 		C52109DAE44BD0E9A96B8047 /* TheMastermindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMastermindTests.swift; sourceTree = "<group>"; };
+		C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+AutoStart.swift"; sourceTree = "<group>"; };
+		C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
+		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
 		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
+		DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
-		DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
 		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F0ED247952BD22150C078646 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
 		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		F23CF2840E34CC68BD8FC797 /* ServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransport.swift; sourceTree = "<group>"; };
-		F66234651DA75BF3554243A5 /* InsideJob+Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InsideJob+Polling.swift"; sourceTree = "<group>"; };
 		F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
+		F6E4258CEEC5A715D4FE479F /* SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouchFactory.swift; sourceTree = "<group>"; };
+		F8168C7514F51ACFEF6B45ED /* BezierSampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSampler.swift; sourceTree = "<group>"; };
+		FEC9D64E860D2FC24B8BD256 /* TheInsideJobTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheInsideJobTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Screen.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -316,6 +316,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				674F25A2AE43B004B9BD49ED /* TheScore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		14CA61B9B732E4A7AC523157 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */,
+				2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -331,16 +340,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		45CF8C85E9D6A9075E9EB639 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				0C7145EA038C828219327A5E /* AccessibilitySnapshotParser.framework in Frameworks */,
-				358F0D3CA7C41CD85CBFD6FA /* TheScore.framework in Frameworks */,
-				426B688D92D772ED09EA3E40 /* Wheelman.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -370,12 +369,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F785E43366810F41027004BA /* Frameworks */ = {
+		E8552EDC870A12D326E727F2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				43A82FB472BDB047D768E104 /* InsideJob.framework in Frameworks */,
-				0F8D31DEA08DD79A3EDFE5D0 /* TheScore.framework in Frameworks */,
+				D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */,
+				1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */,
+				56171E6C62F897C61DCE7FA0 /* Wheelman.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -406,8 +406,8 @@
 				A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */,
 				5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */,
 				2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */,
-				8071638C04ED533931C15878 /* InsideJob.framework */,
-				907EE8684250AD710F0C1EA8 /* InsideJobTests.xctest */,
+				BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */,
+				FEC9D64E860D2FC24B8BD256 /* TheInsideJobTests.xctest */,
 				9A918FE0F8CB350A49C5A16C /* TheScore.framework */,
 				8A1D4EE85FB1349A4CA87816 /* TheScoreTests.xctest */,
 				5606B65675665A31CFB80D72 /* Wheelman.framework */,
@@ -425,6 +425,30 @@
 			path = ButtonHeist;
 			sourceTree = "<group>";
 		};
+		17840E5599593D335B9F716D /* TheInsideJob */ = {
+			isa = PBXGroup;
+			children = (
+				F8168C7514F51ACFEF6B45ED /* BezierSampler.swift */,
+				0DB9B99DC73EB3071CD27B32 /* IOHIDEventBuilder.swift */,
+				26A00F053586DE24ED2FD0FB /* Stakeout.swift */,
+				3A790E30C2A0655A156B25C0 /* SyntheticEventFactory.swift */,
+				F6E4258CEEC5A715D4FE479F /* SyntheticTouchFactory.swift */,
+				5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */,
+				179DAF88825C7F500380DD4B /* TheFingerprints.swift */,
+				0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */,
+				B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */,
+				A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */,
+				C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */,
+				5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */,
+				FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */,
+				C33FA97BFD66D89E91027A83 /* TheMuscle.swift */,
+				3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */,
+				80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */,
+				C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */,
+			);
+			path = TheInsideJob;
+			sourceTree = "<group>";
+		};
 		1F24FF40298DC33E9D6E0207 /* ButtonHeist */ = {
 			isa = PBXGroup;
 			children = (
@@ -440,7 +464,7 @@
 			isa = PBXGroup;
 			children = (
 				1F24FF40298DC33E9D6E0207 /* ButtonHeist */,
-				817498F4760C61DBE0A051A8 /* InsideJob */,
+				17840E5599593D335B9F716D /* TheInsideJob */,
 				FD3C4BF7547AE10804BA625A /* ThePlant */,
 				7CBEA3B65E7D5861F1EEE8C2 /* TheScore */,
 				891CA96A4AFF834775C9B354 /* Wheelman */,
@@ -452,7 +476,7 @@
 			isa = PBXGroup;
 			children = (
 				00407D826337C530975FFF13 /* ButtonHeistTests */,
-				925F3868D1D9A072395CBFE6 /* InsideJobTests */,
+				A6B2D61908997D8B1576A5CF /* TheInsideJobTests */,
 				F6767A00ECE311DACAE11CD3 /* TheScoreTests */,
 				F5A6CBAA90C77D981D32BACA /* WheelmanTests */,
 			);
@@ -478,30 +502,6 @@
 			path = TheScore;
 			sourceTree = "<group>";
 		};
-		817498F4760C61DBE0A051A8 /* InsideJob */ = {
-			isa = PBXGroup;
-			children = (
-				DEFC49480C2ED06C6509CD56 /* BezierSampler.swift */,
-				5B6243A7F04F92B72588A7B5 /* InsideJob.swift */,
-				7057379D084FE9B05F1966BB /* InsideJob+Accessibility.swift */,
-				BFA324EDADD27714491303D6 /* InsideJob+Animation.swift */,
-				96A8AD7325B1B8EAF82D6618 /* InsideJob+AutoStart.swift */,
-				F66234651DA75BF3554243A5 /* InsideJob+Polling.swift */,
-				7C0A9A3116AA1CF282FF84CC /* InsideJob+Screen.swift */,
-				1B4A92B075CDDD7A8570C507 /* IOHIDEventBuilder.swift */,
-				13BFD7949B07EB311587CE2D /* Stakeout.swift */,
-				4AF4A85B1445CDB6D88AECE8 /* SyntheticEventFactory.swift */,
-				1CD7F165D23BE7F7873ADBD3 /* SyntheticTouchFactory.swift */,
-				7F949AFF465DC93ED6B0BA7A /* TheBagman.swift */,
-				035BA0ECCE60862DED8CFB8A /* TheFingerprints.swift */,
-				9604B490E6B44173461DD8FE /* TheMuscle.swift */,
-				B41ED9DF8C1889447BD98E4E /* TheSafecracker.swift */,
-				5CDEEC655F80F022B649ECE5 /* TheSafecracker+Actions.swift */,
-				F0ED247952BD22150C078646 /* TheSafecracker+TextEntry.swift */,
-			);
-			path = InsideJob;
-			sourceTree = "<group>";
-		};
 		891CA96A4AFF834775C9B354 /* Wheelman */ = {
 			isa = PBXGroup;
 			children = (
@@ -516,13 +516,13 @@
 			path = Wheelman;
 			sourceTree = "<group>";
 		};
-		925F3868D1D9A072395CBFE6 /* InsideJobTests */ = {
+		A6B2D61908997D8B1576A5CF /* TheInsideJobTests */ = {
 			isa = PBXGroup;
 			children = (
-				121A15B7F6B29F8F8D4366A0 /* BezierSamplerTests.swift */,
-				B79F71D10F8F6F830671118C /* TheMuscleTests.swift */,
+				DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */,
+				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
 			);
-			path = InsideJobTests;
+			path = TheInsideJobTests;
 			sourceTree = "<group>";
 		};
 		DB0B66B8E13EAC7B83DF0273 /* InfoPlists */ = {
@@ -530,8 +530,8 @@
 			children = (
 				8B7BC6F50889828C130CFD1A /* ButtonHeist-Info.plist */,
 				4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */,
-				A1D6EC7354256F6B4E4A125C /* InsideJob-Info.plist */,
-				54E469DB190D1F9C3057ED0C /* InsideJobTests-Info.plist */,
+				D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */,
+				06D7913F56126CFD418986FA /* TheInsideJobTests-Info.plist */,
 				3F7FFF3C83178165F90D0E35 /* TheScore-Info.plist */,
 				886C395B67A91072CBF2A507 /* TheScoreTests-Info.plist */,
 				86CDDE2889D3D89BF1BB94A4 /* Wheelman-Info.plist */,
@@ -543,8 +543,8 @@
 		F0E23FDFBE2AEBCB4B5EAD36 = {
 			isa = PBXGroup;
 			children = (
-				FEA146ADAD433E87A26D764C /* Project */,
 				119B93DA40D0AC511E09A219 /* Products */,
+				FEA146ADAD433E87A26D764C /* Project */,
 			);
 			sourceTree = "<group>";
 		};
@@ -597,11 +597,11 @@
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
-		B8A45B5F267A7BAFCA786823 /* Headers */ = {
+		22C137DFEF76FF881876D2CA /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F8BF6A4A452617B8F596081A /* ThePlantAutoStart.h in Headers */,
+				D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -653,27 +653,29 @@
 			productReference = 5606B65675665A31CFB80D72 /* Wheelman.framework */;
 			productType = "com.apple.product-type.framework";
 		};
-		5CFDE5E41A144E464C43196D /* InsideJobTests */ = {
+		4966D1848821855A88573DCD /* TheInsideJob */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8DB2A7BFD5E4DF03AFD8B8A7 /* Build configuration list for PBXNativeTarget "InsideJobTests" */;
+			buildConfigurationList = 9F9ED4384F518A334B9BEE7B /* Build configuration list for PBXNativeTarget "TheInsideJob" */;
 			buildPhases = (
-				7D692D8EEFC7DCA49F5F821D /* Sources */,
-				A2E9DF78F6CA6FD366493334 /* Resources */,
-				F785E43366810F41027004BA /* Frameworks */,
-				284EBBE2373B47502EC41293 /* Embed Frameworks */,
+				22C137DFEF76FF881876D2CA /* Headers */,
+				A55B23267CD7BA35E2DAE419 /* Sources */,
+				C2920AB6CDC3629524BF9539 /* Resources */,
+				E8552EDC870A12D326E727F2 /* Frameworks */,
+				B99C06FF78D087099018B6FB /* Embed Frameworks */,
+				EBBB19807112A4856DE95BBF /* SwiftLint */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				A84AB46EE370C94167197A91 /* PBXTargetDependency */,
-				B6487AFE8A28253047417D65 /* PBXTargetDependency */,
+				37C1C0AA613D84DB80A1AB4E /* PBXTargetDependency */,
+				65E6B0094857EB8DB55F0F95 /* PBXTargetDependency */,
 			);
-			name = InsideJobTests;
+			name = TheInsideJob;
 			packageProductDependencies = (
 			);
-			productName = InsideJobTests;
-			productReference = 907EE8684250AD710F0C1EA8 /* InsideJobTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
+			productName = TheInsideJob;
+			productReference = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 		69FF60E6A415001108B6AECC /* WheelmanTests */ = {
 			isa = PBXNativeTarget;
@@ -697,29 +699,27 @@
 			productReference = EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		BE5A0293C8D24991DD6DD2BA /* InsideJob */ = {
+		7E0F23D58CBD2EF0C15E34EB /* TheInsideJobTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 91F7FDCE954285FCE249EA7F /* Build configuration list for PBXNativeTarget "InsideJob" */;
+			buildConfigurationList = 3F6529553789FD230F67C871 /* Build configuration list for PBXNativeTarget "TheInsideJobTests" */;
 			buildPhases = (
-				B8A45B5F267A7BAFCA786823 /* Headers */,
-				DE942DCCC5654CA405AB0322 /* Sources */,
-				211F2241F110BDB41E522E53 /* Resources */,
-				45CF8C85E9D6A9075E9EB639 /* Frameworks */,
-				B0B02F87587EF4633CA8B9F6 /* Embed Frameworks */,
-				50590A0003B3C813E19AA02F /* SwiftLint */,
+				BFE4288BC3EC91D35A340D51 /* Sources */,
+				7788BB78E5D51E6E7E5D8BE6 /* Resources */,
+				14CA61B9B732E4A7AC523157 /* Frameworks */,
+				D0AA2894149AAA52F9267CBE /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				609D2E82CF147D57BF9A5D7E /* PBXTargetDependency */,
-				CBB3A88BE534789E27078F8D /* PBXTargetDependency */,
+				0EFA7BE632864C70E6E69B60 /* PBXTargetDependency */,
+				DFDFD660F8CE3FDE5E4A73A2 /* PBXTargetDependency */,
 			);
-			name = InsideJob;
+			name = TheInsideJobTests;
 			packageProductDependencies = (
 			);
-			productName = InsideJob;
-			productReference = 8071638C04ED533931C15878 /* InsideJob.framework */;
-			productType = "com.apple.product-type.framework";
+			productName = TheInsideJobTests;
+			productReference = FEC9D64E860D2FC24B8BD256 /* TheInsideJobTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		DCA40E9CBA58FAD77D4C6A4E /* TheScoreTests */ = {
 			isa = PBXNativeTarget;
@@ -791,6 +791,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				TargetAttributes = {
+				};
 			};
 			buildConfigurationList = 3A3C0FC0326E7A58AAD87CE7 /* Build configuration list for PBXProject "ButtonHeist" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -807,8 +809,8 @@
 			targets = (
 				01AB9D7BD988A7ADF961852B /* ButtonHeist */,
 				E59AC4213C28C64460B66331 /* ButtonHeistTests */,
-				BE5A0293C8D24991DD6DD2BA /* InsideJob */,
-				5CFDE5E41A144E464C43196D /* InsideJobTests */,
+				4966D1848821855A88573DCD /* TheInsideJob */,
+				7E0F23D58CBD2EF0C15E34EB /* TheInsideJobTests */,
 				DE504387EAB6C70F9E30849E /* TheScore */,
 				DCA40E9CBA58FAD77D4C6A4E /* TheScoreTests */,
 				3319961F53E8E0656480630F /* Wheelman */,
@@ -818,14 +820,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		211F2241F110BDB41E522E53 /* Resources */ = {
+		6F173592DBAF7EDA4853CDB4 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6F173592DBAF7EDA4853CDB4 /* Resources */ = {
+		7788BB78E5D51E6E7E5D8BE6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -839,14 +841,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A2E9DF78F6CA6FD366493334 /* Resources */ = {
+		B35F5F3AA6719A1B6872CEEF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B35F5F3AA6719A1B6872CEEF /* Resources */ = {
+		C2920AB6CDC3629524BF9539 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -896,25 +898,6 @@
 			shellPath = /bin/sh;
 			shellScript = "if command -v swiftlint >/dev/null 2>&1; then\n    swiftlint --fix --quiet\n    swiftlint lint --quiet\nelse\n    echo \"warning: SwiftLint not installed\"\nfi";
 		};
-		50590A0003B3C813E19AA02F /* SwiftLint */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = SwiftLint;
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if command -v swiftlint >/dev/null 2>&1; then\n    swiftlint --fix --quiet\n    swiftlint lint --quiet\nelse\n    echo \"warning: SwiftLint not installed\"\nfi";
-		};
 		548767A1637D3D8608AF00AE /* SwiftLint */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -935,6 +918,25 @@
 			shellScript = "if command -v swiftlint >/dev/null 2>&1; then\n    swiftlint --fix --quiet\n    swiftlint lint --quiet\nelse\n    echo \"warning: SwiftLint not installed\"\nfi";
 		};
 		C3A5D63E68FEB0042E6965D4 /* SwiftLint */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = SwiftLint;
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if command -v swiftlint >/dev/null 2>&1; then\n    swiftlint --fix --quiet\n    swiftlint lint --quiet\nelse\n    echo \"warning: SwiftLint not installed\"\nfi";
+		};
+		EBBB19807112A4856DE95BBF /* SwiftLint */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -1009,12 +1011,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		7D692D8EEFC7DCA49F5F821D /* Sources */ = {
+		A55B23267CD7BA35E2DAE419 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FCFBD502755AAEA15B44025F /* BezierSamplerTests.swift in Sources */,
-				3681D724019E6F93DBAB8382 /* TheMuscleTests.swift in Sources */,
+				C0B70592639D6A69986146F1 /* BezierSampler.swift in Sources */,
+				2ED3C2878EC47FD8005DF370 /* IOHIDEventBuilder.swift in Sources */,
+				2C3B3F133972C81677C1F142 /* Stakeout.swift in Sources */,
+				F36D407CA9D8BAD08F68D72A /* SyntheticEventFactory.swift in Sources */,
+				81727CE6D319AFAF72AFC727 /* SyntheticTouchFactory.swift in Sources */,
+				AA9C3C4951AB133A139E704C /* TheBagman.swift in Sources */,
+				A74AB42D76A561F05EB3EA3B /* TheFingerprints.swift in Sources */,
+				3DEAB67322D82ECF897698D5 /* TheInsideJob+Accessibility.swift in Sources */,
+				F889BCD9DA93158407863900 /* TheInsideJob+Animation.swift in Sources */,
+				210AAB80D5CA1866F3DC6698 /* TheInsideJob+AutoStart.swift in Sources */,
+				AB275BCF9EB98EFA36ADDCBE /* TheInsideJob+Polling.swift in Sources */,
+				F49D4C0E0545F88F2D815788 /* TheInsideJob+Screen.swift in Sources */,
+				D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */,
+				9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */,
+				25DCEA667ACA42C8EF77C553 /* TheSafecracker+Actions.swift in Sources */,
+				DCBB571A99DCD147CF850D67 /* TheSafecracker+TextEntry.swift in Sources */,
+				F40339DF2014B630EB7867F1 /* TheSafecracker.swift in Sources */,
+				7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1039,45 +1057,41 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DE942DCCC5654CA405AB0322 /* Sources */ = {
+		BFE4288BC3EC91D35A340D51 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D3C2801A88967C48FFA5D1AE /* BezierSampler.swift in Sources */,
-				7EFFE0E7E04E84649421EE37 /* IOHIDEventBuilder.swift in Sources */,
-				4733ABACD507734FA6EF732C /* InsideJob+Accessibility.swift in Sources */,
-				BC85CCD2AA0AC32EA60D7867 /* InsideJob+Animation.swift in Sources */,
-				7328ABDB7C865568037C0C89 /* InsideJob+AutoStart.swift in Sources */,
-				7FAF4B0D3E907DD0A24C2287 /* InsideJob+Polling.swift in Sources */,
-				AC8A2B11590C86C27A4A1CD6 /* InsideJob+Screen.swift in Sources */,
-				2ED83C478536244A2AE6C4DB /* InsideJob.swift in Sources */,
-				F685DE3C421249D47A20C8D3 /* Stakeout.swift in Sources */,
-				6327FB0A3A92C42B522775C9 /* SyntheticEventFactory.swift in Sources */,
-				8085411183D605B70A5D3315 /* SyntheticTouchFactory.swift in Sources */,
-				C8D89CC9A34F7A8EE2299185 /* TheBagman.swift in Sources */,
-				2B2804658417B71B7C50D81E /* TheFingerprints.swift in Sources */,
-				F1F85AA44017F7BCA49C9B16 /* TheMuscle.swift in Sources */,
-				912FF5CD0E301B8230095321 /* TheSafecracker+Actions.swift in Sources */,
-				E23744BEB11389FDD146E471 /* TheSafecracker+TextEntry.swift in Sources */,
-				A3995BBE40625DB8403ECD99 /* TheSafecracker.swift in Sources */,
-				25E85EEF5360302604E6FDAD /* ThePlantAutoStart.m in Sources */,
+				444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */,
+				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0EFA7BE632864C70E6E69B60 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TheInsideJob;
+			target = 4966D1848821855A88573DCD /* TheInsideJob */;
+			targetProxy = DAD54DEB8D8895599A2E2C2E /* PBXContainerItemProxy */;
+		};
+		37C1C0AA613D84DB80A1AB4E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TheScore;
+			target = DE504387EAB6C70F9E30849E /* TheScore */;
+			targetProxy = 44667F583C708BD53710BEC0 /* PBXContainerItemProxy */;
+		};
 		4FF73F7AC03BA7B3662026BE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ButtonHeist;
 			target = 01AB9D7BD988A7ADF961852B /* ButtonHeist */;
 			targetProxy = A7D7B66CC2A9ED01D5B9BBD1 /* PBXContainerItemProxy */;
 		};
-		609D2E82CF147D57BF9A5D7E /* PBXTargetDependency */ = {
+		65E6B0094857EB8DB55F0F95 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = TheScore;
-			target = DE504387EAB6C70F9E30849E /* TheScore */;
-			targetProxy = AC6C6EA25551E8A85C71CF7D /* PBXContainerItemProxy */;
+			name = Wheelman;
+			target = 3319961F53E8E0656480630F /* Wheelman */;
+			targetProxy = 1DB3FCA8E5828B803CD921A9 /* PBXContainerItemProxy */;
 		};
 		864CE9CCEF3B0A8F84871CA7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1085,35 +1099,23 @@
 			target = 3319961F53E8E0656480630F /* Wheelman */;
 			targetProxy = C81CB836E3752A563B9796BF /* PBXContainerItemProxy */;
 		};
-		A84AB46EE370C94167197A91 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = InsideJob;
-			target = BE5A0293C8D24991DD6DD2BA /* InsideJob */;
-			targetProxy = BF08A70B46333F32AF4ADBC1 /* PBXContainerItemProxy */;
-		};
-		B6487AFE8A28253047417D65 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = TheScore;
-			target = DE504387EAB6C70F9E30849E /* TheScore */;
-			targetProxy = 384959D6091E933A5B836D7F /* PBXContainerItemProxy */;
-		};
 		CA01DBF3F0E922C24E9189AA /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TheScore;
 			target = DE504387EAB6C70F9E30849E /* TheScore */;
 			targetProxy = 0A5551791301F1B168E4040A /* PBXContainerItemProxy */;
 		};
-		CBB3A88BE534789E27078F8D /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = Wheelman;
-			target = 3319961F53E8E0656480630F /* Wheelman */;
-			targetProxy = D1D13ACA6443E514DF97FF2B /* PBXContainerItemProxy */;
-		};
 		DE4AF76A7E24F03406F80154 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = TheScore;
 			target = DE504387EAB6C70F9E30849E /* TheScore */;
 			targetProxy = 6074A7DA989E51692EB0BBC4 /* PBXContainerItemProxy */;
+		};
+		DFDFD660F8CE3FDE5E4A73A2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = TheScore;
+			target = DE504387EAB6C70F9E30849E /* TheScore */;
+			targetProxy = 9A57193D9ED424CFFB012FE4 /* PBXContainerItemProxy */;
 		};
 		EFC08AE5F154BAB591313A74 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1196,32 +1198,15 @@
 		3727093C59294BD76A340939 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1235,31 +1220,18 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
 				PRODUCT_NAME = TheScore;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
 		};
@@ -1278,44 +1250,7 @@
 				PRODUCT_NAME = WheelmanTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-			};
-			name = Release;
-		};
-		4D858115C677F73C0A8D33DB /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-				);
-				INFOPLIST_FILE = "Derived/InfoPlists/InsideJobTests-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insidejob.tests;
-				PRODUCT_NAME = InsideJobTests;
-				SDKROOT = iphoneos;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
@@ -1334,59 +1269,9 @@
 				PRODUCT_NAME = TheScoreTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
-		};
-		54445733AE565EBBE08EF10E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_IDENTITY = "";
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-				);
-				INFOPLIST_FILE = "Derived/InfoPlists/InsideJob-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insidejob;
-				PRODUCT_NAME = InsideJob;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
-					"$(inherited)",
-					DEBUG,
-				);
-				SWIFT_COMPILATION_MODE = singlefile;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
-			};
-			name = Debug;
 		};
 		5AD43C3BBADC2436846A1412 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -1435,41 +1320,60 @@
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		6365DA6A382337B938B96B7D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+				);
+				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJobTests-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob.tests;
+				PRODUCT_NAME = TheInsideJobTests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
 		6ABCA99CE2546CACEFC7C1FE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1483,117 +1387,22 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
 		};
-		B053953BC4CEE9D5F72E0DED /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
-				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
-				LastSwiftMigration = 2620;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
-				PRODUCT_NAME = TheScore;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
-				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
-				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
-			};
-			name = Debug;
-		};
-		C74029FF0807F2BC718F9C8D /* Release */ = {
+		6AD1D6F6C15D1998F10E2279 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "";
@@ -1604,10 +1413,9 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
-				INFOPLIST_FILE = "Derived/InfoPlists/InsideJob-Info.plist";
+				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJob-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1624,20 +1432,113 @@
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insidejob;
-				PRODUCT_NAME = InsideJob;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob;
+				PRODUCT_NAME = TheInsideJob;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
 			name = Release;
+		};
+		77001CB0E1B4338CFE3E31BE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+				);
+				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJob-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob;
+				PRODUCT_NAME = TheInsideJob;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		B053953BC4CEE9D5F72E0DED /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				LastSwiftMigration = 2620;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
+				PRODUCT_NAME = TheScore;
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+					"$(inherited)",
+					DEBUG,
+				);
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
 		};
 		CD092A15D6AA9EC0124D887A /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1697,32 +1598,15 @@
 		CDB420765D655E899C915F4C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
-				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
-				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
-				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
-				"DEFINES_MODULE[sdk=macosx*]" = YES;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
-				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
-				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
-				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
+				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1736,43 +1620,22 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
-				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
-				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
-				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
-				"SKIP_INSTALL[sdk=macosx*]" = YES;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
 					"$(inherited)",
 					DEBUG,
 				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
-					"$(inherited)",
-					DEBUG,
-				);
-				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
-				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
-				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
-				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
-				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
-				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
-				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
@@ -1875,20 +1738,19 @@
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
 			name = Release;
 		};
-		FD4791F30F49D940BABBB5E6 /* Debug */ = {
+		FD8EE039E8F09CDDBD607BF0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
-				INFOPLIST_FILE = "Derived/InfoPlists/InsideJobTests-Info.plist";
+				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJobTests-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1904,8 +1766,8 @@
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.insidejob.tests;
-				PRODUCT_NAME = InsideJobTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.theinsidejob.tests;
+				PRODUCT_NAME = TheInsideJobTests;
 				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
@@ -1928,6 +1790,15 @@
 			buildConfigurations = (
 				CF35D2B6C6DBC65C64E5E9DA /* Debug */,
 				CD092A15D6AA9EC0124D887A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3F6529553789FD230F67C871 /* Build configuration list for PBXNativeTarget "TheInsideJobTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD8EE039E8F09CDDBD607BF0 /* Debug */,
+				6365DA6A382337B938B96B7D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1959,29 +1830,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8DB2A7BFD5E4DF03AFD8B8A7 /* Build configuration list for PBXNativeTarget "InsideJobTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				FD4791F30F49D940BABBB5E6 /* Debug */,
-				4D858115C677F73C0A8D33DB /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		91F7FDCE954285FCE249EA7F /* Build configuration list for PBXNativeTarget "InsideJob" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				54445733AE565EBBE08EF10E /* Debug */,
-				C74029FF0807F2BC718F9C8D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		99379F7A60255A417FF6BB94 /* Build configuration list for PBXNativeTarget "Wheelman" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CDB420765D655E899C915F4C /* Debug */,
 				6ABCA99CE2546CACEFC7C1FE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9F9ED4384F518A334B9BEE7B /* Build configuration list for PBXNativeTarget "TheInsideJob" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				77001CB0E1B4338CFE3E31BE /* Debug */,
+				6AD1D6F6C15D1998F10E2279 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

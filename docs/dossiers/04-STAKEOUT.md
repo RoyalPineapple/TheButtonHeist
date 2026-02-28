@@ -1,6 +1,6 @@
 # Stakeout - The Lookout
 
-> **File:** `ButtonHeist/Sources/InsideJob/Stakeout.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/Stakeout.swift`
 > **Platform:** iOS 17.0+ (AVFoundation, UIKit)
 > **Role:** Screen recording engine - captures, encodes, and delivers H.264/MP4 video
 
@@ -33,8 +33,8 @@ graph TD
         IntLog["Interaction Log - in-memory InteractionEvent array"]
     end
 
-    InsideJob["InsideJob - captureScreenForRecording()"] -->|frame closure| Capture
-    InsideJob -->|recordInteraction| IntLog
+    TheInsideJob["TheInsideJob - captureScreenForRecording()"] -->|frame closure| Capture
+    TheInsideJob -->|recordInteraction| IntLog
     TheSafecracker["TheSafecracker - onGestureMove"] -->|touch positions| FPComposite
     Capture --> FPComposite
     FPComposite --> Encoder
@@ -68,7 +68,7 @@ flowchart TD
     SizeGuard -->|no| StopSize["stop(.fileSizeLimit)"]
     SizeGuard -->|yes| DurGuard{"elapsed < maxDuration?"}
     DurGuard -->|no| StopDur["stop(.maxDuration)"]
-    DurGuard -->|yes| CaptureFrame["InsideJob.captureScreenForRecording()"]
+    DurGuard -->|yes| CaptureFrame["TheInsideJob.captureScreenForRecording()"]
 
     CaptureFrame --> DrawHierarchy["drawHierarchy(in:afterScreenUpdates:)"]
     DrawHierarchy --> CreatePB["createPixelBuffer(from: UIImage)"]
@@ -95,7 +95,7 @@ flowchart TD
 
 ## Interaction Recording (NEW)
 
-During an active recording, `InsideJob.performInteraction()` now captures each command as an `InteractionEvent` and appends it to Stakeout's in-memory log via `recordInteraction(event:)`.
+During an active recording, `TheInsideJob.performInteraction()` now captures each command as an `InteractionEvent` and appends it to Stakeout's in-memory log via `recordInteraction(event:)`.
 
 Each `InteractionEvent` contains:
 - `timestamp` (seconds since recording start, from `recordingElapsed`)
@@ -145,7 +145,7 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 - This is correct for H.264 but could produce unexpected recording dimensions
 - Users specifying `scale: 0.75` on a non-standard resolution might get slightly different output
 
-**Recording delivered to ALL connected clients** (`InsideJob+Screen.swift`)
+**Recording delivered to ALL connected clients** (`TheInsideJob+Screen.swift`)
 - `broadcastToAll` sends the video payload to every client, not just the one that started recording
 - This means multiple connected clients all receive the (potentially large) video data
 - Could be bandwidth-intensive in multi-client scenarios

@@ -8,7 +8,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 
 1. **TheScore** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
-3. **InsideJob** - iOS framework embedded in the app being inspected
+3. **TheInsideJob** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheClient` and `TheMastermind`
 5. **TheMastermind** - Shared orchestration layer for device connection, session management, and command dispatch
 6. **buttonheist CLI** - Command-line tool for driving iOS apps (thin wrapper over TheMastermind)
@@ -31,7 +31,7 @@ graph TB
     Socket <-->|"WiFi (Bonjour + TCP)<br>or USB (IPv6 + TCP)"| IJ
 
     subgraph ios["iOS Device"]
-        IJ["InsideJob<br>Framework"] --> NS["NetService<br>(Bonjour)"]
+        IJ["TheInsideJob<br>Framework"] --> NS["NetService<br>(Bonjour)"]
         IJ --> SS["SimpleSocketServer<br>(TCP)"]
         IJ --> A11y["A11y Parser"]
         IJ --> TSC["TheSafecracker<br>(Gestures)"]
@@ -69,13 +69,13 @@ graph TB
 
 **Architecture**:
 ```
-InsideJob (singleton, @MainActor) — coordinator split across extension files:
-│   InsideJob.swift              — core server lifecycle, client dispatch
-│   InsideJob+Accessibility.swift — hierarchy parsing, element conversion, delta computation
-│   InsideJob+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
-│   InsideJob+AutoStart.swift    — ObjC +load auto-start bridge
-│   InsideJob+Polling.swift      — polling loop, interface broadcasting
-│   InsideJob+Screen.swift       — screen capture, broadcasting, recording management
+TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
+│   TheInsideJob.swift              — core server lifecycle, client dispatch
+│   TheInsideJob+Accessibility.swift — hierarchy parsing, element conversion, delta computation
+│   TheInsideJob+Animation.swift    — animation detection, waitForIdle, actionResultWithDelta
+│   TheInsideJob+AutoStart.swift    — ObjC +load auto-start bridge
+│   TheInsideJob+Polling.swift      — polling loop, interface broadcasting
+│   TheInsideJob+Screen.swift       — screen capture, broadcasting, recording management
 │
 ├── SimpleSocketServer (from Wheelman; NWListener TCP server, IPv6 dual-stack)
 │   └── Client connections (file descriptors)
@@ -106,7 +106,7 @@ InsideJob (singleton, @MainActor) — coordinator split across extension files:
 
 **Auto-Start Mechanism**:
 
-InsideJob uses ObjC `+load` for automatic initialization:
+TheInsideJob uses ObjC `+load` for automatic initialization:
 
 ```
 ThePlant/
@@ -119,7 +119,7 @@ When the framework loads:
 2. Reads configuration from environment variables or Info.plist:
    - `INSIDEJOB_DISABLE` / `InsideJobDisableAutoStart` - skip startup
    - `INSIDEJOB_POLLING_INTERVAL` / `InsideJobPollingInterval` - update interval (default: 1.0s, min: 0.5s)
-3. Creates a Task on MainActor to configure and start InsideJob singleton
+3. Creates a Task on MainActor to configure and start TheInsideJob singleton
 4. Begins polling for interface changes
 
 **Threading Model**:
@@ -209,11 +209,11 @@ TheSafecracker (stateful, @MainActor)
 - Track active session driver identity and connections
 - Force-takeover handling (evict existing session on `forceSession`)
 
-**Integration**: TheMuscle communicates back to InsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
+**Integration**: TheMuscle communicates back to TheInsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
 ### Screen Capture
 
-InsideJob captures the screen using `UIGraphicsImageRenderer`:
+TheInsideJob captures the screen using `UIGraphicsImageRenderer`:
 1. Finds the foreground window scene
 2. Uses `drawHierarchy(in:afterScreenUpdates:)` to capture the full visual hierarchy (including SwiftUI)
 3. Encodes as PNG, then base64
@@ -241,7 +241,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 **Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
 
 **Key Types**:
-- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by InsideJob on iOS
+- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by TheInsideJob on iOS
 - `DeviceConnection` - TCP client with NWConnection service resolution and data transport
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, vendorIdentifier, tokenHash, instanceId)
@@ -345,7 +345,7 @@ AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the M
 **Via MCP (preferred for AI agents)**:
 ```
 Agent → MCP tool call: run {command: "get_interface"}
-  └── ButtonHeistMCP → TheMastermind.execute() → TheClient → InsideJob
+  └── ButtonHeistMCP → TheMastermind.execute() → TheClient → TheInsideJob
   └── Response: JSON interface with elements
 
 Agent → MCP tool call: run {command: "tap", identifier: "loginButton"}
@@ -542,7 +542,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 ## Threading Considerations
 
-### InsideJob (iOS)
+### TheInsideJob (iOS)
 - `@MainActor` for UIKit compatibility
 - Parser must run on main thread
 - Socket accept/read on GCD queues

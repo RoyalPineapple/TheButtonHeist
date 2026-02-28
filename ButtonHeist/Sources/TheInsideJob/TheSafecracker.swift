@@ -32,7 +32,7 @@ final class TheSafecracker {
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
-    /// InsideJob wraps this with InterfaceDelta to produce the wire ActionResult.
+    /// TheInsideJob wraps this with InterfaceDelta to produce the wire ActionResult.
     struct InteractionResult {
         let success: Bool
         let method: ActionMethod
@@ -66,7 +66,7 @@ final class TheSafecracker {
     private var activeWindow: UIWindow?
 
     /// Called during continuous gestures with all current finger positions.
-    /// Set by InsideJob to update recording overlays during gesture execution.
+    /// Set by TheInsideJob to update recording overlays during gesture execution.
     var onGestureMove: (([CGPoint]) -> Void)?
 
     // MARK: - Public: Single-Finger Gestures

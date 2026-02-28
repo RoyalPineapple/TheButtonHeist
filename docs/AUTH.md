@@ -42,7 +42,7 @@ Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new 
 
 When no explicit token is configured, the token is logged to the console:
 ```
-[InsideJob] Auth token: A1B2C3D4-E5F6-...
+[TheInsideJob] Auth token: A1B2C3D4-E5F6-...
 ```
 
 ### Client-side (macOS / CLI)
@@ -69,16 +69,16 @@ Client has the correct token (explicit or previously received via UI approval).
 ```mermaid
 sequenceDiagram
     participant Client
-    participant InsideJob as InsideJob (iOS)
+    participant TheInsideJob as TheInsideJob (iOS)
 
-    Client->>InsideJob: TCP Connect
-    InsideJob->>Client: authRequired
-    Note right of InsideJob: TheMuscle.sendAuthRequired
-    Client->>InsideJob: authenticate(token)
-    Note right of InsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → markAuthenticated
-    InsideJob->>Client: info
-    Note right of InsideJob: handleClientConnected → sendServerInfo
-    Client->>InsideJob: subscribe / requestInterface
+    Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: authRequired
+    Note right of TheInsideJob: TheMuscle.sendAuthRequired
+    Client->>TheInsideJob: authenticate(token)
+    Note right of TheInsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → markAuthenticated
+    TheInsideJob->>Client: info
+    Note right of TheInsideJob: handleClientConnected → sendServerInfo
+    Client->>TheInsideJob: subscribe / requestInterface
     Note over Client,InsideJob: Client is now fully connected
 ```
 
@@ -89,24 +89,24 @@ Client has no token. Server is in UI approval mode (auto-generated token).
 ```mermaid
 sequenceDiagram
     participant Client
-    participant InsideJob as InsideJob (iOS)
+    participant TheInsideJob as TheInsideJob (iOS)
 
-    Client->>InsideJob: TCP Connect
-    InsideJob->>Client: authRequired
-    Client->>InsideJob: authenticate(token:"")
-    Note right of InsideJob: token is empty + requiresUIApproval<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
+    Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: authRequired
+    Client->>TheInsideJob: authenticate(token:"")
+    Note right of TheInsideJob: token is empty + requiresUIApproval<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
 
     rect rgb(240, 240, 240)
-        Note right of InsideJob: Connection Request<br/>Connection #N is requesting access.<br/>[Deny] [Allow]
+        Note right of TheInsideJob: Connection Request<br/>Connection #N is requesting access.<br/>[Deny] [Allow]
     end
 
-    Note right of InsideJob: User taps Allow
-    InsideJob->>Client: authApproved(token)
+    Note right of TheInsideJob: User taps Allow
+    TheInsideJob->>Client: authApproved(token)
     Note left of Client: Client stores token for reuse
-    Note right of InsideJob: TheMuscle.approveClient<br/>→ markAuthenticated
-    InsideJob->>Client: info
-    Note right of InsideJob: handleClientConnected → sendServerInfo
-    Client->>InsideJob: subscribe / requestInterface
+    Note right of TheInsideJob: TheMuscle.approveClient<br/>→ markAuthenticated
+    TheInsideJob->>Client: info
+    Note right of TheInsideJob: handleClientConnected → sendServerInfo
+    Client->>TheInsideJob: subscribe / requestInterface
 ```
 
 The `authApproved` message includes the server's token. The client stores it and sends it on future connections, skipping the UI prompt.
@@ -116,17 +116,17 @@ The `authApproved` message includes the server's token. The client stores it and
 ```mermaid
 sequenceDiagram
     participant Client
-    participant InsideJob as InsideJob (iOS)
+    participant TheInsideJob as TheInsideJob (iOS)
 
-    Client->>InsideJob: TCP Connect
-    InsideJob->>Client: authRequired
-    Client->>InsideJob: authenticate(token:"")
-    Note right of InsideJob: → show UIAlertController
-    Note right of InsideJob: User taps Deny
-    InsideJob->>Client: authFailed
+    Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: authRequired
+    Client->>TheInsideJob: authenticate(token:"")
+    Note right of TheInsideJob: → show UIAlertController
+    Note right of TheInsideJob: User taps Deny
+    TheInsideJob->>Client: authFailed
     Note left of Client: "Connection denied by user"
-    Note right of InsideJob: → disconnect after 100ms
-    InsideJob--xClient: TCP closed
+    Note right of TheInsideJob: → disconnect after 100ms
+    TheInsideJob--xClient: TCP closed
 ```
 
 ### Invalid Token
@@ -136,16 +136,16 @@ Client sends a wrong token (typo, rotated token, etc.).
 ```mermaid
 sequenceDiagram
     participant Client
-    participant InsideJob as InsideJob (iOS)
+    participant TheInsideJob as TheInsideJob (iOS)
 
-    Client->>InsideJob: TCP Connect
-    InsideJob->>Client: authRequired
-    Client->>InsideJob: authenticate(token:"wrong")
-    Note right of InsideJob: token doesn't match
-    InsideJob->>Client: authFailed
+    Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: authRequired
+    Client->>TheInsideJob: authenticate(token:"wrong")
+    Note right of TheInsideJob: token doesn't match
+    TheInsideJob->>Client: authFailed
     Note left of Client: "Invalid token"
-    Note right of InsideJob: → disconnect after 100ms
-    InsideJob--xClient: TCP closed
+    Note right of TheInsideJob: → disconnect after 100ms
+    TheInsideJob--xClient: TCP closed
 ```
 
 ## Wire Format
@@ -198,7 +198,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 |-----------|------|
 | **TheMuscle** | Token resolution, persistence (UserDefaults), validation, UI approval state, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `requiresUIApproval`, `pendingApprovalClients`, `authenticatedClientIDs`. |
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
-| **InsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
+| **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
 | **TheClient** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
 

@@ -32,7 +32,7 @@ let project = Project(
             scripts: [copyResourceBundleScript],
             dependencies: [
                 .project(target: "TheScore", path: ".."),
-                .project(target: "InsideJob", path: ".."),
+                .project(target: "TheInsideJob", path: ".."),
             ],
             settings: .settings(base: [
                 "CODE_SIGN_STYLE": "Automatic",
@@ -69,7 +69,7 @@ let project = Project(
             scripts: [copyResourceBundleScript],
             dependencies: [
                 .project(target: "TheScore", path: ".."),
-                .project(target: "InsideJob", path: ".."),
+                .project(target: "TheInsideJob", path: ".."),
             ],
             settings: .settings(base: [
                 "CODE_SIGN_STYLE": "Automatic",

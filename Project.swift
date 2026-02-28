@@ -40,14 +40,14 @@ let project = Project(
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
-            name: "InsideJob",
+            name: "TheInsideJob",
             destinations: [.iPhone, .iPad],
             product: .framework,
-            bundleId: "com.buttonheist.insidejob",
+            bundleId: "com.buttonheist.theinsidejob",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
             sources: [
-                "ButtonHeist/Sources/InsideJob/**",
+                "ButtonHeist/Sources/TheInsideJob/**",
                 "ButtonHeist/Sources/ThePlant/**",
             ],
             headers: .headers(
@@ -139,17 +139,17 @@ let project = Project(
             ]
         ),
 
-        // MARK: - InsideJob Tests (iOS Simulator)
+        // MARK: - TheInsideJob Tests (iOS Simulator)
         .target(
-            name: "InsideJobTests",
+            name: "TheInsideJobTests",
             destinations: [.iPhone, .iPad],
             product: .unitTests,
-            bundleId: "com.buttonheist.insidejob.tests",
+            bundleId: "com.buttonheist.theinsidejob.tests",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Tests/InsideJobTests/**"],
+            sources: ["ButtonHeist/Tests/TheInsideJobTests/**"],
             dependencies: [
-                .target(name: "InsideJob"),
+                .target(name: "TheInsideJob"),
                 .target(name: "TheScore"),
             ]
         ),
@@ -189,15 +189,15 @@ let project = Project(
             ])
         ),
         .scheme(
-            name: "InsideJobTests",
+            name: "TheInsideJobTests",
             buildAction: .buildAction(targets: [
-                .target("InsideJobTests"),
-                .target("InsideJob"),
+                .target("TheInsideJobTests"),
+                .target("TheInsideJob"),
                 .target("Wheelman"),
                 .target("TheScore"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("InsideJobTests")),
+                .testableTarget(target: .target("TheInsideJobTests")),
             ])
         ),
     ]

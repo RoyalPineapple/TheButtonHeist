@@ -137,7 +137,7 @@ enum ToolDefinitions {
 
     static let listDevices = Tool(
         name: "list_devices",
-        description: "List iOS devices discovered via Bonjour that are running InsideJob.",
+        description: "List iOS devices discovered via Bonjour that are running TheInsideJob.",
         inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )

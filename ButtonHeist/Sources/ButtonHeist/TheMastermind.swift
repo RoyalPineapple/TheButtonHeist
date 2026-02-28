@@ -6,7 +6,7 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "mastermind")
 
-/// Observable session orchestrator for discovering and connecting to iOS apps running InsideJob.
+/// Observable session orchestrator for discovering and connecting to iOS apps running TheInsideJob.
 ///
 /// Thin @Observable wrapper over TheWheelman. Provides the SwiftUI-friendly API surface
 /// with published state and callback hooks. All discovery, connection, keepalive, and
