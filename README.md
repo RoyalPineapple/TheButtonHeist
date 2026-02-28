@@ -15,15 +15,15 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists, eac
 | **InsideJob** | The Inside Operative | The embedded server running inside your iOS app. Coordinates the entire operation: manages the TCP socket, Bonjour advertisement, accessibility hierarchy, and dispatches commands to the crew. |
 | **TheMuscle** | The Bouncer | Handles authentication, session locking, and the on-device Allow/Deny UI. Decides who gets in and ensures only one driver controls the operation at a time. |
 | **TheSafecracker** | The Specialist | Performs all physical interactions with the app's UI: taps, long presses, swipes, drags, pinches, rotations, text entry, and accessibility actions. Cracks open any interface element. |
-| **Stakeout** | The Lookout | Captures H.264/MP4 screen recordings. Watches the scene, records everything, and composites fingerprint overlays so gestures are visible in the video. |
-| **Fingerprints** | The Evidence | Visual touch indicators — glowing circles that appear and fade on screen during gestures. Visible on-device and composited into recordings by Stakeout. |
+| **TheStakeout** | The Lookout | Captures H.264/MP4 screen recordings. Watches the scene, records everything, and composites fingerprint overlays so gestures are visible in the video. |
+| **TheFingerprints** | The Evidence | Visual touch indicators — glowing circles that appear and fade on screen during gestures. Visible on-device and composited into recordings by Stakeout. |
 | **ThePlant** | The Advance Man | Tiny ObjC `+load` hook that boots InsideJob before any Swift code runs. Just link the framework — no app code needed. |
 
 ### The Outside Team (macOS)
 
 | Character | Role | What They Do |
 |-----------|------|-------------|
-| **Wheelman** | The Getaway Driver | The networking layer. Runs the TCP server (inside the app) and client-side discovery + connection (on macOS). Gets everyone to and from the job. |
+| **TheWheelman** | The Getaway Driver | The networking layer. Runs the TCP server (inside the app) and client-side discovery + connection (on macOS). Gets everyone to and from the job. |
 | **TheClient** | The Outside Coordinator | The macOS client API. Wraps discovery, connection, and typed callbacks into an Observable-friendly facade for building tools. |
 | **TheScore** | The Score | The shared protocol types — all wire messages, element types, and constants. The contract that both sides of the operation understand. |
 
