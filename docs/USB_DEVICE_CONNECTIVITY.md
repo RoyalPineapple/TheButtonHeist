@@ -22,7 +22,7 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 ### Automatic Discovery
 
-> **Note:** `USBDeviceDiscovery` (in the Wheelman framework) is defined but not currently wired into `TheClient`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
+> **Note:** `USBDeviceDiscovery` (in the Wheelman framework) is defined but not currently wired into `TheMastermind`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
 
 The `USBDeviceDiscovery` class implements this flow:
 
@@ -39,7 +39,7 @@ TheInsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devi
 
 1. **Device must be "connected"** in devicectl (USB cable attached, trusted)
 2. **TheInsideJob must use IPv6 dual-stack** (enabled by default)
-3. **App must be running** on the device with InsideJob started
+3. **App must be running** on the device with TheInsideJob started
 4. **Xcode command line tools** installed (`xcrun` must be available)
 
 ## Usage

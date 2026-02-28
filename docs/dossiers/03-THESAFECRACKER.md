@@ -34,7 +34,7 @@ graph TD
     end
 
     subgraph Support["Support"]
-        Bezier["BezierSampler - Cubic bezier to polyline"]
+        Bezier["TheSafecracker.BezierSampler - Cubic bezier to polyline"]
         FP["Fingerprints - Visual feedback overlay"]
     end
 
@@ -98,7 +98,7 @@ graph LR
 
     subgraph Path["Path Drawing"]
         DrawPath["drawPath(points:duration:)"]
-        DrawBezier["drawBezier via BezierSampler"]
+        DrawBezier["drawBezier via TheSafecracker.BezierSampler"]
     end
 
     subgraph Text["Text Input"]
@@ -168,17 +168,17 @@ flowchart TD
 
 ### HIGH PRIORITY
 
-**Private API usage via `unsafeBitCast`** (`SyntheticTouchFactory.swift:93,103,113,125`)
+**Private API usage via `unsafeBitCast`** (`TheSafecracker+SyntheticTouchFactory.swift:93,103,113,125`)
 - All UITouch mutation uses `unsafeBitCast(imp, to: Fn.self)` to call private selectors
 - The type cast is inherently unsafe if Apple changes a selector's signature
 - Guards: `responds(to:)` checks protect against missing selectors but NOT against signature changes
 - This is the established KIF pattern and is DEBUG-only, but should be monitored with each iOS release
 
-**`SyntheticEventFactory` creates fresh UIEvent per phase** (`SyntheticEventFactory.swift`)
+**`SyntheticEventFactory` creates fresh UIEvent per phase** (`TheSafecracker+SyntheticEventFactory.swift`)
 - iOS 26+ requires new UIEvent objects per touch phase (reusing causes validation errors)
 - This was a targeted fix for a specific iOS version - needs verification on future versions
 
-**IOHIDEventBuilder uses `dlsym`-loaded IOKit** (`IOHIDEventBuilder.swift`)
+**IOHIDEventBuilder uses `dlsym`-loaded IOKit** (`TheSafecracker+IOHIDEventBuilder.swift`)
 - All IOKit function pointers are loaded dynamically at first use
 - If IOKit reorganizes or removes these symbols, touch injection silently fails
 - The `guard` on dlsym returns nil-checks, but no runtime warning is logged on failure

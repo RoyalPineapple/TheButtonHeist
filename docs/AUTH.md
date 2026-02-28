@@ -49,7 +49,7 @@ When no explicit token is configured, the token is logged to the console:
 
 | Method | Key | Example |
 |--------|-----|---------|
-| CLI flag | `--token` | `buttonheist watch --once --token my-secret-token` |
+| CLI flag | `--token` | `buttonheist session` (or pass token via `BUTTONHEIST_TOKEN` / `--token` where supported) |
 | Environment variable | `BUTTONHEIST_TOKEN` | `export BUTTONHEIST_TOKEN=my-secret-token` |
 | UI approval | (omit token) | Client sends empty token; user approves on device |
 
@@ -79,7 +79,7 @@ sequenceDiagram
     TheInsideJob->>Client: info
     Note right of TheInsideJob: handleClientConnected → sendServerInfo
     Client->>TheInsideJob: subscribe / requestInterface
-    Note over Client,InsideJob: Client is now fully connected
+    Note over Client,TheInsideJob: Client is now fully connected
 ```
 
 ### UI Approval — Allowed
@@ -200,7 +200,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
-| **TheClient** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
+| **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
 
 ## Related Documentation
 

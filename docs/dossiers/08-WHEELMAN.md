@@ -12,7 +12,7 @@ Wheelman handles all transport:
 2. **TCP client** (`DeviceConnection`) - connects to and exchanges messages with TheInsideJob
 3. **TCP server** (`SimpleSocketServer`) - accepts client connections on the iOS side
 4. **USB tunneling** (`USBDeviceDiscovery`) - discovers USB-connected devices via CoreDevice
-5. **Device model** (`DiscoveredDevice`) - represents a found InsideJob instance
+5. **Device model** (`DiscoveredDevice`) - represents a found TheInsideJob instance
 6. **Disconnect reasons** (`DisconnectReason`) - structured enum for why a connection closed (networkError, bufferOverflow, serverClosed, authFailed, sessionLocked, localDisconnect)
 
 ## Architecture Diagram

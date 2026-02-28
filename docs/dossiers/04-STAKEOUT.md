@@ -1,12 +1,12 @@
-# Stakeout - The Lookout
+# TheStakeout - The Lookout
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/Stakeout.swift`
+> **File:** `ButtonHeist/Sources/TheInsideJob/TheStakeout.swift`
 > **Platform:** iOS 17.0+ (AVFoundation, UIKit)
 > **Role:** Screen recording engine - captures, encodes, and delivers H.264/MP4 video
 
 ## Responsibilities
 
-Stakeout handles all screen recording operations:
+TheStakeout handles all screen recording operations:
 
 1. **Frame capture** at configurable FPS (1-15, default 8)
 2. **H.264/MP4 encoding** via AVAssetWriter pipeline
@@ -119,12 +119,12 @@ flowchart LR
 
 ### HIGH PRIORITY
 
-**`swiftlint:disable file_length` suppression** (`Stakeout.swift:1`)
+**`swiftlint:disable file_length` suppression** (`TheStakeout.swift:1`)
 - File is 425 lines covering: config, state machine, capture timer, pixel buffer creation, fingerprint compositing, inactivity monitoring, and finalization
 - All in one `final class` - could benefit from extraction of the AVAssetWriter pipeline or fingerprint compositing into separate types
 - Not a bug, but the complexity warrants understanding the full state machine
 
-**7MB file size limit is disconnected from 10MB buffer limit** (`Stakeout.swift:218`)
+**7MB file size limit is disconnected from 10MB buffer limit** (`TheStakeout.swift:218`)
 ```swift
 if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 ```
@@ -135,7 +135,7 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 
 ### MEDIUM PRIORITY
 
-**Inactivity detection uses screen hash, not pixel comparison** (`Stakeout.swift`)
+**Inactivity detection uses screen hash, not pixel comparison** (`TheStakeout.swift`)
 - Hashes the captured screen image to detect changes
 - Subtle pixel changes (animations, blinking cursors) will keep recording active
 - This is the intended behavior but means recordings can be longer than expected

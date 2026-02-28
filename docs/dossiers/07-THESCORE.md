@@ -38,7 +38,7 @@ graph TD
     Messages --> Wheelman
     Client --> TheInsideJob
     Client --> Wheelman
-    Server --> InsideJob
+    Server --> TheInsideJob
     Server --> Wheelman
     Elements --> TheInsideJob
     Elements --> Wheelman

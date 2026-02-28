@@ -16,7 +16,7 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 | **TheMuscle** | Bouncer. Auth, session lock, on-device Allow/Deny. Keeps the door; only one driver at a time. |
 | **TheSafecracker** | Cracks the UI. Taps, long press, swipe, drag, pinch, rotate, text entry, accessibility actions — gets past any control. |
 | **TheStakeout** | Lookout. Captures H.264/MP4 screen recordings, composites fingerprint overlays so every gesture shows in the tape. |
-| **TheFingerprints** | Evidence. Touch indicators on screen during gestures; visible live and baked into Stakeout’s recordings. |
+| **TheFingerprints** | Evidence. Touch indicators on screen during gestures; visible live and baked into TheStakeout’s recordings. |
 | **ThePlant** | Advance man. ObjC `+load` hook that boots TheInsideJob before any Swift runs. Link the framework — no app code. |
 
 ### The Outside Team (macOS)
@@ -24,7 +24,6 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 | Character | What they do |
 |-----------|--------------|
 | **TheWheelman** | Getaway driver. TCP server (in-app) and client-side discovery + connection. Gets the crew to and from the job. |
-| **TheClient** | Outside contact. Discovery, connection, typed callbacks — the API you use to talk to the inside crew. |
 | **TheScore** | The score. Shared wire types, element shapes, constants — the contract both sides speak. |
 | **TheMastermind** | Coordinator. @Observable over TheWheelman: discovery, connection, callbacks for SwiftUI and tools. |
 | **TheFence** | Boss. Command dispatch for CLI and MCP. Runs activate, gesture, get_interface, etc.; delegates connection to TheMastermind. |

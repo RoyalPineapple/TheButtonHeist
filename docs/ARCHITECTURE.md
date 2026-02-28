@@ -9,7 +9,7 @@ ButtonHeist is a distributed system that lets AI agents (and humans) inspect and
 1. **TheScore** - Cross-platform shared types (messages, models)
 2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **TheInsideJob** - iOS framework embedded in the app being inspected
-4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheClient` and `TheMastermind`
+4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheMastermind` and `TheFence`
 5. **TheMastermind** - Shared orchestration layer for device connection, session management, and command dispatch
 6. **buttonheist CLI** - Command-line tool for driving iOS apps (thin wrapper over TheMastermind)
 7. **ButtonHeistMCP** - MCP server for AI agent tool use (thin wrapper over TheMastermind)
@@ -22,7 +22,7 @@ graph TB
         Scripts["Python/Shell<br>Scripts"] -->|Bash tool calls| CLI
         MCP --> TM["TheMastermind<br>(Orchestration)"]
         CLI --> TM
-        TM --> HC["ButtonHeist<br>TheClient"]
+        TM --> HC["ButtonHeist<br>TheMastermind / TheFence"]
         HC --> DD["Device Discovery<br>(Wheelman)"]
         HC --> DC["Device Connection<br>(Wheelman)"]
         HC --> Socket["Socket Client<br>(Wheelman)"]
@@ -63,7 +63,7 @@ graph TB
 - No platform-specific imports (UIKit/AppKit)
 - Protocol version 3.1 with token-based authentication and session locking
 
-### InsideJob
+### TheInsideJob
 
 **Purpose**: iOS server that captures and broadcasts UI element interface and handles remote interaction.
 
@@ -92,7 +92,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── SyntheticEventFactory (UIEvent manipulation)
 │   ├── IOHIDEventBuilder (multi-finger HID event creation via IOKit)
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
-├── Stakeout (screen recording engine)
+├── TheStakeout (screen recording engine)
 │   ├── AVAssetWriter (H.264/MP4 encoding)
 │   ├── Frame capture via drawHierarchy + CGContext fingerprint compositing
 │   ├── Inactivity monitor (screen hash + command tracking)
@@ -191,7 +191,7 @@ TheSafecracker (stateful, @MainActor)
 
 ### TheMuscle (Authentication & Connection Approval)
 
-**Purpose**: Manages client authentication, token persistence, and UI-based connection approval. Extracted from InsideJob to isolate auth concerns.
+**Purpose**: Manages client authentication, token persistence, and UI-based connection approval. Extracted from TheInsideJob to isolate auth concerns.
 
 **Token Persistence**: Auto-generated tokens are stored in UserDefaults (`InsideJobAuthToken` key) so they survive app relaunches. Previously approved clients can reconnect without re-approval. When an explicit token is provided via `INSIDEJOB_TOKEN` or `InsideJobToken` plist key, UserDefaults is not used.
 
@@ -256,7 +256,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 ```
 TheMastermind (@MainActor)
 ├── Configuration (deviceFilter, connectionTimeout, forceSession, token, autoReconnect)
-├── TheClient (from ButtonHeist)
+├── TheMastermind (from ButtonHeist)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → MastermindResponse
@@ -273,7 +273,7 @@ TheMastermind (@MainActor)
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
 2. TheMastermind auto-connects if not already connected
-3. Dispatches to the appropriate `TheClient` message
+3. Dispatches to the appropriate `TheMastermind` / TheFence message
 4. Returns a typed `MastermindResponse`
 
 ### ButtonHeistMCP (MCP Server)
@@ -298,13 +298,13 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides the high-level `TheClient` class and `TheMastermind` orchestration layer.
+**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides `TheMastermind` (client API) and `TheFence` (command dispatch).
 
-**Usage**: `import ButtonHeist` gives access to all types (TheClient, TheMastermind, HeistElement, Interface, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (TheMastermind, TheFence, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
-TheClient (@Observable, @MainActor)
+TheMastermind (@Observable, @MainActor)
 ├── DeviceDiscovery (from Wheelman)
 │   └── NWBrowser (Bonjour browsing for "_buttonheist._tcp")
 ├── DeviceConnection (from Wheelman)
@@ -324,7 +324,7 @@ TheClient (@Observable, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When a connection is established, TheClient automatically sends `subscribe`, `requestInterface`, and `requestScreen` messages.
+**Auto-Subscribe on Connect**: When a connection is established, TheMastermind (via TheFence/session) can send `subscribe`, `requestInterface`, and `requestScreen` messages.
 
 **Connection State Machine**:
 ```mermaid
@@ -345,7 +345,7 @@ AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the M
 **Via MCP (preferred for AI agents)**:
 ```
 Agent → MCP tool call: run {command: "get_interface"}
-  └── ButtonHeistMCP → TheMastermind.execute() → TheClient → TheInsideJob
+  └── ButtonHeistMCP → TheFence → TheMastermind → TheInsideJob
   └── Response: JSON interface with elements
 
 Agent → MCP tool call: run {command: "tap", identifier: "loginButton"}
@@ -356,7 +356,7 @@ Agent → MCP tool call: run {command: "tap", identifier: "loginButton"}
 **Via CLI (Bash tool calls)**:
 ```
 1. Stateless commands (one-shot, reconnects each time)
-   └── Bash: buttonheist watch --once --format json
+   └── Bash: buttonheist session (or one-shot get_interface via session)
    └── Bash: buttonheist screenshot --output /tmp/screen.png
    └── Bash: buttonheist touch tap --identifier loginButton
 
@@ -373,10 +373,10 @@ Agent → MCP tool call: run {command: "tap", identifier: "loginButton"}
 
 ```mermaid
 sequenceDiagram
-    participant IJ as InsideJob
+    participant IJ as TheInsideJob
     participant SS as SimpleSocketServer
     participant NS as NetService (Bonjour)
-    participant HC as TheClient
+    participant HC as TheMastermind
     participant NB as NWBrowser
 
     IJ->>SS: start(port: 0)
@@ -406,8 +406,8 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 
 ```mermaid
 sequenceDiagram
-    participant HC as TheClient
-    participant IJ as InsideJob
+    participant HC as TheMastermind
+    participant IJ as TheInsideJob
     participant TM as TheMuscle
 
     HC->>IJ: connect(to: device)
@@ -463,7 +463,7 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     participant Client
-    participant IJ as InsideJob
+    participant IJ as TheInsideJob
     participant TSC as TheSafecracker
 
     Client->>IJ: activate / increment / decrement / customAction
@@ -495,7 +495,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Client
-    participant IJ as InsideJob
+    participant IJ as TheInsideJob
     participant TSC as TheSafecracker
     participant App as UIApplication
 
@@ -549,8 +549,8 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Message handling dispatched to main
 - Interface updates debounced by 300ms
 
-### TheClient (macOS)
-- `@MainActor` for SwiftUI `@Published` properties
+### TheMastermind / TheFence (macOS)
+- `@MainActor` for SwiftUI `@Observable` properties
 - NWBrowser for discovery on main queue
 - NWConnection for data transport
 - Message processing dispatched to main actor

@@ -108,7 +108,7 @@ This uses the repo-relative path so it works in any workspace.
 timeout 5 dns-sd -B _buttonheist._tcp .
 ```
 
-Should show an `Add` entry with the app name. The CLI commands (`buttonheist watch --once`, `buttonheist action`, etc.) should now work.
+Should show an `Add` entry with the app name. The CLI commands (`buttonheist session`, `buttonheist activate`, `buttonheist action`, etc.) should now work.
 
 ## Pre-Commit Checklist
 
@@ -192,7 +192,7 @@ Before pushing any commit, verify the following:
 
 - Follow the **Simulator Quick Start** section above to build, install, and launch the test app.
 - After making code changes, rebuild and reinstall using those same steps.
-- Verify changes via CLI commands (`buttonheist watch --once`, `buttonheist action`, `buttonheist screenshot`, etc.) — not manual GUI inspection.
+- Verify changes via CLI commands (`buttonheist session`, `buttonheist activate`, `buttonheist action`, `buttonheist screenshot`, etc.) — not manual GUI inspection.
 
 ## Recording and Demo Commands
 
@@ -206,6 +206,12 @@ Slash commands for capturing recordings and demos from the connected iOS app. Al
 | `/demo [feature]` | Create a polished 3-act feature demo video |
 
 Recordings are saved to `demos/` with timestamped filenames. Default settings: `--fps 8 --scale 0.5 --inactivity-timeout 60`.
+
+## Product and framework naming
+
+- **Product name**: **Button Heist** (colloquially "the button heist"). We are not renaming to TheButtonHeist, Interface Heist, or UI Heist.
+- **Formally** (code, API, module): use **TheInsideJob** for the iOS server framework.
+- **Colloquially** (prose, chat): "inside job" or "Inside Job" is fine for that framework; don't over-correct.
 
 ## Dossier Maintenance
 

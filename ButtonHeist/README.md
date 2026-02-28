@@ -9,7 +9,7 @@ The core frameworks that power ButtonHeist. Four modules spanning iOS and macOS 
 | **TheScore** (shared types) | iOS + macOS | Wire protocol messages, UI element models, constants |
 | **TheInsideJob** (iOS server) | iOS | Embeds in your app. Parses accessibility hierarchy, executes gestures, serves it all over TCP |
 | **Wheelman** (networking) | iOS + macOS | TCP server/client, Bonjour discovery, BSD socket transport |
-| **ButtonHeist** (macOS client) | macOS | `TheClient` class for macOS consumers. Re-exports TheScore + Wheelman |
+| **ButtonHeist** (macOS client) | macOS | `TheMastermind` and `TheFence` for macOS consumers. Re-exports TheScore + Wheelman |
 
 ## How They Connect
 
@@ -51,11 +51,11 @@ The server that runs inside the iOS app. A `@MainActor` singleton that auto-star
 |------|-------------|
 | `TheInsideJob.swift` | Main server singleton. Starts TCP server, advertises via Bonjour, polls for UI changes, dispatches all client messages |
 | `TheSafecracker.swift` | Gesture simulation engine — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path. Also handles text input via UIKeyboardImpl |
-| `SyntheticTouchFactory.swift` | Creates `UITouch` instances by calling private UIKit methods via direct IMP invocation |
-| `SyntheticEventFactory.swift` | Creates fresh `UIEvent` objects per touch phase (iOS 26 compatible) |
-| `IOHIDEventBuilder.swift` | Low-level IOKit HID event creation via `dlsym`-loaded C function pointers |
-| `Fingerprints.swift` | Visual interaction feedback — fingerprint circles for taps and continuous gesture tracking (multi-finger) |
-| `BezierSampler.swift` | Converts cubic bezier curves into polyline point arrays for the `touchDrawBezier` command |
+| `TheSafecracker+SyntheticTouchFactory.swift` | Creates `UITouch` instances by calling private UIKit methods via direct IMP invocation |
+| `TheSafecracker+SyntheticEventFactory.swift` | Creates fresh `UIEvent` objects per touch phase (iOS 26 compatible) |
+| `TheSafecracker+IOHIDEventBuilder.swift` | Low-level IOKit HID event creation via `dlsym`-loaded C function pointers |
+| `TheFingerprints.swift` | Visual interaction feedback — fingerprint circles for taps and continuous gesture tracking (multi-finger) |
+| `TheSafecracker+Bezier.swift` | BezierSampler: cubic bezier → polyline for the `touchDrawBezier` command |
 
 ### Auto-Start
 
@@ -112,11 +112,12 @@ Cross-platform networking used by both iOS (server-side) and macOS (client-side)
 
 **Location**: `Sources/ButtonHeist/`
 
-Single-import macOS framework. `import ButtonHeist` gives you `TheClient` plus all types from TheScore and Wheelman.
+Single-import macOS framework. `import ButtonHeist` gives you `TheMastermind` and `TheFence` plus all types from TheScore and Wheelman.
 
 | File | What It Does |
 |------|-------------|
-| `TheClient.swift` | `@Observable @MainActor` client. Discovery, connection, sending commands, receiving results. Three API styles: reactive (SwiftUI), callbacks, async/await |
+| `TheMastermind.swift` | `@Observable @MainActor` client. Discovery, connection, callbacks for SwiftUI and tools. |
+| `TheFence.swift` | Command dispatch for CLI and MCP. Executes activate, gesture, get_interface, etc.; uses TheMastermind for connection. |
 | `Exports.swift` | `@_exported import TheScore` + `@_exported import Wheelman` |
 
 ## Further Reading
