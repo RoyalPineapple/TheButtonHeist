@@ -11,18 +11,17 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 - Second argument: max iterations (default: 100)
 
 ## CRITICAL
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
 - ALWAYS plan actions in explicit batches (typically 10-15 actions) — do not reason individually per element
 - ALWAYS batch your file writes at batch boundaries — do not write notes and trace after every action
-- DO NOT call `buttonheist screenshot` on every action — only for findings and new screens
+- DO NOT call `get_screen` on every action — only for findings and new screens
 - DO NOT re-read session notes between actions — keep state in memory, notes are for compaction survival
 - DO NOT skip the refinement pass — unverified findings are unreliable
 
 ## Step 0: Setup + Gap Analysis
 
-Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
 
 Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
 
@@ -67,8 +66,8 @@ If no strategy was specified in `$ARGUMENTS`, choose based on gaps and context:
 
 ## Step 2: Initial Observation
 
-1. Run `buttonheist screenshot --output /tmp/bh-screen.png` (via Bash), then Read the PNG — see the app's current state
-2. Run `buttonheist watch --once --format json --quiet` (via Bash) — read the full element hierarchy
+1. Call `get_screen` — view the inline screenshot to see the app's current state
+2. Call `get_interface` — read the full element hierarchy
 3. Print what you see:
    - App info (if visible from elements)
    - Screen description
@@ -108,7 +107,7 @@ Before starting the main exploration loop, process uninvestigated findings from 
 1. For each `open:uninvestigated` finding (highest severity first, max 3 per session):
    a. Plan a navigation route to the finding's screen using `references/nav-graph.md`
    b. Build an execution plan with up to 5 investigation actions: reproduce, vary, scope, reduce, boundary (see SKILL.md `### When Predictions Fail: Investigate`)
-   c. Dispatch to Haiku via `Task(model: "haiku", subagent_type: "Bash")`
+   c. Dispatch to Haiku via `Task(model: "haiku", subagent_type: "general-purpose")`
    d. Read Haiku's return. Update the finding's status based on results:
       - Reproduced consistently → `open:confirmed`
       - Fully understood (scope + minimal trigger) → `open:investigated`
@@ -118,7 +117,7 @@ Before starting the main exploration loop, process uninvestigated findings from 
 
 ### 4a. Opus: Observe + Identify Intent + Plan Batch
 
-1. If this is the first batch or you don't have current state: run `buttonheist watch --once --format json --quiet`. Otherwise, use the state from Haiku's last return (current screen, fingerprint, nav stack).
+1. If this is the first batch or you don't have current state: call `get_interface`. Otherwise, use the state from Haiku's last return (current screen, fingerprint, nav stack).
 2. **On a new screen, identify its intent first** using `references/screen-intent.md` (form, list, settings, nav hub, etc.). Record the intent in `## Screen Intents`. Plan workflow tests (happy path + violations) before element-by-element fuzzing. See "Screen Intent Recognition" in SKILL.md.
 3. **Plan 10-15 actions** informed by the screen's intent:
    - For a **form**: fill fields with intent-appropriate values → submit → test violations (submit empty, partial fill, abandon)
@@ -128,16 +127,16 @@ Before starting the main exploration loop, process uninvestigated findings from 
    - If the element is a text field, generate values from `references/interesting-values.md` — use the context-aware generation section, not just the static lists
    - If everything on this screen has been tried, **plan a route** to the highest-priority unexplored screen using known transitions from `## Transitions` and `references/nav-graph.md` (see "Navigation Planning" in SKILL.md). Don't wander — navigate directly.
    - When choosing the next screen, **consult `references/app-knowledge.md`**: prefer screens listed in `## Testing Gaps` with unchecked items, screens with lowest coverage in `## Coverage Summary`, and screens not tested by the current session's strategy.
-4. Generate the exact CLI commands for each planned action with expected deltas and predictions
+4. Generate the exact MCP tool calls for each planned action with expected deltas and predictions
 
 ### 4b. Opus: Build Execution Plan + Dispatch to Haiku
 
 Build an execution plan containing the 10-15 planned actions:
 
-**Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
+**Context block**: Session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
 **Action list**: Each action with:
-- Exact CLI command
+- Exact MCP tool call
 - Expected delta kind
 - Expected screen (if screenChanged)
 - Prediction (free text from behavioral model)
@@ -150,7 +149,7 @@ Dispatch:
 Task(
   description: "[the execution plan]",
   model: "haiku",
-  subagent_type: "Bash"
+  subagent_type: "general-purpose"
 )
 ```
 
@@ -201,16 +200,9 @@ Before verifying findings, set up recording to capture video evidence:
 ### For each finding:
 
 **Start recording** before attempting reproduction:
-1. Estimate duration for this finding's verification: `15 × 10 + 15 = 165` seconds (covers 3 reproduction attempts + variations)
-2. Start background recording:
-   ```bash
-   buttonheist record \
-     --output .fuzzer-data/recordings/F-N-refinement.mp4 \
-     --action-log .fuzzer-data/recordings/F-N-refinement.actionlog.json \
-     --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet &
-   RECORD_PID=$!
-   sleep 2
-   ```
+1. Estimate duration for this finding's verification: `15 × 7 + 15 = 120` seconds (covers 3 reproduction attempts + variations)
+2. Start recording:
+   - Call `start_recording(fps: 8, scale: 0.5, maxDuration: <estimated>, inactivityTimeout: 60)`
 
 **Verify the finding:**
 1. **Navigate to finding's screen**: Use the navigation graph (`## Transitions` + `references/nav-graph.md`) to plan a route to each finding's screen
@@ -224,15 +216,10 @@ Before verifying findings, set up recording to capture video evidence:
    - **Intermittent**: Triggered on 1 of 3 attempts
    - **Not reproduced**: Could not trigger again (may have been transient)
 
-**Collect recording and action log** after verification:
-1. Wait for background recording: `wait $RECORD_PID`
+**Collect recording** after verification:
+1. Call `stop_recording(output: ".fuzzer-data/recordings/F-N-refinement.mp4")` — returns metadata (duration, frame count, file size)
 2. Add recording to finding: `**Recording**: .fuzzer-data/recordings/F-N-refinement.mp4`
-3. Read `.fuzzer-data/recordings/F-N-refinement.actionlog.json` and cross-check against trace entries:
-   - Verify `result.success` matches trace's `result.status`
-   - Verify `result.interfaceDelta.kind` matches trace's delta classification
-   - Note any discrepancies as "execution drift" in the finding
-4. Add action log to finding: `**Action log**: .fuzzer-data/recordings/F-N-refinement.actionlog.json`
-5. Update `## Recordings` in session notes with both MP4 and action log paths
+3. Update `## Recordings` in session notes with the MP4 path
 
 5. Remove findings that were "Not reproduced" from the main findings (mention them in a "Transient observations" section instead)
 
@@ -288,7 +275,7 @@ When the loop ends (iterations exhausted, crash detected, or all screens explore
 
 ## Crash Handling
 
-If the app crashes (CLI command fails with a connection error or non-zero exit code):
+If the app crashes (MCP tool call fails with a connection error):
 
 1. **Stop immediately** — the connection is dead
 2. **Update trace**: Append the `interact` entry with `result.status: crash` and `result.finding: F-N`

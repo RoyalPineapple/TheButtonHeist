@@ -9,13 +9,12 @@ You are tasked with systematically mapping every reachable screen in the connect
 ## CRITICAL
 - ALWAYS fingerprint screens by their element set, not by visual appearance or a single identifier
 - ALWAYS record transitions even to already-known screens — they are new edges in the graph
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT re-explore screens that are already fully mapped — check your session notes first
 - DO NOT spend more than 200 total actions — report a partial map if the limit is reached
 
 ## Step 0: Setup
 
-Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
 
 Additionally load: `references/navigation-planning.md`. If starting fresh, create: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
 
@@ -23,7 +22,7 @@ During mapping, update session notes continuously: new screens → `## Screens D
 
 ## Step 1: Start Screen
 
-1. Run `buttonheist screenshot --output /tmp/bh-screen.png` then Read it, and run `buttonheist watch --once --format json --quiet`
+1. Call `get_screen` to see the app's current state, and call `get_interface` to read the full element hierarchy
 2. Fingerprint the current screen:
    - Extract all element identifiers (excluding nil)
    - Extract all element labels
@@ -54,7 +53,7 @@ Identify navigation-like elements on this screen (in priority order):
 4. Any other tappable elements not yet tried
 
 For each navigation-like element, plan a try-and-return action pair:
-- Action: `buttonheist action --identifier ID --format json` (or `touch tap` if no actions)
+- Action: `activate(identifier: ID)` (or `gesture(type: one_finger_tap, ...)` if no actions)
 - Expected delta: `screenChanged` for likely navigation, `noChange` for uncertain
 - If `screenChanged`: include a back-navigation action (use known back-route from nav-graph if available, otherwise instruct Haiku to look for Back/Cancel/Close/Done)
 
@@ -62,7 +61,7 @@ For each navigation-like element, plan a try-and-return action pair:
 
 Build an execution plan containing all try-and-return pairs for this screen:
 
-**Context block**: Include CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
+**Context block**: Session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
 **Action list**: For each navigation-like element:
 1. Activate the element (expected: `screenChanged` or `noChange`)
@@ -84,7 +83,7 @@ Dispatch:
 Task(
   description: "[the execution plan]",
   model: "haiku",
-  subagent_type: "Bash"
+  subagent_type: "general-purpose"
 )
 ```
 

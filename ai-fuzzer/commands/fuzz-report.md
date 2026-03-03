@@ -9,17 +9,16 @@ You are tasked with generating a comprehensive report of all findings from the c
 ## CRITICAL
 - ALWAYS read the session notes file as primary source of truth — it survives compaction, your memory doesn't
 - ALWAYS include trace refs for every finding — findings without trace refs are not reproducible
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT invent or embellish findings — report only what was observed and recorded
 
 ## Step 0: Setup
 
-Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token).
+Follow **## Session Setup** from SKILL.md (verify connection).
 
 ## Step 1: Gather Context
 
 1. **Read the session notes file** — list `.fuzzer-data/sessions/fuzzsession-*.md` files, find the most recent one. This is the primary source of truth for the session, especially after compaction. It contains screens, findings, transitions, coverage, and action log.
-2. Run `buttonheist watch --once --format json --quiet` to get the current screen state (confirms the app is still connected)
+2. Call `get_interface` to get the current screen state (confirms the app is still connected)
 3. Review the session notes plus any additional findings, observations, and notes from this conversation session
 4. Collect:
    - Screens visited and their descriptions (from `## Screens Discovered`)

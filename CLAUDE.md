@@ -173,7 +173,7 @@ Before pushing any commit, verify the following:
 
 ## CLI/MCP Sync Contract
 
-- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 11 purpose-built tools that each dispatch to `TheFence`.
+- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 14 purpose-built tools that each dispatch to `TheFence`.
 - The command source of truth is `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`.
 - Any command add/remove/rename must update `CommandCatalog` in the same change.
 - MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `CommandCatalog.all`.

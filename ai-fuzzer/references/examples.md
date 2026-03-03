@@ -1,10 +1,10 @@
-# CLI Response Examples
+# MCP Tool Response Examples
 
 ## Contents
-- [watch --once response](#watch---once-response) — element structure and key fields
+- [get_interface response](#get_interface-response) — element structure and key fields
 - [Reading the room: screen intent recognition](#reading-the-room-screen-intent-recognition) — form, list, settings examples
 - [Delta interpretation](#delta-interpretation) — noChange, valuesChanged, elementsChanged, screenChanged
-- [Detecting a crash](#detecting-a-crash) — CLI connection error signals
+- [Detecting a crash](#detecting-a-crash) — MCP tool error signals
 - [Detecting subtle bugs through intent](#detecting-subtle-bugs-through-intent) — context-aware anomaly detection
 - [Prediction-driven testing in practice](#prediction-driven-testing-in-practice) — model→predict→validate→investigate cycle
 - [Adjustable element values](#adjustable-element-values) — slider/stepper progression
@@ -12,11 +12,11 @@
 
 ---
 
-How to interpret ButtonHeist CLI command output — and how to use them to drive smart, varied testing.
+How to interpret ButtonHeist MCP tool output — and how to use them to drive smart, varied testing.
 
-## watch --once response
+## get_interface response
 
-This is the JSON output from `buttonheist watch --once --format json --quiet`. Returns an `elements` array and a `tree` array. Each element has:
+This is the JSON output from `get_interface`. Returns an `elements` array and a `tree` array. Each element has:
 
 ```json
 {
@@ -44,7 +44,7 @@ Key fields:
 
 ### Example: Recognizing a form
 
-You run `buttonheist watch --once --format json --quiet` and see:
+You call `get_interface` and see:
 - `"Full Name"` text field (identifier: `profile.nameField`, value: empty)
 - `"Email"` text field (identifier: `profile.emailField`, value: empty)
 - `"Bio"` text editor (identifier: `profile.bioEditor`, value: empty)
@@ -61,7 +61,7 @@ You run `buttonheist watch --once --format json --quiet` and see:
 
 ### Example: Recognizing an item list
 
-You run `buttonheist watch --once --format json --quiet` and see:
+You call `get_interface` and see:
 - An "Add" or "+" button
 - Several similar elements with comparable structure (text + accessory views)
 - Each item has a checkmark, disclosure indicator, or swipe action
@@ -77,7 +77,7 @@ You run `buttonheist watch --once --format json --quiet` and see:
 
 ### Example: Recognizing settings with dependencies
 
-You run `buttonheist watch --once --format json --quiet` and see:
+You call `get_interface` and see:
 - Toggle: `"Enable Notifications"` (value: "1")
 - Segmented control: `"Frequency"` with options "Hourly"/"Daily"/"Weekly"
 - Toggle: `"Sound"` (value: "1")
@@ -144,11 +144,11 @@ You're on a new screen. The full new interface is included. **Immediately classi
 ## Detecting a crash
 
 ```
-CLI: buttonheist touch tap --identifier deleteButton --format json
-Error: non-zero exit code, "No devices found" or "Connection timed out"
+Tool: activate(identifier: "deleteButton")
+Error: MCP tool returns isError: true with "Connection timed out" or "No devices found"
 ```
 
-Any CLI command failure (non-zero exit, connection error) after previously working = **CRASH**. The app died. Record immediately.
+Any MCP tool error (connection error) after previously working = **CRASH**. The app died. Record immediately.
 
 ## Detecting subtle bugs through intent
 

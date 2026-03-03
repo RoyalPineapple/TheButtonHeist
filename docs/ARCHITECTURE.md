@@ -356,12 +356,12 @@ Agent → MCP tool call: activate {identifier: "loginButton"}
 1. Stateless commands (one-shot, reconnects each time)
    └── Bash: buttonheist session (or one-shot get_interface via session)
    └── Bash: buttonheist screenshot --output /tmp/screen.png
-   └── Bash: buttonheist touch tap --identifier loginButton
+   └── Bash: buttonheist touch one_finger_tap --identifier loginButton
 
 2. Session mode (persistent connection, JSON lines on stdin/stdout)
    └── Bash: buttonheist session --format json
    └── stdin: {"command":"get_interface"}  → stdout: JSON response
-   └── stdin: {"command":"tap","identifier":"loginButton"}  → stdout: JSON response
+   └── stdin: {"command":"one_finger_tap","identifier":"loginButton"}  → stdout: JSON response
    └── TheFence maintains connection across commands
 ```
 
