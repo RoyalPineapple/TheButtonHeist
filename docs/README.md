@@ -16,4 +16,3 @@ Technical documentation for ButtonHeist internals.
 
 - [Project Overview](../README.md) — Quick start and architecture
 - [Contributing Guide](../CONTRIBUTING.md) — Development setup and code style
-- [Changelog](../CHANGELOG.md) — Version history
