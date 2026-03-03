@@ -225,7 +225,23 @@ ButtonHeist/
 ├── TestApp/                      # SwiftUI + UIKit test applications
 ├── AccessibilitySnapshot/        # Git submodule (hierarchy parsing)
 ├── docs/                         # Architecture, API, protocol, USB docs
-└── ai-fuzzer/                    # Autonomous AI app fuzzing framework
+└── ai-fuzzer/                    # Git submodule: autonomous AI app fuzzing framework
+```
+
+### ai-fuzzer submodule
+
+The AI fuzzer lives in its own repository and is included here as a Git submodule at `ai-fuzzer/`.
+
+- To initialize it in a fresh clone:
+
+```bash
+git submodule update --init --recursive
+```
+
+- To update it later (after pulling main):
+
+```bash
+git submodule update --remote ai-fuzzer
 ```
 
 ## Troubleshooting
@@ -264,7 +280,7 @@ ButtonHeist/
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 
 **Project:**
-- [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app fuzzer built entirely with prompt engineering on top of Button Heist (zero traditional code — 6,000+ lines of markdown)
+- [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app fuzzer (separate repository, included here as a Git submodule) built entirely with prompt engineering on top of Button Heist (zero traditional code — 6,000+ lines of markdown)
 - [Contributing](CONTRIBUTING.md) — Development setup and guidelines
 ## License
 
