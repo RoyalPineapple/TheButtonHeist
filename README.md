@@ -73,7 +73,7 @@ graph TD
     subgraph Mac["Your Mac"]
         AI
         MCP
-        Session
+        CLI
         Client
     end
 
