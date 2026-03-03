@@ -144,6 +144,7 @@ Before pushing any commit, verify the following:
   - `README.md` - Quick start, features, usage examples
   - `docs/API.md` - Public API documentation
   - `docs/ARCHITECTURE.md` - System design and component interaction
+  - `docs/VERSIONING.md` - SemVer strategy and release workflow
   - `docs/WIRE-PROTOCOL.md` - Message format and protocol details
   - `docs/USB_DEVICE_CONNECTIVITY.md` - USB connection guide
 - When changing behavior, ports, message formats, or configuration:
@@ -164,6 +165,18 @@ Before pushing any commit, verify the following:
 - Run `xcodebuild` to verify the project builds successfully before staging changes.
 - Keep commits atomic and focused on a single logical change.
 - **Squash merge PRs into main.** When merging a PR to `main`, use squash merge with a single descriptive commit message that summarizes the entire change.
+
+## Versioning and Releases
+
+- **SemVer** (MAJOR.MINOR.PATCH). Current baseline: 0.0.1. See `docs/VERSIONING.md` for rules.
+- **Canonical version** lives in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift` (`buttonHeistVersion`). CLI and MCP read it.
+- **Releasing**: Use the release script — never bump version manually in multiple files:
+  ```bash
+  ./scripts/release.sh 0.0.2
+  ./scripts/release.sh --dry-run 0.0.2   # Preview only
+  ```
+  The script updates all 5 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v0.0.2`.
+- **Protocol version** (`protocolVersion` in `Messages.swift`) is separate from product version — bump when wire format or handshake changes.
 
 ## CLI-First Development
 
