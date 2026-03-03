@@ -70,7 +70,7 @@ graph TD
     Client -->|"TCP over WiFi / USB"| IJ
     IJ --> App
 
-    subgraph Intelegence["Intelegence"]
+    subgraph Intelligence["Intelligence"]
         HUMAN
         AI
     end
