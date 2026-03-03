@@ -135,7 +135,7 @@ stateDiagram-v2
 
 **Duplicate error type: `MastermindError` vs `CLIError`**
 - `TheMastermind.swift:5-52` defines `MastermindError` with 8 cases
-- `ButtonHeistCLI/Sources/DeviceConnector.swift:102-150` defines `CLIError` with 6 overlapping cases
+- `ButtonHeistCLI/Sources/Support/DeviceConnector.swift:102-150` defines `CLIError` with 6 overlapping cases
 - Error descriptions are nearly identical between the two
 - The CLI has two code paths: `SessionRunner` (uses MastermindError) and `DeviceConnector` (uses CLIError)
 - Should `CLIError` be removed in favor of `MastermindError`?
