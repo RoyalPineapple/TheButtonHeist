@@ -265,4 +265,5 @@ Apache License 2.0 — see `LICENSE`.
 
 ## Acknowledgments
 
-Built on [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot) for parsing UIKit accessibility hierarchies.
+- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF) — TheSafecracker's touch synthesis and gesture simulation is heavily inspired by KIF's approach to programmatic UI interaction. KIF pioneered reliable techniques for tap, swipe, and text input injection on iOS that we built on.
+- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot) — Used for parsing UIKit accessibility hierarchies.
