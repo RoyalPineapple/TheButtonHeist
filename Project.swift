@@ -69,7 +69,7 @@ let project = Project(
             bundleId: "com.buttonheist.wheelman",
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Sources/Wheelman/**"],
+            sources: ["ButtonHeist/Sources/TheWheelman/**"],
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
@@ -88,7 +88,7 @@ let project = Project(
             bundleId: "com.buttonheist.buttonheist",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Sources/ButtonHeist/**"],
+            sources: ["ButtonHeist/Sources/TheButtonHeist/**"],
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),

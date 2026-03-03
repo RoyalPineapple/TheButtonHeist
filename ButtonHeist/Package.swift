@@ -44,13 +44,13 @@ let package = Package(
         .target(
             name: "Wheelman",
             dependencies: ["TheScore"],
-            path: "Sources/Wheelman",
+            path: "Sources/TheWheelman",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
             name: "ButtonHeist",
             dependencies: ["TheScore", "Wheelman"],
-            path: "Sources/ButtonHeist",
+            path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

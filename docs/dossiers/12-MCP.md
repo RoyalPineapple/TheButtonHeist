@@ -106,7 +106,7 @@ graph TD
 ```swift
 Server(name: "buttonheist", version: "1.0.0")
 ```
-- CLI version is "2.1.0" (`ButtonHeistCLI/Sources/main.swift:12`)
+- CLI version is "2.1.0" (`ButtonHeistCLI/Sources/Support/main.swift:12`)
 - These versions are independent and not derived from a shared source
 - Could cause confusion about which version of the protocol is supported
 
