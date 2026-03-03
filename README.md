@@ -1,8 +1,8 @@
 <img width="1536" height="1024" alt="ChatGPT Image Mar 3, 2026, 01_47_05 PM" src="https://github.com/user-attachments/assets/ab62f18f-a3bd-480e-906d-3167b90c1d77" />
 
-# Let AI agents drive iOS apps.
+# Interface out. Agents in. Clean escape.
 
-The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let the agnet inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
+The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let the agent inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
 
 ## Meet the Crew
 
@@ -12,12 +12,12 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 | Character | What they do |
 |-----------|--------------|
-| **TheInsideJob** | The whole operation. Runs in your iOS app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the rest of the crew. |
+| **TheInsideJob** | The whole operation. Runs in your iOS app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew. |
 | **TheMuscle** | Bouncer. Auth, session lock, on-device Allow/Deny. Keeps the door; only one driver at a time. |
 | **TheSafecracker** | Cracks the UI. Taps, long press, swipe, drag, pinch, rotate, text entry, accessibility actions — gets past any control. |
-| **TheStakeout** | Lookout. Captures H.264/MP4 screen recordings, composites fingerprint overlays so every gesture shows in the tape. |
+| **TheStakeout** | Lookout. Captures H.264/MP4 screen recordings; the fingerprint overlay is included so every gesture shows in the tape. |
 | **TheFingerprints** | Evidence. Touch indicators on screen during gestures; visible live and baked into TheStakeout’s recordings. |
-| **TheBagman** | Handles the score during TheInsideJob. Element cache, hierarchy, animation detection; live view pointers never leave TheBagman. |
+| **TheBagman** | Handles the score. Element cache, hierarchy, animation detection; live view pointers never leave TheBagman. |
 | **ThePlant** | Runs the advance, gets the team inside. ObjC `+load` hook that boots TheInsideJob before any Swift runs. Link the framework — no app code. |
 
 ### The Outside Team (macOS)
@@ -25,15 +25,17 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 | Character | What they do |
 |-----------|--------------|
 | **TheMastermind** | Coordinator. @Observable over TheWheelman: discovery, connection, callbacks for SwiftUI and tools. |
-| **TheFence** | Interface Between the buyer and the team. Command dispatch for CLI and MCP. takes orders and delivers goods; delegates connection to TheMastermind. |
+| **TheWheelman** | Getaway driver. TCP client/server, Bonjour discovery, USB tunneling. Connects Mac to iOS. |
+| **TheFence** | Interface between the buyer and the team. Command dispatch for CLI and MCP. Takes orders and delivers goods; delegates connection to TheMastermind. |
 
-### The Legitimate Front 
-Engage the team for your next job via MCP or CLI interfaces
+### Client Interfaces
+
+Engage the team for your next job via MCP or CLI.
 
 | Character | What they do |
 |-----------|--------------|
-| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `swipe`, `type`, `screenshot`, `session`, and more. |
-| **ButtonHeistMCP** | Agent interface. exposes tools that call through TheFence so AI agents can run the job natively. |
+| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
+| **ButtonHeistMCP** | Agent interface. 14 tools that call through TheFence so AI agents can run the job natively. |
 
 ## Features
 
@@ -100,8 +102,8 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **TheWheelman** | iOS + macOS | TCP client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + TheWheelman | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeistMCP** | macOS | MCP server — 11 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, scroll, copy, paste, cut, select, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **ButtonHeistMCP** | macOS | MCP server — 14 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
+| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, scroll, scroll_to_visible, scroll_to_edge, copy, paste, cut, select, select_all, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
@@ -249,7 +251,7 @@ ButtonHeist/
 ## Documentation
 
 **Frameworks and tools:**
-- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, TheInsideJob, Wheelman, client
+- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, TheInsideJob, TheWheelman, client
 - [MCP Server](ButtonHeistMCP/) — AI agent integration via Model Context Protocol
 - [CLI Reference](ButtonHeistCLI/) — Full command-line documentation
 - [Test Apps](TestApp/) — Sample iOS applications for testing

@@ -193,7 +193,7 @@ Text input uses the same private API approach as KIF (Keep It Functional). The i
 
 ### Fingerprint Tracking
 
-Visual interaction feedback for taps and continuous gestures. All overlays are displayed via a passthrough `FingerprintWindow` (does not intercept touches) and composited into recordings by `Stakeout`.
+Visual interaction feedback for taps and continuous gestures. All overlays are displayed via a passthrough `FingerprintWindow` (does not intercept touches). Recordings include the overlay because `captureScreenForRecording()` draws all windows, including `FingerprintWindow`.
 
 **Instant fingerprints** (`showFingerprint(at:)`):
 - On successful tap/activate, a 40pt white circle appears at the interaction point
@@ -206,9 +206,9 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 - Circles follow touch positions in real-time via `TheSafecracker.onGestureMove` callback
 - Slow animate out: 0.6 seconds (scale to 1.5x + fade)
 
-**Dual overlay system**:
+**Recording integration**:
 - `FingerprintWindow`: Live UIView-based overlay for on-device display (window level `statusBar + 100`)
-- `Stakeout` CGContext compositing: Draws fingerprint circles directly into recorded video frames via `drawFingerprint(in:at:elapsed:)` so interactions are visible in MP4 recordings
+- Recordings include fingerprints because `captureScreenForRecording()` draws all windows (including `FingerprintWindow`) via `drawHierarchy`
 
 ---
 
