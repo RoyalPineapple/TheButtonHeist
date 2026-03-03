@@ -1,4 +1,4 @@
-# ButtonHeist
+# TheButtonHeist
 
 **Let AI agents drive iOS apps.**
 
