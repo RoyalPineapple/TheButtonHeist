@@ -23,7 +23,7 @@ final class SessionResponseTests: XCTestCase {
         let response = SessionResponse.help(commands: ["one_finger_tap", "swipe", "get_interface"])
         let output = response.humanFormatted()
         XCTAssertTrue(output.hasPrefix("Commands:\n"))
-        XCTAssertTrue(output.contains("  tap"))
+        XCTAssertTrue(output.contains("  one_finger_tap"))
         XCTAssertTrue(output.contains("  swipe"))
         XCTAssertTrue(output.contains("  get_interface"))
     }

@@ -514,7 +514,7 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
 
 ```json
 {"actionResult":{"_0":{
