@@ -71,7 +71,7 @@ graph TD
     IJ --> App
 
     subgraph Intelegence["Intelegence"]
-        Human
+        HUMAN
         AI
     end
 
