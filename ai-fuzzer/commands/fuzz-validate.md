@@ -19,17 +19,16 @@ Examples:
 - ALWAYS resolve the feature name to specific screen(s) before doing anything — never start testing without a clear target
 - ALWAYS check `references/app-knowledge.md` for known findings on the target screen(s) — regression checking is the highest-value activity
 - ALWAYS use `references/nav-graph.md` to plan direct routes — don't wander to the feature's screen
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
 - ALWAYS plan actions in explicit sub-phase batches — do not reason individually per element
 - ALWAYS batch your file writes — update notes and trace at sub-phase boundaries, not every action
-- DO NOT call `buttonheist screenshot` on every action — only for findings, new screens, and the initial observation
+- DO NOT call `get_screen` on every action — only for findings, new screens, and the initial observation
 - DO NOT test screens unrelated to the feature — stay scoped
 
 ## Step 0: Setup
 
-Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
 
 Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
 
@@ -126,14 +125,14 @@ Create a new session notes file:
 
 ## Step 3: Navigate to Feature
 
-1. Run `buttonheist watch --once --format json --quiet` to fingerprint the current screen
+1. Call `get_interface` to fingerprint the current screen
 2. If already on the target screen: skip navigation, proceed to Step 4
 3. Plan a route using `references/nav-graph.md`:
    - Find the target screen in the Transitions table
    - BFS from the current screen to the target (see `references/navigation-planning.md`)
    - If no route found: navigate to the app root (Main Menu) first, then route from there
 4. Execute the route step by step:
-   - For each step: execute the action, read the delta, verify the destination fingerprint
+   - For each step: execute the action, check the delta matches expected screenChanged, continue
    - Push each forward navigation onto `## Navigation Stack`
    - Write `navigate` trace entries for each step (purpose: `setup`)
 5. If navigation fails at any step: report the failure and ask the user for help
@@ -142,8 +141,8 @@ Update `## Progress`: phase: `observing`
 
 ## Step 4: Observe + Build Model
 
-1. Run `buttonheist screenshot --output /tmp/bh-validate-screen.png` (via Bash), then Read the PNG — see the feature's current state
-2. Run `buttonheist watch --once --format json --quiet` (via Bash) — read the full element hierarchy
+1. Call `get_screen` — see the feature's current state
+2. Call `get_interface` — read the full element hierarchy
 3. Print what you see: screen description, element count, interactive elements
 4. Record as first screen in `## Screens Discovered`
 
@@ -178,7 +177,7 @@ Use the **Execution Plan Template** from SKILL.md for delegation. For each sub-p
 **This is the highest-value activity.** For each known finding on this screen (from `references/app-knowledge.md` Findings Tracker), Opus builds an execution plan:
 
 **What Opus writes into the plan:**
-- For each finding: the exact triggering action (CLI command), precondition setup actions, expected behavior from the finding's description
+- For each finding: the exact triggering action (MCP tool call), precondition setup actions, expected behavior from the finding's description
 - Prediction for each action: what the original finding observed
 - Purpose: `regression`
 - Budget: up to 3 actions per known finding
@@ -250,7 +249,7 @@ If `references/app-knowledge.md` Testing Gaps has unchecked items for this scree
 - Actions to fill each gap:
   - "adversarial values not tested" → type commands with values from `references/interesting-values.md`
   - "increment/decrement boundary not tested" → increment/decrement to min/max
-  - "drawing gestures untested" → `buttonheist touch draw-path` / `buttonheist touch draw-bezier` commands
+  - "drawing gestures untested" → `gesture(type: draw_path, ...)` / `gesture(type: draw_bezier, ...)` calls
 - Purpose: `fuzzing`
 - Budget: ~5-10 actions
 
@@ -335,7 +334,7 @@ When validation completes (all phases done or action budget exhausted):
 **Finding ID**: F-1
 **Trace refs**: #X, #Y
 **Screen**: [screen]
-**Action**: [exact CLI command] [trace #Y]
+**Action**: [exact tool call] [trace #Y]
 **Expected**: [what you expected]
 **Actual**: [what happened]
 **Steps to Reproduce**:
@@ -379,7 +378,7 @@ When validation completes (all phases done or action budget exhausted):
 
 ## Crash Handling
 
-If the app crashes (CLI command fails with connection error or non-zero exit code after previously working):
+If the app crashes (MCP tool call fails with connection error after previously working):
 
 1. **Stop immediately** — the connection is dead
 2. **Update trace**: Append the `interact` entry with `result.status: crash`
@@ -389,7 +388,7 @@ If the app crashes (CLI command fails with connection error or non-zero exit cod
 
 ## Error Recovery
 
-- If a CLI command returns an error but the app is still connected: record the error, continue with the next validation step
+- If a tool call returns an error but the app is still connected: record the error, continue with the next validation step
 - If navigation to the target screen fails: try an alternate route via the nav-graph, or ask the user for help
 - If an element from the behavioral model is missing: note it as a finding (element removed or renamed), adapt and continue
 - See **## Error Recovery** in SKILL.md for additional recovery procedures

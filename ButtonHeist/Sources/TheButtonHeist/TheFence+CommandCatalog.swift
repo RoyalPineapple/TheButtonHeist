@@ -17,7 +17,7 @@ extension TheFence {
             "get_interface",
             "get_screen",
             "wait_for_idle",
-            "tap",
+            "one_finger_tap",
             "long_press",
             "swipe",
             "drag",

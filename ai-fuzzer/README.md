@@ -215,7 +215,7 @@ The techniques used here generalize beyond fuzzing. A few worth highlighting:
 
 **External memory.** Session notes files act as external memory that survives context compaction. The agent writes state to disk continuously, then reads it back when context is compressed. A persistent knowledge base (`app-knowledge.md`) accumulates across sessions.
 
-**Delegation.** Planning (Opus) and execution (Haiku) are split across model tiers. Opus designs action batches and investigates findings. Haiku mechanically executes CLI commands and classifies deltas. This manages context limits while keeping the expensive reasoning where it matters.
+**Delegation.** Planning (Opus) and execution (Haiku) are split across model tiers. Opus designs action batches and investigates findings. Haiku mechanically executes MCP tool calls and classifies deltas. This manages context limits while keeping the expensive reasoning where it matters.
 
 **Novelty injection.** The prompts explicitly require the agent to vary element order, action order, and test values across sessions. Without this, deterministic prompt execution produces identical sessions every time.
 

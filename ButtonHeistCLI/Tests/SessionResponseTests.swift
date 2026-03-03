@@ -20,7 +20,7 @@ final class SessionResponseTests: XCTestCase {
     }
 
     func testHelpHumanFormatting() {
-        let response = SessionResponse.help(commands: ["tap", "swipe", "get_interface"])
+        let response = SessionResponse.help(commands: ["one_finger_tap", "swipe", "get_interface"])
         let output = response.humanFormatted()
         XCTAssertTrue(output.hasPrefix("Commands:\n"))
         XCTAssertTrue(output.contains("  tap"))
@@ -214,11 +214,11 @@ final class SessionResponseTests: XCTestCase {
     }
 
     func testHelpJsonFormatting() {
-        let response = SessionResponse.help(commands: ["tap", "swipe"])
+        let response = SessionResponse.help(commands: ["one_finger_tap", "swipe"])
         let dict = response.jsonDict()!
         XCTAssertEqual(dict["status"] as? String, "ok")
         let commands = dict["commands"] as? [String]
-        XCTAssertEqual(commands, ["tap", "swipe"])
+        XCTAssertEqual(commands, ["one_finger_tap", "swipe"])
     }
 
     func testStatusJsonFormatting() {
