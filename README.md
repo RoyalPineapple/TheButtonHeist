@@ -12,12 +12,13 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 | Character | What they do |
 |-----------|--------------|
-| **TheInsideJob** | Inside operative. Runs in your iOS app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew. |
+| **TheInsideJob** | The whole operation. Runs in your iOS app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the rest of the crew. |
 | **TheMuscle** | Bouncer. Auth, session lock, on-device Allow/Deny. Keeps the door; only one driver at a time. |
 | **TheSafecracker** | Cracks the UI. Taps, long press, swipe, drag, pinch, rotate, text entry, accessibility actions — gets past any control. |
 | **TheStakeout** | Lookout. Captures H.264/MP4 screen recordings, composites fingerprint overlays so every gesture shows in the tape. |
 | **TheFingerprints** | Evidence. Touch indicators on screen during gestures; visible live and baked into TheStakeout’s recordings. |
-| **ThePlant** | Advance man. ObjC `+load` hook that boots TheInsideJob before any Swift runs. Link the framework — no app code. |
+| **TheBagman** | Handles the score during TheInsideJob. Element cache, hierarchy, animation detection; live view pointers never leave TheBagman. |
+| **ThePlant** | Runs the advance Advance, gets the team inside. ObjC `+load` hook that boots TheInsideJob before any Swift runs. Link the framework — no app code. |
 
 ### The Outside Team (macOS)
 
@@ -34,7 +35,6 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 No code names — just the crew behind the crew:
 
-- **TheBagman** — Holds the goods inside TheInsideJob. Element cache, hierarchy, animation detection; live view pointers stay with TheBagman.
 - **SyntheticTouchFactory** / **SyntheticEventFactory** / **IOHIDEventBuilder** — Forges UITouch and UIEvent via private APIs so TheSafecracker can move fingers on glass.
 - **TheSafecracker.BezierSampler** — Cubic bezier → polyline sampling for drawBezier gestures.
 - **CLI commands** (`buttonheist action`, `touch`, `type`, `screenshot`, `session`, …) — How the outside crew issues orders.
