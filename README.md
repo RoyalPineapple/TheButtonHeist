@@ -53,6 +53,7 @@ Hire the team for your next job via MCP or CLI interfaces
 ## Architecture
 
 ```mermaid
+%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
 graph TD
     AI["AI Agent<br/>(Claude, any MCP client)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
