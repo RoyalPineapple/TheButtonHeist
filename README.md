@@ -53,6 +53,7 @@ Hire the team for your next job via MCP or CLI interfaces
 ## Architecture
 
 ```mermaid
+%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
 graph TD
     AI["AI Agent<br/>(Claude, any MCP client)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
@@ -62,7 +63,7 @@ graph TD
     App["Your iOS App"]
 
     AI -->|"MCP (JSON-RPC over stdio)"| MCP
-    MCP -->|"spawns subprocess"| Session
+    MCP --> Client
     Session --> Client
     Client -->|"TCP over WiFi / USB"| IJ
     IJ --> App
@@ -82,7 +83,7 @@ graph TD
 
 **End-to-end:**
 ```
-AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheFence → TheMastermind → TCP → TheInsideJob
+AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → TheWheelman → TCP → TheInsideJob
 ```
 
 ## Modules
@@ -91,10 +92,10 @@ AI Agent → MCP (stdio) → buttonheist-mcp → buttonheist session → TheFenc
 |--------|----------|-------------|---------|
 | **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
-| **Wheelman** | iOS + macOS | TCP server/client, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
+| **Wheelman** | iOS + macOS | TCP client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 11 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, session, scroll, edit, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, scroll, copy, paste, cut, select, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
@@ -153,15 +154,15 @@ That's it. When Claude (or any MCP client) opens a session in your project, it s
 
 ```
 Agent: "Let me see what's on screen"
-→ calls run(command: "get_screen") → sees the app as an image
-→ calls run(command: "get_interface") → reads the UI hierarchy as structured data
+→ calls get_screen → sees the app as an image
+→ calls get_interface → reads the UI hierarchy as structured data
 
 Agent: "I'll tap the login button"
-→ calls run(command: "tap", identifier: "loginButton")
+→ calls activate(identifier: "loginButton")
 → gets success/failure result with what changed in the UI
 
 Agent: "Let me type an email address"
-→ calls run(command: "type_text", text: "user@example.com", identifier: "emailField")
+→ calls type_text(text: "user@example.com", identifier: "emailField")
 → gets the field's current value back
 ```
 For device targeting, command reference, and internals: **[ButtonHeistMCP/](ButtonHeistMCP/)**

@@ -1,6 +1,6 @@
 # TheMastermind - The Outside Coordinator
 
-> **File:** `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
+> **File:** `ButtonHeist/Sources/TheButtonHeist/TheMastermind.swift`
 > **Platform:** macOS 14.0+
 > **Role:** Observable macOS client API wrapping TheWheelman for SwiftUI and callback consumers
 

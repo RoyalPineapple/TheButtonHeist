@@ -1,6 +1,6 @@
 # Wheelman - The Getaway Driver
 
-> **Module:** `ButtonHeist/Sources/Wheelman/`
+> **Module:** `ButtonHeist/Sources/TheWheelman/`
 > **Platform:** iOS 17.0+ / macOS 14.0+ (Network framework)
 > **Role:** Cross-platform TCP networking - discovery, connections, server, USB tunneling
 
@@ -75,14 +75,13 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    subgraph SimpleSocketServer["SimpleSocketServer (@unchecked Sendable)"]
+    subgraph SimpleSocketServer["SimpleSocketServer (actor)"]
         Listener["NWListener - IPv6 dual-stack, port 0"]
-        Lock["NSLock - protects all mutable state"]
 
-        subgraph State["Mutable State (lock-protected)"]
-            Connections["connections: [String: NWConnection]"]
-            AuthSet["authenticatedClients: Set<String>"]
-            RateLimit["messageTimes: [String: [Date]]"]
+        subgraph State["Actor-Isolated State"]
+            Connections["connections: [Int: NWConnection]"]
+            AuthSet["authenticatedClients: Set<Int>"]
+            RateLimit["clientMessageTimestamps: [Int: [Date]]"]
         end
 
         subgraph Limits["Limits"]
@@ -162,10 +161,9 @@ vendorId = txtRecord["vendorid"]  // line 68 - key never published!
 - `DiscoveredDevice.vendorIdentifier` is always nil for Bonjour-discovered devices
 - This may be intentional (removed feature?) but the dead code path is misleading
 
-**`SimpleSocketServer` is `@unchecked Sendable` with manual locking** (`SimpleSocketServer.swift:9`)
-- All mutable state protected by a single `NSLock`
-- This is correct but fragile - any new mutable state added without lock protection creates a data race
-- The `@unchecked Sendable` annotation suppresses compiler safety checks
+**`SimpleSocketServer` is a Swift actor** (`SimpleSocketServer.swift`)
+- All mutable state is actor-isolated
+- Client IDs are `Int` values (not `String`), incremented from a counter starting at 1
 
 **Listener semaphore timeout not surfaced as error** (`SimpleSocketServer.swift:88`)
 ```swift

@@ -14,7 +14,7 @@ TheSafecracker is the hands of the operation:
 4. **Text input** - typing via UIKeyboardImpl injection (KIF pattern)
 5. **Keyboard management** - detect visibility, dismiss keyboard
 6. **Accessibility actions** - activate, increment, decrement, custom actions
-7. **Element resolution** - find UI elements by identifier/label/order from cache
+7. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
 
 ## Architecture Diagram
 
@@ -22,9 +22,9 @@ TheSafecracker is the hands of the operation:
 graph TD
     subgraph TheSafecracker["TheSafecracker (@MainActor)"]
         Actions["TheSafecracker+Actions.swift - High-level executors"]
-        Elements["TheSafecracker+Elements.swift - Element resolution"]
         TextEntry["TheSafecracker+TextEntry.swift - Text typing & deletion"]
         Core["TheSafecracker.swift - Touch primitives & text injection"]
+        Bagman["TheBagman - Element resolution & point lookup"]
     end
 
     subgraph PrivateAPIs["Private API Layers"]
@@ -39,7 +39,7 @@ graph TD
     end
 
     Actions --> Core
-    Actions --> Elements
+    Actions --> Bagman
     Actions --> TextEntry
     Core --> IOHID
     Core --> TouchFactory
@@ -120,21 +120,18 @@ graph LR
 
 ```mermaid
 flowchart TD
-    Target["ActionTarget - (identifier? / label? / order?)"]
+    Target["ActionTarget - (identifier? / order?)"]
 
     Target --> ByIdent{identifier provided?}
-    ByIdent -->|yes| SearchIdent["Search elements by - accessibilityIdentifier"]
-    ByIdent -->|no| ByLabel{label provided?}
-    ByLabel -->|yes| SearchLabel["Search elements by - accessibilityLabel"]
-    ByLabel -->|no| ByOrder{order provided?}
-    ByOrder -->|yes| SearchOrder["Index into elements array"]
+    ByIdent -->|yes| SearchIdent["Search cachedElements by - accessibilityIdentifier"]
+    ByIdent -->|no| ByOrder{order provided?}
+    ByOrder -->|yes| SearchOrder["Index into cachedElements array"]
     ByOrder -->|no| Fail["elementNotFound"]
 
     SearchIdent --> Found{found?}
-    SearchLabel --> Found
     SearchOrder --> Found
 
-    Found -->|yes| WeakRef["Retrieve live UIView - from interactiveObjects[order]"]
+    Found -->|yes| WeakRef["Retrieve live NSObject - from TheBagman.elementObjects[element]"]
     Found -->|no| Fail
 
     WeakRef --> Alive{still alive?}

@@ -9,10 +9,10 @@
 The CLI provides the canonical test client interface:
 
 1. **Subcommand routing** via swift-argument-parser
-2. **Three connection patterns**: direct (single command), watch (streaming), session (REPL)
+2. **Two connection patterns**: direct (single command via DeviceConnector) and session (REPL via TheFence)
 3. **Output format auto-detection**: human for TTY, JSON for piped
 4. **Exit code contract** for scripting (0-4, 99)
-5. **All TheMastermind commands** accessible via CLI flags
+5. **All TheFence commands** accessible via CLI flags
 
 ## Architecture Diagram
 
@@ -25,8 +25,9 @@ graph TD
 
         subgraph Commands["Subcommands"]
             List["list"]
-            Watch["watch (CLIRunner)"]
-            Action["action (activate/increment/decrement)"]
+            Activate["activate"]
+            Action["action (activate/increment/decrement/custom)"]
+            Scroll["scroll / scroll-to-visible / scroll-to-edge"]
             Touch["touch (tap/longpress/swipe/drag/ - pinch/rotate/two-finger-tap/ - draw-path/draw-bezier)"]
             TypeCmd["type"]
             Screenshot["screenshot"]
@@ -39,13 +40,14 @@ graph TD
 
         subgraph Patterns["Connection Patterns"]
             Direct["DeviceConnector - Connect → Send → Wait → Disconnect"]
-            Stream["CLIRunner - Connect → Stream updates → Ctrl-C"]
-            REPL["SessionRunner - TheMastermind persistent connection - stdin JSON → stdout JSON"]
+            REPL["SessionRunner → TheFence - persistent connection - stdin JSON → stdout JSON"]
         end
     end
 
     List --> Direct
+    Activate --> Direct
     Action --> Direct
+    Scroll --> Direct
     Touch --> Direct
     TypeCmd --> Direct
     Screenshot --> Direct
@@ -53,15 +55,13 @@ graph TD
     StopRec --> Direct
     TextEdit --> Direct
     Dismiss --> Direct
-    Watch --> Stream
     Session --> REPL
 
-    Direct --> TheClient["TheClient"]
-    Stream --> TheClient
-    REPL --> TheMastermind["TheMastermind"]
+    Direct --> TheMastermind["TheMastermind"]
+    REPL --> TheFence["TheFence"]
 ```
 
-## Three Connection Patterns
+## Two Connection Patterns
 
 ```mermaid
 flowchart LR
@@ -72,18 +72,11 @@ flowchart LR
         D4 --> D5["disconnect + exit"]
     end
 
-    subgraph Pattern2["Pattern 2: Watch (Streaming)"]
-        W1["CLIRunner"] --> W2["discover + connect"]
-        W2 --> W3["auto-subscribe"]
-        W3 --> W4["stream interface updates"]
-        W4 --> W5["Ctrl-C or 'q' to exit"]
-    end
-
-    subgraph Pattern3["Pattern 3: Session (REPL)"]
-        S1["SessionRunner"] --> S2["TheMastermind"]
+    subgraph Pattern2["Pattern 2: Session (REPL)"]
+        S1["SessionRunner"] --> S2["TheFence"]
         S2 --> S3["persistent connection"]
         S3 --> S4["read JSON from stdin"]
-        S4 --> S5["execute via TheMastermind"]
+        S4 --> S5["execute via TheFence"]
         S5 --> S6["write JSON to stdout"]
         S6 --> S4
     end
@@ -116,22 +109,6 @@ flowchart TD
 
 ### MEDIUM PRIORITY
 
-**Duplicate error type: `CLIError`** (`DeviceConnector.swift:102-150`)
-- `CLIError` duplicates most of `MastermindError` with nearly identical descriptions
-- The CLI has two connection code paths:
-  - Direct commands use `DeviceConnector` → `CLIError`
-  - Session mode uses `TheMastermind` → `MastermindError`
-- Consider consolidating to `MastermindError` only
-
-**`CLIRunner.startKeyboardMonitoring` data race** (`CLIRunner.swift:249`)
-```swift
-// Task.detached reads @MainActor property:
-while await self.isRunning {  // potential data race
-```
-- `isRunning` is a stored property on `@MainActor CLIRunner`
-- The detached task reads it without MainActor isolation
-- The subsequent `await MainActor.run` at line 254 correctly hops for the body
-
 **Leading space in import** (`ButtonHeistCLI/Tests/ActionCommandTests.swift:3`)
 ```swift
  import ButtonHeist  // leading space
@@ -145,12 +122,7 @@ while await self.isRunning {  // potential data race
 
 ### LOW PRIORITY
 
-**Watch mode keyboard handling**
-- `CLIRunner` reads raw terminal input for `r` (refresh) and `q` (quit)
-- Uses `termios` directly to set raw mode
-- This is standard POSIX terminal handling but adds complexity
-
 **No `--timeout` flag for individual commands**
 - Direct commands use `DeviceConnector` with hardcoded timeouts
 - Users cannot override timeout per-invocation
-- Only session mode inherits TheMastermind's configurable timeout
+- Only session mode inherits TheFence's configurable timeout
