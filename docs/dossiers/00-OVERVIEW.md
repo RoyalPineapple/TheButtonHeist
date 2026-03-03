@@ -6,23 +6,27 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 
 ## Crew Roster
 
+### Shared Foundation
+| Crew Member | Alias | Primary Role |
+|-------------|-------|-------------|
+| [TheScore](01-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
+| [TheWheelman](02-THEWHEELMAN.md) | The Getaway Driver | TCP networking, Bonjour discovery, USB tunneling |
+
 ### Inside Team (iOS - runs in-process)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
-| [TheInsideJob](01-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling |
-| [TheMuscle](02-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
-| [TheSafecracker](03-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
-| [TheStakeout](04-STAKEOUT.md) | The Lookout | Screen recording, video encoding |
-| [TheFingerprints](05-FINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay compositing |
-| [ThePlant](06-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
+| [TheFingerprints](03-THEFINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay compositing |
+| [TheSafecracker](04-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
+| [TheStakeout](05-THESTAKEOUT.md) | The Lookout | Screen recording, video encoding |
+| [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
+| [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling |
+| [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
-| [TheScore](07-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
-| [Wheelman](08-WHEELMAN.md) | The Getaway Driver | TCP networking, Bonjour discovery, USB tunneling |
-| [TheMastermind](09-THECLIENT.md) | The Outside Coordinator | Observable macOS client API (wraps TheWheelman) |
-| [TheFence](10-THEMASTERMIND.md) | The Boss | Centralized command dispatch for CLI/MCP |
+| [TheMastermind](09-THEMASTERMIND.md) | The Outside Coordinator | Observable macOS client API (wraps TheWheelman) |
+| [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch for CLI/MCP |
 | [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
 | [ButtonHeistMCP](12-MCP.md) | The MCP Server | AI agent tool interface |
 

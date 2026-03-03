@@ -9,69 +9,68 @@
 /* Begin PBXBuildFile section */
 		029588B471713710FD1E6D1D /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */; };
-		04D7A9C1624C711E92F3A799 /* TheWheelman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0549AE8F41626E5CC7567AFF /* TheWheelman.swift */; };
+		064C998F6E4663744710C60C /* TheMastermind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A4628DF7E03D859F181B6A /* TheMastermind.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
-		0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */; };
+		0C66F4540219E4FF20FA0734 /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DD2CC38CFDE5D4DB883125F /* ServerTransport.swift */; };
 		172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
 		1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
-		210AAB80D5CA1866F3DC6698 /* TheInsideJob+AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */; };
-		25DCEA667ACA42C8EF77C553 /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */; };
+		23F27EF90EA64C363A84E6B2 /* Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C34776C3FA2EF395B509E52 /* Animation.swift */; };
 		261B718EC40F620AF831DFD3 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */; };
 		292089C888B98285D6A19417 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */; };
 		2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */; };
 		2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
-		3BB15F545AEF99A195AAFF4B /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F23CF2840E34CC68BD8FC797 /* ServerTransport.swift */; };
-		3DEAB67322D82ECF897698D5 /* TheInsideJob+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */; };
+		35EBC59194F55574BEF113CB /* TheFence+CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */; };
+		3CA92319C3F0C158E06E578A /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */; };
+		41D4695B9C949756340D284B /* TheSafecracker+SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F18571487884873109E48997 /* TheSafecracker+SyntheticEventFactory.swift */; };
 		43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
 		444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */; };
-		46E747AFA7A80565A7B2D394 /* TheFence+CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C361797E6074BC827ECD2483 /* TheFence+CommandCatalog.swift */; };
+		45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */; };
+		461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1308BFFECC16AF7E933839EB /* TheSafecracker.swift */; };
 		47D3B8CCCCA0ED59297EB946 /* ConnectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */; };
-		4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */; };
-		4DEEBF8296C770C7228A1DFD /* TheSafecracker+Bezier.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC7D8E68B6F0D02148DF7BF /* TheSafecracker+Bezier.swift */; };
-		519B1D59EC06C659B7D1A2D3 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF927903E9A703B0CB21966 /* TheSafecracker+IOHIDEventBuilder.swift */; };
 		56171E6C62F897C61DCE7FA0 /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
+		5CD6355BDA9E635AE450847F /* Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E49A2463969D4E335E9E49 /* Polling.swift */; };
+		5EF13631934912FD7D933DB1 /* Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6E45285127FD6657C85307 /* Screen.swift */; };
+		6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011FC701399ED6B199815A4C /* AutoStart.swift */; };
 		674F25A2AE43B004B9BD49ED /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		6A855CBF2E2A25A0115F3021 /* TheMastermindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52109DAE44BD0E9A96B8047 /* TheMastermindTests.swift */; };
+		6D6D08503517D7C10C63CA30 /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB0A8AE966E9368CB74DC64 /* DiscoveredDevice.swift */; };
 		70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A7F8340C7B335C8033319 /* TheMuscleTests.swift */; };
 		72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */; };
 		73DE29791CDA8BF7D55C5825 /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9068F44DC10C400D19A6F84C /* SessionLockTests.swift */; };
 		79EC4225431239EEAEFC7093 /* DiscoveredDeviceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */; };
-		7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
+		84A337C8A25148BC81B2DE3B /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */; };
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
+		8CA85695E8E69F38A7E1AE66 /* USBDeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8649D52AA3B3A3CE2934E2 /* USBDeviceDiscovery.swift */; };
 		8EA793CB9AC27195C48ED73F /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
 		90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */; };
 		91938587DB774C0C39F979EC /* Wheelman.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5606B65675665A31CFB80D72 /* Wheelman.framework */; };
-		92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84B993E5FA5DA80654F9CC03 /* Exports.swift */; };
 		9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33FA97BFD66D89E91027A83 /* TheMuscle.swift */; };
-		9CB0A9F7774C4B5F577AA368 /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C58C3164AE07FDD51D10830 /* TheFence.swift */; };
+		A0C1CDA81833FB9493540A58 /* TheSafecracker+SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923765A77D8ED2C93235895 /* TheSafecracker+SyntheticTouchFactory.swift */; };
+		A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286300664EC22C2386C8F58E /* Exports.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
 		A74AB42D76A561F05EB3EA3B /* TheFingerprints.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179DAF88825C7F500380DD4B /* TheFingerprints.swift */; };
 		A94F551D006FE92E2590111D /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03DEA097281E0383C6F06276 /* AuthFailureTests.swift */; };
 		AA9C3C4951AB133A139E704C /* TheBagman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */; };
-		AB275BCF9EB98EFA36ADDCBE /* TheInsideJob+Polling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */; };
-		B70DAB517DACB237844D3C90 /* TheSafecracker+SyntheticEventFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF664870778AF30D3D21AB54 /* TheSafecracker+SyntheticEventFactory.swift */; };
 		BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		BCBD96904472CF97DC0FBA32 /* ServerMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */; };
 		C23A54D8EE16D10E22F9DC02 /* TheScoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */; };
-		D5B498E73725F15EE96B9B56 /* TheMastermind.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45F0E59651997924336C554 /* TheMastermind.swift */; };
+		CA8DB44843A29EE5482011BE /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9554F39FBD74E02DB6F040EC /* TheFence.swift */; };
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		DCBB571A99DCD147CF850D67 /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */; };
 		E3EB50B8FF78DE114640D797 /* TheStakeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CD3D2D34C5473EB6B4E4D1 /* TheStakeout.swift */; };
-		E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */; };
 		EB70E312ACAB369A26299111 /* Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */; };
-		EB9EDAF39EB6A062E6EAF7CF /* TheSafecracker+SyntheticTouchFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E1A7058BAC7012B26A2CBE /* TheSafecracker+SyntheticTouchFactory.swift */; };
+		ECAAFEE0CF5CAED84722AAA3 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A695972469D26E11E4C4FA8A /* SimpleSocketServer.swift */; };
 		EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */; };
-		F40339DF2014B630EB7867F1 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */; };
-		F49D4C0E0545F88F2D815788 /* TheInsideJob+Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */; };
-		F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */; };
-		F889BCD9DA93158407863900 /* TheInsideJob+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */; };
+		F022B8B34B93BED2D15E18A3 /* TheWheelman.swift in Sources */ = {isa = PBXBuildFile; fileRef = 239E73EE0956D5F56B58D327 /* TheWheelman.swift */; };
 		FC2DD3D03C11B65E2333F63F /* ServerInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */; };
+		FD7AF9AB5639D9048B4DF2E2 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C588F2A0FD01FCC7F30E5766 /* DeviceConnection.swift */; };
+		FED6B797912E7832AD2CFE77 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 891864564A74E6AB9C7D8FA5 /* DeviceDiscovery.swift */; };
+		FF72FE3ED77B03A1BC1CBA46 /* TheSafecracker+Bezier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -238,40 +237,44 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		011FC701399ED6B199815A4C /* AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoStart.swift; sourceTree = "<group>"; };
 		01CD3D2D34C5473EB6B4E4D1 /* TheStakeout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeout.swift; sourceTree = "<group>"; };
 		03DEA097281E0383C6F06276 /* AuthFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFailureTests.swift; sourceTree = "<group>"; };
-		0549AE8F41626E5CC7567AFF /* TheWheelman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheWheelman.swift; sourceTree = "<group>"; };
 		06D7913F56126CFD418986FA /* TheInsideJobTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJobTests-Info.plist"; sourceTree = "<group>"; };
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
 		0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJob.swift; sourceTree = "<group>"; };
 		0B3613C6087209693A0A50B4 /* ConnectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStateTests.swift; sourceTree = "<group>"; };
+		1308BFFECC16AF7E933839EB /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		179DAF88825C7F500380DD4B /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
-		1C58C3164AE07FDD51D10830 /* TheFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFence.swift; sourceTree = "<group>"; };
+		1C8649D52AA3B3A3CE2934E2 /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
+		1DD2CC38CFDE5D4DB883125F /* ServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransport.swift; sourceTree = "<group>"; };
+		1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandCatalog.swift"; sourceTree = "<group>"; };
+		239E73EE0956D5F56B58D327 /* TheWheelman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheWheelman.swift; sourceTree = "<group>"; };
+		286300664EC22C2386C8F58E /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		2C72D61788F95A50ED55D4E1 /* WheelmanTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "WheelmanTests-Info.plist"; sourceTree = "<group>"; };
 		2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ButtonHeistTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		32E1A7058BAC7012B26A2CBE /* TheSafecracker+SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+SyntheticTouchFactory.swift"; sourceTree = "<group>"; };
+		321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+IOHIDEventBuilder.swift"; sourceTree = "<group>"; };
 		376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ThePlantAutoStart.m; sourceTree = "<group>"; };
-		3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		3F7FFF3C83178165F90D0E35 /* TheScore-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScore-Info.plist"; sourceTree = "<group>"; };
 		3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HierarchyPayloadTests.swift; sourceTree = "<group>"; };
-		40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityElementDataTests.swift; sourceTree = "<group>"; };
 		4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
+		4C34776C3FA2EF395B509E52 /* Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Animation.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
+		54A4628DF7E03D859F181B6A /* TheMastermind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMastermind.swift; sourceTree = "<group>"; };
 		5606B65675665A31CFB80D72 /* Wheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Wheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
+		5AB0A8AE966E9368CB74DC64 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
 		5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagman.swift; sourceTree = "<group>"; };
-		5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Polling.swift"; sourceTree = "<group>"; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		5FF927903E9A703B0CB21966 /* TheSafecracker+IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+IOHIDEventBuilder.swift"; sourceTree = "<group>"; };
 		6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMessageTests.swift; sourceTree = "<group>"; };
+		78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Bezier.swift"; sourceTree = "<group>"; };
 		7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceTests.swift; sourceTree = "<group>"; };
-		80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
-		84B993E5FA5DA80654F9CC03 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		86CDDE2889D3D89BF1BB94A4 /* Wheelman-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Wheelman-Info.plist"; sourceTree = "<group>"; };
 		886C395B67A91072CBF2A507 /* TheScoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScoreTests-Info.plist"; sourceTree = "<group>"; };
 		88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Elements.swift; sourceTree = "<group>"; };
+		891864564A74E6AB9C7D8FA5 /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		8A1D4EE85FB1349A4CA87816 /* TheScoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheScoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8B7BC6F50889828C130CFD1A /* ButtonHeist-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeist-Info.plist"; sourceTree = "<group>"; };
 		8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Messages.swift; sourceTree = "<group>"; };
@@ -279,35 +282,30 @@
 		8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
 		9068F44DC10C400D19A6F84C /* SessionLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
 		9245D6A432C15F25BE014B73 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
+		9554F39FBD74E02DB6F040EC /* TheFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFence.swift; sourceTree = "<group>"; };
 		9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		9A918FE0F8CB350A49C5A16C /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1EB1A5A46B3485C412A60F9 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
-		A45F0E59651997924336C554 /* TheMastermind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMastermind.swift; sourceTree = "<group>"; };
-		A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Animation.swift"; sourceTree = "<group>"; };
+		A695972469D26E11E4C4FA8A /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
-		B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Accessibility.swift"; sourceTree = "<group>"; };
 		B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
 		BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		BDC7D8E68B6F0D02148DF7BF /* TheSafecracker+Bezier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Bezier.swift"; sourceTree = "<group>"; };
-		BF664870778AF30D3D21AB54 /* TheSafecracker+SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+SyntheticEventFactory.swift"; sourceTree = "<group>"; };
 		C33FA97BFD66D89E91027A83 /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
-		C361797E6074BC827ECD2483 /* TheFence+CommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandCatalog.swift"; sourceTree = "<group>"; };
 		C52109DAE44BD0E9A96B8047 /* TheMastermindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMastermindTests.swift; sourceTree = "<group>"; };
-		C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+AutoStart.swift"; sourceTree = "<group>"; };
-		C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
+		C588F2A0FD01FCC7F30E5766 /* DeviceConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnection.swift; sourceTree = "<group>"; };
+		CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
 		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
-		D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
 		DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
-		E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
+		DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
+		E2E49A2463969D4E335E9E49 /* Polling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Polling.swift; sourceTree = "<group>"; };
+		E923765A77D8ED2C93235895 /* TheSafecracker+SyntheticTouchFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+SyntheticTouchFactory.swift"; sourceTree = "<group>"; };
+		EA6E45285127FD6657C85307 /* Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screen.swift; sourceTree = "<group>"; };
 		EDA0604E563B2DFCC0F35E73 /* WheelmanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WheelmanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
-		F23CF2840E34CC68BD8FC797 /* ServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransport.swift; sourceTree = "<group>"; };
+		F18571487884873109E48997 /* TheSafecracker+SyntheticEventFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+SyntheticEventFactory.swift"; sourceTree = "<group>"; };
 		F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessageTests.swift; sourceTree = "<group>"; };
 		FEC9D64E860D2FC24B8BD256 /* TheInsideJobTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheInsideJobTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Screen.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -392,6 +390,17 @@
 			path = ButtonHeistTests;
 			sourceTree = "<group>";
 		};
+		01A6C2269E71316DFFD456C4 /* TheButtonHeist */ = {
+			isa = PBXGroup;
+			children = (
+				286300664EC22C2386C8F58E /* Exports.swift */,
+				9554F39FBD74E02DB6F040EC /* TheFence.swift */,
+				1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */,
+				54A4628DF7E03D859F181B6A /* TheMastermind.swift */,
+			);
+			path = TheButtonHeist;
+			sourceTree = "<group>";
+		};
 		0E77E51EEF3E53F750D02638 /* include */ = {
 			isa = PBXGroup;
 			children = (
@@ -428,48 +437,41 @@
 		17840E5599593D335B9F716D /* TheInsideJob */ = {
 			isa = PBXGroup;
 			children = (
+				DE2A055195EB170C7CE3CF0D /* Extensions */,
+				9F1C7D991B4200C2941046D0 /* TheSafecracker */,
 				5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */,
 				179DAF88825C7F500380DD4B /* TheFingerprints.swift */,
 				0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */,
-				B0D0BCF4853357DBFCCCE9B8 /* TheInsideJob+Accessibility.swift */,
-				A719D72A19988D520B79DCC6 /* TheInsideJob+Animation.swift */,
-				C611579C85248802FB8EBFEA /* TheInsideJob+AutoStart.swift */,
-				5D0494798F48D09DAE0781E0 /* TheInsideJob+Polling.swift */,
-				FF31AF281B5CD436FF482368 /* TheInsideJob+Screen.swift */,
 				C33FA97BFD66D89E91027A83 /* TheMuscle.swift */,
-				3CA545A7AF8D852FF0F3CF73 /* TheSafecracker.swift */,
-				80C88D44DADAA4E71E6ABA16 /* TheSafecracker+Actions.swift */,
-				BDC7D8E68B6F0D02148DF7BF /* TheSafecracker+Bezier.swift */,
-				5FF927903E9A703B0CB21966 /* TheSafecracker+IOHIDEventBuilder.swift */,
-				BF664870778AF30D3D21AB54 /* TheSafecracker+SyntheticEventFactory.swift */,
-				32E1A7058BAC7012B26A2CBE /* TheSafecracker+SyntheticTouchFactory.swift */,
-				C85E480BDE9050639FFDBFB5 /* TheSafecracker+TextEntry.swift */,
 				01CD3D2D34C5473EB6B4E4D1 /* TheStakeout.swift */,
 			);
 			path = TheInsideJob;
 			sourceTree = "<group>";
 		};
-		1F24FF40298DC33E9D6E0207 /* ButtonHeist */ = {
-			isa = PBXGroup;
-			children = (
-				84B993E5FA5DA80654F9CC03 /* Exports.swift */,
-				1C58C3164AE07FDD51D10830 /* TheFence.swift */,
-				C361797E6074BC827ECD2483 /* TheFence+CommandCatalog.swift */,
-				A45F0E59651997924336C554 /* TheMastermind.swift */,
-			);
-			path = ButtonHeist;
-			sourceTree = "<group>";
-		};
 		2EC3724EF6BB15C5608AFA1A /* Sources */ = {
 			isa = PBXGroup;
 			children = (
-				1F24FF40298DC33E9D6E0207 /* ButtonHeist */,
+				01A6C2269E71316DFFD456C4 /* TheButtonHeist */,
 				17840E5599593D335B9F716D /* TheInsideJob */,
 				FD3C4BF7547AE10804BA625A /* ThePlant */,
 				7CBEA3B65E7D5861F1EEE8C2 /* TheScore */,
-				891CA96A4AFF834775C9B354 /* Wheelman */,
+				5143023FBF445497D050C8EB /* TheWheelman */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		5143023FBF445497D050C8EB /* TheWheelman */ = {
+			isa = PBXGroup;
+			children = (
+				C588F2A0FD01FCC7F30E5766 /* DeviceConnection.swift */,
+				891864564A74E6AB9C7D8FA5 /* DeviceDiscovery.swift */,
+				5AB0A8AE966E9368CB74DC64 /* DiscoveredDevice.swift */,
+				1DD2CC38CFDE5D4DB883125F /* ServerTransport.swift */,
+				A695972469D26E11E4C4FA8A /* SimpleSocketServer.swift */,
+				239E73EE0956D5F56B58D327 /* TheWheelman.swift */,
+				1C8649D52AA3B3A3CE2934E2 /* USBDeviceDiscovery.swift */,
+			);
+			path = TheWheelman;
 			sourceTree = "<group>";
 		};
 		65F9437CA625EC19AE790A5C /* Tests */ = {
@@ -502,18 +504,18 @@
 			path = TheScore;
 			sourceTree = "<group>";
 		};
-		891CA96A4AFF834775C9B354 /* Wheelman */ = {
+		9F1C7D991B4200C2941046D0 /* TheSafecracker */ = {
 			isa = PBXGroup;
 			children = (
-				9AC55E54B4AEB7610218B6B6 /* DeviceConnection.swift */,
-				40787CA605811F1D2094FA0C /* DeviceDiscovery.swift */,
-				D2BC3FB28577548B94105297 /* DiscoveredDevice.swift */,
-				F23CF2840E34CC68BD8FC797 /* ServerTransport.swift */,
-				E1BC0E6680D252CB37FEBBE0 /* SimpleSocketServer.swift */,
-				0549AE8F41626E5CC7567AFF /* TheWheelman.swift */,
-				F0F2EA44C493F35DB2454F7D /* USBDeviceDiscovery.swift */,
+				1308BFFECC16AF7E933839EB /* TheSafecracker.swift */,
+				CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */,
+				78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */,
+				321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */,
+				F18571487884873109E48997 /* TheSafecracker+SyntheticEventFactory.swift */,
+				E923765A77D8ED2C93235895 /* TheSafecracker+SyntheticTouchFactory.swift */,
+				DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */,
 			);
-			path = Wheelman;
+			path = TheSafecracker;
 			sourceTree = "<group>";
 		};
 		A6B2D61908997D8B1576A5CF /* TheInsideJobTests */ = {
@@ -540,11 +542,22 @@
 			path = InfoPlists;
 			sourceTree = "<group>";
 		};
+		DE2A055195EB170C7CE3CF0D /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				4C34776C3FA2EF395B509E52 /* Animation.swift */,
+				011FC701399ED6B199815A4C /* AutoStart.swift */,
+				E2E49A2463969D4E335E9E49 /* Polling.swift */,
+				EA6E45285127FD6657C85307 /* Screen.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
 		F0E23FDFBE2AEBCB4B5EAD36 = {
 			isa = PBXGroup;
 			children = (
-				119B93DA40D0AC511E09A219 /* Products */,
 				FEA146ADAD433E87A26D764C /* Project */,
+				119B93DA40D0AC511E09A219 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
@@ -791,8 +804,6 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				TargetAttributes = {
-				};
 			};
 			buildConfigurationList = 3A3C0FC0326E7A58AAD87CE7 /* Build configuration list for PBXProject "ButtonHeist" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -1001,13 +1012,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E9B44A1DFAB426FC0E14E5AB /* DeviceConnection.swift in Sources */,
-				0A0C26CB1867D528D2191B77 /* DeviceDiscovery.swift in Sources */,
-				4C1F5697DC576934E6AFEEFC /* DiscoveredDevice.swift in Sources */,
-				3BB15F545AEF99A195AAFF4B /* ServerTransport.swift in Sources */,
-				F6FCB7E210313F20D821B801 /* SimpleSocketServer.swift in Sources */,
-				04D7A9C1624C711E92F3A799 /* TheWheelman.swift in Sources */,
-				7BDFF195F5ECA3BFB3C83C4A /* USBDeviceDiscovery.swift in Sources */,
+				FD7AF9AB5639D9048B4DF2E2 /* DeviceConnection.swift in Sources */,
+				FED6B797912E7832AD2CFE77 /* DeviceDiscovery.swift in Sources */,
+				6D6D08503517D7C10C63CA30 /* DiscoveredDevice.swift in Sources */,
+				0C66F4540219E4FF20FA0734 /* ServerTransport.swift in Sources */,
+				ECAAFEE0CF5CAED84722AAA3 /* SimpleSocketServer.swift in Sources */,
+				F022B8B34B93BED2D15E18A3 /* TheWheelman.swift in Sources */,
+				8CA85695E8E69F38A7E1AE66 /* USBDeviceDiscovery.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1015,22 +1026,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23F27EF90EA64C363A84E6B2 /* Animation.swift in Sources */,
+				6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */,
+				5CD6355BDA9E635AE450847F /* Polling.swift in Sources */,
+				5EF13631934912FD7D933DB1 /* Screen.swift in Sources */,
 				AA9C3C4951AB133A139E704C /* TheBagman.swift in Sources */,
 				A74AB42D76A561F05EB3EA3B /* TheFingerprints.swift in Sources */,
-				3DEAB67322D82ECF897698D5 /* TheInsideJob+Accessibility.swift in Sources */,
-				F889BCD9DA93158407863900 /* TheInsideJob+Animation.swift in Sources */,
-				210AAB80D5CA1866F3DC6698 /* TheInsideJob+AutoStart.swift in Sources */,
-				AB275BCF9EB98EFA36ADDCBE /* TheInsideJob+Polling.swift in Sources */,
-				F49D4C0E0545F88F2D815788 /* TheInsideJob+Screen.swift in Sources */,
 				D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */,
 				9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */,
-				25DCEA667ACA42C8EF77C553 /* TheSafecracker+Actions.swift in Sources */,
-				4DEEBF8296C770C7228A1DFD /* TheSafecracker+Bezier.swift in Sources */,
-				519B1D59EC06C659B7D1A2D3 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
-				B70DAB517DACB237844D3C90 /* TheSafecracker+SyntheticEventFactory.swift in Sources */,
-				EB9EDAF39EB6A062E6EAF7CF /* TheSafecracker+SyntheticTouchFactory.swift in Sources */,
-				DCBB571A99DCD147CF850D67 /* TheSafecracker+TextEntry.swift in Sources */,
-				F40339DF2014B630EB7867F1 /* TheSafecracker.swift in Sources */,
+				3CA92319C3F0C158E06E578A /* TheSafecracker+Actions.swift in Sources */,
+				FF72FE3ED77B03A1BC1CBA46 /* TheSafecracker+Bezier.swift in Sources */,
+				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
+				41D4695B9C949756340D284B /* TheSafecracker+SyntheticEventFactory.swift in Sources */,
+				A0C1CDA81833FB9493540A58 /* TheSafecracker+SyntheticTouchFactory.swift in Sources */,
+				84A337C8A25148BC81B2DE3B /* TheSafecracker+TextEntry.swift in Sources */,
+				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
 				E3EB50B8FF78DE114640D797 /* TheStakeout.swift in Sources */,
 				7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */,
 			);
@@ -1040,10 +1050,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				92B8027AF50E6E18E91D58D1 /* Exports.swift in Sources */,
-				46E747AFA7A80565A7B2D394 /* TheFence+CommandCatalog.swift in Sources */,
-				9CB0A9F7774C4B5F577AA368 /* TheFence.swift in Sources */,
-				D5B498E73725F15EE96B9B56 /* TheMastermind.swift in Sources */,
+				A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */,
+				35EBC59194F55574BEF113CB /* TheFence+CommandCatalog.swift in Sources */,
+				CA8DB44843A29EE5482011BE /* TheFence.swift in Sources */,
+				064C998F6E4663744710C60C /* TheMastermind.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1198,15 +1208,32 @@
 		3727093C59294BD76A340939 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1220,18 +1247,31 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
 				PRODUCT_NAME = TheScore;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				SKIP_INSTALL = YES;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Release;
 		};
@@ -1250,7 +1290,7 @@
 				PRODUCT_NAME = WheelmanTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 			};
 			name = Release;
 		};
@@ -1269,7 +1309,7 @@
 				PRODUCT_NAME = TheScoreTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 			};
 			name = Release;
 		};
@@ -1320,7 +1360,7 @@
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -1331,6 +1371,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
@@ -1357,7 +1398,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -1365,15 +1406,32 @@
 		6ABCA99CE2546CACEFC7C1FE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1387,18 +1445,31 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				SKIP_INSTALL = YES;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = wholemodule;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = wholemodule;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Release;
 		};
@@ -1412,6 +1483,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
@@ -1440,7 +1512,7 @@
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -1457,6 +1529,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
@@ -1499,15 +1572,32 @@
 		B053953BC4CEE9D5F72E0DED /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/TheScore-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1521,22 +1611,43 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.thescore;
 				PRODUCT_NAME = TheScore;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				SKIP_INSTALL = YES;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					DEBUG,
 				);
-				SWIFT_COMPILATION_MODE = singlefile;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Debug;
 		};
@@ -1598,15 +1709,32 @@
 		CDB420765D655E899C915F4C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				"CURRENT_PROJECT_VERSION[sdk=iphoneos*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=iphonesimulator*]" = 1;
+				"CURRENT_PROJECT_VERSION[sdk=macosx*]" = 1;
+				"DEFINES_MODULE[sdk=iphoneos*]" = YES;
+				"DEFINES_MODULE[sdk=iphonesimulator*]" = YES;
+				"DEFINES_MODULE[sdk=macosx*]" = YES;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_COMPATIBILITY_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphoneos*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=iphonesimulator*]" = 1;
+				"DYLIB_CURRENT_VERSION[sdk=macosx*]" = 1;
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphoneos*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=iphonesimulator*]" = "@rpath";
+				"DYLIB_INSTALL_NAME_BASE[sdk=macosx*]" = "@rpath";
 				INFOPLIST_FILE = "Derived/InfoPlists/Wheelman-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphoneos*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=iphonesimulator*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				"INSTALL_PATH[sdk=macosx*]" = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphoneos*]" = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
@@ -1620,22 +1748,43 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.wheelman;
 				PRODUCT_NAME = Wheelman;
+				"PRODUCT_NAME[sdk=iphoneos*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=iphonesimulator*]" = "$(TARGET_NAME:c99extidentifier)";
+				"PRODUCT_NAME[sdk=macosx*]" = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = auto;
-				SKIP_INSTALL = YES;
+				"SKIP_INSTALL[sdk=iphoneos*]" = YES;
+				"SKIP_INSTALL[sdk=iphonesimulator*]" = YES;
+				"SKIP_INSTALL[sdk=macosx*]" = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = (
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphoneos*]" = (
 					"$(inherited)",
 					DEBUG,
 				);
-				SWIFT_COMPILATION_MODE = singlefile;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=iphonesimulator*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_ACTIVE_COMPILATION_CONDITIONS[sdk=macosx*]" = (
+					"$(inherited)",
+					DEBUG,
+				);
+				"SWIFT_COMPILATION_MODE[sdk=iphoneos*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=iphonesimulator*]" = singlefile;
+				"SWIFT_COMPILATION_MODE[sdk=macosx*]" = singlefile;
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
+				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
+				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
+				"VERSIONING_SYSTEM[sdk=macosx*]" = "apple-generic";
+				"VERSION_INFO_PREFIX[sdk=iphoneos*]" = "";
+				"VERSION_INFO_PREFIX[sdk=iphonesimulator*]" = "";
+				"VERSION_INFO_PREFIX[sdk=macosx*]" = "";
 			};
 			name = Debug;
 		};
@@ -1738,7 +1887,7 @@
 				PRODUCT_NAME = ButtonHeistTests;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 			};
 			name = Release;
 		};
@@ -1747,6 +1896,7 @@
 			buildSettings = {
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
