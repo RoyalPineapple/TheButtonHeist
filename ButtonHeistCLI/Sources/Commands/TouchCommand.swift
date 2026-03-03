@@ -11,8 +11,8 @@ struct TouchCommand: AsyncParsableCommand {
             Send touch gestures to the connected iOS app.
 
             Examples:
-              buttonheist touch tap --identifier "myButton"
-              buttonheist touch tap --x 100 --y 200
+              buttonheist touch one_finger_tap --identifier "myButton"
+              buttonheist touch one_finger_tap --x 100 --y 200
               buttonheist touch longpress --identifier "myButton" --duration 1.0
               buttonheist touch swipe --identifier "list" --direction up
               buttonheist touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
@@ -40,7 +40,7 @@ struct TouchCommand: AsyncParsableCommand {
 // MARK: - Tap
 
 struct TapSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "tap", abstract: "Tap at a point or element")
+    static let configuration = CommandConfiguration(commandName: "one_finger_tap", abstract: "Tap at a point or element (prefer 'activate' for element interactions)")
 
     @Option(name: .long, help: "Element identifier")
     var identifier: String?

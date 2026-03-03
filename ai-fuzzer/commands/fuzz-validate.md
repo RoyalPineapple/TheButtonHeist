@@ -19,35 +19,18 @@ Examples:
 - ALWAYS resolve the feature name to specific screen(s) before doing anything — never start testing without a clear target
 - ALWAYS check `references/app-knowledge.md` for known findings on the target screen(s) — regression checking is the highest-value activity
 - ALWAYS use `references/nav-graph.md` to plan direct routes — don't wander to the feature's screen
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
 - ALWAYS plan actions in explicit sub-phase batches — do not reason individually per element
 - ALWAYS batch your file writes — update notes and trace at sub-phase boundaries, not every action
-- DO NOT call `buttonheist screenshot` on every action — only for findings, new screens, and the initial observation
+- DO NOT call `get_screen` on every action — only for findings, new screens, and the initial observation
 - DO NOT test screens unrelated to the feature — stay scoped
 
-## Step 0: Verify Connection + Load Knowledge
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one.
-   - If one exists with `Status: in_progress` and the same feature target: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
-   - Otherwise: start a fresh session
-8. **Load navigation knowledge**: Read `references/nav-graph.md` — this gives you all known screens, transitions, and back-routes
-9. **Load app knowledge**: Read `references/app-knowledge.md` — this gives you coverage data, behavioral models, known findings, and testing gaps
-10. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol
-11. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm
-12. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation
-13. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
+
+Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
 
 ## Step 1: Resolve Feature
 
@@ -138,19 +121,18 @@ Create a new session notes file:
 1. Write the `## Config` section: command: `validate`, target feature, related screens, user context, status: `in_progress`, trace file name, next finding ID: `F-1`
 2. Write the `## Progress` section: actions: 0, current screen, phase: `navigating`
 3. Write empty sections: `## Screens Discovered`, `## Coverage`, `## Behavioral Models`, `## Transitions`, `## Navigation Stack`, `## Findings`, `## Regression Check`, `## Action Log`, `## Next Actions`
-4. **Create the companion trace file**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-validate-{feature-name}.trace.md`
-   - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
+4. **Create the companion trace file** (see `references/session-files.md` for format)
 
 ## Step 3: Navigate to Feature
 
-1. Run `buttonheist watch --once --format json --quiet` to fingerprint the current screen
+1. Call `get_interface` to fingerprint the current screen
 2. If already on the target screen: skip navigation, proceed to Step 4
 3. Plan a route using `references/nav-graph.md`:
    - Find the target screen in the Transitions table
    - BFS from the current screen to the target (see `references/navigation-planning.md`)
    - If no route found: navigate to the app root (Main Menu) first, then route from there
 4. Execute the route step by step:
-   - For each step: execute the action, read the delta, verify the destination fingerprint
+   - For each step: execute the action, check the delta matches expected screenChanged, continue
    - Push each forward navigation onto `## Navigation Stack`
    - Write `navigate` trace entries for each step (purpose: `setup`)
 5. If navigation fails at any step: report the failure and ask the user for help
@@ -159,8 +141,8 @@ Update `## Progress`: phase: `observing`
 
 ## Step 4: Observe + Build Model
 
-1. Run `buttonheist screenshot --output /tmp/bh-validate-screen.png` (via Bash), then Read the PNG — see the feature's current state
-2. Run `buttonheist watch --once --format json --quiet` (via Bash) — read the full element hierarchy
+1. Call `get_screen` — see the feature's current state
+2. Call `get_interface` — read the full element hierarchy
 3. Print what you see: screen description, element count, interactive elements
 4. Record as first screen in `## Screens Discovered`
 
@@ -188,22 +170,14 @@ Update `## Progress`: phase: `validating`
 
 Run validation in this priority order, delegating each sub-phase to a Haiku executor. Track actions taken — budget ~50 actions total for a single feature (adjustable based on feature complexity).
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
-
-For each sub-phase below, Opus:
-1. Designs the action list based on the behavioral model, known findings, and screen intent
-2. Builds an execution plan with context block (including auth token), action list, and stop conditions
-3. Dispatches to Haiku via `Task(model: "haiku", subagent_type: "Bash")`
-4. Reads Haiku's Execution Result
-5. Incorporates notes and findings into the validation state
-6. Adjusts the next sub-phase if needed (e.g., skip related violation tests if a regression appears fixed)
+Use the **Execution Plan Template** from SKILL.md for delegation. For each sub-phase, Opus designs actions, builds an execution plan, dispatches to Haiku, reads the result, and adjusts the next sub-phase.
 
 ### 5a. Regression Check (known findings)
 
 **This is the highest-value activity.** For each known finding on this screen (from `references/app-knowledge.md` Findings Tracker), Opus builds an execution plan:
 
 **What Opus writes into the plan:**
-- For each finding: the exact triggering action (CLI command), precondition setup actions, expected behavior from the finding's description
+- For each finding: the exact triggering action (MCP tool call), precondition setup actions, expected behavior from the finding's description
 - Prediction for each action: what the original finding observed
 - Purpose: `regression`
 - Budget: up to 3 actions per known finding
@@ -275,7 +249,7 @@ If `references/app-knowledge.md` Testing Gaps has unchecked items for this scree
 - Actions to fill each gap:
   - "adversarial values not tested" → type commands with values from `references/interesting-values.md`
   - "increment/decrement boundary not tested" → increment/decrement to min/max
-  - "drawing gestures untested" → `buttonheist touch draw-path` / `buttonheist touch draw-bezier` commands
+  - "drawing gestures untested" → `gesture(type: draw_path, ...)` / `gesture(type: draw_bezier, ...)` calls
 - Purpose: `fuzzing`
 - Budget: ~5-10 actions
 
@@ -360,7 +334,7 @@ When validation completes (all phases done or action budget exhausted):
 **Finding ID**: F-1
 **Trace refs**: #X, #Y
 **Screen**: [screen]
-**Action**: [exact CLI command] [trace #Y]
+**Action**: [exact tool call] [trace #Y]
 **Expected**: [what you expected]
 **Actual**: [what happened]
 **Steps to Reproduce**:
@@ -404,7 +378,7 @@ When validation completes (all phases done or action budget exhausted):
 
 ## Crash Handling
 
-If the app crashes (CLI command fails with connection error or non-zero exit code after previously working):
+If the app crashes (MCP tool call fails with connection error after previously working):
 
 1. **Stop immediately** — the connection is dead
 2. **Update trace**: Append the `interact` entry with `result.status: crash`
@@ -414,7 +388,7 @@ If the app crashes (CLI command fails with connection error or non-zero exit cod
 
 ## Error Recovery
 
-- If a CLI command returns an error but the app is still connected: record the error, continue with the next validation step
+- If a tool call returns an error but the app is still connected: record the error, continue with the next validation step
 - If navigation to the target screen fails: try an alternate route via the nav-graph, or ask the user for help
 - If an element from the behavioral model is missing: note it as a finding (element removed or renamed), adapt and continue
-- Read `references/troubleshooting.md` for additional recovery procedures
+- See **## Error Recovery** in SKILL.md for additional recovery procedures

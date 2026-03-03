@@ -42,9 +42,7 @@ For each step in the planned route:
 1. Look up the action from `## Transitions` (e.g., `activate "Settings"`)
 2. Find the element on the current screen matching that action (by identifier or label)
 3. Execute the action
-4. Read the delta: `screenChanged` should show the expected destination
-5. Verify the fingerprint matches the expected screen
-6. If verification fails: you're on an unexpected screen. Record the unexpected transition and re-plan from your current position.
+4. `screenChanged` = destination reached, continue to next step. Any other delta = unexpected, record the unexpected transition and re-plan from current position.
 
 ### Navigation Stack
 

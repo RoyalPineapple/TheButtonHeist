@@ -16,6 +16,8 @@
 
 Composable interaction templates that strategies can reference. Each pattern is a self-contained sequence with a clear purpose. Apply these as building blocks instead of reinventing them per strategy.
 
+**Delta efficiency**: When a pattern says "Record state" or "Verify screen," use the delta from the preceding action — don't make a separate `get_interface` call. A `screenChanged` delta includes the full new interface. A `valuesChanged` delta tells you exactly what changed. Only call `get_interface` when you need state without acting first (e.g., the very first step of a pattern).
+
 ## Navigate-Interact-Verify-Return
 
 Test an element on another screen without losing your place.
@@ -27,8 +29,7 @@ Test an element on another screen without losing your place.
 4. Interact with the target element
 5. Record target screen state → After
 6. Compare Before and After — record any changes
-7. Navigate back to Origin
-8. Verify you returned (fingerprint matches Origin)
+7. Navigate back — `screenChanged` delta confirms you returned to Origin
 ```
 
 Use this when: You want to test an element on a different screen but need to come back to continue exploring the current one.
@@ -82,8 +83,7 @@ Try every action type on a single element.
 2. For each action in the element's actions array:
    a. Perform the action
    b. Record the result (screen change, value change, no change)
-   c. If the screen changed, navigate back
-   d. Verify we're back on the original screen
+   c. If the screen changed, navigate back — `screenChanged` delta confirms return
 3. Then try actions NOT in the actions array (as fuzzing):
    a. tap (if not already tried)
    b. long_press
@@ -143,13 +143,14 @@ Explore hidden content by scrolling through containers.
 
 ```
 1. Record all visible elements → Visible Set
-2. Swipe up on the container area
+2. scroll(direction: down) on the container
 3. Record all elements → New Visible Set
 4. Note any newly appeared elements (in New but not in original Visible Set)
-5. Repeat swipes until no new elements appear (swipe returned same set)
-6. Swipe down repeatedly to return to top
-7. Verify original Visible Set is restored
+5. Repeat scrolls until no new elements appear (scroll returned same set)
+6. scroll_to_edge(edge: top) to return to the beginning
 ```
+
+Use `scroll_to_visible(identifier: ID)` when you know a specific element exists but is off-screen — it scrolls directly to it without paging.
 
 Use this when: The screen has lists, scroll views, or any content that might extend beyond the visible area. Always scroll before concluding a screen is "fully explored."
 

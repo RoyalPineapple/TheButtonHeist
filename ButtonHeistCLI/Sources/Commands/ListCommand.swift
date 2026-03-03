@@ -20,11 +20,24 @@ struct ListCommand: AsyncParsableCommand {
         logStatus("Discovering devices...")
         client.startDiscovery()
 
-        try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+        let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(timeout * 1_000_000_000)
+        var lastCount = 0
+        var stableAt = DispatchTime.now().uptimeNanoseconds
 
-        client.stopDiscovery()
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let count = client.discoveredDevices.count
+            if count != lastCount {
+                lastCount = count
+                stableAt = DispatchTime.now().uptimeNanoseconds
+            }
+            if count > 0 && (DispatchTime.now().uptimeNanoseconds - stableAt) > 500_000_000 {
+                break
+            }
+        }
 
         let devices = client.discoveredDevices
+        client.stopDiscovery()
 
         if devices.isEmpty {
             logStatus("No devices found.")

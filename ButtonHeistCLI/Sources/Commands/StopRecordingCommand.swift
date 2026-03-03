@@ -26,10 +26,8 @@ struct StopRecordingCommand: AsyncParsableCommand {
         if !connection.quiet { logStatus("Stopping recording...") }
         client.send(.stopRecording)
 
-        // Wait briefly for the server to acknowledge — the recording payload
-        // is broadcast to all clients, so the original `record` process
-        // (running in background) receives it and writes the file.
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        // Brief yield so the WebSocket frame flushes before we disconnect.
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
         if !connection.quiet { logStatus("Stop signal sent") }
     }

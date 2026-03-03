@@ -58,7 +58,8 @@ struct ButtonHeistMCPServer {
             switch params.name {
             // Direct 1:1 tools — tool name IS the command
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
-                 "wait_for_idle", "start_recording", "stop_recording", "list_devices":
+                 "wait_for_idle", "start_recording", "stop_recording", "list_devices",
+                 "scroll", "scroll_to_visible", "scroll_to_edge":
                 request["command"] = params.name
 
             // Grouped tools — "type" field becomes the command
@@ -66,8 +67,7 @@ struct ButtonHeistMCPServer {
                 guard let type = request.removeValue(forKey: "type") as? String else {
                     return .init(content: [.text("Missing required parameter: type")], isError: true)
                 }
-                // one_finger_tap maps to TheFence "tap" command
-                request["command"] = (type == "one_finger_tap") ? "tap" : type
+                request["command"] = type
 
             case "accessibility_action":
                 guard let type = request.removeValue(forKey: "type") as? String else {

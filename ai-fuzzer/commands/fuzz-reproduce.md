@@ -13,7 +13,6 @@ You are tasked with replaying the action sequence that triggered a specific find
 ## CRITICAL
 - ALWAYS use exact tool names and arguments from the trace — do not improvise actions
 - ALWAYS compare fingerprints before and after each action against the trace's recorded state
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - ALWAYS present the reproduction plan and wait for user confirmation before executing
 - DO NOT modify app state beyond what the trace specifies
 - DO NOT continue past major divergence (< 50% similarity) without reporting
@@ -25,8 +24,7 @@ You are tasked with replaying the action sequence that triggered a specific find
 3. Otherwise, use the most recent trace file
 4. Read the trace file header to find the companion session notes file
 5. Read the session notes file
-6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format conventions.
-7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+6. **Load formats**: Read `references/session-files.md` and `references/navigation-planning.md`.
 
 If no trace files exist, stop and tell the user: "No trace files found. Run `/fuzz` or `/fuzz-explore` first — they generate trace files automatically."
 
@@ -62,7 +60,7 @@ Reproduction plan (5 actions):
   2. [trace #10] activate(order: 8)         — navigate Adjustable Controls → Controls Demo
   3. [trace #12] activate(identifier: "settings") — navigate Controls Demo → Settings
   4. [trace #42] activate(identifier: "darkModeToggle") — the triggering action
-  5. [trace #43] buttonheist watch --once --format json --quiet — verify the anomaly
+  5. [trace #43] get_interface — verify the anomaly
 
 Proceed? (waiting for confirmation)
 ```
@@ -71,18 +69,9 @@ Proceed? (waiting for confirmation)
 
 ## Step 3: Verify Connection
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for this reproduction run
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. **Load nav graph**: Read `references/nav-graph.md` for route planning
-6. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
-7. If already on the finding's screen, skip navigation steps
-8. If not on the expected starting screen, **plan a route** from current screen to the finding's screen using the nav graph and `## Transitions`
+Follow **## Session Setup** from SKILL.md (verify connection).
+
+Then: fingerprint the current screen with `get_interface`. If not on the finding's screen, plan a route using `references/nav-graph.md` and `## Transitions`.
 
 ## Step 4: Dispatch Execution to Haiku
 
@@ -90,12 +79,12 @@ For each reproduction attempt, build an execution plan and dispatch to Haiku.
 
 ### Building the Execution Plan
 
-Read `references/execution-protocol.md` for the full plan format. The reproduction execution plan contains:
+Use the **Execution Plan Template** from SKILL.md. The reproduction execution plan contains:
 
-**Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
+**Context block**: Session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
 **Action list**: The reproduction sequence from Step 2, where each action has:
-- `command`: Exact CLI command from the trace entry
+- `command`: Exact MCP tool call from the trace entry
 - `expected_delta`: Based on trace — `screenChanged` for navigation steps, the original delta kind for the triggering action
 - `expected_screen`: Destination screen name for navigation steps
 - `prediction`: From the trace's recorded result
@@ -104,7 +93,7 @@ Read `references/execution-protocol.md` for the full plan format. The reproducti
 **Additional instructions for Haiku** (included in the plan):
 
 Before each action:
-1. Run `buttonheist watch --once --format json --quiet` to get the current fingerprint
+1. Get the current fingerprint from existing state (previous action's `screenChanged` delta includes the full interface; for the first action, use the initial `get_interface`). Only call `get_interface` if you don't already have the current interface.
 2. Compare with the trace's expected `screen_fingerprint_before` using overlap similarity:
    - **100%**: Exact match — continue
    - **≥ 80%**: Minor drift — note and continue
@@ -119,8 +108,8 @@ After the finding's triggering action, verify whether the finding reproduces:
 Include this verification result in the return's Notes.
 
 **Recording setup** (include in the plan as first and last actions):
-- First: `mkdir -p .fuzzer-data/recordings && buttonheist record --output .fuzzer-data/recordings/F-N-reproduce.mp4 --action-log .fuzzer-data/recordings/F-N-reproduce.actionlog.json --max-duration <estimated> --inactivity-timeout 60 --fps 8 --scale 0.5 --quiet >/tmp/fuzz-reproduce-record.log 2>&1 &` then `sleep 2`
-- Last: `ls -la .fuzzer-data/recordings/F-N-reproduce.mp4 .fuzzer-data/recordings/F-N-reproduce.actionlog.json` (recording auto-stops on inactivity)
+- First: `mkdir -p .fuzzer-data/recordings` (via Bash), then call `start_recording(fps: 8, scale: 0.5, maxDuration: <estimated>, inactivityTimeout: 60)`
+- Last: Call `stop_recording(output: ".fuzzer-data/recordings/F-N-reproduce.mp4")` — returns metadata (duration, frame count, file size)
 
 **Stop conditions**: Stop on crash. Stop on < 50% fingerprint similarity (major divergence). Stop on 3+ consecutive unexpected results.
 
@@ -130,7 +119,7 @@ Include this verification result in the return's Notes.
 Task(
   description: "[the execution plan as markdown]",
   model: "haiku",
-  subagent_type: "Bash"
+  subagent_type: "general-purpose"
 )
 ```
 
@@ -147,10 +136,10 @@ Parse the Execution Result:
 Try the reproduction up to 3 times. Opus manages the attempt loop, dispatching Haiku for each attempt:
 
 1. **Attempt 1**: Straight replay — dispatch the exact reproduction plan
-2. **Attempt 2** (if attempt 1 failed due to timing): Modify the plan to include brief pauses between actions (add `sleep 1` commands between action entries)
-3. **Attempt 3** (if element identifiers changed): Modify the plan to use `--index N` instead of `--identifier ID` for elements Haiku reported as not found
+2. **Attempt 2** (if attempt 1 failed due to timing): Modify the plan to include `wait_for_idle` calls between actions
+3. **Attempt 3** (if element identifiers changed): Modify the plan to use `order: N` instead of `identifier: ID` for elements Haiku reported as not found
 
-Between attempts for CRASH findings, tell the user to relaunch the app and wait for `buttonheist list` to show the device again.
+Between attempts for CRASH findings, tell the user to relaunch the app and wait for `list_devices` to show the device again.
 
 After each attempt, print:
 ```

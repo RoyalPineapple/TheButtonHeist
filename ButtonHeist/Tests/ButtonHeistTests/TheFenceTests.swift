@@ -9,7 +9,7 @@ final class TheFenceTests: XCTestCase {
     func testCommandCatalogContainsExpectedCommands() {
         let commands = TheFence.CommandCatalog.all
         XCTAssertTrue(commands.contains("help"))
-        XCTAssertTrue(commands.contains("tap"))
+        XCTAssertTrue(commands.contains("one_finger_tap"))
         XCTAssertTrue(commands.contains("get_interface"))
         XCTAssertTrue(commands.contains("get_screen"))
         XCTAssertTrue(commands.contains("type_text"))
@@ -37,9 +37,9 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testHelpResponseFormatting() {
-        let response = FenceResponse.help(commands: ["tap", "swipe"])
+        let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
         let formatted = response.humanFormatted()
-        XCTAssertTrue(formatted.contains("tap"))
+        XCTAssertTrue(formatted.contains("one_finger_tap"))
         XCTAssertTrue(formatted.contains("swipe"))
         XCTAssertTrue(formatted.hasPrefix("Commands:"))
     }
@@ -76,11 +76,11 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testHelpResponseJSON() {
-        let response = FenceResponse.help(commands: ["tap", "swipe"])
+        let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
         let json = response.jsonDict()
         XCTAssertEqual(json?["status"] as? String, "ok")
         let commands = json?["commands"] as? [String]
-        XCTAssertEqual(commands, ["tap", "swipe"])
+        XCTAssertEqual(commands, ["one_finger_tap", "swipe"])
     }
 
     func testStatusResponseJSON() {
@@ -158,7 +158,7 @@ final class TheFenceTests: XCTestCase {
         let response = try await fence.execute(request: ["command": "help"])
         if case .help(let commands) = response {
             XCTAssertFalse(commands.isEmpty)
-            XCTAssertTrue(commands.contains("tap"))
+            XCTAssertTrue(commands.contains("one_finger_tap"))
         } else {
             XCTFail("Expected help response, got \(response)")
         }
