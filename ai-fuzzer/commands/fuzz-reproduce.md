@@ -25,8 +25,7 @@ You are tasked with replaying the action sequence that triggered a specific find
 3. Otherwise, use the most recent trace file
 4. Read the trace file header to find the companion session notes file
 5. Read the session notes file
-6. **Load session notes format**: Read `references/session-notes-format.md` for notes file format conventions.
-7. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+6. **Load formats**: Read `references/session-files.md` and `references/navigation-planning.md`.
 
 If no trace files exist, stop and tell the user: "No trace files found. Run `/fuzz` or `/fuzz-explore` first — they generate trace files automatically."
 
@@ -71,18 +70,9 @@ Proceed? (waiting for confirmation)
 
 ## Step 3: Verify Connection
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for this reproduction run
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. **Load nav graph**: Read `references/nav-graph.md` for route planning
-6. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
-7. If already on the finding's screen, skip navigation steps
-8. If not on the expected starting screen, **plan a route** from current screen to the finding's screen using the nav graph and `## Transitions`
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token).
+
+Then: fingerprint the current screen with `buttonheist watch --once --format json --quiet`. If not on the finding's screen, plan a route using `references/nav-graph.md` and `## Transitions`.
 
 ## Step 4: Dispatch Execution to Haiku
 
@@ -90,7 +80,7 @@ For each reproduction attempt, build an execution plan and dispatch to Haiku.
 
 ### Building the Execution Plan
 
-Read `references/execution-protocol.md` for the full plan format. The reproduction execution plan contains:
+Use the **Execution Plan Template** from SKILL.md. The reproduction execution plan contains:
 
 **Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 

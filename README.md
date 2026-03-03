@@ -256,7 +256,7 @@ ButtonHeist/
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 
 **Project:**
-- [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app testing framework
+- [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app fuzzer built entirely with prompt engineering on top of Button Heist (zero traditional code — 6,000+ lines of markdown)
 - [Contributing](CONTRIBUTING.md) — Development setup and guidelines
 - [Changelog](CHANGELOG.md) — Version history
 

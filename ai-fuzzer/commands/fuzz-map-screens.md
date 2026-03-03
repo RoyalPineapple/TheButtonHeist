@@ -13,27 +13,13 @@ You are tasked with systematically mapping every reachable screen in the connect
 - DO NOT re-explore screens that are already fully mapped — check your session notes first
 - DO NOT spend more than 200 total actions — report a partial map if the limit is reached
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to pick up partial screen maps. Skip screens already fully mapped. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. Pre-populate known screens and transitions — skip mapping what's already known.
-9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-10. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
 
-During mapping, update your session notes file continuously:
-- After each new screen: add to `## Screens Discovered`
-- After each transition: add to `## Transitions`
-- Every 5 actions: update `## Progress` and `## Next Actions`
+Additionally load: `references/navigation-planning.md`. If starting fresh, create: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-map-screens.md`
+
+During mapping, update session notes continuously: new screens → `## Screens Discovered`, transitions → `## Transitions`, every 5 actions → `## Progress`.
 
 ## Step 1: Start Screen
 
@@ -51,7 +37,7 @@ Push the current screen onto the exploration stack.
 
 ## Step 2: Exploration Loop (Delegated to Haiku)
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
+Use the **Execution Plan Template** from SKILL.md for delegation.
 
 While the exploration stack is not empty:
 

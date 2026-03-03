@@ -15,21 +15,11 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
 **Arguments** (optional): `$ARGUMENTS`
 - Element identifier or "all" (default: "all" — stress test every interactive element)
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
-9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+
+If starting fresh, create: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
 
 ## Step 1: Identify Targets
 
@@ -45,7 +35,7 @@ For each target element, build an execution plan and dispatch it to a Haiku exec
 
 ### Building the Execution Plan
 
-Read `references/execution-protocol.md` for the full plan format. For each target element, generate an execution plan containing:
+Use the **Execution Plan Template** from SKILL.md. For each target element, generate an execution plan containing:
 
 **Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen name + fingerprint, nav stack.
 

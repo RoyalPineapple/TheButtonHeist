@@ -36,7 +36,7 @@ Unlike `/fuzz-reproduce` (which verifies reproducibility with multiple attempts 
    - Steps to Reproduce (if present)
 5. Read the companion `.trace.md` file and extract the relevant trace entries
 6. If the finding has `**Steps to Reproduce**`, prefer those over raw trace entries
-7. **Load session notes format**: Read `references/session-notes-format.md` for format conventions
+7. **Load session file format**: Read `references/session-files.md` for format conventions
 
 Print:
 ```
@@ -110,16 +110,9 @@ Proceed? (waiting for confirmation)
 
 ## Step 3: Verify Connection
 
-1. **Ensure CLI is on PATH**: Build the CLI if `buttonheist` is not available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` — confirm device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for this demo run
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
-6. If not on the app's main/launch screen, navigate there using the nav graph or Back actions
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token).
+
+Then: fingerprint the current screen. If not on the app's main/launch screen, navigate there using the nav graph or Back actions.
 
 ## Step 4: Execute the Demo with Recording
 

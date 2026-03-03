@@ -20,44 +20,30 @@ You are tasked with autonomously fuzzing the connected iOS app. Explore screens,
 - DO NOT re-read session notes between actions — keep state in memory, notes are for compaction survival
 - DO NOT skip the refinement pass — unverified findings are unreliable
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup + Gap Analysis
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one and read it.
-   - If one exists with `Status: in_progress`: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
-   - Otherwise: start a fresh session (previous notes files stay for reference)
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you all known transitions, back-routes, and screen fingerprints from prior sessions.
-9. **Load app knowledge**: Read `references/app-knowledge.md` if it exists. This gives you accumulated coverage, behavioral models, finding investigation status, and known testing gaps from prior sessions.
-10. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-11. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-12. **Load response examples**: Read `references/examples.md` for annotated CLI response examples — these show how to interpret deltas and recognize screen intents in practice.
-13. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences to use when planning action batches.
-14. **Gap analysis**: Before choosing a strategy, identify the highest-priority work from `references/app-knowledge.md`:
-    - **Uninvestigated findings**: Check `## Findings Tracker` for `open:uninvestigated` entries — these need 5-10 actions of investigation each
-    - **Untested areas**: Check `## Testing Gaps` for unchecked items — these are explicitly known blind spots
-    - **Low-coverage screens**: Check `## Coverage Summary` for screens with < 80% element coverage or missing action types
-    - **Stale screens**: Screens not tested in the last 2+ sessions may have regressed
-    Print the gap analysis:
-    ```
-    [Gap Analysis]
-    Uninvestigated findings: [list findings needing investigation]
-    Untested areas: [list unchecked gaps]
-    Low coverage: [list screens below 80%]
-    Session plan: [prioritized plan for this session]
-    ```
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+
+Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
+
+**Gap analysis**: Before choosing a strategy, identify highest-priority work from `references/app-knowledge.md`:
+- **Uninvestigated findings**: `## Findings Tracker` entries with `open:uninvestigated`
+- **Untested areas**: Unchecked items in `## Testing Gaps`
+- **Low-coverage screens**: Screens with < 80% element coverage in `## Coverage Summary`
+- **Stale screens**: Not tested in 2+ sessions
+
+Print the gap analysis:
+```
+[Gap Analysis]
+Uninvestigated findings: [list]
+Untested areas: [list]
+Low coverage: [list]
+Session plan: [prioritized plan]
+```
 
 ## Step 1: Load Strategy
 
-Parse `$ARGUMENTS` for the strategy name and iteration limit. If a strategy was explicitly specified, read the corresponding strategy file from `references/strategies/[name].md`.
+Parse `$ARGUMENTS` for the strategy name and iteration limit. If a strategy was explicitly specified, read the corresponding section from `references/strategies.md`.
 
 If no strategy was specified, defer selection until after Step 2 (Initial Observation) — see **Strategy Auto-Selection** below.
 
@@ -77,7 +63,7 @@ If no strategy was specified in `$ARGUMENTS`, choose based on gaps and context:
    - **< 5 total interactive elements**: use `gesture-fuzzing` — go deep on each element with every gesture type
    - **Otherwise** (default): use `systematic-traversal` — breadth-first coverage
 5. Print the auto-selected strategy, reasoning, and how it connects to the gap analysis
-6. Read the corresponding strategy file from `references/strategies/`
+6. Read the corresponding section from `references/strategies.md`
 
 ## Step 2: Initial Observation
 
@@ -105,14 +91,13 @@ Create a new session notes file (see SKILL.md for naming convention):
 5. Write empty `## Transitions`, `## Navigation Stack` (with Screen #1 at depth 0), `## Findings`, `## Action Log` sections
 6. Write `## Next Actions` describing what to try first on Screen #1
 7. **Create the companion trace file**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-fuzz-{strategy}.trace.md`
-   - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
-   - Append the first `observe` entry for the initial `buttonheist watch --once --format json --quiet` from Step 2
+   - Write the trace header and first `observe` entry (see `references/session-files.md`)
 
 Both files are your lifeline — the session notes for compaction survival, the trace for reproducibility.
 
 ## Step 4: Fuzzing Loop (Opus Plans, Haiku Executes)
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
+Use the **Execution Plan Template** from SKILL.md for delegation.
 
 Repeat until max iterations reached or a CRASH is detected:
 

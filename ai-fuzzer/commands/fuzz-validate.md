@@ -27,27 +27,11 @@ Examples:
 - DO NOT call `buttonheist screenshot` on every action — only for findings, new screens, and the initial observation
 - DO NOT test screens unrelated to the feature — stay scoped
 
-## Step 0: Verify Connection + Load Knowledge
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. Find the most recent one.
-   - If one exists with `Status: in_progress` and the same feature target: **resume the session** — read all sections (including `## Navigation Stack`), skip to the appropriate step, and continue from `## Next Actions`
-   - Otherwise: start a fresh session
-8. **Load navigation knowledge**: Read `references/nav-graph.md` — this gives you all known screens, transitions, and back-routes
-9. **Load app knowledge**: Read `references/app-knowledge.md` — this gives you coverage data, behavioral models, known findings, and testing gaps
-10. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol
-11. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm
-12. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation
-13. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+
+Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
 
 ## Step 1: Resolve Feature
 
@@ -138,8 +122,7 @@ Create a new session notes file:
 1. Write the `## Config` section: command: `validate`, target feature, related screens, user context, status: `in_progress`, trace file name, next finding ID: `F-1`
 2. Write the `## Progress` section: actions: 0, current screen, phase: `navigating`
 3. Write empty sections: `## Screens Discovered`, `## Coverage`, `## Behavioral Models`, `## Transitions`, `## Navigation Stack`, `## Findings`, `## Regression Check`, `## Action Log`, `## Next Actions`
-4. **Create the companion trace file**: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-validate-{feature-name}.trace.md`
-   - Write the trace header (Session, App, Device, Started, Format version: 1) — see `references/trace-format.md`
+4. **Create the companion trace file** (see `references/session-files.md` for format)
 
 ## Step 3: Navigate to Feature
 
@@ -188,15 +171,7 @@ Update `## Progress`: phase: `validating`
 
 Run validation in this priority order, delegating each sub-phase to a Haiku executor. Track actions taken — budget ~50 actions total for a single feature (adjustable based on feature complexity).
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
-
-For each sub-phase below, Opus:
-1. Designs the action list based on the behavioral model, known findings, and screen intent
-2. Builds an execution plan with context block (including auth token), action list, and stop conditions
-3. Dispatches to Haiku via `Task(model: "haiku", subagent_type: "Bash")`
-4. Reads Haiku's Execution Result
-5. Incorporates notes and findings into the validation state
-6. Adjusts the next sub-phase if needed (e.g., skip related violation tests if a regression appears fixed)
+Use the **Execution Plan Template** from SKILL.md for delegation. For each sub-phase, Opus designs actions, builds an execution plan, dispatches to Haiku, reads the result, and adjusts the next sub-phase.
 
 ### 5a. Regression Check (known findings)
 
@@ -417,4 +392,4 @@ If the app crashes (CLI command fails with connection error or non-zero exit cod
 - If a CLI command returns an error but the app is still connected: record the error, continue with the next validation step
 - If navigation to the target screen fails: try an alternate route via the nav-graph, or ask the user for help
 - If an element from the behavioral model is missing: note it as a finding (element removed or renamed), adapt and continue
-- Read `references/troubleshooting.md` for additional recovery procedures
+- See **## Error Recovery** in SKILL.md for additional recovery procedures
