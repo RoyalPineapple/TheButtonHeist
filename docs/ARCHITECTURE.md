@@ -93,7 +93,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   └── UIKeyboardImpl (text injection via ObjC runtime, same approach as KIF)
 ├── TheStakeout (screen recording engine)
 │   ├── AVAssetWriter (H.264/MP4 encoding)
-│   ├── Frame capture via drawHierarchy + CGContext fingerprint compositing
+│   ├── Frame capture via drawHierarchy (includes FingerprintWindow)
 │   ├── Inactivity monitor (screen hash + command tracking)
 │   ├── Interaction log (in-memory [InteractionEvent] array)
 │   └── File size guard (7MB cap for wire protocol)
@@ -224,7 +224,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 1. Client sends `startRecording` with optional configuration (fps, scale, timeouts)
 2. InsideJob creates a `Stakeout` instance with a frame capture closure
 3. Stakeout uses `AVAssetWriter` with H.264 codec, encoding frames from `drawHierarchy` compositing
-4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video. Additionally, `Stakeout` composites fingerprint circles directly into frames via CGContext for interactions that complete between frame captures.
+4. Unlike screenshots, recording captures **include** the `FingerprintWindow` so interaction indicators are visible in the video.
 5. Frames are captured at the configured FPS (default 8, range 1-15) using `afterScreenUpdates: false` to reduce main thread impact
 6. Action-triggered bonus frames are captured after each successful action completes
 7. During recording, each interaction through `performInteraction` captures the `ClientMessage`, `ActionResult`, and optional `InterfaceDelta` as an `InteractionEvent`, appended to Stakeout's in-memory interaction log
@@ -275,7 +275,7 @@ TheFence (@MainActor)
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 11 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 14 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -283,12 +283,12 @@ TheFence (@MainActor)
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 11 tool schemas (get_interface, activate, type_text, swipe, get_screen, wait_for_idle, start_recording, stop_recording, list_devices, gesture, accessibility_action)
+├── ToolDefinitions.swift — 14 tool schemas (get_interface, activate, type_text, swipe, get_screen, wait_for_idle, start_recording, stop_recording, list_devices, gesture, accessibility_action, scroll, scroll_to_visible, scroll_to_edge)
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 11 tools dispatch through `fence.execute(request:)`
+- 14 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_FORCE`, `BUTTONHEIST_SESSION_TIMEOUT`

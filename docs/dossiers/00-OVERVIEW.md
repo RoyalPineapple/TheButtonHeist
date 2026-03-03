@@ -15,7 +15,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ### Inside Team (iOS - runs in-process)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
-| [TheFingerprints](03-THEFINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay compositing |
+| [TheFingerprints](03-THEFINGERPRINTS.md) | The Evidence | Visual touch indicators, overlay included in recordings |
 | [TheSafecracker](04-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
 | [TheStakeout](05-THESTAKEOUT.md) | The Lookout | Screen recording, video encoding |
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |

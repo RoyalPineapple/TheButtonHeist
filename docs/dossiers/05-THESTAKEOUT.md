@@ -12,7 +12,7 @@ TheStakeout handles all screen recording operations:
 2. **H.264/MP4 encoding** via AVAssetWriter pipeline
 3. **Resolution scaling** adjustable from 0.25x to 1.0x native
 4. **Inactivity detection** auto-stops when no screen changes for timeout window
-5. **Fingerprint compositing** draws touch indicators directly into video frames
+5. **Fingerprint inclusion** — recordings include the FingerprintWindow overlay because captureScreenForRecording() draws all windows
 6. **Size limiting** caps at 7MB to stay under 10MB wire protocol buffer limit
 7. **Max duration** caps at configurable limit (default 60s)
 8. **Interaction logging** records wire-level command/result pairs alongside video (NEW)
@@ -27,17 +27,12 @@ graph TD
         Capture["Frame Capture - Timer at 1/fps interval"]
         Encoder["AVAssetWriter - H.264 codec pipeline"]
         InactMon["Inactivity Monitor - 1-second polling"]
-        FPComposite["Fingerprint Overlay - CGContext drawing"]
-    end
-
         IntLog["Interaction Log - in-memory InteractionEvent array"]
     end
 
     TheInsideJob["TheInsideJob - captureScreenForRecording()"] -->|frame closure| Capture
     TheInsideJob -->|recordInteraction| IntLog
-    TheSafecracker["TheSafecracker - onGestureMove"] -->|touch positions| FPComposite
-    Capture --> FPComposite
-    FPComposite --> Encoder
+    Capture --> Encoder
     Encoder -->|finalized MP4| Deliver["Base64 encode + interaction log → RecordingPayload"]
 ```
 
@@ -70,15 +65,12 @@ flowchart TD
     DurGuard -->|no| StopDur["stop(.maxDuration)"]
     DurGuard -->|yes| CaptureFrame["TheInsideJob.captureScreenForRecording()"]
 
-    CaptureFrame --> DrawHierarchy["drawHierarchy(in:afterScreenUpdates:)"]
+    CaptureFrame --> DrawHierarchy["drawHierarchy (all windows, incl. FingerprintWindow)"]
     DrawHierarchy --> CreatePB["createPixelBuffer(from: UIImage)"]
 
     CreatePB --> LockPB["CVPixelBufferLockBaseAddress"]
     LockPB --> DrawImage["CGContext: draw scaled image"]
-    DrawImage --> DrawFP{"active fingerprints?"}
-    DrawFP -->|yes| CompositeCircles["Draw 40pt circles - 0.5s fade-out - Y-flipped for CG coords"]
-    DrawFP -->|no| UnlockPB["CVPixelBufferUnlockBaseAddress"]
-    CompositeCircles --> UnlockPB
+    DrawImage --> UnlockPB["CVPixelBufferUnlockBaseAddress"]
 
     UnlockPB --> AppendPB["assetWriterInput.append(pixelBuffer)"]
     AppendPB --> UpdateMeta["Update frame count, - activity hash, timestamp"]
@@ -120,8 +112,8 @@ flowchart LR
 ### HIGH PRIORITY
 
 **`swiftlint:disable file_length` suppression** (`TheStakeout.swift:1`)
-- File is 425 lines covering: config, state machine, capture timer, pixel buffer creation, fingerprint compositing, inactivity monitoring, and finalization
-- All in one `final class` - could benefit from extraction of the AVAssetWriter pipeline or fingerprint compositing into separate types
+- File is 425 lines covering: config, state machine, capture timer, pixel buffer creation, inactivity monitoring, and finalization
+- All in one `final class` - could benefit from extraction of the AVAssetWriter pipeline into a separate type
 - Not a bug, but the complexity warrants understanding the full state machine
 
 **7MB file size limit is disconnected from 10MB buffer limit** (`TheStakeout.swift:218`)

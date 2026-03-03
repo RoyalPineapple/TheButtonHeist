@@ -2,7 +2,7 @@
 
 > **File:** `ButtonHeist/Sources/TheInsideJob/TheFingerprints.swift`
 > **Platform:** iOS 17.0+ (UIKit)
-> **Role:** Visual touch indicators - shows where interactions happen, composited into recordings
+> **Role:** Visual touch indicators - shows where interactions happen, included in recordings
 
 ## Responsibilities
 
@@ -11,7 +11,7 @@ Fingerprints provides visual feedback for all touch interactions:
 1. **Passthrough overlay window** at window level `statusBar + 100`
 2. **Instant fingerprints** for taps - 40pt white circle, scales 1.5x and fades over 0.8s
 3. **Continuous tracking** for swipes/drags/pinches - multi-finger circles that follow touch
-4. **Recording integration** - positions reported to Stakeout for video frame compositing
+4. **Recording integration** - FingerprintWindow is drawn with all windows in captureScreenForRecording(), so recordings include the overlay
 5. **Accessibility exclusion** - window excluded from hierarchy traversal
 
 ## Architecture Diagram
@@ -32,7 +32,7 @@ graph TD
 
     subgraph Consumers["Consumers"]
         Safecracker["TheSafecracker - calls show/begin/update/end"]
-        StakeoutComp["Stakeout - composites circles into video frames"]
+        Capture["captureScreenForRecording - draws all windows incl. FingerprintWindow"]
         Hierarchy["TheInsideJob+Accessibility - excludes window from traversal"]
     end
 
@@ -40,7 +40,7 @@ graph TD
     Safecracker --> TrackingFP
     InstantFP --> Window
     TrackingFP --> Window
-    TrackingFP -->|positions| StakeoutComp
+    Window -.->|drawn by| Capture
     Window -.->|excluded| Hierarchy
 ```
 
@@ -61,11 +61,10 @@ flowchart LR
         Begin --> Update --> End
     end
 
-    subgraph Recording["In Recording Frames"]
-        Positions["Active positions with timestamps"]
-        Fade["0.5s fade-out in CGContext"]
-        Composite["40pt circle drawn Y-flipped"]
-        Positions --> Fade --> Composite
+    subgraph Recording["In Recordings"]
+        DrawAll["captureScreenForRecording draws all windows"]
+        Include["FingerprintWindow included in drawHierarchy"]
+        DrawAll --> Include
     end
 ```
 
@@ -78,10 +77,9 @@ flowchart LR
 - For automated testing at high speed, the overlay animations may add slight overhead
 - Not configurable via any env var or plist key
 
-**Y-flip required for CGContext compositing in Stakeout**
-- CGContext has origin at bottom-left, UIKit at top-left
-- The Y-flip transform in Stakeout's fingerprint drawing is correct but non-obvious
-- Worth verifying if device rotation is ever supported
+**Fingerprints captured via drawHierarchy**
+- captureScreenForRecording() draws all windows (including FingerprintWindow)
+- No separate CGContext compositing; the overlay is captured when visible at frame capture time
 
 **Passthrough window always in the hierarchy**
 - `FingerprintWindow` is created and added to the scene
