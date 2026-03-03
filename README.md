@@ -57,8 +57,8 @@ Engage the team for your next job via MCP or CLI interfaces
 graph TD
     AI["AI Agent<br/>(Claude, or any other MCP client)"]
     HUMAN["A Human<br/> (You even)"]
-    MCP["buttonheist-mcp<br/>(MCP server)"]
-    CLI["buttonheistCLI"]
+    MCP["buttonheist-mcp"]
+    CLI["buttonheist CLI"]
     Client["TheFence / TheMastermind<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded framework)"]
     App["Your iOS App"]
