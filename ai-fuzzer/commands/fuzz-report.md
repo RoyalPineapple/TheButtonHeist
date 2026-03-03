@@ -12,19 +12,9 @@ You are tasked with generating a comprehensive report of all findings from the c
 - ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT invent or embellish findings — report only what was observed and recorded
 
-## Step 0: Verify Connection
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Load session notes format**: Read `references/session-notes-format.md` for notes file format and naming conventions.
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token).
 
 ## Step 1: Gather Context
 

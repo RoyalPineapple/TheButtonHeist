@@ -14,26 +14,13 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 - ALWAYS plan actions in batches — do not reason individually per element
 - DO NOT call `buttonheist screenshot` on every action — only for findings and new screens
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
-   - Create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
-   - Create the companion trace file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
-9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-10. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-11. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation examples.
-12. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
+Follow **## Session Setup** from SKILL.md (build CLI, verify connection, bootstrap auth token, check for existing session, load cross-session knowledge).
+
+Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
+
+If starting fresh, create session notes and companion trace file (see `references/session-files.md` for format): `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md`
 
 ## Step 1: Observe the Current Screen
 
@@ -61,7 +48,7 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 
 ## Step 3: Dispatch Execution to Haiku
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
+Use the **Execution Plan Template** from SKILL.md for delegation.
 
 ### Batch 1: Workflow Tests
 
