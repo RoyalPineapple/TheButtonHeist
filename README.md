@@ -4,6 +4,21 @@
 
 The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let the agent inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
 
+## Features
+
+- **MCP server** — AI agents like Claude or Codex drive any iOS app through native tool calls
+- **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
+- **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
+- **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
+- **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
+- **Real-time inspection** — See UI elements and screenshots update as the app changes
+- **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
+- **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
+- **Auto-start** — TheInsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
+- **Multi-device** — Run many instances on many simulators with stable identifiers
+- **USB auto-discovery** — USB devices discovered automatically alongside WiFi via Bonjour
+- **Multiple interfaces** — MCP server, CLI, or build your own
+
 ## Meet the Crew
 
 Every heist needs a team. ButtonHeist is built around a crew of specialists.
@@ -36,21 +51,6 @@ Engage the team for your next job via MCP or CLI.
 |-----------|--------------|
 | **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
 | **ButtonHeistMCP** | Agent interface. 14 tools that call through TheFence so AI agents can run the job natively. |
-
-## Features
-
-- **MCP server** — AI agents like Claude or Codex drive any iOS app through native tool calls
-- **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
-- **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
-- **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
-- **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
-- **Real-time inspection** — See UI elements and screenshots update as the app changes
-- **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
-- **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
-- **Auto-start** — TheInsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
-- **Multi-device** — Run many instances on many simulators with stable identifiers
-- **USB auto-discovery** — USB devices discovered automatically alongside WiFi via Bonjour
-- **Multiple interfaces** — MCP server, CLI, or build your own
 
 ## Architecture
 

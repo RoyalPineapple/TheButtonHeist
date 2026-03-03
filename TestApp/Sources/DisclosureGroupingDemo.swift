@@ -15,7 +15,7 @@ struct DisclosureGroupingDemo: View {
                 }
                 .accessibilityIdentifier("buttonheist.disclosure.advancedGroup")
 
-                LabeledContent("Version", value: "1.0.0")
+                LabeledContent("Version", value: "0.0.1")
                     .accessibilityIdentifier("buttonheist.disclosure.versionLabel")
 
                 LabeledContent("Build", value: "42")
