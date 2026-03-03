@@ -25,15 +25,15 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 | Character | What they do |
 |-----------|--------------|
 | **TheMastermind** | Coordinator. @Observable over TheWheelman: discovery, connection, callbacks for SwiftUI and tools. |
-| **TheFence** | Interface Between the buyer and the team. Command dispatch for CLI and MCP. Runs activate, gesture, get_interface, etc.; delegates connection to TheMastermind. |
+| **TheFence** | Interface Between the buyer and the team. Command dispatch for CLI and MCP. takes orders and delivers goods; delegates connection to TheMastermind. |
 
-### The Buyers 
+### For The Buyers 
 Hire the team for your next job via MCP or CLI interfaces
 
 | Character | What they do |
 |-----------|--------------|
 | **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
-| **ButtonHeistMCP** | Agent interface. Eleven tools that call through TheFence so AI agents can run the job. |
+| **ButtonHeistMCP** | Agent interface. exposes tools that call through TheFence so AI agents can run the job natively. |
 
 ## Features
 
