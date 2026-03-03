@@ -13,10 +13,8 @@ Unlike `/fuzz-reproduce` (which verifies reproducibility with multiple attempts 
 - Optional: session file name to target a specific session
 
 ## CRITICAL
-- This is a PRESENTATION tool, not a verification tool — prioritize watchability over speed
-- ALWAYS add deliberate pauses (`sleep 3-5`) between actions so a human viewer can follow
+- This is a PRESENTATION tool, not a verification tool
 - ALWAYS start from the app's main/launch screen for context
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - ALWAYS show the happy path first (what SHOULD happen), then the bug — unless there is no meaningful happy path (e.g., crash on launch)
 - DO NOT attempt multiple reproduction tries — one clean take
 - DO NOT use divergence detection — if the bug doesn't appear, report it and stop
@@ -36,7 +34,7 @@ Unlike `/fuzz-reproduce` (which verifies reproducibility with multiple attempts 
    - Steps to Reproduce (if present)
 5. Read the companion `.trace.md` file and extract the relevant trace entries
 6. If the finding has `**Steps to Reproduce**`, prefer those over raw trace entries
-7. **Load session notes format**: Read `references/session-notes-format.md` for format conventions
+7. **Load session file format**: Read `references/session-files.md` for format conventions
 
 Print:
 ```
@@ -62,47 +60,44 @@ Plan the entire demo sequence before executing. The demo has three acts:
 ### Act 1: Context
 Show the app's starting state to orient the viewer.
 - Ensure the app is on its main/launch screen
-- Hold for 3 seconds so the viewer sees the home screen
-- Plan: 1 action (verify screen) + 3s pause
+- Plan: 1 action (verify screen)
 
 ### Act 2: Happy Path (optional)
 Show what SHOULD happen to set a baseline expectation.
 - If the finding involves an element that should change (toggle, slider, button navigation), demonstrate it working correctly on a DIFFERENT but similar element first
 - This gives the viewer a "before" to compare against the bug
 - **Skip this act** if: crash findings, launch failures, no meaningful comparison exists, or you cannot identify a working similar element
-- Plan: 2-5 actions with 3s pauses between each
+- Plan: 2-5 actions
 
 ### Act 3: The Bug
 Navigate to the finding's screen and trigger the bug.
 - Use the nav graph to plan the shortest route from the current screen to the finding's screen
 - Fall back to trace entries if nav graph doesn't cover the route
 - Execute the triggering action
-- Hold for 5 seconds so the viewer sees the result
-- Plan: navigation actions + trigger action + 5s final hold
+- Plan: navigation actions + trigger action
 
 ### Duration Estimate
 
 Calculate the total:
-- Per-action time: **15 seconds** (higher than reproduce to account for deliberate pauses)
-- Buffer: **20 seconds** (connection setup + final hold)
-- Formula: `(total_actions × 15) + 20`
+- Per-action time: **7 seconds** (MCP tool call ~50ms + agent think time ~5-7s)
+- Buffer: **20 seconds** (final hold)
+- Formula: `(total_actions × 7) + 20`
 
 Present the demo script and **wait for user confirmation**:
 ```
 [Demo Script]
 Act 1 — Context:
-  1. [pause 3s] Home screen — verify starting state
+  1. Home screen — verify starting state
 
 Act 2 — Happy Path:
-  2. [pause 3s] activate(identifier: "wifiToggle") — show a working toggle
-  3. [pause 3s] activate(identifier: "wifiToggle") — toggle it back
+  2. activate(identifier: "wifiToggle") — show a working toggle
+  3. activate(identifier: "wifiToggle") — toggle it back
 
 Act 3 — The Bug:
-  4. [pause 3s] activate(identifier: "settings") — navigate to Settings
-  5. [pause 3s] activate(identifier: "darkModeToggle") — trigger the bug
-  6. [pause 5s] Final hold — viewer sees the anomaly
+  4. activate(identifier: "settings") — navigate to Settings
+  5. activate(identifier: "darkModeToggle") — trigger the bug
 
-Total: 6 actions, estimated duration: 110s
+Total: 5 actions, estimated duration: 55s
 Output: .fuzzer-data/recordings/F-3-demo.mp4
 
 Proceed? (waiting for confirmation)
@@ -110,59 +105,35 @@ Proceed? (waiting for confirmation)
 
 ## Step 3: Verify Connection
 
-1. **Ensure CLI is on PATH**: Build the CLI if `buttonheist` is not available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` — confirm device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for this demo run
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. Run `buttonheist watch --once --format json --quiet` — fingerprint the current screen
-6. If not on the app's main/launch screen, navigate there using the nav graph or Back actions
+Follow **## Session Setup** from SKILL.md (verify connection).
+
+Then: fingerprint the current screen. If not on the app's main/launch screen, navigate there using the nav graph or Back actions.
 
 ## Step 4: Execute the Demo with Recording
 
 ### Start Recording
 
-```bash
-mkdir -p .fuzzer-data/recordings
-buttonheist record \
-  --output .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 \
-  --action-log .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json \
-  --max-duration <estimated_duration> \
-  --inactivity-timeout 60 \
-  --fps 8 --scale 0.5 --quiet &
-RECORD_PID=$!
-sleep 2
-```
+1. Create the recordings directory: `mkdir -p .fuzzer-data/recordings` (via Bash)
+2. Call `start_recording(fps: 8, scale: 0.5, maxDuration: <estimated_duration>, inactivityTimeout: 60)`
 
-### Execute Each Action with Deliberate Pacing
+### Execute Each Action
 
 For each action in the demo script:
 
-1. **Pause** before the action:
-   - Standard actions: `sleep 3`
-   - Final hold (last action in Act 3): `sleep 5`
-   - This gives viewers time to read the screen before the next interaction
-2. **Execute** the CLI command (`buttonheist action`, `buttonheist touch`, etc.)
-3. **Read the delta** from the action response
-   - If `screenChanged`, use the new interface for context — no need to call `watch`
+1. **Execute** the MCP tool call (`activate`, `gesture`, `swipe`, `type_text`, etc.)
+2. **Read the delta** from the action response
+   - If `screenChanged`, use the new interface for context — no need to call `get_interface`
    - If on a new screen, note it for navigation awareness
-4. **At key moments**, take a screenshot and read it to confirm what's on screen:
+4. **At key moments**, call `get_screen` to confirm what's on screen:
    - Start of Act 1 (home screen)
    - Start of Act 3 (the finding's screen, before triggering)
    - After the triggering action (the bug state)
 
 ### Stop and Collect Recording
 
-After executing the last action and the final hold pause, explicitly stop the recording:
+After executing the last action, stop the recording:
 
-```bash
-buttonheist stop-recording --quiet
-wait $RECORD_PID
-ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json
-```
+Call `stop_recording(output: ".fuzzer-data/recordings/{FINDING_ID}-demo.mp4")` — returns metadata (duration, frame count, file size).
 
 ## Step 5: Verify and Report
 
@@ -177,8 +148,6 @@ ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 .fuzzer-data/recordings/{FI
      | {FINDING_ID} | .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 | {duration}s | Demo video |
      ```
    - Add `**Demo**: .fuzzer-data/recordings/{FINDING_ID}-demo.mp4` to the finding entry
-   - If an action log was generated, add `**Action log**: .fuzzer-data/recordings/{FINDING_ID}-demo.actionlog.json` to the finding entry
-
 4. Print the result:
 
 ```
@@ -186,7 +155,6 @@ ls -la .fuzzer-data/recordings/{FINDING_ID}-demo.mp4 .fuzzer-data/recordings/{FI
 
 **Finding**: F-3 [ANOMALY] Toggle doesn't respond to activate
 **Recording**: .fuzzer-data/recordings/F-3-demo.mp4
-**Action log**: .fuzzer-data/recordings/F-3-demo.actionlog.json
 **Duration**: ~45s
 **Acts**: Context (home screen) → Happy path (wifi toggle works) → Bug (dark mode toggle fails)
 **Bug reproduced**: Yes
