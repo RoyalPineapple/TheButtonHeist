@@ -70,8 +70,12 @@ graph TD
     Client -->|"TCP over WiFi / USB"| IJ
     IJ --> App
 
-    subgraph Mac["Your Mac"]
+    subgraph Intelegence["Intelegence"]
+        Human
         AI
+    end
+
+    subgraph Mac["Your Mac"]
         MCP
         CLI
         Client
