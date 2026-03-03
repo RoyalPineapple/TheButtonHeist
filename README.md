@@ -164,9 +164,6 @@ Agent: "Let me type an email address"
 → calls run(command: "type_text", text: "user@example.com", identifier: "emailField")
 → gets the field's current value back
 ```
-
-Tool calls complete in milliseconds — the connection is persistent, no per-call discovery or handshake.
-
 For device targeting, command reference, and internals: **[ButtonHeistMCP/](ButtonHeistMCP/)**
 
 ### 3. Connect with the CLI
@@ -182,7 +179,7 @@ buttonheist screenshot --output screen.png          # Capture screenshot
 buttonheist record --output demo.mp4                # Record screen (auto-stops on inactivity)
 ```
 
-Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)** — list, activate, action, touch (9 gestures), type, screenshot, record, session, scroll, edit actions, dismiss-keyboard.
+Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)** 
 
 ### 4. Connect over USB
 
