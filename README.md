@@ -2,7 +2,7 @@
 
 # Let AI agents drive iOS apps.
 
-The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
+The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let the agnet inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
 
 ## Meet the Crew
 
@@ -37,7 +37,7 @@ Hire the team for your next job via MCP or CLI interfaces
 
 ## Features
 
-- **MCP server** — AI agents like Claude drive any iOS app through native tool calls
+- **MCP server** — AI agents like Claude or Codex drive any iOS app through native tool calls
 - **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
 - **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
 - **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
@@ -55,7 +55,7 @@ Hire the team for your next job via MCP or CLI interfaces
 ```mermaid
 %% If you can read this, the diagram isn't rendering. Try github.com in a browser.
 graph TD
-    AI["AI Agent<br/>(Claude, any MCP client)"]
+    AI["AI Agent<br/>(Claude, codex, or any MCP client)"]
     HUMAN["A Human<br/> (You even)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
     CLI["buttonheistCLI"]
