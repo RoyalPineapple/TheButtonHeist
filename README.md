@@ -98,8 +98,8 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 |--------|----------|-------------|---------|
 | **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
-| **Wheelman** | iOS + macOS | TCP client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + Wheelman | [ButtonHeist/](ButtonHeist/) |
+| **TheWheelman** | iOS + macOS | TCP client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + TheWheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 11 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
 | **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, scroll, copy, paste, cut, select, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
@@ -217,7 +217,7 @@ open ButtonHeist.xcworkspace
 
 ```
 ButtonHeist/
-├── ButtonHeist/Sources/          # Core frameworks (TheScore, TheInsideJob, Wheelman, ButtonHeist)
+├── ButtonHeist/Sources/          # Core frameworks (TheScore, TheInsideJob, TheWheelman, ButtonHeist)
 ├── ButtonHeistMCP/               # MCP server (Swift Package)
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
