@@ -28,7 +28,7 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 | **TheWheelman** | Getaway driver. TCP client/server, Bonjour discovery, USB tunneling. Connects Mac to iOS. |
 | **TheFence** | Interface between the buyer and the team. Command dispatch for CLI and MCP. Takes orders and delivers goods; delegates connection to TheMastermind. |
 
-### Client Interfaces
+### The Legitimate Front
 
 Engage the team for your next job via MCP or CLI.
 
