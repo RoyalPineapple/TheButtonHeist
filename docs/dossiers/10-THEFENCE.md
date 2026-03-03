@@ -29,7 +29,7 @@ graph TD
             Conn["help, status, quit, exit, list_devices"]
             IF["get_interface, get_screen, wait_for_idle"]
             Access["activate, increment, decrement, - perform_custom_action"]
-            Gesture["tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
+            Gesture["one_finger_tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
             Scroll["scroll, scroll_to_visible, scroll_to_edge"]
             Text["type_text, edit_action, dismiss_keyboard"]
             Rec["start_recording, stop_recording"]
@@ -75,7 +75,7 @@ flowchart TD
 
     Route -->|get_interface| ReqIF["requestInterface (10s timeout)"]
     Route -->|get_screen| ReqScreen["send .requestScreen, - waitForScreen (30s)"]
-    Route -->|tap/swipe/etc| SendAction["sendAction (15s timeout)"]
+    Route -->|one_finger_tap/swipe/etc| SendAction["sendAction (15s timeout)"]
     Route -->|type_text| TypeText["send .typeText, - waitForActionResult (30s)"]
     Route -->|start_recording| StartRec["send .startRecording, - return ok"]
     Route -->|stop_recording| StopRec["send .stopRecording, - waitForRecording (30s)"]
