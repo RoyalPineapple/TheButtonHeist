@@ -56,15 +56,17 @@ Hire the team for your next job via MCP or CLI interfaces
 %% If you can read this, the diagram isn't rendering. Try github.com in a browser.
 graph TD
     AI["AI Agent<br/>(Claude, any MCP client)"]
+    HUMAN["A Human<br/> (You even)"]
     MCP["buttonheist-mcp<br/>(MCP server)"]
-    Session["buttonheist session<br/>(persistent CLI)"]
+    CLI["buttonheistCLI"]
     Client["TheFence / TheMastermind<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded framework)"]
     App["Your iOS App"]
 
     AI -->|"MCP (JSON-RPC over stdio)"| MCP
     MCP --> Client
-    Session --> Client
+    HUMAN -->|"A Terminal"| CLI
+    CLI --> Client
     Client -->|"TCP over WiFi / USB"| IJ
     IJ --> App
 
