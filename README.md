@@ -24,20 +24,13 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 | Character | What they do |
 |-----------|--------------|
-| **TheWheelman** | Getaway driver. TCP server (in-app) and client-side discovery + connection. Gets the crew to and from the job. |
-| **TheScore** | The score. Shared wire types, element shapes, constants — the contract both sides speak. |
 | **TheMastermind** | Coordinator. @Observable over TheWheelman: discovery, connection, callbacks for SwiftUI and tools. |
-| **TheFence** | Boss. Command dispatch for CLI and MCP. Runs activate, gesture, get_interface, etc.; delegates connection to TheMastermind. |
+| **TheFence** | Interface Between the buyer and the team. Command dispatch for CLI and MCP. Runs activate, gesture, get_interface, etc.; delegates connection to TheMastermind. |
+
+### The Buyers 
+Hire the team for your next job via MCP or CLI interfaces
 | **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
 | **ButtonHeistMCP** | Agent interface. Eleven tools that call through TheFence so Claude (or any MCP client) can run the job. |
-
-### Supporting cast
-
-No code names — just the crew behind the crew:
-
-- **SyntheticTouchFactory** / **SyntheticEventFactory** / **IOHIDEventBuilder** — Forges UITouch and UIEvent via private APIs so TheSafecracker can move fingers on glass.
-- **TheSafecracker.BezierSampler** — Cubic bezier → polyline sampling for drawBezier gestures.
-- **CLI commands** (`buttonheist action`, `touch`, `type`, `screenshot`, `session`, …) — How the outside crew issues orders.
 
 ## Features
 
