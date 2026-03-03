@@ -68,11 +68,23 @@ echo "Bumping version: $CURRENT_VERSION -> $NEW_VERSION"
 [[ "$DRY_RUN" == true ]] && echo "(dry run — no files modified)"
 echo ""
 
+# Escape version for literal match in sed pattern (escape . * [ ] \ ^ $ + ? ( ) { } |)
+escape_sed_pattern() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/\./\\./g; s/[*\[\]^$+?(){}|]/\\&/g'
+}
+# Escape version for sed replacement (escape \ and &)
+escape_sed_replacement() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/&/\\&/g'
+}
+
+CURRENT_ESC=$(escape_sed_pattern "$CURRENT_VERSION")
+NEW_ESC=$(escape_sed_replacement "$NEW_VERSION")
+
 # 1. TheFence+CommandCatalog.swift
 if [[ "$DRY_RUN" == true ]]; then
     echo "  Would update: buttonHeistVersion = \"$NEW_VERSION\" in TheFence+CommandCatalog.swift"
 else
-    sed -i '' "s/buttonHeistVersion = \"$CURRENT_VERSION\"/buttonHeistVersion = \"$NEW_VERSION\"/" \
+    sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_ESC\"/" \
         ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift
 fi
 echo "  ✓ TheFence+CommandCatalog.swift"
@@ -89,7 +101,7 @@ echo "  ✓ VERSION"
 if [[ "$DRY_RUN" == true ]]; then
     echo "  Would update: **Version**: $NEW_VERSION in docs/API.md"
 else
-    sed -i '' "s/\*\*Version\*\*: $CURRENT_VERSION/**Version**: $NEW_VERSION/" docs/API.md
+    sed -i '' "s/\*\*Version\*\*: $CURRENT_ESC/**Version**: $NEW_ESC/" docs/API.md
 fi
 echo "  ✓ docs/API.md"
 
@@ -97,7 +109,7 @@ echo "  ✓ docs/API.md"
 if [[ "$DRY_RUN" == true ]]; then
     echo "  Would update: LabeledContent(\"Version\", value: \"$NEW_VERSION\") in DisclosureGroupingDemo.swift"
 else
-    sed -i '' "s/LabeledContent(\"Version\", value: \"$CURRENT_VERSION\")/LabeledContent(\"Version\", value: \"$NEW_VERSION\")/" \
+    sed -i '' "s/LabeledContent(\"Version\", value: \"$CURRENT_ESC\")/LabeledContent(\"Version\", value: \"$NEW_ESC\")/" \
         TestApp/Sources/DisclosureGroupingDemo.swift
 fi
 echo "  ✓ TestApp/Sources/DisclosureGroupingDemo.swift"
@@ -106,7 +118,7 @@ echo "  ✓ TestApp/Sources/DisclosureGroupingDemo.swift"
 if [[ "$DRY_RUN" == true ]]; then
     echo "  Would update: **$NEW_VERSION** in docs/VERSIONING.md"
 else
-    sed -i '' "s/\*\*$CURRENT_VERSION\*\*/**$NEW_VERSION**/" docs/VERSIONING.md
+    sed -i '' "s/\*\*$CURRENT_ESC\*\*/**$NEW_ESC**/" docs/VERSIONING.md
 fi
 echo "  ✓ docs/VERSIONING.md"
 
