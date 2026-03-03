@@ -3,6 +3,11 @@
 build/
 DerivedData/
 
+# Tuist-generated artifacts (nested project)
+ButtonHeist/ButtonHeist.xcodeproj/
+ButtonHeist/Workspace.xcworkspace/
+ButtonHeist/Derived/
+
 # Package resolved files (regenerated on build)
 Package.resolved
 
