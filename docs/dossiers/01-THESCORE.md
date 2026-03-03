@@ -8,8 +8,8 @@
 
 TheScore is the protocol bible. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` - 24 cases)
-2. **All server-to-client messages** (`ServerMessage` - 13 cases)
+1. **All client-to-server messages** (`ClientMessage` - 28 cases)
+2. **All server-to-client messages** (`ServerMessage` - 14 cases)
 3. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
 4. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
 5. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
@@ -23,8 +23,8 @@ TheScore is the protocol bible. It defines:
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
         Messages["Messages.swift - Constants: serviceType, protocolVersion"]
-        Client["ClientMessages.swift - ClientMessage enum (24 cases)"]
-        Server["ServerMessages.swift - ServerMessage enum (13 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
+        Client["ClientMessages.swift - ClientMessage enum (28 cases)"]
+        Server["ServerMessages.swift - ServerMessage enum (14 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
         Elements["Elements.swift - HeistElement, Interface, - ElementNode, ElementAction, - Group, HeistCustomContent"]
     end
 
@@ -49,26 +49,27 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (24 cases)"]
+    subgraph ClientMessages["ClientMessage (28 cases)"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
         Ping["ping"]
         Query["requestInterface / requestScreen / waitForIdle"]
         Actions["activate / increment / decrement - performCustomAction"]
-        Touch["touchTap / touchLongPress / touchSwipe - touchDrag / touchPinch / touchRotate - twoFingerTap / touchDrawPath / touchDrawBezier"]
+        Touch["touchTap / touchLongPress / touchSwipe - touchDrag / touchPinch / touchRotate - touchTwoFingerTap / touchDrawPath / touchDrawBezier"]
+        Scroll["scroll / scrollToVisible / scrollToEdge"]
         Text["typeText / editAction / resignFirstResponder"]
         Recording["startRecording / stopRecording"]
     end
 
-    subgraph ServerMessages["ServerMessage (13 cases)"]
+    subgraph ServerMessages["ServerMessage (14 cases)"]
         AuthResp["authRequired / authFailed / authApproved"]
         Info["info(ServerInfo)"]
         Data["interface(Interface) / screen(ScreenPayload)"]
         Pong["pong"]
         Error["error(String)"]
         Action["actionResult(ActionResult)"]
-        Session["sessionLocked(String)"]
-        Rec["recordingStarted / recording(RecordingPayload) / recordingError(String)"]
+        Session["sessionLocked(SessionLockedPayload)"]
+        Rec["recordingStarted / recordingStopped - recording(RecordingPayload) / recordingError(String)"]
     end
 ```
 
@@ -123,7 +124,7 @@ classDiagram
     class InterfaceDelta {
         +DeltaKind kind
         +Int elementCount
-        +[HeistElement]? addedElements
+        +[HeistElement]? added
         +[Int]? removedOrders
         +[ValueChange]? valueChanges
         +Interface? newInterface
@@ -138,12 +139,11 @@ classDiagram
         +Double timestamp
         +ClientMessage command
         +ActionResult result
-        +Interface interfaceBefore
-        +Interface interfaceAfter
+        +InterfaceDelta? interfaceDelta
     }
 
     InteractionEvent --> ActionResult
-    InteractionEvent --> Interface
+    InteractionEvent --> InterfaceDelta
 ```
 
 ## Wire Protocol
@@ -158,18 +158,16 @@ classDiagram
 
 ### MEDIUM PRIORITY
 
-**`InteractionEvent` stores full Interface snapshots** (NEW - `ServerMessages.swift`)
-- Each event includes `interfaceBefore` and `interfaceAfter` as full `Interface` objects
-- These contain all `HeistElement` arrays, which can be large
-- In a recording with many interactions, this could produce a substantial JSON payload
-- No compression or deduplication between consecutive snapshots
-- Well-tested though: `RecordingPayloadTests` covers round-trip, backward compat, and nil cases
+**`InteractionEvent` stores optional `InterfaceDelta`** (`ServerMessages.swift`)
+- Each event includes an optional `interfaceDelta: InterfaceDelta?` instead of full before/after snapshots
+- Deltas are compact but can include full `newInterface` for screen-changed cases
+- Well-tested: `RecordingPayloadTests` covers round-trip, backward compat, and nil cases
 
 **`ElementAction` custom Codable** (`Elements.swift:27-48`)
 - Known actions encode as plain strings: `"activate"`, `"increment"`, `"decrement"`
-- Custom actions encode as their name string directly
-- Decoding: if the string isn't one of the known three, it's treated as `custom(name)`
-- This means a custom action named `"activate"` would be decoded as the built-in `.activate`
+- Custom actions encode as `{"custom":"name"}` objects
+- Decoding: tries `{"custom":"name"}` keyed form first, falls back to plain string
+- A plain string that isn't one of the known three is treated as `.custom(name)` for backward compatibility
 - Edge case but worth noting
 
 **`ActionMethod` has cases that may not round-trip cleanly through tests**

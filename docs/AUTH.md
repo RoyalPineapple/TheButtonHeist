@@ -18,17 +18,15 @@ The server resolves its auth token at startup using this priority:
 ```mermaid
 flowchart TD
     Start["Server starts"] --> Check1{"Explicit token set?"}
-    Check1 -->|"INSIDEJOB_TOKEN env var<br/>or InsideJobToken plist key"| Explicit["Use explicit token<br/>requiresUIApproval = false"]
-    Check1 -->|No| Check2{"Persisted token in<br/>UserDefaults?"}
-    Check2 -->|"Key: InsideJobAuthToken<br/>Survives app relaunches"| Persisted["Use persisted token<br/>requiresUIApproval = true"]
-    Check2 -->|No| Generate["Generate UUID<br/>Store in UserDefaults<br/>requiresUIApproval = true"]
+    Check1 -->|"INSIDEJOB_TOKEN env var<br/>or InsideJobToken plist key"| Explicit["Use explicit token"]
+    Check1 -->|No| Generate["Generate fresh UUID<br/>(ephemeral, not persisted)"]
 ```
 
-When an explicit token is set, it is used directly and UserDefaults is not touched. When no explicit token is set, the auto-generated token persists across app relaunches so previously approved clients retain access.
+When no explicit token is set, a fresh UUID is generated each launch. Previously approved clients must re-authenticate after an app restart.
 
 ### Token Invalidation
 
-Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new UUID, stores it in UserDefaults, and invalidates all previously approved clients. They must re-authenticate on their next connection.
+Call `invalidateToken()` on TheMuscle to rotate the token. This generates a new UUID in memory. All previously approved clients lose access and must re-authenticate on their next connection.
 
 ## Configuration
 
@@ -57,7 +55,7 @@ Priority: `--token` flag > `BUTTONHEIST_TOKEN` env var > empty string (UI approv
 
 When a client is approved via UI, the server sends the token in the `authApproved` message. The CLI prints it:
 ```
-Set BUTTONHEIST_TOKEN=<token> for future connections
+BUTTONHEIST_TOKEN=<token>
 ```
 
 ## Connection Flows
@@ -94,7 +92,7 @@ sequenceDiagram
     Client->>TheInsideJob: TCP Connect
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"")
-    Note right of TheInsideJob: token is empty + requiresUIApproval<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
+    Note right of TheInsideJob: token is empty<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
 
     rect rgb(240, 240, 240)
         Note right of TheInsideJob: Connection Request<br/>Connection #N is requesting access.<br/>[Deny] [Allow]
@@ -143,7 +141,7 @@ sequenceDiagram
     Client->>TheInsideJob: authenticate(token:"wrong")
     Note right of TheInsideJob: token doesn't match
     TheInsideJob->>Client: authFailed
-    Note left of Client: "Invalid token"
+    Note left of Client: "Invalid token. Retry without<br/>a token to request a fresh session."
     Note right of TheInsideJob: → disconnect after 100ms
     TheInsideJob--xClient: TCP closed
 ```
@@ -157,7 +155,7 @@ Auth messages use the standard newline-delimited JSON format. See [WIRE-PROTOCOL
 ```json
 {"authRequired":{}}
 {"authApproved":{"_0":{"token":"A1B2C3D4-E5F6-..."}}}
-{"authFailed":{"_0":"Invalid token"}}
+{"authFailed":{"_0":"Invalid token. Retry without a token to request a fresh session."}}
 ```
 
 ### Client → Server
@@ -196,7 +194,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 
 | Component | Role |
 |-----------|------|
-| **TheMuscle** | Token resolution, persistence (UserDefaults), validation, UI approval state, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `requiresUIApproval`, `pendingApprovalClients`, `authenticatedClientIDs`. |
+| **TheMuscle** | Token resolution, validation, UI approval, session locking, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`. |
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |

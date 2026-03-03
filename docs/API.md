@@ -216,7 +216,7 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/ButtonHeist/TheMastermind.swift`
+**Location**: `ButtonHeist/Sources/TheButtonHeist/TheMastermind.swift`
 
 ### TheMastermind
 
@@ -532,7 +532,7 @@ public enum ActionError: Error, LocalizedError {
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/ButtonHeist/TheFence.swift`
+**Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence.swift`
 
 ### Overview
 
@@ -606,7 +606,7 @@ public enum CommandCatalog {
 
 Single source of truth for the 30 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`, `scroll`, `scroll_to_visible`, `scroll_to_edge`.
 
-**Location**: `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`
+**Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
 ### FenceResponse
 
