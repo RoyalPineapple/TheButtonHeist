@@ -29,8 +29,11 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 ### The Buyers 
 Hire the team for your next job via MCP or CLI interfaces
+
+| Character | What they do |
+|-----------|--------------|
 | **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
-| **ButtonHeistMCP** | Agent interface. Eleven tools that call through TheFence so Claude (or any MCP client) can run the job. |
+| **ButtonHeistMCP** | Agent interface. Eleven tools that call through TheFence so AI agents can run the job. |
 
 ## Features
 
