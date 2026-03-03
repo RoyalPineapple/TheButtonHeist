@@ -509,7 +509,7 @@ public final class TheFence {
             return try await handleGetScreen(args)
         case "wait_for_idle":
             return try await sendAction(.waitForIdle(WaitForIdleTarget(timeout: doubleArg(args, "timeout"))))
-        case "tap", "long_press", "swipe", "drag", "pinch", "rotate", "two_finger_tap",
+        case "one_finger_tap", "long_press", "swipe", "drag", "pinch", "rotate", "two_finger_tap",
              "draw_path", "draw_bezier":
             return try await handleGesture(command: command, args: args)
         case "scroll", "scroll_to_visible", "scroll_to_edge":
@@ -569,7 +569,7 @@ public final class TheFence {
 
     private func handleGesture(command: String, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case "tap":
+        case "one_finger_tap":
             let target = elementTarget(args)
             let x = doubleArg(args, "x")
             let y = doubleArg(args, "y")

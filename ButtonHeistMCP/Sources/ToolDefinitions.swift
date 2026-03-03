@@ -15,6 +15,7 @@ enum ToolDefinitions {
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, startRecording, stopRecording, listDevices,
         gesture, accessibilityAction,
+        scroll, scrollToVisible, scrollToEdge,
     ]
 
     // MARK: - Individual Tools
@@ -140,6 +141,59 @@ enum ToolDefinitions {
         description: "List iOS devices discovered via Bonjour that are running TheInsideJob.",
         inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
+    )
+
+    // MARK: - Scroll Tools
+
+    static let scroll = Tool(
+        name: "scroll",
+        description: "Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor of the specified element, or the main scroll view if no element is specified.",
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
+                "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "direction": [
+                    "type": "string",
+                    "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
+                    "description": "Scroll direction",
+                ],
+            ],
+            "required": .array([.string("direction")]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let scrollToVisible = Tool(
+        name: "scroll_to_visible",
+        description: "Scroll the nearest scroll view ancestor until the target element is fully visible. Provide identifier or order from get_interface.",
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
+                "order": ["type": "integer", "description": "Target element by traversal order index"],
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let scrollToEdge = Tool(
+        name: "scroll_to_edge",
+        description: "Scroll the nearest scroll view ancestor to an edge. Useful for scrolling to the top or bottom of a list.",
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
+                "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "edge": [
+                    "type": "string",
+                    "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
+                    "description": "Edge to scroll to",
+                ],
+            ],
+            "required": .array([.string("edge")]),
+            "additionalProperties": false,
+        ]
     )
 
     // MARK: - Grouped Tools

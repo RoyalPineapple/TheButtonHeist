@@ -2,13 +2,13 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes TheFence as 11 purpose-built MCP tools for AI agents
+> **Role:** Exposes TheFence as 14 purpose-built MCP tools for AI agents
 
 ## Responsibilities
 
 The MCP server provides a bridge between AI agents and ButtonHeist:
 
-1. **11 purpose-built tools** with typed schemas (not a single `run` tool)
+1. **14 purpose-built tools** with typed schemas (not a single `run` tool)
 2. **TheFence delegation** for all command execution
 3. **Smart response rendering** - screenshots as inline MCP images, recordings summarized
 4. **Idle monitoring** - auto-disconnects after inactivity, reconnects on next tool call
@@ -23,7 +23,7 @@ graph TD
         Main["main.swift - @main ButtonHeistMCPServer"]
         Server["MCP Server - (swift-sdk)"]
         Transport["StdioTransport - stdin/stdout JSON-RPC"]
-        ToolDef["ToolDefinitions.swift - 11 tool schemas"]
+        ToolDef["ToolDefinitions.swift - 14 tool schemas"]
         Handler["handleToolCall - route → execute → render"]
         Idle["IdleMonitor - auto-disconnect on inactivity"]
     end
@@ -53,7 +53,7 @@ graph TD
     Handler --> VideoSummary
 ```
 
-## The 11 Tools
+## The 14 Tools
 
 | # | Tool Name | Key Parameters | Annotations |
 |---|-----------|---------------|-------------|
@@ -68,6 +68,9 @@ graph TD
 | 9 | `list_devices` | (none) | readOnly, idempotent |
 | 10 | `gesture` | `type` (enum), `identifier`, `order`, `x/y`, `endX/Y`, `duration`, `scale`, `angle`, `points`, `curves` | — |
 | 11 | `accessibility_action` | `type` (enum), `identifier`, `order`, `actionName`, `action` | — |
+| 12 | `scroll` | `direction` (required), `identifier`, `order` | — |
+| 13 | `scroll_to_visible` | `identifier`, `order` | — |
+| 14 | `scroll_to_edge` | `edge` (required), `identifier`, `order` | — |
 
 **`gesture` type values:** `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
 
@@ -77,11 +80,11 @@ graph TD
 
 Tools route to TheFence in two patterns:
 
-1. **Direct tools** (9 tools): The tool name becomes the `command` key directly
-   - `get_interface`, `activate`, `type_text`, `swipe`, `get_screen`, `wait_for_idle`, `start_recording`, `stop_recording`, `list_devices`
+1. **Direct tools** (12 tools): The tool name becomes the `command` key directly
+   - `get_interface`, `activate`, `type_text`, `swipe`, `get_screen`, `wait_for_idle`, `start_recording`, `stop_recording`, `list_devices`, `scroll`, `scroll_to_visible`, `scroll_to_edge`
 
 2. **Grouped tools** (2 tools): The `type` field is extracted and becomes the command
-   - `gesture`: `type` becomes the command (`one_finger_tap` → `tap`, others verbatim)
+   - `gesture`: `type` becomes the command verbatim
    - `accessibility_action`: `type` becomes the command verbatim
 
 All paths call `fence.execute(request:)` with the assembled request dictionary.

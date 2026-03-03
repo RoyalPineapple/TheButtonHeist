@@ -22,7 +22,7 @@ struct SessionCommand: AsyncParsableCommand {
               buttonheist session --device a1b2
               echo '{"command":"get_interface"}' | buttonheist session
               buttonheist session --format json <<EOF
-              {"command":"tap","identifier":"myButton"}
+              {"command":"one_finger_tap","identifier":"myButton"}
               {"command":"get_interface"}
               {"command":"quit"}
               EOF

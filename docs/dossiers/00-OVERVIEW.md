@@ -95,19 +95,6 @@ sequenceDiagram
     TF-->>CLI: response JSON
 ```
 
-## Recent Changes (from main)
-
-**Activate-first surface refactor** — Primary interaction pattern shifted to activation-first:
-- **MCP**: Single `run` tool replaced with 11 purpose-built tools (`activate` as primary, `gesture` and `accessibility_action` grouped)
-- **CLI**: New top-level `buttonheist activate` command; `WatchCommand` removed
-- **TheFence**: New command dispatcher (renamed from TheMastermind), owns `FenceError`, `FenceResponse`, and all command dispatch
-- **TheMastermind**: Now a thin `@Observable` wrapper over TheWheelman (absorbed former TheClient)
-- **TheWheelman**: New session manager owning discovery, connection, keepalive, and auto-reconnect
-- **TheBagman**: New accessibility data owner extracted from TheInsideJob (element cache, hierarchy parsing, animation detection)
-- **TheFingerprints**: Renamed from Fingerprints, now excludes itself from accessibility hierarchy
-- **InteractionEvent**: Uses `InterfaceDelta` instead of full before/after snapshots
-- **Session idle timeout**: CLI and MCP auto-disconnect after configurable inactivity period
-
 ## Cross-Cutting Review Concerns
 
 These issues span multiple crew members and warrant holistic review:

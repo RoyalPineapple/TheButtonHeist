@@ -7,38 +7,24 @@ description: Deep-dive exploration of the current screen — catalogs every elem
 You are tasked with thoroughly exploring whatever screen is currently showing in the connected iOS app. You identify the screen's intent and design tests, then delegate execution to a Haiku agent.
 
 ## CRITICAL
-- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `buttonheist watch --once` after actions
-- On `screenChanged`, the delta includes the full new interface — no separate `buttonheist watch --once` needed
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
+- Every action tool returns an interface delta JSON (`noChange`, `valuesChanged`, `elementsChanged`, `screenChanged`) — use it instead of calling `get_interface` after actions
+- On `screenChanged`, the delta includes the full new interface — no separate `get_interface` needed
 - ALWAYS use `activate` before falling back to `tap` — accessibility API interaction is more reliable
 - ALWAYS plan actions in batches — do not reason individually per element
-- DO NOT call `buttonheist screenshot` on every action — only for findings and new screens
+- DO NOT call `get_screen` on every action — only for findings and new screens
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it (including `## Navigation Stack`) to understand what's already been explored. Skip elements already covered. If starting fresh:
-   - Create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md` (include `Trace file` and `Next finding ID: F-1` in `## Config`)
-   - Create the companion trace file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.trace.md` with the header (see `references/trace-format.md`)
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. This gives you known transitions and back-routes from prior sessions.
-9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
-10. **Load navigation planning**: Read `references/navigation-planning.md` for route planning algorithm and navigation stack protocol.
-11. **Load response examples**: Read `references/examples.md` for annotated CLI response interpretation examples.
-12. **Load action patterns**: Read `references/action-patterns.md` for composable interaction sequences.
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
+
+Additionally load: `references/navigation-planning.md`, `references/examples.md`, `references/action-patterns.md`.
+
+If starting fresh, create session notes and companion trace file (see `references/session-files.md` for format): `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-explore-{screen-name}.md`
 
 ## Step 1: Observe the Current Screen
 
-1. Run `buttonheist screenshot --output /tmp/bh-screen.png` (via Bash), then Read the PNG to see what's on screen.
-2. Run `buttonheist watch --once --format json --quiet` (via Bash) to get the full element hierarchy.
+1. Call `get_screen` to see what's on screen.
+2. Call `get_interface` to get the full element hierarchy.
 3. Print a summary:
    - How many elements are on screen
    - List each element: `[order] label/description (identifier) — frame — actions`
@@ -61,16 +47,16 @@ You are tasked with thoroughly exploring whatever screen is currently showing in
 
 ## Step 3: Dispatch Execution to Haiku
 
-Read `references/execution-protocol.md` for the full execution plan format, delta handling rules, and return protocol.
+Use the **Execution Plan Template** from SKILL.md for delegation.
 
 ### Batch 1: Workflow Tests
 
 Build an execution plan containing the workflow test sequence designed in Step 2:
 
-**Context block**: Include CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
+**Context block**: Session notes path, trace file path, next trace seq, next finding ID, current screen + fingerprint, nav stack.
 
 **Action list**: Happy path actions first, then violation tests. Include:
-- Exact CLI commands for each workflow step
+- Exact MCP tool calls for each workflow step
 - Expected deltas based on the screen intent's typical behavior
 - Predictions from the behavioral model
 - Navigation commands (with back-routes from nav-graph) for any workflow steps that leave the current screen
@@ -83,7 +69,7 @@ Dispatch to Haiku:
 Task(
   description: "[the execution plan]",
   model: "haiku",
-  subagent_type: "Bash"
+  subagent_type: "general-purpose"
 )
 ```
 
@@ -94,23 +80,24 @@ Read Haiku's return. Print: `[Workflow] Happy path: PASS/FAIL | Violations: N fi
 For remaining elements not covered by workflow tests, build execution plans in chunks of 15-20 actions:
 
 **For elements with actions** (activate, increment, decrement, custom):
-- `buttonheist action --identifier ID --format json`
-- If element has increment/decrement: include both actions
+- `activate(identifier: ID)`
+- If element has increment/decrement: include both `accessibility_action(type: increment, identifier: ID)` and `accessibility_action(type: decrement, identifier: ID)`
 - Expected delta: varies by element type (buttons → noChange or screenChanged, toggles → valuesChanged)
 
 **For elements without actions**:
-- `buttonheist touch tap --x X --y Y --format json` at center coordinates
-- `buttonheist touch longpress --x X --y Y --duration 1.0 --format json`
+- `gesture(type: one_finger_tap, x: X, y: Y)` at center coordinates
+- `gesture(type: long_press, x: X, y: Y, duration: 1.0)`
 - Expected delta: `noChange` for most
 
-**For text fields** (generate the CLI commands with values from Step 2):
-- `buttonheist type --identifier ID --text "VALUE" --format json`
-- `buttonheist type --identifier ID --delete N --text "ADVERSARIAL" --format json`
+**For text fields** (generate the tool calls with values from Step 2):
+- `type_text(text: "VALUE", identifier: ID)`
+- `type_text(deleteCount: N, text: "ADVERSARIAL", identifier: ID)`
 - Include values from at least 3 categories per field
 
 **For scrollable containers** (list/landmark elements):
-- `buttonheist touch swipe --direction up --format json` on the container area
-- `buttonheist touch swipe --direction down --format json`
+- `scroll(direction: up)` / `scroll(direction: down)` on the container
+- `scroll_to_visible(identifier: ID)` to bring a known off-screen element into view
+- `scroll_to_edge(edge: top)` / `scroll_to_edge(edge: bottom)` to jump to list boundaries
 
 **Stop conditions**: Max actions per batch. Stop on crash. Stop on 3+ consecutive unexpected.
 

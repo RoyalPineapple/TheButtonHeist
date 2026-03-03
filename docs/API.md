@@ -149,7 +149,7 @@ TheInsideJob follows an **activation-first** strategy for all element interactio
 
 2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the element's activation point. This is a low-level escape hatch that cannot confirm the gesture was actually handled by the target view.
 
-The same pattern applies to `increment`/`decrement` (native accessibility API first). The `tap` command is a pure synthetic tap with no activation-first logic — it is a low-level escape hatch for when coordinate-precise touch injection is needed.
+The same pattern applies to `increment`/`decrement` (native accessibility API first). The `one_finger_tap` command is a pure synthetic tap with no activation-first logic — it is a low-level escape hatch for when coordinate-precise touch injection is needed.
 
 **Why activation-first matters:**
 - Native activation respects custom `accessibilityActivate()` overrides
@@ -163,7 +163,7 @@ When a synthetic tap fallback occurs, a debug log is emitted so the behavior is 
 TheInsideJob uses `TheSafecracker` internally for handling all touch gesture and text input commands. TheSafecracker is an **internal** type -- only TheInsideJob creates and holds the instance. It supports single-finger gestures, multi-touch gestures via synthetic UITouch/IOHIDEvent injection, and text entry via UIKeyboardImpl. TheSafecracker never holds live UIView pointers; it receives only screen coordinates and action outcomes from TheBagman.
 
 **Supported gestures:**
-- `tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
+- `one_finger_tap` - Single tap at a point (low-level escape hatch; prefer `activate` for element interactions)
 - `longPress` - Long press with configurable duration
 - `swipe` - Quick swipe between two points
 - `drag` - Slow drag between two points (for sliders, reordering)
@@ -604,7 +604,7 @@ public enum CommandCatalog {
 }
 ```
 
-Single source of truth for the 30 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`, `scroll`, `scroll_to_visible`, `scroll_to_edge`.
+Single source of truth for the 29 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `one_finger_tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `scroll`, `scroll_to_visible`, `scroll_to_edge`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
@@ -682,7 +682,7 @@ Structured reason for why a connection was closed. Passed to `onDisconnected` ca
 
 ### Overview
 
-MCP server exposing 11 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server exposing 14 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -703,6 +703,9 @@ cd ButtonHeistMCP && swift build -c release
 | `list_devices` | List discovered iOS devices | — |
 | `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier` |
 | `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard` |
+| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order` |
+| `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order` |
+| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order` |
 
 All tools use strict schemas (`additionalProperties: false`) — only documented parameters are accepted.
 
@@ -714,7 +717,7 @@ The primary way to interact with buttons, links, and controls. Uses the activati
 
 Low-level touch gesture escape hatch. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
 
-- `one_finger_tap` — Synthetic tap at x/y coordinates (maps to TheFence `tap` command)
+- `one_finger_tap` — Synthetic tap at x/y coordinates
 - `drag` — Requires `endX`, `endY`
 - `long_press` — Optional `duration` (seconds, default 1.0)
 - `pinch` — Requires `scale` (>1 zoom in, <1 zoom out)
@@ -1298,7 +1301,7 @@ USAGE: buttonheist action [OPTIONS]
 OPTIONS:
   --identifier <id>       Element identifier
   --index <n>             Traversal index
-  --type <type>           Action type: activate, increment, decrement, tap, custom
+  --type <type>           Action type: activate, increment, decrement, one_finger_tap, custom
                           (default: activate)
   --custom-action <name>  Custom action name (required when type is 'custom')
   --x <x>                 X coordinate (for tap type)
@@ -1316,7 +1319,7 @@ Simulate touch gestures on the connected iOS device.
 USAGE: buttonheist touch <subcommand>
 
 SUBCOMMANDS:
-  tap                     Tap at a point or element
+  one_finger_tap          Tap at a point or element
   longpress               Long press at a point or element
   swipe                   Swipe between two points or in a direction
   drag                    Drag from one point to another
@@ -1649,8 +1652,8 @@ buttonheist action --type custom --identifier myCell --custom-action "Delete"
 buttonheist screenshot --output screen.png
 
 # Touch gestures (low-level escape hatches)
-buttonheist touch tap --x 100 --y 200
-buttonheist touch tap --identifier loginButton
+buttonheist touch one_finger_tap --x 100 --y 200
+buttonheist touch one_finger_tap --identifier loginButton
 buttonheist touch longpress --identifier myButton --duration 1.0
 buttonheist touch swipe --identifier list --direction up
 buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200

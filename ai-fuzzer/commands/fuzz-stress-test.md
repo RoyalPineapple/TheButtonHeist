@@ -9,34 +9,23 @@ You are tasked with hammering the connected iOS app with rapid, repeated interac
 ## CRITICAL
 - ALWAYS verify the app is still responsive after each sequence — include health checks in the execution plan
 - ALWAYS record which sequence and iteration caused a crash — this makes reproduction trivial
-- ALWAYS reuse `BUTTONHEIST_TOKEN` after first auth approval — repeated auth prompts mean the token was not carried forward
 - DO NOT stop at the first crash — record it and continue with other elements if possible
 
 **Arguments** (optional): `$ARGUMENTS`
 - Element identifier or "all" (default: "all" — stress test every interactive element)
 
-## Step 0: Verify Connection + Check for Existing Session
+## Step 0: Setup
 
-1. **Ensure CLI is on PATH**: Build the CLI and add to PATH if `buttonheist` is not already available:
-   ```bash
-   cd ButtonHeistCLI && swift build -c release && cd ..
-   export PATH="$PWD/ButtonHeistCLI/.build/release:$PATH"
-   ```
-2. Run `buttonheist list --format json` (via Bash) — confirm at least one device is connected
-3. Bootstrap auth token once: run `buttonheist watch --once --format json --quiet`, capture `BUTTONHEIST_TOKEN=...` from output, and store as `AUTH_TOKEN` for the session
-4. Reuse token on every later command: `buttonheist ... --token "$AUTH_TOKEN"` (or `BUTTONHEIST_TOKEN="$AUTH_TOKEN" buttonheist ...`)
-5. If no devices found: stop and tell the user to launch the app and try again
-6. Print the connected device name and app name for confirmation
-7. **Check for existing session**: List `.fuzzer-data/sessions/fuzzsession-*.md` files. If the most recent one has `Status: in_progress`, read it to know which elements and sequences have already been stress-tested. Skip completed ones. If starting fresh, create a new notes file: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
-8. **Load navigation knowledge**: Read `references/nav-graph.md` if it exists. If targeting an element on a different screen, use the nav graph to plan a route there.
-9. **Load session notes format**: Read `references/session-notes-format.md` for notes file format, naming, and update protocol.
+Follow **## Session Setup** from SKILL.md (verify connection, check for existing session, load cross-session knowledge).
+
+If starting fresh, create: `.fuzzer-data/sessions/fuzzsession-YYYY-MM-DD-HHMM-stress-test-{target}.md`
 
 ## Step 1: Identify Targets
 
-1. Run `buttonheist watch --once --format json --quiet` to get the current screen
+1. Call `get_interface` to get the current screen
 2. If a specific element was requested, find it by identifier
 3. If "all" (default), collect all interactive elements (those with actions or tappable)
-4. Run `buttonheist screenshot --output /tmp/bh-screen.png` then Read the PNG for baseline visual state
+4. Call `get_screen` for baseline visual state
 5. Record the screen fingerprint (sorted set of identifiers) and element list
 
 ## Step 2: Build Execution Plans + Dispatch to Haiku
@@ -45,58 +34,58 @@ For each target element, build an execution plan and dispatch it to a Haiku exec
 
 ### Building the Execution Plan
 
-Read `references/execution-protocol.md` for the full plan format. For each target element, generate an execution plan containing:
+Use the **Execution Plan Template** from SKILL.md. For each target element, generate an execution plan containing:
 
-**Context block**: CLI path, auth token, session notes path, trace file path, next trace seq, next finding ID, current screen name + fingerprint, nav stack.
+**Context block**: Session notes path, trace file path, next trace seq, next finding ID, current screen name + fingerprint, nav stack.
 
-**Action list**: All 6 stress test sequences for this element, with health checks between sequences. Generate the exact CLI commands by substituting the element's identifier into the templates below.
+**Action list**: All 6 stress test sequences for this element, with health checks between sequences. Generate the exact MCP tool calls by substituting the element's identifier into the templates below.
 
 #### Sequence Templates
 
 For each target element (`ELEMENT` = the identifier), the action list contains:
 
 **Sequence 1 — Rapid Taps (20 actions)**:
-- 20x `buttonheist touch tap --identifier ELEMENT --format json`
+- 20x `gesture(type: one_finger_tap, identifier: ELEMENT)`
 - Expected delta: `noChange` for most (some may produce `valuesChanged`)
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Sequence 2 — Rapid Swipes (10 actions, alternating up/down)**:
-- 5x alternating: `buttonheist touch swipe --identifier ELEMENT --direction up --format json` then `--direction down`
+- 5x alternating: `swipe(identifier: ELEMENT, direction: up)` then `swipe(identifier: ELEMENT, direction: down)`
 - Expected delta: `noChange` or `valuesChanged`
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Sequence 3 — Rapid Pinch Cycles (10 actions)**:
-- 5x alternating: `buttonheist touch pinch --identifier ELEMENT --scale 2.0 --format json` then `--scale 0.5`
+- 5x alternating: `gesture(type: pinch, identifier: ELEMENT, scale: 2.0)` then `gesture(type: pinch, identifier: ELEMENT, scale: 0.5)`
 - Expected delta: `noChange`
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Sequence 4 — Rapid Rotate Cycles (10 actions)**:
-- 5x alternating: `buttonheist touch rotate --identifier ELEMENT --angle 1.57 --format json` then `--angle -1.57`
+- 5x alternating: `gesture(type: rotate, identifier: ELEMENT, angle: 1.57)` then `gesture(type: rotate, identifier: ELEMENT, angle: -1.57)`
 - Expected delta: `noChange`
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Sequence 5 — Mixed Rapid Gestures (10 actions)**:
 - tap, longpress (0.1s), swipe left, tap, pinch (1.5), tap, rotate (0.5), tap, two-finger-tap, tap
 - Expected delta: `noChange` for most
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Sequence 6 — Increment/Decrement Hammering (40 actions, only if element is adjustable)**:
-- 20x `buttonheist action --identifier ELEMENT --type increment --format json`
-- 20x `buttonheist action --identifier ELEMENT --type decrement --format json`
+- 20x `accessibility_action(type: increment, identifier: ELEMENT)`
+- 20x `accessibility_action(type: decrement, identifier: ELEMENT)`
 - Expected delta: `valuesChanged`
 - Purpose: `stress`
 
-**Health check**: `buttonheist watch --once --format json --quiet`
+**Health check**: `get_interface`
 
 **Stop conditions**: Stop on crash. Stop on 3+ consecutive unexpected results.
 
@@ -112,7 +101,7 @@ For each target element:
    Task(
      description: "[the execution plan as markdown]",
      model: "haiku",
-     subagent_type: "Bash"
+     subagent_type: "general-purpose"
    )
    ```
 3. Wait for Haiku to return
@@ -146,8 +135,8 @@ Dispatch this as a single Haiku batch (~20 actions). Read the return and record 
 
 After all sequences (Opus does this directly — not delegated):
 
-1. `buttonheist watch --once --format json --quiet` — verify element count hasn't changed dramatically
-2. `buttonheist screenshot` — visual comparison with baseline
+1. Call `get_interface` — verify element count hasn't changed dramatically
+2. Call `get_screen` — visual comparison with baseline
 3. Report any degradation:
    - Elements that disappeared
    - Values that changed unexpectedly
