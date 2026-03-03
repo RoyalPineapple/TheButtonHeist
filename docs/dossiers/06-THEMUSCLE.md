@@ -11,8 +11,8 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 1. **Token-based authentication** - validates incoming tokens against configured/auto-generated value
 2. **On-device UI approval** - shows Allow/Deny popup for empty-token connections
 3. **Session locking** - ensures only one "driver" controls the app at a time
-4. **Dual-timer session release** - disconnect timer + lease timer for robust cleanup
-5. **Force-takeover** - allows a new driver to evict the current one
+4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
+5. **Force-takeover** - wire protocol field exists (`forceSession: Bool?`) but takeover logic is **not implemented** — different drivers always get `sessionLocked`
 
 ## Architecture Diagram
 
@@ -22,7 +22,7 @@ graph TD
         TokenRes["Token Resolution - explicit > env var > plist > auto-generated UUID"]
         AuthFlow["Auth Flow - validate token / show UI prompt"]
         SessionMgr["Session Manager - driver identity tracking"]
-        Timers["Dual Timers - disconnect (30s) + lease (30s)"]
+        Timer["Release Timer - fires when all connections drop"]
     end
 
     Client["Remote Client"] -->|authenticate(token)| AuthFlow
@@ -32,10 +32,8 @@ graph TD
 
     SessionMgr -->|same driver| Join["Join existing session"]
     SessionMgr -->|different driver| Lock["sessionLocked"]
-    SessionMgr -->|force=true| Evict["Evict current driver"]
 
-    Timers -->|all disconnected 30s| Release["releaseSession()"]
-    Timers -->|no pings 30s| Release
+    Timer -->|all disconnected, timeout elapsed| Release["releaseSession()"]
     Release -->|invalidates token| TokenRes
 ```
 
@@ -88,15 +86,10 @@ stateDiagram-v2
     }
 
     ActiveSession --> SessionLocked: different driverId tries to connect
-    SessionLocked --> ActiveSession: new driver uses forceSession=true
 
-    ActiveSession --> DisconnectTimer: all connections drop
-    DisconnectTimer --> NoSession: 30s elapsed
-    DisconnectTimer --> ActiveSession: client reconnects
-
-    ActiveSession --> LeaseTimer: no pings received
-    LeaseTimer --> NoSession: 30s elapsed (also invalidates token)
-    LeaseTimer --> ActiveSession: ping received
+    ActiveSession --> ReleaseTimer: all connections drop
+    ReleaseTimer --> NoSession: timeout elapsed (also invalidates token)
+    ReleaseTimer --> ActiveSession: client reconnects
 ```
 
 ## Configuration
@@ -105,10 +98,8 @@ stateDiagram-v2
 |--------|-----|---------|-------|
 | Environment | `INSIDEJOB_TOKEN` | auto-UUID | Explicit auth token |
 | Info.plist | `InsideJobToken` | auto-UUID | Fallback to env var |
-| Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Disconnect timer |
+| Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Release timer (fires when all connections drop) |
 | Info.plist | `InsideJobSessionTimeout` | 30s | Fallback |
-| Environment | `INSIDEJOB_SESSION_LEASE` | 30s | Lease timeout (min 10s) |
-| Info.plist | `InsideJobSessionLease` | 30s | Fallback |
 
 ## Items Flagged for Review
 
@@ -120,11 +111,10 @@ stateDiagram-v2
 - Documented behavior, but potential for annoyance/DoS in shared network environments
 - Consider: should there be a way to disable UI approval flow entirely?
 
-**Lease timer invalidates auth token** (`TheMuscle.swift:294`)
-- When the lease expires (no pings for 30s), `releaseSession()` is called AND the token is invalidated
+**Release timer invalidates auth token** (`TheMuscle.swift`)
+- When the release timer fires (all connections dropped for timeout duration), `releaseSession()` is called AND the token is invalidated
 - A fresh UUID is generated, meaning the previous token no longer works
 - This is aggressive: if a client temporarily loses connectivity for >30s, it cannot reconnect without re-discovering the new token
-- The disconnect timer does NOT invalidate the token (only the lease timer does)
 
 ### MEDIUM PRIORITY
 
@@ -135,19 +125,17 @@ try? await Task.sleep(nanoseconds: 100_000_000)  // appears 3 times
 - Used as a "give client time to receive the message before disconnect" delay
 - Should be a named constant
 
-**Token resolution generates new UUID every launch** (`TheMuscle.swift:79-84`)
-- WIRE-PROTOCOL.md states tokens are "persisted in UserDefaults and reused across app relaunches"
-- Actual implementation: `UUID().uuidString` every time
-- Documentation drift: tokens are ephemeral unless `INSIDEJOB_TOKEN` is set
+**Token resolution generates new UUID every launch** (`TheMuscle.swift`)
+- `UUID().uuidString` on every launch — tokens are ephemeral unless `INSIDEJOB_TOKEN` is set
+- Previously-approved clients must re-authenticate after app restart
 
 **No unit tests for TheMuscle**
-- Session locking logic (driver identity matching, force-takeover, timer behavior) is complex
+- Session locking logic (driver identity matching, timer behavior) is complex
 - Could be tested with mock server/client without UIKit dependency
-- The dual-timer interaction is particularly worth testing
 
 ### LOW PRIORITY
 
-**Session connections tracked by client ID strings**
-- `activeSessionConnections: Set<String>` stores client IDs
-- Client IDs come from `SimpleSocketServer` connection tracking
+**Session connections tracked by client ID integers**
+- `activeSessionConnections: Set<Int>` stores client IDs
+- Client IDs come from `SimpleSocketServer` connection tracking (incrementing `Int` counter)
 - If IDs were reused (unlikely but possible), stale entries could accumulate

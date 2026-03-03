@@ -2,17 +2,18 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes TheMastermind as an MCP (Model Context Protocol) tool for AI agents
+> **Role:** Exposes TheFence as 11 purpose-built MCP tools for AI agents
 
 ## Responsibilities
 
 The MCP server provides a bridge between AI agents and ButtonHeist:
 
-1. **Single `run` tool** accepting `{command, ...params}` JSON
-2. **TheMastermind delegation** for all command execution
+1. **11 purpose-built tools** with typed schemas (not a single `run` tool)
+2. **TheFence delegation** for all command execution
 3. **Smart response rendering** - screenshots as inline MCP images, recordings summarized
-4. **Environment-based config** - device filter, token, force mode
-5. **StdioTransport** - JSON-RPC over stdin/stdout
+4. **Idle monitoring** - auto-disconnects after inactivity, reconnects on next tool call
+5. **Environment-based config** - device filter, token, force mode, session timeout
+6. **StdioTransport** - JSON-RPC over stdin/stdout
 
 ## Architecture Diagram
 
@@ -22,15 +23,16 @@ graph TD
         Main["main.swift - @main ButtonHeistMCPServer"]
         Server["MCP Server - (swift-sdk)"]
         Transport["StdioTransport - stdin/stdout JSON-RPC"]
-        ToolDef["ToolDefinitions.swift - run tool schema"]
-        Handler["handleToolCall - decode → execute → render"]
+        ToolDef["ToolDefinitions.swift - 11 tool schemas"]
+        Handler["handleToolCall - route → execute → render"]
+        Idle["IdleMonitor - auto-disconnect on inactivity"]
     end
 
     subgraph Config["Environment Config"]
         Device["BUTTONHEIST_DEVICE"]
         Token["BUTTONHEIST_TOKEN"]
         Force["BUTTONHEIST_FORCE"]
-        DriverID["BUTTONHEIST_DRIVER_ID"]
+        Timeout["BUTTONHEIST_SESSION_TIMEOUT"]
     end
 
     subgraph Rendering["Response Rendering"]
@@ -42,13 +44,47 @@ graph TD
     AIAgent["AI Agent - (Claude, etc.)"] <-->|JSON-RPC| Transport
     Transport --> Server
     Server --> Handler
-    Handler --> TheMastermind["TheMastermind"]
-    Config --> TheMastermind
+    Handler --> TheFence["TheFence"]
+    Config --> TheFence
+    Idle --> TheFence
 
     Handler --> TextContent
     Handler --> ImageContent
     Handler --> VideoSummary
 ```
+
+## The 11 Tools
+
+| # | Tool Name | Key Parameters | Annotations |
+|---|-----------|---------------|-------------|
+| 1 | `get_interface` | (none) | readOnly, idempotent |
+| 2 | `activate` | `identifier`, `order` | — |
+| 3 | `type_text` | `text`, `deleteCount`, `identifier`, `order` | — |
+| 4 | `swipe` | `identifier`, `order`, `direction`, `startX/Y`, `endX/Y`, `distance`, `duration` | — |
+| 5 | `get_screen` | `output` (file path) | readOnly, idempotent |
+| 6 | `wait_for_idle` | `timeout` (seconds) | readOnly |
+| 7 | `start_recording` | `fps`, `scale`, `maxDuration`, `inactivityTimeout` | — |
+| 8 | `stop_recording` | `output` (file path) | — |
+| 9 | `list_devices` | (none) | readOnly, idempotent |
+| 10 | `gesture` | `type` (enum), `identifier`, `order`, `x/y`, `endX/Y`, `duration`, `scale`, `angle`, `points`, `curves` | — |
+| 11 | `accessibility_action` | `type` (enum), `identifier`, `order`, `actionName`, `action` | — |
+
+**`gesture` type values:** `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
+
+**`accessibility_action` type values:** `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`
+
+## Tool Routing
+
+Tools route to TheFence in two patterns:
+
+1. **Direct tools** (9 tools): The tool name becomes the `command` key directly
+   - `get_interface`, `activate`, `type_text`, `swipe`, `get_screen`, `wait_for_idle`, `start_recording`, `stop_recording`, `list_devices`
+
+2. **Grouped tools** (2 tools): The `type` field is extracted and becomes the command
+   - `gesture`: `type` becomes the command (`one_finger_tap` → `tap`, others verbatim)
+   - `accessibility_action`: `type` becomes the command verbatim
+
+All paths call `fence.execute(request:)` with the assembled request dictionary.
 
 ## Tool Call Flow
 
@@ -56,14 +92,15 @@ graph TD
 sequenceDiagram
     participant AI as AI Agent
     participant MCP as MCP Server
-    participant TM as TheMastermind
+    participant TF as TheFence
 
-    AI->>MCP: CallTool("run", {command: "tap", identifier: "btn"})
-    MCP->>MCP: Validate tool name == "run"
+    AI->>MCP: CallTool("activate", {identifier: "btn"})
     MCP->>MCP: decodeArguments([String: Value] → [String: Any])
-    MCP->>TM: execute(request: {command: "tap", identifier: "btn"})
-    TM-->>MCP: MastermindResponse.action(result)
+    MCP->>MCP: Set request["command"] = "activate"
+    MCP->>TF: fence.execute(request: {command: "activate", identifier: "btn"})
+    TF-->>MCP: FenceResponse.action(result)
     MCP->>MCP: renderResponse(response)
+    MCP->>MCP: idleMonitor.resetTimer()
     MCP-->>AI: [TextContent(json)]
 ```
 
@@ -73,42 +110,29 @@ sequenceDiagram
 sequenceDiagram
     participant AI as AI Agent
     participant MCP as MCP Server
-    participant TM as TheMastermind
+    participant TF as TheFence
 
-    AI->>MCP: CallTool("run", {command: "get_screen"})
-    MCP->>TM: execute(request: {command: "get_screen"})
-    TM-->>MCP: MastermindResponse.screenshotData(pngData, w, h)
+    AI->>MCP: CallTool("get_screen", {})
+    MCP->>TF: fence.execute(request: {command: "get_screen"})
+    TF-->>MCP: FenceResponse.screenshotData(pngData, w, h)
     MCP->>MCP: renderResponse:
     Note over MCP: 1. Extract pngData from jsonDict
-    Note over MCP: 2. Create .image content
-    Note over MCP: 3. Remove pngData from text dict
+    Note over MCP: 2. Create .image content (image/png)
+    Note over MCP: 3. Replace pngData with placeholder
     Note over MCP: 4. Create .text(remainingJson) content
     MCP-->>AI: [ImageContent(png), TextContent(metadata)]
 ```
 
-## Tool Schema
+## Idle Monitor
 
-```mermaid
-graph TD
-    RunTool["run tool"]
-    RunTool --> Schema["Input Schema: - additionalProperties: true"]
-    RunTool --> Desc["Description includes: - MastermindCommandCatalog.all - (auto-synced)"]
-
-    Schema --> Cmd["command: string (required)"]
-    Schema --> Params["...any additional params - (identifier, label, order, x, y, etc.)"]
-```
+The MCP server wraps TheFence in an `IdleMonitor`:
+- After each successful or failed tool call, the idle timer resets
+- When the timer fires (default: `BUTTONHEIST_SESSION_TIMEOUT` or 60s), it calls `fence.stop()`
+- The next tool call auto-reconnects via `TheFence.execute()` → `TheFence.start()`
 
 ## Items Flagged for Review
 
 ### MEDIUM PRIORITY
-
-**MCP version hardcoded to "1.0.0"** (`ButtonHeistMCP/Sources/main.swift:20`)
-```swift
-Server(name: "buttonheist", version: "1.0.0")
-```
-- CLI version is "2.1.0" (`ButtonHeistCLI/Sources/Support/main.swift:12`)
-- These versions are independent and not derived from a shared source
-- Could cause confusion about which version of the protocol is supported
 
 **Video data omitted from MCP responses** (`main.swift`)
 - `renderResponse` replaces `videoData` with a size summary
@@ -116,18 +140,7 @@ Server(name: "buttonheist", version: "1.0.0")
 - This is intentional (too large for LLM context) but means MCP clients can't access raw video
 - Only `screenshotData` gets the inline image treatment
 
-**`additionalProperties: true` schema** (`ToolDefinitions.swift`)
-- The tool accepts any JSON keys alongside `command`
-- No per-command parameter validation at the MCP schema level
-- All validation happens inside TheMastermind's dispatch
-- An AI agent sending wrong parameters gets a runtime error, not a schema error
-
 ### LOW PRIORITY
-
-**Single-tool design**
-- All 27 commands go through one `run` tool
-- Alternative: could expose each command as a separate MCP tool with typed schemas
-- Current design is simpler to maintain (auto-syncs with catalog) but less discoverable
 
 **No streaming support**
 - MCP responses are one-shot

@@ -24,8 +24,9 @@ TheInsideJob advertises itself using Bonjour:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
   - `tokenhash` — SHA256 hash prefix of the auth token (first 8 bytes, hex-encoded). Used for pre-connection filtering.
   - `instanceid` — Human-readable instance identifier
+  - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, token hash, or instance ID without establishing a TCP connection first.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, token hash, instance ID, or session state without establishing a TCP connection first.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -695,7 +696,7 @@ Error message.
 | `activationPointY` | `Double` | Activation point Y |
 | `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
 | `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
-| `actions` | `[String]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
+| `actions` | `[ElementAction]` | Available actions. Built-in actions encode as plain strings (`"activate"`, `"increment"`, `"decrement"`). Custom actions encode as objects: `{"custom":"actionName"}`. |
 
 ### ElementNode
 
@@ -1077,6 +1078,7 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
+| `forceSession` | `Bool?` | When true, request force-takeover of an active session (currently accepted but not acted upon) |
 | `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
@@ -1155,9 +1157,9 @@ The session inactivity timeout (time after last connection disconnects before th
 
 When the token is auto-generated (not explicitly set), TheInsideJob supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
 
-1. Server starts with auto-generated token — a floating overlay appears showing "Waiting for connection"
+1. Server starts with auto-generated token
 2. Client connects and sends `authenticate` with an empty token (`""`)
-3. Server shows an approval prompt overlay with Allow/Deny buttons
+3. Server presents a `UIAlertController` with "Allow" and "Deny" buttons
 4. **If approved**: Server sends `authApproved` with the token, then `info` — the session proceeds normally
 5. **If denied**: Server sends `authFailed("Connection denied by user")` and disconnects
 
@@ -1169,7 +1171,7 @@ sequenceDiagram
     Client->>Server: TCP Connect
     Server-->>Client: authRequired
     Client->>Server: authenticate(token:"") (empty token)
-    Note over Server: Overlay: "Allow / Deny"
+    Note over Server: UIAlertController: "Allow / Deny"
     Note over Server: ... user taps Allow ...
     Server-->>Client: authApproved(token) (token for future use)
     Server-->>Client: info
@@ -1177,7 +1179,7 @@ sequenceDiagram
 
 The client stores the received token and uses it for subsequent connections, which will authenticate normally without requiring approval.
 
-This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOKEN` or `InsideJobToken` is explicitly set, the standard token-based flow is used and no overlay is shown.
+This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOKEN` or `InsideJobToken` is explicitly set, the standard token-based flow is used and no approval alert is shown.
 
 ### Security Limits
 
