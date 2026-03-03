@@ -21,6 +21,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
+| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, animation detection |
 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
@@ -35,8 +36,9 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ```mermaid
 graph TD
     TheScore["TheScore - (Shared Protocol)"]
-    Wheelman["Wheelman - (Networking)"]
+    Wheelman["TheWheelman - (Networking)"]
     TheInsideJob["TheInsideJob - (iOS Server)"]
+    TheBagman["TheBagman - (Element Cache & Delta)"]
     ThePlant["ThePlant - (Auto-Start)"]
     ButtonHeist["ButtonHeist - (macOS Client Framework)"]
     CLI["ButtonHeistCLI - (CLI)"]
@@ -50,10 +52,10 @@ graph TD
     TheScore --> ButtonHeist
     ButtonHeist --> CLI
     ButtonHeist --> MCP
+    TheInsideJob --> TheBagman
     TheInsideJob --> ThePlant
     TheInsideJob --> TestApp
     ThePlant --> TestApp
-end
 ```
 
 ## End-to-End Data Flow

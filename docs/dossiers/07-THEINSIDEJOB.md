@@ -21,11 +21,11 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
         Core["TheInsideJob.swift - Server lifecycle, message dispatch"]
-        Acc["TheInsideJob+Accessibility.swift - Hierarchy parsing, delta computation"]
-        Anim["TheInsideJob+Animation.swift - Animation detection, waitForIdle"]
-        Poll["TheInsideJob+Polling.swift - Periodic hash-change polling"]
-        Screen["TheInsideJob+Screen.swift - Screenshot capture, recording mgmt"]
-        Auto["TheInsideJob+AutoStart.swift - @_cdecl entry point for ThePlant"]
+        Bagman["TheBagman.swift - Hierarchy parsing, element cache, - delta computation, animation detection"]
+        Anim["Extensions/Animation.swift - waitForIdle handler"]
+        Poll["Extensions/Polling.swift - Periodic hash-change polling"]
+        Screen["Extensions/Screen.swift - Screenshot capture, recording mgmt"]
+        Auto["Extensions/AutoStart.swift - @_cdecl entry point for ThePlant"]
     end
 
     subgraph Crew["Crew Members (Owned)"]
@@ -47,21 +47,21 @@ graph TD
     Core --> Fingerprints
     Core --> Server
     Core --> NetService
-    Acc --> Parser
-    Poll --> Acc
+    Bagman --> Parser
+    Poll --> Bagman
     Screen --> StakeoutCrew
 ```
 
 ## Key Files
 
-| File | Lines | Purpose |
-|------|-------|---------|
-| `TheInsideJob.swift` | ~400 | Core lifecycle, server wiring, message dispatch |
-| `TheInsideJob+Accessibility.swift` | ~300 | Hierarchy parsing, element conversion, delta computation |
-| `TheInsideJob+Animation.swift` | ~180 | Animation detection, settle-waiting, post-action result |
-| `TheInsideJob+Polling.swift` | ~80 | Periodic poll loop, debounced broadcast |
-| `TheInsideJob+Screen.swift` | ~120 | Screen capture, recording start/stop |
-| `TheInsideJob+AutoStart.swift` | ~50 | `@_cdecl` bridge for ObjC auto-start |
+| File | Purpose |
+|------|---------|
+| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch |
+| `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
+| `Extensions/Animation.swift` | `handleWaitForIdle` — waits for animation settle, refreshes hierarchy |
+| `Extensions/Polling.swift` | Periodic poll loop, debounced broadcast |
+| `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
+| `Extensions/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
 
 ## Message Dispatch Flow
 
@@ -148,14 +148,13 @@ Dead computed property. The server always binds to all interfaces. The documente
 - `1_000_000_000` polling interval (line 70)
 - These could be named constants for clarity.
 
-**`performInteraction` now captures interaction events during recording** (NEW)
-- When `stakeout.state == .recording`, each interaction captures a full `InteractionEvent`
-- This includes `interfaceBefore` and `interfaceAfter` snapshots
-- On failed interactions, an extra `refreshAccessibilityData()` call is made for the after-snapshot
-- The `command: ClientMessage` parameter was added to `performInteraction` — all 16 call sites updated
+**`performInteraction` captures interaction events during recording**
+- When `stakeout.state == .recording`, each interaction captures an `InteractionEvent`
+- This includes an optional `interfaceDelta: InterfaceDelta?` (not full before/after snapshots)
+- The `command: ClientMessage` parameter was added to `performInteraction` — all call sites updated
 
 **No unit tests for TheInsideJob itself**
-- The delta computation logic in `TheInsideJob+Accessibility.swift:194-299` is pure data transformation
+- The delta computation logic in `TheBagman.swift` is pure data transformation
 - It could be extracted and tested without UIKit dependency
 - Currently untested
 
