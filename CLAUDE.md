@@ -213,6 +213,19 @@ Recordings are saved to `demos/` with timestamped filenames. Default settings: `
 - **Formally** (code, API, module): use **TheInsideJob** for the iOS server framework.
 - **Colloquially** (prose, chat): "inside job" or "Inside Job" is fine for that framework; don't over-correct.
 
+## AccessibilitySnapshot Submodule
+
+The `AccessibilitySnapshot` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshot`) on the `buttonheist` branch. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). The `buttonheist` branch is rebased on upstream `main` and carries only two targeted commits:
+
+1. `elementVisitor` closure on the hierarchy parser + xcodegen project support
+2. `Hashable` conformance on `AccessibilityElement`
+
+**Rules for this submodule:**
+- Only touch files in the hierarchy parser (`Sources/AccessibilitySnapshot/Parser/`).
+- Keep changes minimal and targeted — do not modify snapshot testing, examples, or package config.
+- When upstream `cashapp/AccessibilitySnapshot:main` updates, rebase `buttonheist` onto the new `main` rather than merging.
+- After updating the submodule, run `git submodule update --remote` and commit the new pin.
+
 ## Dossier Maintenance
 
 Crew member dossiers live in `docs/dossiers/`. When a PR changes a crew member's responsibilities, adds/removes types, or changes architecture:
