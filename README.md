@@ -1,8 +1,8 @@
-# TheButtonHeist
+# The Button Heist
 
 **Let AI agents drive iOS apps.**
 
-ButtonHeist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
+The Button Heist gives AI agents (and humans) full control over iOS apps. Embed TheInsideJob in your app, then connect with the MCP server to let Claude inspect UI, tap buttons, swipe, type, and navigate — all programmatically over a persistent connection.
 
 ## Meet the Crew
 
