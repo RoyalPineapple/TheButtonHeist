@@ -32,7 +32,7 @@ Hire the team for your next job via MCP or CLI interfaces
 
 | Character | What they do |
 |-----------|--------------|
-| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
+| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `swipe`, `type`, `screenshot`, `session`, and more. |
 | **ButtonHeistMCP** | Agent interface. exposes tools that call through TheFence so AI agents can run the job natively. |
 
 ## Features
