@@ -393,7 +393,7 @@ public enum Timeouts {
     static let interfaceRequest: UInt64 = 10_000_000_000
 }
 
-@MainActor
+@ButtonHeistActor
 public final class TheFence {
     public struct Configuration {
         public var deviceFilter: String?

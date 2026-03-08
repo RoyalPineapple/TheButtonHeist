@@ -25,7 +25,7 @@ struct ActivateCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let target = try element.requireTarget()
 

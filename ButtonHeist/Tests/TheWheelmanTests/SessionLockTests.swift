@@ -9,7 +9,7 @@ final class SessionLockTests: XCTestCase {
 
     private var server: SimpleSocketServer!
     // Hold DeviceConnection references to prevent deallocation during async tests
-    @MainActor private var deviceConnection: DeviceConnection?
+    @ButtonHeistActor private var deviceConnection: DeviceConnection?
 
     override func setUp() {
         super.setUp()
@@ -19,7 +19,7 @@ final class SessionLockTests: XCTestCase {
     override func tearDown() {
         server.stop()
         server = nil
-        Task { @MainActor in
+        Task { @ButtonHeistActor in
             self.deviceConnection?.disconnect()
             self.deviceConnection = nil
         }
@@ -56,7 +56,7 @@ final class SessionLockTests: XCTestCase {
         // Use DeviceConnection so the sessionLocked handler fires and disconnects
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token")
             self.deviceConnection = conn
             conn.connect()
@@ -92,7 +92,7 @@ final class SessionLockTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token", forceSession: true)
             self.deviceConnection = conn
             conn.connect()
@@ -127,7 +127,7 @@ final class SessionLockTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token")
             self.deviceConnection = conn
             conn.connect()
@@ -162,7 +162,7 @@ final class SessionLockTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token", driverId: "test-driver-id")
             self.deviceConnection = conn
             conn.connect()
@@ -200,7 +200,7 @@ final class SessionLockTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token")
             self.deviceConnection = conn
             conn.connect()
@@ -226,7 +226,7 @@ final class SessionLockTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "test-token")
             conn.onSessionLocked = { payload in
                 XCTAssertEqual(payload.message, "Another driver active")
