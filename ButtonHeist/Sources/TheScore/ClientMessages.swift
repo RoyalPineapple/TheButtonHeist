@@ -1,6 +1,21 @@
 import Foundation
 import CoreGraphics
 
+// MARK: - Request Envelope
+
+/// Wraps a client message with an optional request ID for response correlation.
+/// When `requestId` is present, the server echoes it in the corresponding response
+/// so the client can match request-response pairs. Push broadcasts have no requestId.
+public struct RequestEnvelope: Codable, Sendable {
+    public let requestId: String?
+    public let message: ClientMessage
+
+    public init(requestId: String? = nil, message: ClientMessage) {
+        self.requestId = requestId
+        self.message = message
+    }
+}
+
 // MARK: - Client -> Server Messages
 
 public enum ClientMessage: Codable, Sendable {
@@ -93,6 +108,11 @@ public enum ClientMessage: Codable, Sendable {
 
     /// Stop an in-progress recording
     case stopRecording
+
+    // MARK: - Watch (Observer) Commands
+
+    /// Connect as a read-only observer (no session lock)
+    case watch(WatchPayload)
 }
 
 // MARK: - Action Targets
@@ -442,6 +462,16 @@ public struct SessionLockedPayload: Codable, Sendable {
     public init(message: String, activeConnections: Int) {
         self.message = message
         self.activeConnections = activeConnections
+    }
+}
+
+/// Payload for watch (observer) connections
+public struct WatchPayload: Codable, Sendable {
+    /// Optional auth token. When empty and server allows open watch, auto-approved.
+    /// When empty and server restricts watch, triggers UI approval prompt.
+    public let token: String
+    public init(token: String = "") {
+        self.token = token
     }
 }
 

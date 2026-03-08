@@ -44,8 +44,7 @@ final class SessionLockTests: XCTestCase {
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
             let payload = SessionLockedPayload(message: "Session held by another driver", activeConnections: 1)
-            let msg = ServerMessage.sessionLocked(payload)
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .sessionLocked(payload))) {
                 self.server.send(data, to: clientId)
             }
         }
@@ -76,15 +75,14 @@ final class SessionLockTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, data, _ in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -112,15 +110,14 @@ final class SessionLockTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, data, _ in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -148,15 +145,14 @@ final class SessionLockTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, data, _ in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -184,15 +180,14 @@ final class SessionLockTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, data, _ in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -224,8 +219,7 @@ final class SessionLockTests: XCTestCase {
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
             let payload = SessionLockedPayload(message: "Another driver active", activeConnections: 3)
-            let msg = ServerMessage.sessionLocked(payload)
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .sessionLocked(payload))) {
                 self.server.send(data, to: clientId)
             }
         }
