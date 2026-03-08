@@ -19,7 +19,7 @@ TheFence is the brain of the outside operation:
 
 ```mermaid
 graph TD
-    subgraph TheFence["TheFence (@MainActor)"]
+    subgraph TheFence["TheFence (@ButtonHeistActor)"]
         Config["Configuration - deviceFilter, connectionTimeout, - forceSession, token, autoReconnect"]
         Execute["execute(request:) - Main entry point"]
         Dispatch["dispatch(command:args:) - 29-command switch"]
