@@ -105,5 +105,5 @@ These issues span multiple crew members and warrant holistic review:
 4. ~~**`vendorid` TXT key**~~ - Fixed: removed from DiscoveredDevice and DeviceDiscovery
 5. **Token logged in plaintext** - TheInsideJob.swift logs full auth token at info level
 6. **No TheInsideJob unit tests** - TheMuscleTests added; TheBagman and TheInsideJob server-side logic still untested
-7. **USBDeviceDiscovery blocks main thread** - Subprocess calls in @MainActor context
+7. **USBDeviceDiscovery blocks actor thread** - Subprocess calls in @ButtonHeistActor context
 8. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses InterfaceDelta instead of full snapshots

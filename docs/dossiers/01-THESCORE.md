@@ -18,6 +18,7 @@ TheScore is the protocol bible. It defines:
 8. **Watch payload** (`WatchPayload`) - observer connection parameters
 9. **Server info** (`ServerInfo`)
 10. **Protocol constants** (service type, version)
+11. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
 
 ## Architecture Diagram
 
