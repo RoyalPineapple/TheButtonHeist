@@ -56,7 +56,7 @@ struct TapSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
@@ -95,7 +95,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
@@ -146,7 +146,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
@@ -205,7 +205,7 @@ struct DragSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
@@ -250,7 +250,7 @@ struct PinchSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
@@ -295,7 +295,7 @@ struct RotateSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
@@ -334,7 +334,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
@@ -385,7 +385,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let pathPoints: [PathPoint]
 
@@ -472,7 +472,7 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let url = URL(fileURLWithPath: bezierFile)
         let data = try Data(contentsOf: url)
@@ -496,7 +496,7 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
 
 // MARK: - Shared Connection Helper
 
-@MainActor
+@ButtonHeistActor
 private func sendTouchGesture(message: ClientMessage, connection: ConnectionOptions,
                               timeout: Double, format: OutputFormat?) async throws {
     let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)

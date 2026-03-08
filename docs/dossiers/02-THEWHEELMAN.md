@@ -178,7 +178,7 @@ _ = readySemaphore.wait(timeout: .now() + 5)
 **USBDeviceDiscovery blocks main thread** (`USBDeviceDiscovery.swift:154-155`)
 - `poll()` runs subprocess commands (`xcrun devicectl`, `lsof`) synchronously
 - Uses `process.waitUntilExit()` and `pipe.fileHandleForReading.readDataToEndOfFile()`
-- These are blocking calls on the main thread (the timer fires on `@MainActor`)
+- These are blocking calls on the actor thread (the timer fires on `@ButtonHeistActor`)
 - `xcrun devicectl` has a 10-second timeout, `lsof` has 5-second timeout
 - Should be moved to a background queue
 

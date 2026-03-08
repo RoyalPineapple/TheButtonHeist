@@ -1,7 +1,7 @@
 import Foundation
 import ButtonHeist
 
-@MainActor
+@ButtonHeistActor
 final class DeviceConnector {
     let client = TheMastermind()
     private let deviceFilter: String?

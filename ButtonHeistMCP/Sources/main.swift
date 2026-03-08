@@ -1,6 +1,7 @@
 import Foundation
 import MCP
 import ButtonHeist
+import TheScore
 
 /// Idle timeout before disconnecting from the device (seconds).
 /// `BUTTONHEIST_SESSION_TIMEOUT` env var overrides the default.
@@ -15,17 +16,7 @@ private let sessionTimeout: TimeInterval = {
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
-        let fence = TheFence(
-            configuration: .init(
-                deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
-                connectionTimeout: 30,
-                forceSession: ProcessInfo.processInfo.environment["BUTTONHEIST_FORCE"] == "1",
-                token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
-                autoReconnect: true
-            )
-        )
-
-        let idleMonitor = IdleMonitor(fence: fence, timeout: sessionTimeout)
+        let (fence, idleMonitor) = await setUp()
 
         let server = Server(
             name: "buttonheist",
@@ -45,7 +36,22 @@ struct ButtonHeistMCPServer {
         await server.waitUntilCompleted()
     }
 
-    @MainActor
+    @ButtonHeistActor
+    private static func setUp() -> (TheFence, IdleMonitor) {
+        let fence = TheFence(
+            configuration: .init(
+                deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
+                connectionTimeout: 30,
+                forceSession: ProcessInfo.processInfo.environment["BUTTONHEIST_FORCE"] == "1",
+                token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
+                autoReconnect: true
+            )
+        )
+        let idleMonitor = IdleMonitor(fence: fence, timeout: sessionTimeout)
+        return (fence, idleMonitor)
+    }
+
+    @ButtonHeistActor
     private static func handleToolCall(
         _ params: CallTool.Parameters,
         fence: TheFence,
@@ -161,7 +167,7 @@ struct ButtonHeistMCPServer {
 
 /// Disconnects the fence after a period of inactivity.
 /// The next tool call will auto-reconnect via `TheFence.execute()`.
-@MainActor
+@ButtonHeistActor
 private final class IdleMonitor {
     private let fence: TheFence
     private let timeout: TimeInterval

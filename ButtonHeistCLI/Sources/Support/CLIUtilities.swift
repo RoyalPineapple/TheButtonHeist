@@ -48,7 +48,7 @@ func formatActionResultJSON(_ result: ActionResult) -> String {
 // MARK: - Action Result Output
 
 /// Shared output handler for action results used by action, touch, type, edit, and dismiss commands.
-@MainActor
+@ButtonHeistActor
 func outputActionResult(_ result: ActionResult, format: OutputFormat?, quiet: Bool, verb: String = "Action") {
     switch format ?? .auto {
     case .json:

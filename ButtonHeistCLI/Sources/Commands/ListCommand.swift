@@ -14,7 +14,7 @@ struct ListCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let client = TheMastermind()
         logStatus("Discovering devices...")

@@ -255,7 +255,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 
 **Architecture**:
 ```
-TheFence (@MainActor)
+TheFence (@ButtonHeistActor)
 ├── Configuration (deviceFilter, connectionTimeout, forceSession, token, autoReconnect)
 ├── TheMastermind (private client instance)
 ├── Device discovery + connection with configurable timeouts
@@ -265,7 +265,7 @@ TheFence (@MainActor)
 ```
 
 **Key Types**:
-- `TheFence` - Main command dispatch class, `@MainActor`-isolated
+- `TheFence` - Main command dispatch class, `@ButtonHeistActor`-isolated
 - `TheFence.Configuration` - Connection settings (device filter, timeout, force, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
@@ -305,7 +305,7 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 
 **Architecture**:
 ```
-TheMastermind (@Observable, @MainActor)
+TheMastermind (@Observable, @ButtonHeistActor)
 ├── TheWheelman (from TheWheelman)
 │   ├── DeviceDiscovery (NWBrowser for "_buttonheist._tcp")
 │   └── DeviceConnection (NWConnection + data transport)
@@ -591,10 +591,10 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Interface updates debounced by 300ms
 
 ### TheMastermind / TheFence (macOS)
-- `@MainActor` for SwiftUI `@Observable` properties
-- NWBrowser for discovery on main queue
+- `@ButtonHeistActor` for backend isolation (discovery, connection, command dispatch)
+- NWBrowser for discovery on a dedicated queue
 - NWConnection for data transport
-- Message processing dispatched to main actor
+- Message processing dispatched to `@ButtonHeistActor`
 
 ## Error Handling
 

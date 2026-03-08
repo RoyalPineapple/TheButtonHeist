@@ -225,7 +225,7 @@ Main client class. Uses the `@Observable` macro for SwiftUI integration.
 
 ```swift
 @Observable
-@MainActor
+@ButtonHeistActor
 public final class TheMastermind
 ```
 
@@ -542,7 +542,7 @@ TheFence is the shared orchestration layer for all command dispatch. Both the CL
 ### TheFence Class
 
 ```swift
-@MainActor
+@ButtonHeistActor
 public final class TheFence
 ```
 

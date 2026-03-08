@@ -22,7 +22,7 @@ TheMastermind is the macOS-side counterpart to TheInsideJob:
 
 ```mermaid
 graph TD
-    subgraph TheMastermind["TheMastermind (@Observable, @MainActor)"]
+    subgraph TheMastermind["TheMastermind (@Observable, @ButtonHeistActor)"]
         TW["TheWheelman - discovery, connection, keepalive"]
 
         subgraph ObservableState["Observable State"]
@@ -83,7 +83,7 @@ flowchart TD
     Call["waitForActionResult(timeout: 15)"]
     Call --> Setup["withCheckedThrowingContinuation"]
     Setup --> Hook["Set onActionResult callback"]
-    Setup --> Timer["Start timeout Task (@MainActor)"]
+    Setup --> Timer["Start timeout Task (@ButtonHeistActor)"]
 
     Hook --> Result{"Result received?"}
     Result -->|yes| Check{"didResume?"}
