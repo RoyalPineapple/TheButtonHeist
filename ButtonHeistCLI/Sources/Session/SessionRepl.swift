@@ -1,0 +1,364 @@
+import Foundation
+import Darwin
+import ButtonHeist
+
+@MainActor
+final class ReplSession {
+    private let format: OutputFormat
+    private let fence: TheFence
+    private let sessionTimeout: TimeInterval
+    private var isRunning = true
+    private var shouldExit = false
+    private nonisolated(unsafe) var lastCommandTime = ContinuousClock.now
+    private var timeoutTask: Task<Void, Never>?
+
+    init(
+        deviceFilter: String?,
+        connectionTimeout: Double,
+        format: OutputFormat,
+        force: Bool = false,
+        token: String? = nil,
+        sessionTimeout: Double = 0
+    ) {
+        self.format = format
+        if sessionTimeout > 0 {
+            self.sessionTimeout = sessionTimeout
+        } else if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
+                  let parsed = Double(envValue), parsed > 0 {
+            self.sessionTimeout = parsed
+        } else {
+            self.sessionTimeout = 0
+        }
+        self.fence = TheFence(
+            configuration: .init(
+                deviceFilter: deviceFilter,
+                connectionTimeout: connectionTimeout,
+                forceSession: force,
+                token: token,
+                autoReconnect: true
+            )
+        )
+        self.fence.onStatus = { message in
+            logStatus(message)
+        }
+    }
+
+    func run() async throws {
+        try await fence.start()
+
+        let isTTY = isatty(STDIN_FILENO) != 0
+        if isTTY {
+            logStatus("Session started. Type 'help' for commands, 'quit' to exit.")
+            if sessionTimeout > 0 {
+                logStatus("Idle timeout: \(Int(sessionTimeout))s")
+            }
+        }
+
+        signal(SIGINT) { _ in Darwin.exit(0) }
+
+        lastCommandTime = .now
+        if sessionTimeout > 0 {
+            startTimeoutMonitor()
+        }
+
+        while isRunning {
+            if isTTY {
+                fputs("> ", stderr)
+                fflush(stderr)
+            }
+
+            guard let line = await Task.detached(operation: { Swift.readLine() }).value else {
+                break
+            }
+
+            lastCommandTime = .now
+
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+
+            let (response, requestId) = await processLine(trimmed)
+            outputResponse(response, id: requestId)
+
+            if shouldExit { break }
+        }
+
+        timeoutTask?.cancel()
+        fence.stop()
+    }
+
+    private func startTimeoutMonitor() {
+        timeoutTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(SessionDefaults.timeoutCheckInterval))
+                guard !Task.isCancelled, let self else { return }
+                let elapsed = ContinuousClock.now - self.lastCommandTime
+                if elapsed > .seconds(self.sessionTimeout) {
+                    logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
+                    self.isRunning = false
+                    close(STDIN_FILENO)
+                    return
+                }
+            }
+        }
+    }
+
+    private func processLine(_ line: String) async -> (FenceResponse, Any?) {
+        let request: [String: Any]
+
+        if line.hasPrefix("{") {
+            // JSON mode — machine interface
+            guard
+                let data = line.data(using: .utf8),
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let _ = object["command"] as? String
+            else {
+                return (.error("Invalid JSON or missing 'command' field"), nil)
+            }
+            request = object
+        } else {
+            // Human-friendly mode
+            request = Self.parseHumanInput(line)
+        }
+
+        guard let command = request["command"] as? String else {
+            return (.error("Unknown command. Type 'help' for available commands."), nil)
+        }
+
+        let requestId = request["id"]
+
+        // Enhanced help for human mode
+        if command == "help" && format == .human && !line.hasPrefix("{") {
+            return (.ok(message: Self.humanHelp), nil)
+        }
+
+        do {
+            let response = try await fence.execute(request: request)
+            if command == "quit" || command == "exit" {
+                shouldExit = true
+                isRunning = false
+            }
+            return (response, requestId)
+        } catch {
+            if let fenceError = error as? FenceError, let message = fenceError.errorDescription {
+                return (.error(message), requestId)
+            }
+            return (.error("Internal error: \(error.localizedDescription)"), requestId)
+        }
+    }
+
+    // MARK: - Human-Friendly Input Parser
+
+    private static let humanHelp = """
+        Commands (type a command, or use JSON for full control):
+
+        Quick reference:
+          help                        Show this help
+          status                      Connection status
+          quit / exit                 End session
+          devices                     List available devices
+
+        Inspect:
+          ui                          Get accessibility interface
+          screen                      Capture screenshot
+          screen output=photo.png     Save screenshot to file
+
+        Gestures:
+          tap <identifier>            Tap element by accessibility ID
+          tap #3                      Tap element by order number
+          tap 100 200                 Tap at coordinates
+          press <id>                  Long press (duration=N for seconds)
+          swipe up <id>               Swipe direction on element
+          scroll down <id>            Scroll direction on element
+          scroll_to_visible <id>      Scroll until element visible
+          scroll_to_edge top <id>     Scroll to edge
+          drag endX=200 endY=300      Drag gesture
+
+        Actions:
+          activate <id>               Activate element
+          increment <id>              Increment (e.g. slider)
+          decrement <id>              Decrement
+          type "hello world"          Type text
+          edit_action copy            Edit action (copy/paste/cut/select/selectAll)
+          dismiss_keyboard            Dismiss keyboard
+
+        Recording:
+          record                      Start recording
+          stop_recording              Stop and retrieve recording
+
+        Target elements by accessibility identifier, or #N for order number.
+        Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
+        JSON input still works: {"command":"one_finger_tap","identifier":"btn"}
+        """
+
+    private static let commandAliases: [String: String] = [
+        "tap": "one_finger_tap",
+        "ui": "get_interface",
+        "type": "type_text",
+        "screen": "get_screen",
+        "devices": "list_devices",
+        "press": "long_press",
+        "idle": "wait_for_idle",
+        "record": "start_recording",
+    ]
+
+    private static let directionWords: Set<String> = [
+        "up", "down", "left", "right", "next", "previous"
+    ]
+
+    private static let edgeWords: Set<String> = [
+        "top", "bottom", "left", "right"
+    ]
+
+    private static let directionCommands: Set<String> = [
+        "swipe", "scroll"
+    ]
+
+    static func parseHumanInput(_ line: String) -> [String: Any] {
+        let tokens = tokenize(line)
+        guard let first = tokens.first else { return [:] }
+
+        let rawCommand = first.lowercased()
+        let command = commandAliases[rawCommand] ?? rawCommand
+        var result: [String: Any] = ["command": command]
+        let args = Array(tokens.dropFirst())
+
+        // Separate key=value pairs from positional tokens
+        var positional: [String] = []
+        for arg in args {
+            if let eqIndex = arg.firstIndex(of: "="), eqIndex != arg.startIndex {
+                let key = String(arg[arg.startIndex..<eqIndex])
+                let value = String(arg[arg.index(after: eqIndex)...])
+                // Auto-convert numeric values
+                if let intVal = Int(value) {
+                    result[key] = intVal
+                } else if let dblVal = Double(value) {
+                    result[key] = dblVal
+                } else {
+                    result[key] = value
+                }
+            } else {
+                positional.append(arg)
+            }
+        }
+
+        // Interpret positional arguments based on command context
+        interpretPositionalArgs(command: command, positional: positional, into: &result)
+
+        return result
+    }
+
+    private static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
+        guard !positional.isEmpty else { return }
+
+        switch command {
+        case "type_text":
+            // Everything after "type" is the text to type
+            if result["text"] == nil {
+                result["text"] = positional.joined(separator: " ")
+            }
+
+        case "edit_action":
+            if result["action"] == nil, let action = positional.first {
+                result["action"] = action
+            }
+
+        case "scroll_to_edge":
+            // First positional: edge or identifier; second: identifier
+            var remaining = positional
+            if let first = remaining.first, edgeWords.contains(first.lowercased()) {
+                result["edge"] = first.lowercased()
+                remaining.removeFirst()
+            }
+            applyElementTarget(remaining, into: &result)
+
+        case "perform_custom_action":
+            // First positional: identifier, rest: actionName
+            if let first = positional.first {
+                applyElementTarget([first], into: &result)
+                if positional.count > 1 {
+                    result["actionName"] = positional.dropFirst().joined(separator: " ")
+                }
+            }
+
+        default:
+            // Generic positional handling
+            var remaining = positional
+
+            // For direction commands, consume a direction word first
+            if directionCommands.contains(command),
+               let first = remaining.first, directionWords.contains(first.lowercased()) {
+                result["direction"] = first.lowercased()
+                remaining.removeFirst()
+            }
+
+            // Two bare numbers → x, y coordinates
+            if remaining.count >= 2,
+               let x = Double(remaining[0]),
+               let y = Double(remaining[1]) {
+                result["x"] = x
+                result["y"] = y
+                remaining.removeFirst(2)
+            } else {
+                // Otherwise treat as element target
+                applyElementTarget(remaining, into: &result)
+                remaining = []
+            }
+        }
+    }
+
+    private static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
+        guard let first = tokens.first else { return }
+        if first.hasPrefix("#"), let order = Int(first.dropFirst()) {
+            result["order"] = order
+        } else {
+            result["identifier"] = first
+        }
+    }
+
+    private static func tokenize(_ line: String) -> [String] {
+        var tokens: [String] = []
+        var current = ""
+        var inQuote: Character?
+        var iterator = line.makeIterator()
+
+        while let ch = iterator.next() {
+            if let quote = inQuote {
+                if ch == quote {
+                    inQuote = nil
+                } else {
+                    current.append(ch)
+                }
+            } else if ch == "\"" || ch == "'" {
+                inQuote = ch
+            } else if ch == " " || ch == "\t" {
+                if !current.isEmpty {
+                    tokens.append(current)
+                    current = ""
+                }
+            } else {
+                current.append(ch)
+            }
+        }
+        if !current.isEmpty {
+            tokens.append(current)
+        }
+        return tokens
+    }
+
+    private func outputResponse(_ response: FenceResponse, id: Any?) {
+        switch format {
+        case .human:
+            writeOutput(response.humanFormatted())
+        case .json:
+            if var dictionary = response.jsonDict() {
+                if let id {
+                    dictionary["id"] = id
+                }
+                if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
+                   let json = String(data: data, encoding: .utf8) {
+                    writeOutput(json)
+                }
+            }
+        }
+    }
+}
