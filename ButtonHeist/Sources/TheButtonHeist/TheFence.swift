@@ -527,7 +527,7 @@ public final class TheFence {
         case "stop_recording":
             return try await handleStopRecording(args)
         default:
-            return .error("Unknown command: \(command). Send {\"command\":\"help\"} for available commands.")
+            return .error("Unknown command: \(command). Use 'help' for available commands.")
         }
     }
 

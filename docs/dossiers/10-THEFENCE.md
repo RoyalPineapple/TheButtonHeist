@@ -48,7 +48,7 @@ graph TD
         end
     end
 
-    CLI["ButtonHeistCLI - SessionRunner"] --> Execute
+    CLI["ButtonHeistCLI - ReplSession"] --> Execute
     MCP["ButtonHeistMCP - handleToolCall"] --> Execute
     Execute --> Dispatch
     Dispatch --> Client["TheMastermind - send/wait"]
