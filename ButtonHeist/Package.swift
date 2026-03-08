@@ -67,8 +67,8 @@ let package = Package(
         ),
         .testTarget(
             name: "WheelmanTests",
-            dependencies: ["Wheelman", "TheScore"],
-            path: "Tests/WheelmanTests",
+            dependencies: ["TheWheelman", "TheScore"],
+            path: "Tests/TheWheelmanTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

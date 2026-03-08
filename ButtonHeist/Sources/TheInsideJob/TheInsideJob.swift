@@ -43,6 +43,7 @@ public final class TheInsideJob {
     private var transport: ServerTransport?
     let muscle: TheMuscle
     private let instanceId: String?
+    private let installationId: String
     private let sessionId = UUID()
     let bagman = TheBagman()
     let theSafecracker = TheSafecracker()
@@ -75,6 +76,7 @@ public final class TheInsideJob {
     public init(token: String? = nil, instanceId: String? = nil) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
+        self.installationId = Self.loadInstallationId()
         self.theSafecracker.bagman = self.bagman
     }
 
@@ -115,6 +117,7 @@ public final class TheInsideJob {
         isSuspended = false
         stopPolling()
 
+        transport?.stopAdvertising()
         transport?.stop()
         transport = nil
 
@@ -203,6 +206,19 @@ public final class TheInsideJob {
         instanceId ?? shortId
     }
 
+    private static func loadInstallationId() -> String {
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.buttonheist.theinsidejob"
+        let defaultsKey = "\(bundleId).installation-id"
+
+        if let existing = UserDefaults.standard.string(forKey: defaultsKey), !existing.isEmpty {
+            return existing
+        }
+
+        let generated = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(generated, forKey: defaultsKey)
+        return generated
+    }
+
     private func advertiseService(port: UInt16) {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
@@ -215,7 +231,11 @@ public final class TheInsideJob {
             serviceName: serviceName,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
             tokenHash: tokenHashPrefix,
-            instanceId: effectiveInstanceId
+            installationId: installationId,
+            instanceId: effectiveInstanceId,
+            additionalTXT: [
+                "devicename": UIDevice.current.name
+            ]
         )
     }
 
@@ -489,6 +509,12 @@ public final class TheInsideJob {
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
     }
 
     private func stopLifecycleObservation() {
@@ -500,6 +526,11 @@ public final class TheInsideJob {
         NotificationCenter.default.removeObserver(
             self,
             name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIApplication.willTerminateNotification,
             object: nil
         )
     }
@@ -514,6 +545,11 @@ public final class TheInsideJob {
         resume()
     }
 
+    @objc private func appWillTerminate() {
+        insideJobLogger.info("App will terminate, stopping server advertisement")
+        stop()
+    }
+
     private func suspend() {
         guard isRunning, !isSuspended else { return }
         isSuspended = true
@@ -524,6 +560,7 @@ public final class TheInsideJob {
         updateDebounceTask?.cancel()
         updateDebounceTask = nil
 
+        transport?.stopAdvertising()
         transport?.stop()
         transport = nil
 

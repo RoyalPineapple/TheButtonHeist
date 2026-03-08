@@ -131,6 +131,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         XCTAssertNil(device.simulatorUDID)
         XCTAssertNil(device.tokenHash)
+        XCTAssertNil(device.installationId)
         XCTAssertNil(device.instanceId)
         XCTAssertNil(device.sessionActive)
     }
@@ -142,14 +143,31 @@ final class DiscoveredDeviceTests: XCTestCase {
             endpoint: endpoint,
             simulatorUDID: "SIM-UUID",
             tokenHash: "deadbeef",
+            installationId: "install-1",
+            displayDeviceName: "Chris's iPhone",
             instanceId: "my-instance",
             sessionActive: true
         )
 
         XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
         XCTAssertEqual(device.tokenHash, "deadbeef")
+        XCTAssertEqual(device.installationId, "install-1")
+        XCTAssertEqual(device.deviceName, "Chris's iPhone")
         XCTAssertEqual(device.instanceId, "my-instance")
         XCTAssertEqual(device.sessionActive, true)
+    }
+
+    func testDeviceNamePrefersBroadcastDeviceName() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(
+            id: "test",
+            name: "AccessibilityTestApp#abc123",
+            endpoint: endpoint,
+            displayDeviceName: "Office iPhone"
+        )
+
+        XCTAssertEqual(device.appName, "AccessibilityTestApp")
+        XCTAssertEqual(device.deviceName, "Office iPhone")
     }
 
     func testSessionActiveFalse() {
@@ -232,6 +250,135 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         XCTAssertFalse(device.matches(filter: "Android"))
         XCTAssertFalse(device.matches(filter: "zzzzz"))
+    }
+
+    func testDiscoveryIdentityPrefersInstallationId() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let oldDevice = DiscoveredDevice(
+            id: "old",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "a18032ae"
+        )
+        let newDevice = DiscoveredDevice(
+            id: "new",
+            name: "AccessibilityTestApp#841803ea",
+            endpoint: endpoint,
+            tokenHash: "cafebabe",
+            installationId: "install-1",
+            instanceId: "841803ea"
+        )
+
+        XCTAssertEqual(oldDevice.discoveryIdentity, newDevice.discoveryIdentity)
+    }
+
+    func testDiscoveryIdentityFallsBackToTokenHashForUnnamedAds() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let firstDevice = DiscoveredDevice(
+            id: "first",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            instanceId: "a18032ae"
+        )
+        let secondDevice = DiscoveredDevice(
+            id: "second",
+            name: "AccessibilityTestApp#841803ea",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            instanceId: "841803ea"
+        )
+
+        XCTAssertEqual(firstDevice.discoveryIdentity, secondDevice.discoveryIdentity)
+    }
+
+    func testDiscoveryRegistryDedupesSimulatorRelaunches() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let oldDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "a18032ae"
+        )
+        let newDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#841803ea",
+            name: "AccessibilityTestApp#841803ea",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "841803ea"
+        )
+
+        var registry = DiscoveryRegistry()
+
+        XCTAssertEqual(registry.recordFound(oldDevice), [.found(oldDevice)])
+        XCTAssertEqual(registry.devices, [oldDevice])
+        XCTAssertEqual(
+            registry.recordFound(newDevice),
+            [.lost(oldDevice), .found(newDevice)]
+        )
+        XCTAssertEqual(registry.devices, [newDevice])
+    }
+
+    func testDiscoveryRegistryPromotesNewestSiblingWhenCurrentAdDisappears() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let oldDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "a18032ae"
+        )
+        let newDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#841803ea",
+            name: "AccessibilityTestApp#841803ea",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "841803ea"
+        )
+
+        var registry = DiscoveryRegistry()
+        _ = registry.recordFound(oldDevice)
+        _ = registry.recordFound(newDevice)
+
+        XCTAssertEqual(
+            registry.recordLost(serviceName: newDevice.id),
+            [.lost(newDevice), .found(oldDevice)]
+        )
+        XCTAssertEqual(registry.devices, [oldDevice])
+    }
+
+    func testDiscoveryRegistryIgnoresHiddenSiblingRemoval() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let oldDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#a18032ae",
+            name: "AccessibilityTestApp#a18032ae",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "a18032ae"
+        )
+        let newDevice = DiscoveredDevice(
+            id: "AccessibilityTestApp#841803ea",
+            name: "AccessibilityTestApp#841803ea",
+            endpoint: endpoint,
+            tokenHash: "deadbeef",
+            installationId: "install-1",
+            instanceId: "841803ea"
+        )
+
+        var registry = DiscoveryRegistry()
+        _ = registry.recordFound(oldDevice)
+        _ = registry.recordFound(newDevice)
+
+        XCTAssertTrue(registry.recordLost(serviceName: oldDevice.id).isEmpty)
+        XCTAssertEqual(registry.devices, [newDevice])
     }
 
     // MARK: - Array first(matching:)
