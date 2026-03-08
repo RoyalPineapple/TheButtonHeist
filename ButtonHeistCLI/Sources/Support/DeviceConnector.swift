@@ -66,9 +66,10 @@ final class DeviceConnector {
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
         client.onDisconnected = { reason in if connectionError == nil { connectionError = reason } }
-        client.onTokenReceived = { token in
-            // Always output — callers parse this for session reuse
-            logStatus("BUTTONHEIST_TOKEN=\(token)")
+        client.onAuthApproved = { token in
+            if let token {
+                logStatus("BUTTONHEIST_TOKEN=\(token)")
+            }
         }
         client.onAuthFailed = { reason in
             connectionError = FenceError.authFailed(reason)

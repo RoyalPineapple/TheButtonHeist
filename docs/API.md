@@ -379,13 +379,13 @@ public var onDisconnected: ((DisconnectReason) -> Void)?
 
 Called when disconnected. The `DisconnectReason` indicates why the connection was closed (see [DisconnectReason](#disconnectreason)).
 
-##### onTokenReceived
+##### onAuthApproved
 
 ```swift
-public var onTokenReceived: ((String) -> Void)?
+public var onAuthApproved: ((String?) -> Void)?
 ```
 
-Called when a token is received via on-device UI approval. The client should store this token and set it as `client.token` for future connections to skip the approval flow. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
+Called when the connection is approved (via token match or on-device UI). For driver connections, the token is provided so the client can store it for future connections. For observer connections, the token is `nil`. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
 ##### onSessionLocked
 
@@ -571,11 +571,11 @@ public var onStatus: ((String) -> Void)?
 ```
 Called with status messages during connection lifecycle (searching, connecting, reconnecting).
 
-##### onTokenReceived
+##### onAuthApproved
 ```swift
-public var onTokenReceived: ((String) -> Void)?
+public var onAuthApproved: ((String?) -> Void)?
 ```
-Called when a token is received via on-device UI approval.
+Called when the connection is approved. Token is `nil` for observer connections.
 
 #### Methods
 

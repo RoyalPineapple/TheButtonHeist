@@ -45,7 +45,7 @@ public final class TheMastermind {
     public var onRecordingStarted: (() -> Void)?
     public var onRecording: ((RecordingPayload) -> Void)?
     public var onRecordingError: ((String) -> Void)?
-    public var onTokenReceived: ((String?) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
     public var onAuthFailed: ((String) -> Void)?
     public var onInteraction: ((InteractionEvent) -> Void)?
@@ -178,7 +178,7 @@ public final class TheMastermind {
 
         wheelman.onAuthApproved = { [weak self] approvedToken in
             guard let self else { return }
-            self.onTokenReceived?(approvedToken)
+            self.onAuthApproved?(approvedToken)
         }
 
         wheelman.onSessionLocked = { [weak self] payload in

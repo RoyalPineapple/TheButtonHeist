@@ -42,7 +42,7 @@ graph TD
             OnAction["onActionResult"]
             OnScreen["onScreen"]
             OnRec["onRecordingStarted / onRecording / onRecordingError"]
-            OnToken["onTokenReceived"]
+            OnToken["onAuthApproved"]
             OnAuth["onAuthFailed / onSessionLocked"]
         end
     end

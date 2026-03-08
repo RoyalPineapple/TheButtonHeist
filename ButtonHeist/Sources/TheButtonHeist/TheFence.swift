@@ -422,7 +422,7 @@ public final class TheFence {
     public var onStatus: ((String) -> Void)? {
         didSet { client.wheelman.onStatus = onStatus }
     }
-    public var onTokenReceived: ((String?) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
 
     private let config: Configuration
     private let client = TheMastermind()
@@ -434,11 +434,11 @@ public final class TheFence {
         self.client.forceSession = configuration.forceSession
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = true
-        self.client.onTokenReceived = { [weak self] token in
+        self.client.onAuthApproved = { [weak self] token in
             if let token {
                 self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
             }
-            self?.onTokenReceived?(token)
+            self?.onAuthApproved?(token)
         }
     }
 
