@@ -44,7 +44,7 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Idle timeout in seconds — exit if no command received (0 = disabled, default: \(Int(SessionDefaults.sessionTimeout)))")
     var sessionTimeout: Double = SessionDefaults.sessionTimeout
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
         let repl = ReplSession(deviceFilter: device,

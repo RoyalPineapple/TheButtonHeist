@@ -31,7 +31,7 @@ struct TypeCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         guard text != nil || delete != nil else {
             throw ValidationError("Must specify --text, --delete, or both")

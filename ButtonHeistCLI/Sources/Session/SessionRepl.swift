@@ -2,7 +2,7 @@ import Foundation
 import Darwin
 import ButtonHeist
 
-@MainActor
+@ButtonHeistActor
 final class ReplSession {
     private let format: OutputFormat
     private let fence: TheFence
@@ -148,7 +148,7 @@ final class ReplSession {
 
     // MARK: - Human-Friendly Input Parser
 
-    private static let humanHelp = """
+    nonisolated static let humanHelp = """
         Commands (type a command, or use JSON for full control):
 
         Quick reference:
@@ -190,7 +190,7 @@ final class ReplSession {
         JSON input still works: {"command":"one_finger_tap","identifier":"btn"}
         """
 
-    private static let commandAliases: [String: String] = [
+    private nonisolated static let commandAliases: [String: String] = [
         "tap": "one_finger_tap",
         "ui": "get_interface",
         "type": "type_text",
@@ -201,19 +201,19 @@ final class ReplSession {
         "record": "start_recording",
     ]
 
-    private static let directionWords: Set<String> = [
+    private nonisolated static let directionWords: Set<String> = [
         "up", "down", "left", "right", "next", "previous"
     ]
 
-    private static let edgeWords: Set<String> = [
+    private nonisolated static let edgeWords: Set<String> = [
         "top", "bottom", "left", "right"
     ]
 
-    private static let directionCommands: Set<String> = [
+    private nonisolated static let directionCommands: Set<String> = [
         "swipe", "scroll"
     ]
 
-    static func parseHumanInput(_ line: String) -> [String: Any] {
+    nonisolated static func parseHumanInput(_ line: String) -> [String: Any] {
         let tokens = tokenize(line)
         guard let first = tokens.first else { return [:] }
 
@@ -247,7 +247,7 @@ final class ReplSession {
         return result
     }
 
-    private static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
+    private nonisolated static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
         guard !positional.isEmpty else { return }
 
         switch command {
@@ -306,7 +306,7 @@ final class ReplSession {
         }
     }
 
-    private static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
+    private nonisolated static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
         guard let first = tokens.first else { return }
         if first.hasPrefix("#"), let order = Int(first.dropFirst()) {
             result["order"] = order
@@ -315,7 +315,7 @@ final class ReplSession {
         }
     }
 
-    private static func tokenize(_ line: String) -> [String] {
+    private nonisolated static func tokenize(_ line: String) -> [String] {
         var tokens: [String] = []
         var current = ""
         var inQuote: Character?

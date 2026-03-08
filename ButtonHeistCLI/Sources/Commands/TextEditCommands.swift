@@ -18,7 +18,7 @@ struct CopyCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         try await sendEditAction("copy", connection: connection, timeout: timeout, format: output.format)
     }
@@ -38,7 +38,7 @@ struct PasteCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         try await sendEditAction("paste", connection: connection, timeout: timeout, format: output.format)
     }
@@ -58,7 +58,7 @@ struct CutCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         try await sendEditAction("cut", connection: connection, timeout: timeout, format: output.format)
     }
@@ -78,7 +78,7 @@ struct SelectCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         try await sendEditAction("select", connection: connection, timeout: timeout, format: output.format)
     }
@@ -98,7 +98,7 @@ struct SelectAllCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         try await sendEditAction("selectAll", connection: connection, timeout: timeout, format: output.format)
     }
@@ -106,7 +106,7 @@ struct SelectAllCommand: AsyncParsableCommand {
 
 // MARK: - Shared Helper
 
-@MainActor
+@ButtonHeistActor
 private func sendEditAction(_ action: String, connection: ConnectionOptions,
                              timeout: Double, format: OutputFormat?) async throws {
     let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)

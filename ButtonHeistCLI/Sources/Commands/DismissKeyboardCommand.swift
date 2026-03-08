@@ -15,7 +15,7 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     mutating func run() async throws {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
         try await connector.connect()

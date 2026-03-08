@@ -84,11 +84,12 @@ struct DiscoveryRegistry {
     }
 }
 
-@MainActor
+@ButtonHeistActor
 public final class DeviceDiscovery {
 
     private var browser: NWBrowser?
     private var registry = DiscoveryRegistry()
+    private let browserQueue = DispatchQueue(label: "com.buttonheist.thewheelman.discovery.browser")
 
     public var discoveredDevices: [DiscoveredDevice] {
         registry.devices
@@ -112,20 +113,20 @@ public final class DeviceDiscovery {
         )
 
         browser?.browseResultsChangedHandler = { [weak self] results, changes in
-            Task { @MainActor in
+            Task { [weak self] in
                 logger.info("Results changed: \(results.count) results, \(changes.count) changes")
-                self?.handleResults(results, changes: changes)
+                await self?.handleResults(results, changes: changes)
             }
         }
 
         browser?.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
+            Task { [weak self] in
                 logger.info("Browser state: \(String(describing: state))")
-                self?.onStateChange?(state == .ready)
+                await self?.handleStateUpdate(state)
             }
         }
 
-        browser?.start(queue: .main)
+        browser?.start(queue: browserQueue)
         logger.info("Browser started")
     }
 
@@ -133,6 +134,10 @@ public final class DeviceDiscovery {
         browser?.cancel()
         browser = nil
         registry = DiscoveryRegistry()
+    }
+
+    private func handleStateUpdate(_ state: NWBrowser.State) {
+        onStateChange?(state == .ready)
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>, changes: Set<NWBrowser.Result.Change>) {

@@ -16,7 +16,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
-    @MainActor
+    @ButtonHeistActor
     func run() async throws {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
         try await connector.connect()
