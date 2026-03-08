@@ -1415,7 +1415,7 @@ OPTIONS:
 
 ### buttonheist session
 
-Start a persistent interactive session that accepts JSON commands on stdin and emits JSON responses on stdout.
+Start a persistent interactive session that accepts commands on stdin and writes responses to stdout. Interactive mode accepts plain-text commands (e.g. `tap myButton`). JSON input is always accepted (e.g. `{"command":"one_finger_tap"}`). Output is human-readable by default, compact JSON when piped.
 
 ```
 USAGE: buttonheist session [OPTIONS]
@@ -1431,17 +1431,35 @@ OPTIONS:
 
 The `--session-timeout` flag exits the session if no commands are received within the specified period. This prevents abandoned agent processes from holding sessions indefinitely. Also configurable via the `BUTTONHEIST_SESSION_TIMEOUT` environment variable.
 
-In `--format json` mode, each line of stdin is parsed as a JSON object with a `command` field. Each command produces exactly one JSON response line on stdout.
+**Human-friendly input:** In interactive mode, commands can be typed as plain text with positional arguments. Command aliases provide shortcuts for common operations. Use `help` to see all available commands.
+
+| Shorthand | Resolves to |
+|-----------|------------|
+| `tap <id>` | `one_finger_tap` |
+| `ui` | `get_interface` |
+| `screen` | `get_screen` |
+| `type "text"` | `type_text` |
+| `press <id>` | `long_press` |
+| `devices` | `list_devices` |
+| `idle` | `wait_for_idle` |
+| `record` | `start_recording` |
+
+Elements can be targeted by accessibility identifier (`tap myButton`), by order number (`tap #3`), or by coordinates (`tap 100 200`). Key=value pairs work for any parameter (`press identifier=btn duration=2`).
+
+**JSON input:** Each line of stdin can also be a JSON object with a `command` field. Each command produces exactly one response. Use `--format json` to force JSON output.
 
 ```bash
 # Start an interactive session
-buttonheist session --format json
+buttonheist session
+
+# Plain-text commands
+echo 'tap myButton' | buttonheist session --format json
+
+# JSON commands still work
+echo '{"command":"get_interface"}' | buttonheist session --format json
 
 # Start a session with a 5-minute idle timeout (for agent use)
 buttonheist session --format json --session-timeout 300
-
-# Commands are sent as JSON lines; responses come back as JSON lines
-echo '{"command":"get_interface"}' | buttonheist session --format json --once
 ```
 
 This command is useful for persistent connections where multiple commands need to share a single TCP session.

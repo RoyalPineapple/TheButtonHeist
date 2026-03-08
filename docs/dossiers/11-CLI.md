@@ -35,12 +35,12 @@ graph TD
             StopRec["stop-recording"]
             TextEdit["copy/paste/cut/select/select-all"]
             Dismiss["dismiss-keyboard"]
-            Session["session (SessionRunner)"]
+            Session["session (ReplSession)"]
         end
 
         subgraph Patterns["Connection Patterns"]
             Direct["DeviceConnector - Connect → Send → Wait → Disconnect"]
-            REPL["SessionRunner → TheFence - persistent connection - stdin JSON → stdout JSON"]
+            REPL["ReplSession → TheFence - persistent connection - stdin commands → stdout responses"]
         end
     end
 
@@ -73,11 +73,11 @@ flowchart LR
     end
 
     subgraph Pattern2["Pattern 2: Session (REPL)"]
-        S1["SessionRunner"] --> S2["TheFence"]
+        S1["ReplSession"] --> S2["TheFence"]
         S2 --> S3["persistent connection"]
-        S3 --> S4["read JSON from stdin"]
+        S3 --> S4["read command from stdin"]
         S4 --> S5["execute via TheFence"]
-        S5 --> S6["write JSON to stdout"]
+        S5 --> S6["write response to stdout"]
         S6 --> S4
     end
 ```
