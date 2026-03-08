@@ -8,7 +8,7 @@ import TheScore
 final class AuthFailureTests: XCTestCase {
 
     private var server: SimpleSocketServer!
-    @MainActor private var deviceConnection: DeviceConnection?
+    @ButtonHeistActor private var deviceConnection: DeviceConnection?
 
     override func setUp() {
         super.setUp()
@@ -18,7 +18,7 @@ final class AuthFailureTests: XCTestCase {
     override func tearDown() {
         server.stop()
         server = nil
-        Task { @MainActor in
+        Task { @ButtonHeistActor in
             self.deviceConnection?.disconnect()
             self.deviceConnection = nil
         }
@@ -54,7 +54,7 @@ final class AuthFailureTests: XCTestCase {
 
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "wrong-token")
             conn.onAuthFailed = { reason in
                 XCTAssertTrue(reason.contains("Invalid token"))
@@ -92,7 +92,7 @@ final class AuthFailureTests: XCTestCase {
         var callOrder: [String] = []
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await MainActor.run {
+        await ButtonHeistActor.run {
             let conn = DeviceConnection(device: device, token: "wrong-token")
             conn.onAuthFailed = { _ in
                 callOrder.append("authFailed")
@@ -111,7 +111,7 @@ final class AuthFailureTests: XCTestCase {
         await fulfillment(of: [disconnectedFired], timeout: 5.0)
 
         // Verify authFailed fires before disconnected
-        await MainActor.run {
+        await ButtonHeistActor.run {
             XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
         }
     }

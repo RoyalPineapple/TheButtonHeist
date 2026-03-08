@@ -140,38 +140,38 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9EECCF21DA365EF0D50A9494"
+               BuildableName = "TheWheelman.framework"
+               BlueprintName = "TheWheelman"
+               ReferencedContainer = "container:ButtonHeist.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "22A5F9EB5F3E30C5EB5D3623"
+               BuildableName = "TheWheelmanTests.xctest"
+               BlueprintName = "TheWheelmanTests"
+               ReferencedContainer = "container:ButtonHeist.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "E8F47D029AA78A88203C022B"
                BuildableName = "UIKitTestApp.app"
                BlueprintName = "UIKitTestApp"
                ReferencedContainer = "container:TestApp/TestApp.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "3319961F53E8E0656480630F"
-               BuildableName = "Wheelman.framework"
-               BlueprintName = "Wheelman"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "69FF60E6A415001108B6AECC"
-               BuildableName = "WheelmanTests.xctest"
-               BlueprintName = "WheelmanTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -220,9 +220,9 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "69FF60E6A415001108B6AECC"
-               BuildableName = "WheelmanTests.xctest"
-               BlueprintName = "WheelmanTests"
+               BlueprintIdentifier = "22A5F9EB5F3E30C5EB5D3623"
+               BuildableName = "TheWheelmanTests.xctest"
+               BlueprintName = "TheWheelmanTests"
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </TestableReference>

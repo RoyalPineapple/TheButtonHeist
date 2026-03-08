@@ -2,7 +2,7 @@ import XCTest
 @testable import ButtonHeist
 import TheScore
 
-@MainActor
+@ButtonHeistActor
 final class TheMastermindTests: XCTestCase {
 
     func testInitialState() {

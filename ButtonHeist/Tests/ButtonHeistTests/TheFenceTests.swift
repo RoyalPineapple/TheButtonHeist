@@ -135,7 +135,7 @@ final class TheFenceTests: XCTestCase {
 
     // MARK: - TheFence execute (error cases)
 
-    @MainActor
+    @ButtonHeistActor
     func testExecuteWithMissingCommand() async {
         let fence = TheFence()
         do {
@@ -152,7 +152,7 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
-    @MainActor
+    @ButtonHeistActor
     func testExecuteHelp() async throws {
         let fence = TheFence()
         let response = try await fence.execute(request: ["command": "help"])
@@ -164,7 +164,7 @@ final class TheFenceTests: XCTestCase {
         }
     }
 
-    @MainActor
+    @ButtonHeistActor
     func testExecuteQuit() async throws {
         let fence = TheFence()
         let response = try await fence.execute(request: ["command": "quit"])
