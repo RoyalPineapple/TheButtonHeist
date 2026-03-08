@@ -45,8 +45,10 @@ graph TB
 **Purpose**: Shared types and protocol definitions for cross-platform communication.
 
 **Key Types**:
-- `ClientMessage` - Messages from client to server (28 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, and recording control)
-- `ServerMessage` - Messages from server to client (14 cases including auth challenge/failure/approval, recording events)
+- `RequestEnvelope` - Wraps `ClientMessage` with an optional `requestId` for response correlation
+- `ResponseEnvelope` - Wraps `ServerMessage` echoing the `requestId` back; push broadcasts use `requestId: nil`
+- `ClientMessage` - Messages from client to server (29 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, and watch)
+- `ServerMessage` - Messages from server to client (15 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
@@ -56,12 +58,13 @@ graph TB
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 - `RecordingConfig` - Recording configuration (fps, scale, inactivity timeout, max duration)
 - `RecordingPayload` - Completed recording with base64 H.264/MP4 video, metadata, and optional interaction log
-- `InteractionEvent` - Single recorded interaction with command, result, and optional interface delta
+- `InteractionEvent` - Single recorded interaction with command, result, and optional interface delta (also broadcast live to observers)
+- `WatchPayload` - Payload for watch (observer) connections with optional token
 
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 3.1 with token-based authentication and session locking
+- Protocol version 4.0 with envelope correlation, watch mode, and session locking
 
 ### TheInsideJob
 
@@ -134,7 +137,7 @@ When the framework loads:
 - OS-assigned port (advertised via Bonjour)
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking (v3.1)
+- Token-based authentication with session locking, envelope correlation, and watch mode (v4.0)
 
 ### TheSafecracker (Touch Gesture & Text Input System)
 
@@ -205,6 +208,7 @@ TheSafecracker (stateful, @MainActor)
 - Session locking: single-driver exclusivity with release timer
   - **Release timer** (`INSIDEJOB_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
 - Track active session driver identity and connections
+- **Observer support**: Track read-only observer connections (`observerClients`). Observers are auto-approved by default (no token required). Set `INSIDEJOB_WATCH_AUTH=1` (env) or `InsideJobWatchAuth=true` (Info.plist) to require a valid token for watch connections.
 
 **Integration**: TheMuscle communicates back to TheInsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
@@ -322,7 +326,9 @@ TheMastermind (@Observable, @MainActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, TheWheelman automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connect. Note: TheFence explicitly disables `autoSubscribe` for CLI/MCP use.
+**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, TheWheelman automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connect. Note: TheFence explicitly disables `autoSubscribe` for CLI/MCP use. The `watch` command enables `autoSubscribe` for its read-only observer connection.
+
+**Observe Mode**: When `observeMode` is set on TheWheelman, the client sends `watch(WatchPayload)` instead of `authenticate` in response to `authRequired`. This establishes a read-only observer connection that receives all broadcasts (interface updates, screen captures, interaction events) without claiming a session lock. Observers coexist with active driver sessions.
 
 **Connection State Machine**:
 ```mermaid
@@ -438,6 +444,42 @@ sequenceDiagram
     HC->>IJ: requestScreen
 ```
 
+### Watch (Observer) Connection Flow
+
+```mermaid
+sequenceDiagram
+    participant WC as Watch Client
+    participant IJ as TheInsideJob
+    participant TM as TheMuscle
+
+    WC->>IJ: connect(to: device)
+    Note over WC,IJ: TCP connection established
+    IJ-->>WC: authRequired
+
+    WC->>IJ: watch(token:"")
+    Note over IJ: TheMuscle routes to handleWatchRequest
+
+    alt Default (INSIDEJOB_WATCH_AUTH not set)
+        TM-->>IJ: auto-approved
+        IJ-->>WC: info(ServerInfo)
+    else INSIDEJOB_WATCH_AUTH=1
+        alt Valid token
+            TM-->>IJ: approved
+            IJ-->>WC: info(ServerInfo)
+        else Invalid/empty token
+            IJ-->>WC: authFailed
+            IJ-xWC: disconnect
+        end
+    end
+
+    Note over WC: Auto-subscribed to broadcasts
+    IJ-->>WC: interface (pushed on change)
+    IJ-->>WC: screen (pushed on change)
+    IJ-->>WC: interaction (when driver acts)
+```
+
+Observers never claim a session lock and cannot send commands. They receive the same `interface`, `screen`, and `interaction` broadcasts as subscribed drivers.
+
 ### Interface Update Flow
 
 ```mermaid
@@ -524,10 +566,10 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 3.1
+- Protocol version: 4.0
 - Transport: TCP socket (Network framework NWListener/NWConnection)
-- Authentication: Token-based (required for all connections), with optional on-device UI approval for auto-generated tokens
-- Session locking: Single-driver exclusivity with release timer on disconnect
+- Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections are auto-approved by default.
+- Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`)
 - Encoding: Newline-delimited JSON (UTF-8)
 - Port: OS-assigned (advertised via Bonjour)
@@ -582,6 +624,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 | `INSIDEJOB_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
+| `INSIDEJOB_WATCH_AUTH` / `InsideJobWatchAuth` | Set to `"1"` (env) or `true` (plist) to require a valid token for watch (observer) connections | not set (observers auto-approved) |
 
 ### Info.plist Keys (fallback)
 ```xml

@@ -7,16 +7,16 @@ extension TheInsideJob {
 
     // MARK: - Screen Request Handler
 
-    func handleScreen(respond: @escaping (Data) -> Void) {
+    func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
 
         guard let (image, bounds) = bagman.captureScreen() else {
-            sendMessage(.error("Could not access app window"), respond: respond)
+            sendMessage(.error("Could not access app window"), requestId: requestId, respond: respond)
             return
         }
 
         guard let pngData = image.pngData() else {
-            sendMessage(.error("Failed to encode screen as PNG"), respond: respond)
+            sendMessage(.error("Failed to encode screen as PNG"), requestId: requestId, respond: respond)
             return
         }
 
@@ -26,7 +26,7 @@ extension TheInsideJob {
             height: bounds.height
         )
 
-        sendMessage(.screen(payload), respond: respond)
+        sendMessage(.screen(payload), requestId: requestId, respond: respond)
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
     }
 
@@ -41,16 +41,16 @@ extension TheInsideJob {
             height: bounds.height
         )
 
-        if let data = try? JSONEncoder().encode(ServerMessage.screen(screenPayload)) {
+        if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .screen(screenPayload))) {
             broadcastToSubscribed(data)
         }
     }
 
     // MARK: - Screen Recording
 
-    func handleStartRecording(_ config: RecordingConfig, respond: @escaping (Data) -> Void) {
+    func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) {
         if stakeout?.state == .recording {
-            sendMessage(.recordingError("Recording already in progress"), respond: respond)
+            sendMessage(.recordingError("Recording already in progress"), requestId: requestId, respond: respond)
             return
         }
 
@@ -61,11 +61,11 @@ extension TheInsideJob {
         recorder.onRecordingComplete = { [weak self] result in
             switch result {
             case .success(let payload):
-                if let data = try? JSONEncoder().encode(ServerMessage.recording(payload)) {
+                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .recording(payload))) {
                     self?.broadcastToAll(data)
                 }
             case .failure(let error):
-                if let data = try? JSONEncoder().encode(ServerMessage.recordingError(error.localizedDescription)) {
+                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .recordingError(error.localizedDescription))) {
                     self?.broadcastToAll(data)
                 }
             }
@@ -77,23 +77,23 @@ extension TheInsideJob {
         bagman.stakeout = recorder
         do {
             try recorder.startRecording(config: config)
-            sendMessage(.recordingStarted, respond: respond)
+            sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
-            sendMessage(.recordingError(error.localizedDescription), respond: respond)
+            sendMessage(.recordingError(error.localizedDescription), requestId: requestId, respond: respond)
             stakeout = nil
             bagman.stakeout = nil
         }
     }
 
-    func handleStopRecording(respond: @escaping (Data) -> Void) {
+    func handleStopRecording(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         guard let stakeout else {
-            sendMessage(.recordingError("No recording in progress"), respond: respond)
+            sendMessage(.recordingError("No recording in progress"), requestId: requestId, respond: respond)
             return
         }
         if stakeout.state == .recording {
             stakeout.stopRecording(reason: .manual)
         }
-        sendMessage(.recordingStopped, respond: respond)
+        sendMessage(.recordingStopped, requestId: requestId, respond: respond)
     }
 }
 

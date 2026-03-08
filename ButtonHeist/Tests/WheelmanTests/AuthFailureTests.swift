@@ -40,16 +40,14 @@ final class AuthFailureTests: XCTestCase {
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
             // Send authRequired then authFailed (simulating wrong token rejection)
-            let authReq = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(authReq) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, _, respond in
             // Reject with authFailed
-            let failed = ServerMessage.authFailed("Invalid token. Retry without a token to request a fresh session.")
-            if let data = try? JSONEncoder().encode(failed) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authFailed("Invalid token. Retry without a token to request a fresh session."))) {
                 respond(data)
             }
         }
@@ -80,15 +78,13 @@ final class AuthFailureTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let authReq = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(authReq) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, _, respond in
-            let failed = ServerMessage.authFailed("Invalid token. Retry without a token to request a fresh session.")
-            if let data = try? JSONEncoder().encode(failed) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authFailed("Invalid token. Retry without a token to request a fresh session."))) {
                 respond(data)
             }
         }

@@ -8,14 +8,16 @@
 
 TheScore is the protocol bible. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` - 28 cases)
-2. **All server-to-client messages** (`ServerMessage` - 14 cases)
-3. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
-4. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
-5. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
-6. **Interaction events** (`InteractionEvent`) - wire-level command/result recording (NEW)
-7. **Server info** (`ServerInfo`)
-8. **Protocol constants** (service type, version)
+1. **All client-to-server messages** (`ClientMessage` - 29 cases, including `watch`)
+2. **All server-to-client messages** (`ServerMessage` - 15 cases, including `interaction`)
+3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
+4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
+5. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
+6. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
+7. **Interaction events** (`InteractionEvent`) - wire-level command/result recording, also broadcast live to observers
+8. **Watch payload** (`WatchPayload`) - observer connection parameters
+9. **Server info** (`ServerInfo`)
+10. **Protocol constants** (service type, version)
 
 ## Architecture Diagram
 
@@ -23,8 +25,8 @@ TheScore is the protocol bible. It defines:
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
         Messages["Messages.swift - Constants: serviceType, protocolVersion"]
-        Client["ClientMessages.swift - ClientMessage enum (28 cases)"]
-        Server["ServerMessages.swift - ServerMessage enum (14 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
+        Client["ClientMessages.swift - RequestEnvelope, ClientMessage enum (29 cases)"]
+        Server["ServerMessages.swift - ResponseEnvelope, ServerMessage enum (15 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
         Elements["Elements.swift - HeistElement, Interface, - ElementNode, ElementAction, - Group, HeistCustomContent"]
     end
 
@@ -49,7 +51,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (28 cases)"]
+    subgraph ClientMessages["ClientMessage (29 cases)"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
         Ping["ping"]
@@ -59,9 +61,10 @@ graph TD
         Scroll["scroll / scrollToVisible / scrollToEdge"]
         Text["typeText / editAction / resignFirstResponder"]
         Recording["startRecording / stopRecording"]
+        Watch["watch(WatchPayload)"]
     end
 
-    subgraph ServerMessages["ServerMessage (14 cases)"]
+    subgraph ServerMessages["ServerMessage (15 cases)"]
         AuthResp["authRequired / authFailed / authApproved"]
         Info["info(ServerInfo)"]
         Data["interface(Interface) / screen(ScreenPayload)"]
@@ -70,6 +73,7 @@ graph TD
         Action["actionResult(ActionResult)"]
         Session["sessionLocked(SessionLockedPayload)"]
         Rec["recordingStarted / recordingStopped - recording(RecordingPayload) / recordingError(String)"]
+        Interaction["interaction(InteractionEvent)"]
     end
 ```
 
@@ -149,7 +153,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"3.1"` (token auth + session locking)
+- **Protocol version:** `"4.0"` (envelope correlation + watch mode)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with standard `JSONEncoder`/`JSONDecoder`
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
@@ -178,7 +182,7 @@ classDiagram
 ### LOW PRIORITY
 
 **Protocol version is a string, not a numeric**
-- `protocolVersion = "3.1"` - no formal version comparison logic exists
+- `protocolVersion = "4.0"` - no formal version comparison logic exists
 - Clients and servers don't negotiate or validate versions
 - If a version mismatch occurs, messages may silently fail to decode
 

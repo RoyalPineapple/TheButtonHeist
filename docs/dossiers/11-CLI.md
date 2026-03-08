@@ -9,7 +9,7 @@
 The CLI provides the canonical test client interface:
 
 1. **Subcommand routing** via swift-argument-parser
-2. **Two connection patterns**: direct (single command via DeviceConnector) and session (REPL via TheFence)
+2. **Three connection patterns**: direct (single command via DeviceConnector), session (REPL via TheFence), and watch (read-only observer via WatchStream)
 3. **Output format auto-detection**: human for TTY, JSON for piped
 4. **Exit code contract** for scripting (0-4, 99)
 5. **All TheFence commands** accessible via CLI flags
@@ -36,11 +36,13 @@ graph TD
             TextEdit["copy/paste/cut/select/select-all"]
             Dismiss["dismiss-keyboard"]
             Session["session (ReplSession)"]
+            Watch["watch (WatchStream)"]
         end
 
         subgraph Patterns["Connection Patterns"]
             Direct["DeviceConnector - Connect → Send → Wait → Disconnect"]
             REPL["ReplSession → TheFence - persistent connection - stdin commands → stdout responses"]
+            WatchPattern["WatchStream → TheMastermind - read-only observer - streams JSON events to stdout"]
         end
     end
 
@@ -56,12 +58,14 @@ graph TD
     TextEdit --> Direct
     Dismiss --> Direct
     Session --> REPL
+    Watch --> WatchPattern
 
     Direct --> TheMastermind["TheMastermind"]
     REPL --> TheFence["TheFence"]
+    WatchPattern --> TheMastermind
 ```
 
-## Two Connection Patterns
+## Three Connection Patterns
 
 ```mermaid
 flowchart LR
@@ -79,6 +83,14 @@ flowchart LR
         S4 --> S5["execute via TheFence"]
         S5 --> S6["write response to stdout"]
         S6 --> S4
+    end
+
+    subgraph Pattern3["Pattern 3: Watch (Observer)"]
+        W1["WatchStream"] --> W2["TheMastermind"]
+        W2 --> W3["watch mode connection"]
+        W3 --> W4["receive broadcasts"]
+        W4 --> W5["emit JSON to stdout"]
+        W5 --> W4
     end
 ```
 

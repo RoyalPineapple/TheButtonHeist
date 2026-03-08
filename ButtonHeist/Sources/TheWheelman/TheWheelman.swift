@@ -33,21 +33,23 @@ public final class TheWheelman {
 
     public var onConnected: ((ServerInfo) -> Void)?
     public var onDisconnected: ((DisconnectReason) -> Void)?
-    public var onInterface: ((Interface) -> Void)?
-    public var onActionResult: ((ActionResult) -> Void)?
-    public var onScreen: ((ScreenPayload) -> Void)?
+    public var onInterface: ((Interface, String?) -> Void)?
+    public var onActionResult: ((ActionResult, String?) -> Void)?
+    public var onScreen: ((ScreenPayload, String?) -> Void)?
     public var onRecordingStarted: (() -> Void)?
     public var onRecording: ((RecordingPayload) -> Void)?
     public var onRecordingError: ((String) -> Void)?
     public var onError: ((String) -> Void)?
-    public var onAuthApproved: ((String) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
     public var onAuthFailed: ((String) -> Void)?
+    public var onInteraction: ((InteractionEvent) -> Void)?
 
     // MARK: - Configuration
 
     public var token: String?
     public var forceSession: Bool = false
+    public var observeMode: Bool = false
     public var driverId: String?
     public var autoSubscribe: Bool = true
 
@@ -103,6 +105,7 @@ public final class TheWheelman {
         disconnect()
 
         connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: driverId)
+        connection?.observeMode = observeMode
 
         connection?.onConnected = { [weak self] in
             self?.connectedDevice = device
@@ -129,16 +132,16 @@ public final class TheWheelman {
             self.onConnected?(info)
         }
 
-        connection?.onInterface = { [weak self] payload in
-            self?.onInterface?(payload)
+        connection?.onInterface = { [weak self] payload, requestId in
+            self?.onInterface?(payload, requestId)
         }
 
-        connection?.onActionResult = { [weak self] result in
-            self?.onActionResult?(result)
+        connection?.onActionResult = { [weak self] result, requestId in
+            self?.onActionResult?(result, requestId)
         }
 
-        connection?.onScreen = { [weak self] payload in
-            self?.onScreen?(payload)
+        connection?.onScreen = { [weak self] payload, requestId in
+            self?.onScreen?(payload, requestId)
         }
 
         connection?.onRecordingStarted = { [weak self] in
@@ -168,6 +171,10 @@ public final class TheWheelman {
             self?.onAuthFailed?(reason)
         }
 
+        connection?.onInteraction = { [weak self] event in
+            self?.onInteraction?(event)
+        }
+
         connection?.connect()
     }
 
@@ -192,8 +199,8 @@ public final class TheWheelman {
 
     // MARK: - Commands
 
-    public func send(_ message: ClientMessage) {
-        connection?.send(message)
+    public func send(_ message: ClientMessage, requestId: String? = nil) {
+        connection?.send(message, requestId: requestId)
     }
 
     // MARK: - Keepalive

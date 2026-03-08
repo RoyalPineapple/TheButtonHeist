@@ -4,4 +4,4 @@ import Foundation
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "3.1"
+public let protocolVersion = "4.0"
