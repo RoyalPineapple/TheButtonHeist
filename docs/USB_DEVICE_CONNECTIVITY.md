@@ -51,7 +51,7 @@ TheInsideJob uses an OS-assigned port advertised via Bonjour. USB-connected devi
 buttonheist list
 
 # Connect to a USB device by name
-buttonheist --device "iPhone 15 Pro" watch --once
+buttonheist --device "iPhone 15 Pro" activate --identifier myButton
 
 # Take a screenshot over USB
 buttonheist --device "iPhone 15 Pro" screenshot --output screen.png
