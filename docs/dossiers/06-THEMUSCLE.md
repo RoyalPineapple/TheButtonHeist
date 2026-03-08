@@ -13,6 +13,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 3. **Session locking** - ensures only one "driver" controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
 5. **Force-takeover** - wire protocol field exists (`forceSession: Bool?`) but takeover logic is **not implemented** — different drivers always get `sessionLocked`
+6. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, auto-approves by default or validates token when `INSIDEJOB_WATCH_AUTH=1` (env) or `InsideJobWatchAuth=true` (plist) is set
 
 ## Architecture Diagram
 
@@ -25,7 +26,10 @@ graph TD
         Timer["Release Timer - fires when all connections drop"]
     end
 
+    WatchMgr["Observer Manager - observer tracking, auto-approve"]
+
     Client["Remote Client"] -->|authenticate(token)| AuthFlow
+    Client -->|watch(token)| WatchMgr
     AuthFlow -->|valid| SessionMgr
     AuthFlow -->|empty| UIPrompt["UIAlertController - Allow / Deny"]
     AuthFlow -->|invalid| Reject["authFailed + disconnect"]
@@ -100,6 +104,8 @@ stateDiagram-v2
 | Info.plist | `InsideJobToken` | auto-UUID | Fallback to env var |
 | Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Release timer (fires when all connections drop) |
 | Info.plist | `InsideJobSessionTimeout` | 30s | Fallback |
+| Environment | `INSIDEJOB_WATCH_AUTH` | not set | Set to `"1"` to require valid token for watch connections |
+| Info.plist | `InsideJobWatchAuth` | not set | Set to `true` to require valid token for watch connections |
 
 ## Items Flagged for Review
 

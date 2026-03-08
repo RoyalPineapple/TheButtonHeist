@@ -1,9 +1,23 @@
 import Foundation
 import CoreGraphics
 
+// MARK: - Response Envelope
+
+/// Wraps a server message with the echoed requestId for response correlation.
+/// Push broadcasts (subscription updates) use requestId = nil.
+public struct ResponseEnvelope: Codable, Sendable {
+    public let requestId: String?
+    public let message: ServerMessage
+
+    public init(requestId: String? = nil, message: ServerMessage) {
+        self.requestId = requestId
+        self.message = message
+    }
+}
+
 // MARK: - Server -> Client Messages
 
-public enum ServerMessage: Codable {
+public enum ServerMessage: Codable, Sendable {
     /// Server requires authentication (sent immediately on connection)
     case authRequired
 
@@ -47,6 +61,11 @@ public enum ServerMessage: Codable {
 
     /// Recording failed or was not active
     case recordingError(String)
+
+    // MARK: - Observer Broadcasts
+
+    /// An action was performed by the driver — broadcast to observers
+    case interaction(InteractionEvent)
 }
 
 // MARK: - Action Results
@@ -267,8 +286,8 @@ public enum ActionMethod: String, Codable, Sendable {
 
 /// Payload sent when a connection is approved via the on-device UI
 public struct AuthApprovedPayload: Codable, Sendable {
-    public let token: String
-    public init(token: String) { self.token = token }
+    public let token: String?
+    public init(token: String? = nil) { self.token = token }
 }
 
 public struct ServerInfo: Codable, Sendable {

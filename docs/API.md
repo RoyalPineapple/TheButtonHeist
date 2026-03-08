@@ -31,6 +31,7 @@ INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated eac
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
 INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
+INSIDEJOB_WATCH_AUTH=1               # Require valid token for watch (observer) connections (default: auto-approve)
 ```
 
 **Info.plist (fallback):**
@@ -378,13 +379,13 @@ public var onDisconnected: ((DisconnectReason) -> Void)?
 
 Called when disconnected. The `DisconnectReason` indicates why the connection was closed (see [DisconnectReason](#disconnectreason)).
 
-##### onTokenReceived
+##### onAuthApproved
 
 ```swift
-public var onTokenReceived: ((String) -> Void)?
+public var onAuthApproved: ((String?) -> Void)?
 ```
 
-Called when a token is received via on-device UI approval. The client should store this token and set it as `client.token` for future connections to skip the approval flow. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
+Called when the connection is approved (via token match or on-device UI). For driver connections, the token is provided so the client can store it for future connections. For observer connections, the token is `nil`. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
 ##### onSessionLocked
 
@@ -570,11 +571,11 @@ public var onStatus: ((String) -> Void)?
 ```
 Called with status messages during connection lifecycle (searching, connecting, reconnecting).
 
-##### onTokenReceived
+##### onAuthApproved
 ```swift
-public var onTokenReceived: ((String) -> Void)?
+public var onAuthApproved: ((String?) -> Void)?
 ```
-Called when a token is received via on-device UI approval.
+Called when the connection is approved. Token is `nil` for observer connections.
 
 #### Methods
 
@@ -763,7 +764,7 @@ Specialized accessibility actions. For general element interaction, use `activat
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "3.1"  // Protocol v3.1 with token auth and session locking
+public let protocolVersion = "4.0"  // Protocol v4.0 with envelope correlation and watch mode
 ```
 
 ### ConnectionState
@@ -997,7 +998,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "3.1")
+- `protocolVersion: String` - Protocol version (e.g., "4.0")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
@@ -1481,6 +1482,42 @@ OPTIONS:
   --timeout <seconds>     Connection timeout (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
+```
+
+### buttonheist watch
+
+Watch a live session as a read-only observer. Streams JSON events to stdout until killed with Ctrl+C. Does not require a token by default and does not claim a session lock — multiple observers can observe simultaneously alongside an active driver.
+
+```
+USAGE: buttonheist watch [OPTIONS]
+
+OPTIONS:
+  --device <filter>       Target a specific device by name, ID prefix, or index
+  -t, --timeout <seconds> Connection timeout (default: 30)
+  --token <token>         Auth token (only needed if server requires INSIDEJOB_WATCH_AUTH)
+```
+
+**Output**: Newline-delimited JSON objects, each with a `type` field:
+
+| Type | Description |
+|------|-------------|
+| `"info"` | Connection established, contains `ServerInfo` |
+| `"interface"` | UI hierarchy update |
+| `"interaction"` | Driver performed an action (contains command, result, delta) |
+
+**Examples:**
+```bash
+# Watch the first available device
+buttonheist watch
+
+# Watch a specific device
+buttonheist watch --device my-simulator
+
+# Pipe to jq for formatted output
+buttonheist watch | jq .
+
+# Watch with auth (when server requires it)
+buttonheist watch --token my-secret-token
 ```
 
 ---

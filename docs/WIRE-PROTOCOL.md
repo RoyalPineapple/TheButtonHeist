@@ -1,6 +1,6 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 3.1
+**Version**: 4.0
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (Wheelman, CLI, Python scripts).
 
@@ -43,27 +43,36 @@ sequenceDiagram
 
     Client->>Server: TCP Connect
     Server-->>Client: authRequired (auth challenge)
-    Client->>Server: authenticate(token)
 
-    alt Success + session acquired
+    alt Driver connection
+        Client->>Server: authenticate(token)
+
+        alt Success + session acquired
+            Server-->>Client: info
+        else Bad token
+            Server-->>Client: authFailed → disconnect
+        else v3.1: session held by another driver
+            Server-->>Client: sessionLocked → disconnect
+        end
+
+        Client->>Server: subscribe (enable auto-updates)
+        Client->>Server: requestInterface
+        Client->>Server: requestScreen
+        Server-->>Client: interface
+        Server-->>Client: screen
+
+        Client->>Server: activate / touchTap / touchDrag ...
+        Server-->>Client: actionResult
+    else Watch (observer) connection
+        Client->>Server: watch(token:"")
+        Note over Server: Auto-approved (default)<br>or token-checked if INSIDEJOB_WATCH_AUTH=1
         Server-->>Client: info
-    else Bad token
-        Server-->>Client: authFailed → disconnect
-    else v3.1: session held by another driver
-        Server-->>Client: sessionLocked → disconnect
+        Note over Client: Auto-subscribed to broadcasts
     end
-
-    Client->>Server: subscribe (enable auto-updates)
-    Client->>Server: requestInterface
-    Client->>Server: requestScreen
-    Server-->>Client: interface
-    Server-->>Client: screen
-
-    Client->>Server: activate / touchTap / touchDrag ...
-    Server-->>Client: actionResult
 
     Server-->>Client: interface (auto-pushed on change)
     Server-->>Client: screen (auto-pushed on change)
+    Server-->>Client: interaction (broadcast after driver actions)
 
     Client->>Server: ping
     Server-->>Client: pong
@@ -74,6 +83,27 @@ sequenceDiagram
 ## Message Format
 
 All messages are JSON objects terminated by a newline (`\n`). Swift enums with associated values encode with `_0` wrapper.
+
+### Request/Response Envelopes
+
+All messages are wrapped in envelope types for request-response correlation:
+
+**Client → Server** (`RequestEnvelope`):
+```json
+{"requestId":"abc-123","message":{"activate":{"_0":{"identifier":"loginButton"}}}}
+```
+
+**Server → Client** (`ResponseEnvelope`):
+```json
+{"requestId":"abc-123","message":{"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}}
+```
+
+When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts (interface updates, screen captures, interaction events) have `requestId: null`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requestId` | `String?` | Optional correlation ID; echoed in the response |
+| `message` | `ClientMessage` / `ServerMessage` | The actual message payload |
 
 ## Client → Server Messages
 
@@ -404,6 +434,20 @@ Keepalive ping.
 {"ping":{}}
 ```
 
+### watch
+
+Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive all broadcasts (interface, screen, interaction events) but cannot send commands or claim a session.
+
+```json
+{"watch":{"_0":{"token":""}}}
+```
+
+By default, watch connections are auto-approved without a token. If the server has `INSIDEJOB_WATCH_AUTH=1` set, a valid token is required.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | `String` | Auth token (empty string for default open access) |
+
 ## Server → Client Messages
 
 ### authRequired
@@ -451,7 +495,7 @@ Sent after successful authentication. Contains device and app metadata.
 
 ```json
 {"info":{"_0":{
-  "protocolVersion":"3.1",
+  "protocolVersion":"4.0",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -642,6 +686,21 @@ Recording failed with an error.
 {"recordingError":{"_0":"AVAssetWriter failed to start"}}
 ```
 
+### interaction
+
+Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
+
+```json
+{"interaction":{"_0":{"timestamp":1709472045.123,"command":{"activate":{"_0":{"identifier":"loginButton"}}},"result":{"success":true,"method":"syntheticTap"},"interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}}}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | `Double` | Unix timestamp of the interaction |
+| `command` | `ClientMessage` | The command that triggered the interaction |
+| `result` | `ActionResult` | The result of the action |
+| `interfaceDelta` | `InterfaceDelta?` | What changed in the UI hierarchy |
+
 ### error
 
 Error message.
@@ -656,7 +715,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "3.1") |
+| `protocolVersion` | `String` | Protocol version (e.g., "4.0") |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
@@ -996,7 +1055,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"authenticate":{"_0":{"token":"my-secret-token"}}}
 
 # Server sends info after successful auth
-{"info":{"_0":{"protocolVersion":"3.1","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
+{"info":{"_0":{"protocolVersion":"4.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
 
 # Client subscribes to updates
 {"subscribe":{}}
@@ -1088,17 +1147,24 @@ A single recorded interaction event captured during a Stakeout recording.
 | `message` | `String` | Human-readable description |
 | `activeConnections` | `Int` | Number of active connections in the current session |
 
+### WatchPayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | `String` | Auth token. Empty string for default open access. Required when `INSIDEJOB_WATCH_AUTH=1` is set on the server. |
+
 ## Implementation Notes
 
 ### Authentication
 
-Token-based authentication is required for all connections:
+Token-based authentication is required for driver connections:
 
 1. Server sends `authRequired` immediately on TCP connect
-2. Client must respond with `authenticate` containing the correct token
-3. On success and session acquired, server sends `info` and the session proceeds normally
+2. Client must respond with `authenticate` (for drivers) or `watch` (for observers). Any other message causes immediate disconnection.
+3. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
+6. For observers: auto-approved by default (no token required). When `INSIDEJOB_WATCH_AUTH=1` is set, a valid token is required.
 
 The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 

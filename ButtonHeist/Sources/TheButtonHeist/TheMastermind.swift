@@ -45,9 +45,10 @@ public final class TheMastermind {
     public var onRecordingStarted: (() -> Void)?
     public var onRecording: ((RecordingPayload) -> Void)?
     public var onRecordingError: ((String) -> Void)?
-    public var onTokenReceived: ((String) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
     public var onAuthFailed: ((String) -> Void)?
+    public var onInteraction: ((InteractionEvent) -> Void)?
 
     // MARK: - Configuration (forwarded to TheWheelman)
 
@@ -74,6 +75,12 @@ public final class TheMastermind {
     // MARK: - The Wheelman
 
     public let wheelman = TheWheelman()
+
+    // MARK: - Pending Request Tracking
+
+    private var pendingActionRequests: [String: CheckedContinuation<ActionResult, Error>] = [:]
+    private var pendingInterfaceRequests: [String: CheckedContinuation<Interface, Error>] = [:]
+    private var pendingScreenRequests: [String: CheckedContinuation<ScreenPayload, Error>] = [:]
 
     // MARK: - Init
 
@@ -119,21 +126,33 @@ public final class TheMastermind {
             self.onDisconnected?(reason)
         }
 
-        wheelman.onInterface = { [weak self] payload in
+        wheelman.onInterface = { [weak self] payload, requestId in
             guard let self else { return }
-            self.currentInterface = payload
-            self.onInterfaceUpdate?(payload)
+            if let requestId, let continuation = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: payload)
+            } else {
+                self.currentInterface = payload
+                self.onInterfaceUpdate?(payload)
+            }
         }
 
-        wheelman.onActionResult = { [weak self] result in
+        wheelman.onActionResult = { [weak self] result, requestId in
             guard let self else { return }
-            self.onActionResult?(result)
+            if let requestId, let continuation = self.pendingActionRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: result)
+            } else {
+                self.onActionResult?(result)
+            }
         }
 
-        wheelman.onScreen = { [weak self] payload in
+        wheelman.onScreen = { [weak self] payload, requestId in
             guard let self else { return }
-            self.currentScreen = payload
-            self.onScreen?(payload)
+            if let requestId, let continuation = self.pendingScreenRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: payload)
+            } else {
+                self.currentScreen = payload
+                self.onScreen?(payload)
+            }
         }
 
         wheelman.onRecordingStarted = { [weak self] in
@@ -159,7 +178,7 @@ public final class TheMastermind {
 
         wheelman.onAuthApproved = { [weak self] approvedToken in
             guard let self else { return }
-            self.onTokenReceived?(approvedToken)
+            self.onAuthApproved?(approvedToken)
         }
 
         wheelman.onSessionLocked = { [weak self] payload in
@@ -172,6 +191,10 @@ public final class TheMastermind {
             guard let self else { return }
             self.connectionState = .failed(reason)
             self.onAuthFailed?(reason)
+        }
+
+        wheelman.onInteraction = { [weak self] event in
+            self?.onInteraction?(event)
         }
     }
 
@@ -196,6 +219,20 @@ public final class TheMastermind {
     }
 
     public func disconnect() {
+        // Cancel all pending requests
+        for (_, continuation) in pendingActionRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingActionRequests.removeAll()
+        for (_, continuation) in pendingInterfaceRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingInterfaceRequests.removeAll()
+        for (_, continuation) in pendingScreenRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingScreenRequests.removeAll()
+
         wheelman.disconnect()
         connectionState = .disconnected
         connectedDevice = nil
@@ -211,8 +248,8 @@ public final class TheMastermind {
         wheelman.send(.requestInterface)
     }
 
-    public func send(_ message: ClientMessage) {
-        wheelman.send(message)
+    public func send(_ message: ClientMessage, requestId: String? = nil) {
+        wheelman.send(message, requestId: requestId)
     }
 
     /// Force-close the connection, triggering the onDisconnected callback.
@@ -225,20 +262,53 @@ public final class TheMastermind {
 
     // MARK: - Async Wait Methods
 
-    public func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult {
-        try await waitForResponse(timeout: timeout) { complete in
+    public func waitForActionResult(requestId: String? = nil, timeout: TimeInterval) async throws -> ActionResult {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingActionRequests[requestId] = continuation
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    if let cont = pendingActionRequests.removeValue(forKey: requestId) {
+                        cont.resume(throwing: ActionError.timeout)
+                    }
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
             onActionResult = { complete(.success($0)) }
         }
     }
 
-    public func waitForInterface(timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await waitForResponse(timeout: timeout) { complete in
+    public func waitForInterface(requestId: String? = nil, timeout: TimeInterval = 10.0) async throws -> Interface {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingInterfaceRequests[requestId] = continuation
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    if let cont = pendingInterfaceRequests.removeValue(forKey: requestId) {
+                        cont.resume(throwing: ActionError.timeout)
+                    }
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
             onInterfaceUpdate = { complete(.success($0)) }
         }
     }
 
-    public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await waitForResponse(timeout: timeout) { complete in
+    public func waitForScreen(requestId: String? = nil, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingScreenRequests[requestId] = continuation
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    if let cont = pendingScreenRequests.removeValue(forKey: requestId) {
+                        cont.resume(throwing: ActionError.timeout)
+                    }
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
             onScreen = { complete(.success($0)) }
         }
     }
