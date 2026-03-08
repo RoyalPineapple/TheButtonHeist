@@ -1,4 +1,4 @@
-# Wheelman - The Getaway Driver
+# TheWheelman - The Getaway Driver
 
 > **Module:** `ButtonHeist/Sources/TheWheelman/`
 > **Platform:** iOS 17.0+ / macOS 14.0+ (Network framework)
@@ -6,7 +6,7 @@
 
 ## Responsibilities
 
-Wheelman handles all transport:
+TheWheelman handles all transport:
 
 1. **Bonjour discovery** (`DeviceDiscovery`) - finds TheInsideJob instances on the network
 2. **TCP client** (`DeviceConnection`) - connects to and exchanges messages with TheInsideJob
@@ -19,7 +19,7 @@ Wheelman handles all transport:
 
 ```mermaid
 graph TD
-    subgraph Wheelman["Wheelman Module"]
+    subgraph TW["TheWheelman Module"]
         subgraph MacOS["macOS Side"]
             Discovery["DeviceDiscovery - NWBrowser for _buttonheist._tcp"]
             Connection["DeviceConnection - NWConnection TCP client"]

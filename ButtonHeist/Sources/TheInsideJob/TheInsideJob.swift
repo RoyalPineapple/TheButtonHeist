@@ -4,7 +4,7 @@ import UIKit
 import AccessibilitySnapshotParser
 import CryptoKit
 import TheScore
-import Wheelman
+import TheWheelman
 import os.log
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")

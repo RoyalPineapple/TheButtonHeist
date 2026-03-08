@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import Wheelman
+@testable import TheWheelman
 
 final class DiscoveredDeviceTests: XCTestCase {
 

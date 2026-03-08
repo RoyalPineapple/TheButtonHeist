@@ -7,7 +7,7 @@ This document describes the internal architecture of ButtonHeist and how its com
 ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
 1. **TheScore** - Cross-platform shared types (messages, models)
-2. **Wheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
+2. **TheWheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
 3. **TheInsideJob** - iOS framework embedded in the app being inspected
 4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheMastermind` and `TheFence`
 5. **TheFence** - Command dispatch layer for CLI and MCP (takes orders, delivers goods)
@@ -24,8 +24,8 @@ graph TB
         CLI --> TF
         TF --> TM["TheMastermind<br>(@Observable wrapper)"]
         TM --> TW["TheWheelman<br>(Discovery + Connection)"]
-        TW --> DD["Device Discovery<br>(Wheelman)"]
-        TW --> DC["Device Connection<br>(Wheelman)"]
+        TW --> DD["Device Discovery<br>(TheWheelman)"]
+        TW --> DC["Device Connection<br>(TheWheelman)"]
     end
 
     DC <-->|"WiFi (Bonjour + TCP)<br>or USB (IPv6 + TCP)"| IJ
@@ -79,7 +79,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   Extensions/Polling.swift        — polling loop, interface broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
 │
-├── ServerTransport (from Wheelman; wraps SimpleSocketServer + Bonjour via NetService)
+├── ServerTransport (from TheWheelman; wraps SimpleSocketServer + Bonjour via NetService)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
@@ -237,7 +237,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 10. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native
 11. On completion, the video is base64-encoded and the interaction log (if non-empty) is included in the `recording(RecordingPayload)` message
 
-### Wheelman
+### TheWheelman
 
 **Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
 
@@ -299,14 +299,14 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports TheScore and Wheelman, provides `TheMastermind` (client API) and `TheFence` (command dispatch).
+**Purpose**: Single-import macOS framework. Re-exports TheScore and TheWheelman, provides `TheMastermind` (client API) and `TheFence` (command dispatch).
 
 **Usage**: `import ButtonHeist` gives access to all types (TheMastermind, TheFence, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
 TheMastermind (@Observable, @MainActor)
-├── TheWheelman (from Wheelman)
+├── TheWheelman (from TheWheelman)
 │   ├── DeviceDiscovery (NWBrowser for "_buttonheist._tcp")
 │   └── DeviceConnection (NWConnection + data transport)
 └── Observable Properties

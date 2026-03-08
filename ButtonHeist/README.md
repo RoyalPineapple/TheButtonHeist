@@ -8,21 +8,21 @@ The core frameworks that power ButtonHeist. Four modules spanning iOS and macOS 
 |--------|----------|-------------|
 | **TheScore** (shared types) | iOS + macOS | Wire protocol messages, UI element models, constants |
 | **TheInsideJob** (iOS server) | iOS | Embeds in your app. Parses accessibility hierarchy, executes gestures, serves it all over TCP |
-| **Wheelman** (networking) | iOS + macOS | TCP server/client, Bonjour discovery, BSD socket transport |
-| **ButtonHeist** (macOS client) | macOS | `TheMastermind` and `TheFence` for macOS consumers. Re-exports TheScore + Wheelman |
+| **TheWheelman** (networking) | iOS + macOS | TCP server/client, Bonjour discovery, BSD socket transport |
+| **ButtonHeist** (macOS client) | macOS | `TheMastermind` and `TheFence` for macOS consumers. Re-exports TheScore + TheWheelman |
 
 ## How They Connect
 
 ```mermaid
 graph LR
     subgraph ios["iOS App"]
-        IJ["TheInsideJob<br>(uses TheScore + Wheelman)"]
+        IJ["TheInsideJob<br>(uses TheScore + TheWheelman)"]
     end
 
     IJ <-->|"TCP over WiFi (Bonjour)<br>or USB (IPv6)"| BH
 
     subgraph macos["macOS"]
-        BH["ButtonHeist framework<br>(TheClient, re-exports TheScore + Wheelman)"]
+        BH["ButtonHeist framework<br>(TheClient, re-exports TheScore + TheWheelman)"]
         BH --> Consumers["CLI, MCP server, or your own tools"]
     end
 ```
@@ -95,9 +95,9 @@ Private APIs are called via `method(for:)` + `unsafeBitCast` to `@convention(c)`
 
 Text input uses `UIKeyboardImpl.activeInstance` → `addInputString:` per character — the same approach as the KIF testing framework.
 
-## Wheelman — Networking
+## TheWheelman — Networking
 
-**Location**: `Sources/Wheelman/`
+**Location**: `Sources/TheWheelman/`
 
 Cross-platform networking used by both iOS (server-side) and macOS (client-side).
 
@@ -112,13 +112,13 @@ Cross-platform networking used by both iOS (server-side) and macOS (client-side)
 
 **Location**: `Sources/ButtonHeist/`
 
-Single-import macOS framework. `import ButtonHeist` gives you `TheMastermind` and `TheFence` plus all types from TheScore and Wheelman.
+Single-import macOS framework. `import ButtonHeist` gives you `TheMastermind` and `TheFence` plus all types from TheScore and TheWheelman.
 
 | File | What It Does |
 |------|-------------|
 | `TheMastermind.swift` | `@Observable @MainActor` client. Discovery, connection, callbacks for SwiftUI and tools. |
 | `TheFence.swift` | Command dispatch for CLI and MCP. Executes activate, gesture, get_interface, etc.; uses TheMastermind for connection. |
-| `Exports.swift` | `@_exported import TheScore` + `@_exported import Wheelman` |
+| `Exports.swift` | `@_exported import TheScore` + `@_exported import TheWheelman` |
 
 ## Further Reading
 
