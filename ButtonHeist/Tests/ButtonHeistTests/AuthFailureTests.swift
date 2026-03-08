@@ -1,7 +1,7 @@
 import XCTest
 import Network
-import TheScore
-@testable import TheWheelman
+import TheGetaway
+@testable import ButtonHeist
 
 /// Tests for auth failure handling over real TCP connections.
 /// Validates that authFailed fires correctly and isn't swallowed by the subsequent disconnect.

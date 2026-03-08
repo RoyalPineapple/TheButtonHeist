@@ -8,9 +8,9 @@
 
 TheFence is the brain of the outside operation:
 
-1. **Command dispatch** - routes 29 commands via TheMastermind/TheWheelman
+1. **Command dispatch** - routes 29 commands via TheMastermind/TheHandoff
 2. **Auto-discovery and connection** - finds and connects to devices automatically
-3. **Auto-reconnect** - retries connection on disconnect via TheWheelman
+3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
 4. **Argument parsing** - extracts typed args from JSON dictionaries
 5. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
 6. **Session management** - persistent connection for CLI session and MCP modes
@@ -23,7 +23,7 @@ graph TD
         Config["Configuration - deviceFilter, connectionTimeout, - forceSession, token, autoReconnect"]
         Execute["execute(request:) - Main entry point"]
         Dispatch["dispatch(command:args:) - 29-command switch"]
-        Reconnect["Auto-Reconnect - via TheWheelman.setupAutoReconnect"]
+        Reconnect["Auto-Reconnect - via TheHandoff.setupAutoReconnect"]
 
         subgraph Commands["Command Catalog (29)"]
             Conn["help, status, quit, exit, list_devices"]

@@ -84,6 +84,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E65BBC0E48B5E27C1F1B784F"
+               BuildableName = "TheGetaway.framework"
+               BlueprintName = "TheGetaway"
+               ReferencedContainer = "container:ButtonHeist.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "4966D1848821855A88573DCD"
                BuildableName = "TheInsideJob.framework"
                BlueprintName = "TheInsideJob"
@@ -140,34 +154,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "9EECCF21DA365EF0D50A9494"
-               BuildableName = "TheWheelman.framework"
-               BlueprintName = "TheWheelman"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "22A5F9EB5F3E30C5EB5D3623"
-               BuildableName = "TheWheelmanTests.xctest"
-               BlueprintName = "TheWheelmanTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "E8F47D029AA78A88203C022B"
                BuildableName = "UIKitTestApp.app"
                BlueprintName = "UIKitTestApp"
@@ -212,17 +198,6 @@
                BlueprintIdentifier = "DCA40E9CBA58FAD77D4C6A4E"
                BuildableName = "TheScoreTests.xctest"
                BlueprintName = "TheScoreTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "22A5F9EB5F3E30C5EB5D3623"
-               BuildableName = "TheWheelmanTests.xctest"
-               BlueprintName = "TheWheelmanTests"
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </TestableReference>

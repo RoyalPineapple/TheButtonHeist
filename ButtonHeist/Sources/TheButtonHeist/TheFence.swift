@@ -1,6 +1,4 @@
 import Foundation
-import TheScore
-import TheWheelman
 
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -420,7 +418,7 @@ public final class TheFence {
     public static let supportedCommands = CommandCatalog.all
 
     public var onStatus: ((String) -> Void)? {
-        didSet { client.wheelman.onStatus = onStatus }
+        didSet { client.handoff.onStatus = onStatus }
     }
     public var onAuthApproved: ((String?) -> Void)?
 
@@ -450,7 +448,7 @@ public final class TheFence {
         try await connect()
         if config.autoReconnect {
             let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
-            client.wheelman.setupAutoReconnect(filter: filter)
+            client.handoff.setupAutoReconnect(filter: filter)
         }
         isStarted = true
     }
@@ -485,11 +483,11 @@ public final class TheFence {
     private func connect() async throws {
         let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         do {
-            try await client.wheelman.connectWithDiscovery(
+            try await client.handoff.connectWithDiscovery(
                 filter: filter,
                 timeout: config.connectionTimeout
             )
-        } catch let error as TheWheelman.ConnectionError {
+        } catch let error as TheHandoff.ConnectionError {
             throw error.asFenceError()
         }
     }
@@ -902,7 +900,7 @@ public final class TheFence {
 
 // MARK: - ConnectionError → FenceError Bridge
 
-extension TheWheelman.ConnectionError {
+extension TheHandoff.ConnectionError {
     func asFenceError() -> FenceError {
         switch self {
         case .noDeviceFound:

@@ -2,28 +2,28 @@
 
 > **File:** `ButtonHeist/Sources/TheButtonHeist/TheMastermind.swift`
 > **Platform:** macOS 14.0+
-> **Role:** Observable macOS client API wrapping TheWheelman for SwiftUI and callback consumers
+> **Role:** Observable macOS client API wrapping TheHandoff for SwiftUI and callback consumers
 
 ## Responsibilities
 
 TheMastermind is the macOS-side counterpart to TheInsideJob:
 
-1. **Observable state** for SwiftUI integration (`@Observable`) - mirrors TheWheelman's state
+1. **Observable state** for SwiftUI integration (`@Observable`) - mirrors TheHandoff's state
 2. **Callback API** for non-SwiftUI consumers (CLI, MCP) via typed closures
-3. **Configuration forwarding** - proxies `token`, `forceSession`, `driverId`, `autoSubscribe` to TheWheelman
+3. **Configuration forwarding** - proxies `token`, `forceSession`, `driverId`, `autoSubscribe` to TheHandoff
 4. **Async wait methods** for action results, screenshots, interface, recordings
-5. **Display name disambiguation** when multiple devices share names (delegated to TheWheelman)
-6. **Discovery and connection** delegation to TheWheelman
+5. **Display name disambiguation** when multiple devices share names (delegated to TheHandoff)
+6. **Discovery and connection** delegation to TheHandoff
 
 > **Note:** TheMastermind replaced the former `TheClient` class. It is a thin `@Observable` wrapper
-> that delegates all discovery, connection, keepalive, and reconnect logic to `TheWheelman`.
+> that delegates all discovery, connection, keepalive, and reconnect logic to `TheHandoff`.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TheMastermind["TheMastermind (@Observable, @ButtonHeistActor)"]
-        TW["TheWheelman - discovery, connection, keepalive"]
+        TW["TheHandoff - discovery, connection, keepalive"]
 
         subgraph ObservableState["Observable State"]
             Devices["discoveredDevices: [DiscoveredDevice]"]
@@ -98,18 +98,18 @@ flowchart TD
 
 ## Delegation Pattern
 
-TheMastermind delegates all core operations to TheWheelman:
+TheMastermind delegates all core operations to TheHandoff:
 
 | TheMastermind method | Delegates to |
 |---------------------|-------------|
-| `startDiscovery()` | `wheelman.startDiscovery()` |
-| `stopDiscovery()` | `wheelman.stopDiscovery()` |
-| `connect(to:)` | `wheelman.connect(to:)` |
-| `disconnect()` | `wheelman.disconnect()` |
-| `send(_:)` | `wheelman.send(_:)` |
-| `requestInterface()` | `wheelman.send(.requestInterface)` |
-| `displayName(for:)` | `wheelman.displayName(for:)` |
-| `token` / `forceSession` / `driverId` / `autoSubscribe` | `wheelman.token` / etc. |
+| `startDiscovery()` | `handoff.startDiscovery()` |
+| `stopDiscovery()` | `handoff.stopDiscovery()` |
+| `connect(to:)` | `handoff.connect(to:)` |
+| `disconnect()` | `handoff.disconnect()` |
+| `send(_:)` | `handoff.send(_:)` |
+| `requestInterface()` | `handoff.send(.requestInterface)` |
+| `displayName(for:)` | `handoff.displayName(for:)` |
+| `token` / `forceSession` / `driverId` / `autoSubscribe` | `handoff.token` / etc. |
 
-The `wireUpWheelman()` method (called from `init`) connects all of TheWheelman's callbacks
+The `wireUpHandoff()` method (called from `init`) connects all of TheHandoff's callbacks
 to update TheMastermind's observable state and forward to TheMastermind's own callbacks.

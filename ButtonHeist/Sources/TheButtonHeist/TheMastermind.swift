@@ -1,16 +1,14 @@
 import Foundation
 import Observation
-import TheWheelman
-import TheScore
 import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "mastermind")
 
 /// Observable session orchestrator for discovering and connecting to iOS apps running TheInsideJob.
 ///
-/// Thin @Observable wrapper over TheWheelman. Provides the SwiftUI-friendly API surface
+/// Thin @Observable wrapper over TheHandoff. Provides the SwiftUI-friendly API surface
 /// with published state and callback hooks. All discovery, connection, keepalive, and
-/// reconnect logic lives in TheWheelman.
+/// reconnect logic lives in TheHandoff.
 @Observable
 @ButtonHeistActor
 public final class TheMastermind {
@@ -50,31 +48,31 @@ public final class TheMastermind {
     public var onAuthFailed: ((String) -> Void)?
     public var onInteraction: ((InteractionEvent) -> Void)?
 
-    // MARK: - Configuration (forwarded to TheWheelman)
+    // MARK: - Configuration (forwarded to TheHandoff)
 
     public var token: String? {
-        get { wheelman.token }
-        set { wheelman.token = newValue }
+        get { handoff.token }
+        set { handoff.token = newValue }
     }
 
     public var forceSession: Bool {
-        get { wheelman.forceSession }
-        set { wheelman.forceSession = newValue }
+        get { handoff.forceSession }
+        set { handoff.forceSession = newValue }
     }
 
     public var driverId: String? {
-        get { wheelman.driverId }
-        set { wheelman.driverId = newValue }
+        get { handoff.driverId }
+        set { handoff.driverId = newValue }
     }
 
     public var autoSubscribe: Bool {
-        get { wheelman.autoSubscribe }
-        set { wheelman.autoSubscribe = newValue }
+        get { handoff.autoSubscribe }
+        set { handoff.autoSubscribe = newValue }
     }
 
-    // MARK: - The Wheelman
+    // MARK: - The Handoff
 
-    public let wheelman = TheWheelman()
+    public let handoff = TheHandoff()
 
     // MARK: - Pending Request Tracking
 
@@ -85,32 +83,32 @@ public final class TheMastermind {
     // MARK: - Init
 
     public init() {
-        wireUpWheelman()
+        wireUpHandoff()
     }
 
-    private func wireUpWheelman() {
-        wheelman.onDeviceFound = { [weak self] device in
+    private func wireUpHandoff() {
+        handoff.onDeviceFound = { [weak self] device in
             guard let self else { return }
-            self.discoveredDevices = self.wheelman.discoveredDevices
-            self.isDiscovering = self.wheelman.isDiscovering
+            self.discoveredDevices = self.handoff.discoveredDevices
+            self.isDiscovering = self.handoff.isDiscovering
             self.onDeviceDiscovered?(device)
         }
 
-        wheelman.onDeviceLost = { [weak self] device in
+        handoff.onDeviceLost = { [weak self] device in
             guard let self else { return }
-            self.discoveredDevices = self.wheelman.discoveredDevices
+            self.discoveredDevices = self.handoff.discoveredDevices
             self.onDeviceLost?(device)
         }
 
-        wheelman.onConnected = { [weak self] info in
+        handoff.onConnected = { [weak self] info in
             guard let self else { return }
             self.connectionState = .connected
-            self.connectedDevice = self.wheelman.connectedDevice
+            self.connectedDevice = self.handoff.connectedDevice
             self.serverInfo = info
             self.onConnected?(info)
         }
 
-        wheelman.onDisconnected = { [weak self] reason in
+        handoff.onDisconnected = { [weak self] reason in
             guard let self else { return }
             // Preserve .failed state (e.g., from sessionLocked)
             if case .failed = self.connectionState {
@@ -126,7 +124,7 @@ public final class TheMastermind {
             self.onDisconnected?(reason)
         }
 
-        wheelman.onInterface = { [weak self] payload, requestId in
+        handoff.onInterface = { [weak self] payload, requestId in
             guard let self else { return }
             if let requestId, let continuation = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
                 continuation.resume(returning: payload)
@@ -136,7 +134,7 @@ public final class TheMastermind {
             }
         }
 
-        wheelman.onActionResult = { [weak self] result, requestId in
+        handoff.onActionResult = { [weak self] result, requestId in
             guard let self else { return }
             if let requestId, let continuation = self.pendingActionRequests.removeValue(forKey: requestId) {
                 continuation.resume(returning: result)
@@ -145,7 +143,7 @@ public final class TheMastermind {
             }
         }
 
-        wheelman.onScreen = { [weak self] payload, requestId in
+        handoff.onScreen = { [weak self] payload, requestId in
             guard let self else { return }
             if let requestId, let continuation = self.pendingScreenRequests.removeValue(forKey: requestId) {
                 continuation.resume(returning: payload)
@@ -155,45 +153,45 @@ public final class TheMastermind {
             }
         }
 
-        wheelman.onRecordingStarted = { [weak self] in
+        handoff.onRecordingStarted = { [weak self] in
             guard let self else { return }
             self.isRecording = true
             self.onRecordingStarted?()
         }
-        wheelman.onRecording = { [weak self] payload in
+        handoff.onRecording = { [weak self] payload in
             guard let self else { return }
             self.isRecording = false
             self.onRecording?(payload)
         }
-        wheelman.onRecordingError = { [weak self] message in
+        handoff.onRecordingError = { [weak self] message in
             guard let self else { return }
             self.isRecording = false
             self.onRecordingError?(message)
         }
 
-        wheelman.onError = { [weak self] message in
+        handoff.onError = { [weak self] message in
             guard let self else { return }
             self.connectionState = .failed(message)
         }
 
-        wheelman.onAuthApproved = { [weak self] approvedToken in
+        handoff.onAuthApproved = { [weak self] approvedToken in
             guard let self else { return }
             self.onAuthApproved?(approvedToken)
         }
 
-        wheelman.onSessionLocked = { [weak self] payload in
+        handoff.onSessionLocked = { [weak self] payload in
             guard let self else { return }
             self.connectionState = .failed(payload.message)
             self.onSessionLocked?(payload)
         }
 
-        wheelman.onAuthFailed = { [weak self] reason in
+        handoff.onAuthFailed = { [weak self] reason in
             guard let self else { return }
             self.connectionState = .failed(reason)
             self.onAuthFailed?(reason)
         }
 
-        wheelman.onInteraction = { [weak self] event in
+        handoff.onInteraction = { [weak self] event in
             self?.onInteraction?(event)
         }
     }
@@ -201,12 +199,12 @@ public final class TheMastermind {
     // MARK: - Discovery (delegated)
 
     public func startDiscovery() {
-        wheelman.startDiscovery()
-        isDiscovering = wheelman.isDiscovering
+        handoff.startDiscovery()
+        isDiscovering = handoff.isDiscovering
     }
 
     public func stopDiscovery() {
-        wheelman.stopDiscovery()
+        handoff.stopDiscovery()
         isDiscovering = false
         discoveredDevices = []
     }
@@ -215,7 +213,7 @@ public final class TheMastermind {
 
     public func connect(to device: DiscoveredDevice) {
         connectionState = .connecting
-        wheelman.connect(to: device)
+        handoff.connect(to: device)
     }
 
     public func disconnect() {
@@ -233,7 +231,7 @@ public final class TheMastermind {
         }
         pendingScreenRequests.removeAll()
 
-        wheelman.disconnect()
+        handoff.disconnect()
         connectionState = .disconnected
         connectedDevice = nil
         serverInfo = nil
@@ -245,11 +243,11 @@ public final class TheMastermind {
     // MARK: - Commands
 
     public func requestInterface() {
-        wheelman.send(.requestInterface)
+        handoff.send(.requestInterface)
     }
 
     public func send(_ message: ClientMessage, requestId: String? = nil) {
-        wheelman.send(message, requestId: requestId)
+        handoff.send(message, requestId: requestId)
     }
 
     /// Force-close the connection, triggering the onDisconnected callback.
@@ -360,7 +358,7 @@ public final class TheMastermind {
     // MARK: - Display Names (delegated)
 
     public func displayName(for device: DiscoveredDevice) -> String {
-        wheelman.displayName(for: device)
+        handoff.displayName(for: device)
     }
 
     public var connectedDeviceDisplayName: String? {
