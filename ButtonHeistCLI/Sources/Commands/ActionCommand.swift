@@ -18,11 +18,7 @@ struct ActionCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Action type: activate, increment, decrement, custom")
     var type: String = "activate"
@@ -31,26 +27,19 @@ struct ActionCommand: AsyncParsableCommand {
     var customAction: String?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil else {
-            throw ValidationError("Must specify --identifier or --index")
-        }
+        let target = try element.requireTarget()
 
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
-
-        // Build target
-        let target = ActionTarget(identifier: identifier, order: index)
 
         // Build and send message
         let message: ClientMessage
@@ -80,6 +69,6 @@ struct ActionCommand: AsyncParsableCommand {
         client.send(message)
 
         let result = try await client.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Action")
+        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Action")
     }
 }

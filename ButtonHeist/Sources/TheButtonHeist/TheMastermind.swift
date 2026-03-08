@@ -120,48 +120,58 @@ public final class TheMastermind {
         }
 
         wheelman.onInterface = { [weak self] payload in
-            self?.currentInterface = payload
-            self?.onInterfaceUpdate?(payload)
+            guard let self else { return }
+            self.currentInterface = payload
+            self.onInterfaceUpdate?(payload)
         }
 
         wheelman.onActionResult = { [weak self] result in
-            self?.onActionResult?(result)
+            guard let self else { return }
+            self.onActionResult?(result)
         }
 
         wheelman.onScreen = { [weak self] payload in
-            self?.currentScreen = payload
-            self?.onScreen?(payload)
+            guard let self else { return }
+            self.currentScreen = payload
+            self.onScreen?(payload)
         }
 
         wheelman.onRecordingStarted = { [weak self] in
-            self?.isRecording = true
-            self?.onRecordingStarted?()
+            guard let self else { return }
+            self.isRecording = true
+            self.onRecordingStarted?()
         }
         wheelman.onRecording = { [weak self] payload in
-            self?.isRecording = false
-            self?.onRecording?(payload)
+            guard let self else { return }
+            self.isRecording = false
+            self.onRecording?(payload)
         }
         wheelman.onRecordingError = { [weak self] message in
-            self?.isRecording = false
-            self?.onRecordingError?(message)
+            guard let self else { return }
+            self.isRecording = false
+            self.onRecordingError?(message)
         }
 
         wheelman.onError = { [weak self] message in
-            self?.connectionState = .failed(message)
+            guard let self else { return }
+            self.connectionState = .failed(message)
         }
 
         wheelman.onAuthApproved = { [weak self] approvedToken in
-            self?.onTokenReceived?(approvedToken)
+            guard let self else { return }
+            self.onTokenReceived?(approvedToken)
         }
 
         wheelman.onSessionLocked = { [weak self] payload in
-            self?.connectionState = .failed(payload.message)
-            self?.onSessionLocked?(payload)
+            guard let self else { return }
+            self.connectionState = .failed(payload.message)
+            self.onSessionLocked?(payload)
         }
 
         wheelman.onAuthFailed = { [weak self] reason in
-            self?.connectionState = .failed(reason)
-            self?.onAuthFailed?(reason)
+            guard let self else { return }
+            self.connectionState = .failed(reason)
+            self.onAuthFailed?(reason)
         }
     }
 
@@ -216,74 +226,36 @@ public final class TheMastermind {
     // MARK: - Async Wait Methods
 
     public func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult {
-        try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
-
-            let timeoutTask = Task { @MainActor in
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if !didResume {
-                    didResume = true
-                    continuation.resume(throwing: ActionError.timeout)
-                }
-            }
-
-            onActionResult = { result in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(returning: result)
-                }
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            onActionResult = { complete(.success($0)) }
         }
     }
 
     public func waitForInterface(timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
-
-            let timeoutTask = Task { @MainActor in
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if !didResume {
-                    didResume = true
-                    continuation.resume(throwing: ActionError.timeout)
-                }
-            }
-
-            onInterfaceUpdate = { payload in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(returning: payload)
-                }
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            onInterfaceUpdate = { complete(.success($0)) }
         }
     }
 
     public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
-
-            let timeoutTask = Task { @MainActor in
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if !didResume {
-                    didResume = true
-                    continuation.resume(throwing: ActionError.timeout)
-                }
-            }
-
-            onScreen = { payload in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(returning: payload)
-                }
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            onScreen = { complete(.success($0)) }
         }
     }
 
     public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await waitForResponse(timeout: timeout) { complete in
+            onRecording = { complete(.success($0)) }
+            onRecordingError = { complete(.failure(RecordingError.serverError($0))) }
+        }
+    }
+
+    private func waitForResponse<T: Sendable>(
+        timeout: TimeInterval,
+        install: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
-            var didResume = false
+            nonisolated(unsafe) var didResume = false
 
             let timeoutTask = Task { @MainActor in
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -293,19 +265,11 @@ public final class TheMastermind {
                 }
             }
 
-            onRecording = { payload in
+            install { result in
                 if !didResume {
                     didResume = true
                     timeoutTask.cancel()
-                    continuation.resume(returning: payload)
-                }
-            }
-
-            onRecordingError = { message in
-                if !didResume {
-                    didResume = true
-                    timeoutTask.cancel()
-                    continuation.resume(throwing: RecordingError.serverError(message))
+                    continuation.resume(with: result)
                 }
             }
         }

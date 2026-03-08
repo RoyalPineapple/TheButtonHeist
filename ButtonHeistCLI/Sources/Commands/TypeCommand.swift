@@ -24,16 +24,9 @@ struct TypeCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Number of characters to delete before typing")
     var delete: Int?
 
-    @Option(name: .long, help: "Element identifier to target (focuses field, reads value back)")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index to target")
-    var index: Int?
-
+    @OptionGroup var element: ElementTargetOptions
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
@@ -44,13 +37,10 @@ struct TypeCommand: AsyncParsableCommand {
             throw ValidationError("Must specify --text, --delete, or both")
         }
 
-        let elementTarget: ActionTarget? = (identifier != nil || index != nil)
-            ? ActionTarget(identifier: identifier, order: index) : nil
-
         let message = ClientMessage.typeText(TypeTextTarget(
             text: text,
             deleteCount: delete,
-            elementTarget: elementTarget
+            elementTarget: element.actionTarget
         ))
 
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
@@ -65,6 +55,6 @@ struct TypeCommand: AsyncParsableCommand {
         client.send(message)
 
         let result = try await client.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Type")
+        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Type")
     }
 }
