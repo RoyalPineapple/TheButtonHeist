@@ -36,7 +36,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ```mermaid
 graph TD
     TheScore["TheScore - (Shared Protocol)"]
-    Wheelman["TheWheelman - (Networking)"]
+    TW["TheWheelman - (Networking)"]
     TheInsideJob["TheInsideJob - (iOS Server)"]
     TheBagman["TheBagman - (Element Cache & Delta)"]
     ThePlant["ThePlant - (Auto-Start)"]
@@ -45,10 +45,10 @@ graph TD
     MCP["ButtonHeistMCP - (MCP Server)"]
     TestApp["AccessibilityTestApp"]
 
-    TheScore --> Wheelman
+    TheScore --> TW
     TheScore --> TheInsideJob
-    Wheelman --> TheInsideJob
-    Wheelman --> ButtonHeist
+    TW --> TheInsideJob
+    TW --> ButtonHeist
     TheScore --> ButtonHeist
     ButtonHeist --> CLI
     ButtonHeist --> MCP

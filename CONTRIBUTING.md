@@ -25,7 +25,7 @@ Thank you for your interest in contributing to ButtonHeist!
 | `ButtonHeist/Sources/TheScore/` | Shared types and protocol messages |
 | `ButtonHeist/Sources/TheInsideJob/` | iOS server framework (server, touch injection, tap visualization) |
 | `ButtonHeist/Sources/ThePlant/` | ObjC auto-start via +load |
-| `ButtonHeist/Sources/Wheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
+| `ButtonHeist/Sources/TheWheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
 | `ButtonHeistCLI/` | Command-line tool (list, activate, action, touch, type, screenshot, session) |
 | `ButtonHeistMCP/` | MCP server for AI agent integration |
 | `TestApp/` | Sample SwiftUI and UIKit iOS applications |
@@ -84,7 +84,7 @@ tuist generate
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob \
   -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheWheelman build
 
 # Build apps
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
@@ -112,9 +112,9 @@ cd ButtonHeistCLI && swift build
 
 - iOS-only, UIKit is allowed
 - Run all operations on `@MainActor`
-- Uses SimpleSocketServer (from Wheelman) for TCP server
+- Uses SimpleSocketServer (from TheWheelman) for TCP server
 
-### Wheelman
+### TheWheelman
 
 - Cross-platform (iOS + macOS)
 - TCP server (SimpleSocketServer), client (DeviceConnection), and Bonjour discovery (DeviceDiscovery)

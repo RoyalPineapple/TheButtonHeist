@@ -9,7 +9,7 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 | File | Purpose |
 |------|---------|
 | `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
-| `Project.swift` | Root project: TheScore, TheInsideJob, Wheelman, ButtonHeist frameworks + tests |
+| `Project.swift` | Root project: TheScore, TheInsideJob, TheWheelman, ButtonHeist frameworks + tests |
 | `TestApp/Project.swift` | Demo apps: AccessibilityTestApp (SwiftUI) and UIKitTestApp (UIKit) |
 | `Tuist.swift` | Tuist configuration (default) |
 | `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
@@ -79,7 +79,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 ```
 
-Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob, Wheelman, and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
+Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob, TheWheelman, and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
 
 ### 3. Install and launch
 
@@ -118,7 +118,7 @@ Before pushing any commit, verify the following:
 - **All targets must build successfully.** Run the full build:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme Wheelman build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheWheelman build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
   ```
@@ -133,7 +133,7 @@ Before pushing any commit, verify the following:
 - **All existing tests must pass.** Run the test suite:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme WheelmanTests test
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheWheelmanTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
   ```

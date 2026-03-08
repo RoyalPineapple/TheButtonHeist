@@ -56,14 +56,14 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
-                .target(name: "Wheelman"),
+                .target(name: "TheWheelman"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
         ),
 
         // MARK: - Cross-Platform Networking Library
         .target(
-            name: "Wheelman",
+            name: "TheWheelman",
             destinations: [.iPhone, .iPad, .mac],
             product: .framework,
             bundleId: "com.buttonheist.wheelman",
@@ -92,7 +92,7 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
-                .target(name: "Wheelman"),
+                .target(name: "TheWheelman"),
             ]
         ),
 
@@ -110,17 +110,17 @@ let project = Project(
             ]
         ),
 
-        // MARK: - Wheelman Tests
+        // MARK: - TheWheelman Tests
         .target(
-            name: "WheelmanTests",
+            name: "TheWheelmanTests",
             destinations: .macOS,
             product: .unitTests,
-            bundleId: "com.buttonheist.wheelman.tests",
+            bundleId: "com.buttonheist.thewheelman.tests",
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
-            sources: ["ButtonHeist/Tests/WheelmanTests/**"],
+            sources: ["ButtonHeist/Tests/TheWheelmanTests/**"],
             dependencies: [
-                .target(name: "Wheelman"),
+                .target(name: "TheWheelman"),
                 .target(name: "TheScore"),
             ]
         ),
@@ -166,14 +166,14 @@ let project = Project(
             ])
         ),
         .scheme(
-            name: "WheelmanTests",
+            name: "TheWheelmanTests",
             buildAction: .buildAction(targets: [
-                .target("WheelmanTests"),
-                .target("Wheelman"),
+                .target("TheWheelmanTests"),
+                .target("TheWheelman"),
                 .target("TheScore"),
             ]),
             testAction: .targets([
-                .testableTarget(target: .target("WheelmanTests")),
+                .testableTarget(target: .target("TheWheelmanTests")),
             ])
         ),
         .scheme(
@@ -181,7 +181,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("ButtonHeistTests"),
                 .target("ButtonHeist"),
-                .target("Wheelman"),
+                .target("TheWheelman"),
                 .target("TheScore"),
             ]),
             testAction: .targets([
@@ -193,7 +193,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("TheInsideJobTests"),
                 .target("TheInsideJob"),
-                .target("Wheelman"),
+                .target("TheWheelman"),
                 .target("TheScore"),
             ]),
             testAction: .targets([

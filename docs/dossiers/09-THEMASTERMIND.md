@@ -23,7 +23,7 @@ TheMastermind is the macOS-side counterpart to TheInsideJob:
 ```mermaid
 graph TD
     subgraph TheMastermind["TheMastermind (@Observable, @MainActor)"]
-        Wheelman["TheWheelman - discovery, connection, keepalive"]
+        TW["TheWheelman - discovery, connection, keepalive"]
 
         subgraph ObservableState["Observable State"]
             Devices["discoveredDevices: [DiscoveredDevice]"]
@@ -47,8 +47,8 @@ graph TD
         end
     end
 
-    Wheelman --> ObservableState
-    Wheelman --> Callbacks
+    TW --> ObservableState
+    TW --> Callbacks
 ```
 
 ## Connection Lifecycle
