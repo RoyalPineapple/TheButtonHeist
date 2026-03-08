@@ -534,35 +534,25 @@ public final class TheFence {
     // MARK: - Handler: Interface
 
     private func handleGetInterface() async throws -> Interface {
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
-        client.send(.requestInterface)
-        do {
-            return try await client.waitForInterface(timeout: Timeouts.actionSeconds)
-        } catch {
-            client.forceDisconnect()
-            throw mapCaughtError(error)
+        try await sendAndAwait(.requestInterface) {
+            try await client.waitForInterface(timeout: Timeouts.actionSeconds)
         }
     }
 
     // MARK: - Handler: Screen
 
     private func handleGetScreen(_ args: [String: Any]) async throws -> FenceResponse {
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
-        client.send(.requestScreen)
-        do {
-            let screen = try await client.waitForScreen(timeout: 30)
-            if let outputPath = stringArg(args, "output") {
-                guard let pngData = Data(base64Encoded: screen.pngData) else {
-                    return .error("Failed to decode screenshot data")
-                }
-                try pngData.write(to: URL(fileURLWithPath: outputPath))
-                return .screenshot(path: outputPath, width: screen.width, height: screen.height)
-            }
-            return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
-        } catch {
-            client.forceDisconnect()
-            throw mapCaughtError(error)
+        let screen: ScreenPayload = try await sendAndAwait(.requestScreen) {
+            try await client.waitForScreen(timeout: 30)
         }
+        if let outputPath = stringArg(args, "output") {
+            guard let pngData = Data(base64Encoded: screen.pngData) else {
+                return .error("Failed to decode screenshot data")
+            }
+            try pngData.write(to: URL(fileURLWithPath: outputPath))
+            return .screenshot(path: outputPath, width: screen.width, height: screen.height)
+        }
+        return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
     }
 
     // MARK: - Handler: Gestures
@@ -800,17 +790,12 @@ public final class TheFence {
         guard text != nil || deleteCount != nil else {
             return .error("Must specify text, deleteCount, or both")
         }
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
-        client.send(.typeText(TypeTextTarget(
+        let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, elementTarget: elementTarget(args)
-        )))
-        do {
-            let result = try await client.waitForActionResult(timeout: Timeouts.longActionSeconds)
-            return .action(result: result)
-        } catch {
-            client.forceDisconnect()
-            throw mapCaughtError(error)
+        ))) {
+            try await client.waitForActionResult(timeout: Timeouts.longActionSeconds)
         }
+        return .action(result: result)
     }
 
     private func handleEditAction(_ args: [String: Any]) async throws -> FenceResponse {
@@ -835,32 +820,33 @@ public final class TheFence {
     }
 
     private func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
-        client.send(.stopRecording)
-        do {
-            let recording = try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
-            if let outputPath = stringArg(args, "output") {
-                guard let videoData = Data(base64Encoded: recording.videoData) else {
-                    return .error("Failed to decode video data")
-                }
-                try videoData.write(to: URL(fileURLWithPath: outputPath))
-                return .recording(path: outputPath, payload: recording)
-            }
-            return .recordingData(payload: recording)
-        } catch {
-            client.forceDisconnect()
-            throw mapCaughtError(error)
+        let recording: RecordingPayload = try await sendAndAwait(.stopRecording) {
+            try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
+        if let outputPath = stringArg(args, "output") {
+            guard let videoData = Data(base64Encoded: recording.videoData) else {
+                return .error("Failed to decode video data")
+            }
+            try videoData.write(to: URL(fileURLWithPath: outputPath))
+            return .recording(path: outputPath, payload: recording)
+        }
+        return .recordingData(payload: recording)
     }
 
     // MARK: - Send Action (shared)
 
     private func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
+        let result: ActionResult = try await sendAndAwait(message) {
+            try await client.waitForActionResult(timeout: Timeouts.actionSeconds)
+        }
+        return .action(result: result)
+    }
+
+    private func sendAndAwait<T>(_ message: ClientMessage, response: () async throws -> T) async throws -> T {
         guard client.connectionState == .connected else { throw FenceError.notConnected }
         client.send(message)
         do {
-            let result = try await client.waitForActionResult(timeout: Timeouts.actionSeconds)
-            return .action(result: result)
+            return try await response()
         } catch {
             client.forceDisconnect()
             throw mapCaughtError(error)
