@@ -17,28 +17,20 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Element identifier (finds nearest scroll view ancestor)")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Edge to scroll to: top, bottom, left, right")
     var edge: String
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil else {
-            throw ValidationError("Must specify --identifier or --index")
-        }
+        let target = try element.requireTarget()
 
         guard let scrollEdge = ScrollEdge(rawValue: edge.lowercased()) else {
             throw ValidationError("Invalid edge '\(edge)'. Valid: top, bottom, left, right")
@@ -49,7 +41,6 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
         defer { connector.disconnect() }
         let client = connector.client
 
-        let target = ActionTarget(identifier: identifier, order: index)
         let message = ClientMessage.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: scrollEdge))
 
         if !connection.quiet {
@@ -59,6 +50,6 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
         client.send(message)
 
         let result = try await client.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Scroll to edge")
+        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Scroll to edge")
     }
 }

@@ -13,15 +13,14 @@ struct CopyCommand: AsyncParsableCommand {
 
     @OptionGroup var connection: ConnectionOptions
 
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("copy", connection: connection, timeout: timeout, format: format)
+        try await sendEditAction("copy", connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -34,16 +33,14 @@ struct PasteCommand: AsyncParsableCommand {
     )
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("paste", connection: connection, timeout: timeout, format: format)
+        try await sendEditAction("paste", connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -56,16 +53,14 @@ struct CutCommand: AsyncParsableCommand {
     )
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("cut", connection: connection, timeout: timeout, format: format)
+        try await sendEditAction("cut", connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -78,16 +73,14 @@ struct SelectCommand: AsyncParsableCommand {
     )
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("select", connection: connection, timeout: timeout, format: format)
+        try await sendEditAction("select", connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -100,16 +93,14 @@ struct SelectAllCommand: AsyncParsableCommand {
     )
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        try await sendEditAction("selectAll", connection: connection, timeout: timeout, format: format)
+        try await sendEditAction("selectAll", connection: connection, timeout: timeout, format: output.format)
     }
 }
 

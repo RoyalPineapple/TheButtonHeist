@@ -42,11 +42,7 @@ struct TouchCommand: AsyncParsableCommand {
 struct TapSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "one_finger_tap", abstract: "Tap at a point or element (prefer 'activate' for element interactions)")
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "X coordinate")
     var x: Double?
@@ -55,28 +51,25 @@ struct TapSubcommand: AsyncParsableCommand {
     var y: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
+        guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, order: index)
+        if let target = element.actionTarget {
             message = .touchTap(TouchTapTarget(elementTarget: target))
         } else {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
         }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -85,11 +78,7 @@ struct TapSubcommand: AsyncParsableCommand {
 struct LongPressSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "longpress", abstract: "Long press at a point or element")
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "X coordinate")
     var x: Double?
@@ -101,28 +90,25 @@ struct LongPressSubcommand: AsyncParsableCommand {
     var duration: Double = 0.5
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
+        guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, order: index)
+        if let target = element.actionTarget {
             message = .touchLongPress(LongPressTarget(elementTarget: target, duration: duration))
         } else {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -131,11 +117,7 @@ struct LongPressSubcommand: AsyncParsableCommand {
 struct SwipeSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "swipe", abstract: "Swipe between two points or in a direction")
 
-    @Option(name: .long, help: "Element identifier for start point")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index for start point")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .customLong("from-x"), help: "Start X coordinate")
     var fromX: Double?
@@ -159,24 +141,19 @@ struct SwipeSubcommand: AsyncParsableCommand {
     var duration: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (fromX != nil && fromY != nil) else {
+        guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
         }
         guard (toX != nil && toY != nil) || direction != nil else {
             throw ValidationError("Must specify --to-x/--to-y or --direction")
         }
-
-        let elementTarget: ActionTarget? = (identifier != nil || index != nil)
-            ? ActionTarget(identifier: identifier, order: index) : nil
 
         let swipeDirection: SwipeDirection?
         if let dir = direction {
@@ -189,14 +166,14 @@ struct SwipeSubcommand: AsyncParsableCommand {
         }
 
         let message = ClientMessage.touchSwipe(SwipeTarget(
-            elementTarget: elementTarget,
+            elementTarget: element.actionTarget,
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             direction: swipeDirection, distance: distance,
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -205,11 +182,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
 struct DragSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "drag", abstract: "Drag from one point to another")
 
-    @Option(name: .long, help: "Element identifier for start point")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index for start point")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .customLong("from-x"), help: "Start X coordinate")
     var fromX: Double?
@@ -227,30 +200,25 @@ struct DragSubcommand: AsyncParsableCommand {
     var duration: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (fromX != nil && fromY != nil) else {
+        guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
         }
 
-        let elementTarget: ActionTarget? = (identifier != nil || index != nil)
-            ? ActionTarget(identifier: identifier, order: index) : nil
-
         let message = ClientMessage.touchDrag(DragTarget(
-            elementTarget: elementTarget,
+            elementTarget: element.actionTarget,
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             duration: duration
         ))
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -259,11 +227,7 @@ struct DragSubcommand: AsyncParsableCommand {
 struct PinchSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "pinch", abstract: "Pinch/zoom at a point or element")
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
     var x: Double?
@@ -281,28 +245,25 @@ struct PinchSubcommand: AsyncParsableCommand {
     var duration: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
+        guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, order: index)
+        if let target = element.actionTarget {
             message = .touchPinch(PinchTarget(elementTarget: target, scale: scale, spread: spread, duration: duration))
         } else {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -311,11 +272,7 @@ struct PinchSubcommand: AsyncParsableCommand {
 struct RotateSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "rotate", abstract: "Rotate at a point or element")
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
     var x: Double?
@@ -333,28 +290,25 @@ struct RotateSubcommand: AsyncParsableCommand {
     var duration: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
+        guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, order: index)
+        if let target = element.actionTarget {
             message = .touchRotate(RotateTarget(elementTarget: target, angle: angle, radius: radius, duration: duration))
         } else {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
         }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -363,11 +317,7 @@ struct RotateSubcommand: AsyncParsableCommand {
 struct TwoFingerTapSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "two-finger-tap", abstract: "Tap with two fingers at a point or element")
 
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Center X coordinate")
     var x: Double?
@@ -379,28 +329,25 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     var spread: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil || (x != nil && y != nil) else {
+        guard element.actionTarget != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if identifier != nil || index != nil {
-            let target = ActionTarget(identifier: identifier, order: index)
+        if let target = element.actionTarget {
             message = .touchTwoFingerTap(TwoFingerTapTarget(elementTarget: target, spread: spread))
         } else {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
         }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -433,9 +380,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
     var velocity: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
@@ -462,7 +407,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
             velocity: velocity
         ))
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 
     private func parseInlinePoints(_ str: String) throws -> [PathPoint] {
@@ -522,9 +467,7 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
     var velocity: Double?
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 30.0
@@ -547,7 +490,7 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
             velocity: velocity ?? target.velocity
         ))
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: format)
+        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
 }
 

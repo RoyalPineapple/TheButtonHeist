@@ -18,32 +18,21 @@ struct ActivateCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Element accessibility identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Element traversal order index")
-    var index: Int?
-
+    @OptionGroup var element: ElementTargetOptions
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
 
     @MainActor
     mutating func run() async throws {
-        guard identifier != nil || index != nil else {
-            throw ValidationError("Must specify --identifier or --index")
-        }
+        let target = try element.requireTarget()
 
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
-
-        let target = ActionTarget(identifier: identifier, order: index)
 
         if !connection.quiet {
             logStatus("Activating element...")
@@ -52,6 +41,6 @@ struct ActivateCommand: AsyncParsableCommand {
         client.send(.activate(target))
 
         let result = try await client.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Activate")
+        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Activate")
     }
 }
