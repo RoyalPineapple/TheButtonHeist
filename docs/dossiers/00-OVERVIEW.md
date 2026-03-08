@@ -10,7 +10,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
 | [TheScore](01-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
-| [TheWheelman](02-THEWHEELMAN.md) | The Getaway Driver | TCP networking, Bonjour discovery, USB tunneling |
+| [TheGetaway](02-THEGETAWAY.md) | The Getaway | iOS server transport (SimpleSocketServer, ServerTransport) |
 
 ### Inside Team (iOS - runs in-process)
 | Crew Member | Alias | Primary Role |
@@ -26,7 +26,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
-| [TheMastermind](09-THEMASTERMIND.md) | The Outside Coordinator | Observable macOS client API (wraps TheWheelman) |
+| [TheMastermind](09-THEMASTERMIND.md) | The Outside Coordinator | Observable macOS client API (wraps TheHandoff) |
 | [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch for CLI/MCP |
 | [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
 | [ButtonHeistMCP](12-MCP.md) | The MCP Server | AI agent tool interface |
@@ -36,7 +36,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ```mermaid
 graph TD
     TheScore["TheScore - (Shared Protocol)"]
-    TW["TheWheelman - (Networking)"]
+    TheGetaway["TheGetaway - (iOS Server Transport)"]
     TheInsideJob["TheInsideJob - (iOS Server)"]
     TheBagman["TheBagman - (Element Cache & Delta)"]
     ThePlant["ThePlant - (Auto-Start)"]
@@ -45,10 +45,9 @@ graph TD
     MCP["ButtonHeistMCP - (MCP Server)"]
     TestApp["AccessibilityTestApp"]
 
-    TheScore --> TW
+    TheScore --> TheGetaway
     TheScore --> TheInsideJob
-    TW --> TheInsideJob
-    TW --> ButtonHeist
+    TheGetaway --> TheInsideJob
     TheScore --> ButtonHeist
     ButtonHeist --> CLI
     ButtonHeist --> MCP
@@ -65,7 +64,7 @@ sequenceDiagram
     participant CLI as CLI / MCP
     participant TF as TheFence
     participant TM as TheMastermind
-    participant TW as TheWheelman
+    participant TH as TheHandoff
     participant DC as DeviceConnection
     participant SS as SimpleSocketServer
     participant IJ as TheInsideJob
@@ -73,8 +72,8 @@ sequenceDiagram
     participant TS as TheSafecracker
 
     CLI->>TF: execute({"command":"activate","identifier":"btn"})
-    TF->>TW: connectWithDiscovery()
-    TW->>DC: connect(to: device)
+    TF->>TH: connectWithDiscovery()
+    TH->>DC: connect(to: device)
     DC->>SS: TCP connect
     SS->>TM2: onClientConnected
     TM2-->>DC: authRequired
