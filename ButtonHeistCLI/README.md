@@ -1,6 +1,6 @@
 # ButtonHeist CLI
 
-Command-line tool for inspecting and interacting with iOS apps running TheInsideJob. List devices, watch the UI hierarchy live, tap buttons, swipe lists, type text, capture screenshots — all from the terminal.
+Command-line tool for inspecting and interacting with iOS apps running TheInsideJob. List devices, inspect the UI hierarchy, tap buttons, swipe lists, type text, capture screenshots — all from the terminal.
 
 ## Building
 
@@ -27,7 +27,7 @@ All subcommands accept `--device <filter>` to target a specific instance. The fi
 - Vendor identifier
 
 ```bash
-buttonheist --device a1b2 watch --once
+buttonheist --device a1b2 activate --identifier myButton
 buttonheist --device "iPhone 15 Pro" screenshot --output screen.png
 ```
 
@@ -47,22 +47,6 @@ buttonheist list [--timeout <seconds>] [--format human|json]
 buttonheist list                  # Human-readable table
 buttonheist list --format json    # JSON for scripting
 ```
-
-### watch (default)
-
-Live-updating accessibility hierarchy viewer. This is the default command when you run `buttonheist` with no subcommand.
-
-```
-buttonheist watch [--format human|json] [--once] [--quiet] [--timeout <seconds>] [--verbose] [--device <filter>]
-```
-
-```bash
-buttonheist                       # Live watch mode
-buttonheist --once                # Single snapshot, then exit
-buttonheist --format json --once  # JSON output for scripting
-```
-
-In watch mode, keyboard shortcuts: `r` or Enter to refresh, `q` to quit.
 
 ### action
 
@@ -153,7 +137,7 @@ buttonheist screenshot | imgcat               # Pipe to viewer
 
 ### session
 
-Persistent interactive session — the backbone of the MCP server. Maintains a single TCP connection to the device and accepts commands as JSON on stdin.
+Persistent interactive session — the backbone of the MCP server. Maintains a single TCP connection to the device and accepts commands on stdin. Interactive mode accepts plain-text commands; JSON input is always accepted.
 
 ```
 buttonheist session [--format human|json] [--timeout <seconds>] [--device <filter>]
@@ -162,11 +146,7 @@ buttonheist session [--format human|json] [--timeout <seconds>] [--device <filte
 ```bash
 buttonheist session                    # Interactive (human-readable)
 buttonheist session --format json      # JSON mode (used by MCP server)
-```
-
-In JSON mode, each line of stdin is a JSON object with a `command` field. Each command produces exactly one JSON response line on stdout.
-
-```bash
+echo 'tap myButton' | buttonheist session --format json
 echo '{"command":"get_interface"}' | buttonheist session --format json
 ```
 

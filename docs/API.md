@@ -1243,32 +1243,6 @@ OPTIONS:
 
 Human output shows device index, short ID, app name, device name, and any device identifiers (simulator UDID or vendor identifier). JSON output includes all fields.
 
-### buttonheist watch (default)
-
-Watch UI element snapshot in real-time.
-
-```
-USAGE: buttonheist watch [OPTIONS]
-
-OPTIONS:
-  -f, --format <format>   Output format: human, json (default: human)
-  -o, --once              Single snapshot then exit
-  -q, --quiet             Suppress status messages
-  -t, --timeout <seconds> Timeout waiting for device (default: 0 = no timeout)
-  -v, --verbose           Show verbose output
-  --device <filter>       Target a specific device
-```
-
-In watch mode, keyboard commands are available:
-- `r` or Enter - Refresh hierarchy
-- `q` - Quit
-
-Exit codes:
-- `0` - Success
-- `1` - Connection failed
-- `2` - No device found
-- `3` - Timeout
-
 ### buttonheist activate
 
 Activate a UI element — the primary interaction command. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, then falls back to synthetic tap at the element's activation point. This is the most reliable way to interact with buttons, links, and controls.
@@ -1651,11 +1625,11 @@ buttonheist list
 buttonheist list --format json
 
 # Target a specific device (by short ID, UDID, or name)
-buttonheist --device a1b2 watch --once
+buttonheist --device a1b2 activate --identifier myButton
 buttonheist --device DEADBEEF-1234 screenshot --output screen.png
 
-# Get hierarchy as JSON
-buttonheist --format json --once > hierarchy.json
+# Get hierarchy as JSON via session
+echo '{"command":"get_interface"}' | buttonheist session --format json
 
 # Activate a button (primary interaction command)
 buttonheist activate --identifier loginButton
