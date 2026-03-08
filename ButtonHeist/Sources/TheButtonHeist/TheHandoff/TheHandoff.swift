@@ -1,17 +1,16 @@
 import Foundation
-import TheScore
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "wheelman")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "handoff")
 
 /// Client-side session manager that owns the full device lifecycle:
 /// discovery, connection, keepalive, and auto-reconnect.
 ///
-/// TheMastermind observes TheWheelman and exposes its state as @Observable
+/// TheMastermind observes TheHandoff and exposes its state as @Observable
 /// properties for SwiftUI consumption. TheFence delegates its connect/reconnect
 /// logic here instead of reimplementing it.
 @ButtonHeistActor
-public final class TheWheelman {
+public final class TheHandoff {
 
     // MARK: - Discovery State
 

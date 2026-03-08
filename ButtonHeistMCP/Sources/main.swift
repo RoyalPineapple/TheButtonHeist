@@ -1,7 +1,6 @@
 import Foundation
 import MCP
 import ButtonHeist
-import TheScore
 
 /// Idle timeout before disconnecting from the device (seconds).
 /// `BUTTONHEIST_SESSION_TIMEOUT` env var overrides the default.

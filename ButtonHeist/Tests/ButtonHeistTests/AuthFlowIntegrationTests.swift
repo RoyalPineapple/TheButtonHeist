@@ -1,7 +1,7 @@
 import XCTest
 import Network
-import TheScore
-@testable import TheWheelman
+import TheGetaway
+@testable import ButtonHeist
 
 /// Integration tests for the auth flow over real TCP connections.
 /// These exercise the approval path introduced in the connection approval feature.

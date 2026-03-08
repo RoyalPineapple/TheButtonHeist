@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import TheScore
 import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "discovery")

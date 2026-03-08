@@ -1,6 +1,6 @@
 import XCTest
 import Network
-@testable import TheWheelman
+@testable import ButtonHeist
 
 final class DiscoveredDeviceTests: XCTestCase {
 
