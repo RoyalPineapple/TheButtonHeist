@@ -10,9 +10,7 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
     )
 
     @OptionGroup var connection: ConnectionOptions
-
-    @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
-    var format: OutputFormat?
+    @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
     var timeout: Double = 10.0
@@ -27,6 +25,6 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
         if !connection.quiet { logStatus("Dismissing keyboard...") }
         client.send(.resignFirstResponder)
         let result = try await client.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: format, quiet: connection.quiet, verb: "Keyboard dismiss")
+        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Keyboard dismiss")
     }
 }
