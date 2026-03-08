@@ -42,9 +42,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "3319961F53E8E0656480630F"
-               BuildableName = "Wheelman.framework"
-               BlueprintName = "Wheelman"
+               BlueprintIdentifier = "9EECCF21DA365EF0D50A9494"
+               BuildableName = "TheWheelman.framework"
+               BlueprintName = "TheWheelman"
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
