@@ -14,7 +14,6 @@ Package.resolved
 # Xcode user-specific files
 *.xcuserstate
 xcuserdata/
-xcshareddata/
 
 # Swift compiler diagnostics
 *.d
