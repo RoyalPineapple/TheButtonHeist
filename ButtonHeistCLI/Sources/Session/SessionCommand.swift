@@ -13,19 +13,16 @@ struct SessionCommand: AsyncParsableCommand {
         commandName: "session",
         abstract: "Start a persistent REPL session with an iOS device",
         discussion: """
-            Maintains a single connection and accepts JSON commands on stdin.
-            Responses are written to stdout — human-readable by default when
-            interactive, compact JSON when piped.
+            Maintains a single connection and accepts commands on stdin.
+            Interactive mode accepts plain-text commands (e.g. 'tap myButton').
+            JSON input is always accepted (e.g. {"command":"one_finger_tap"}).
+            Output is human-readable by default, compact JSON when piped.
 
             Examples:
               buttonheist session
               buttonheist session --device a1b2
-              echo '{"command":"get_interface"}' | buttonheist session
-              buttonheist session --format json <<EOF
-              {"command":"one_finger_tap","identifier":"myButton"}
-              {"command":"get_interface"}
-              {"command":"quit"}
-              EOF
+              echo '{"command":"get_interface"}' | buttonheist session --format json
+              echo 'tap myButton' | buttonheist session --format json
             """
     )
 
@@ -50,10 +47,10 @@ struct SessionCommand: AsyncParsableCommand {
     @MainActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
-        let runner = SessionRunner(deviceFilter: device,
-                                   connectionTimeout: timeout, format: effectiveFormat,
-                                   force: force, token: token,
-                                   sessionTimeout: sessionTimeout)
-        try await runner.run()
+        let repl = ReplSession(deviceFilter: device,
+                               connectionTimeout: timeout, format: effectiveFormat,
+                               force: force, token: token,
+                               sessionTimeout: sessionTimeout)
+        try await repl.run()
     }
 }
