@@ -120,7 +120,7 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 
 ### Manual Connection (for debugging)
 
-**Note**: Protocol v3.1 requires token authentication before any commands are accepted.
+**Note**: The protocol requires token authentication before any commands are accepted.
 
 ```bash
 # Using netcat (must authenticate first)
@@ -133,7 +133,7 @@ nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format js
 
 ## Message Protocol
 
-Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. Protocol v3.1 requires authentication before any commands are accepted.
+Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. The protocol requires authentication before any commands are accepted.
 
 ### Authenticate
 ```json

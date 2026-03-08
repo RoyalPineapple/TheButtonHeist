@@ -47,17 +47,20 @@ public final class DeviceConnection {
     public var onConnected: (() -> Void)?
     public var onDisconnected: ((DisconnectReason) -> Void)?
     public var onServerInfo: ((ServerInfo) -> Void)?
-    public var onInterface: ((Interface) -> Void)?
-    public var onActionResult: ((ActionResult) -> Void)?
-    public var onScreen: ((ScreenPayload) -> Void)?
+    public var onInterface: ((Interface, String?) -> Void)?
+    public var onActionResult: ((ActionResult, String?) -> Void)?
+    public var onScreen: ((ScreenPayload, String?) -> Void)?
     public var onRecordingStarted: (() -> Void)?
     public var onRecording: ((RecordingPayload) -> Void)?
     public var onRecordingError: ((String) -> Void)?
     public var onError: ((String) -> Void)?
-    public var onAuthApproved: ((String) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
     public var onAuthFailed: ((String) -> Void)?
+    public var onInteraction: ((InteractionEvent) -> Void)?
 
+    /// When true, send .watch instead of .authenticate on authRequired
+    public var observeMode: Bool = false
     /// When true, send forceSession in the auth handshake to take over an existing session
     public var forceSession: Bool
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
@@ -92,9 +95,10 @@ public final class DeviceConnection {
         receiveBuffer = Data()
     }
 
-    public func send(_ message: ClientMessage) {
+    public func send(_ message: ClientMessage, requestId: String? = nil) {
         guard let connection, isConnected else { return }
-        guard var data = try? JSONEncoder().encode(message) else {
+        let envelope = RequestEnvelope(requestId: requestId, message: message)
+        guard var data = try? JSONEncoder().encode(envelope) else {
             logger.error("Failed to encode message: \(String(describing: message).prefix(100))")
             return
         }
@@ -183,7 +187,7 @@ public final class DeviceConnection {
 
     private func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
-        guard let message = try? JSONDecoder().decode(ServerMessage.self, from: data) else {
+        guard let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: data) else {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
@@ -191,15 +195,22 @@ public final class DeviceConnection {
             return
         }
 
+        let requestId = envelope.requestId
+        let message = envelope.message
+
         switch message {
         case .authRequired:
-            logger.info("Auth required, sending token")
-            // Send token if available, otherwise send empty token to request UI approval
-            send(.authenticate(AuthenticatePayload(
-                token: token ?? "",
-                forceSession: forceSession ? true : nil,
-                driverId: driverId
-            )))
+            if observeMode {
+                logger.info("Auth required, sending watch request")
+                send(.watch(WatchPayload(token: token ?? "")))
+            } else {
+                logger.info("Auth required, sending token")
+                send(.authenticate(AuthenticatePayload(
+                    token: token ?? "",
+                    forceSession: forceSession ? true : nil,
+                    driverId: driverId
+                )))
+            }
         case .authFailed(let reason):
             logger.error("Auth failed: \(reason)")
             onAuthFailed?(reason)
@@ -215,10 +226,10 @@ public final class DeviceConnection {
             onConnected?()
         case .interface(let payload):
             logger.debug("Received interface: \(payload.elements.count) elements")
-            onInterface?(payload)
+            onInterface?(payload, requestId)
         case .actionResult(let result):
             logger.debug("Received action result: \(result.success)")
-            onActionResult?(result)
+            onActionResult?(result, requestId)
         case .error(let errorMessage):
             logger.error("Received error: \(errorMessage)")
             onError?(errorMessage)
@@ -226,7 +237,7 @@ public final class DeviceConnection {
             logger.debug("Received pong")
         case .screen(let payload):
             logger.debug("Received screen: \(payload.pngData.count) chars base64")
-            onScreen?(payload)
+            onScreen?(payload, requestId)
         case .sessionLocked(let payload):
             logger.warning("Session locked: \(payload.message)")
             onSessionLocked?(payload)
@@ -243,6 +254,9 @@ public final class DeviceConnection {
         case .recordingError(let message):
             logger.error("Recording error: \(message)")
             onRecordingError?(message)
+        case .interaction(let event):
+            logger.debug("Received interaction: \(event.result.method.rawValue)")
+            onInteraction?(event)
         }
     }
 }

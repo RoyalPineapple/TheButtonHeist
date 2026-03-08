@@ -40,6 +40,15 @@ final class TheMuscle {
     /// True when at least one client is subscribed.
     var hasSubscribers: Bool { !subscribedClients.isEmpty }
 
+    // MARK: - Observer Tracking
+
+    /// Clients connected in observe mode — not part of any session.
+    private(set) var observerClients: Set<Int> = []
+    /// Pending approval clients that requested observe mode
+    private var pendingObserverClients: Set<Int> = []
+    /// Whether observers require token authentication (env: INSIDEJOB_WATCH_AUTH, plist: InsideJobWatchAuth)
+    private let observeRequiresAuth: Bool
+
     // MARK: - Session Lock State
 
     /// Driver identity that currently holds the session (nil = no active session).
@@ -69,6 +78,13 @@ final class TheMuscle {
 
     init(explicitToken: String?) {
         self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
+        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_WATCH_AUTH"] {
+            self.observeRequiresAuth = ["1", "true", "yes"].contains(envValue.lowercased())
+        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobWatchAuth") as? Bool {
+            self.observeRequiresAuth = plistValue
+        } else {
+            self.observeRequiresAuth = false
+        }
         if let envTimeout = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_TIMEOUT"],
            let parsed = TimeInterval(envTimeout) {
             self.sessionReleaseTimeout = max(1.0, parsed)
@@ -89,7 +105,7 @@ final class TheMuscle {
     // MARK: - Public API
 
     func sendAuthRequired(clientId: Int) {
-        guard let data = try? JSONEncoder().encode(ServerMessage.authRequired) else { return }
+        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else { return }
         sendToClient?(data, clientId)
     }
 
@@ -122,12 +138,25 @@ final class TheMuscle {
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
-        guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-              case .authenticate(let payload) = message else {
+        guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data) else {
+            logger.warning("Client \(clientId) sent unparsable message before authenticating, disconnecting")
+            disconnectClient?(clientId)
+            return
+        }
+
+        switch envelope.message {
+        case .watch(let payload):
+            handleWatchRequest(clientId, payload: payload, respond: respond)
+            return
+        case .authenticate:
+            break // Fall through to existing auth logic below
+        default:
             logger.warning("Client \(clientId) sent non-auth message before authenticating, disconnecting")
             disconnectClient?(clientId)
             return
         }
+
+        guard case .authenticate(let payload) = envelope.message else { return }
 
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
@@ -170,6 +199,8 @@ final class TheMuscle {
         pendingApprovalClients.removeValue(forKey: clientId)
         clientDriverIds.removeValue(forKey: clientId)
         subscribedClients.remove(clientId)
+        observerClients.remove(clientId)
+        pendingObserverClients.remove(clientId)
         if authenticatedClientIDs.remove(clientId) != nil {
             updateAuthenticatedCount(delta: -1)
         }
@@ -216,6 +247,8 @@ final class TheMuscle {
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
         subscribedClients.removeAll()
+        observerClients.removeAll()
+        pendingObserverClients.removeAll()
         releaseSession()
         dismissAlert()
     }
@@ -223,6 +256,61 @@ final class TheMuscle {
     func invalidateToken() {
         authToken = UUID().uuidString
         logger.info("Token invalidated, new token: \(self.authToken)")
+    }
+
+    // MARK: - Observer Auth
+
+    /// Handle a watch request from an unauthenticated client.
+    /// Observers are auto-approved by default. When INSIDEJOB_WATCH_AUTH=1,
+    /// they require a token match — but never claim a session.
+    private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
+        if observeRequiresAuth {
+            guard !payload.token.isEmpty else {
+                sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
+                logger.warning("Observer \(clientId) sent no token with observeRequiresAuth=true, rejected")
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    self?.disconnectClient?(clientId)
+                }
+                return
+            }
+            guard payload.token == authToken else {
+                sendMessage(.authFailed("Invalid token."), respond: respond)
+                logger.warning("Observer \(clientId) sent invalid token, rejected")
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    self?.disconnectClient?(clientId)
+                }
+                return
+            }
+        }
+        approveObserver(clientId, respond: respond)
+    }
+
+    /// Approve an observer from the pending-approval path (UI prompt)
+    private func approveObserver(_ clientId: Int) {
+        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
+        pendingObserverClients.remove(clientId)
+        markClientAuthenticated?(clientId)
+        authenticatedClientIDs.insert(clientId)
+        observerClients.insert(clientId)
+        subscribedClients.insert(clientId)
+        sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
+        updateAuthenticatedCount(delta: 1)
+        logger.info("Observer \(clientId) approved via UI")
+        onClientAuthenticated?(clientId, respond)
+    }
+
+    /// Approve an observer directly (no UI needed)
+    private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
+        markClientAuthenticated?(clientId)
+        authenticatedClientIDs.insert(clientId)
+        observerClients.insert(clientId)
+        subscribedClients.insert(clientId)
+        sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
+        updateAuthenticatedCount(delta: 1)
+        logger.info("Observer \(clientId) approved (no session lock)")
+        onClientAuthenticated?(clientId, respond)
     }
 
     // MARK: - Session Lock
@@ -362,7 +450,7 @@ final class TheMuscle {
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
-        guard let data = try? JSONEncoder().encode(message) else {
+        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: message)) else {
             logger.error("Failed to encode message")
             return
         }

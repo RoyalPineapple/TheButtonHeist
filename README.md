@@ -49,7 +49,7 @@ Engage the team for your next job via MCP or CLI.
 
 | Character | What they do |
 |-----------|--------------|
-| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, and more. |
+| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, `watch`, and more. |
 | **ButtonHeistMCP** | Agent interface. 14 tools that call through TheFence so AI agents can run the job natively. |
 
 ## Architecture
@@ -103,7 +103,7 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 | **TheWheelman** | iOS + macOS | TCP client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + TheWheelman | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 14 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, scroll, scroll_to_visible, scroll_to_edge, copy, paste, cut, select, select_all, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, copy, paste, cut, select, select_all, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
@@ -186,6 +186,7 @@ buttonheist touch swipe --identifier list --direction up  # Swipe a list
 buttonheist type --text "Hello" --identifier nameField    # Type text
 buttonheist screenshot --output screen.png          # Capture screenshot
 buttonheist record --output demo.mp4                # Record screen (auto-stops on inactivity)
+buttonheist watch                                   # Stream live session as read-only observer
 ```
 
 Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)** 

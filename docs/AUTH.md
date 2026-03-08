@@ -4,12 +4,13 @@ Every TCP connection must authenticate before it can send commands. This documen
 
 ## Overview
 
-Authentication is mandatory. When a client connects, the server sends an `authRequired` challenge. The client must respond with an `authenticate` message containing a valid token. Any other message before authenticating causes immediate disconnection.
+Authentication is mandatory for driver connections. When a client connects, the server sends an `authRequired` challenge. The client must respond with either `authenticate` (for drivers) or `watch` (for observers). Any other message before authenticating causes immediate disconnection.
 
-There are two authentication modes:
+There are three connection modes:
 
-1. **Token auth** — The client sends a known token. If it matches, the client is authenticated.
-2. **UI approval** — The client sends an empty token. If the server is in UI approval mode, an on-device prompt asks the user to Allow or Deny the connection. On Allow, the server sends the token back so the client can reuse it.
+1. **Token auth** — The client sends a known token via `authenticate`. If it matches, the client is authenticated as a driver.
+2. **UI approval** — The client sends an empty token via `authenticate`. If the server is in UI approval mode, an on-device prompt asks the user to Allow or Deny the connection. On Allow, the server sends the token back so the client can reuse it.
+3. **Watch (observer)** — The client sends `watch` instead of `authenticate`. By default, observers are auto-approved without a token. Observers receive all broadcasts but cannot send commands or claim a session. See [Watch (Observer) Connections](#watch-observer-connections) below.
 
 ## Token Resolution
 
@@ -148,24 +149,83 @@ sequenceDiagram
 
 ## Wire Format
 
-Auth messages use the standard newline-delimited JSON format. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for full details.
+Auth messages use the standard newline-delimited JSON format wrapped in envelopes. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for full details.
 
-### Server → Client
-
-```json
-{"authRequired":{}}
-{"authApproved":{"_0":{"token":"A1B2C3D4-E5F6-..."}}}
-{"authFailed":{"_0":"Invalid token. Retry without a token to request a fresh session."}}
-```
-
-### Client → Server
+### Server → Client (ResponseEnvelope)
 
 ```json
-{"authenticate":{"_0":{"token":"my-secret-token"}}}
-{"authenticate":{"_0":{"token":""}}}
+{"requestId":null,"message":{"authRequired":{}}}
+{"requestId":null,"message":{"authApproved":{"_0":{"token":"A1B2C3D4-E5F6-..."}}}}
+{"requestId":null,"message":{"authFailed":{"_0":"Invalid token. Retry without a token to request a fresh session."}}}
 ```
 
-An empty token string requests UI approval. A non-empty token attempts direct authentication.
+### Client → Server (RequestEnvelope)
+
+```json
+{"requestId":"req-1","message":{"authenticate":{"_0":{"token":"my-secret-token"}}}}
+{"requestId":"req-2","message":{"authenticate":{"_0":{"token":""}}}}
+{"requestId":null,"message":{"watch":{"_0":{"token":""}}}}
+```
+
+An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.
+
+## Watch (Observer) Connections
+
+Watch connections use a separate auth flow from driver connections. Instead of `authenticate`, the client sends `watch` in response to `authRequired`.
+
+### Default (Open Access)
+
+By default, watch connections are auto-approved without requiring a token:
+
+```mermaid
+sequenceDiagram
+    participant Observer
+    participant TheInsideJob as TheInsideJob (iOS)
+
+    Observer->>TheInsideJob: TCP Connect
+    TheInsideJob->>Observer: authRequired
+    Observer->>TheInsideJob: watch(token:"")
+    Note right of TheInsideJob: TheMuscle auto-approves observer
+    TheInsideJob->>Observer: info
+    Note over Observer: Auto-subscribed to broadcasts
+    TheInsideJob-->>Observer: interface, screen, interaction
+```
+
+### Restricted (Token Required)
+
+Set `INSIDEJOB_WATCH_AUTH=1` (env) or `InsideJobWatchAuth=true` (Info.plist) on the server to require a valid token for watch connections:
+
+```mermaid
+sequenceDiagram
+    participant Observer
+    participant TheInsideJob as TheInsideJob (iOS)
+
+    Observer->>TheInsideJob: TCP Connect
+    TheInsideJob->>Observer: authRequired
+    Observer->>TheInsideJob: watch(token:"valid-token")
+    Note right of TheInsideJob: TheMuscle validates token
+    TheInsideJob->>Observer: info
+    Note over Observer: Auto-subscribed to broadcasts
+```
+
+### Key Differences from Driver Auth
+
+| Aspect | Driver (`authenticate`) | Observer (`watch`) |
+|--------|------------------------|-------------------|
+| Session lock | Claims exclusive session | No session lock |
+| Commands | Full command set | Read-only (no commands) |
+| Default auth | Token required | Auto-approved |
+| Restricted auth | N/A | `INSIDEJOB_WATCH_AUTH=1` / `InsideJobWatchAuth` plist |
+| UI approval | Supported (empty token) | Not supported |
+| Broadcasts | When subscribed | Always (auto-subscribed) |
+
+### Configuration
+
+| Method | Key | Example |
+|--------|-----|---------|
+| Environment variable (server) | `INSIDEJOB_WATCH_AUTH` | `INSIDEJOB_WATCH_AUTH=1` (require token) |
+| Info.plist key (server) | `InsideJobWatchAuth` | `true` (require token) |
+| CLI flag (client) | `--token` | `buttonheist watch --token my-secret-token` |
 
 ## Bonjour Token Hash
 
@@ -194,11 +254,11 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 
 | Component | Role |
 |-----------|------|
-| **TheMuscle** | Token resolution, validation, UI approval, session locking, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`. |
+| **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
-| **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onTokenReceived` callback. |
+| **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. |
 
 ## Related Documentation
 

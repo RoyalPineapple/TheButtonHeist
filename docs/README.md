@@ -8,7 +8,7 @@ Technical documentation for ButtonHeist internals.
 |----------|-------------|
 | [Architecture](ARCHITECTURE.md) | System design, component interaction, and data flow diagrams |
 | [API Reference](API.md) | Complete API for the MCP server, TheInsideJob, TheMastermind, TheFence, and CLI |
-| [Wire Protocol](WIRE-PROTOCOL.md) | Protocol v3.1 specification — message formats, authentication, transport |
+| [Wire Protocol](WIRE-PROTOCOL.md) | Protocol v4.0 specification — message formats, authentication, transport |
 | [Authentication](AUTH.md) | Token auth, session locking, UI approval |
 | [USB Connectivity](USB_DEVICE_CONNECTIVITY.md) | Connecting to physical devices over USB via CoreDevice IPv6 tunnels |
 

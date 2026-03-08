@@ -422,7 +422,7 @@ public final class TheFence {
     public var onStatus: ((String) -> Void)? {
         didSet { client.wheelman.onStatus = onStatus }
     }
-    public var onTokenReceived: ((String) -> Void)?
+    public var onAuthApproved: ((String?) -> Void)?
 
     private let config: Configuration
     private let client = TheMastermind()
@@ -433,10 +433,12 @@ public final class TheFence {
         self.client.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
         self.client.forceSession = configuration.forceSession
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
-        self.client.autoSubscribe = false
-        self.client.onTokenReceived = { [weak self] token in
-            self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
-            self?.onTokenReceived?(token)
+        self.client.autoSubscribe = true
+        self.client.onAuthApproved = { [weak self] token in
+            if let token {
+                self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
+            }
+            self?.onAuthApproved?(token)
         }
     }
 
@@ -534,16 +536,16 @@ public final class TheFence {
     // MARK: - Handler: Interface
 
     private func handleGetInterface() async throws -> Interface {
-        try await sendAndAwait(.requestInterface) {
-            try await client.waitForInterface(timeout: Timeouts.actionSeconds)
+        try await sendAndAwait(.requestInterface) { requestId in
+            try await client.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
     }
 
     // MARK: - Handler: Screen
 
     private func handleGetScreen(_ args: [String: Any]) async throws -> FenceResponse {
-        let screen: ScreenPayload = try await sendAndAwait(.requestScreen) {
-            try await client.waitForScreen(timeout: 30)
+        let screen: ScreenPayload = try await sendAndAwait(.requestScreen) { requestId in
+            try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
             guard let pngData = Data(base64Encoded: screen.pngData) else {
@@ -792,8 +794,8 @@ public final class TheFence {
         }
         let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, elementTarget: elementTarget(args)
-        ))) {
-            try await client.waitForActionResult(timeout: Timeouts.longActionSeconds)
+        ))) { requestId in
+            try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
         }
         return .action(result: result)
     }
@@ -820,7 +822,7 @@ public final class TheFence {
     }
 
     private func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        let recording: RecordingPayload = try await sendAndAwait(.stopRecording) {
+        let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
@@ -836,17 +838,18 @@ public final class TheFence {
     // MARK: - Send Action (shared)
 
     private func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
-        let result: ActionResult = try await sendAndAwait(message) {
-            try await client.waitForActionResult(timeout: Timeouts.actionSeconds)
+        let result: ActionResult = try await sendAndAwait(message) { requestId in
+            try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
         return .action(result: result)
     }
 
-    private func sendAndAwait<T>(_ message: ClientMessage, response: () async throws -> T) async throws -> T {
+    private func sendAndAwait<T>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
         guard client.connectionState == .connected else { throw FenceError.notConnected }
-        client.send(message)
+        let requestId = UUID().uuidString
+        client.send(message, requestId: requestId)
         do {
-            return try await response()
+            return try await response(requestId)
         } catch {
             client.forceDisconnect()
             throw mapCaughtError(error)

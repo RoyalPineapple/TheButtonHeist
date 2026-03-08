@@ -39,7 +39,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
     /// Send a newline-delimited JSON message over a connection.
     private func sendMessage(_ message: ClientMessage, over connection: NWConnection) {
-        guard var data = try? JSONEncoder().encode(message) else {
+        guard var data = try? JSONEncoder().encode(RequestEnvelope(message: message)) else {
             XCTFail("Failed to encode message")
             return
         }
@@ -80,7 +80,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         if let newlineIndex = messageData.firstIndex(of: 0x0A) {
             messageData = Data(messageData.prefix(upTo: newlineIndex))
         }
-        return try JSONDecoder().decode(ServerMessage.self, from: messageData)
+        return try JSONDecoder().decode(ResponseEnvelope.self, from: messageData).message
     }
 
     // MARK: - Tests
@@ -95,16 +95,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            // Send authRequired
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { clientId, data, respond in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -122,7 +120,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
                 screenWidth: 393,
                 screenHeight: 852
             )
-            if let data = try? JSONEncoder().encode(ServerMessage.info(info)) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .info(info))) {
                 respond(data)
             }
             clientAuthenticated.fulfill()
@@ -156,15 +154,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { _, data, _ in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 XCTFail("Expected authenticate message")
                 return
             }
@@ -197,15 +194,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { clientId, data, respond in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 return
             }
 
@@ -214,8 +210,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
                 // Simulate UI approval: mark authenticated, send authApproved, then info
                 self.server.markAuthenticated(clientId)
-                let approved = ServerMessage.authApproved(AuthApprovedPayload(token: approvalToken))
-                if let data = try? JSONEncoder().encode(approved) {
+                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authApproved(AuthApprovedPayload(token: approvalToken)))) {
                     respond(data)
                 }
 
@@ -229,7 +224,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
                     screenWidth: 393,
                     screenHeight: 852
                 )
-                if let data = try? JSONEncoder().encode(ServerMessage.info(info)) {
+                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .info(info))) {
                     self.server.send(data, to: clientId)
                 }
             }
@@ -260,7 +255,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         while let newlineIndex = buffer.firstIndex(of: 0x0A) {
             let msgData = Data(buffer.prefix(upTo: newlineIndex))
             buffer = Data(buffer.suffix(from: buffer.index(after: newlineIndex)))
-            if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ServerMessage.self, from: msgData) {
+            if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ResponseEnvelope.self, from: msgData).message {
                 if case .authApproved(let payload) = msg {
                     XCTAssertEqual(payload.token, approvalToken)
                     receivedAuthApproved = true
@@ -275,7 +270,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
             while let newlineIndex = moreBuffer.firstIndex(of: 0x0A) {
                 let msgData = Data(moreBuffer.prefix(upTo: newlineIndex))
                 moreBuffer = Data(moreBuffer.suffix(from: moreBuffer.index(after: newlineIndex)))
-                if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ServerMessage.self, from: msgData) {
+                if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ResponseEnvelope.self, from: msgData).message {
                     if case .authApproved(let payload) = msg {
                         XCTAssertEqual(payload.token, approvalToken)
                         receivedAuthApproved = true
@@ -305,15 +300,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         server.onClientConnected = { clientId in
             clientConnected.fulfill()
-            let msg = ServerMessage.authRequired
-            if let data = try? JSONEncoder().encode(msg) {
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
                 self.server.send(data, to: clientId)
             }
         }
 
         server.onUnauthenticatedData = { clientId, data, respond in
-            guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data),
-                  case .authenticate(let payload) = message else {
+            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                  case .authenticate(let payload) = envelope.message else {
                 return
             }
 
@@ -321,8 +315,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
                 emptyTokenReceived.fulfill()
 
                 // Simulate UI denial: send authFailed and disconnect
-                let failed = ServerMessage.authFailed("Connection denied by user")
-                if let data = try? JSONEncoder().encode(failed) {
+                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authFailed("Connection denied by user"))) {
                     respond(data)
                 }
 
@@ -354,7 +347,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         while let newlineIndex = buffer.firstIndex(of: 0x0A) {
             let msgData = Data(buffer.prefix(upTo: newlineIndex))
             buffer = Data(buffer.suffix(from: buffer.index(after: newlineIndex)))
-            if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ServerMessage.self, from: msgData) {
+            if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ResponseEnvelope.self, from: msgData).message {
                 if case .authFailed(let reason) = msg {
                     XCTAssertEqual(reason, "Connection denied by user")
                     receivedAuthFailed = true
@@ -364,7 +357,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         if !receivedAuthFailed {
             // Check remaining buffer for the authRequired message first
-            if !buffer.isEmpty, let msg = try? JSONDecoder().decode(ServerMessage.self, from: buffer) {
+            if !buffer.isEmpty, let msg = try? JSONDecoder().decode(ResponseEnvelope.self, from: buffer).message {
                 if case .authFailed(let reason) = msg {
                     XCTAssertEqual(reason, "Connection denied by user")
                     receivedAuthFailed = true
@@ -379,7 +372,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
             while let newlineIndex = moreBuffer.firstIndex(of: 0x0A) {
                 let msgData = Data(moreBuffer.prefix(upTo: newlineIndex))
                 moreBuffer = Data(moreBuffer.suffix(from: moreBuffer.index(after: newlineIndex)))
-                if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ServerMessage.self, from: msgData) {
+                if !msgData.isEmpty, let msg = try? JSONDecoder().decode(ResponseEnvelope.self, from: msgData).message {
                     if case .authFailed(let reason) = msg {
                         XCTAssertEqual(reason, "Connection denied by user")
                         receivedAuthFailed = true

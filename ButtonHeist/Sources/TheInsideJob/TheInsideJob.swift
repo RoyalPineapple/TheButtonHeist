@@ -226,7 +226,7 @@ public final class TheInsideJob {
     }
 
     private func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
-        guard let message = try? JSONDecoder().decode(ClientMessage.self, from: data) else {
+        guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data) else {
             insideJobLogger.error("Failed to decode client message")
             if String(data: data, encoding: .utf8) != nil {
                 insideJobLogger.debug("Unparsable message: \(data.count) bytes")
@@ -235,90 +235,106 @@ public final class TheInsideJob {
             return
         }
 
+        let requestId = envelope.requestId
+        let message = envelope.message
+
         insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
+
+        // Observers are read-only — only allow protocol and observation messages
+        let isObserver = muscle.observerClients.contains(clientId)
 
         switch message {
         // Protocol messages
-        case .authenticate:
-            break // Already authenticated via onUnauthenticatedData path
+        case .authenticate, .watch:
+            break // Already handled via onUnauthenticatedData path
         case .requestInterface:
             insideJobLogger.debug("Interface requested by client \(clientId)")
-            await sendInterface(respond: respond)
+            await sendInterface(requestId: requestId, respond: respond)
         case .subscribe:
             muscle.subscribe(clientId: clientId)
         case .unsubscribe:
             muscle.unsubscribe(clientId: clientId)
         case .ping:
             muscle.noteClientActivity(clientId)
-            sendMessage(.pong, respond: respond)
+            sendMessage(.pong, requestId: requestId, respond: respond)
 
         // Observation
         case .requestScreen:
-            handleScreen(respond: respond)
+            handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
-            await handleWaitForIdle(target, respond: respond)
+            await handleWaitForIdle(target, requestId: requestId, respond: respond)
 
-        // Recording
-        case .startRecording(let config):
-            handleStartRecording(config, respond: respond)
-        case .stopRecording:
-            handleStopRecording(respond: respond)
-
-        // All interactions delegate to TheSafecracker via performInteraction
+        // Recording & interactions — blocked for observers
         default:
-            await dispatchInteraction(message, respond: respond)
+            if isObserver {
+                sendMessage(.actionResult(ActionResult(
+                    success: false,
+                    method: .activate,
+                    message: "Watch mode is read-only"
+                )), requestId: requestId, respond: respond)
+                return
+            }
+
+            switch message {
+            case .startRecording(let config):
+                handleStartRecording(config, requestId: requestId, respond: respond)
+            case .stopRecording:
+                handleStopRecording(requestId: requestId, respond: respond)
+            default:
+                await dispatchInteraction(message, requestId: requestId, respond: respond)
+            }
         }
     }
 
     /// Route interaction messages to TheSafecracker through the standard
     /// refresh-snapshot-execute-delta pipeline.
-    private func dispatchInteraction(_ message: ClientMessage, respond: @escaping (Data) -> Void) async {
+    private func dispatchInteraction(_ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void) async {
         switch message {
         case .activate(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeActivate(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeActivate(target) }
         case .increment(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeIncrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeDecrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeDecrement(target) }
         case .performCustomAction(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeCustomAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeEditAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeEditAction(target) }
         case .resignFirstResponder:
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
         case .touchTap(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTap(target) }
         case .touchLongPress(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeLongPress(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeLongPress(target) }
         case .touchSwipe(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeSwipe(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeSwipe(target) }
         case .touchDrag(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrag(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrag(target) }
         case .touchPinch(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executePinch(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executePinch(target) }
         case .touchRotate(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeRotate(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawPath(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
         case .typeText(let target):
-            await performInteraction(command: message, respond: respond) { await self.theSafecracker.executeTypeText(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         case .scroll(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScroll(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScroll(target) }
         case .scrollToVisible(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
         case .scrollToEdge(let target):
-            await performInteraction(command: message, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
         default:
             insideJobLogger.error("Unhandled message type in dispatchInteraction")
             sendMessage(.actionResult(ActionResult(
                 success: false,
                 method: .activate,
                 message: "Unhandled command"
-            )), respond: respond)
+            )), requestId: requestId, respond: respond)
         }
     }
 
@@ -329,6 +345,7 @@ public final class TheInsideJob {
     /// When a recording is active, captures the command and before/after interface state.
     private func performInteraction(
         command: ClientMessage,
+        requestId: String? = nil,
         respond: @escaping (Data) -> Void,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
@@ -368,7 +385,20 @@ public final class TheInsideJob {
             stakeout.recordInteraction(event: event)
         }
 
-        sendMessage(.actionResult(actionResult), respond: respond)
+        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
+
+        // Broadcast interaction event to observers/subscribers
+        if muscle.hasSubscribers {
+            let event = InteractionEvent(
+                timestamp: Date().timeIntervalSince1970,
+                command: command,
+                result: actionResult,
+                interfaceDelta: actionResult.interfaceDelta
+            )
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
+                broadcastToSubscribed(data)
+            }
+        }
     }
 
     private func sendServerInfo(respond: @escaping (Data) -> Void) {
@@ -390,8 +420,9 @@ public final class TheInsideJob {
         sendMessage(.info(info), respond: respond)
     }
 
-    func sendMessage(_ message: ServerMessage, respond: @escaping (Data) -> Void) {
-        guard let data = try? JSONEncoder().encode(message) else {
+    func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping (Data) -> Void) {
+        let envelope = ResponseEnvelope(requestId: requestId, message: message)
+        guard let data = try? JSONEncoder().encode(envelope) else {
             insideJobLogger.error("Failed to encode message")
             return
         }

@@ -7,12 +7,12 @@ extension TheInsideJob {
 
     // MARK: - Wait For Idle Handler
 
-    func handleWaitForIdle(_ target: WaitForIdleTarget, respond: @escaping (Data) -> Void) async {
+    func handleWaitForIdle(_ target: WaitForIdleTarget, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         let timeout = min(target.timeout ?? 5.0, 60.0)
         let settled = await bagman.waitForAnimationsToSettle(timeout: timeout)
 
         guard let hierarchyTree = bagman.refreshAccessibilityData() else {
-            sendMessage(.error("Could not access root view"), respond: respond)
+            sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
@@ -31,7 +31,7 @@ extension TheInsideJob {
             ),
             animating: settled ? nil : true
         )
-        sendMessage(.actionResult(result), respond: respond)
+        sendMessage(.actionResult(result), requestId: requestId, respond: respond)
     }
 }
 
