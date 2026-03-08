@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "TheScore", targets: ["TheScore"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
-        .library(name: "TheWheelman", targets: ["TheWheelman"]),
+        .library(name: "TheGetaway", targets: ["TheGetaway"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
@@ -28,7 +28,7 @@ let package = Package(
             name: "TheInsideJob",
             dependencies: [
                 "TheScore",
-                "TheWheelman",
+                "TheGetaway",
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
             path: "Sources/TheInsideJob",
@@ -42,14 +42,14 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "TheWheelman",
+            name: "TheGetaway",
             dependencies: ["TheScore"],
-            path: "Sources/TheWheelman",
+            path: "Sources/TheGetaway",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .target(
             name: "ButtonHeist",
-            dependencies: ["TheScore", "TheWheelman"],
+            dependencies: ["TheScore"],
             path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
@@ -61,14 +61,8 @@ let package = Package(
         ),
         .testTarget(
             name: "ButtonHeistTests",
-            dependencies: ["ButtonHeist", "TheScore"],
+            dependencies: ["ButtonHeist", "TheScore", "TheGetaway"],
             path: "Tests/ButtonHeistTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
-        ),
-        .testTarget(
-            name: "WheelmanTests",
-            dependencies: ["TheWheelman", "TheScore"],
-            path: "Tests/TheWheelmanTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

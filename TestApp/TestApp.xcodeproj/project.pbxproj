@@ -9,9 +9,10 @@
 /* Begin PBXBuildFile section */
 		06EA656669AD7FD0FDCBD16B /* TheScore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		0B7EB1E6FE0F617D95F7095C /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		0EA0C972481746F3855F0A23 /* TheWheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2FBE6B8FE062E6BE99A80B48 /* TheWheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		11505204DEA908FB351946FC /* TheGetaway.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0DECAA08C43D7B29524A07A1 /* TheGetaway.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		18770BE558AFA7ED1A6D0254 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; };
 		2207F605FE5B90CBFAA698BA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 08C502CD65C96FA553FDE94E /* Assets.xcassets */; };
+		2B52EA5353B9ECB4EACB6312 /* TheGetaway.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0DECAA08C43D7B29524A07A1 /* TheGetaway.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3446F6FA07532BAC23F137EF /* AlertsSheetDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */; };
 		3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3E93AE1108866F17601CB8 /* SettingsView.swift */; };
 		41BCD5493551504A86D47AB5 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79538EA411CEC1C55C14AE0E /* NotesView.swift */; };
@@ -20,7 +21,6 @@
 		5ADD7EE878F11746F33810CA /* DisclosureGroupingDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */; };
 		5DAE78C8EAB2E5B2A3FF393C /* TuistBundle+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */; };
 		6CD11C258BD8A5FDA8CDC91B /* ButtonsActionsDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */; };
-		79FFE9F7E0824015E4CBE1F5 /* TheWheelman.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 2FBE6B8FE062E6BE99A80B48 /* TheWheelman.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7EDC08F72FF1AA94E23C68AE /* TextInputDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */; };
 		80C51014DFAF47520993D24E /* CalculatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBC26E435BAE4472EEAEAB2 /* CalculatorView.swift */; };
 		82541C601407533FF3F64BD2 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484B42EBF5AEA433BA605F9B /* AppDelegate.swift */; };
@@ -61,9 +61,9 @@
 			files = (
 				A239CC3711100EE9AFA82648 /* AccessibilitySnapshotParser.framework in Embed Frameworks */,
 				0B7EB1E6FE0F617D95F7095C /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */,
+				11505204DEA908FB351946FC /* TheGetaway.framework in Embed Frameworks */,
 				B0D4005F086154117D0AD69B /* TheInsideJob.framework in Embed Frameworks */,
 				06EA656669AD7FD0FDCBD16B /* TheScore.framework in Embed Frameworks */,
-				0EA0C972481746F3855F0A23 /* TheWheelman.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -76,9 +76,9 @@
 			files = (
 				540D12ACEC20064BAC859223 /* AccessibilitySnapshotParser.framework in Embed Frameworks */,
 				EA78FA2AA8AB39C21DACFC8B /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */,
+				2B52EA5353B9ECB4EACB6312 /* TheGetaway.framework in Embed Frameworks */,
 				4DF934707AE8F3560D688EF7 /* TheInsideJob.framework in Embed Frameworks */,
 				BBCDE07C34B4141E1373FF8A /* TheScore.framework in Embed Frameworks */,
-				79FFE9F7E0824015E4CBE1F5 /* TheWheelman.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -89,10 +89,10 @@
 		00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustableControlsDemo.swift; sourceTree = "<group>"; };
 		08096B81FBB34A677903EC34 /* DemoTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTableViewController.swift; sourceTree = "<group>"; };
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0DECAA08C43D7B29524A07A1 /* TheGetaway.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheGetaway.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		10CDD5E500E477B98B606858 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		229C794D786BCDA692A6A11C /* TuistAssets+AccessibilityTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistAssets+AccessibilityTestApp.swift"; sourceTree = "<group>"; };
 		2D55E96F64A552EA4B0C5D12 /* CornerScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CornerScrollView.swift; sourceTree = "<group>"; };
-		2FBE6B8FE062E6BE99A80B48 /* TheWheelman.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheWheelman.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C83CD8B9B8895CCCF58B8FB /* UIKitTestApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "UIKitTestApp-Info.plist"; sourceTree = "<group>"; };
 		3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonsActionsDemo.swift; sourceTree = "<group>"; };
 		484B42EBF5AEA433BA605F9B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -187,9 +187,9 @@
 				C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */,
 				97C3DF6EAC0366513F5B9CB8 /* AccessibilitySnapshotParser.framework */,
 				E601B3DB12C7BDDE9834556C /* AccessibilityTestApp.app */,
+				0DECAA08C43D7B29524A07A1 /* TheGetaway.framework */,
 				10CDD5E500E477B98B606858 /* TheInsideJob.framework */,
 				6EF972032CB124C82F21FE17 /* TheScore.framework */,
-				2FBE6B8FE062E6BE99A80B48 /* TheWheelman.framework */,
 				877D35FA7E56356C3A73F9AC /* UIKitTestApp.app */,
 			);
 			name = Products;

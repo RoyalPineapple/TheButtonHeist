@@ -37,6 +37,21 @@ let project = Project(
             ])
         ),
 
+        // MARK: - Server Transport (cross-platform networking, embeds in iOS apps alongside TheInsideJob)
+        .target(
+            name: "TheGetaway",
+            destinations: [.iPhone, .iPad, .mac],
+            product: .framework,
+            bundleId: "com.buttonheist.thegetaway",
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/TheGetaway/**"],
+            scripts: [swiftlintScript],
+            dependencies: [
+                .target(name: "TheScore"),
+            ]
+        ),
+
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
@@ -56,28 +71,9 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
-                .target(name: "TheWheelman"),
+                .target(name: "TheGetaway"),
                 .external(name: "AccessibilitySnapshotParser"),
             ]
-        ),
-
-        // MARK: - Cross-Platform Networking Library
-        .target(
-            name: "TheWheelman",
-            destinations: [.iPhone, .iPad, .mac],
-            product: .framework,
-            bundleId: "com.buttonheist.wheelman",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Sources/TheWheelman/**"],
-            scripts: [swiftlintScript],
-            dependencies: [
-                .target(name: "TheScore"),
-            ],
-            settings: .settings(base: [
-                "SWIFT_VERSION": "5.0",
-                "LastSwiftMigration": "2620",
-            ])
         ),
 
         // MARK: - macOS Client Framework (single import for Mac consumers)
@@ -92,7 +88,6 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
-                .target(name: "TheWheelman"),
             ]
         ),
 
@@ -110,21 +105,6 @@ let project = Project(
             ]
         ),
 
-        // MARK: - TheWheelman Tests
-        .target(
-            name: "TheWheelmanTests",
-            destinations: .macOS,
-            product: .unitTests,
-            bundleId: "com.buttonheist.thewheelman.tests",
-            deploymentTargets: .macOS("14.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Tests/TheWheelmanTests/**"],
-            dependencies: [
-                .target(name: "TheWheelman"),
-                .target(name: "TheScore"),
-            ]
-        ),
-
         // MARK: - ButtonHeist Tests
         .target(
             name: "ButtonHeistTests",
@@ -136,6 +116,7 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
                 .target(name: "ButtonHeist"),
+                .target(name: "TheGetaway"),
             ]
         ),
 
@@ -166,22 +147,10 @@ let project = Project(
             ])
         ),
         .scheme(
-            name: "TheWheelmanTests",
-            buildAction: .buildAction(targets: [
-                .target("TheWheelmanTests"),
-                .target("TheWheelman"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("TheWheelmanTests")),
-            ])
-        ),
-        .scheme(
             name: "ButtonHeistTests",
             buildAction: .buildAction(targets: [
                 .target("ButtonHeistTests"),
                 .target("ButtonHeist"),
-                .target("TheWheelman"),
                 .target("TheScore"),
             ]),
             testAction: .targets([
@@ -193,7 +162,7 @@ let project = Project(
             buildAction: .buildAction(targets: [
                 .target("TheInsideJobTests"),
                 .target("TheInsideJob"),
-                .target("TheWheelman"),
+                .target("TheGetaway"),
                 .target("TheScore"),
             ]),
             testAction: .targets([

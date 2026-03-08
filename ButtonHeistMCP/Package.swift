@@ -18,7 +18,6 @@ let package = Package(
             name: "ButtonHeistMCP",
             dependencies: [
                 .product(name: "ButtonHeist", package: "ButtonHeist"),
-                .product(name: "TheScore", package: "ButtonHeist"),
                 .product(name: "MCP", package: "swift-sdk")
             ],
             path: "Sources",
