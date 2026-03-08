@@ -26,7 +26,7 @@ Thank you for your interest in contributing to ButtonHeist!
 | `ButtonHeist/Sources/TheInsideJob/` | iOS server framework (server, touch injection, tap visualization) |
 | `ButtonHeist/Sources/ThePlant/` | ObjC auto-start via +load |
 | `ButtonHeist/Sources/Wheelman/` | Cross-platform networking (TCP server/client, Bonjour discovery) |
-| `ButtonHeistCLI/` | Command-line tool (list, watch, action, touch, type, screenshot, session) |
+| `ButtonHeistCLI/` | Command-line tool (list, activate, action, touch, type, screenshot, session) |
 | `ButtonHeistMCP/` | MCP server for AI agent integration |
 | `TestApp/` | Sample SwiftUI and UIKit iOS applications |
 | `AccessibilitySnapshot/` | Hierarchy parsing submodule |
