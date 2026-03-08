@@ -67,6 +67,10 @@ public final class ServerTransport {
         self.server = SimpleSocketServer()
     }
 
+    deinit {
+        stop()
+    }
+
     // MARK: - Lifecycle
 
     /// Start the TCP server on the specified port.
@@ -81,9 +85,8 @@ public final class ServerTransport {
 
     /// Stop the TCP server and any Bonjour advertisement.
     public func stop() {
+        stopAdvertising()
         server.stop()
-        netService?.stop()
-        netService = nil
     }
 
     // MARK: - Bonjour Advertisement
@@ -94,12 +97,14 @@ public final class ServerTransport {
     ///   - serviceName: The Bonjour service name (e.g. "MyApp#instanceId")
     ///   - simulatorUDID: Simulator UDID to include in TXT record (optional)
     ///   - tokenHash: Token hash prefix for pre-connection filtering (optional)
+    ///   - installationId: Stable installation identifier (optional)
     ///   - instanceId: Human-readable instance identifier (optional)
     ///   - additionalTXT: Extra TXT record key-value pairs (optional)
     public func advertise(
         serviceName: String,
         simulatorUDID: String? = nil,
         tokenHash: String? = nil,
+        installationId: String? = nil,
         instanceId: String? = nil,
         additionalTXT: [String: String] = [:]
     ) {
@@ -108,6 +113,8 @@ public final class ServerTransport {
             logger.error("Cannot advertise: server not started")
             return
         }
+
+        stopAdvertising()
 
         let service = NetService(
             domain: "local.",
@@ -123,6 +130,9 @@ public final class ServerTransport {
         }
         if let hash = tokenHash, let data = hash.data(using: .utf8) {
             txtDict["tokenhash"] = data
+        }
+        if let installationId, let data = installationId.data(using: .utf8) {
+            txtDict["installationid"] = data
         }
         if let id = instanceId, let data = id.data(using: .utf8) {
             txtDict["instanceid"] = data
@@ -162,6 +172,7 @@ public final class ServerTransport {
     public func stopAdvertising() {
         netService?.stop()
         netService = nil
+        currentTXT.removeAll()
     }
 
     // MARK: - Message Sending

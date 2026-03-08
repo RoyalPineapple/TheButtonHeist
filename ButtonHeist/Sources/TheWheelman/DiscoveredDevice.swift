@@ -10,6 +10,10 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let simulatorUDID: String?
     /// Token hash from Bonjour TXT record (for pre-connection filtering)
     public let tokenHash: String?
+    /// Stable installation identifier from Bonjour TXT record
+    public let installationId: String?
+    /// Human-readable device name from Bonjour TXT record
+    public let displayDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     public let instanceId: String?
     /// Whether the device has an active session (from Bonjour TXT record)
@@ -17,13 +21,18 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     public init(id: String, name: String, endpoint: NWEndpoint,
                 simulatorUDID: String? = nil,
-                tokenHash: String? = nil, instanceId: String? = nil,
+                tokenHash: String? = nil,
+                installationId: String? = nil,
+                displayDeviceName: String? = nil,
+                instanceId: String? = nil,
                 sessionActive: Bool? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
         self.tokenHash = tokenHash
+        self.installationId = installationId
+        self.displayDeviceName = displayDeviceName
         self.instanceId = instanceId
         self.sessionActive = sessionActive
     }
@@ -43,6 +52,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     public static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
         lhs.id == rhs.id
+    }
+
+    private static func normalizedIdentifier(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
     /// Short instance ID parsed from service name (e.g., "a1b2c3d4")
@@ -80,7 +95,21 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     /// Device name extracted from service name (empty for v3 format)
     public var deviceName: String {
-        parsedName?.deviceName ?? ""
+        displayDeviceName ?? parsedName?.deviceName ?? ""
+    }
+
+    var discoveryIdentity: String {
+        let normalizedAppName = appName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if let installationId = Self.normalizedIdentifier(installationId) {
+            return "install|\(normalizedAppName)|\(installationId)"
+        }
+
+        if let tokenHash = Self.normalizedIdentifier(tokenHash) {
+            return "token|\(normalizedAppName)|\(tokenHash)"
+        }
+
+        return "service|\(id)"
     }
 
     /// Check if this device matches a filter string.
@@ -91,6 +120,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             appName.lowercased().contains(low) ||
             deviceName.lowercased().contains(low) ||
             (shortId?.lowercased().hasPrefix(low) ?? false) ||
+            (installationId?.lowercased().hasPrefix(low) ?? false) ||
             (instanceId?.lowercased().hasPrefix(low) ?? false) ||
             (simulatorUDID?.lowercased().hasPrefix(low) ?? false)
     }

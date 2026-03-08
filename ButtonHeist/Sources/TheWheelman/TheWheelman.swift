@@ -76,14 +76,16 @@ public final class TheWheelman {
         discoveredDevices.removeAll()
         discovery = DeviceDiscovery()
         discovery?.onDeviceFound = { [weak self] device in
+            guard let self else { return }
             logger.info("Device found: \(device.name)")
-            self?.discoveredDevices.append(device)
-            self?.onDeviceFound?(device)
+            self.discoveredDevices = self.discovery?.discoveredDevices ?? []
+            self.onDeviceFound?(device)
         }
         discovery?.onDeviceLost = { [weak self] device in
+            guard let self else { return }
             logger.info("Device lost: \(device.name)")
-            self?.discoveredDevices.removeAll { $0.id == device.id }
-            self?.onDeviceLost?(device)
+            self.discoveredDevices = self.discovery?.discoveredDevices ?? []
+            self.onDeviceLost?(device)
         }
         discovery?.onStateChange = { [weak self] isReady in
             logger.info("Discovery state changed: isReady=\(isReady)")
@@ -97,6 +99,7 @@ public final class TheWheelman {
         discovery?.stop()
         discovery = nil
         isDiscovering = false
+        discoveredDevices = []
     }
 
     // MARK: - Connection

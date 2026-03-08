@@ -21,7 +21,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
         subcommands: [ActivateCommand.self, ListCommand.self, ActionCommand.self,
                        ScrollCommand.self, ScrollToVisibleCommand.self, ScrollToEdgeCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
-                       SessionCommand.self, WatchCommand.self,
+                       SessionCommand.self,
                        RecordCommand.self, StopRecordingCommand.self,
                        CopyCommand.self, PasteCommand.self, CutCommand.self,
                        SelectCommand.self, SelectAllCommand.self,
