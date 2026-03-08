@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "com.buttonheist", category: "mastermind"
 /// with published state and callback hooks. All discovery, connection, keepalive, and
 /// reconnect logic lives in TheWheelman.
 @Observable
-@MainActor
+@ButtonHeistActor
 public final class TheMastermind {
 
     // MARK: - Observable State
@@ -266,11 +266,9 @@ public final class TheMastermind {
         if let requestId {
             return try await withCheckedThrowingContinuation { continuation in
                 pendingActionRequests[requestId] = continuation
-                Task { @MainActor in
+                Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    if let cont = pendingActionRequests.removeValue(forKey: requestId) {
-                        cont.resume(throwing: ActionError.timeout)
-                    }
+                    await self?.timeoutActionRequest(requestId)
                 }
             }
         }
@@ -283,11 +281,9 @@ public final class TheMastermind {
         if let requestId {
             return try await withCheckedThrowingContinuation { continuation in
                 pendingInterfaceRequests[requestId] = continuation
-                Task { @MainActor in
+                Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    if let cont = pendingInterfaceRequests.removeValue(forKey: requestId) {
-                        cont.resume(throwing: ActionError.timeout)
-                    }
+                    await self?.timeoutInterfaceRequest(requestId)
                 }
             }
         }
@@ -300,11 +296,9 @@ public final class TheMastermind {
         if let requestId {
             return try await withCheckedThrowingContinuation { continuation in
                 pendingScreenRequests[requestId] = continuation
-                Task { @MainActor in
+                Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    if let cont = pendingScreenRequests.removeValue(forKey: requestId) {
-                        cont.resume(throwing: ActionError.timeout)
-                    }
+                    await self?.timeoutScreenRequest(requestId)
                 }
             }
         }
@@ -327,7 +321,7 @@ public final class TheMastermind {
         try await withCheckedThrowingContinuation { continuation in
             nonisolated(unsafe) var didResume = false
 
-            let timeoutTask = Task { @MainActor in
+            let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 if !didResume {
                     didResume = true
@@ -372,5 +366,23 @@ public final class TheMastermind {
     public var connectedDeviceDisplayName: String? {
         guard let device = connectedDevice else { return nil }
         return displayName(for: device)
+    }
+
+    private func timeoutActionRequest(_ requestId: String) {
+        if let cont = pendingActionRequests.removeValue(forKey: requestId) {
+            cont.resume(throwing: ActionError.timeout)
+        }
+    }
+
+    private func timeoutInterfaceRequest(_ requestId: String) {
+        if let cont = pendingInterfaceRequests.removeValue(forKey: requestId) {
+            cont.resume(throwing: ActionError.timeout)
+        }
+    }
+
+    private func timeoutScreenRequest(_ requestId: String) {
+        if let cont = pendingScreenRequests.removeValue(forKey: requestId) {
+            cont.resume(throwing: ActionError.timeout)
+        }
     }
 }

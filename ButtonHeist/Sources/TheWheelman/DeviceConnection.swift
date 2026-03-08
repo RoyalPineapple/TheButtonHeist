@@ -5,6 +5,10 @@ import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
 
+private struct ServerMessageEnvelope: Decodable {
+    let message: ServerMessage
+}
+
 /// Structured reason for why a connection was closed.
 public enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
@@ -33,7 +37,7 @@ public enum DisconnectReason: Error, LocalizedError {
 }
 
 /// Connection client using Network framework.
-@MainActor
+@ButtonHeistActor
 public final class DeviceConnection {
 
     private static let maxBufferSize = 10_000_000 // 10 MB
@@ -79,8 +83,8 @@ public final class DeviceConnection {
         let conn = NWConnection(to: device.endpoint, using: .tcp)
 
         conn.stateUpdateHandler = { [weak self] state in
-            Task { @MainActor in
-                self?.handleStateChange(state)
+            Task { [weak self] in
+                await self?.handleStateChange(state)
             }
         }
 
@@ -140,37 +144,44 @@ public final class DeviceConnection {
 
     private func receiveNext(connection: NWConnection) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
-            Task { @MainActor in
-                guard let self else { return }
-
-                if let error {
-                    logger.error("Receive error: \(error)")
-                    self.isConnected = false
-                    self.onDisconnected?(.networkError(error))
-                    return
-                }
-
-                if let content {
-                    self.receiveBuffer.append(content)
-
-                    if self.receiveBuffer.count > Self.maxBufferSize {
-                        logger.error("Server exceeded max buffer size, disconnecting")
-                        self.disconnect()
-                        self.onDisconnected?(.bufferOverflow)
-                        return
-                    }
-
-                    self.processBuffer()
-                }
-
-                if isComplete {
-                    logger.info("Connection closed by server")
-                    self.isConnected = false
-                    self.onDisconnected?(.serverClosed)
-                } else {
-                    self.receiveNext(connection: connection)
-                }
+            Task { [weak self] in
+                await self?.handleReceive(content: content, isComplete: isComplete, error: error, connection: connection)
             }
+        }
+    }
+
+    private func handleReceive(
+        content: Data?,
+        isComplete: Bool,
+        error: NWError?,
+        connection: NWConnection
+    ) {
+        if let error {
+            logger.error("Receive error: \(error)")
+            isConnected = false
+            onDisconnected?(.networkError(error))
+            return
+        }
+
+        if let content {
+            receiveBuffer.append(content)
+
+            if receiveBuffer.count > Self.maxBufferSize {
+                logger.error("Server exceeded max buffer size, disconnecting")
+                disconnect()
+                onDisconnected?(.bufferOverflow)
+                return
+            }
+
+            processBuffer()
+        }
+
+        if isComplete {
+            logger.info("Connection closed by server")
+            isConnected = false
+            onDisconnected?(.serverClosed)
+        } else {
+            receiveNext(connection: connection)
         }
     }
 
@@ -187,16 +198,13 @@ public final class DeviceConnection {
 
     private func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
-        guard let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: data) else {
+        guard let (requestId, message) = decodeEnvelope(from: data) else {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
             onError?("Failed to decode server message")
             return
         }
-
-        let requestId = envelope.requestId
-        let message = envelope.message
 
         switch message {
         case .authRequired:
@@ -258,5 +266,23 @@ public final class DeviceConnection {
             logger.debug("Received interaction: \(event.result.method.rawValue)")
             onInteraction?(event)
         }
+    }
+
+    private func decodeEnvelope(from data: Data) -> (requestId: String?, message: ServerMessage)? {
+        let decoder = JSONDecoder()
+
+        if let envelope = try? decoder.decode(ResponseEnvelope.self, from: data) {
+            return (envelope.requestId, envelope.message)
+        }
+
+        if let envelope = try? decoder.decode(ServerMessageEnvelope.self, from: data) {
+            return (nil, envelope.message)
+        }
+
+        if let message = try? decoder.decode(ServerMessage.self, from: data) {
+            return (nil, message)
+        }
+
+        return nil
     }
 }

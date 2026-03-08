@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: 
 /// TheMastermind observes TheWheelman and exposes its state as @Observable
 /// properties for SwiftUI consumption. TheFence delegates its connect/reconnect
 /// logic here instead of reimplementing it.
-@MainActor
+@ButtonHeistActor
 public final class TheWheelman {
 
     // MARK: - Discovery State
@@ -321,28 +321,31 @@ public final class TheWheelman {
         onDisconnected = { [weak self] reason in
             savedOnDisconnected?(reason)
             guard let self else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.onStatus?("Device disconnected — watching for reconnection...")
-                for _ in 0..<60 {
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                    if let device = self.discoveredDevices.first(matching: filter) {
-                        self.onStatus?("Reconnecting to \(device.name)...")
-                        self.connect(to: device)
-                        let deadline = Date().addingTimeInterval(10)
-                        while !self.isConnected {
-                            if Date() > deadline { break }
-                            try? await Task.sleep(nanoseconds: 100_000_000)
-                        }
-                        if self.isConnected {
-                            self.onStatus?("Reconnected to \(device.name)")
-                            return
-                        }
-                    }
-                }
-                self.onStatus?("Auto-reconnect gave up after 60 attempts")
+            Task { [weak self] in
+                await self?.runAutoReconnect(filter: filter)
             }
         }
+    }
+
+    private func runAutoReconnect(filter: String?) async {
+        onStatus?("Device disconnected — watching for reconnection...")
+        for _ in 0..<60 {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            if let device = discoveredDevices.first(matching: filter) {
+                onStatus?("Reconnecting to \(device.name)...")
+                connect(to: device)
+                let deadline = Date().addingTimeInterval(10)
+                while !isConnected {
+                    if Date() > deadline { break }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if isConnected {
+                    onStatus?("Reconnected to \(device.name)")
+                    return
+                }
+            }
+        }
+        onStatus?("Auto-reconnect gave up after 60 attempts")
     }
 
     /// Errors from the session management lifecycle.
