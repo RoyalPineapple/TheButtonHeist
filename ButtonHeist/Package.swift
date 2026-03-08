@@ -58,6 +58,24 @@ let package = Package(
             dependencies: ["TheScore"],
             path: "Tests/TheScoreTests",
             swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "ButtonHeistTests",
+            dependencies: ["ButtonHeist", "TheScore"],
+            path: "Tests/ButtonHeistTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "WheelmanTests",
+            dependencies: ["Wheelman", "TheScore"],
+            path: "Tests/WheelmanTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
+            name: "TheInsideJobTests",
+            dependencies: ["TheInsideJob", "TheScore"],
+            path: "Tests/TheInsideJobTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]
 )
