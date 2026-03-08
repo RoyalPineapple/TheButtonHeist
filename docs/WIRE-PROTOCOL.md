@@ -2,7 +2,7 @@
 
 **Version**: 4.0
 
-This document specifies the communication protocol between TheInsideJob (iOS) and clients (Wheelman, CLI, Python scripts).
+This document specifies the communication protocol between TheInsideJob (iOS) and clients (TheWheelman, CLI, Python scripts).
 
 ## Transport
 

@@ -1,7 +1,7 @@
 import XCTest
 import Network
 import TheScore
-@testable import Wheelman
+@testable import TheWheelman
 
 /// Tests for session locking behavior over real TCP connections.
 /// Validates that clients correctly handle sessionLocked messages and send forceSession.

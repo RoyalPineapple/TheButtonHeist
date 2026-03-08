@@ -1,6 +1,6 @@
 import Foundation
 import TheScore
-import Wheelman
+import TheWheelman
 
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
