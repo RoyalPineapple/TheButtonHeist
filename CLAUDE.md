@@ -159,6 +159,12 @@ Before pushing any commit, verify the following:
   - New connection paths → Add integration tests
 - Tests should be automatable (no manual verification required).
 
+## Git Branch Conventions
+
+- **"main" means `origin/main`**. When instructions or conversation refer to `main`, always use `origin/main`. The local `main` branch may be stale.
+- Before creating PRs, diffing, or merging, always `git fetch origin main` first.
+- Periodically update local `main` to track `origin/main`: `git checkout main && git pull origin main`.
+
 ## Commit Hygiene
 
 - **Always ensure code builds before committing.** Never commit code that doesn't compile or pass basic build checks.
