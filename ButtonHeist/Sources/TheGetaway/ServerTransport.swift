@@ -24,6 +24,9 @@ public final class ServerTransport {
     /// The underlying TCP server (actor-isolated).
     public let server: SimpleSocketServer
 
+    /// TLS identity for encrypted transport (nil = plain TCP).
+    private let tlsIdentity: TLSIdentity?
+
     /// The Bonjour service, if advertising.
     private var netService: NetService?
 
@@ -63,8 +66,9 @@ public final class ServerTransport {
 
     // MARK: - Init
 
-    public init() {
+    public init(tlsIdentity: TLSIdentity? = nil) {
         self.server = SimpleSocketServer()
+        self.tlsIdentity = tlsIdentity
     }
 
     deinit {
@@ -80,7 +84,7 @@ public final class ServerTransport {
     /// - Returns: Actual port number bound
     @discardableResult
     public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
-        try server.start(port: port, bindToLoopback: bindToLoopback)
+        try server.start(port: port, bindToLoopback: bindToLoopback, tlsIdentity: tlsIdentity?.identity)
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
@@ -136,6 +140,12 @@ public final class ServerTransport {
             if let data = value.data(using: .utf8) {
                 txtDict[key] = data
             }
+        }
+        if let fp = tlsIdentity?.fingerprint, let data = fp.data(using: .utf8) {
+            txtDict["certfp"] = data
+        }
+        if tlsIdentity != nil {
+            txtDict["transport"] = Data("tls".utf8)
         }
 
         currentTXT = txtDict

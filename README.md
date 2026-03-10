@@ -13,6 +13,7 @@ The Button Heist gives AI agents (and humans) full control over iOS apps. Embed 
 - **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
 - **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
+- **TLS encryption** — All traffic encrypted with TLS 1.2+. Self-signed ECDSA certificates generated at runtime, verified via SHA-256 fingerprint pinning through Bonjour
 - **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
 - **Auto-start** — TheInsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
 - **Multi-device** — Run many instances on many simulators with stable identifiers

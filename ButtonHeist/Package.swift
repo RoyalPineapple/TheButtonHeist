@@ -15,7 +15,9 @@ let package = Package(
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
-        .package(path: "../AccessibilitySnapshot")
+        .package(path: "../AccessibilitySnapshot"),
+        .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],
     targets: [
         .target(
@@ -43,13 +45,20 @@ let package = Package(
         ),
         .target(
             name: "TheGetaway",
-            dependencies: ["TheScore"],
+            dependencies: [
+                "TheScore",
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
             path: "Sources/TheGetaway",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .target(
             name: "ButtonHeist",
-            dependencies: ["TheScore"],
+            dependencies: [
+                "TheScore",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
             path: "Sources/TheButtonHeist",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
@@ -61,7 +70,10 @@ let package = Package(
         ),
         .testTarget(
             name: "ButtonHeistTests",
-            dependencies: ["ButtonHeist", "TheScore", "TheGetaway"],
+            dependencies: [
+                "ButtonHeist", "TheScore", "TheGetaway",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
             path: "Tests/ButtonHeistTests",
             swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
         ),
