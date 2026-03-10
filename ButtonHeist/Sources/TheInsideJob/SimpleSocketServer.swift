@@ -235,26 +235,30 @@ public actor SimpleSocketServer {
             return
         }
 
-        // Scope filtering: classify the remote address and reject disallowed scopes
-        if allowedScopes != ConnectionScope.all {
-            let remoteAddress = Self.extractRemoteAddress(from: connection)
-            let scope = ConnectionScope.classify(remoteAddress: remoteAddress)
-            if !allowedScopes.contains(scope) {
-                logger.warning("Rejecting \(scope.rawValue) connection from \(remoteAddress)")
-                connection.cancel()
-                return
-            }
-            logger.info("Accepted \(scope.rawValue) connection from \(remoteAddress)")
-        }
-
         clientCounter += 1
         let clientId = clientCounter
         connections[clientId] = connection
+        let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
 
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
             case .ready:
+                // Scope filtering at .ready: interface info is now available for precise USB detection
+                if let scopeFilter {
+                    if let host = Self.extractRemoteHost(from: connection) {
+                        let interfaces = connection.currentPath?.availableInterfaces ?? []
+                        let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
+                        let hostDescription = "\(host)"
+                        let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
+                        if !scopeFilter.contains(scope) {
+                            logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                            Task { await self.removeClient(clientId) }
+                            return
+                        }
+                        logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                    }
+                }
                 logger.info("Client \(clientId) connected")
                 self.onClientConnected?(clientId)
             case .failed(let error):
@@ -371,14 +375,16 @@ public actor SimpleSocketServer {
         }
     }
 
-    /// Extract the remote IP address string from an NWConnection's endpoint.
-    nonisolated private static func extractRemoteAddress(from connection: NWConnection) -> String {
-        if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
-            return "\(host)"
+    /// Extract the remote host from an NWConnection using typed Network framework values.
+    /// Checks the connection endpoint directly (always available), with currentPath as fallback.
+    nonisolated private static func extractRemoteHost(from connection: NWConnection) -> NWEndpoint.Host? {
+        if case .hostPort(let host, _) = connection.endpoint {
+            return host
         }
-        // Fall back to endpoint description for connections not yet established
-        let description = "\(connection.endpoint)"
-        return description
+        if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
+            return host
+        }
+        return nil
     }
 
     // MARK: - Errors

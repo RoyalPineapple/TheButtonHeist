@@ -1,14 +1,13 @@
 import Foundation
 import Network
-import os.log
-
+import os
 private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
 
 /// How a device was discovered or is reachable.
 public enum ConnectionType: String, Sendable {
     case simulator
     case usb
-    case device
+    case network
 }
 
 /// A discovered iOS device running TheInsideJob
@@ -59,7 +58,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public var connectionType: ConnectionType {
         if simulatorUDID != nil { return .simulator }
         if id.hasPrefix("usb-") { return .usb }
-        return .device
+        return .network
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -165,25 +164,25 @@ extension Array where Element == DiscoveredDevice {
 }
 
 extension DiscoveredDevice {
-    /// Attempt a plain TCP connect to check if the device is reachable.
-    /// Returns true if the TCP handshake completes within the timeout.
+    /// Check if the device's host is reachable via a UDP path probe.
+    /// Uses UDP to avoid consuming TCP connection slots on the server.
+    /// Returns true if the network path becomes viable within the timeout.
     nonisolated func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
         let endpoint = self.endpoint
         let deviceName = self.name
+        let probeQueue = DispatchQueue(label: "com.buttonheist.reachability-probe")
+        let resumed = OSAllocatedUnfairLock(initialState: false)
         return await withCheckedContinuation { continuation in
-            nonisolated(unsafe) var resumed = false
-
-            let conn = NWConnection(to: endpoint, using: .tcp)
+            let conn = NWConnection(to: endpoint, using: .udp)
             conn.stateUpdateHandler = { state in
-                guard !resumed else { return }
                 switch state {
                 case .ready:
-                    resumed = true
+                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
                     reachabilityLogger.debug("Reachable: \(deviceName)")
                     conn.cancel()
                     continuation.resume(returning: true)
                 case .failed, .cancelled:
-                    resumed = true
+                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
                     reachabilityLogger.debug("Unreachable: \(deviceName)")
                     conn.cancel()
                     continuation.resume(returning: false)
@@ -191,11 +190,10 @@ extension DiscoveredDevice {
                     break
                 }
             }
-            conn.start(queue: .global())
+            conn.start(queue: probeQueue)
 
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                guard !resumed else { return }
-                resumed = true
+            probeQueue.asyncAfter(deadline: .now() + timeout) {
+                guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
                 reachabilityLogger.debug("Probe timeout: \(deviceName)")
                 conn.cancel()
                 continuation.resume(returning: false)
