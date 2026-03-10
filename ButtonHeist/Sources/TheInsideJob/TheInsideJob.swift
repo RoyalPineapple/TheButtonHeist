@@ -86,7 +86,7 @@ public final class TheInsideJob {
                   let parsed = ConnectionScope.parse(envValue) {
             self.allowedScopes = parsed
         } else {
-            self.allowedScopes = ConnectionScope.all
+            self.allowedScopes = ConnectionScope.default
         }
     }
 
@@ -114,10 +114,8 @@ public final class TheInsideJob {
         self.transport = t
         isRunning = true
 
-        if allowedScopes != ConnectionScope.all {
-            let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
-            insideJobLogger.info("Connection scopes: \(scopeNames)")
-        }
+        let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
+        insideJobLogger.info("Connection scopes: \(scopeNames)")
         insideJobLogger.info("Server listening on port \(actualPort)")
         insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .sensitive)")
         if let instanceId {
