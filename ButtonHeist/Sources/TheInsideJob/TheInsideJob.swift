@@ -90,8 +90,9 @@ public final class TheInsideJob {
 
         let identity: TLSIdentity?
         do {
-            identity = try TLSIdentity.getOrCreate()
-            insideJobLogger.info("TLS identity ready: \(identity!.fingerprint)")
+            let created = try TLSIdentity.getOrCreate()
+            insideJobLogger.info("TLS identity ready: \(created.fingerprint)")
+            identity = created
         } catch {
             insideJobLogger.warning("TLS identity creation failed: \(error)")
             identity = try? TLSIdentity.createEphemeral()
@@ -532,7 +533,16 @@ public final class TheInsideJob {
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let t = ServerTransport()
+                let identity: TLSIdentity?
+                do {
+                    identity = try TLSIdentity.getOrCreate()
+                } catch {
+                    insideJobLogger.warning("TLS identity creation failed on resume: \(error)")
+                    identity = try? TLSIdentity.createEphemeral()
+                }
+                self.tlsActive = identity != nil
+
+                let t = ServerTransport(tlsIdentity: identity)
                 self.wireTransport(t)
 
                 let actualPort = try await t.start()

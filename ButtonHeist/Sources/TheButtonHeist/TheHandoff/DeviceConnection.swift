@@ -50,6 +50,7 @@ public final class DeviceConnection {
     private let device: DiscoveredDevice
     private(set) var token: String?
     private var receiveBuffer = Data()
+    // Internal for testing (see DeviceConnectionTLSTests)
     var isConnected = false
 
     public var onConnected: (() -> Void)?
@@ -208,6 +209,7 @@ public final class DeviceConnection {
         }
     }
 
+    // Internal for testing (see AuthFlowIntegrationTests, AuthFailureTests)
     func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
         guard let (requestId, message) = decodeEnvelope(from: data) else {
@@ -339,7 +341,7 @@ public final class DeviceConnection {
                 }
                 completionHandler(matches)
             },
-            .main
+            DispatchQueue(label: "com.buttonheist.tls.verify")
         )
 
         return NWParameters(tls: tlsOptions)
