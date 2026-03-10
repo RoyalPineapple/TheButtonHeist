@@ -38,13 +38,13 @@ let project = Project(
             ])
         ),
 
-        // MARK: - Server Transport (cross-platform networking, embeds in iOS apps alongside TheInsideJob)
+        // MARK: - Server Transport (iOS-only, embeds in iOS apps alongside TheInsideJob)
         .target(
             name: "TheGetaway",
-            destinations: [.iPhone, .iPad, .mac],
+            destinations: [.iPhone, .iPad],
             product: .framework,
             bundleId: "com.buttonheist.thegetaway",
-            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            deploymentTargets: .iOS("17.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheGetaway/**"],
             scripts: [swiftlintScript],
@@ -120,12 +120,11 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
                 .target(name: "ButtonHeist"),
-                .target(name: "TheGetaway"),
                 .external(name: "Crypto"),
             ]
         ),
 
-        // MARK: - TheInsideJob Tests (iOS Simulator)
+        // MARK: - TheInsideJob Tests (iOS Simulator, hosted in AccessibilityTestApp)
         .target(
             name: "TheInsideJobTests",
             destinations: [.iPhone, .iPad],
@@ -137,7 +136,14 @@ let project = Project(
             dependencies: [
                 .target(name: "TheInsideJob"),
                 .target(name: "TheScore"),
-            ]
+                .target(name: "TheGetaway"),
+                .external(name: "Crypto"),
+                .project(target: "AccessibilityTestApp", path: "TestApp"),
+            ],
+            settings: .settings(base: [
+                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/AccessibilityTestApp.app/AccessibilityTestApp",
+                "BUNDLE_LOADER": "$(TEST_HOST)",
+            ])
         ),
     ],
     schemes: [
@@ -160,18 +166,6 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("ButtonHeistTests")),
-            ])
-        ),
-        .scheme(
-            name: "TheInsideJobTests",
-            buildAction: .buildAction(targets: [
-                .target("TheInsideJobTests"),
-                .target("TheInsideJob"),
-                .target("TheGetaway"),
-                .target("TheScore"),
-            ]),
-            testAction: .targets([
-                .testableTarget(target: .target("TheInsideJobTests")),
             ])
         ),
     ]
