@@ -49,6 +49,7 @@ public final class TheInsideJob {
 
     private var isRunning = false
     private var isSuspended = false
+    private var tlsActive = false
 
     // Screen recording
     var stakeout: TheStakeout?
@@ -87,7 +88,16 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let t = ServerTransport()
+        let identity: TLSIdentity?
+        do {
+            identity = try TLSIdentity.getOrCreate()
+            insideJobLogger.info("TLS identity ready: \(identity!.fingerprint)")
+        } catch {
+            insideJobLogger.warning("TLS identity creation failed: \(error)")
+            identity = try? TLSIdentity.createEphemeral()
+        }
+        self.tlsActive = identity != nil
+        let t = ServerTransport(tlsIdentity: identity)
         wireTransport(t)
 
         let actualPort = try t.start()
@@ -374,7 +384,8 @@ public final class TheInsideJob {
             instanceIdentifier: effectiveInstanceId,
             listeningPort: transport?.listeningPort,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString
+            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
+            tlsActive: tlsActive
         )
         sendMessage(.info(info), respond: respond)
     }

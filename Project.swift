@@ -50,6 +50,8 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
+                .external(name: "X509"),
+                .external(name: "Crypto"),
             ]
         ),
 
@@ -89,6 +91,7 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
+                .external(name: "Crypto"),
             ]
         ),
 
@@ -118,6 +121,7 @@ let project = Project(
             dependencies: [
                 .target(name: "ButtonHeist"),
                 .target(name: "TheGetaway"),
+                .external(name: "Crypto"),
             ]
         ),
 
