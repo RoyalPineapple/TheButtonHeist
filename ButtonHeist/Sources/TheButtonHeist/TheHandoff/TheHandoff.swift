@@ -68,7 +68,7 @@ public final class TheHandoff {
 
     private static let driverIdFile: URL = {
         let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/buttonheist", isDirectory: true)
+            .appendingPathComponent(".buttonheist", isDirectory: true)
         return configDir.appendingPathComponent("driver-id")
     }()
 
