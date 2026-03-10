@@ -133,16 +133,17 @@ stateDiagram-v2
 **Interface request timeout differs from other operations** (`TheFence.swift`)
 - 10 seconds hardcoded vs 15s for actions, 30s for screenshots/recordings
 
-**No tests for TheFence**
-- The primary integration point for CLI and MCP has zero unit tests
-- Command dispatch, argument parsing, timeout behavior, and auto-reconnect are all untested
+**TheFence test coverage is improving but incomplete**
+- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 29 commands) and `FenceResponse` formatting
+- `TheFenceHandlerTests` covers command routing (`testAllCatalogCommandsAreRouted`) and handler-level argument validation
+- Timeout behavior and auto-reconnect logic remain untested
 
 ### LOW PRIORITY
 
 **`FenceResponse` recording cases include interaction count**
 - `humanFormatted()` appends "Interactions: N" line when `interactionLog` is non-nil
 - `jsonDict()` includes `interactionCount` key (0 when nil)
-- Well-tested: `SessionResponseTests` covers both human formatting and JSON serialization
+- Well-tested: `FenceResponseTests` covers both human formatting and JSON serialization
 
 **`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)
 - `TheFence.Command` is a `String`-backed `CaseIterable` enum with 29 cases
