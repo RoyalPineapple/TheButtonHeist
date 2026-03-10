@@ -1,10 +1,10 @@
 # ButtonHeist - Project Index
 
-> Generated: 2025-03-10 | Commit: ee2a60b | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
 
 ## Overview
 
-**Button Heist** gives AI agents and humans full programmatic control over iOS apps. Embed TheInsideJob in your iOS app, then connect via MCP server or CLI to inspect UI, tap buttons, swipe, type, and navigate over a persistent TCP connection.
+**Button Heist** gives AI agents and humans full programmatic control over iOS apps. Embed TheInsideJob in your iOS app, then connect via MCP server or CLI to inspect UI, tap buttons, swipe, type, and navigate over a persistent TLS-encrypted TCP connection.
 
 - **Version**: 0.0.1
 - **Language**: Swift 6.0 (strict concurrency), Objective-C (minor)
@@ -18,9 +18,12 @@
 | Dependency | Purpose |
 |-----------|---------|
 | UIKit / SwiftUI | Accessibility hierarchy, touch injection, test apps |
-| Network.framework | TCP server/client (NWListener, NWConnection), Bonjour (NWBrowser) |
+| Network.framework | TCP server/client (NWListener, NWConnection), Bonjour (NWBrowser), TLS 1.3 |
 | IOKit (private) | Multi-finger HID event synthesis for touch injection |
 | AVFoundation | H.264/MP4 screen recording via AVAssetWriter |
+| Security.framework | Keychain storage for TLS certificates, SecIdentity |
+| swift-certificates 1.0.0+ (X509) | ECDSA P-256 X.509 certificate generation for TLS |
+| swift-crypto 3.0.0+ (Crypto) | SHA-256 fingerprint computation for TLS certificate pinning |
 | AccessibilitySnapshot | Forked submodule for accessibility hierarchy parsing |
 | swift-argument-parser 1.3.0+ | CLI command/option parsing |
 | MCP swift-sdk 0.11.0+ | Model Context Protocol server for AI agent tools |
@@ -37,15 +40,20 @@ ButtonHeist/
 │   │   ├── TheSafecracker/       # Touch injection (7 files, split by concern)
 │   │   ├── TheMuscle.swift, TheStakeout.swift, TheFingerprints.swift
 │   │   └── Extensions/
-│   ├── TheGetaway/               # Cross-platform TCP transport layer
+│   │   ├── TLSIdentity.swift            # ECDSA certificate generation + fingerprint pinning
+│   │   ├── ServerTransport.swift        # Transport abstraction with TLS integration
+│   │   └── SimpleSocketServer.swift     # TLS-capable TCP server
 │   ├── TheButtonHeist/           # macOS client
 │   │   ├── TheFence.swift + TheFence+Handlers.swift + TheFence+Formatting.swift
 │   │   ├── TheFence+CommandCatalog.swift
 │   │   ├── TheMastermind.swift
-│   │   ├── TheHandoff/           # Connection lifecycle
+│   │   ├── TheHandoff/           # Connection lifecycle (TLS-aware discovery + connection)
 │   │   └── ButtonHeistActor.swift, Exports.swift
 │   └── ThePlant/                 # ObjC +load auto-start hook
 ├── ButtonHeist/Tests/            # Unit tests for all modules
+│   ├── TheScoreTests/
+│   ├── ButtonHeistTests/         # Includes DeviceConnectionTLSTests, TLSIdentityTests, TLSIntegrationTests
+│   └── TheInsideJobTests/
 ├── ButtonHeistMCP/               # MCP server (14 tools, macOS)
 ├── ButtonHeistCLI/               # CLI tool (29 commands, macOS)
 ├── TestApp/                      # SwiftUI + UIKit demo apps
@@ -63,12 +71,15 @@ ButtonHeist/
 
 | Entry Point | Purpose |
 |------------|---------|
-| `TheInsideJob.swift` | iOS server singleton - TCP server, Bonjour, UI polling |
+| `TheInsideJob.swift` | iOS server singleton - TCP server, Bonjour, UI polling, TLS configuration |
 | `TheInsideJob+Dispatch.swift` | iOS server command dispatch routing |
+| `TLSIdentity.swift` | TLS identity management - ECDSA certificate generation and SHA-256 fingerprint pinning |
 | `TheMastermind.swift` | macOS observable coordinator - discovery, connection, callbacks |
 | `TheFence.swift` | Command dispatch core - connection management and send/await |
 | `TheFence+Handlers.swift` | Command handler implementations |
 | `TheFence+Formatting.swift` | FenceResponse enum and output formatting |
+| `DeviceConnection.swift` | Client-side TLS connection with fingerprint pinning |
+| `DeviceDiscovery.swift` | Device discovery with TLS fingerprint extraction from Bonjour |
 | `ThePlantAutoStart.m` | ObjC +load entry point - boots TheInsideJob before Swift runs |
 | `ButtonHeistCLI/Sources/` | CLI entry point - ArgumentParser commands through TheFence |
 | `ButtonHeistMCP/Sources/` | MCP server entry point - JSON-RPC over stdio through TheFence |
@@ -81,6 +92,7 @@ git clone --recursive <repo-url>
 
 # Build frameworks
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
 

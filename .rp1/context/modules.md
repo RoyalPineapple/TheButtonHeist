@@ -1,19 +1,19 @@
 # ButtonHeist - Modules
 
-> Generated: 2025-03-10 | Commit: ee2a60b | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
 
 ## Module Overview
 
 | Module | Type | Files | LOC | Purpose |
 |--------|------|-------|-----|---------|
-| TheScore | Framework | 4 | 1,107 | Shared wire protocol types and message definitions |
-| TheButtonHeist | Framework | 12 | 2,713 | macOS client: TheFence (3 files), TheMastermind, TheHandoff |
-| TheInsideJob | Framework | 19 | 4,421 | iOS server: accessibility, gestures, recording, auth |
-| TheGetaway | Framework | 2 | 565 | TCP server/client transport and Bonjour |
+| TheScore | Framework | 4 | 1,111 | Shared wire protocol types and message definitions |
+| TheButtonHeist | Framework | 12 | 2,769 | macOS client: TheFence (3 files), TheMastermind, TheHandoff (TLS-aware) |
+| TheInsideJob | Framework | 19 | 4,460 | iOS server: accessibility, gestures, recording, auth, TLS config |
+| *(Transport layer)* | *(merged)* | — | — | *TLS transport (TLSIdentity, ServerTransport, SimpleSocketServer) merged into TheInsideJob* |
 | ButtonHeistCLI | Executable | 21 | 1,932 | CLI tool with 29 commands |
 | ButtonHeistMCP | Executable | 2 | 470 | MCP server with 14 AI agent tools |
 | TestApp | App | 28 | 1,954 | SwiftUI + UIKit demo apps |
-| Tests | Test Suite | 19 | 3,411 | Unit and integration tests |
+| Tests | Test Suite | 22 | 3,397 | Unit and integration tests |
 
 ## Module Details
 
@@ -23,19 +23,19 @@
 
 **Key Files**:
 - `ButtonHeist/Sources/TheScore/ClientMessages.swift` - 29 client-to-server message cases
-- `ButtonHeist/Sources/TheScore/ServerMessages.swift` - 15 server-to-client message cases
+- `ButtonHeist/Sources/TheScore/ServerMessages.swift` - 15 server-to-client message cases, ServerInfo.tlsActive
 - `ButtonHeist/Sources/TheScore/Elements.swift` - HeistElement, Interface, InterfaceDelta models
-- `ButtonHeist/Sources/TheScore/Messages.swift` - RequestEnvelope, ResponseEnvelope, constants
+- `ButtonHeist/Sources/TheScore/Messages.swift` - RequestEnvelope, ResponseEnvelope, constants, protocolVersion 5.0
 
-**Public API**: ClientMessage, ServerMessage, RequestEnvelope, ResponseEnvelope, HeistElement, Interface, ActionResult, InterfaceDelta, ActionTarget, ScreenPayload, RecordingPayload, ServerInfo, InteractionEvent, ElementAction, RecordingConfig, buttonHeistServiceType, protocolVersion
+**Public API**: ClientMessage, ServerMessage, RequestEnvelope, ResponseEnvelope, HeistElement, Interface, ActionResult, InterfaceDelta, ActionTarget, ScreenPayload, RecordingPayload, ServerInfo (tlsActive), InteractionEvent, ElementAction, RecordingConfig, buttonHeistServiceType, protocolVersion
 
-**Contracts**: All types Codable + Sendable. Protocol v4.0. Service type: `_buttonheist._tcp`.
+**Contracts**: All types Codable + Sendable. Protocol v5.0. Service type: `_buttonheist._tcp`.
 
 ---
 
 ### TheButtonHeist (macOS Client Framework)
 
-**Purpose**: Client-side framework. TheFence split into 3 files (core, handlers, formatting). TheMastermind (Observable coordinator), TheHandoff (discovery + connection lifecycle), ButtonHeistActor.
+**Purpose**: Client-side framework. TheFence split into 3 files (core, handlers, formatting). TheMastermind (Observable coordinator), TheHandoff (TLS-aware discovery + connection lifecycle), ButtonHeistActor.
 
 **Key Files**:
 - `ButtonHeist/Sources/TheButtonHeist/TheFence.swift` - Command dispatch core (~303 lines)
@@ -44,7 +44,9 @@
 - `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift` - Command catalog + version
 - `ButtonHeist/Sources/TheButtonHeist/TheMastermind.swift` - Observable session orchestrator
 - `ButtonHeist/Sources/TheButtonHeist/TheHandoff/TheHandoff.swift` - Session lifecycle manager
-- `ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnection.swift` - TCP client
+- `ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceConnection.swift` - TLS TCP client with fingerprint pinning
+- `ButtonHeist/Sources/TheButtonHeist/TheHandoff/DeviceDiscovery.swift` - Bonjour discovery with certfp extraction
+- `ButtonHeist/Sources/TheButtonHeist/TheHandoff/DiscoveredDevice.swift` - Device model with certFingerprint
 
 **Components**:
 
@@ -55,22 +57,23 @@
 | **TheFence+Formatting** | FenceResponse enum with humanFormatted() and jsonDict() output (360 lines) |
 | **CommandCatalog** | Canonical command list + version string (buttonHeistVersion). Source of truth for CLI/MCP. |
 | **TheMastermind** | @Observable wrapper over TheHandoff. Async waitFor* methods with requestId correlation. Generic waitForResponse<T>. |
-| **TheHandoff** | Device lifecycle: Bonjour discovery, TCP connect, keepalive (3s), auto-reconnect (60x1s). Persistent driver ID. |
-| **DeviceDiscovery** | NWBrowser for `_buttonheist._tcp`. TXT record parsing. DiscoveryRegistry deduplication. |
-| **DeviceConnection** | NWConnection TCP client. Auth handshake, NDJSON framing, 10MB buffer limit. |
+| **TheHandoff** | Device lifecycle: Bonjour discovery, TLS connect, keepalive (3s), auto-reconnect (60x1s). Persistent driver ID. |
+| **DeviceDiscovery** | NWBrowser for `_buttonheist._tcp`. TXT record parsing including certfp extraction. DiscoveryRegistry deduplication. |
+| **DeviceConnection** | TLS-encrypted NWConnection client. Fingerprint pinning via sec_protocol_options_set_verify_block. Refuses plain TCP. Auth handshake, NDJSON framing, 10MB buffer. DisconnectReason.certificateMismatch. |
+| **DiscoveredDevice** | Device metadata: service name, endpoint, simulator UDID, installation ID, session status, certFingerprint (sha256:hex). |
 
-**Public API**: TheFence, TheFence.Configuration, CommandCatalog, TheMastermind, TheHandoff, DeviceDiscovery, DeviceConnection, DiscoveredDevice, FenceResponse, FenceError, ButtonHeistActor, DisconnectReason, buttonHeistVersion
+**Public API**: TheFence, TheFence.Configuration, CommandCatalog, TheMastermind, TheHandoff, DeviceDiscovery, DeviceConnection, DiscoveredDevice (certFingerprint), FenceResponse, FenceError, ButtonHeistActor, DisconnectReason (certificateMismatch), buttonHeistVersion
 
-**Dependencies**: TheScore (@_exported import)
+**Dependencies**: TheScore (@_exported import), Crypto (swift-crypto)
 
 ---
 
 ### TheInsideJob (iOS Server Framework)
 
-**Purpose**: iOS-side server embedded in target apps. Dispatch extracted to TheInsideJob+Dispatch.swift. TheSafecracker split into 7 files. TheBagman conversion extracted. DEBUG builds only.
+**Purpose**: iOS-side server embedded in target apps. Creates TLSIdentity on start, configures TLS-encrypted transport. Dispatch extracted to TheInsideJob+Dispatch.swift. TheSafecracker split into 7 files. TheBagman conversion extracted. DEBUG builds only.
 
 **Key Files**:
-- `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift` - Server singleton, lifecycle (~547 lines)
+- `ButtonHeist/Sources/TheInsideJob/TheInsideJob.swift` - Server singleton, lifecycle, TLS identity creation (~547 lines)
 - `ButtonHeist/Sources/TheInsideJob/TheInsideJob+Dispatch.swift` - Three-stage message dispatch (121 lines)
 - `ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker.swift` - Touch injection core (~498 lines)
 - `ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Actions.swift` - Action implementations
@@ -87,38 +90,38 @@
 
 | Component | Responsibility |
 |-----------|---------------|
-| **TheInsideJob** | Singleton coordinator. TCP server, Bonjour, app lifecycle. |
+| **TheInsideJob** | Singleton coordinator. Creates TLSIdentity (persistent or ephemeral), initializes ServerTransport with TLS, tracks tlsActive, handles suspend/resume. |
 | **TheInsideJob+Dispatch** | Three-stage dispatch routing: accessibility -> touch -> text/scroll. |
 | **TheSafecracker** | Core touch infrastructure (7 files total). |
 | **TheSafecracker+MultiTouch** | Pinch, rotate, two-finger tap via IOKit HID. |
 | **TheBagman** | Accessibility parsing, weak NSObject refs, animation detection, screenshot capture. |
 | **TheBagman+Conversion** | Element conversion, trait mapping, InterfaceDelta computation. |
-| **TheMuscle** | Token validation, UI approval, session lock (one driver, 30s timeout), observer management. |
+| **TheMuscle** | Token validation, UI approval, session lock (one driver, 30s timeout), observer management. Auth after TLS handshake. |
 | **TheStakeout** | AVAssetWriter H.264/MP4. Configurable FPS/scale. File size limit (7MB). Interaction event log. |
 | **TheFingerprints** | Translucent touch circles on passthrough FingerprintWindow. |
 
 **Public API**: TheInsideJob (configure, start, stop, notifyChange, startPolling, stopPolling)
 
-**Dependencies**: TheScore, TheGetaway, AccessibilitySnapshotParser
+**Dependencies**: TheScore, AccessibilitySnapshotParser, X509, Crypto, SwiftASN1
 
 ---
 
-### TheGetaway (Transport Layer)
+### Transport Layer (in TheInsideJob)
 
-**Purpose**: Server-side networking. TCP server + Bonjour advertisement. Used exclusively by TheInsideJob.
+**Purpose**: Server-side networking with TLS encryption. TCP server + Bonjour advertisement + TLS identity management. Formerly a separate module (TheGetaway), now merged into TheInsideJob.
 
 **Key Files**:
-- `ButtonHeist/Sources/TheGetaway/ServerTransport.swift` - TCP + Bonjour wrapper
-- `ButtonHeist/Sources/TheGetaway/SimpleSocketServer.swift` - Actor-isolated NWListener
+- `ButtonHeist/Sources/TheInsideJob/TLSIdentity.swift` - Self-signed cert generation, Keychain persistence, fingerprint computation, certificate expiry tracking
+- `ButtonHeist/Sources/TheInsideJob/ServerTransport.swift` - TCP + TLS + Bonjour wrapper, publishes certfp in TXT record
+- `ButtonHeist/Sources/TheInsideJob/SimpleSocketServer.swift` - Actor-isolated NWListener with TLS parameter support
 
 **Components**:
 
 | Component | Responsibility |
 |-----------|---------------|
-| **ServerTransport** | Combined TCP + Bonjour. Start/stop server, manage NetService, forward callbacks. |
-| **SimpleSocketServer** | NWListener actor. Max 5 connections, NDJSON framing, 30 msg/s rate limit, auth gating, 10MB buffer. |
-
-**Dependencies**: TheScore (buttonHeistServiceType)
+| **TLSIdentity** | Actor: ECDSA P-256 X.509 cert generation, Keychain getOrCreate, ephemeral fallback, SHA-256 fingerprint, NWParameters for TLS 1.3, certificate expiry tracking with auto-renewal. |
+| **ServerTransport** | Combined TCP + TLS + Bonjour. Injects TLSIdentity NWParameters into SimpleSocketServer. Publishes certfp and transport=tls in Bonjour TXT record. |
+| **SimpleSocketServer** | NWListener actor. Max 5 connections, NDJSON framing, 30 msg/s rate limit, auth gating, 10MB buffer. Accepts optional TLS NWParameters. |
 
 ---
 
@@ -172,33 +175,37 @@
 
 ### Tests
 
-**Purpose**: Unit and integration tests across all framework modules.
+**Purpose**: Unit and integration tests across all framework modules. 22 files.
 
 **Test Suites**:
 - `TheScoreTests` - Protocol encoding/decoding, element data, payloads, constants
-- `ButtonHeistTests` - TheFence dispatch, TheMastermind state, session locking, auth flows, discovery dedup
-- `TheInsideJobTests` - TheMuscle auth, bezier sampling
+- `ButtonHeistTests` - TheFence dispatch, TheMastermind state, session locking, auth flows, discovery dedup, TLS connection tests
+- `TheInsideJobTests` - TheMuscle auth, bezier sampling, TLS identity tests, TLS integration tests
 
 **Key Files**:
 - `ButtonHeist/Tests/TheScoreTests/TheScoreTests.swift`
+- `ButtonHeist/Tests/TheScoreTests/ConstantsTests.swift`
 - `ButtonHeist/Tests/ButtonHeistTests/TheFenceTests.swift`
 - `ButtonHeist/Tests/ButtonHeistTests/TheMastermindTests.swift`
-- `ButtonHeist/Tests/ButtonHeistTests/AuthFailureTests.swift`
+- `ButtonHeist/Tests/ButtonHeistTests/AuthFailureTests.swift` - Refactored to use direct message injection
 - `ButtonHeist/Tests/ButtonHeistTests/AuthFlowIntegrationTests.swift`
+- `ButtonHeist/Tests/ButtonHeistTests/DeviceConnectionTLSTests.swift` - TLS disconnect reasons and fingerprint handling
+- `ButtonHeist/Tests/ButtonHeistTests/DiscoveredDeviceTests.swift`
+- `ButtonHeist/Tests/ButtonHeistTests/SessionLockTests.swift`
 - `ButtonHeist/Tests/TheInsideJobTests/TheMuscleTests.swift`
+- `ButtonHeist/Tests/TheInsideJobTests/TLSIdentityTests.swift` - Cert generation, fingerprint format, Keychain round-trip
+- `ButtonHeist/Tests/TheInsideJobTests/TLSIntegrationTests.swift` - Real TLS handshake, data exchange, wrong-fingerprint rejection
 
 ## Dependency Graph
 
 ```
 TheScore (shared, no dependencies)
   ↑
-TheGetaway (imports TheScore)
-  ↑
-TheInsideJob (imports TheScore, TheGetaway, AccessibilitySnapshotParser)
+TheInsideJob (imports TheScore, X509, Crypto, SwiftASN1, AccessibilitySnapshotParser)
 
 TheScore (shared)
   ↑
-TheButtonHeist (@_exported TheScore)
+TheButtonHeist (@_exported TheScore, imports Crypto)
   ↑
 ButtonHeistCLI (imports TheButtonHeist + ArgumentParser)
 ButtonHeistMCP (imports TheButtonHeist + MCP)
@@ -210,13 +217,14 @@ TestApp (embeds TheInsideJob + TheScore)
 
 | Pattern | Description | Modules |
 |---------|-------------|---------|
+| **TLS Transport Encryption** | End-to-end TLS 1.3 with self-signed ECDSA P-256 certificates and SHA-256 fingerprint pinning via Bonjour TXT records. No CA required. | TheInsideJob, TheButtonHeist, TheScore |
 | **Heist Crew Metaphor** | Every component named after a heist role | All |
 | **Extension-Based File Splitting** | Large files decomposed into Type+Concern.swift extensions (TheFence 3 files, TheInsideJob 2, TheSafecracker 7, TheBagman 2) | TheButtonHeist, TheInsideJob |
 | **Protocol Symmetry** | TheScore types used identically on both sides | TheScore, TheButtonHeist, TheInsideJob |
-| **Layered Command Dispatch** | CLI/MCP -> TheFence -> TheMastermind -> TCP -> TheInsideJob | All |
+| **Layered Command Dispatch** | CLI/MCP -> TheFence -> TheMastermind -> TLS/TCP -> TheInsideJob | All |
 | **Interaction Pipeline** | Refresh -> snapshot -> execute -> delta -> respond | TheInsideJob, TheSafecracker, TheBagman |
 | **Three-Stage Dispatch** | Accessibility -> touch -> text/scroll routing chain | TheInsideJob |
 | **Request-ID Correlation** | UUID requestIds threaded through envelopes for multiplexed responses | TheButtonHeist, TheScore, TheInsideJob |
 | **Dual Client Architecture** | CLI + MCP both wrap TheFence with same CommandCatalog | ButtonHeistCLI, ButtonHeistMCP, TheButtonHeist |
-| **Global Actor Isolation** | @ButtonHeistActor (macOS), @MainActor (iOS), actor (SimpleSocketServer) | All |
+| **Global Actor Isolation** | @ButtonHeistActor (macOS), @MainActor (iOS), actor (SimpleSocketServer, TLSIdentity) | All |
 | **Warnings-as-Errors** | All SPM targets enforce zero-warning build policy | All |

@@ -12,29 +12,54 @@ public actor TLSIdentity {
     private let identity: SecIdentity
     private let certificate: SecCertificate
     public nonisolated let fingerprint: String
+    public nonisolated let expiryDate: Date
 
-    private init(identity: SecIdentity, certificate: SecCertificate, fingerprint: String) {
+    /// Number of days before expiry at which the certificate is auto-renewed.
+    static let renewalThresholdDays: Int = 30
+
+    /// Number of days before expiry at which a warning is logged.
+    static let warningThresholdDays: Int = 60
+
+    private init(identity: SecIdentity, certificate: SecCertificate, fingerprint: String, expiryDate: Date) {
         self.identity = identity
         self.certificate = certificate
         self.fingerprint = fingerprint
+        self.expiryDate = expiryDate
     }
 
     /// Retrieve an existing identity from the Keychain, or create and store a new one.
+    /// If the loaded certificate expires within ``renewalThresholdDays`` days, it is
+    /// deleted and a fresh one is generated. A warning is logged if expiry is within
+    /// ``warningThresholdDays`` days.
     public static func getOrCreate(label: String = "com.buttonheist.tls") throws -> TLSIdentity {
         if let existing = try loadFromKeychain(label: label) {
-            logger.debug("Loaded existing TLS identity from Keychain")
-            return existing
+            let daysRemaining = existing.daysUntilExpiry
+            if daysRemaining <= renewalThresholdDays {
+                logger.warning(
+                    "TLS certificate expires in \(daysRemaining) day(s) — regenerating"
+                )
+                try delete(label: label)
+            } else {
+                if daysRemaining <= warningThresholdDays {
+                    logger.warning(
+                        "TLS certificate expires in \(daysRemaining) day(s) — consider renewal soon"
+                    )
+                }
+                logger.debug("Loaded existing TLS identity from Keychain")
+                return existing
+            }
         }
 
         logger.info("No existing TLS identity found, generating new one")
         let (privateKey, derBytes) = try generateCertificate()
         let secCert = try makeSecCertificate(derBytes: derBytes)
         let fp = computeFingerprint(derBytes: derBytes)
+        let expiry = try certificateExpiryDate(derBytes: derBytes)
 
         do {
             let secIdentity = try storeInKeychain(privateKey: privateKey, certificate: secCert, label: label)
             logger.info("TLS identity stored in Keychain: \(fp)")
-            return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp)
+            return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp, expiryDate: expiry)
         } catch {
             logger.warning("Keychain storage failed, using ephemeral identity: \(error)")
             return try createEphemeral()
@@ -47,9 +72,10 @@ public actor TLSIdentity {
         let (privateKey, derBytes) = try generateCertificate()
         let secCert = try makeSecCertificate(derBytes: derBytes)
         let fp = computeFingerprint(derBytes: derBytes)
+        let expiry = try certificateExpiryDate(derBytes: derBytes)
         let secIdentity = try createInMemoryIdentity(privateKey: privateKey, certificate: secCert)
         logger.info("Created ephemeral TLS identity: \(fp)")
-        return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp)
+        return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp, expiryDate: expiry)
     }
 
     /// Remove a stored identity from the Keychain.
@@ -90,20 +116,22 @@ public actor TLSIdentity {
 
     // MARK: - Certificate Generation
 
-    static func generateCertificate() throws -> (P256.Signing.PrivateKey, [UInt8]) {
+    static func generateCertificate(
+        validityDays: Double = 365.25
+    ) throws -> (P256.Signing.PrivateKey, [UInt8]) {
         let key = P256.Signing.PrivateKey()
         let name = try DistinguishedName {
             CommonName("ButtonHeist")
             OrganizationName("ButtonHeist")
         }
         let now = Date()
-        let oneYear = now.addingTimeInterval(365.25 * 24 * 3600)
+        let notValidAfter = now.addingTimeInterval(validityDays * 24 * 3600)
         let cert = try X509.Certificate(
             version: .v3,
             serialNumber: X509.Certificate.SerialNumber(),
             publicKey: .init(key.publicKey),
             notValidBefore: now,
-            notValidAfter: oneYear,
+            notValidAfter: notValidAfter,
             issuer: name,
             subject: name,
             signatureAlgorithm: .ecdsaWithSHA256,
@@ -126,6 +154,18 @@ public actor TLSIdentity {
     static func computeFingerprint(derBytes: [UInt8]) -> String {
         let hash = Crypto.SHA256.hash(data: derBytes)
         return "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Parse the ``notValidAfter`` date from DER-encoded certificate bytes.
+    static func certificateExpiryDate(derBytes: [UInt8]) throws -> Date {
+        let cert = try X509.Certificate(derEncoded: derBytes)
+        return cert.notValidAfter
+    }
+
+    /// Number of whole days until this certificate expires (negative if already expired).
+    public nonisolated var daysUntilExpiry: Int {
+        let interval = expiryDate.timeIntervalSinceNow
+        return Int(interval / (24 * 3600))
     }
 
     // MARK: - Keychain Operations
@@ -155,8 +195,10 @@ public actor TLSIdentity {
         }
 
         let derData = SecCertificateCopyData(cert) as Data
-        let fp = computeFingerprint(derBytes: Array(derData))
-        return TLSIdentity(identity: secIdentity, certificate: cert, fingerprint: fp)
+        let derBytes = Array(derData)
+        let fp = computeFingerprint(derBytes: derBytes)
+        let expiry = try certificateExpiryDate(derBytes: derBytes)
+        return TLSIdentity(identity: secIdentity, certificate: cert, fingerprint: fp, expiryDate: expiry)
     }
 
     private static func storeInKeychain(

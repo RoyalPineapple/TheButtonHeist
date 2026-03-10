@@ -25,8 +25,10 @@ final class SessionLockTests: XCTestCase {
         conn.isConnected = true
 
         var disconnectReason: DisconnectReason?
-        conn.onDisconnected = { reason in
-            disconnectReason = reason
+        conn.onEvent = { event in
+            if case .disconnected(let reason) = event {
+                disconnectReason = reason
+            }
         }
 
         let payload = SessionLockedPayload(message: "Session held by another driver", activeConnections: 1)
@@ -46,8 +48,10 @@ final class SessionLockTests: XCTestCase {
         conn.isConnected = true
 
         var receivedPayload: SessionLockedPayload?
-        conn.onSessionLocked = { payload in
-            receivedPayload = payload
+        conn.onEvent = { event in
+            if case .message(.sessionLocked(let payload), _) = event {
+                receivedPayload = payload
+            }
         }
 
         let payload = SessionLockedPayload(message: "Another driver active", activeConnections: 3)
