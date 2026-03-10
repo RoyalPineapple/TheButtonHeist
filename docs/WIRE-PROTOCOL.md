@@ -28,7 +28,9 @@ TheInsideJob advertises itself using Bonjour:
   - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>` (v5.0+)
   - `transport` — `"tls"` when TLS transport is active (v5.0+)
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery: clients verify the server's TLS certificate against this fingerprint during the TLS handshake.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake.
+
+> **Security note**: The `certfp` value is delivered via mDNS, which provides no integrity protection. An attacker on the same network segment could spoof Bonjour responses with a different fingerprint. This is acceptable for a local development tool but does not provide the same guarantees as a PKI-based certificate chain. The fingerprint prevents passive eavesdropping and verifies the server identity hasn't changed between discovery and connection.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:

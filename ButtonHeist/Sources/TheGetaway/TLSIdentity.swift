@@ -200,6 +200,8 @@ public actor TLSIdentity {
             keyStatus = SecItemAdd(keyAddQuery as CFDictionary, nil)
         }
         guard keyStatus == errSecSuccess else {
+            // Clean up the certificate we just stored to avoid orphaned items
+            SecItemDelete(certAddQuery as CFDictionary)
             throw TLSIdentityError.keychainError(keyStatus)
         }
 
