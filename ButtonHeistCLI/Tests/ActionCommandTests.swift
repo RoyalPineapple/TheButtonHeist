@@ -563,20 +563,20 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - EditAction Tests
 
     func testEditActionTargetEncoding() throws {
-        let target = EditActionTarget(action: "copy")
+        let target = EditActionTarget(action: .copy)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(EditActionTarget.self, from: data)
 
-        XCTAssertEqual(decoded.action, "copy")
+        XCTAssertEqual(decoded.action, .copy)
     }
 
     func testClientMessageEditActionEncoding() throws {
-        let message = ClientMessage.editAction(EditActionTarget(action: "paste"))
+        let message = ClientMessage.editAction(EditActionTarget(action: .paste))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .editAction(let target) = decoded {
-            XCTAssertEqual(target.action, "paste")
+            XCTAssertEqual(target.action, .paste)
         } else {
             XCTFail("Expected editAction message")
         }

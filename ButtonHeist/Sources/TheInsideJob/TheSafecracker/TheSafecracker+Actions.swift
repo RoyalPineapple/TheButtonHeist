@@ -330,12 +330,7 @@ extension TheSafecracker {
     }
 
     func executeEditAction(_ target: EditActionTarget) -> InteractionResult {
-        guard let action = EditAction(rawValue: target.action) else {
-            let valid = EditAction.allCases.map(\.rawValue).joined(separator: ", ")
-            return .failure(.editAction, message: "Unknown edit action '\(target.action)'. Valid: \(valid)")
-        }
-
-        let success = performEditAction(action)
+        let success = performEditAction(target.action)
         return InteractionResult(success: success, method: .editAction, message: nil, value: nil)
     }
 
