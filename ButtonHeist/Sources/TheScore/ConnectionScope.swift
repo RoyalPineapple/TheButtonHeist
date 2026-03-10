@@ -1,6 +1,14 @@
 import Foundation
 import Network
 
+/// Abstraction over `NWInterface` for testability.
+/// The only property needed for scope classification is `name`.
+public protocol NetworkInterfaceNaming: Sendable {
+    var name: String { get }
+}
+
+extension NWInterface: NetworkInterfaceNaming {}
+
 /// Defines which connection sources a server will accept.
 ///
 /// Each scope corresponds to a network path:
@@ -41,7 +49,7 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     ///
     /// Pass `interfaces` from `NWConnection.currentPath?.availableInterfaces` after the
     /// connection reaches `.ready` for precise CoreDevice USB detection.
-    public static func classify(host: NWEndpoint.Host, interfaces: [NWInterface] = []) -> ConnectionScope {
+    public static func classify(host: NWEndpoint.Host, interfaces: [some NetworkInterfaceNaming] = [NWInterface]()) -> ConnectionScope {
         // Loopback = simulator
         switch host {
         case .ipv4(let addr):
