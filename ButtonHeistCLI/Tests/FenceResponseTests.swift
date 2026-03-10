@@ -3,7 +3,7 @@ import ButtonHeist
 import Network
 import TheScore
 
-final class SessionResponseTests: XCTestCase {
+final class FenceResponseTests: XCTestCase {
 
     // MARK: - Human Formatting Tests
 
