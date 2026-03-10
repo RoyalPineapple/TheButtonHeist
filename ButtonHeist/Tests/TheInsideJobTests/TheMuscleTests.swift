@@ -47,13 +47,13 @@ final class TheMuscleTests: XCTestCase {
 
     private func encodeAuth(token: String, driverId: String? = nil) -> Data {
         let payload = AuthenticatePayload(token: token, driverId: driverId)
-        let message = ClientMessage.authenticate(payload)
+        let envelope = RequestEnvelope(message: .authenticate(payload))
         // swiftlint:disable:next force_try
-        return try! JSONEncoder().encode(message)
+        return try! JSONEncoder().encode(envelope)
     }
 
     private func decodeServerMessage(_ data: Data) -> ServerMessage? {
-        try? JSONDecoder().decode(ServerMessage.self, from: data)
+        (try? JSONDecoder().decode(ResponseEnvelope.self, from: data))?.message
     }
 
     private func respondSink() -> @Sendable (Data) -> Void {
@@ -125,7 +125,7 @@ final class TheMuscleTests: XCTestCase {
     func testNonAuthMessageDisconnects() {
         // Send a ping message before authenticating
         // swiftlint:disable:next force_try
-        let pingData = try! JSONEncoder().encode(ClientMessage.ping)
+        let pingData = try! JSONEncoder().encode(RequestEnvelope(message: .ping))
         muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respondSink())
 
         XCTAssertTrue(disconnectedClients.contains(1), "Should disconnect client that sends non-auth message")
