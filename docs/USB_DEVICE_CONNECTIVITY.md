@@ -215,6 +215,28 @@ Common issues that USB bypasses:
 - Ensure app is running on the device
 - USB discovery polls every 3 seconds — wait a moment
 
+## Connection Scopes
+
+By default, TheInsideJob only accepts connections from simulators (loopback) and USB (CoreDevice IPv6 ULA). Network/WiFi connections are rejected unless explicitly allowed via the `INSIDEJOB_SCOPE` environment variable:
+
+```bash
+# Default: simulator and USB only
+INSIDEJOB_SCOPE=simulator,usb
+
+# Also allow WiFi/LAN connections
+INSIDEJOB_SCOPE=simulator,usb,network
+
+# USB only (reject simulator and WiFi)
+INSIDEJOB_SCOPE=usb
+```
+
+The scope filter classifies incoming connections by remote address:
+- **simulator**: Loopback (`::1`, `127.0.0.1`)
+- **usb**: CoreDevice IPv6 ULA tunnel (`fd` prefix)
+- **network**: Everything else (WiFi, LAN, public)
+
+Connections from disallowed scopes are rejected immediately at the TCP level, before authentication.
+
 ## See Also
 
 - [Wire Protocol](WIRE-PROTOCOL.md) — Message format (identical over WiFi and USB)

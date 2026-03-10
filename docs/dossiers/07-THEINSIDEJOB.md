@@ -16,6 +16,7 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 6. **Dispatches all commands** to crew members (TheSafecracker, Stakeout, TheMuscle)
 7. **Manages client subscriptions** and broadcasts hierarchy/screen updates
 8. **Caches accessibility elements** with weak references for fast resolution
+9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections by remote IP (loopback = simulator, ULA = USB, other = network) and rejects disallowed scopes. Defaults to simulator + USB; configurable via `INSIDEJOB_SCOPE` env var.
 
 ## Architecture Diagram
 
@@ -154,7 +155,7 @@ The full UUID token is emitted to the system log at `info` level. Any process wi
 ```swift
 private var shouldBindToLoopback: Bool { false }
 ```
-Dead computed property. The server always binds to all interfaces. The documented `INSIDEJOB_BIND_ALL` env var is never read. This is a documentation drift issue (WIRE-PROTOCOL.md says loopback is the default for simulators).
+Dead computed property. The server always binds to all interfaces. The documented `INSIDEJOB_BIND_ALL` env var is never read. Note: connection scope filtering (`INSIDEJOB_SCOPE`) now provides a proper mechanism to restrict which connection sources are accepted, partially superseding the need for bind-address filtering.
 
 **Magic nanosecond literals**
 - `300_000_000` debounce (line 66)

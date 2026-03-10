@@ -135,6 +135,7 @@ When the framework loads:
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
 - Binds to all interfaces (`::`) for Bonjour compatibility
 - OS-assigned port (advertised via Bonjour)
+- Connection scope filtering: rejects connections from disallowed sources based on remote IP classification (loopback = simulator, `fd` ULA = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
 - Token-based authentication with session locking, envelope correlation, and watch mode (v4.0)
@@ -624,6 +625,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 | `INSIDEJOB_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
 | `INSIDEJOB_RESTRICT_WATCHERS` / `InsideJobRestrictWatchers` | Set to `"1"` (env) or `true` (plist) to require a valid token for watch (observer) connections | not set (observers auto-approved) |
+| `INSIDEJOB_SCOPE` | Comma-separated list of allowed connection scopes: `simulator`, `usb`, `network`. Controls which connection sources the server accepts. | `simulator,usb` |
 
 ### Info.plist Keys (fallback)
 ```xml
