@@ -255,7 +255,7 @@ final class TheMuscle {
 
     func invalidateToken() {
         authToken = UUID().uuidString
-        logger.info("Token invalidated, new token: \(self.authToken)")
+        logger.info("Token invalidated, new token: \(self.authToken, privacy: .sensitive)")
     }
 
     // MARK: - Observer Auth

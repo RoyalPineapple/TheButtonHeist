@@ -546,6 +546,7 @@ public final class TheFence {
             try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
+            try validateOutputPath(outputPath)
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
@@ -824,6 +825,7 @@ public final class TheFence {
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
+            try validateOutputPath(outputPath)
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
@@ -888,6 +890,13 @@ public final class TheFence {
         if let value = value as? Int { return Double(value) }
         if let value = value as? String { return Double(value) }
         return nil
+    }
+
+    private func validateOutputPath(_ path: String) throws {
+        let resolved = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard !resolved.contains("..") else {
+            throw FenceError.invalidRequest("Output path must not contain path traversal")
+        }
     }
 
     private func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {

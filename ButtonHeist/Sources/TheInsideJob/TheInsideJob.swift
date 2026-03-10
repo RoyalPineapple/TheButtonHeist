@@ -96,7 +96,7 @@ public final class TheInsideJob {
         isRunning = true
 
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Auth token: \(self.muscle.authToken)")
+        insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .sensitive)")
         if let instanceId {
             insideJobLogger.info("Instance ID: \(instanceId)")
         }
@@ -337,9 +337,23 @@ public final class TheInsideJob {
         case .touchTwoFingerTap(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawPath(target) }
+            guard target.points.count <= 10_000 else {
+                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)")
+                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
+                return
+            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) {
+                await self.theSafecracker.executeDrawPath(target)
+            }
         case .touchDrawBezier(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
+            guard target.segments.count <= 1_000 else {
+                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many segments (max 1,000)")
+                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
+                return
+            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) {
+                await self.theSafecracker.executeDrawBezier(target)
+            }
         case .typeText(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         case .scroll(let target):
