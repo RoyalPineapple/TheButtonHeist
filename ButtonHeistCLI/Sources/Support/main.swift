@@ -15,12 +15,13 @@ struct ButtonHeistApp: AsyncParsableCommand {
               buttonheist activate --identifier "myButton"  # Activate element
               buttonheist list                              # Show available devices
               buttonheist session                           # Interactive session
-              buttonheist touch tap --x 100 --y 200         # Low-level tap
+              buttonheist touch one_finger_tap --x 100 --y 200  # Low-level tap
             """,
         version: buttonHeistVersion,
         subcommands: [ActivateCommand.self, ListCommand.self, ActionCommand.self,
                        ScrollCommand.self, ScrollToVisibleCommand.self, ScrollToEdgeCommand.self,
                        TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
+                       GetInterfaceCommand.self, WaitForIdleCommand.self,
                        SessionCommand.self,
                        RecordCommand.self, StopRecordingCommand.self,
                        CopyCommand.self, PasteCommand.self, CutCommand.self,

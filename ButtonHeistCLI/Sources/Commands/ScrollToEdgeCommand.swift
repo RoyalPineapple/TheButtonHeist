@@ -3,15 +3,15 @@ import ButtonHeist
 
 struct ScrollToEdgeCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "scroll-to-edge",
+        commandName: "scroll_to_edge",
         abstract: "Scroll to the edge of a scroll view",
         discussion: """
             Finds the nearest scroll view ancestor of the target element and
             scrolls it all the way to the specified edge.
 
             Examples:
-              buttonheist scroll-to-edge --identifier "buttonheist.longList.item-5" --edge bottom
-              buttonheist scroll-to-edge --index 3 --edge top
+              buttonheist scroll_to_edge --identifier "buttonheist.longList.item-5" --edge bottom
+              buttonheist scroll_to_edge --index 3 --edge top
             """
     )
 

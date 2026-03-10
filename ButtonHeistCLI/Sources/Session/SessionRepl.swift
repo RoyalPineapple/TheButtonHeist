@@ -159,6 +159,8 @@ final class ReplSession {
           ui                          Get accessibility interface
           screen                      Capture screenshot
           screen output=photo.png     Save screenshot to file
+          idle                        Wait for animations to settle
+          idle timeout=5              Wait with custom timeout
 
         Gestures:
           tap <identifier>            Tap element by accessibility ID
@@ -166,17 +168,26 @@ final class ReplSession {
           tap 100 200                 Tap at coordinates
           press <id>                  Long press (duration=N for seconds)
           swipe up <id>               Swipe direction on element
+          drag endX=200 endY=300      Drag gesture
+          pinch <id> scale=2.0        Pinch (>1 zoom in, <1 zoom out)
+          rotate <id> angle=1.57      Rotate (radians)
+          two_finger_tap <id>         Two-finger tap
+          draw_path points=[...]      Draw path through waypoints (JSON)
+          draw_bezier curves=[...]    Draw bezier curves (JSON)
+
+        Scrolling:
           scroll down <id>            Scroll direction on element
           scroll_to_visible <id>      Scroll until element visible
           scroll_to_edge top <id>     Scroll to edge
-          drag endX=200 endY=300      Drag gesture
 
         Actions:
           activate <id>               Activate element
           increment <id>              Increment (e.g. slider)
           decrement <id>              Decrement
+          perform_custom_action <id>  Perform named custom action
           type "hello world"          Type text
-          edit_action copy            Edit action (copy/paste/cut/select/selectAll)
+          copy / paste / cut          Edit actions
+          select / select_all         Selection actions
           dismiss_keyboard            Dismiss keyboard
 
         Recording:
@@ -190,13 +201,24 @@ final class ReplSession {
 
     private nonisolated static let commandAliases: [String: String] = [
         "tap": TheFence.Command.oneFingerTap.rawValue,
-        "ui": TheFence.Command.getInterface.rawValue,
-        "type": TheFence.Command.typeText.rawValue,
-        "screen": TheFence.Command.getScreen.rawValue,
-        "devices": TheFence.Command.listDevices.rawValue,
         "press": TheFence.Command.longPress.rawValue,
+        "ui": TheFence.Command.getInterface.rawValue,
+        "screen": TheFence.Command.getScreen.rawValue,
+        "screenshot": TheFence.Command.getScreen.rawValue,
         "idle": TheFence.Command.waitForIdle.rawValue,
+        "devices": TheFence.Command.listDevices.rawValue,
+        "list": TheFence.Command.listDevices.rawValue,
+        "type": TheFence.Command.typeText.rawValue,
         "record": TheFence.Command.startRecording.rawValue,
+    ]
+
+    /// Aliases that expand to a command + default parameter (e.g. "copy" → edit_action with action=copy).
+    private nonisolated static let compoundAliases: [String: (command: String, params: [String: String])] = [
+        "copy": (TheFence.Command.editAction.rawValue, ["action": "copy"]),
+        "paste": (TheFence.Command.editAction.rawValue, ["action": "paste"]),
+        "cut": (TheFence.Command.editAction.rawValue, ["action": "cut"]),
+        "select": (TheFence.Command.editAction.rawValue, ["action": "select"]),
+        "select_all": (TheFence.Command.editAction.rawValue, ["action": "selectAll"]),
     ]
 
     private nonisolated static let directionWords: Set<String> = [
@@ -216,9 +238,18 @@ final class ReplSession {
         guard let first = tokens.first else { return [:] }
 
         let rawCommand = first.lowercased()
-        let command = commandAliases[rawCommand] ?? rawCommand
-        var result: [String: Any] = ["command": command]
+        let command: String
+        var result: [String: Any]
         let args = Array(tokens.dropFirst())
+
+        if let compound = compoundAliases[rawCommand] {
+            command = compound.command
+            result = ["command": command]
+            for (key, value) in compound.params { result[key] = value }
+        } else {
+            command = commandAliases[rawCommand] ?? rawCommand
+            result = ["command": command]
+        }
 
         // Separate key=value pairs from positional tokens
         var positional: [String] = []
