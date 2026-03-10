@@ -50,6 +50,7 @@ public final class TheInsideJob {
     private var isRunning = false
     private var isSuspended = false
     private var tlsActive = false
+    private var resumeTask: Task<Void, Never>?
 
     // Screen recording
     var stakeout: TheStakeout?
@@ -125,6 +126,8 @@ public final class TheInsideJob {
     public func stop() {
         isRunning = false
         isSuspended = false
+        resumeTask?.cancel()
+        resumeTask = nil
         stopPolling()
 
         transport?.stopAdvertising()
@@ -505,6 +508,9 @@ public final class TheInsideJob {
         guard isRunning, !isSuspended else { return }
         isSuspended = true
 
+        resumeTask?.cancel()
+        resumeTask = nil
+
         pollingTask?.cancel()
         pollingTask = nil
 
@@ -530,9 +536,12 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Resuming server...")
 
-        Task { @MainActor [weak self] in
+        resumeTask?.cancel()
+        resumeTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
+                try Task.checkCancellation()
+
                 let identity: TLSIdentity?
                 do {
                     identity = try TLSIdentity.getOrCreate()
@@ -540,12 +549,18 @@ public final class TheInsideJob {
                     insideJobLogger.warning("TLS identity creation failed on resume: \(error)")
                     identity = try? TLSIdentity.createEphemeral()
                 }
+
+                try Task.checkCancellation()
+
                 self.tlsActive = identity != nil
 
                 let t = ServerTransport(tlsIdentity: identity)
                 self.wireTransport(t)
 
                 let actualPort = try await t.start()
+
+                try Task.checkCancellation()
+
                 self.transport = t
 
                 insideJobLogger.info("Server resumed on port \(actualPort)")
@@ -558,10 +573,11 @@ public final class TheInsideJob {
                 }
 
                 insideJobLogger.info("Server resume complete")
+            } catch is CancellationError {
+                insideJobLogger.info("Server resume cancelled")
             } catch {
                 insideJobLogger.error("Failed to resume server: \(error)")
-                self.isRunning = false
-                self.isSuspended = false
+                self.isSuspended = true
             }
         }
     }

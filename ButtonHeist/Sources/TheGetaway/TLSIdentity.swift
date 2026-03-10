@@ -83,7 +83,7 @@ public actor TLSIdentity {
         )
         sec_protocol_options_set_min_tls_protocol_version(
             tlsOptions.securityProtocolOptions,
-            .TLSv12
+            .TLSv13
         )
         return NWParameters(tls: tlsOptions)
     }
@@ -97,13 +97,13 @@ public actor TLSIdentity {
             OrganizationName("ButtonHeist")
         }
         let now = Date()
-        let tenYears = now.addingTimeInterval(10 * 365.25 * 24 * 3600)
+        let oneYear = now.addingTimeInterval(365.25 * 24 * 3600)
         let cert = try X509.Certificate(
             version: .v3,
             serialNumber: X509.Certificate.SerialNumber(),
             publicKey: .init(key.publicKey),
             notValidBefore: now,
-            notValidAfter: tenYears,
+            notValidAfter: oneYear,
             issuer: name,
             subject: name,
             signatureAlgorithm: .ecdsaWithSHA256,
@@ -179,6 +179,7 @@ public actor TLSIdentity {
             kSecClass as String: kSecClassCertificate,
             kSecValueRef as String: certificate,
             kSecAttrLabel as String: label,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
         var certStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
         if certStatus == errSecDuplicateItem {
@@ -193,6 +194,7 @@ public actor TLSIdentity {
             kSecClass as String: kSecClassKey,
             kSecValueRef as String: secKey,
             kSecAttrLabel as String: label,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         ]
         var keyStatus = SecItemAdd(keyAddQuery as CFDictionary, nil)
         if keyStatus == errSecDuplicateItem {
