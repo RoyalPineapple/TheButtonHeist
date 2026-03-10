@@ -11,8 +11,7 @@ let package = Package(
         .library(name: "TheScore", targets: ["TheScore"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
-        .library(name: "TheGetaway", targets: ["TheGetaway"]),
-        .library(name: "ButtonHeist", targets: ["ButtonHeist"])
+.library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
         .package(path: "../AccessibilitySnapshot"),
@@ -30,8 +29,9 @@ let package = Package(
             name: "TheInsideJob",
             dependencies: [
                 "TheScore",
-                "TheGetaway",
-                .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
+                .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/TheInsideJob",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
@@ -42,16 +42,6 @@ let package = Package(
             dependencies: ["TheInsideJob"],
             path: "Sources/ThePlant",
             publicHeadersPath: "include"
-        ),
-        .target(
-            name: "TheGetaway",
-            dependencies: [
-                "TheScore",
-                .product(name: "X509", package: "swift-certificates"),
-                .product(name: "Crypto", package: "swift-crypto"),
-            ],
-            path: "Sources/TheGetaway",
-            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .target(
             name: "ButtonHeist",
@@ -71,7 +61,7 @@ let package = Package(
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: [
-                "ButtonHeist", "TheScore", "TheGetaway",
+                "ButtonHeist", "TheScore",
                 .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Tests/ButtonHeistTests",
