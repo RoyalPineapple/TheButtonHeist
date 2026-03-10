@@ -23,7 +23,7 @@ graph TD
     end
 
     subgraph External["Network"]
-        Conn["TLS 1.2+ / TCP fallback - Newline-delimited JSON"]
+        Conn["TLS 1.2+ - Newline-delimited JSON"]
     end
 
     subgraph Deps["External Dependencies"]

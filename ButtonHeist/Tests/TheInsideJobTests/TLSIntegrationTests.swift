@@ -131,33 +131,6 @@ final class TLSIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
-    func testPlainTCPFallbackWhenNoTLS() async throws {
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: nil)
-        XCTAssertGreaterThan(port, 0)
-
-        let connected = expectation(description: "plain TCP client connected")
-        server.onClientConnected = { _ in
-            connected.fulfill()
-        }
-
-        let connection = NWConnection(
-            host: .ipv6(.loopback),
-            port: NWEndpoint.Port(rawValue: port)!,
-            using: .tcp
-        )
-
-        let clientReady = expectation(description: "client ready")
-        connection.stateUpdateHandler = { state in
-            if case .ready = state {
-                clientReady.fulfill()
-            }
-        }
-        connection.start(queue: .global())
-
-        await fulfillment(of: [clientReady, connected], timeout: 5.0)
-        connection.cancel()
-    }
-
     // MARK: - Helpers
 
     private static func makeClientTLSParameters(expectedFingerprint: String) -> NWParameters {
