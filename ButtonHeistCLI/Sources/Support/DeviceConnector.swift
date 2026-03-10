@@ -41,8 +41,19 @@ final class DeviceConnector {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        guard let device = matchingDevice() else {
-            throw FenceError.noDeviceFound
+        let device: DiscoveredDevice
+        if let filter = deviceFilter {
+            guard let match = client.discoveredDevices.first(matching: filter) else {
+                throw FenceError.noDeviceFound
+            }
+            device = match
+        } else if client.discoveredDevices.count == 1 {
+            device = client.discoveredDevices[0]
+        } else {
+            throw FenceError.noMatchingDevice(
+                filter: "(none)",
+                available: client.discoveredDevices.map(\.name)
+            )
         }
 
         if !quiet {

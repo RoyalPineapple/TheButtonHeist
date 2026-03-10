@@ -2,7 +2,6 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
-import CryptoKit
 import TheScore
 import TheGetaway
 import os.log
@@ -223,14 +222,9 @@ public final class TheInsideJob {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
-        // Token hash for pre-connection filtering (SHA256, first 8 bytes hex)
-        let tokenHash = SHA256.hash(data: Data(muscle.authToken.utf8))
-        let tokenHashPrefix = tokenHash.prefix(8).map { String(format: "%02x", $0) }.joined()
-
         transport?.advertise(
             serviceName: serviceName,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-            tokenHash: tokenHashPrefix,
             installationId: installationId,
             instanceId: effectiveInstanceId,
             additionalTXT: [

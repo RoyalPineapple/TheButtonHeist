@@ -8,8 +8,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let endpoint: NWEndpoint
     /// Simulator UDID from Bonjour TXT record (nil on physical devices)
     public let simulatorUDID: String?
-    /// Token hash from Bonjour TXT record (for pre-connection filtering)
-    public let tokenHash: String?
     /// Stable installation identifier from Bonjour TXT record
     public let installationId: String?
     /// Human-readable device name from Bonjour TXT record
@@ -21,7 +19,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     public init(id: String, name: String, endpoint: NWEndpoint,
                 simulatorUDID: String? = nil,
-                tokenHash: String? = nil,
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
@@ -30,7 +27,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.name = name
         self.endpoint = endpoint
         self.simulatorUDID = simulatorUDID
-        self.tokenHash = tokenHash
         self.installationId = installationId
         self.displayDeviceName = displayDeviceName
         self.instanceId = instanceId
@@ -103,10 +99,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
         if let installationId = Self.normalizedIdentifier(installationId) {
             return "install|\(normalizedAppName)|\(installationId)"
-        }
-
-        if let tokenHash = Self.normalizedIdentifier(tokenHash) {
-            return "token|\(normalizedAppName)|\(tokenHash)"
         }
 
         return "service|\(id)"
