@@ -10,7 +10,7 @@ TheMastermind is the macOS-side counterpart to TheInsideJob:
 
 1. **Observable state** for SwiftUI integration (`@Observable`) - mirrors TheHandoff's state
 2. **Callback API** for non-SwiftUI consumers (CLI, MCP) via typed closures
-3. **Configuration forwarding** - proxies `token`, `forceSession`, `driverId`, `autoSubscribe` to TheHandoff
+3. **Configuration forwarding** - proxies `token`, `driverId`, `autoSubscribe` to TheHandoff
 4. **Async wait methods** for action results, screenshots, interface, recordings
 5. **Display name disambiguation** when multiple devices share names (delegated to TheHandoff)
 6. **Discovery and connection** delegation to TheHandoff
@@ -109,7 +109,7 @@ TheMastermind delegates all core operations to TheHandoff:
 | `send(_:)` | `handoff.send(_:)` |
 | `requestInterface()` | `handoff.send(.requestInterface)` |
 | `displayName(for:)` | `handoff.displayName(for:)` |
-| `token` / `forceSession` / `driverId` / `autoSubscribe` | `handoff.token` / etc. |
+| `token` / `driverId` / `autoSubscribe` | `handoff.token` / etc. |
 
 The `wireUpHandoff()` method (called from `init`) connects all of TheHandoff's callbacks
 to update TheMastermind's observable state and forward to TheMastermind's own callbacks.

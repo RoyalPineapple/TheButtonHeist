@@ -21,7 +21,7 @@ graph TD
     subgraph CLI["ButtonHeistCLI"]
         Main["main.swift - @main ButtonHeist: AsyncParsableCommand"]
         Format["OutputFormat - auto / human / json"]
-        Options["ConnectionOptions - --device, --token, --quiet, --force"]
+        Options["ConnectionOptions - --device, --token, --quiet"]
 
         subgraph Commands["Subcommands"]
             List["list"]

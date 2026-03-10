@@ -889,8 +889,8 @@ public final class TheFence {
     }
 
     private func validateOutputPath(_ path: String) throws {
-        let resolved = URL(fileURLWithPath: path).standardizedFileURL.path
-        guard !resolved.contains("..") else {
+        let components = path.components(separatedBy: "/")
+        guard !components.contains("..") else {
             throw FenceError.invalidRequest("Output path must not contain path traversal")
         }
     }
