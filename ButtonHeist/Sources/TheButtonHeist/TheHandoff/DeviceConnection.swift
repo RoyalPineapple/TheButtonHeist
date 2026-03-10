@@ -50,7 +50,7 @@ public final class DeviceConnection {
     private let device: DiscoveredDevice
     private(set) var token: String?
     private var receiveBuffer = Data()
-    private var isConnected = false
+    var isConnected = false
 
     public var onConnected: (() -> Void)?
     public var onDisconnected: ((DisconnectReason) -> Void)?
@@ -208,7 +208,7 @@ public final class DeviceConnection {
         }
     }
 
-    private func handleMessage(_ data: Data) {
+    func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
         guard let (requestId, message) = decodeEnvelope(from: data) else {
             if let str = String(data: data, encoding: .utf8) {

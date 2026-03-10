@@ -78,53 +78,32 @@ final class TLSIdentityTests: XCTestCase {
         XCTAssertNil(error)
     }
 
-    // MARK: - Keychain Integration (may fail without entitlements)
+    // MARK: - Keychain Integration (hosted in AccessibilityTestApp for entitlements)
 
     func testGetOrCreateAndRetrieve() throws {
         let label = "com.buttonheist.tls.test.\(UUID().uuidString)"
         defer { try? TLSIdentity.delete(label: label) }
 
-        do {
-            let first = try TLSIdentity.getOrCreate(label: label)
-            let second = try TLSIdentity.getOrCreate(label: label)
-            XCTAssertEqual(first.fingerprint, second.fingerprint,
-                           "Same label should return the same identity")
-        } catch let error as TLSIdentityError {
-            if case .keychainError(let status) = error, status == -34018 {
-                throw XCTSkip("Keychain not available in this test environment (errSecMissingEntitlement)")
-            }
-            throw error
-        }
+        let first = try TLSIdentity.getOrCreate(label: label)
+        let second = try TLSIdentity.getOrCreate(label: label)
+        XCTAssertEqual(first.fingerprint, second.fingerprint,
+                       "Same label should return the same identity")
     }
 
     func testDeleteRemovesIdentity() throws {
         let label = "com.buttonheist.tls.test.\(UUID().uuidString)"
 
-        do {
-            let first = try TLSIdentity.getOrCreate(label: label)
-            try TLSIdentity.delete(label: label)
-            let second = try TLSIdentity.getOrCreate(label: label)
-            XCTAssertNotEqual(first.fingerprint, second.fingerprint,
-                              "After delete, a new identity should be generated")
-            try TLSIdentity.delete(label: label)
-        } catch let error as TLSIdentityError {
-            if case .keychainError = error {
-                throw XCTSkip("Keychain not fully available in this test environment")
-            }
-            throw error
-        }
+        let first = try TLSIdentity.getOrCreate(label: label)
+        try TLSIdentity.delete(label: label)
+        let second = try TLSIdentity.getOrCreate(label: label)
+        XCTAssertNotEqual(first.fingerprint, second.fingerprint,
+                          "After delete, a new identity should be generated")
+        try TLSIdentity.delete(label: label)
     }
 
     func testEphemeralIdentityProducesValidSecIdentity() throws {
-        do {
-            let identity = try TLSIdentity.createEphemeral()
-            let secId = sec_identity_create(identity.identity)
-            XCTAssertNotNil(secId, "sec_identity_create must succeed for Network framework TLS")
-        } catch let error as TLSIdentityError {
-            if case .keychainError(let status) = error, status == -34018 {
-                throw XCTSkip("Keychain not available in this test environment (errSecMissingEntitlement)")
-            }
-            throw error
-        }
+        let identity = try TLSIdentity.createEphemeral()
+        let secId = sec_identity_create(identity.identity)
+        XCTAssertNotNil(secId, "sec_identity_create must succeed for Network framework TLS")
     }
 }

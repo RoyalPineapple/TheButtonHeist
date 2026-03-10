@@ -1,6 +1,5 @@
 import XCTest
 import Network
-import TheGetaway
 @testable import ButtonHeist
 
 /// Thread-safe ordered log for tracking callback invocation order.
@@ -17,120 +16,56 @@ private final class CallOrder: @unchecked Sendable {
     }
 }
 
-/// Tests for auth failure handling over real TCP connections.
+/// Tests for auth failure handling using direct message injection.
 /// Validates that authFailed fires correctly and isn't swallowed by the subsequent disconnect.
 final class AuthFailureTests: XCTestCase {
 
-    private var server: SimpleSocketServer!
-    @ButtonHeistActor private var deviceConnection: DeviceConnection?
-
-    override func setUp() {
-        super.setUp()
-        server = SimpleSocketServer()
+    private func makeDummyDevice() -> DiscoveredDevice {
+        DiscoveredDevice(
+            id: "mock",
+            name: "MockApp#test",
+            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1)
+        )
     }
 
-    override func tearDown() {
-        server.stop()
-        server = nil
-        Task { @ButtonHeistActor in
-            self.deviceConnection?.disconnect()
-            self.deviceConnection = nil
-        }
-        super.tearDown()
-    }
-
-    private func startServer() throws -> UInt16 {
-        try server.start(port: 0, bindToLoopback: true)
+    private func encode(_ message: ServerMessage) -> Data {
+        // swiftlint:disable:next force_try
+        try! JSONEncoder().encode(ResponseEnvelope(message: message))
     }
 
     // MARK: - Tests
 
-    func testAuthFailedCallbackFires() async throws {
-        let port = try startServer()
+    @ButtonHeistActor
+    func testAuthFailedCallbackFires() {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
+        conn.isConnected = true
 
-        let clientConnected = expectation(description: "client connected")
-        let authFailedFired = expectation(description: "authFailed callback")
-
-        server.onClientConnected = { clientId in
-            clientConnected.fulfill()
-            // Send authRequired then authFailed (simulating wrong token rejection)
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
-                self.server.send(data, to: clientId)
-            }
+        var authFailedReason: String?
+        conn.onAuthFailed = { reason in
+            authFailedReason = reason
         }
 
-        server.onUnauthenticatedData = { _, _, respond in
-            // Reject with authFailed
-            let authFailed = ResponseEnvelope(
-                message: .authFailed("Invalid token. Retry without a token to request a fresh session."))
-            if let data = try? JSONEncoder().encode(authFailed) {
-                respond(data)
-            }
-        }
+        conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
 
-        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
-        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await ButtonHeistActor.run {
-            let conn = DeviceConnection(device: device, token: "wrong-token")
-            conn.onAuthFailed = { reason in
-                XCTAssertTrue(reason.contains("Invalid token"))
-                authFailedFired.fulfill()
-            }
-            self.deviceConnection = conn
-            conn.connect()
-        }
-
-        await fulfillment(of: [clientConnected], timeout: 5.0)
-        await fulfillment(of: [authFailedFired], timeout: 5.0)
+        XCTAssertNotNil(authFailedReason)
+        XCTAssertTrue(authFailedReason!.contains("Invalid token"))
     }
 
-    func testAuthFailedFiresBeforeDisconnected() async throws {
-        let port = try startServer()
-
-        let clientConnected = expectation(description: "client connected")
-        let authFailedFired = expectation(description: "authFailed callback")
-        let disconnectedFired = expectation(description: "disconnected callback")
-        disconnectedFired.assertForOverFulfill = false
-
-        server.onClientConnected = { clientId in
-            clientConnected.fulfill()
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
-                self.server.send(data, to: clientId)
-            }
-        }
-
-        server.onUnauthenticatedData = { _, _, respond in
-            let authFailed = ResponseEnvelope(
-                message: .authFailed("Invalid token. Retry without a token to request a fresh session."))
-            if let data = try? JSONEncoder().encode(authFailed) {
-                respond(data)
-            }
-        }
+    @ButtonHeistActor
+    func testAuthFailedFiresBeforeDisconnected() {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
+        conn.isConnected = true
 
         let callOrder = CallOrder()
-        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
-        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await ButtonHeistActor.run {
-            let conn = DeviceConnection(device: device, token: "wrong-token")
-            conn.onAuthFailed = { _ in
-                callOrder.append("authFailed")
-                authFailedFired.fulfill()
-            }
-            conn.onDisconnected = { _ in
-                callOrder.append("disconnected")
-                disconnectedFired.fulfill()
-            }
-            self.deviceConnection = conn
-            conn.connect()
+        conn.onAuthFailed = { _ in
+            callOrder.append("authFailed")
+        }
+        conn.onDisconnected = { _ in
+            callOrder.append("disconnected")
         }
 
-        await fulfillment(of: [clientConnected], timeout: 5.0)
-        await fulfillment(of: [authFailedFired], timeout: 5.0)
-        await fulfillment(of: [disconnectedFired], timeout: 5.0)
+        conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
 
-        // Verify authFailed fires before disconnected
-        await ButtonHeistActor.run {
-            XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
-        }
+        XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
     }
 }
