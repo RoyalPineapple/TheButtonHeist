@@ -182,6 +182,15 @@ When adding or changing code:
 - Do not weaken the concurrency strictness level for any target.
 - If an upstream dependency produces warnings, isolate it behind a wrapper rather than lowering the project settings.
 
+## Type Safety: Enums Over Raw Strings
+
+Prefer typed enums (`enum Foo: String`) over raw strings for any value that has a known set of valid cases — command names, action types, status codes, option values, etc. Convert to and from strings only at system boundaries (CLI argument parsing, JSON deserialization, MCP tool dispatch). Internally, pass the enum everywhere.
+
+- `TheFence.Command` is the canonical example: strings enter via `execute(request:)`, are parsed to the enum at the boundary, and flow as typed values through dispatch and handlers.
+- `EditAction`, `SwipeDirection`, `ScrollDirection`, `ScrollEdge` follow the same pattern.
+- When adding a new command, action type, or option set: define it as a `String`-backed enum with `CaseIterable` in the appropriate module, not as string literals scattered across switch statements.
+- Use `.rawValue` only at serialization boundaries — never compare `.rawValue` against a string literal deeper in the stack.
+
 ## Versioning and Releases
 
 - **SemVer** (MAJOR.MINOR.PATCH). Current baseline: 0.0.1. See `docs/VERSIONING.md` for rules.
@@ -203,9 +212,9 @@ When adding or changing code:
 ## CLI/MCP Sync Contract
 
 - `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 14 purpose-built tools that each dispatch to `TheFence`.
-- The command source of truth is `ButtonHeist/Sources/ButtonHeist/CommandCatalog.swift`.
-- Any command add/remove/rename must update `CommandCatalog` in the same change.
-- MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `CommandCatalog.all`.
+- The command source of truth is `TheFence.Command` enum in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`.
+- Any command add/remove/rename must update the `Command` enum in the same change.
+- MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `Command.allCases`.
 - For rapid MCP driving: prefer action `delta` responses and only call `get_interface` when context is stale.
 - When mastermind/session behavior changes, validate both builds in the same branch:
   - `cd ButtonHeistCLI && swift build -c release`

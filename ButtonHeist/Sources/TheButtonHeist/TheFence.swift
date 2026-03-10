@@ -94,7 +94,7 @@ public final class TheFence {
         }
     }
 
-    public static let supportedCommands = CommandCatalog.all
+    public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
     public var onStatus: ((String) -> Void)? {
         didSet { client.handoff.onStatus = onStatus }
@@ -138,15 +138,18 @@ public final class TheFence {
     }
 
     public func execute(request: [String: Any]) async throws -> FenceResponse {
-        guard let command = request["command"] as? String else {
+        guard let commandString = request["command"] as? String else {
             throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
         }
+        guard let command = Command(rawValue: commandString) else {
+            return .error("Unknown command: \(commandString). Use 'help' for available commands.")
+        }
 
-        if command == "help" {
+        if command == .help {
             return .help(commands: Self.supportedCommands)
         }
 
-        if command == "quit" || command == "exit" {
+        if command == .quit || command == .exit {
             stop()
             return .ok(message: "bye")
         }
@@ -172,40 +175,40 @@ public final class TheFence {
 
     // MARK: - Command Dispatch (thin router)
 
-    private func dispatch(command: String, args: [String: Any]) async throws -> FenceResponse {
+    private func dispatch(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case "status":
+        case .status:
             return .status(
                 connected: client.connectionState == .connected,
                 deviceName: client.connectedDevice.map { client.displayName(for: $0) }
             )
-        case "list_devices":
+        case .listDevices:
             return .devices(client.discoveredDevices)
-        case "get_interface":
+        case .getInterface:
             return .interface(try await handleGetInterface())
-        case "get_screen":
+        case .getScreen:
             return try await handleGetScreen(args)
-        case "wait_for_idle":
+        case .waitForIdle:
             return try await sendAction(.waitForIdle(WaitForIdleTarget(timeout: doubleArg(args, "timeout"))))
-        case "one_finger_tap", "long_press", "swipe", "drag", "pinch", "rotate", "two_finger_tap",
-             "draw_path", "draw_bezier":
+        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
+             .drawPath, .drawBezier:
             return try await handleGesture(command: command, args: args)
-        case "scroll", "scroll_to_visible", "scroll_to_edge":
+        case .scroll, .scrollToVisible, .scrollToEdge:
             return try await handleScrollAction(command: command, args: args)
-        case "activate", "increment", "decrement", "perform_custom_action":
+        case .activate, .increment, .decrement, .performCustomAction:
             return try await handleAccessibilityAction(command: command, args: args)
-        case "type_text":
+        case .typeText:
             return try await handleTypeText(args)
-        case "edit_action":
+        case .editAction:
             return try await handleEditAction(args)
-        case "dismiss_keyboard":
+        case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
-        case "start_recording":
+        case .startRecording:
             return try await handleStartRecording(args)
-        case "stop_recording":
+        case .stopRecording:
             return try await handleStopRecording(args)
-        default:
-            return .error("Unknown command: \(command). Use 'help' for available commands.")
+        case .help, .quit, .exit:
+            return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
     }
 
