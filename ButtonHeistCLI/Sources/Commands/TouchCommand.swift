@@ -12,15 +12,15 @@ struct TouchCommand: AsyncParsableCommand {
             Examples:
               buttonheist touch one_finger_tap --identifier "myButton"
               buttonheist touch one_finger_tap --x 100 --y 200
-              buttonheist touch longpress --identifier "myButton" --duration 1.0
+              buttonheist touch long_press --identifier "myButton" --duration 1.0
               buttonheist touch swipe --identifier "list" --direction up
               buttonheist touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
               buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
               buttonheist touch pinch --identifier "mapView" --scale 2.0
               buttonheist touch rotate --x 200 --y 300 --angle 1.57
-              buttonheist touch two-finger-tap --identifier "zoomControl"
-              buttonheist touch draw-path --points "100,400 200,300 300,400"
-              buttonheist touch draw-bezier --bezier-file curve.json
+              buttonheist touch two_finger_tap --identifier "zoomControl"
+              buttonheist touch draw_path --points "100,400 200,300 300,400"
+              buttonheist touch draw_bezier --bezier-file curve.json
             """,
         subcommands: [
             TapSubcommand.self,
@@ -78,7 +78,7 @@ struct TapSubcommand: AsyncParsableCommand {
 // MARK: - Long Press
 
 struct LongPressSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "longpress", abstract: "Long press at a point or element")
+    static let configuration = CommandConfiguration(commandName: "long_press", abstract: "Long press at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -317,7 +317,7 @@ struct RotateSubcommand: AsyncParsableCommand {
 // MARK: - Two-Finger Tap
 
 struct TwoFingerTapSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "two-finger-tap", abstract: "Tap with two fingers at a point or element")
+    static let configuration = CommandConfiguration(commandName: "two_finger_tap", abstract: "Tap with two fingers at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
 
@@ -357,15 +357,15 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
 struct DrawPathSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "draw-path",
+        commandName: "draw_path",
         abstract: "Draw along a path of points",
         discussion: """
             Trace a finger through a sequence of waypoints.
 
             Examples:
-              buttonheist touch draw-path --points "100,200 150,250 200,300"
-              buttonheist touch draw-path --path-file shape.json
-              buttonheist touch draw-path --points "100,400 200,300 300,400" --velocity 500
+              buttonheist touch draw_path --points "100,200 150,250 200,300"
+              buttonheist touch draw_path --path-file shape.json
+              buttonheist touch draw_path --points "100,400 200,300 300,400" --velocity 500
             """
     )
 
@@ -436,7 +436,7 @@ struct DrawPathSubcommand: AsyncParsableCommand {
 
 struct DrawBezierSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "draw-bezier",
+        commandName: "draw_bezier",
         abstract: "Draw along a cubic bezier curve",
         discussion: """
             Trace a finger along cubic bezier curve segments. The curve is sampled
@@ -451,8 +451,8 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
             }
 
             Examples:
-              buttonheist touch draw-bezier --bezier-file curve.json
-              buttonheist touch draw-bezier --bezier-file curve.json --samples 40 --velocity 300
+              buttonheist touch draw_bezier --bezier-file curve.json
+              buttonheist touch draw_bezier --bezier-file curve.json --samples 40 --velocity 300
             """
     )
 

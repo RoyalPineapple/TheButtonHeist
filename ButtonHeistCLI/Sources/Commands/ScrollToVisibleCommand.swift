@@ -3,15 +3,15 @@ import ButtonHeist
 
 struct ScrollToVisibleCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "scroll-to-visible",
+        commandName: "scroll_to_visible",
         abstract: "Scroll until a target element is visible",
         discussion: """
             Finds the nearest scroll view ancestor and adjusts its content offset
             so the target element's accessibility frame is fully within the viewport.
 
             Examples:
-              buttonheist scroll-to-visible --identifier "buttonheist.longList.last"
-              buttonheist scroll-to-visible --index 42
+              buttonheist scroll_to_visible --identifier "buttonheist.longList.last"
+              buttonheist scroll_to_visible --index 42
             """
     )
 

@@ -4,13 +4,13 @@
   "repo_root": ".",
   "current_project_path": ".",
   "monorepo_projects": [],
-  "generated_at": "2026-03-10T00:00:00Z",
-  "git_commit": "c78697f0631180d838c9d5d2872e13a4a583f029",
-  "files_analyzed": 34,
+  "generated_at": "2026-03-11T00:00:00Z",
+  "git_commit": "7c86f2d3abd84c954fef91223437eba28e2fcc4e",
+  "files_analyzed": 27,
   "languages": ["Swift", "Objective-C", "Markdown", "Shell"],
   "metrics": {
     "modules": 8,
-    "components": 22,
-    "concepts": 27
+    "components": 24,
+    "concepts": 31
   }
 }
