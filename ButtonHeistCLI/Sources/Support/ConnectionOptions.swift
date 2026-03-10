@@ -1,5 +1,4 @@
 import ArgumentParser
-import Foundation
 
 /// Shared connection options used by all commands that connect to a device.
 /// Commands that also need `--format` and `--timeout` declare those individually
@@ -13,7 +12,4 @@ struct ConnectionOptions: ParsableArguments {
 
     @Flag(name: .shortAndLong, help: "Suppress status messages")
     var quiet: Bool = false
-
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
 }

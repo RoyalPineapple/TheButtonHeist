@@ -1,5 +1,4 @@
 import ArgumentParser
-import Foundation
 import ButtonHeist
 
 struct StopRecordingCommand: AsyncParsableCommand {
@@ -17,7 +16,7 @@ struct StopRecordingCommand: AsyncParsableCommand {
     func run() async throws {
         let connector = DeviceConnector(
             deviceFilter: connection.device, token: connection.token,
-            quiet: connection.quiet, force: connection.force
+            quiet: connection.quiet
         )
         try await connector.connect()
         defer { connector.disconnect() }

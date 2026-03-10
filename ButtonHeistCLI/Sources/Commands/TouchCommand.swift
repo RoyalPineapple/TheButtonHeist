@@ -1,6 +1,5 @@
 import ArgumentParser
 import Foundation
-import Darwin
 import ButtonHeist
 
 struct TouchCommand: AsyncParsableCommand {
@@ -499,7 +498,7 @@ struct DrawBezierSubcommand: AsyncParsableCommand {
 @ButtonHeistActor
 private func sendTouchGesture(message: ClientMessage, connection: ConnectionOptions,
                               timeout: Double, format: OutputFormat?) async throws {
-    let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+    let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client

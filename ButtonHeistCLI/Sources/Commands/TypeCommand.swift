@@ -1,6 +1,4 @@
 import ArgumentParser
-import Foundation
-import Darwin
 import ButtonHeist
 
 struct TypeCommand: AsyncParsableCommand {
@@ -43,7 +41,7 @@ struct TypeCommand: AsyncParsableCommand {
             elementTarget: element.actionTarget
         ))
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client

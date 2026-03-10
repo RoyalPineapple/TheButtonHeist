@@ -1,5 +1,4 @@
 import ArgumentParser
-import Foundation
 import ButtonHeist
 
 struct ActivateCommand: AsyncParsableCommand {
@@ -29,7 +28,7 @@ struct ActivateCommand: AsyncParsableCommand {
     mutating func run() async throws {
         let target = try element.requireTarget()
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
