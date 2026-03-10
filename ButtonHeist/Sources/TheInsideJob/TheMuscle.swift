@@ -46,8 +46,8 @@ final class TheMuscle {
     private(set) var observerClients: Set<Int> = []
     /// Pending approval clients that requested observe mode
     private var pendingObserverClients: Set<Int> = []
-    /// Whether observers require token authentication (env: INSIDEJOB_WATCH_AUTH, plist: InsideJobWatchAuth)
-    private let observeRequiresAuth: Bool
+    /// Whether observers require token authentication (env: INSIDEJOB_RESTRICT_WATCHERS, plist: InsideJobRestrictWatchers)
+    private let restrictWatchers: Bool
 
     // MARK: - Session Lock State
 
@@ -76,12 +76,12 @@ final class TheMuscle {
 
     init(explicitToken: String?) {
         self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
-        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_WATCH_AUTH"] {
-            self.observeRequiresAuth = ["1", "true", "yes"].contains(envValue.lowercased())
-        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobWatchAuth") as? Bool {
-            self.observeRequiresAuth = plistValue
+        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_RESTRICT_WATCHERS"] {
+            self.restrictWatchers = ["1", "true", "yes"].contains(envValue.lowercased())
+        } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
+            self.restrictWatchers = plistValue
         } else {
-            self.observeRequiresAuth = false
+            self.restrictWatchers = false
         }
         if let envTimeout = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_TIMEOUT"],
            let parsed = TimeInterval(envTimeout) {
@@ -259,13 +259,13 @@ final class TheMuscle {
     // MARK: - Observer Auth
 
     /// Handle a watch request from an unauthenticated client.
-    /// Observers are auto-approved by default. When INSIDEJOB_WATCH_AUTH=1,
+    /// Observers are auto-approved by default. When INSIDEJOB_RESTRICT_WATCHERS=1,
     /// they require a token match — but never claim a session.
     private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
-        if observeRequiresAuth {
+        if restrictWatchers {
             guard !payload.token.isEmpty else {
                 sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
-                logger.warning("Observer \(clientId) sent no token with observeRequiresAuth=true, rejected")
+                logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
