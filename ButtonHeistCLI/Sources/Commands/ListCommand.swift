@@ -94,9 +94,12 @@ struct ListCommand: AsyncParsableCommand {
             switch device.connectionType {
             case .simulator: typeLabel = "sim"
             case .usb: typeLabel = "usb"
-            case .device: typeLabel = "device"
+            case .network: typeLabel = "network"
             }
             writeOutput("  [\(index)] \(id)  \(app)  (\(dev))  [\(typeLabel)]")
+            if let udid = device.simulatorUDID {
+                writeOutput("       Simulator: \(udid)")
+            }
         }
         writeOutput("")
         writeOutput("Use --device <id|name|udid> to target a specific instance.")

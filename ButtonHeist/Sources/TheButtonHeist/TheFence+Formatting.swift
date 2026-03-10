@@ -55,7 +55,7 @@ public enum FenceResponse {
             switch device.connectionType {
             case .simulator: typeLabel = "sim"
             case .usb: typeLabel = "usb"
-            case .device: typeLabel = "device"
+            case .network: typeLabel = "network"
             }
             output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))  [\(typeLabel)]\n"
         }

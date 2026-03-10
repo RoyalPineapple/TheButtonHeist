@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 /// Defines which connection sources a server will accept.
 ///
@@ -32,22 +33,34 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     /// All scopes allowed (including network).
     public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
 
-    /// Classify a remote address string into a connection scope.
+    /// Classify a remote host into a connection scope using typed Network framework values.
     ///
-    /// - `::1` or `127.0.0.1` → `.simulator` (loopback)
-    /// - `fd??:` prefix → `.usb` (CoreDevice IPv6 ULA tunnel)
+    /// - IPv4/IPv6 loopback → `.simulator`
+    /// - `anpi` interface (Apple Network Private Interface) → `.usb` (CoreDevice tunnel)
+    /// - IPv6 ULA (`fd00::/8`) on non-`anpi` interface → `.network` (regular ULA, not USB)
     /// - Everything else → `.network`
-    public static func classify(remoteAddress: String) -> ConnectionScope {
-        let addr = remoteAddress.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+    ///
+    /// Pass `interfaces` from `NWConnection.currentPath?.availableInterfaces` after the
+    /// connection reaches `.ready` for precise CoreDevice USB detection.
+    public static func classify(host: NWEndpoint.Host, interfaces: [NWInterface] = []) -> ConnectionScope {
+        switch host {
+        case .ipv4(let addr):
+            if addr == .loopback { return .simulator }
+            if addr.rawValue.first == 127 { return .simulator }
+            return .network
 
-        if addr == "::1" || addr == "127.0.0.1" || addr.hasPrefix("127.") {
-            return .simulator
+        case .ipv6(let addr):
+            if addr == .loopback { return .simulator }
+            // CoreDevice USB: check for anpi (Apple Network Private Interface)
+            let isAnpi = interfaces.contains { $0.name.hasPrefix("anpi") }
+            if isAnpi { return .usb }
+            // fd00::/8 ULA without anpi — treat as USB only if no interface info available
+            // (pre-.ready fallback). With interface info, non-anpi ULA is network.
+            if addr.rawValue.first == 0xfd && interfaces.isEmpty { return .usb }
+            return .network
+
+        default:
+            return .network
         }
-
-        if addr.lowercased().hasPrefix("fd") {
-            return .usb
-        }
-
-        return .network
     }
 }
