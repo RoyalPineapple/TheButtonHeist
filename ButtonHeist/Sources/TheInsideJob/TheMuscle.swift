@@ -46,7 +46,7 @@ final class TheMuscle {
     private(set) var observerClients: Set<Int> = []
     /// Pending approval clients that requested observe mode
     private var pendingObserverClients: Set<Int> = []
-    /// Whether observers require token authentication (env: INSIDEJOB_RESTRICT_WATCHERS, plist: InsideJobRestrictWatchers)
+    /// Whether observers require token authentication (default: true; override with env: INSIDEJOB_RESTRICT_WATCHERS=0, plist: InsideJobRestrictWatchers=false)
     private let restrictWatchers: Bool
 
     // MARK: - Session Lock State
@@ -81,7 +81,7 @@ final class TheMuscle {
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
             self.restrictWatchers = plistValue
         } else {
-            self.restrictWatchers = false
+            self.restrictWatchers = true
         }
         if let envTimeout = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_TIMEOUT"],
            let parsed = TimeInterval(envTimeout) {
@@ -259,8 +259,8 @@ final class TheMuscle {
     // MARK: - Observer Auth
 
     /// Handle a watch request from an unauthenticated client.
-    /// Observers are auto-approved by default. When INSIDEJOB_RESTRICT_WATCHERS=1,
-    /// they require a token match — but never claim a session.
+    /// Observers require token authentication by default. Set INSIDEJOB_RESTRICT_WATCHERS=0
+    /// to allow unauthenticated observers. Observers never claim a session.
     private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
         if restrictWatchers {
             guard !payload.token.isEmpty else {

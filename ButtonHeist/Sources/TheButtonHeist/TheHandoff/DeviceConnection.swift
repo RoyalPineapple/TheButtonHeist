@@ -315,7 +315,7 @@ public final class DeviceConnection {
 
         sec_protocol_options_set_min_tls_protocol_version(
             tlsOptions.securityProtocolOptions,
-            .TLSv12
+            .TLSv13
         )
 
         let expected = expectedFingerprint

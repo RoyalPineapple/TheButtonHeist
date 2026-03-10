@@ -266,13 +266,6 @@ public final class TheFence {
         return nil
     }
 
-    func validateOutputPath(_ path: String) throws {
-        let components = path.components(separatedBy: "/")
-        guard !components.contains("..") else {
-            throw FenceError.invalidRequest("Output path must not contain path traversal")
-        }
-    }
-
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
         let identifier = stringArg(dictionary, "identifier")
         let order = intArg(dictionary, "order")
