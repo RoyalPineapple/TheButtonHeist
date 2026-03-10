@@ -4,24 +4,26 @@ import TheScore
 
 final class TheFenceTests: XCTestCase {
 
-    // MARK: - CommandCatalog
+    // MARK: - Command Enum
 
-    func testCommandCatalogContainsExpectedCommands() {
-        let commands = TheFence.CommandCatalog.all
-        XCTAssertTrue(commands.contains("help"))
-        XCTAssertTrue(commands.contains("one_finger_tap"))
-        XCTAssertTrue(commands.contains("get_interface"))
-        XCTAssertTrue(commands.contains("get_screen"))
-        XCTAssertTrue(commands.contains("type_text"))
-        XCTAssertTrue(commands.contains("start_recording"))
-        XCTAssertTrue(commands.contains("stop_recording"))
-        XCTAssertTrue(commands.contains("dismiss_keyboard"))
+    func testCommandEnumContainsExpectedCommands() {
+        let commands = TheFence.Command.allCases
+        XCTAssertTrue(commands.contains(.help))
+        XCTAssertTrue(commands.contains(.oneFingerTap))
+        XCTAssertTrue(commands.contains(.getInterface))
+        XCTAssertTrue(commands.contains(.getScreen))
+        XCTAssertTrue(commands.contains(.typeText))
+        XCTAssertTrue(commands.contains(.startRecording))
+        XCTAssertTrue(commands.contains(.stopRecording))
+        XCTAssertTrue(commands.contains(.dismissKeyboard))
     }
 
-    func testCommandCatalogHasNoDuplicates() {
-        let commands = TheFence.CommandCatalog.all
-        let unique = Set(commands)
-        XCTAssertEqual(commands.count, unique.count, "CommandCatalog should not have duplicate entries")
+    func testCommandRawValuesMatchWireFormat() {
+        XCTAssertEqual(TheFence.Command.oneFingerTap.rawValue, "one_finger_tap")
+        XCTAssertEqual(TheFence.Command.getInterface.rawValue, "get_interface")
+        XCTAssertEqual(TheFence.Command.typeText.rawValue, "type_text")
+        XCTAssertEqual(TheFence.Command.scrollToEdge.rawValue, "scroll_to_edge")
+        XCTAssertEqual(TheFence.Command.dismissKeyboard.rawValue, "dismiss_keyboard")
     }
 
     // MARK: - FenceResponse Human Formatting

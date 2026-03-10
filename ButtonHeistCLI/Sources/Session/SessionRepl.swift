@@ -125,13 +125,13 @@ final class ReplSession {
         let requestId = request["id"]
 
         // Enhanced help for human mode
-        if command == "help" && format == .human && !line.hasPrefix("{") {
+        if command == TheFence.Command.help.rawValue && format == .human && !line.hasPrefix("{") {
             return (.ok(message: Self.humanHelp), nil)
         }
 
         do {
             let response = try await fence.execute(request: request)
-            if command == "quit" || command == "exit" {
+            if command == TheFence.Command.quit.rawValue || command == TheFence.Command.exit.rawValue {
                 shouldExit = true
                 isRunning = false
             }
@@ -189,14 +189,14 @@ final class ReplSession {
         """
 
     private nonisolated static let commandAliases: [String: String] = [
-        "tap": "one_finger_tap",
-        "ui": "get_interface",
-        "type": "type_text",
-        "screen": "get_screen",
-        "devices": "list_devices",
-        "press": "long_press",
-        "idle": "wait_for_idle",
-        "record": "start_recording",
+        "tap": TheFence.Command.oneFingerTap.rawValue,
+        "ui": TheFence.Command.getInterface.rawValue,
+        "type": TheFence.Command.typeText.rawValue,
+        "screen": TheFence.Command.getScreen.rawValue,
+        "devices": TheFence.Command.listDevices.rawValue,
+        "press": TheFence.Command.longPress.rawValue,
+        "idle": TheFence.Command.waitForIdle.rawValue,
+        "record": TheFence.Command.startRecording.rawValue,
     ]
 
     private nonisolated static let directionWords: Set<String> = [
@@ -208,7 +208,7 @@ final class ReplSession {
     ]
 
     private nonisolated static let directionCommands: Set<String> = [
-        "swipe", "scroll"
+        TheFence.Command.swipe.rawValue, TheFence.Command.scroll.rawValue,
     ]
 
     nonisolated static func parseHumanInput(_ line: String) -> [String: Any] {
@@ -249,18 +249,18 @@ final class ReplSession {
         guard !positional.isEmpty else { return }
 
         switch command {
-        case "type_text":
+        case TheFence.Command.typeText.rawValue:
             // Everything after "type" is the text to type
             if result["text"] == nil {
                 result["text"] = positional.joined(separator: " ")
             }
 
-        case "edit_action":
+        case TheFence.Command.editAction.rawValue:
             if result["action"] == nil, let action = positional.first {
                 result["action"] = action
             }
 
-        case "scroll_to_edge":
+        case TheFence.Command.scrollToEdge.rawValue:
             // First positional: edge or identifier; second: identifier
             var remaining = positional
             if let first = remaining.first, edgeWords.contains(first.lowercased()) {
@@ -269,7 +269,7 @@ final class ReplSession {
             }
             applyElementTarget(remaining, into: &result)
 
-        case "perform_custom_action":
+        case TheFence.Command.performCustomAction.rawValue:
             // First positional: identifier, rest: actionName
             if let first = positional.first {
                 applyElementTarget([first], into: &result)

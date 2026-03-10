@@ -553,7 +553,7 @@ public struct Configuration {
 
 ##### supportedCommands
 ```swift
-public static let supportedCommands: [String]  // From CommandCatalog.all
+public static let supportedCommands: [String]  // From Command.allCases
 ```
 
 ##### onStatus
@@ -588,15 +588,18 @@ public func execute(request: [String: Any]) async throws -> FenceResponse
 ```
 Execute a command. The `request` dictionary must contain a `command` key. Auto-connects if not already connected. Returns a typed `FenceResponse`.
 
-### CommandCatalog
+### Command
 
 ```swift
-public enum CommandCatalog {
-    public static let all: [String]
+public enum Command: String, CaseIterable, Sendable {
+    case help, status, quit, exit
+    case listDevices = "list_devices"
+    case getInterface = "get_interface"
+    // ... 29 total cases
 }
 ```
 
-Single source of truth for the 29 supported commands: `help`, `status`, `quit`, `exit`, `list_devices`, `get_interface`, `get_screen`, `wait_for_idle`, `one_finger_tap`, `long_press`, `swipe`, `drag`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`, `scroll`, `scroll_to_visible`, `scroll_to_edge`, `activate`, `increment`, `decrement`, `perform_custom_action`, `type_text`, `edit_action`, `dismiss_keyboard`, `start_recording`, `stop_recording`.
+Single source of truth for the 29 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 

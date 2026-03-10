@@ -144,10 +144,10 @@ stateDiagram-v2
 - `jsonDict()` includes `interactionCount` key (0 when nil)
 - Well-tested: `SessionResponseTests` covers both human formatting and JSON serialization
 
-**`supportedCommands` is a String array** (`TheFence+CommandCatalog.swift`)
-- Commands are matched by string comparison in the dispatch switch
-- A typo in the catalog wouldn't be caught at compile time
-- No enum-based type safety for command names
+**`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)
+- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 29 cases
+- Commands are matched by enum case in the dispatch switch (compile-time exhaustiveness)
+- `supportedCommands` is `Command.allCases.map(\.rawValue)` — no hand-maintained list
 
 **Screenshot file saving uses temp directory** (`TheFence.swift`)
 - Screenshots and recordings are saved to `FileManager.default.temporaryDirectory`

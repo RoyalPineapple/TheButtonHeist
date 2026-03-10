@@ -419,12 +419,17 @@ public struct TypeTextTarget: Codable, Sendable {
     }
 }
 
+/// Standard edit actions that can be dispatched via the responder chain.
+public enum EditAction: String, Codable, Sendable, CaseIterable {
+    case copy, paste, cut, select, selectAll
+}
+
 /// Target for edit actions dispatched via the responder chain
 public struct EditActionTarget: Codable, Sendable {
-    /// The edit action to perform: "copy", "paste", "cut", "select", "selectAll"
-    public let action: String
+    /// The edit action to perform
+    public let action: EditAction
 
-    public init(action: String) {
+    public init(action: EditAction) {
         self.action = action
     }
 }
