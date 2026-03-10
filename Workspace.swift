@@ -12,7 +12,7 @@ let workspace = Workspace(
             buildAction: .buildAction(targets: [
                 .project(path: ".", target: "TheInsideJobTests"),
                 .project(path: ".", target: "TheInsideJob"),
-.project(path: ".", target: "TheScore"),
+                .project(path: ".", target: "TheScore"),
                 .project(path: "TestApp", target: "AccessibilityTestApp"),
             ]),
             testAction: .targets([

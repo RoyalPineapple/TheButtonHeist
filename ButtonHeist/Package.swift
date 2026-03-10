@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "TheScore", targets: ["TheScore"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
-.library(name: "ButtonHeist", targets: ["ButtonHeist"])
+        .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
         .package(path: "../AccessibilitySnapshot"),
@@ -69,7 +69,10 @@ let package = Package(
         ),
         .testTarget(
             name: "TheInsideJobTests",
-            dependencies: ["TheInsideJob", "TheScore"],
+            dependencies: [
+                "TheInsideJob", "TheScore",
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
             path: "Tests/TheInsideJobTests",
             swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
         )
