@@ -3,7 +3,6 @@
 import UIKit
 import AccessibilitySnapshotParser
 import TheScore
-import TheGetaway
 import os.log
 
 let insideJobLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "server")

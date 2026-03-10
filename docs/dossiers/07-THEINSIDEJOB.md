@@ -8,12 +8,14 @@
 
 TheInsideJob is the central hub running inside the target iOS app. It:
 
-1. **Runs a TCP server** (`SimpleSocketServer`) listening for remote commands
-2. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
-3. **Polls for UI changes** at configurable intervals (default 1s, min 0.5s)
-4. **Dispatches all commands** to crew members (TheSafecracker, Stakeout, TheMuscle)
-5. **Manages client subscriptions** and broadcasts hierarchy/screen updates
-6. **Caches accessibility elements** with weak references for fast resolution
+1. **Runs a TLS/TCP server** (`SimpleSocketServer`) listening for remote commands
+2. **Manages TLS identity** (`TLSIdentity`) — runtime-generated self-signed ECDSA certificates with SHA-256 fingerprint pinning
+3. **Provides server transport** (`ServerTransport`) — protocol abstraction for server-side networking
+4. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
+5. **Polls for UI changes** at configurable intervals (default 1s, min 0.5s)
+6. **Dispatches all commands** to crew members (TheSafecracker, Stakeout, TheMuscle)
+7. **Manages client subscriptions** and broadcasts hierarchy/screen updates
+8. **Caches accessibility elements** with weak references for fast resolution
 
 ## Architecture Diagram
 
@@ -35,11 +37,19 @@ graph TD
         Fingerprints["Fingerprints - Visual Feedback"]
     end
 
+    subgraph Transport["Transport (formerly TheGetaway)"]
+        Server["SimpleSocketServer - TLS/TCP listener"]
+        STransport["ServerTransport - Protocol abstraction"]
+        TLS["TLSIdentity - ECDSA cert + SHA-256 fingerprint"]
+    end
+
     subgraph Infra["Infrastructure"]
-        Server["SimpleSocketServer - TCP listener"]
         NetService["NetService - Bonjour advertisement"]
         Parser["AccessibilitySnapshotParser - Hierarchy traversal"]
     end
+
+    TLS --> Server
+    STransport --> Server
 
     Core --> Muscle
     Core --> Safecracker
@@ -62,6 +72,9 @@ graph TD
 | `Extensions/Polling.swift` | Periodic poll loop, debounced broadcast |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
 | `Extensions/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
+| `SimpleSocketServer.swift` | NWListener TLS/TCP server, connection management |
+| `ServerTransport.swift` | Server-side networking protocol abstraction |
+| `TLSIdentity.swift` | ECDSA cert generation, SHA-256 fingerprint, Keychain persistence |
 
 ## Message Dispatch Flow
 

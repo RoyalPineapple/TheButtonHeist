@@ -1,7 +1,7 @@
 import XCTest
 import Security
 import Crypto
-@testable import TheGetaway
+@testable import TheInsideJob
 
 final class TLSIdentityTests: XCTestCase {
 
