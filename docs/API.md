@@ -651,7 +651,7 @@ public enum FenceError: Error, LocalizedError
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed to `onDisconnected` callbacks on `DeviceConnection`, `TheWheelman`, and `TheMastermind`.
+Structured reason for why a connection was closed. Passed to `onDisconnected` callbacks on `DeviceConnection`, `TheGetaway`, and `TheMastermind`.
 
 #### Cases
 
@@ -755,7 +755,7 @@ Specialized accessibility actions. For general element interaction, use `activat
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "4.0"  // Protocol v4.0 with envelope correlation and watch mode
+public let protocolVersion = "5.0"  // Protocol v5.0 with envelope correlation, watch mode, and TLS transport
 ```
 
 ### ConnectionState
@@ -988,7 +988,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "4.0")
+- `protocolVersion: String` - Protocol version (e.g., "5.0")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name

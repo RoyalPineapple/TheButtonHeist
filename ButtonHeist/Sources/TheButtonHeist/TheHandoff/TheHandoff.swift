@@ -53,10 +53,17 @@ public final class TheHandoff {
     public var driverId: String?
     public var autoSubscribe: Bool = true
 
+    // MARK: - Injectable Closures
+
+    var makeDiscovery: () -> any DeviceDiscovering = { DeviceDiscovery() }
+    var makeConnection: (DiscoveredDevice, String?, String) -> any DeviceConnecting = {
+        DeviceConnection(device: $0, token: $1, driverId: $2)
+    }
+
     // MARK: - Private
 
-    private var discovery: DeviceDiscovery?
-    private var connection: DeviceConnection?
+    private var discovery: (any DeviceDiscovering)?
+    private var connection: (any DeviceConnecting)?
     private var keepaliveTask: Task<Void, Never>?
     private var autoReconnectInstalled = false
 
@@ -98,22 +105,22 @@ public final class TheHandoff {
         }
 
         discoveredDevices.removeAll()
-        discovery = DeviceDiscovery()
-        discovery?.onDeviceFound = { [weak self] device in
+        discovery = makeDiscovery()
+        discovery?.onEvent = { [weak self] event in
             guard let self else { return }
-            logger.info("Device found: \(device.name)")
-            self.discoveredDevices = self.discovery?.discoveredDevices ?? []
-            self.onDeviceFound?(device)
-        }
-        discovery?.onDeviceLost = { [weak self] device in
-            guard let self else { return }
-            logger.info("Device lost: \(device.name)")
-            self.discoveredDevices = self.discovery?.discoveredDevices ?? []
-            self.onDeviceLost?(device)
-        }
-        discovery?.onStateChange = { [weak self] isReady in
-            logger.info("Discovery state changed: isReady=\(isReady)")
-            self?.isDiscovering = isReady
+            switch event {
+            case .found(let device):
+                logger.info("Device found: \(device.name)")
+                self.discoveredDevices = self.discovery?.discoveredDevices ?? []
+                self.onDeviceFound?(device)
+            case .lost(let device):
+                logger.info("Device lost: \(device.name)")
+                self.discoveredDevices = self.discovery?.discoveredDevices ?? []
+                self.onDeviceLost?(device)
+            case .stateChanged(let isReady):
+                logger.info("Discovery state changed: isReady=\(isReady)")
+                self.isDiscovering = isReady
+            }
         }
         discovery?.start()
         logger.info("Discovery started")
@@ -131,78 +138,65 @@ public final class TheHandoff {
     public func connect(to device: DiscoveredDevice) {
         disconnect()
 
-        connection = DeviceConnection(device: device, token: token, driverId: effectiveDriverId)
+        connection = makeConnection(device, token, effectiveDriverId)
         connection?.observeMode = observeMode
 
-        connection?.onConnected = { [weak self] in
-            self?.connectedDevice = device
-            self?.isConnected = true
-            self?.startKeepalive()
-        }
-
-        connection?.onDisconnected = { [weak self] reason in
+        connection?.onEvent = { [weak self] event in
             guard let self else { return }
-            self.isConnected = false
-            self.connectedDevice = nil
-            self.serverInfo = nil
-            self.onDisconnected?(reason)
-        }
-
-        connection?.onServerInfo = { [weak self] info in
-            guard let self else { return }
-            self.serverInfo = info
-            if self.autoSubscribe {
-                self.connection?.send(.subscribe)
-                self.connection?.send(.requestInterface)
-                self.connection?.send(.requestScreen)
+            switch event {
+            case .connected:
+                self.connectedDevice = device
+                self.isConnected = true
+                self.startKeepalive()
+            case .disconnected(let reason):
+                self.isConnected = false
+                self.connectedDevice = nil
+                self.serverInfo = nil
+                self.onDisconnected?(reason)
+            case .message(let msg, let requestId):
+                self.handleServerMessage(msg, requestId: requestId)
             }
-            self.onConnected?(info)
-        }
-
-        connection?.onInterface = { [weak self] payload, requestId in
-            self?.onInterface?(payload, requestId)
-        }
-
-        connection?.onActionResult = { [weak self] result, requestId in
-            self?.onActionResult?(result, requestId)
-        }
-
-        connection?.onScreen = { [weak self] payload, requestId in
-            self?.onScreen?(payload, requestId)
-        }
-
-        connection?.onRecordingStarted = { [weak self] in
-            self?.onRecordingStarted?()
-        }
-        connection?.onRecording = { [weak self] payload in
-            self?.onRecording?(payload)
-        }
-        connection?.onRecordingError = { [weak self] message in
-            self?.onRecordingError?(message)
-        }
-
-        connection?.onError = { [weak self] message in
-            self?.onError?(message)
-        }
-
-        connection?.onAuthApproved = { [weak self] approvedToken in
-            self?.token = approvedToken
-            self?.onAuthApproved?(approvedToken)
-        }
-
-        connection?.onSessionLocked = { [weak self] payload in
-            self?.onSessionLocked?(payload)
-        }
-
-        connection?.onAuthFailed = { [weak self] reason in
-            self?.onAuthFailed?(reason)
-        }
-
-        connection?.onInteraction = { [weak self] event in
-            self?.onInteraction?(event)
         }
 
         connection?.connect()
+    }
+
+    private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+        switch message {
+        case .info(let info):
+            serverInfo = info
+            if autoSubscribe {
+                connection?.send(.subscribe)
+                connection?.send(.requestInterface)
+                connection?.send(.requestScreen)
+            }
+            onConnected?(info)
+        case .interface(let payload):
+            onInterface?(payload, requestId)
+        case .actionResult(let result):
+            onActionResult?(result, requestId)
+        case .screen(let payload):
+            onScreen?(payload, requestId)
+        case .recordingStarted:
+            onRecordingStarted?()
+        case .recording(let payload):
+            onRecording?(payload)
+        case .recordingError(let msg):
+            onRecordingError?(msg)
+        case .error(let msg):
+            onError?(msg)
+        case .authApproved(let payload):
+            token = payload.token
+            onAuthApproved?(payload.token)
+        case .sessionLocked(let payload):
+            onSessionLocked?(payload)
+        case .authFailed(let reason):
+            onAuthFailed?(reason)
+        case .interaction(let event):
+            onInteraction?(event)
+        case .authRequired, .pong, .recordingStopped:
+            break
+        }
     }
 
     public func disconnect() {

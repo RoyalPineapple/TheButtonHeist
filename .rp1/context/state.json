@@ -1,16 +1,16 @@
 {
-  "strategy": "parallel-map-reduce",
+  "strategy": "parallel-map-reduce (incremental)",
   "repo_type": "single-project",
   "repo_root": ".",
   "current_project_path": ".",
   "monorepo_projects": [],
-  "generated_at": "2025-03-10T00:00:00Z",
-  "git_commit": "ee2a60bda670a2f5bd7c3d44871146bca81d31ad",
-  "files_analyzed": 248,
+  "generated_at": "2026-03-10T00:00:00Z",
+  "git_commit": "402d50e4bd280a28dc466378d120ad989b3122ed",
+  "files_analyzed": 34,
   "languages": ["Swift", "Objective-C", "Markdown", "Shell"],
   "metrics": {
     "modules": 8,
-    "components": 19,
-    "concepts": 23
+    "components": 22,
+    "concepts": 27
   }
 }

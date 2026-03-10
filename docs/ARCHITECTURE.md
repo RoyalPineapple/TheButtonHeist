@@ -130,8 +130,8 @@ When the framework loads:
 - Network callbacks dispatch to main actor
 - Socket accept/read on dedicated GCD queues
 
-**TCP Server (SimpleSocketServer)**:
-- Network framework implementation using `NWListener` and `NWConnection`
+**TLS Server (SimpleSocketServer)**:
+- Network framework implementation using `NWListener` and `NWConnection` with `NWProtocolTLS`
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
 - Binds to all interfaces (`::`) for Bonjour compatibility
 - OS-assigned port (advertised via Bonjour)
@@ -565,8 +565,8 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 4.0
-- Transport: TCP socket (Network framework NWListener/NWConnection)
+- Protocol version: 5.0
+- Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections are auto-approved by default.
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`)
@@ -578,7 +578,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 ### WiFi (Bonjour)
 - Service advertised via mDNS
 - Client discovers via NWBrowser
-- TCP connection to advertised endpoint
+- TLS connection to advertised endpoint
 
 ## Threading Considerations
 

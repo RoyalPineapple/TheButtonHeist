@@ -157,6 +157,36 @@ Before pushing any commit, verify the following:
   - New connection paths → Add integration tests
 - Tests should be automatable (no manual verification required).
 
+## Testing Philosophy
+
+### Determinism First
+
+All unit tests must be fully deterministic — no dependency on running apps, Bonjour discovery, network state, or wall-clock timing. Tests that touch real network or Keychain are **integration tests** and must be clearly labeled as such.
+
+### Mocking Strategy
+
+**Never create a real `TheFence`, `TheMastermind`, or `NWBrowser` in a unit test.** These trigger real Bonjour discovery and will find live apps on the network, making tests flaky and environment-dependent.
+
+The mock boundary is at the network layer: `DeviceConnecting` and `DeviceDiscovering` protocols. Everything above — TheHandoff's callback wiring, auto-reconnect, keepalive; TheMastermind's state management; TheFence's dispatch — stays real in tests. Only the actual network I/O is mocked.
+
+TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so tests can inject mock implementations. Default closures create the real `DeviceDiscovery` and `DeviceConnection`.
+
+### What Belongs Where
+
+| Test type | Can use | Must NOT use |
+|-----------|---------|-------------|
+| **Protocol tests** (TheScore) | Value types, Codable round-trips | Any networking or UIKit |
+| **Handler/dispatch tests** (TheFence) | Mock DeviceConnecting via TheHandoff factory, pure arg parsing | Real TheMastermind, Bonjour, NWConnection |
+| **Connection logic tests** (DeviceConnection) | Message injection, forced isConnected | Real NWListener, real TCP sockets |
+| **Auth/session tests** (TheMuscle) | Callback injection | Real networking, real UI alerts |
+| **Integration tests** (TLS, Keychain) | Real NWListener on loopback, real Keychain | Must be clearly labeled, must clean up after themselves |
+
+### Naming Conventions
+
+- Unit test files: `{Type}Tests.swift` (e.g., `TheFenceHandlerTests.swift`)
+- Integration test files: `{Feature}IntegrationTests.swift` (e.g., `TLSIntegrationTests.swift`)
+- Integration tests that require entitlements (Keychain, etc.) must note this in a file-level comment.
+
 ## Git Branch Conventions
 
 - **"main" means `origin/main`**. When instructions or conversation refer to `main`, always use `origin/main`. The local `main` branch may be stale.
