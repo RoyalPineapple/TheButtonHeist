@@ -311,7 +311,7 @@ public final class DeviceConnection {
 
     // MARK: - TLS
 
-    private static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
+    private nonisolated static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
         sec_protocol_options_set_min_tls_protocol_version(
