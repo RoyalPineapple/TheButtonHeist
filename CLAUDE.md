@@ -187,6 +187,39 @@ TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so t
 - Integration test files: `{Feature}IntegrationTests.swift` (e.g., `TLSIntegrationTests.swift`)
 - Integration tests that require entitlements (Keychain, etc.) must note this in a file-level comment.
 
+## Feature Development: API → Tests → Implementation
+
+New features follow a strict three-phase workflow — define the contract, prove it with tests, then fill in the code.
+
+### Phase 1: Define the API
+
+Start by writing the public types, protocols, and method signatures. This is the contract — what the feature looks like from the outside. Stub out the bodies with `fatalError("not implemented")` or empty returns so it compiles but doesn't work yet.
+
+- Define new enums, structs, and protocol requirements.
+- Add method signatures to existing types (TheFence commands, TheMastermind callbacks, etc.).
+- Wire up CLI commands and MCP tool definitions as thin shells.
+
+### Phase 2: Write the tests
+
+Write tests against the API you just defined. Every test should fail (red) because the implementations are stubs. This is eating your vegetables — it's the part you do first so the reward at the end is real.
+
+- Unit tests for each new public method or message type.
+- Handler/dispatch tests for new TheFence commands.
+- Round-trip Codable tests for any new wire types in TheScore.
+- Tests define the expected behavior; the implementation must satisfy them, not the other way around.
+
+### Phase 3: Fill in the implementation
+
+Now write the real code until every test goes green. When all tests pass, dessert is served — the feature is done and proven correct.
+
+- Implement one test at a time if helpful; the test suite is your progress tracker.
+- Do not skip back to Phase 1 to change the API just to make implementation easier — if the API needs to change, update the tests first.
+- A feature is not complete until all tests from Phase 2 pass.
+
+### Why this order matters
+
+Writing tests before implementation keeps the design honest. If a test is hard to write, the API is probably wrong — and it's cheaper to fix the API before the implementation exists. By the time you're writing code in Phase 3, you have a clear target and an automated way to know when you've hit it.
+
 ## Git Branch Conventions
 
 - **"main" means `origin/main`**. When instructions or conversation refer to `main`, always use `origin/main`. The local `main` branch may be stale.
