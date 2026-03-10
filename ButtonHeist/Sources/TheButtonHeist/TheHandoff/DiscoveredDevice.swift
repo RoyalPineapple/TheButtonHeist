@@ -1,5 +1,15 @@
 import Foundation
 import Network
+import os.log
+
+private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
+
+/// How a device was discovered or is reachable.
+public enum ConnectionType: String, Sendable {
+    case simulator
+    case usb
+    case device
+}
 
 /// A discovered iOS device running TheInsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
@@ -44,6 +54,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             port: NWEndpoint.Port(integerLiteral: port)
         )
         self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
+    }
+
+    public var connectionType: ConnectionType {
+        if simulatorUDID != nil { return .simulator }
+        if id.hasPrefix("usb-") { return .usb }
+        return .device
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -127,5 +143,63 @@ extension Array where Element == DiscoveredDevice {
     public func first(matching filter: String?) -> DiscoveredDevice? {
         guard let filter else { return first }
         return first { $0.matches(filter: filter) }
+    }
+
+    /// Probe all devices in parallel and return only those that are TCP-reachable.
+    /// Uses a plain TCP connect to each device's endpoint; stale mDNS cache entries
+    /// will fail with TCP RST while live devices complete the handshake.
+    public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
+        await withTaskGroup(of: DiscoveredDevice?.self) { group in
+            for device in self {
+                group.addTask {
+                    await device.isReachable(timeout: timeout) ? device : nil
+                }
+            }
+            var result: [DiscoveredDevice] = []
+            for await device in group {
+                if let device { result.append(device) }
+            }
+            return result
+        }
+    }
+}
+
+extension DiscoveredDevice {
+    /// Attempt a plain TCP connect to check if the device is reachable.
+    /// Returns true if the TCP handshake completes within the timeout.
+    nonisolated func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
+        let endpoint = self.endpoint
+        let deviceName = self.name
+        return await withCheckedContinuation { continuation in
+            nonisolated(unsafe) var resumed = false
+
+            let conn = NWConnection(to: endpoint, using: .tcp)
+            conn.stateUpdateHandler = { state in
+                guard !resumed else { return }
+                switch state {
+                case .ready:
+                    resumed = true
+                    reachabilityLogger.debug("Reachable: \(deviceName)")
+                    conn.cancel()
+                    continuation.resume(returning: true)
+                case .failed, .cancelled:
+                    resumed = true
+                    reachabilityLogger.debug("Unreachable: \(deviceName)")
+                    conn.cancel()
+                    continuation.resume(returning: false)
+                default:
+                    break
+                }
+            }
+            conn.start(queue: .global())
+
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                guard !resumed else { return }
+                resumed = true
+                reachabilityLogger.debug("Probe timeout: \(deviceName)")
+                conn.cancel()
+                continuation.resume(returning: false)
+            }
+        }
     }
 }
