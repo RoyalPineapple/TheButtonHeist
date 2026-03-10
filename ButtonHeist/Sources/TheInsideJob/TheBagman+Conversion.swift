@@ -105,7 +105,7 @@ extension TheBagman {
         case .landmark:
             typeName = "landmark"
             label = nil; value = nil; identifier = nil
-        case let .dataTable(rowCount: _, columnCount: _):
+        case .dataTable:
             typeName = "dataTable"
             label = nil; value = nil; identifier = nil
         case .tabBar:
