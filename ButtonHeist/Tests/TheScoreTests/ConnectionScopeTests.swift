@@ -57,14 +57,7 @@ struct ConnectionScopeTests {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("::1")) == .simulator)
     }
 
-    @Test func classifiesULAAsUSBWithoutInterfaces() {
-        // Without interface info (empty default), ULA falls back to .usb
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1")) == .usb)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fdab:cdef:1234::2")) == .usb)
-        #expect(ConnectionScope.classify(host: NWEndpoint.Host("FD9A:6190:EED7::1")) == .usb)
-    }
-
-    @Test func classifiesPrivateIPv4AsNetwork() {
+@Test func classifiesPrivateIPv4AsNetwork() {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100")) == .network)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("10.0.0.5")) == .network)
     }

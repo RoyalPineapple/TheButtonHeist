@@ -16,7 +16,7 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 6. **Dispatches all commands** to crew members (TheSafecracker, Stakeout, TheMuscle)
 7. **Manages client subscriptions** and broadcasts hierarchy/screen updates
 8. **Caches accessibility elements** with weak references for fast resolution
-9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections by remote IP (loopback = simulator, ULA = USB, other = network) and rejects disallowed scopes. Defaults to simulator + USB; configurable via `INSIDEJOB_SCOPE` env var.
+9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Defaults to simulator + USB; configurable via `INSIDEJOB_SCOPE` env var.
 
 ## Architecture Diagram
 

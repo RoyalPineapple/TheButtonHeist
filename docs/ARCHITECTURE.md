@@ -135,7 +135,7 @@ When the framework loads:
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
 - Binds to all interfaces (`::`) for Bonjour compatibility
 - OS-assigned port (advertised via Bonjour)
-- Connection scope filtering: rejects connections from disallowed sources based on remote IP classification (loopback = simulator, `fd` ULA = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
+- Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
 - Token-based authentication with session locking, envelope correlation, and watch mode (v4.0)
