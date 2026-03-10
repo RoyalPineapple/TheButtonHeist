@@ -12,7 +12,7 @@ extension NWInterface: NetworkInterfaceNaming {}
 /// Defines which connection sources a server will accept.
 ///
 /// Each scope corresponds to a network path:
-/// - `simulator`: Loopback connections (`::1`, `127.0.0.1`) — iOS Simulator on the same Mac
+/// - `simulator`: Loopback address or `lo` interface — iOS Simulator on the same Mac
 /// - `usb`: `anpi` interface (Apple Network Private Interface) — physical device over USB
 /// - `network`: Everything else — WiFi, LAN, or broader network
 ///
@@ -43,14 +43,14 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
 
     /// Classify a remote host into a connection scope using typed Network framework values.
     ///
-    /// - IPv4/IPv6 loopback → `.simulator`
+    /// - IPv4/IPv6 loopback address or `lo` interface → `.simulator`
     /// - `anpi` interface (Apple Network Private Interface) → `.usb` (CoreDevice tunnel)
     /// - Everything else → `.network`
     ///
     /// Pass `interfaces` from `NWConnection.currentPath?.availableInterfaces` after the
-    /// connection reaches `.ready` for precise CoreDevice USB detection.
+    /// connection reaches `.ready` for precise classification.
     public static func classify(host: NWEndpoint.Host, interfaces: [some NetworkInterfaceNaming] = [NWInterface]()) -> ConnectionScope {
-        // Loopback = simulator
+        // Loopback address = simulator
         switch host {
         case .ipv4(let addr):
             if addr == .loopback || addr.rawValue.first == 127 { return .simulator }
@@ -59,6 +59,9 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
         default:
             break
         }
+
+        // lo0 interface = simulator (Simulator may use link-local addresses on loopback)
+        if interfaces.contains(where: { $0.name.hasPrefix("lo") }) { return .simulator }
 
         // anpi = USB (Apple Network Private Interface, CoreDevice tunnel)
         if interfaces.contains(where: { $0.name.hasPrefix("anpi") }) { return .usb }
