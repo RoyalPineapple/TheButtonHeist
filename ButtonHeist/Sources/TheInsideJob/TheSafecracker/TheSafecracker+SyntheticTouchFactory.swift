@@ -12,7 +12,7 @@ extension TheSafecracker {
 
     /// Factory for creating synthetic UITouch instances using private APIs.
     /// Based on KIF's UITouch-KIFAdditions.m implementation.
-    final class SyntheticTouchFactory {
+    @MainActor final class SyntheticTouchFactory {
 
         static func createTouch(at point: CGPoint, in window: UIWindow, view: UIView, phase: UITouch.Phase) -> UITouch? {
             let touch = UITouch()

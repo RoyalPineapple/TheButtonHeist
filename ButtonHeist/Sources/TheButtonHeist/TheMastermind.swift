@@ -271,7 +271,7 @@ public final class TheMastermind {
                 pendingActionRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    await self?.timeoutActionRequest(requestId)
+                    self?.timeoutActionRequest(requestId)
                 }
             }
         }
@@ -286,7 +286,7 @@ public final class TheMastermind {
                 pendingInterfaceRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    await self?.timeoutInterfaceRequest(requestId)
+                    self?.timeoutInterfaceRequest(requestId)
                 }
             }
         }
@@ -301,7 +301,7 @@ public final class TheMastermind {
                 pendingScreenRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    await self?.timeoutScreenRequest(requestId)
+                    self?.timeoutScreenRequest(requestId)
                 }
             }
         }
