@@ -62,6 +62,20 @@
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A5279DE30B7AF901FE29167D"
+               BuildableName = "AccessibilityTestApp.app"
+               BlueprintName = "AccessibilityTestApp"
+               ReferencedContainer = "container:TestApp/TestApp.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

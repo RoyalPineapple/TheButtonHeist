@@ -1,17 +1,18 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 4.0
+**Version**: 5.0
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (TheWheelman, CLI, Python scripts).
 
 ## Transport
 
-- **Layer**: TCP socket (BSD sockets)
+- **Layer**: TLS over TCP (Network.framework `NWProtocolTLS`)
 - **Discovery**: Bonjour/mDNS (WiFi) or CoreDevice IPv6 tunnel (USB)
 - **Service Type**: `_buttonheist._tcp`
 - **Port**: OS-assigned (advertised via Bonjour)
 - **Encoding**: Newline-delimited JSON (UTF-8)
 - **Socket**: IPv6 dual-stack (accepts both IPv4 and IPv6)
+- **Encryption**: TLS 1.2+ with self-signed ECDSA (P-256) certificates, verified via SHA-256 fingerprint pinning
 
 ## Discovery Methods
 
@@ -24,8 +25,12 @@ TheInsideJob advertises itself using Bonjour:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
   - `instanceid` — Human-readable instance identifier
   - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
+  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>` (v5.0+, always present)
+  - `transport` — `"tls"` (v5.0+, always present)
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake. TLS is required — clients must refuse connections to servers that do not advertise a `certfp`.
+
+> **Security note**: The `certfp` value is delivered via mDNS, which provides no integrity protection. An attacker on the same network segment could spoof Bonjour responses with a different fingerprint. This is acceptable for a local development tool but does not provide the same guarantees as a PKI-based certificate chain. The fingerprint prevents passive eavesdropping and verifies the server identity hasn't changed between discovery and connection.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -40,7 +45,8 @@ sequenceDiagram
     participant Client
     participant Server
 
-    Client->>Server: TCP Connect
+    Client->>Server: TLS Handshake (verify certfp from Bonjour TXT)
+    Note over Client,Server: All subsequent messages encrypted
     Server-->>Client: authRequired (auth challenge)
 
     alt Driver connection
@@ -714,7 +720,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "4.0") |
+| `protocolVersion` | `String` | Protocol version (e.g., "5.0") |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
@@ -726,6 +732,7 @@ Error message.
 | `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
 | `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
 | `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
+| `tlsActive` | `Bool?` | Whether TLS transport encryption is active (always `true` for v5.0+, nil for servers < v5.0) |
 
 ### Interface
 
@@ -1054,7 +1061,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"authenticate":{"_0":{"token":"my-secret-token"}}}
 
 # Server sends info after successful auth
-{"info":{"_0":{"protocolVersion":"4.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null}}}
+{"info":{"_0":{"protocolVersion":"5.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}}
 
 # Client subscribes to updates
 {"subscribe":{}}

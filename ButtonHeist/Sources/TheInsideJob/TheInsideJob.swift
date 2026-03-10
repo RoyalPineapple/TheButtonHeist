@@ -49,6 +49,8 @@ public final class TheInsideJob {
 
     private var isRunning = false
     private var isSuspended = false
+    private var tlsActive = false
+    private var resumeTask: Task<Void, Never>?
 
     // Screen recording
     var stakeout: TheStakeout?
@@ -82,15 +84,24 @@ public final class TheInsideJob {
     // MARK: - Public Methods
 
     /// Start the server
-    public func start() throws {
+    public func start() async throws {
         guard !isRunning else { return }
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let t = ServerTransport()
+        let identity: TLSIdentity
+        do {
+            identity = try TLSIdentity.getOrCreate()
+            insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
+        } catch {
+            insideJobLogger.warning("Keychain identity failed, using ephemeral: \(error)")
+            identity = try TLSIdentity.createEphemeral()
+        }
+        self.tlsActive = true
+        let t = ServerTransport(tlsIdentity: identity)
         wireTransport(t)
 
-        let actualPort = try t.start()
+        let actualPort = try await t.start()
         self.transport = t
         isRunning = true
 
@@ -114,6 +125,8 @@ public final class TheInsideJob {
     public func stop() {
         isRunning = false
         isSuspended = false
+        resumeTask?.cancel()
+        resumeTask = nil
         stopPolling()
 
         transport?.stopAdvertising()
@@ -374,7 +387,8 @@ public final class TheInsideJob {
             instanceIdentifier: effectiveInstanceId,
             listeningPort: transport?.listeningPort,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString
+            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
+            tlsActive: tlsActive
         )
         sendMessage(.info(info), respond: respond)
     }
@@ -493,6 +507,9 @@ public final class TheInsideJob {
         guard isRunning, !isSuspended else { return }
         isSuspended = true
 
+        resumeTask?.cancel()
+        resumeTask = nil
+
         pollingTask?.cancel()
         pollingTask = nil
 
@@ -518,27 +535,49 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Resuming server...")
 
-        do {
-            let t = ServerTransport()
-            wireTransport(t)
+        resumeTask?.cancel()
+        resumeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
 
-            let actualPort = try t.start()
-            self.transport = t
+                let identity: TLSIdentity
+                do {
+                    identity = try TLSIdentity.getOrCreate()
+                } catch {
+                    insideJobLogger.warning("Keychain identity failed on resume, using ephemeral: \(error)")
+                    identity = try TLSIdentity.createEphemeral()
+                }
 
-            insideJobLogger.info("Server resumed on port \(actualPort)")
-            advertiseService(port: actualPort)
+                try Task.checkCancellation()
 
-            startAccessibilityObservation()
+                self.tlsActive = true
 
-            if isPollingEnabled {
-                startPollingLoop()
+                let t = ServerTransport(tlsIdentity: identity)
+                self.wireTransport(t)
+
+                let actualPort = try await t.start()
+
+                try Task.checkCancellation()
+
+                self.transport = t
+
+                insideJobLogger.info("Server resumed on port \(actualPort)")
+                self.advertiseService(port: actualPort)
+
+                self.startAccessibilityObservation()
+
+                if self.isPollingEnabled {
+                    self.startPollingLoop()
+                }
+
+                insideJobLogger.info("Server resume complete")
+            } catch is CancellationError {
+                insideJobLogger.info("Server resume cancelled")
+            } catch {
+                insideJobLogger.error("Failed to resume server: \(error)")
+                self.isSuspended = true
             }
-
-            insideJobLogger.info("Server resume complete")
-        } catch {
-            insideJobLogger.error("Failed to resume server: \(error)")
-            isRunning = false
-            isSuspended = false
         }
     }
 }

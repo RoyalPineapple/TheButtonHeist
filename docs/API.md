@@ -663,6 +663,7 @@ Structured reason for why a connection was closed. Passed to `onDisconnected` ca
 | `authFailed(_:)` | Authentication failed with reason |
 | `sessionLocked(_:)` | Session locked by another driver |
 | `localDisconnect` | Disconnected by client |
+| `certificateMismatch` | TLS certificate fingerprint did not match expected value from Bonjour TXT |
 
 ---
 
@@ -786,6 +787,7 @@ Represents a discovered TheInsideJob device.
 - `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
 - `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
 - `instanceId: String?` - Instance identifier from Bonjour TXT record
+- `certFingerprint: String?` - TLS certificate SHA-256 fingerprint from Bonjour TXT record (format: `sha256:<hex>`, v5.0+)
 
 #### Computed Properties
 

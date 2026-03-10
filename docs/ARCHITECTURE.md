@@ -242,10 +242,11 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 **Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
 
 **Key Types**:
-- `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by TheInsideJob via ServerTransport
-- `DeviceConnection` - TCP client with NWConnection service resolution and data transport
-- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, instanceId, sessionActive)
+- `SimpleSocketServer` - Network framework TCP/TLS server (NWListener, IPv6 dual-stack), used by TheInsideJob via ServerTransport. Supports optional TLS via `NWProtocolTLS` with self-signed certificates.
+- `TLSIdentity` - Runtime-generated self-signed ECDSA (P-256) certificate management with Keychain persistence and SHA-256 fingerprint computation. Uses `swift-certificates` for X.509 generation.
+- `DeviceConnection` - TLS/TCP client with NWConnection service resolution, data transport, and certificate fingerprint verification via `sec_protocol_verify_block`
+- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records including `certfp` for TLS fingerprint pinning
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, instanceId, sessionActive, certFingerprint)
 
 ### TheFence (Command Dispatch Layer)
 
