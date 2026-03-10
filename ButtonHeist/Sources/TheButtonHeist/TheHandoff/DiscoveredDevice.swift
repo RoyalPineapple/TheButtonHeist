@@ -16,13 +16,16 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     public let instanceId: String?
     /// Whether the device has an active session (from Bonjour TXT record)
     public let sessionActive: Bool?
+    /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
+    public let certFingerprint: String?
 
     public init(id: String, name: String, endpoint: NWEndpoint,
                 simulatorUDID: String? = nil,
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
-                sessionActive: Bool? = nil) {
+                sessionActive: Bool? = nil,
+                certFingerprint: String? = nil) {
         self.id = id
         self.name = name
         self.endpoint = endpoint
@@ -31,6 +34,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.displayDeviceName = displayDeviceName
         self.instanceId = instanceId
         self.sessionActive = sessionActive
+        self.certFingerprint = certFingerprint
     }
 
     /// Convenience init for direct host:port connections (no Bonjour).

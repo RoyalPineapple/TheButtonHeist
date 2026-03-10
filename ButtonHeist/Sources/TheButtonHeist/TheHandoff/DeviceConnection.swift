@@ -1,5 +1,7 @@
 import Foundation
 import Network
+import Crypto
+import Security
 import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
@@ -16,6 +18,7 @@ public enum DisconnectReason: Error, LocalizedError {
     case authFailed(String)
     case sessionLocked(String)
     case localDisconnect
+    case certificateMismatch
 
     public var errorDescription: String? {
         switch self {
@@ -31,6 +34,8 @@ public enum DisconnectReason: Error, LocalizedError {
             return "Session locked: \(message)"
         case .localDisconnect:
             return "Disconnected by client"
+        case .certificateMismatch:
+            return "Server certificate fingerprint does not match expected value"
         }
     }
 }
@@ -45,7 +50,8 @@ public final class DeviceConnection {
     private let device: DiscoveredDevice
     private(set) var token: String?
     private var receiveBuffer = Data()
-    private var isConnected = false
+    // Internal for testing (see DeviceConnectionTLSTests)
+    var isConnected = false
 
     public var onConnected: (() -> Void)?
     public var onDisconnected: ((DisconnectReason) -> Void)?
@@ -67,16 +73,28 @@ public final class DeviceConnection {
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
     public var driverId: String?
 
+    private let expectedFingerprint: String?
+
     public init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
         self.device = device
         self.token = token
         self.driverId = driverId
+        self.expectedFingerprint = device.certFingerprint
     }
 
     public func connect() {
         logger.info("Connecting to \(self.device.name)...")
 
-        let conn = NWConnection(to: device.endpoint, using: .tcp)
+        guard let expectedFingerprint else {
+            logger.error("No TLS fingerprint available — refusing plain TCP connection")
+            onDisconnected?(.certificateMismatch)
+            return
+        }
+
+        let parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
+        logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
+
+        let conn = NWConnection(to: device.endpoint, using: parameters)
 
         conn.stateUpdateHandler = { [weak self] state in
             Task { [weak self] in
@@ -192,7 +210,8 @@ public final class DeviceConnection {
         }
     }
 
-    private func handleMessage(_ data: Data) {
+    // Internal for testing (see AuthFlowIntegrationTests, AuthFailureTests)
+    func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
         guard let (requestId, message) = decodeEnvelope(from: data) else {
             if let str = String(data: data, encoding: .utf8) {
@@ -288,6 +307,45 @@ public final class DeviceConnection {
         default:
             break
         }
+    }
+
+    // MARK: - TLS
+
+    private static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
+        let tlsOptions = NWProtocolTLS.Options()
+
+        sec_protocol_options_set_min_tls_protocol_version(
+            tlsOptions.securityProtocolOptions,
+            .TLSv13
+        )
+
+        let expected = expectedFingerprint
+        sec_protocol_options_set_verify_block(
+            tlsOptions.securityProtocolOptions,
+            { _, trust, completionHandler in
+                let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
+                guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate],
+                      let leaf = chain.first else {
+                    logger.error("TLS verification failed: no server certificate")
+                    completionHandler(false)
+                    return
+                }
+                let derData = SecCertificateCopyData(leaf) as Data
+                let hash = SHA256.hash(data: derData)
+                let actual = "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
+
+                let matches = actual == expected
+                if matches {
+                    logger.debug("TLS fingerprint verified")
+                } else {
+                    logger.error("TLS fingerprint mismatch: expected=\(expected.prefix(20))... actual=\(actual.prefix(20))...")
+                }
+                completionHandler(matches)
+            },
+            DispatchQueue(label: "com.buttonheist.tls.verify")
+        )
+
+        return NWParameters(tls: tlsOptions)
     }
 
     private func decodeEnvelope(from data: Data) -> (requestId: String?, message: ServerMessage)? {

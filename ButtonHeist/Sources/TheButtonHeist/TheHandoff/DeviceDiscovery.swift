@@ -188,11 +188,13 @@ public final class DeviceDiscovery {
         var displayDeviceName: String?
         var instanceId: String?
         var sessionActive: Bool?
+        var certFingerprint: String?
         if let txtRecord {
             simUDID = txtRecord["simudid"]
             installationId = txtRecord["installationid"]
             displayDeviceName = txtRecord["devicename"]
             instanceId = txtRecord["instanceid"]
+            certFingerprint = txtRecord["certfp"]
             if let value = txtRecord["sessionactive"] {
                 sessionActive = value == "1"
             }
@@ -206,7 +208,8 @@ public final class DeviceDiscovery {
             installationId: installationId,
             displayDeviceName: displayDeviceName,
             instanceId: instanceId,
-            sessionActive: sessionActive
+            sessionActive: sessionActive,
+            certFingerprint: certFingerprint
         )
     }
 

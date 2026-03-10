@@ -1,0 +1,311 @@
+import Foundation
+import Network
+import Security
+import Crypto
+import X509
+import SwiftASN1
+import os.log
+
+private let logger = Logger(subsystem: "com.buttonheist.thegetaway", category: "tls")
+
+public actor TLSIdentity {
+    private let identity: SecIdentity
+    private let certificate: SecCertificate
+    public nonisolated let fingerprint: String
+
+    private init(identity: SecIdentity, certificate: SecCertificate, fingerprint: String) {
+        self.identity = identity
+        self.certificate = certificate
+        self.fingerprint = fingerprint
+    }
+
+    /// Retrieve an existing identity from the Keychain, or create and store a new one.
+    public static func getOrCreate(label: String = "com.buttonheist.tls") throws -> TLSIdentity {
+        if let existing = try loadFromKeychain(label: label) {
+            logger.debug("Loaded existing TLS identity from Keychain")
+            return existing
+        }
+
+        logger.info("No existing TLS identity found, generating new one")
+        let (privateKey, derBytes) = try generateCertificate()
+        let secCert = try makeSecCertificate(derBytes: derBytes)
+        let fp = computeFingerprint(derBytes: derBytes)
+
+        do {
+            let secIdentity = try storeInKeychain(privateKey: privateKey, certificate: secCert, label: label)
+            logger.info("TLS identity stored in Keychain: \(fp)")
+            return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp)
+        } catch {
+            logger.warning("Keychain storage failed, using ephemeral identity: \(error)")
+            return try createEphemeral()
+        }
+    }
+
+    /// Create an ephemeral identity by temporarily storing items in the Keychain
+    /// for `SecIdentity` creation, then immediately removing them.
+    public static func createEphemeral() throws -> TLSIdentity {
+        let (privateKey, derBytes) = try generateCertificate()
+        let secCert = try makeSecCertificate(derBytes: derBytes)
+        let fp = computeFingerprint(derBytes: derBytes)
+        let secIdentity = try createInMemoryIdentity(privateKey: privateKey, certificate: secCert)
+        logger.info("Created ephemeral TLS identity: \(fp)")
+        return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp)
+    }
+
+    /// Remove a stored identity from the Keychain.
+    public static func delete(label: String = "com.buttonheist.tls") throws {
+        let classes: [CFString] = [kSecClassKey, kSecClassCertificate, kSecClassIdentity]
+        for secClass in classes {
+            let query: [String: Any] = [
+                kSecClass as String: secClass,
+                kSecAttrLabel as String: label,
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            if status != errSecSuccess && status != errSecItemNotFound {
+                throw TLSIdentityError.keychainError(status)
+            }
+        }
+    }
+
+    // MARK: - TLS Parameters
+
+    /// Build NWParameters configured for TLS using this identity.
+    /// Actor-isolated so SecIdentity never crosses isolation boundaries.
+    public func makeTLSParameters() -> NWParameters? {
+        let tlsOptions = NWProtocolTLS.Options()
+        guard let secIdentity = sec_identity_create(identity) else {
+            logger.warning("sec_identity_create failed for TLS identity")
+            return nil
+        }
+        sec_protocol_options_set_local_identity(
+            tlsOptions.securityProtocolOptions,
+            secIdentity
+        )
+        sec_protocol_options_set_min_tls_protocol_version(
+            tlsOptions.securityProtocolOptions,
+            .TLSv13
+        )
+        return NWParameters(tls: tlsOptions)
+    }
+
+    // MARK: - Certificate Generation
+
+    static func generateCertificate() throws -> (P256.Signing.PrivateKey, [UInt8]) {
+        let key = P256.Signing.PrivateKey()
+        let name = try DistinguishedName {
+            CommonName("ButtonHeist")
+            OrganizationName("ButtonHeist")
+        }
+        let now = Date()
+        let oneYear = now.addingTimeInterval(365.25 * 24 * 3600)
+        let cert = try X509.Certificate(
+            version: .v3,
+            serialNumber: X509.Certificate.SerialNumber(),
+            publicKey: .init(key.publicKey),
+            notValidBefore: now,
+            notValidAfter: oneYear,
+            issuer: name,
+            subject: name,
+            signatureAlgorithm: .ecdsaWithSHA256,
+            extensions: X509.Certificate.Extensions {},
+            issuerPrivateKey: .init(key)
+        )
+        var serializer = DER.Serializer()
+        try cert.serialize(into: &serializer)
+        return (key, serializer.serializedBytes)
+    }
+
+    static func makeSecCertificate(derBytes: [UInt8]) throws -> SecCertificate {
+        let data = Data(derBytes)
+        guard let cert = SecCertificateCreateWithData(nil, data as CFData) else {
+            throw TLSIdentityError.invalidCertificateData
+        }
+        return cert
+    }
+
+    static func computeFingerprint(derBytes: [UInt8]) -> String {
+        let hash = Crypto.SHA256.hash(data: derBytes)
+        return "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Keychain Operations
+
+    private static func loadFromKeychain(label: String) throws -> TLSIdentity? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrLabel as String: label,
+            kSecReturnRef as String: true,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess, let identityRef = result else {
+            throw TLSIdentityError.keychainError(status)
+        }
+
+        // SecItemCopyMatching returns CFTypeRef; bridge to SecIdentity
+        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+        var certRef: SecCertificate?
+        let certStatus = SecIdentityCopyCertificate(secIdentity, &certRef)
+        guard certStatus == errSecSuccess, let cert = certRef else {
+            throw TLSIdentityError.keychainError(certStatus)
+        }
+
+        let derData = SecCertificateCopyData(cert) as Data
+        let fp = computeFingerprint(derBytes: Array(derData))
+        return TLSIdentity(identity: secIdentity, certificate: cert, fingerprint: fp)
+    }
+
+    private static func storeInKeychain(
+        privateKey: P256.Signing.PrivateKey,
+        certificate: SecCertificate,
+        label: String
+    ) throws -> SecIdentity {
+        let keyData = privateKey.x963Representation
+        let keyAttributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrKeySizeInBits as String: 256,
+        ]
+        var error: Unmanaged<CFError>?
+        guard let secKey = SecKeyCreateWithData(keyData as CFData, keyAttributes as CFDictionary, &error) else {
+            throw TLSIdentityError.keyCreationFailed(error?.takeRetainedValue())
+        }
+
+        let certAddQuery: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
+            kSecValueRef as String: certificate,
+            kSecAttrLabel as String: label,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+        var certStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
+        if certStatus == errSecDuplicateItem {
+            SecItemDelete([kSecClass as String: kSecClassCertificate, kSecAttrLabel as String: label] as CFDictionary)
+            certStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
+        }
+        guard certStatus == errSecSuccess else {
+            throw TLSIdentityError.keychainError(certStatus)
+        }
+
+        let keyAddQuery: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecValueRef as String: secKey,
+            kSecAttrLabel as String: label,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+        var keyStatus = SecItemAdd(keyAddQuery as CFDictionary, nil)
+        if keyStatus == errSecDuplicateItem {
+            SecItemDelete([kSecClass as String: kSecClassKey, kSecAttrLabel as String: label] as CFDictionary)
+            keyStatus = SecItemAdd(keyAddQuery as CFDictionary, nil)
+        }
+        guard keyStatus == errSecSuccess else {
+            // Clean up the certificate we just stored to avoid orphaned items
+            SecItemDelete(certAddQuery as CFDictionary)
+            throw TLSIdentityError.keychainError(keyStatus)
+        }
+
+        let identityQuery: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrLabel as String: label,
+            kSecReturnRef as String: true,
+        ]
+        var identityResult: CFTypeRef?
+        let identityStatus = SecItemCopyMatching(identityQuery as CFDictionary, &identityResult)
+        guard identityStatus == errSecSuccess, let identityRef = identityResult else {
+            throw TLSIdentityError.keychainError(identityStatus)
+        }
+        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+    }
+
+    private static func createInMemoryIdentity(
+        privateKey: P256.Signing.PrivateKey,
+        certificate: SecCertificate
+    ) throws -> SecIdentity {
+        let tempLabel = "com.buttonheist.tls.ephemeral.\(UUID().uuidString)"
+
+        // Clean up temporary Keychain items when we're done.
+        // The SecIdentity object is retained in memory after the entries are deleted.
+        defer {
+            let certDeleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassCertificate,
+                kSecAttrLabel as String: tempLabel,
+            ]
+            SecItemDelete(certDeleteQuery as CFDictionary)
+
+            let keyDeleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrLabel as String: tempLabel,
+            ]
+            SecItemDelete(keyDeleteQuery as CFDictionary)
+        }
+
+        let keyData = privateKey.x963Representation
+        let keyAttributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrKeySizeInBits as String: 256,
+        ]
+        var error: Unmanaged<CFError>?
+        guard let secKey = SecKeyCreateWithData(keyData as CFData, keyAttributes as CFDictionary, &error) else {
+            throw TLSIdentityError.keyCreationFailed(error?.takeRetainedValue())
+        }
+
+        let certAddQuery: [String: Any] = [
+            kSecClass as String: kSecClassCertificate,
+            kSecValueRef as String: certificate,
+            kSecAttrLabel as String: tempLabel,
+        ]
+        let certStatus = SecItemAdd(certAddQuery as CFDictionary, nil)
+        guard certStatus == errSecSuccess else {
+            throw TLSIdentityError.keychainError(certStatus)
+        }
+
+        let keyAddQuery: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecValueRef as String: secKey,
+            kSecAttrLabel as String: tempLabel,
+        ]
+        let keyStatus = SecItemAdd(keyAddQuery as CFDictionary, nil)
+        guard keyStatus == errSecSuccess else {
+            throw TLSIdentityError.keychainError(keyStatus)
+        }
+
+        let identityQuery: [String: Any] = [
+            kSecClass as String: kSecClassIdentity,
+            kSecAttrLabel as String: tempLabel,
+            kSecReturnRef as String: true,
+        ]
+        var identityResult: CFTypeRef?
+        let identityStatus = SecItemCopyMatching(identityQuery as CFDictionary, &identityResult)
+        guard identityStatus == errSecSuccess, let identityRef = identityResult else {
+            throw TLSIdentityError.keychainError(identityStatus)
+        }
+
+        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+    }
+}
+
+// MARK: - Errors
+
+public enum TLSIdentityError: Error, LocalizedError {
+    case invalidCertificateData
+    case keychainError(OSStatus)
+    case keyCreationFailed(CFError?)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidCertificateData:
+            return "Generated certificate DER data was rejected by SecCertificateCreateWithData"
+        case .keychainError(let status):
+            return "Keychain operation failed with status \(status)"
+        case .keyCreationFailed(let error):
+            if let error {
+                return "Private key creation failed: \(error)"
+            }
+            return "Private key creation failed"
+        }
+    }
+}

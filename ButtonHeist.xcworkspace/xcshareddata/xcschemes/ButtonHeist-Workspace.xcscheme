@@ -84,6 +84,90 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0C402B96BBD3B71C0DF7855E"
+               BuildableName = "CCryptoBoringSSL.framework"
+               BlueprintName = "CCryptoBoringSSL"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "0EE746172D7B13428C590074"
+               BuildableName = "CCryptoBoringSSLShims.framework"
+               BlueprintName = "CCryptoBoringSSLShims"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "EFE8F0C7C1D24E25CAA7F815"
+               BuildableName = "Crypto.framework"
+               BlueprintName = "Crypto"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "6FECC8B2C3C6F11523069529"
+               BuildableName = "CryptoBoringWrapper.framework"
+               BlueprintName = "CryptoBoringWrapper"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AB38BE4BC9B6E28962A4DD23"
+               BuildableName = "CryptoExtras.framework"
+               BlueprintName = "CryptoExtras"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D510020B0587B40B98CC4C49"
+               BuildableName = "SwiftASN1.framework"
+               BlueprintName = "SwiftASN1"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-asn1/swift-asn1.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "E65BBC0E48B5E27C1F1B784F"
                BuildableName = "TheGetaway.framework"
                BlueprintName = "TheGetaway"
@@ -158,6 +242,104 @@
                BuildableName = "UIKitTestApp.app"
                BlueprintName = "UIKitTestApp"
                ReferencedContainer = "container:TestApp/TestApp.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "01225C45B7EB5BCAD924B347"
+               BuildableName = "X509.framework"
+               BlueprintName = "X509"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-certificates/swift-certificates.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FE062C0AA291A14CF975BA87"
+               BuildableName = "_CertificateInternals.framework"
+               BlueprintName = "_CertificateInternals"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-certificates/swift-certificates.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "4CB045221B0A8E88199D7A87"
+               BuildableName = "_CryptoExtras.framework"
+               BlueprintName = "_CryptoExtras"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C857B83BC95EC3AFE7206A1A"
+               BuildableName = "swift-crypto_CCryptoBoringSSL.bundle"
+               BlueprintName = "swift-crypto_CCryptoBoringSSL"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "9B5DDC0F2D209F320FCE741D"
+               BuildableName = "swift-crypto_CCryptoBoringSSLShims.bundle"
+               BlueprintName = "swift-crypto_CCryptoBoringSSLShims"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "40DC2E2DBA3C44B54E5C7BF9"
+               BuildableName = "swift-crypto_CryptoBoringWrapper.bundle"
+               BlueprintName = "swift-crypto_CryptoBoringWrapper"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E3354C967CE85E16AF5C99E9"
+               BuildableName = "swift-crypto_CryptoExtras.bundle"
+               BlueprintName = "swift-crypto_CryptoExtras"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>

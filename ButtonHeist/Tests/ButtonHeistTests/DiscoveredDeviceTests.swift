@@ -417,4 +417,53 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertNil(device.simulatorUDID)
         XCTAssertNil(device.sessionActive)
     }
+
+    // MARK: - TLS Certificate Fingerprint
+
+    func testCertFingerprintStored() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let fingerprint = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone#abc",
+            endpoint: endpoint,
+            certFingerprint: fingerprint
+        )
+
+        XCTAssertEqual(device.certFingerprint, fingerprint)
+    }
+
+    func testCertFingerprintDefaultsToNil() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
+
+        XCTAssertNil(device.certFingerprint)
+    }
+
+    func testHostPortInitHasNilCertFingerprint() {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 8080)
+
+        XCTAssertNil(device.certFingerprint)
+    }
+
+    func testAllFieldsIncludingCertFingerprint() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        let device = DiscoveredDevice(
+            id: "test", name: "TestApp-iPhone#abc",
+            endpoint: endpoint,
+            simulatorUDID: "SIM-UUID",
+            installationId: "install-1",
+            displayDeviceName: "Chris's iPhone",
+            instanceId: "my-instance",
+            sessionActive: true,
+            certFingerprint: fingerprint
+        )
+
+        XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
+        XCTAssertEqual(device.installationId, "install-1")
+        XCTAssertEqual(device.deviceName, "Chris's iPhone")
+        XCTAssertEqual(device.instanceId, "my-instance")
+        XCTAssertEqual(device.sessionActive, true)
+        XCTAssertEqual(device.certFingerprint, fingerprint)
+    }
 }

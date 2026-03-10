@@ -19,7 +19,6 @@ extension TheFence {
             try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
-            try validateOutputPath(outputPath)
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
@@ -317,7 +316,6 @@ extension TheFence {
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
-            try validateOutputPath(outputPath)
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }

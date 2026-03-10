@@ -308,6 +308,8 @@ public struct ServerInfo: Codable, Sendable {
     public let simulatorUDID: String?
     /// Vendor identifier from UIDevice.identifierForVendor (stable per app install per device)
     public let vendorIdentifier: String?
+    /// Whether TLS transport encryption is active (nil for servers < v5.0)
+    public let tlsActive: Bool?
 
     public init(
         protocolVersion: String,
@@ -321,7 +323,8 @@ public struct ServerInfo: Codable, Sendable {
         instanceIdentifier: String? = nil,
         listeningPort: UInt16? = nil,
         simulatorUDID: String? = nil,
-        vendorIdentifier: String? = nil
+        vendorIdentifier: String? = nil,
+        tlsActive: Bool? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.appName = appName
@@ -335,6 +338,7 @@ public struct ServerInfo: Codable, Sendable {
         self.listeningPort = listeningPort
         self.simulatorUDID = simulatorUDID
         self.vendorIdentifier = vendorIdentifier
+        self.tlsActive = tlsActive
     }
 }
 
