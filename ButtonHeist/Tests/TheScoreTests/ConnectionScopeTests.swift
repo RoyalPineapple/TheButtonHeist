@@ -43,6 +43,12 @@ struct ConnectionScopeTests {
         #expect(ConnectionScope.parse("foo,bar") == nil)
     }
 
+    // MARK: - Mock interface
+
+    private struct MockInterface: NetworkInterfaceNaming {
+        let name: String
+    }
+
     // MARK: - classify (typed NWEndpoint.Host, no interfaces)
 
     @Test func classifiesIPv4Loopback() {
@@ -76,6 +82,34 @@ struct ConnectionScopeTests {
 
     @Test func classifiesHostnameAsNetwork() {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("example.local")) == .network)
+    }
+
+    // MARK: - classify with interfaces (anpi detection)
+
+    @Test func classifiesAnpiInterfaceAsUSB() {
+        let anpi = MockInterface(name: "anpi0")
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaces: [anpi]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [anpi]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("2001:db8::1"), interfaces: [anpi]) == .usb)
+    }
+
+    @Test func classifiesAnpiVariantsAsUSB() {
+        let anpi1 = MockInterface(name: "anpi1")
+        let anpi2 = MockInterface(name: "anpi2")
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [anpi1]) == .usb)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [anpi2]) == .usb)
+    }
+
+    @Test func nonAnpiInterfaceIsNotUSB() {
+        let en0 = MockInterface(name: "en0")
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fd9a:6190:eed7::1"), interfaces: [en0]) == .network)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [en0]) == .network)
+    }
+
+    @Test func loopbackStillSimulatorWithAnpiInterface() {
+        let anpi = MockInterface(name: "anpi0")
+        #expect(ConnectionScope.classify(host: .ipv4(.loopback), interfaces: [anpi]) == .simulator)
+        #expect(ConnectionScope.classify(host: .ipv6(.loopback), interfaces: [anpi]) == .simulator)
     }
 
     // MARK: - Static properties
