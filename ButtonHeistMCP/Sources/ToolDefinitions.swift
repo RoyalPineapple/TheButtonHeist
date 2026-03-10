@@ -1,5 +1,4 @@
 import MCP
-import ButtonHeist
 
 enum ToolDefinitions {
     // NOTE: Video data handling

@@ -1,6 +1,4 @@
 import ArgumentParser
-import Foundation
-import Darwin
 import ButtonHeist
 
 struct ScrollCommand: AsyncParsableCommand {
@@ -38,7 +36,7 @@ struct ScrollCommand: AsyncParsableCommand {
             throw ValidationError("Invalid direction '\(direction)'. Valid: up, down, left, right, next, previous")
         }
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
