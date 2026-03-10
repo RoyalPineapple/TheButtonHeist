@@ -52,7 +52,7 @@ public final class USBDeviceDiscovery {
 
     private func poll() async {
         // Run subprocess work off the main thread
-        let (connectedDevices, ipv6Address) = await Task.detached { [port] () -> ([String], String?) in
+        let (connectedDevices, ipv6Address) = await Task.detached { () -> ([String], String?) in
             let devices = Self.discoverConnectedDevices()
             let address = Self.findIPv6Tunnel()
             return (devices, address)

@@ -1,5 +1,6 @@
 import XCTest
 import Network
+@preconcurrency import Dispatch
 import TheGetaway
 @testable import ButtonHeist
 
@@ -320,8 +321,9 @@ final class AuthFlowIntegrationTests: XCTestCase {
                 }
 
                 // Disconnect after a brief delay (matching TheInsideJob behavior)
+                let server = self.server!
                 DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
-                    self.server.disconnect(clientId: clientId)
+                    server.disconnect(clientId: clientId)
                 }
             }
         }

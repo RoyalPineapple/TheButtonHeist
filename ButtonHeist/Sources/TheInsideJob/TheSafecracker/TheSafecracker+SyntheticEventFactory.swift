@@ -8,7 +8,7 @@ private typealias SetHIDFunc = @convention(c) (AnyObject, Selector, UnsafeMutabl
 extension TheSafecracker {
 
     /// Factory for creating and manipulating UIEvent instances for touch injection.
-    final class SyntheticEventFactory {
+    @MainActor final class SyntheticEventFactory {
 
         static func getTouchesEvent() -> UIEvent? {
             let app = UIApplication.shared

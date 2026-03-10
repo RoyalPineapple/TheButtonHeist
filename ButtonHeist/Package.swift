@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "TheScore",
             path: "Sources/TheScore",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         // Swift implementation of TheInsideJob
         .target(
@@ -32,7 +32,7 @@ let package = Package(
                 .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot")
             ],
             path: "Sources/TheInsideJob",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         // Objective-C loader that triggers auto-start via +load
         .target(
@@ -45,31 +45,31 @@ let package = Package(
             name: "TheGetaway",
             dependencies: ["TheScore"],
             path: "Sources/TheGetaway",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .target(
             name: "ButtonHeist",
             dependencies: ["TheScore"],
             path: "Sources/TheButtonHeist",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "TheScoreTests",
             dependencies: ["TheScore"],
             path: "Tests/TheScoreTests",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "ButtonHeistTests",
             dependencies: ["ButtonHeist", "TheScore", "TheGetaway"],
             path: "Tests/ButtonHeistTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(
             name: "TheInsideJobTests",
             dependencies: ["TheInsideJob", "TheScore"],
             path: "Tests/TheInsideJobTests",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-warnings-as-errors"])]
         )
     ]
 )
