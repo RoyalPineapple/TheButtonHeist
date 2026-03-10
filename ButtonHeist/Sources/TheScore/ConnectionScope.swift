@@ -7,10 +7,10 @@ import Foundation
 /// - `usb`: CoreDevice IPv6 tunnel (`fd??:` ULA prefix) — physical device over USB
 /// - `network`: Everything else — WiFi, LAN, or broader network
 ///
-/// By default, all scopes are allowed. Set `INSIDEJOB_SCOPE` to restrict:
+/// By default, only simulator and USB are allowed. Set `INSIDEJOB_SCOPE` to change:
 /// ```
-/// INSIDEJOB_SCOPE=simulator,usb  // reject WiFi connections
-/// INSIDEJOB_SCOPE=usb            // USB only
+/// INSIDEJOB_SCOPE=simulator,usb,network  // also allow WiFi/LAN
+/// INSIDEJOB_SCOPE=usb                    // USB only
 /// ```
 public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     case simulator
@@ -26,7 +26,10 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
         return scopes.isEmpty ? nil : Set(scopes)
     }
 
-    /// All scopes allowed.
+    /// Default scopes: simulator and USB only (network is opt-in).
+    public static let `default`: Set<ConnectionScope> = [.simulator, .usb]
+
+    /// All scopes allowed (including network).
     public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
 
     /// Classify a remote address string into a connection scope.
