@@ -13,6 +13,9 @@ let copyResourceBundleScript: TargetScript = .post(
 
 let project = Project(
     name: "TestApp",
+    settings: .settings(base: [
+        "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
+    ]),
     targets: [
         // MARK: - SwiftUI Test App
         .target(

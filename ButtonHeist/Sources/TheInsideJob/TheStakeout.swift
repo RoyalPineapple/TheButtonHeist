@@ -317,11 +317,12 @@ final class TheStakeout {
         let url = outputURL
         let interactions = self.interactionLog
 
+        nonisolated(unsafe) let writerRef = writer
         writer.finishWriting { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
                 defer { self.cleanup() }
-
+                let writer = writerRef
                 if writer.status == .failed {
                     self.deliverError(.finalizationFailed(writer.error?.localizedDescription ?? "Unknown"))
                     return

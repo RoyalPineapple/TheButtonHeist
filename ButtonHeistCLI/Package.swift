@@ -23,7 +23,7 @@ let package = Package(
             path: "Sources",
             swiftSettings: [
                 .swiftLanguageMode(.v6),
-                .unsafeFlags(["-parse-as-library"])
+                .unsafeFlags(["-parse-as-library", "-warnings-as-errors"])
             ]
         ),
         .testTarget(
@@ -32,7 +32,7 @@ let package = Package(
                 .product(name: "ButtonHeist", package: "ButtonHeist")
             ],
             path: "Tests",
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         )
     ]
 )

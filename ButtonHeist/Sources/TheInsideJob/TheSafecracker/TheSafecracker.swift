@@ -55,10 +55,10 @@ final class TheSafecracker {
 
     /// Default inter-key delay for text injection (30ms). Single source of truth
     /// for typeText and deleteText default parameters.
-    static let defaultInterKeyDelay: UInt64 = 30_000_000
+    nonisolated static let defaultInterKeyDelay: UInt64 = 30_000_000
 
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
-    static let maxInterKeyDelay: UInt64 = 500_000_000
+    nonisolated static let maxInterKeyDelay: UInt64 = 500_000_000
 
     // MARK: - Internal Touch State
 
