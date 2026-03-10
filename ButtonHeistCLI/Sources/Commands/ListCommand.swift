@@ -36,11 +36,19 @@ struct ListCommand: AsyncParsableCommand {
             }
         }
 
-        let devices = client.discoveredDevices
+        let discovered = client.discoveredDevices
         client.stopDiscovery()
 
-        if devices.isEmpty {
+        if discovered.isEmpty {
             logStatus("No devices found.")
+            return
+        }
+
+        logStatus("Verifying \(discovered.count) device(s)...")
+        let devices = await discovered.reachable()
+
+        if devices.isEmpty {
+            logStatus("No reachable devices found (\(discovered.count) stale).")
             return
         }
 
@@ -57,12 +65,15 @@ struct ListCommand: AsyncParsableCommand {
             let name: String
             let appName: String
             let deviceName: String
+            let connectionType: String
             let shortId: String?
             let simulatorUDID: String?
         }
         let infos = devices.map {
             DeviceInfo(name: $0.name, appName: $0.appName,
-                       deviceName: $0.deviceName, shortId: $0.shortId,
+                       deviceName: $0.deviceName,
+                       connectionType: $0.connectionType.rawValue,
+                       shortId: $0.shortId,
                        simulatorUDID: $0.simulatorUDID)
         }
         let encoder = JSONEncoder()
@@ -79,7 +90,13 @@ struct ListCommand: AsyncParsableCommand {
             let id = device.shortId ?? "----"
             let app = device.appName
             let dev = device.deviceName
-            writeOutput("  [\(index)] \(id)  \(app)  (\(dev))")
+            let typeLabel: String
+            switch device.connectionType {
+            case .simulator: typeLabel = "sim"
+            case .usb: typeLabel = "usb"
+            case .network: typeLabel = "network"
+            }
+            writeOutput("  [\(index)] \(id)  \(app)  (\(dev))  [\(typeLabel)]")
             if let udid = device.simulatorUDID {
                 writeOutput("       Simulator: \(udid)")
             }

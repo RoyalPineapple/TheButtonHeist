@@ -28,12 +28,12 @@ public final class TheInsideJob {
 
     /// Configure the shared instance. Must be called before `start()`.
     /// Second and subsequent calls are no-ops.
-    public static func configure(token: String? = nil, instanceId: String? = nil) {
+    public static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil) {
         if _shared != nil {
             insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
             return
         }
-        _shared = TheInsideJob(token: token, instanceId: instanceId)
+        _shared = TheInsideJob(token: token, instanceId: instanceId, allowedScopes: allowedScopes)
     }
 
     // MARK: - Properties
@@ -46,6 +46,7 @@ public final class TheInsideJob {
     let bagman = TheBagman()
     let theSafecracker = TheSafecracker()
 
+    private let allowedScopes: Set<ConnectionScope>
     private var isRunning = false
     private var isSuspended = false
     private var tlsActive = false
@@ -73,11 +74,20 @@ public final class TheInsideJob {
 
     // MARK: - Initialization
 
-    public init(token: String? = nil, instanceId: String? = nil) {
+    public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
         self.installationId = Self.loadInstallationId()
         self.theSafecracker.bagman = self.bagman
+
+        if let scopes = allowedScopes {
+            self.allowedScopes = scopes
+        } else if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_SCOPE"],
+                  let parsed = ConnectionScope.parse(envValue) {
+            self.allowedScopes = parsed
+        } else {
+            self.allowedScopes = ConnectionScope.default
+        }
     }
 
     // MARK: - Public Methods
@@ -97,13 +107,15 @@ public final class TheInsideJob {
             identity = try TLSIdentity.createEphemeral()
         }
         self.tlsActive = true
-        let t = ServerTransport(tlsIdentity: identity)
+        let t = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
         wireTransport(t)
 
         let actualPort = try await t.start()
         self.transport = t
         isRunning = true
 
+        let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
+        insideJobLogger.info("Connection scopes: \(scopeNames)")
         insideJobLogger.info("Server listening on port \(actualPort)")
         insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .sensitive)")
         if let instanceId {
@@ -552,7 +564,7 @@ public final class TheInsideJob {
 
                 self.tlsActive = true
 
-                let t = ServerTransport(tlsIdentity: identity)
+                let t = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
                 self.wireTransport(t)
 
                 let actualPort = try await t.start()

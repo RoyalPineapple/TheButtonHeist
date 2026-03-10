@@ -1,5 +1,9 @@
 import Foundation
 import Network
+import os
+import TheScore
+
+private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
 
 /// A discovered iOS device running TheInsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
@@ -44,6 +48,12 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
             port: NWEndpoint.Port(integerLiteral: port)
         )
         self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
+    }
+
+    public var connectionType: ConnectionScope {
+        if simulatorUDID != nil { return .simulator }
+        if id.hasPrefix("usb-") { return .usb }
+        return .network
     }
 
     public func hash(into hasher: inout Hasher) {
@@ -127,5 +137,62 @@ extension Array where Element == DiscoveredDevice {
     public func first(matching filter: String?) -> DiscoveredDevice? {
         guard let filter else { return first }
         return first { $0.matches(filter: filter) }
+    }
+
+    /// Probe all devices in parallel and return only those that are reachable.
+    /// Uses a UDP path probe to each device's endpoint; stale mDNS cache entries
+    /// will fail while live devices establish a viable path.
+    public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
+        await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
+            for (index, device) in self.enumerated() {
+                group.addTask {
+                    await device.isReachable(timeout: timeout) ? (index, device) : (index, nil)
+                }
+            }
+            var indexed: [(Int, DiscoveredDevice)] = []
+            for await (index, device) in group {
+                if let device { indexed.append((index, device)) }
+            }
+            return indexed.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
+}
+
+extension DiscoveredDevice {
+    /// Check if the device's host is reachable via a UDP path probe.
+    /// Uses UDP to avoid consuming TCP connection slots on the server.
+    /// Returns true if the network path becomes viable within the timeout.
+    nonisolated func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
+        let endpoint = self.endpoint
+        let deviceName = self.name
+        let probeQueue = DispatchQueue(label: "com.buttonheist.reachability-probe")
+        let resumed = OSAllocatedUnfairLock(initialState: false)
+        return await withCheckedContinuation { continuation in
+            let conn = NWConnection(to: endpoint, using: .udp)
+            conn.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
+                    reachabilityLogger.debug("Reachable: \(deviceName)")
+                    conn.cancel()
+                    continuation.resume(returning: true)
+                case .failed, .cancelled:
+                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
+                    reachabilityLogger.debug("Unreachable: \(deviceName)")
+                    conn.cancel()
+                    continuation.resume(returning: false)
+                default:
+                    break
+                }
+            }
+            conn.start(queue: probeQueue)
+
+            probeQueue.asyncAfter(deadline: .now() + timeout) {
+                guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
+                reachabilityLogger.debug("Probe timeout: \(deviceName)")
+                conn.cancel()
+                continuation.resume(returning: false)
+            }
+        }
     }
 }
