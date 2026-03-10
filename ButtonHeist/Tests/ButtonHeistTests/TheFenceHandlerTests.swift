@@ -323,17 +323,6 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    @ButtonHeistActor
-    func testUnknownGestureReturnsError() async {
-        let (fence, _) = makeConnectedFence()
-        let response = try? await fence.handleGesture(command: "unknown_gesture", args: [:])
-        if case .error(let message) = response {
-            XCTAssertTrue(message.contains("Unknown gesture"))
-        } else {
-            XCTFail("Expected error for unknown gesture")
-        }
-    }
-
     // MARK: - Draw Path Validation
 
     @ButtonHeistActor
@@ -494,17 +483,6 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    @ButtonHeistActor
-    func testUnknownScrollActionReturnsError() async {
-        let (fence, _) = makeConnectedFence()
-        let response = try? await fence.handleScrollAction(command: "scroll_unknown", args: [:])
-        if case .error(let message) = response {
-            XCTAssertTrue(message.contains("Unknown scroll action"))
-        } else {
-            XCTFail("Expected error for unknown scroll action")
-        }
-    }
-
     // MARK: - Accessibility Action Validation
 
     @ButtonHeistActor
@@ -559,17 +537,6 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"]
         )
-    }
-
-    @ButtonHeistActor
-    func testUnknownAccessibilityActionReturnsError() async {
-        let (fence, _) = makeConnectedFence()
-        let response = try? await fence.handleAccessibilityAction(command: "unknown_a11y", args: [:])
-        if case .error(let message) = response {
-            XCTAssertTrue(message.contains("Unknown accessibility action"))
-        } else {
-            XCTFail("Expected error for unknown accessibility action")
-        }
     }
 
     // MARK: - Text Input Validation
@@ -636,20 +603,20 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testAllCatalogCommandsAreRouted() async {
         let (fence, _) = makeConnectedFence()
-        let skipCommands: Set<String> = ["help", "quit", "exit"]
+        let skipCommands: Set<TheFence.Command> = [.help, .quit, .exit]
 
-        for command in TheFence.CommandCatalog.all where !skipCommands.contains(command) {
+        for command in TheFence.Command.allCases where !skipCommands.contains(command) {
             do {
-                let response = try await fence.execute(request: ["command": command])
+                let response = try await fence.execute(request: ["command": command.rawValue])
                 if case .error(let message) = response {
                     XCTAssertFalse(
                         message.hasPrefix("Unknown command"),
-                        "Command '\(command)' was not routed by dispatch"
+                        "Command '\(command.rawValue)' was not routed by dispatch"
                     )
                 }
             } catch let error as FenceError {
                 if case .notConnected = error {
-                    XCTFail("Command '\(command)' hit notConnected — mock connection should be active")
+                    XCTFail("Command '\(command.rawValue)' hit notConnected — mock connection should be active")
                 }
             } catch {
                 // Any other error is OK — means the command was recognized

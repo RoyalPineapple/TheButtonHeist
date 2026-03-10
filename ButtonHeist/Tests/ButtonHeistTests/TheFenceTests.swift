@@ -6,24 +6,46 @@ final class TheFenceTests: XCTestCase {
 
     // MARK: - Command Enum
 
-    func testCommandEnumContainsExpectedCommands() {
-        let commands = TheFence.Command.allCases
-        XCTAssertTrue(commands.contains(.help))
-        XCTAssertTrue(commands.contains(.oneFingerTap))
-        XCTAssertTrue(commands.contains(.getInterface))
-        XCTAssertTrue(commands.contains(.getScreen))
-        XCTAssertTrue(commands.contains(.typeText))
-        XCTAssertTrue(commands.contains(.startRecording))
-        XCTAssertTrue(commands.contains(.stopRecording))
-        XCTAssertTrue(commands.contains(.dismissKeyboard))
+    func testCommandCaseCount() {
+        XCTAssertEqual(TheFence.Command.allCases.count, 29)
     }
 
     func testCommandRawValuesMatchWireFormat() {
-        XCTAssertEqual(TheFence.Command.oneFingerTap.rawValue, "one_finger_tap")
-        XCTAssertEqual(TheFence.Command.getInterface.rawValue, "get_interface")
-        XCTAssertEqual(TheFence.Command.typeText.rawValue, "type_text")
-        XCTAssertEqual(TheFence.Command.scrollToEdge.rawValue, "scroll_to_edge")
-        XCTAssertEqual(TheFence.Command.dismissKeyboard.rawValue, "dismiss_keyboard")
+        let expected: [TheFence.Command: String] = [
+            .help: "help",
+            .status: "status",
+            .quit: "quit",
+            .exit: "exit",
+            .listDevices: "list_devices",
+            .getInterface: "get_interface",
+            .getScreen: "get_screen",
+            .waitForIdle: "wait_for_idle",
+            .oneFingerTap: "one_finger_tap",
+            .longPress: "long_press",
+            .swipe: "swipe",
+            .drag: "drag",
+            .pinch: "pinch",
+            .rotate: "rotate",
+            .twoFingerTap: "two_finger_tap",
+            .drawPath: "draw_path",
+            .drawBezier: "draw_bezier",
+            .scroll: "scroll",
+            .scrollToVisible: "scroll_to_visible",
+            .scrollToEdge: "scroll_to_edge",
+            .activate: "activate",
+            .increment: "increment",
+            .decrement: "decrement",
+            .performCustomAction: "perform_custom_action",
+            .typeText: "type_text",
+            .editAction: "edit_action",
+            .dismissKeyboard: "dismiss_keyboard",
+            .startRecording: "start_recording",
+            .stopRecording: "stop_recording",
+        ]
+        XCTAssertEqual(expected.count, TheFence.Command.allCases.count)
+        for (command, wire) in expected {
+            XCTAssertEqual(command.rawValue, wire)
+        }
     }
 
     // MARK: - FenceResponse Human Formatting
