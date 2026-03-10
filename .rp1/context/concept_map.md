@@ -23,7 +23,7 @@
 | **TheMastermind** | Coordinator | macOS | Observable client API wrapping TheHandoff. @Observable state for SwiftUI, async waitFor* methods with request-ID correlation. |
 | **TheFence** | Fence/Dealer | macOS | Centralized command dispatch facade. Split into TheFence.swift (core), TheFence+Handlers.swift (command handlers), TheFence+Formatting.swift (FenceResponse + output). |
 | **TheHandoff** | Handoff | macOS | Client-side session manager. Bonjour discovery, TLS connection with fingerprint pinning, keepalive (ping 3s), auto-reconnect (60 attempts at 1s). |
-| **TheGetaway** | Escape Vehicle | Shared | TLS-encrypted TCP server/client transport and Bonjour advertisement. Contains TLSIdentity (certificate management), SimpleSocketServer (TCP with TLS), ServerTransport (unified server+Bonjour layer). |
+| **Transport Layer** | *(in TheInsideJob)* | iOS | TLS-encrypted TCP server transport and Bonjour advertisement. Contains TLSIdentity (certificate management + expiry tracking), SimpleSocketServer (TCP with TLS), ServerTransport (unified server+Bonjour layer). Formerly a separate module (TheGetaway). |
 
 ### Data Types
 
@@ -95,7 +95,7 @@ MCP → TheFence
 - **Concepts**: ClientMessage (29 cases), ServerMessage (15 cases), HeistElement, Interface, InterfaceDelta, ActionResult, ServerInfo.tlsActive
 - **Boundary**: No UIKit/AppKit dependency. Consumed by both sides. Protocol v5.0. Defines tlsActive field for TLS status reporting.
 
-### 2. Transport Layer (TheGetaway)
+### 2. Transport Layer (in TheInsideJob)
 - **Scope**: Shared networking module
 - **Concepts**: TLSIdentity, SimpleSocketServer, ServerTransport, TLSIdentityError, Bonjour TXT (certfp, transport)
 - **Boundary**: Owns TLS certificate lifecycle (generation, Keychain storage, fingerprint computation), TCP server with TLS, and Bonjour advertisement with TLS metadata. Does not handle auth or application messages.

@@ -40,10 +40,9 @@ ButtonHeist/
 │   │   ├── TheSafecracker/       # Touch injection (7 files, split by concern)
 │   │   ├── TheMuscle.swift, TheStakeout.swift, TheFingerprints.swift
 │   │   └── Extensions/
-│   ├── TheGetaway/               # Server transport layer (TCP + TLS)
-│   │   ├── SimpleSocketServer.swift   # TLS-capable TCP server
-│   │   ├── ServerTransport.swift      # Transport abstraction with TLS integration
-│   │   └── TLSIdentity.swift          # ECDSA certificate generation + fingerprint pinning
+│   │   ├── TLSIdentity.swift            # ECDSA certificate generation + fingerprint pinning
+│   │   ├── ServerTransport.swift        # Transport abstraction with TLS integration
+│   │   └── SimpleSocketServer.swift     # TLS-capable TCP server
 │   ├── TheButtonHeist/           # macOS client
 │   │   ├── TheFence.swift + TheFence+Handlers.swift + TheFence+Formatting.swift
 │   │   ├── TheFence+CommandCatalog.swift
@@ -93,7 +92,7 @@ git clone --recursive <repo-url>
 
 # Build frameworks
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGetaway -destination 'generic/platform=iOS' build
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
 

@@ -387,6 +387,8 @@ public var onAuthApproved: ((String?) -> Void)?
 
 Called when the connection is approved (via token match or on-device UI). For driver connections, the token is provided so the client can store it for future connections. For observer connections, the token is `nil`. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
+> **Note:** These callbacks are on `TheMastermind`. At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`) instead of individual properties. See [DeviceConnecting](#deviceconnecting) and [DeviceDiscovering](#devicediscovering).
+
 ##### onSessionLocked
 
 ```swift
@@ -651,7 +653,7 @@ public enum FenceError: Error, LocalizedError
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed to `onDisconnected` callbacks on `DeviceConnection`, `TheGetaway`, and `TheMastermind`.
+Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection` and to `onDisconnected` callbacks on `TheMastermind`.
 
 #### Cases
 

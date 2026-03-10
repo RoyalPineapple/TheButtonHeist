@@ -48,7 +48,7 @@ graph TB
 
     subgraph shared["Shared"]
         TS["TheScore<br/>Wire protocol types"]
-        TG["TheGetaway<br/>Server transport + TLS"]
+        TG["Transport Layer<br/>Server transport + TLS<br/>(in TheInsideJob)"]
     end
 
     TS -.->|used by| IJ
@@ -64,7 +64,7 @@ graph TB
 | **Trust-on-First-Sight (TOFU) TLS** | Self-signed ECDSA P-256 certificates with fingerprint pinning via Bonjour TXT records. No CA required. Server generates identity, publishes SHA-256 fingerprint; client verifies during TLS handshake. |
 | **Facade / Command Dispatch** | TheFence centralizes all 29 commands. CLI and MCP are thin wrappers over TheFence.execute(). Handlers extracted to TheFence+Handlers.swift. |
 | **Observer Pattern (Reactive)** | TheMastermind uses @Observable for SwiftUI. iOS server uses polling-and-broadcast for hierarchy changes. |
-| **Layered Architecture** | Strict dependency direction: TheScore -> TheGetaway -> TheInsideJob / TheButtonHeist -> TheFence -> CLI/MCP. |
+| **Layered Architecture** | Strict dependency direction: TheScore -> TheInsideJob / TheButtonHeist -> TheFence -> CLI/MCP. |
 | **Heist Crew Metaphor** | Domain-driven naming where each component is a heist crew role with clear responsibility. |
 | **Extension-Based File Organization** | Large types decomposed into focused Swift extensions using Type+Concern.swift naming. Each extension file owns a single responsibility. Keeps files under ~350 lines while preserving public API. |
 | **Warnings-as-Errors Build Policy** | All SPM targets treat warnings as errors (`-warnings-as-errors`), enforcing a zero-warning policy as a build quality gate. |
@@ -77,7 +77,7 @@ graph TB
 - **Dependencies**: None
 
 ### 2. Transport Layer
-- **Components**: TheGetaway (SimpleSocketServer, ServerTransport, TLSIdentity), DeviceConnection, DeviceDiscovery
+- **Components**: TheInsideJob (SimpleSocketServer, ServerTransport, TLSIdentity), TheButtonHeist (DeviceConnection, DeviceDiscovery, DeviceProtocols)
 - **Purpose**: TLS-encrypted TCP server/client networking, Bonjour discovery, certificate identity management, connection lifecycle
 - **Dependencies**: Shared Protocol Layer
 

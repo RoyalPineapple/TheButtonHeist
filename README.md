@@ -40,8 +40,7 @@ Every heist needs a team. ButtonHeist is built around a crew of specialists.
 
 | Character | What they do |
 |-----------|--------------|
-| **TheMastermind** | Coordinator. @Observable over TheGetaway: discovery, connection, callbacks for SwiftUI and tools. |
-| **TheGetaway** | Getaway driver. TLS client/server, Bonjour discovery, USB tunneling. Connects Mac to iOS. |
+| **TheMastermind** | Coordinator. @Observable over TheHandoff: discovery, connection, callbacks for SwiftUI and tools. |
 | **TheFence** | Interface between the buyer and the team. Command dispatch for CLI and MCP. Takes orders and delivers goods; delegates connection to TheMastermind. |
 
 ### The Legitimate Front
@@ -92,7 +91,7 @@ graph TD
 
 **End-to-end:**
 ```
-AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → TheGetaway → TLS → TheInsideJob
+AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → TheHandoff → TLS → TheInsideJob
 ```
 
 ## Modules
@@ -101,8 +100,7 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 |--------|----------|-------------|---------|
 | **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
-| **TheGetaway** | iOS + macOS | TLS client, server, Bonjour discovery | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence); re-exports TheScore + TheGetaway | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 14 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
 | **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, copy, paste, cut, select, select_all, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
@@ -221,7 +219,7 @@ open ButtonHeist.xcworkspace
 
 ```
 ButtonHeist/
-├── ButtonHeist/Sources/          # Core frameworks (TheScore, TheInsideJob, TheGetaway, ButtonHeist)
+├── ButtonHeist/Sources/          # Core frameworks (TheScore, TheInsideJob, ButtonHeist)
 ├── ButtonHeistMCP/               # MCP server (Swift Package)
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
@@ -269,7 +267,7 @@ git submodule update --remote ai-fuzzer
 ## Documentation
 
 **Frameworks and tools:**
-- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, TheInsideJob, TheGetaway, client
+- [ButtonHeist Frameworks](ButtonHeist/) — Core modules: TheScore, TheInsideJob, ButtonHeist client
 - [MCP Server](ButtonHeistMCP/) — AI agent integration via Model Context Protocol
 - [CLI Reference](ButtonHeistCLI/) — Full command-line documentation
 - [Test Apps](TestApp/) — Sample iOS applications for testing

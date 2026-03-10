@@ -165,9 +165,9 @@ All unit tests must be fully deterministic — no dependency on running apps, Bo
 
 ### Mocking Strategy
 
-**Never create a real `TheFence`, `TheMastermind`, or `NWBrowser` in a unit test.** These trigger real Bonjour discovery and will find live apps on the network, making tests flaky and environment-dependent.
+**Never let real Bonjour discovery or `NWConnection` run in a unit test.** These find live apps on the network, making tests flaky and environment-dependent.
 
-The mock boundary is at the network layer: `DeviceConnecting` and `DeviceDiscovering` protocols. Everything above — TheHandoff's callback wiring, auto-reconnect, keepalive; TheMastermind's state management; TheFence's dispatch — stays real in tests. Only the actual network I/O is mocked.
+The mock boundary is at the network layer: `DeviceConnecting` and `DeviceDiscovering` protocols. Real `TheFence`, `TheMastermind`, and `TheHandoff` are used in tests, but with mock closures injected (`makeDiscovery`, `makeConnection`) so no real network I/O occurs.
 
 TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so tests can inject mock implementations. Default closures create the real `DeviceDiscovery` and `DeviceConnection`.
 
@@ -176,7 +176,7 @@ TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so t
 | Test type | Can use | Must NOT use |
 |-----------|---------|-------------|
 | **Protocol tests** (TheScore) | Value types, Codable round-trips | Any networking or UIKit |
-| **Handler/dispatch tests** (TheFence) | Mock DeviceConnecting via TheHandoff factory, pure arg parsing | Real TheMastermind, Bonjour, NWConnection |
+| **Handler/dispatch tests** (TheFence) | Real TheFence/TheMastermind with mock DeviceConnecting injected via TheHandoff factory, pure arg parsing | Real Bonjour, NWConnection |
 | **Connection logic tests** (DeviceConnection) | Message injection, forced isConnected | Real NWListener, real TCP sockets |
 | **Auth/session tests** (TheMuscle) | Callback injection | Real networking, real UI alerts |
 | **Integration tests** (TLS, Keychain) | Real NWListener on loopback, real Keychain | Must be clearly labeled, must clean up after themselves |
