@@ -105,8 +105,12 @@ struct SelectAllCommand: AsyncParsableCommand {
 // MARK: - Shared Helper
 
 @ButtonHeistActor
-private func sendEditAction(_ action: String, connection: ConnectionOptions,
-                             timeout: Double, format: OutputFormat?) async throws {
+private func sendEditAction(
+    _ action: String,
+    connection: ConnectionOptions,
+    timeout: Double,
+    format: OutputFormat?
+) async throws {
     let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
     try await connector.connect()
     defer { connector.disconnect() }

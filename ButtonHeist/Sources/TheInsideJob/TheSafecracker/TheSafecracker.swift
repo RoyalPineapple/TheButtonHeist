@@ -347,115 +347,6 @@ final class TheSafecracker {
         return nil
     }
 
-    // MARK: - Public: Multi-Touch Gestures
-
-    /// Simulate a pinch gesture centered at a screen point.
-    /// - Parameters:
-    ///   - center: Center point of the pinch in screen coordinates
-    ///   - scale: Scale factor (>1.0 = spread/zoom in, <1.0 = pinch/zoom out)
-    ///   - spread: Initial distance from center to each finger (default 100pt)
-    ///   - duration: Duration of the gesture (default 0.5s)
-    func pinch(center: CGPoint, scale: CGFloat, spread: CGFloat = 100, duration: TimeInterval = 0.5) async -> Bool {
-        let angle: CGFloat = .pi / 4 // 45° diagonal
-        let startSpread = spread
-        let endSpread = spread * scale
-
-        let finger1Start = CGPoint(
-            x: center.x + cos(angle) * startSpread,
-            y: center.y + sin(angle) * startSpread
-        )
-        let finger2Start = CGPoint(
-            x: center.x - cos(angle) * startSpread,
-            y: center.y - sin(angle) * startSpread
-        )
-
-        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
-        onGestureMove?([finger1Start, finger2Start])
-
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-
-        for i in 1...steps {
-            let progress = CGFloat(i) / CGFloat(steps)
-            let currentSpread = startSpread + progress * (endSpread - startSpread)
-
-            let p1 = CGPoint(
-                x: center.x + cos(angle) * currentSpread,
-                y: center.y + sin(angle) * currentSpread
-            )
-            let p2 = CGPoint(
-                x: center.x - cos(angle) * currentSpread,
-                y: center.y - sin(angle) * currentSpread
-            )
-            moveTouches(to: [p1, p2])
-            fingerprints.updateTrackingFingerprints(to: [p1, p2])
-            onGestureMove?([p1, p2])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
-        }
-
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
-    }
-
-    /// Simulate a rotation gesture centered at a screen point.
-    /// - Parameters:
-    ///   - center: Center point of the rotation in screen coordinates
-    ///   - angle: Rotation angle in radians (positive = counter-clockwise)
-    ///   - radius: Distance from center to each finger (default 100pt)
-    ///   - duration: Duration of the gesture (default 0.5s)
-    func rotate(center: CGPoint, angle: CGFloat, radius: CGFloat = 100, duration: TimeInterval = 0.5) async -> Bool {
-        let startAngle: CGFloat = 0
-
-        let finger1Start = CGPoint(
-            x: center.x + cos(startAngle) * radius,
-            y: center.y + sin(startAngle) * radius
-        )
-        let finger2Start = CGPoint(
-            x: center.x + cos(startAngle + .pi) * radius,
-            y: center.y + sin(startAngle + .pi) * radius
-        )
-
-        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
-        onGestureMove?([finger1Start, finger2Start])
-
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-
-        for i in 1...steps {
-            let progress = CGFloat(i) / CGFloat(steps)
-            let currentAngle = startAngle + progress * angle
-
-            let p1 = CGPoint(
-                x: center.x + cos(currentAngle) * radius,
-                y: center.y + sin(currentAngle) * radius
-            )
-            let p2 = CGPoint(
-                x: center.x + cos(currentAngle + .pi) * radius,
-                y: center.y + sin(currentAngle + .pi) * radius
-            )
-            moveTouches(to: [p1, p2])
-            fingerprints.updateTrackingFingerprints(to: [p1, p2])
-            onGestureMove?([p1, p2])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
-        }
-
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
-    }
-
-    /// Simulate a two-finger tap at a screen point.
-    /// - Parameters:
-    ///   - center: Center point between the two fingers
-    ///   - spread: Distance between the two fingers (default 40pt)
-    func twoFingerTap(at center: CGPoint, spread: CGFloat = 40) -> Bool {
-        let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
-        let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
-        guard touchesDown(at: [p1, p2]) else { return false }
-        return touchesUp()
-    }
-
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
 
     private func touchDown(at point: CGPoint) -> Bool {
@@ -474,7 +365,7 @@ final class TheSafecracker {
     // MARK: - Internal: N-Finger Primitives
 
     /// Begin touches at N screen points simultaneously.
-    private func touchesDown(at points: [CGPoint]) -> Bool {
+    func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard let window = windowForPoint(points[0]) else {
             insideJobLogger.error("No window found for point \(String(describing: points[0]))")
@@ -482,7 +373,7 @@ final class TheSafecracker {
         }
 
         var touches: [UITouch] = []
-        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+        var fingerData: [FingerTouchData] = []
 
         for point in points {
             let windowPoint = window.convert(point, from: nil)
@@ -497,7 +388,7 @@ final class TheSafecracker {
                 return false
             }
             touches.append(touch)
-            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+            fingerData.append(FingerTouchData(
                 touch: touch, location: windowPoint, phase: .began
             ))
         }
@@ -521,17 +412,17 @@ final class TheSafecracker {
     /// Move all active touches to new screen points.
     /// points.count must equal activeTouches.count.
     @discardableResult
-    private func moveTouches(to points: [CGPoint]) -> Bool {
+    func moveTouches(to points: [CGPoint]) -> Bool {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
 
-        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+        var fingerData: [FingerTouchData] = []
 
         for (touch, point) in zip(activeTouches, points) {
             let windowPoint = window.convert(point, from: nil)
             SyntheticTouchFactory.setLocation(touch, point: windowPoint)
             SyntheticTouchFactory.setPhase(touch, phase: .moved)
-            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+            fingerData.append(FingerTouchData(
                 touch: touch, location: windowPoint, phase: .moved
             ))
         }
@@ -550,15 +441,15 @@ final class TheSafecracker {
     }
 
     /// Lift all active touches.
-    private func touchesUp() -> Bool {
+    func touchesUp() -> Bool {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
 
-        var fingerData: [IOHIDEventBuilder.FingerTouchData] = []
+        var fingerData: [FingerTouchData] = []
 
         for touch in activeTouches {
             SyntheticTouchFactory.setPhase(touch, phase: .ended)
             let windowPoint = touch.location(in: window)
-            fingerData.append(IOHIDEventBuilder.FingerTouchData(
+            fingerData.append(FingerTouchData(
                 touch: touch, location: windowPoint, phase: .ended
             ))
         }

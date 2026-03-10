@@ -47,7 +47,9 @@ final class AuthFailureTests: XCTestCase {
 
         server.onUnauthenticatedData = { _, _, respond in
             // Reject with authFailed
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authFailed("Invalid token. Retry without a token to request a fresh session."))) {
+            let authFailed = ResponseEnvelope(
+                message: .authFailed("Invalid token. Retry without a token to request a fresh session."))
+            if let data = try? JSONEncoder().encode(authFailed) {
                 respond(data)
             }
         }
@@ -84,7 +86,9 @@ final class AuthFailureTests: XCTestCase {
         }
 
         server.onUnauthenticatedData = { _, _, respond in
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authFailed("Invalid token. Retry without a token to request a fresh session."))) {
+            let authFailed = ResponseEnvelope(
+                message: .authFailed("Invalid token. Retry without a token to request a fresh session."))
+            if let data = try? JSONEncoder().encode(authFailed) {
                 respond(data)
             }
         }

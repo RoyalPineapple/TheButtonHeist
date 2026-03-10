@@ -2,6 +2,12 @@
 #if DEBUG
 import UIKit
 
+private typealias RawPointerFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
+private typealias IntFn = @convention(c) (AnyObject, Selector, Int) -> Void
+private typealias BoolFn = @convention(c) (AnyObject, Selector, Bool) -> Void
+private typealias DoubleFn = @convention(c) (AnyObject, Selector, Double) -> Void
+private typealias PointBoolFn = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
+
 extension TheSafecracker {
 
     /// Factory for creating synthetic UITouch instances using private APIs.
@@ -35,8 +41,7 @@ extension TheSafecracker {
                 return
             }
             if let imp = touch.method(for: selector) {
-                typealias Fn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
-                unsafeBitCast(imp, to: Fn.self)(touch, selector, event)
+                unsafeBitCast(imp, to: RawPointerFn.self)(touch, selector, event)
             }
         }
 
@@ -54,8 +59,7 @@ extension TheSafecracker {
             let sel = NSSelectorFromString(selector)
             guard object.responds(to: sel) else { return }
             if let imp = object.method(for: sel) {
-                typealias Fn = @convention(c) (AnyObject, Selector, Int) -> Void
-                unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+                unsafeBitCast(imp, to: IntFn.self)(object, sel, value)
             }
         }
 
@@ -63,8 +67,7 @@ extension TheSafecracker {
             let sel = NSSelectorFromString(selector)
             guard object.responds(to: sel) else { return }
             if let imp = object.method(for: sel) {
-                typealias Fn = @convention(c) (AnyObject, Selector, Bool) -> Void
-                unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+                unsafeBitCast(imp, to: BoolFn.self)(object, sel, value)
             }
         }
 
@@ -72,8 +75,7 @@ extension TheSafecracker {
             let sel = NSSelectorFromString(selector)
             guard object.responds(to: sel) else { return }
             if let imp = object.method(for: sel) {
-                typealias Fn = @convention(c) (AnyObject, Selector, Double) -> Void
-                unsafeBitCast(imp, to: Fn.self)(object, sel, value)
+                unsafeBitCast(imp, to: DoubleFn.self)(object, sel, value)
             }
         }
 
@@ -84,8 +86,7 @@ extension TheSafecracker {
                 return
             }
             if let imp = touch.method(for: selector) {
-                typealias Fn = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
-                unsafeBitCast(imp, to: Fn.self)(touch, selector, point, resetPrevious)
+                unsafeBitCast(imp, to: PointBoolFn.self)(touch, selector, point, resetPrevious)
             }
         }
     }
