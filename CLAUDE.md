@@ -9,7 +9,7 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 | File | Purpose |
 |------|---------|
 | `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
-| `Project.swift` | Root project: TheScore, TheInsideJob, TheGetaway, ButtonHeist frameworks + tests |
+| `Project.swift` | Root project: TheScore, TheInsideJob, ButtonHeist frameworks + tests |
 | `TestApp/Project.swift` | Demo apps: AccessibilityTestApp (SwiftUI) and UIKitTestApp (UIKit) |
 | `Tuist.swift` | Tuist configuration (default) |
 | `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
@@ -79,7 +79,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 ```
 
-Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob, TheGetaway, and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
+Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
 
 ### 3. Install and launch
 
@@ -118,7 +118,6 @@ Before pushing any commit, verify the following:
 - **All targets must build successfully.** Run the full build:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheGetaway -destination 'generic/platform=iOS' build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination 'generic/platform=iOS' build
   ```

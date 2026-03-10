@@ -42,20 +42,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E65BBC0E48B5E27C1F1B784F"
-               BuildableName = "TheGetaway.framework"
-               BlueprintName = "TheGetaway"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "DE504387EAB6C70F9E30849E"
                BuildableName = "TheScore.framework"
                BlueprintName = "TheScore"
