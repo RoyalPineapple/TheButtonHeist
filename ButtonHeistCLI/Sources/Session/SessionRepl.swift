@@ -214,11 +214,11 @@ final class ReplSession {
 
     /// Aliases that expand to a command + default parameter (e.g. "copy" → edit_action with action=copy).
     private nonisolated static let compoundAliases: [String: (command: String, params: [String: String])] = [
-        "copy": (TheFence.Command.editAction.rawValue, ["action": "copy"]),
-        "paste": (TheFence.Command.editAction.rawValue, ["action": "paste"]),
-        "cut": (TheFence.Command.editAction.rawValue, ["action": "cut"]),
-        "select": (TheFence.Command.editAction.rawValue, ["action": "select"]),
-        "select_all": (TheFence.Command.editAction.rawValue, ["action": "selectAll"]),
+        "copy": (TheFence.Command.editAction.rawValue, ["action": EditAction.copy.rawValue]),
+        "paste": (TheFence.Command.editAction.rawValue, ["action": EditAction.paste.rawValue]),
+        "cut": (TheFence.Command.editAction.rawValue, ["action": EditAction.cut.rawValue]),
+        "select": (TheFence.Command.editAction.rawValue, ["action": EditAction.select.rawValue]),
+        "select_all": (TheFence.Command.editAction.rawValue, ["action": EditAction.selectAll.rawValue]),
     ]
 
     private nonisolated static let directionWords: Set<String> = [

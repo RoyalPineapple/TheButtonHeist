@@ -27,14 +27,16 @@ graph TD
             List["list"]
             Activate["activate"]
             Action["action (activate/increment/decrement/custom)"]
-            Scroll["scroll / scroll-to-visible / scroll-to-edge"]
-            Touch["touch (tap/longpress/swipe/drag/ - pinch/rotate/two-finger-tap/ - draw-path/draw-bezier)"]
+            Scroll["scroll / scroll_to_visible / scroll_to_edge"]
+            Touch["touch (one_finger_tap/long_press/swipe/drag/ - pinch/rotate/two_finger_tap/ - draw_path/draw_bezier)"]
             TypeCmd["type"]
             Screenshot["screenshot"]
+            GetInterface["get_interface"]
+            WaitForIdle["wait_for_idle"]
             Record["record"]
-            StopRec["stop-recording"]
-            TextEdit["copy/paste/cut/select/select-all"]
-            Dismiss["dismiss-keyboard"]
+            StopRec["stop_recording"]
+            TextEdit["copy/paste/cut/select/select_all"]
+            Dismiss["dismiss_keyboard"]
             Session["session (ReplSession)"]
             Watch["watch (WatchStream)"]
         end
@@ -53,6 +55,8 @@ graph TD
     Touch --> Direct
     TypeCmd --> Direct
     Screenshot --> Direct
+    GetInterface --> Direct
+    WaitForIdle --> Direct
     Record --> Direct
     StopRec --> Direct
     TextEdit --> Direct
