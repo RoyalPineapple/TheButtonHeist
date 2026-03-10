@@ -66,14 +66,21 @@ public final class TheHandoff {
         return Self.persistentDriverId
     }
 
-    private static let driverIdKey = "com.buttonheist.driver-id"
+    private static let driverIdFile: URL = {
+        let configDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/buttonheist", isDirectory: true)
+        return configDir.appendingPathComponent("driver-id")
+    }()
 
     private static let persistentDriverId: String = {
-        if let existing = UserDefaults.standard.string(forKey: driverIdKey), !existing.isEmpty {
+        let fileURL = driverIdFile
+        if let existing = try? String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+           !existing.isEmpty {
             return existing
         }
         let generated = UUID().uuidString.lowercased()
-        UserDefaults.standard.set(generated, forKey: driverIdKey)
+        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? generated.write(to: fileURL, atomically: true, encoding: .utf8)
         return generated
     }()
 
