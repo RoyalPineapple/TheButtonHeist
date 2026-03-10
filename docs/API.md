@@ -387,6 +387,8 @@ public var onAuthApproved: ((String?) -> Void)?
 
 Called when the connection is approved (via token match or on-device UI). For driver connections, the token is provided so the client can store it for future connections. For observer connections, the token is `nil`. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 
+> **Note:** These callbacks are on `TheMastermind`. At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`) instead of individual properties. See [DeviceConnecting](#deviceconnecting) and [DeviceDiscovering](#devicediscovering).
+
 ##### onSessionLocked
 
 ```swift
@@ -654,7 +656,7 @@ public enum FenceError: Error, LocalizedError
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed to `onDisconnected` callbacks on `DeviceConnection`, `TheWheelman`, and `TheMastermind`.
+Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection` and to `onDisconnected` callbacks on `TheMastermind`.
 
 #### Cases
 
@@ -758,7 +760,7 @@ Specialized accessibility actions. For general element interaction, use `activat
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "4.0"  // Protocol v4.0 with envelope correlation and watch mode
+public let protocolVersion = "5.0"  // Protocol v5.0 with envelope correlation, watch mode, and TLS transport
 ```
 
 ### ConnectionState
@@ -991,7 +993,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "4.0")
+- `protocolVersion: String` - Protocol version (e.g., "5.0")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name

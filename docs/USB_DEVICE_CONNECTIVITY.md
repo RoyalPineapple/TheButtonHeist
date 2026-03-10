@@ -22,7 +22,7 @@ When an iOS device is connected via USB and recognized by Xcode/CoreDevice:
 
 ### Automatic Discovery
 
-> **Note:** `USBDeviceDiscovery` (in TheWheelman framework) is defined but not currently wired into `TheMastermind`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
+> **Note:** `USBDeviceDiscovery` (in the ButtonHeist framework) is defined but not currently wired into `TheMastermind`. USB devices are discovered via Bonjour over the CoreDevice IPv6 tunnel — no separate USB discovery step is needed.
 
 The `USBDeviceDiscovery` class implements this flow:
 

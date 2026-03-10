@@ -153,7 +153,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"4.0"` (envelope correlation + watch mode)
+- **Protocol version:** `"5.0"` (envelope correlation + watch mode + TLS transport)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with standard `JSONEncoder`/`JSONDecoder`
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
@@ -182,7 +182,7 @@ classDiagram
 ### LOW PRIORITY
 
 **Protocol version is a string, not a numeric**
-- `protocolVersion = "4.0"` - no formal version comparison logic exists
+- `protocolVersion = "5.0"` - no formal version comparison logic exists
 - Clients and servers don't negotiate or validate versions
 - If a version mismatch occurs, messages may silently fail to decode
 

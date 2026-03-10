@@ -40,8 +40,10 @@ final class AuthFailureTests: XCTestCase {
         conn.isConnected = true
 
         var authFailedReason: String?
-        conn.onAuthFailed = { reason in
-            authFailedReason = reason
+        conn.onEvent = { event in
+            if case .message(.authFailed(let reason), _) = event {
+                authFailedReason = reason
+            }
         }
 
         try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
@@ -56,11 +58,15 @@ final class AuthFailureTests: XCTestCase {
         conn.isConnected = true
 
         let callOrder = CallOrder()
-        conn.onAuthFailed = { _ in
-            callOrder.append("authFailed")
-        }
-        conn.onDisconnected = { _ in
-            callOrder.append("disconnected")
+        conn.onEvent = { event in
+            switch event {
+            case .message(.authFailed, _):
+                callOrder.append("authFailed")
+            case .disconnected:
+                callOrder.append("disconnected")
+            default:
+                break
+            }
         }
 
         try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))

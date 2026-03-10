@@ -52,8 +52,10 @@ final class AuthFlowIntegrationTests: XCTestCase {
         conn.isConnected = true
 
         var approvedToken: String?
-        conn.onAuthApproved = { token in
-            approvedToken = token
+        conn.onEvent = { event in
+            if case .message(.authApproved(let payload), _) = event {
+                approvedToken = payload.token
+            }
         }
 
         let approvalToken = "auto-generated-uuid-token"
@@ -70,9 +72,16 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         var connectedFired = false
         var receivedInfo: ServerInfo?
-        conn.onAuthApproved = { _ in }
-        conn.onServerInfo = { info in receivedInfo = info }
-        conn.onConnected = { connectedFired = true }
+        conn.onEvent = { event in
+            switch event {
+            case .connected:
+                connectedFired = true
+            case .message(.info(let info), _):
+                receivedInfo = info
+            default:
+                break
+            }
+        }
 
         // Simulate approval then info (the normal success flow)
         try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: "new-token"))))
@@ -88,7 +97,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         )
         try conn.handleMessage(encode(.info(info)))
 
-        XCTAssertTrue(connectedFired, "onConnected should fire after receiving info")
+        XCTAssertTrue(connectedFired, "onEvent(.connected) should fire after receiving info")
         XCTAssertEqual(receivedInfo?.appName, "TestApp")
     }
 
@@ -99,8 +108,16 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         var authFailedReason: String?
         var disconnectReason: DisconnectReason?
-        conn.onAuthFailed = { reason in authFailedReason = reason }
-        conn.onDisconnected = { reason in disconnectReason = reason }
+        conn.onEvent = { event in
+            switch event {
+            case .message(.authFailed(let reason), _):
+                authFailedReason = reason
+            case .disconnected(let reason):
+                disconnectReason = reason
+            default:
+                break
+            }
+        }
 
         try conn.handleMessage(encode(.authFailed("Connection denied by user")))
 
