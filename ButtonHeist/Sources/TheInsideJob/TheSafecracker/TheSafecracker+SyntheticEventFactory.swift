@@ -2,6 +2,9 @@
 #if DEBUG
 import UIKit
 
+private typealias AddTouchFunc = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void
+private typealias SetHIDFunc = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
+
 extension TheSafecracker {
 
     /// Factory for creating and manipulating UIEvent instances for touch injection.
@@ -33,7 +36,6 @@ extension TheSafecracker {
                 return
             }
             if let imp = (event as NSObject).method(for: selector) {
-                typealias AddTouchFunc = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void
                 let function = unsafeBitCast(imp, to: AddTouchFunc.self)
                 function(event, selector, touch, delayed)
             }
@@ -46,7 +48,6 @@ extension TheSafecracker {
                 return
             }
             if let imp = (event as NSObject).method(for: selector) {
-                typealias SetHIDFunc = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
                 let function = unsafeBitCast(imp, to: SetHIDFunc.self)
                 function(event, selector, hidEvent)
             }

@@ -82,6 +82,12 @@ public final class TheMastermind {
     }
 
     private func wireUpHandoff() {
+        wireUpDiscoveryCallbacks()
+        wireUpConnectionCallbacks()
+        wireUpMessageCallbacks()
+    }
+
+    private func wireUpDiscoveryCallbacks() {
         handoff.onDeviceFound = { [weak self] device in
             guard let self else { return }
             self.discoveredDevices = self.handoff.discoveredDevices
@@ -94,7 +100,9 @@ public final class TheMastermind {
             self.discoveredDevices = self.handoff.discoveredDevices
             self.onDeviceLost?(device)
         }
+    }
 
+    private func wireUpConnectionCallbacks() {
         handoff.onConnected = { [weak self] info in
             guard let self else { return }
             self.connectionState = .connected
@@ -119,6 +127,30 @@ public final class TheMastermind {
             self.onDisconnected?(reason)
         }
 
+        handoff.onError = { [weak self] message in
+            guard let self else { return }
+            self.connectionState = .failed(message)
+        }
+
+        handoff.onAuthApproved = { [weak self] approvedToken in
+            guard let self else { return }
+            self.onAuthApproved?(approvedToken)
+        }
+
+        handoff.onSessionLocked = { [weak self] payload in
+            guard let self else { return }
+            self.connectionState = .failed(payload.message)
+            self.onSessionLocked?(payload)
+        }
+
+        handoff.onAuthFailed = { [weak self] reason in
+            guard let self else { return }
+            self.connectionState = .failed(reason)
+            self.onAuthFailed?(reason)
+        }
+    }
+
+    private func wireUpMessageCallbacks() {
         handoff.onInterface = { [weak self] payload, requestId in
             guard let self else { return }
             if let requestId, let continuation = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
@@ -162,28 +194,6 @@ public final class TheMastermind {
             guard let self else { return }
             self.isRecording = false
             self.onRecordingError?(message)
-        }
-
-        handoff.onError = { [weak self] message in
-            guard let self else { return }
-            self.connectionState = .failed(message)
-        }
-
-        handoff.onAuthApproved = { [weak self] approvedToken in
-            guard let self else { return }
-            self.onAuthApproved?(approvedToken)
-        }
-
-        handoff.onSessionLocked = { [weak self] payload in
-            guard let self else { return }
-            self.connectionState = .failed(payload.message)
-            self.onSessionLocked?(payload)
-        }
-
-        handoff.onAuthFailed = { [weak self] reason in
-            guard let self else { return }
-            self.connectionState = .failed(reason)
-            self.onAuthFailed?(reason)
         }
 
         handoff.onInteraction = { [weak self] event in

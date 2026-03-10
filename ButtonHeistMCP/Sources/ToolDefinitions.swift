@@ -21,7 +21,11 @@ enum ToolDefinitions {
 
     static let getInterface = Tool(
         name: "get_interface",
-        description: "Get the current UI element hierarchy from the connected iOS device. Returns a structured list of all accessible elements with their order, label, value, identifier, traits, frame, activation point, and available actions.",
+        description: """
+            Get the current UI element hierarchy from the connected iOS device. Returns a structured list \
+            of all accessible elements with their order, label, value, identifier, traits, frame, \
+            activation point, and available actions.
+            """,
         inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
@@ -46,7 +50,10 @@ enum ToolDefinitions {
 
     static let typeText = Tool(
         name: "type_text",
-        description: "Type text and/or delete characters via keyboard injection. Optionally target an element to focus it first and read back the resulting value.",
+        description: """
+            Type text and/or delete characters via keyboard injection. Optionally target an element \
+            to focus it first and read back the resulting value.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
@@ -61,7 +68,10 @@ enum ToolDefinitions {
 
     static let swipe = Tool(
         name: "swipe",
-        description: "Swipe on an element or between coordinates. For element-based: provide identifier/order and direction. For coordinate-based: provide startX/startY and endX/endY.",
+        description: """
+            Swipe on an element or between coordinates. For element-based: provide identifier/order \
+            and direction. For coordinate-based: provide startX/startY and endX/endY.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
@@ -146,7 +156,10 @@ enum ToolDefinitions {
 
     static let scroll = Tool(
         name: "scroll",
-        description: "Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor of the specified element, or the main scroll view if no element is specified.",
+        description: """
+            Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor \
+            of the specified element, or the main scroll view if no element is specified.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
@@ -216,7 +229,10 @@ enum ToolDefinitions {
             "properties": [
                 "type": [
                     "type": "string",
-                    "enum": .array(["one_finger_tap", "drag", "long_press", "pinch", "rotate", "two_finger_tap", "draw_path", "draw_bezier"].map { .string($0) }),
+                    "enum": .array([
+                        "one_finger_tap", "drag", "long_press", "pinch",
+                        "rotate", "two_finger_tap", "draw_path", "draw_bezier",
+                    ].map { .string($0) }),
                     "description": "Gesture type",
                 ],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
