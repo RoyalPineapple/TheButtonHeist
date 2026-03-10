@@ -2,7 +2,7 @@
 
 **Version**: 5.0
 
-This document specifies the communication protocol between TheInsideJob (iOS) and clients (TheGetaway, CLI, Python scripts).
+This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
 ## Transport
 

@@ -32,7 +32,7 @@ flowchart LR
 
 ## 3) Architecture Overview (components and layers)
 
-The system is layered into six tiers: a shared protocol layer (TheScore), a transport layer (TheGetaway), an iOS server layer (TheInsideJob and crew), a macOS client layer (TheMastermind), a command dispatch layer (TheFence), and consumer interfaces (CLI/MCP). All component names follow a heist crew metaphor where each member has a single, well-defined responsibility.
+The system is layered into five tiers: a shared protocol layer (TheScore), an iOS server layer (TheInsideJob and crew, including TLS transport), a macOS client layer (TheMastermind), a command dispatch layer (TheFence), and consumer interfaces (CLI/MCP). All component names follow a heist crew metaphor where each member has a single, well-defined responsibility.
 
 ```mermaid
 flowchart TB
@@ -67,7 +67,6 @@ flowchart TB
 
     subgraph SharedLayer["Shared Protocol"]
         Score["TheScore\nWire Types"]
-        Getaway["TheGetaway\nServer Transport"]
     end
 
     MCP --> Fence
@@ -76,7 +75,7 @@ flowchart TB
     Mastermind --> Handoff
     Handoff --> Discovery
     Handoff --> Connection
-    Connection <-->|TCP| SocketServer
+    Connection <-->|TLS| SocketServer
     SocketServer --> InsideJob
     InsideJob --> Bagman
     InsideJob --> Safecracker
@@ -85,16 +84,15 @@ flowchart TB
     InsideJob --> Fingerprints
     Score -.->|used by| InsideJob
     Score -.->|used by| Mastermind
-    Getaway -.->|used by| SocketServer
+    Score -.->|used by| SocketServer
 ```
 
 ## 4) Module and Package Relationships
 
-The project comprises 8 modules with a strict, acyclic dependency graph. TheScore sits at the foundation with zero dependencies, TheGetaway adds transport on top of it, and the iOS and macOS sides branch from there. CLI and MCP are thin wrappers that depend only on TheButtonHeist (which re-exports TheScore).
+The project comprises 7 modules with a strict, acyclic dependency graph. TheScore sits at the foundation with zero dependencies, TheInsideJob builds the iOS server (including TLS transport) on top of it, and TheButtonHeist provides the macOS client. CLI and MCP are thin wrappers that depend only on TheButtonHeist (which re-exports TheScore).
 
 - `TheScore` (4 files, 1107 LOC) -- shared wire protocol, no dependencies
-- `TheGetaway` (2 files, 565 LOC) -- TCP server + Bonjour, imports TheScore
-- `TheInsideJob` (16 files, 4324 LOC) -- iOS server, imports TheScore + TheGetaway + AccessibilitySnapshotParser
+- `TheInsideJob` (19 files, ~4800 LOC) -- iOS server + TLS transport, imports TheScore + AccessibilitySnapshotParser + X509/Crypto
 - `TheButtonHeist` (10 files, 2609 LOC) -- macOS client, @_exported import TheScore
 - `ButtonHeistCLI` (21 files, 1925 LOC) -- CLI, imports TheButtonHeist + ArgumentParser
 - `ButtonHeistMCP` (2 files, 454 LOC) -- MCP server, imports TheButtonHeist + MCP SDK
@@ -102,7 +100,7 @@ The project comprises 8 modules with a strict, acyclic dependency graph. TheScor
 ```mermaid
 flowchart BT
     Score["TheScore\nShared Protocol"]
-    Getaway["TheGetaway\nTransport"]
+    Transport["Transport Layer\n(in TheInsideJob)"]
     InsideJob["TheInsideJob\niOS Server"]
     ButtonHeist["TheButtonHeist\nmacOS Client"]
     CLI["ButtonHeistCLI"]
@@ -321,7 +319,7 @@ The system has 12 named components ("crew members"), each with a single focused 
 - `TheMastermind` -- macOS observable coordinator: @Observable state, async `waitForResponse<T>`, requestId correlation
 - `TheFence` -- command dispatch facade: routes 29 commands, auto-discovery/connection/reconnect, `sendAndAwait<T>` pattern
 - `TheHandoff` -- connection lifecycle: Bonjour discovery, TCP connect, keepalive (ping 3s), auto-reconnect (60 attempts at 1s)
-- `TheGetaway` -- TCP transport: `SimpleSocketServer` (NWListener, max 5 connections, 30 msg/s rate limit, 10MB buffer, NDJSON framing)
+- *Transport layer* (in TheInsideJob) -- TLS transport: `SimpleSocketServer` (NWListener, max 5 connections, 30 msg/s rate limit, 10MB buffer, NDJSON framing)
 
 ## 11) Integrations and External Systems
 

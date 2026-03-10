@@ -9,7 +9,7 @@
 | TheScore | Framework | 4 | 1,111 | Shared wire protocol types and message definitions |
 | TheButtonHeist | Framework | 12 | 2,769 | macOS client: TheFence (3 files), TheMastermind, TheHandoff (TLS-aware) |
 | TheInsideJob | Framework | 19 | 4,460 | iOS server: accessibility, gestures, recording, auth, TLS config |
-| TheGetaway | Framework | 3 | 891 | TLS-encrypted TCP server/client transport and Bonjour |
+| *(Transport layer)* | *(merged)* | — | — | *TLS transport (TLSIdentity, ServerTransport, SimpleSocketServer) merged into TheInsideJob* |
 | ButtonHeistCLI | Executable | 21 | 1,932 | CLI tool with 29 commands |
 | ButtonHeistMCP | Executable | 2 | 470 | MCP server with 14 AI agent tools |
 | TestApp | App | 28 | 1,954 | SwiftUI + UIKit demo apps |
@@ -102,30 +102,26 @@
 
 **Public API**: TheInsideJob (configure, start, stop, notifyChange, startPolling, stopPolling)
 
-**Dependencies**: TheScore, TheGetaway (TLSIdentity, ServerTransport), AccessibilitySnapshotParser
+**Dependencies**: TheScore, AccessibilitySnapshotParser, X509, Crypto, SwiftASN1
 
 ---
 
-### TheGetaway (Transport Layer)
+### Transport Layer (in TheInsideJob)
 
-**Purpose**: Server-side networking with TLS encryption. TCP server + Bonjour advertisement + TLS identity management. 3 files.
+**Purpose**: Server-side networking with TLS encryption. TCP server + Bonjour advertisement + TLS identity management. Formerly a separate module (TheGetaway), now merged into TheInsideJob.
 
 **Key Files**:
-- `ButtonHeist/Sources/TheGetaway/TLSIdentity.swift` - Self-signed cert generation, Keychain persistence, fingerprint computation (311 lines)
-- `ButtonHeist/Sources/TheGetaway/ServerTransport.swift` - TCP + TLS + Bonjour wrapper, publishes certfp in TXT record
-- `ButtonHeist/Sources/TheGetaway/SimpleSocketServer.swift` - Actor-isolated NWListener with TLS parameter support
+- `ButtonHeist/Sources/TheInsideJob/TLSIdentity.swift` - Self-signed cert generation, Keychain persistence, fingerprint computation, certificate expiry tracking
+- `ButtonHeist/Sources/TheInsideJob/ServerTransport.swift` - TCP + TLS + Bonjour wrapper, publishes certfp in TXT record
+- `ButtonHeist/Sources/TheInsideJob/SimpleSocketServer.swift` - Actor-isolated NWListener with TLS parameter support
 
 **Components**:
 
 | Component | Responsibility |
 |-----------|---------------|
-| **TLSIdentity** | Actor: ECDSA P-256 X.509 cert generation, Keychain getOrCreate, ephemeral fallback, SHA-256 fingerprint, NWParameters for TLS 1.3. |
+| **TLSIdentity** | Actor: ECDSA P-256 X.509 cert generation, Keychain getOrCreate, ephemeral fallback, SHA-256 fingerprint, NWParameters for TLS 1.3, certificate expiry tracking with auto-renewal. |
 | **ServerTransport** | Combined TCP + TLS + Bonjour. Injects TLSIdentity NWParameters into SimpleSocketServer. Publishes certfp and transport=tls in Bonjour TXT record. |
 | **SimpleSocketServer** | NWListener actor. Max 5 connections, NDJSON framing, 30 msg/s rate limit, auth gating, 10MB buffer. Accepts optional TLS NWParameters. |
-
-**Public API**: TLSIdentity (getOrCreate, createEphemeral, delete, makeTLSParameters, computeFingerprint, fingerprint), TLSIdentityError, ServerTransport, SimpleSocketServer
-
-**Dependencies**: TheScore (buttonHeistServiceType), X509 (swift-certificates), Crypto (swift-crypto), SwiftASN1
 
 ---
 
@@ -205,9 +201,7 @@
 ```
 TheScore (shared, no dependencies)
   ↑
-TheGetaway (imports TheScore, X509, Crypto, SwiftASN1)
-  ↑
-TheInsideJob (imports TheScore, TheGetaway, AccessibilitySnapshotParser)
+TheInsideJob (imports TheScore, X509, Crypto, SwiftASN1, AccessibilitySnapshotParser)
 
 TheScore (shared)
   ↑
@@ -223,7 +217,7 @@ TestApp (embeds TheInsideJob + TheScore)
 
 | Pattern | Description | Modules |
 |---------|-------------|---------|
-| **TLS Transport Encryption** | End-to-end TLS 1.3 with self-signed ECDSA P-256 certificates and SHA-256 fingerprint pinning via Bonjour TXT records. No CA required. | TheGetaway, TheInsideJob, TheButtonHeist, TheScore |
+| **TLS Transport Encryption** | End-to-end TLS 1.3 with self-signed ECDSA P-256 certificates and SHA-256 fingerprint pinning via Bonjour TXT records. No CA required. | TheInsideJob, TheButtonHeist, TheScore |
 | **Heist Crew Metaphor** | Every component named after a heist role | All |
 | **Extension-Based File Splitting** | Large files decomposed into Type+Concern.swift extensions (TheFence 3 files, TheInsideJob 2, TheSafecracker 7, TheBagman 2) | TheButtonHeist, TheInsideJob |
 | **Protocol Symmetry** | TheScore types used identically on both sides | TheScore, TheButtonHeist, TheInsideJob |
