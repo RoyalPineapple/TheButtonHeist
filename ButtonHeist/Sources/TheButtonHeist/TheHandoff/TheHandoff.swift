@@ -47,7 +47,6 @@ public final class TheHandoff {
     // MARK: - Configuration
 
     public var token: String?
-    public var forceSession: Bool = false
     public var observeMode: Bool = false
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
@@ -125,7 +124,7 @@ public final class TheHandoff {
     public func connect(to device: DiscoveredDevice) {
         disconnect()
 
-        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: effectiveDriverId)
+        connection = DeviceConnection(device: device, token: token, driverId: effectiveDriverId)
         connection?.observeMode = observeMode
 
         connection?.onConnected = { [weak self] in

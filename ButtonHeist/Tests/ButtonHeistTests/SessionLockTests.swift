@@ -4,7 +4,6 @@ import TheGetaway
 @testable import ButtonHeist
 
 /// Tests for session locking behavior over real TCP connections.
-/// Validates that clients correctly handle sessionLocked messages and send forceSession.
 final class SessionLockTests: XCTestCase {
 
     private var server: SimpleSocketServer!
@@ -65,76 +64,6 @@ final class SessionLockTests: XCTestCase {
         await fulfillment(of: [clientConnected], timeout: 5.0)
         // DeviceConnection.handleMessage for .sessionLocked calls disconnect(), triggering server disconnect
         await fulfillment(of: [clientDisconnected], timeout: 5.0)
-    }
-
-    func testForceSessionSentInAuthPayload() async throws {
-        let port = try startServer()
-
-        let clientConnected = expectation(description: "client connected")
-        let forceSessionReceived = expectation(description: "forceSession received")
-
-        server.onClientConnected = { clientId in
-            clientConnected.fulfill()
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
-                self.server.send(data, to: clientId)
-            }
-        }
-
-        server.onUnauthenticatedData = { _, data, _ in
-            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
-                  case .authenticate(let payload) = envelope.message else {
-                XCTFail("Expected authenticate message")
-                return
-            }
-            XCTAssertEqual(payload.forceSession, true)
-            forceSessionReceived.fulfill()
-        }
-
-        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
-        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await ButtonHeistActor.run {
-            let conn = DeviceConnection(device: device, token: "test-token", forceSession: true)
-            self.deviceConnection = conn
-            conn.connect()
-        }
-
-        await fulfillment(of: [clientConnected], timeout: 5.0)
-        await fulfillment(of: [forceSessionReceived], timeout: 5.0)
-    }
-
-    func testNormalAuthDoesNotSendForceSession() async throws {
-        let port = try startServer()
-
-        let clientConnected = expectation(description: "client connected")
-        let authReceived = expectation(description: "auth received")
-
-        server.onClientConnected = { clientId in
-            clientConnected.fulfill()
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) {
-                self.server.send(data, to: clientId)
-            }
-        }
-
-        server.onUnauthenticatedData = { _, data, _ in
-            guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
-                  case .authenticate(let payload) = envelope.message else {
-                XCTFail("Expected authenticate message")
-                return
-            }
-            XCTAssertNil(payload.forceSession)
-            authReceived.fulfill()
-        }
-
-        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
-        let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
-        await ButtonHeistActor.run {
-            let conn = DeviceConnection(device: device, token: "test-token")
-            self.deviceConnection = conn
-            conn.connect()
-        }
-
-        await fulfillment(of: [clientConnected], timeout: 5.0)
-        await fulfillment(of: [authReceived], timeout: 5.0)
     }
 
     func testDriverIdSentInAuthPayload() async throws {

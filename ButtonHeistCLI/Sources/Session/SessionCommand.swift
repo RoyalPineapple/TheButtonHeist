@@ -35,9 +35,6 @@ struct SessionCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output format: human, json (default: human when interactive, json when piped)")
     var format: OutputFormat?
 
-    @Flag(name: .long, help: "Force-takeover session from another driver")
-    var force: Bool = false
-
     @Option(name: .long, help: "Auth token from a previous connection")
     var token: String?
 
@@ -49,7 +46,7 @@ struct SessionCommand: AsyncParsableCommand {
         let effectiveFormat = format ?? .auto
         let repl = ReplSession(deviceFilter: device,
                                connectionTimeout: timeout, format: effectiveFormat,
-                               force: force, token: token,
+                               token: token,
                                sessionTimeout: sessionTimeout)
         try await repl.run()
     }
