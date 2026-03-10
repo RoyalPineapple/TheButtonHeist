@@ -69,8 +69,6 @@ final class TheMuscle {
     var markClientAuthenticated: ((_ clientId: Int) -> Void)?
     var disconnectClient: ((_ clientId: Int) -> Void)?
     var onClientAuthenticated: ((_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-    /// Called during force-takeover to disconnect all clients from the evicted session
-    var disconnectClientsForSession: ((_ clientIds: [Int]) -> Void)?
     /// Called when the session active state changes (true = session claimed, false = released)
     var onSessionActiveChanged: ((_ isActive: Bool) -> Void)?
 
@@ -183,7 +181,7 @@ final class TheMuscle {
 
         // Token matches → authenticate and acquire session
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
-        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, forceSession: payload.forceSession == true, respond: respond) {
+        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
         }
 
@@ -218,7 +216,7 @@ final class TheMuscle {
 
         // UI-approved clients use the server's authToken — session check with that token
         let driverIdentity = effectiveDriverId(driverId: nil, token: authToken)
-        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, forceSession: false, respond: respond) {
+        if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
         }
 
@@ -329,8 +327,8 @@ final class TheMuscle {
     /// Session rules:
     /// - No active session → claim it
     /// - Active session, same driver → rejoin (cancel release timer)
-    /// - Active session, different driver → busy signal (no force takeover)
-    private func acquireSession(driverIdentity: String, clientId: Int, forceSession: Bool, respond: @escaping @Sendable (Data) -> Void) -> Bool {
+    /// - Active session, different driver → busy signal
+    private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) -> Bool {
         if let activeId = activeSessionDriverId {
             if driverIdentity == activeId {
                 // Same driver — allow, cancel any pending release timer

@@ -34,8 +34,8 @@ public enum FenceError: Error, LocalizedError {
         case .sessionLocked(let message):
             return """
                 Session locked: \(message)
-                  Another driver is currently connected. Wait for it to finish,
-                  or use --force to take over the session.
+                  Another driver is currently connected. Wait for it to disconnect
+                  or for the session to time out.
                 """
         case .authFailed(let message):
             return """
@@ -396,20 +396,17 @@ public final class TheFence {
     public struct Configuration {
         public var deviceFilter: String?
         public var connectionTimeout: TimeInterval
-        public var forceSession: Bool
         public var token: String?
         public var autoReconnect: Bool
 
         public init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
-            forceSession: Bool = false,
             token: String? = nil,
             autoReconnect: Bool = true
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
-            self.forceSession = forceSession
             self.token = token
             self.autoReconnect = autoReconnect
         }
@@ -429,7 +426,6 @@ public final class TheFence {
     public init(configuration: Configuration = .init()) {
         self.config = configuration
         self.client.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.client.forceSession = configuration.forceSession
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = true
         self.client.onAuthApproved = { [weak self] token in

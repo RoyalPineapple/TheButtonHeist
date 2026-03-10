@@ -158,9 +158,6 @@ public final class TheInsideJob {
         muscle.sendToClient = { [weak t] data, clientId in t?.send(data, to: clientId) }
         muscle.markClientAuthenticated = { [weak t] clientId in t?.markAuthenticated(clientId) }
         muscle.disconnectClient = { [weak t] clientId in t?.disconnect(clientId: clientId) }
-        muscle.disconnectClientsForSession = { [weak t] clientIds in
-            for clientId in clientIds { t?.disconnect(clientId: clientId) }
-        }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
