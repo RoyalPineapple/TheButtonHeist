@@ -55,11 +55,6 @@ public final class TheMastermind {
         set { handoff.token = newValue }
     }
 
-    public var forceSession: Bool {
-        get { handoff.forceSession }
-        set { handoff.forceSession = newValue }
-    }
-
     public var driverId: String? {
         get { handoff.driverId }
         set { handoff.driverId = newValue }

@@ -130,7 +130,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
 
         XCTAssertNil(device.simulatorUDID)
-        XCTAssertNil(device.tokenHash)
         XCTAssertNil(device.installationId)
         XCTAssertNil(device.instanceId)
         XCTAssertNil(device.sessionActive)
@@ -142,7 +141,6 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "test", name: "TestApp-iPhone#abc",
             endpoint: endpoint,
             simulatorUDID: "SIM-UUID",
-            tokenHash: "deadbeef",
             installationId: "install-1",
             displayDeviceName: "Chris's iPhone",
             instanceId: "my-instance",
@@ -150,7 +148,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         )
 
         XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
-        XCTAssertEqual(device.tokenHash, "deadbeef")
         XCTAssertEqual(device.installationId, "install-1")
         XCTAssertEqual(device.deviceName, "Chris's iPhone")
         XCTAssertEqual(device.instanceId, "my-instance")
@@ -258,7 +255,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "old",
             name: "AccessibilityTestApp#a18032ae",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "a18032ae"
         )
@@ -266,7 +263,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "new",
             name: "AccessibilityTestApp#841803ea",
             endpoint: endpoint,
-            tokenHash: "cafebabe",
+
             installationId: "install-1",
             instanceId: "841803ea"
         )
@@ -274,24 +271,23 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(oldDevice.discoveryIdentity, newDevice.discoveryIdentity)
     }
 
-    func testDiscoveryIdentityFallsBackToTokenHashForUnnamedAds() {
+    func testDiscoveryIdentityFallsBackToServiceIdWithoutInstallationId() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let firstDevice = DiscoveredDevice(
             id: "first",
             name: "AccessibilityTestApp#a18032ae",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
             instanceId: "a18032ae"
         )
         let secondDevice = DiscoveredDevice(
             id: "second",
             name: "AccessibilityTestApp#841803ea",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
             instanceId: "841803ea"
         )
 
-        XCTAssertEqual(firstDevice.discoveryIdentity, secondDevice.discoveryIdentity)
+        // Without installationId, each device gets a unique service-based identity
+        XCTAssertNotEqual(firstDevice.discoveryIdentity, secondDevice.discoveryIdentity)
     }
 
     func testDiscoveryRegistryDedupesSimulatorRelaunches() {
@@ -300,7 +296,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "a18032ae"
         )
@@ -308,7 +304,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#841803ea",
             name: "AccessibilityTestApp#841803ea",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "841803ea"
         )
@@ -330,7 +326,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "a18032ae"
         )
@@ -338,7 +334,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#841803ea",
             name: "AccessibilityTestApp#841803ea",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "841803ea"
         )
@@ -360,7 +356,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#a18032ae",
             name: "AccessibilityTestApp#a18032ae",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "a18032ae"
         )
@@ -368,7 +364,7 @@ final class DiscoveredDeviceTests: XCTestCase {
             id: "AccessibilityTestApp#841803ea",
             name: "AccessibilityTestApp#841803ea",
             endpoint: endpoint,
-            tokenHash: "deadbeef",
+
             installationId: "install-1",
             instanceId: "841803ea"
         )

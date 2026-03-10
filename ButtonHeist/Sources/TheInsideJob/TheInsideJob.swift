@@ -2,7 +2,6 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
-import CryptoKit
 import TheScore
 import TheGetaway
 import os.log
@@ -96,7 +95,7 @@ public final class TheInsideJob {
         isRunning = true
 
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Auth token: \(self.muscle.authToken)")
+        insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .sensitive)")
         if let instanceId {
             insideJobLogger.info("Instance ID: \(instanceId)")
         }
@@ -159,9 +158,6 @@ public final class TheInsideJob {
         muscle.sendToClient = { [weak t] data, clientId in t?.send(data, to: clientId) }
         muscle.markClientAuthenticated = { [weak t] clientId in t?.markAuthenticated(clientId) }
         muscle.disconnectClient = { [weak t] clientId in t?.disconnect(clientId: clientId) }
-        muscle.disconnectClientsForSession = { [weak t] clientIds in
-            for clientId in clientIds { t?.disconnect(clientId: clientId) }
-        }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
@@ -223,14 +219,9 @@ public final class TheInsideJob {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
-        // Token hash for pre-connection filtering (SHA256, first 8 bytes hex)
-        let tokenHash = SHA256.hash(data: Data(muscle.authToken.utf8))
-        let tokenHashPrefix = tokenHash.prefix(8).map { String(format: "%02x", $0) }.joined()
-
         transport?.advertise(
             serviceName: serviceName,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-            tokenHash: tokenHashPrefix,
             installationId: installationId,
             instanceId: effectiveInstanceId,
             additionalTXT: [
@@ -337,9 +328,23 @@ public final class TheInsideJob {
         case .touchTwoFingerTap(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawPath(target) }
+            guard target.points.count <= 10_000 else {
+                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)")
+                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
+                return
+            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) {
+                await self.theSafecracker.executeDrawPath(target)
+            }
         case .touchDrawBezier(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrawBezier(target) }
+            guard target.segments.count <= 1_000 else {
+                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many segments (max 1,000)")
+                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
+                return
+            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) {
+                await self.theSafecracker.executeDrawBezier(target)
+            }
         case .typeText(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         case .scroll(let target):

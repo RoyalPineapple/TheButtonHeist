@@ -41,7 +41,6 @@ struct ButtonHeistMCPServer {
             configuration: .init(
                 deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
                 connectionTimeout: 30,
-                forceSession: ProcessInfo.processInfo.environment["BUTTONHEIST_FORCE"] == "1",
                 token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
                 autoReconnect: true
             )

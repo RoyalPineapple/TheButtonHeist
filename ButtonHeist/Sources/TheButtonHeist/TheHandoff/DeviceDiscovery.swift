@@ -184,14 +184,12 @@ public final class DeviceDiscovery {
         }()
 
         var simUDID: String?
-        var tokenHash: String?
         var installationId: String?
         var displayDeviceName: String?
         var instanceId: String?
         var sessionActive: Bool?
         if let txtRecord {
             simUDID = txtRecord["simudid"]
-            tokenHash = txtRecord["tokenhash"]
             installationId = txtRecord["installationid"]
             displayDeviceName = txtRecord["devicename"]
             instanceId = txtRecord["instanceid"]
@@ -205,7 +203,6 @@ public final class DeviceDiscovery {
             name: name,
             endpoint: result.endpoint,
             simulatorUDID: simUDID,
-            tokenHash: tokenHash,
             installationId: installationId,
             displayDeviceName: displayDeviceName,
             instanceId: instanceId,

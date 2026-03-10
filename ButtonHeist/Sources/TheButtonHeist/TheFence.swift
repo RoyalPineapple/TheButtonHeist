@@ -34,8 +34,8 @@ public enum FenceError: Error, LocalizedError {
         case .sessionLocked(let message):
             return """
                 Session locked: \(message)
-                  Another driver is currently connected. Wait for it to finish,
-                  or use --force to take over the session.
+                  Another driver is currently connected. Wait for it to disconnect
+                  or for the session to time out.
                 """
         case .authFailed(let message):
             return """
@@ -396,20 +396,17 @@ public final class TheFence {
     public struct Configuration {
         public var deviceFilter: String?
         public var connectionTimeout: TimeInterval
-        public var forceSession: Bool
         public var token: String?
         public var autoReconnect: Bool
 
         public init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
-            forceSession: Bool = false,
             token: String? = nil,
             autoReconnect: Bool = true
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
-            self.forceSession = forceSession
             self.token = token
             self.autoReconnect = autoReconnect
         }
@@ -429,7 +426,6 @@ public final class TheFence {
     public init(configuration: Configuration = .init()) {
         self.config = configuration
         self.client.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.client.forceSession = configuration.forceSession
         self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
         self.client.autoSubscribe = true
         self.client.onAuthApproved = { [weak self] token in
@@ -546,6 +542,7 @@ public final class TheFence {
             try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
+            try validateOutputPath(outputPath)
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
@@ -824,6 +821,7 @@ public final class TheFence {
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
+            try validateOutputPath(outputPath)
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
@@ -888,6 +886,13 @@ public final class TheFence {
         if let value = value as? Int { return Double(value) }
         if let value = value as? String { return Double(value) }
         return nil
+    }
+
+    private func validateOutputPath(_ path: String) throws {
+        let components = path.components(separatedBy: "/")
+        guard !components.contains("..") else {
+            throw FenceError.invalidRequest("Output path must not contain path traversal")
+        }
     }
 
     private func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {

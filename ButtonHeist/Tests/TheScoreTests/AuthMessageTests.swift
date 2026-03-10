@@ -277,43 +277,6 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
-    func testAuthenticateWithForceSession() throws {
-        let payload = AuthenticatePayload(token: "my-token", forceSession: true)
-        let message = ClientMessage.authenticate(payload)
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .authenticate(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.token, "my-token")
-            XCTAssertEqual(decodedPayload.forceSession, true)
-        } else {
-            XCTFail("Expected authenticate with forceSession")
-        }
-    }
-
-    func testAuthenticateWithoutForceSessionBackwardCompat() throws {
-        // Old-style JSON without forceSession should still decode
-        let json = """
-        {"authenticate":{"_0":{"token":"old-client"}}}
-        """
-        let data = Data(json.utf8)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        if case .authenticate(let payload) = decoded {
-            XCTAssertEqual(payload.token, "old-client")
-            XCTAssertNil(payload.forceSession)
-        } else {
-            XCTFail("Expected authenticate from old-style JSON")
-        }
-    }
-
-    func testAuthenticateNilForceSessionOmittedFromJSON() throws {
-        let payload = AuthenticatePayload(token: "test")
-        let data = try JSONEncoder().encode(payload)
-        let json = String(data: data, encoding: .utf8)!
-        // forceSession is nil so should not appear in output
-        XCTAssertFalse(json.contains("forceSession"))
-    }
-
     // MARK: - Driver ID
 
     func testAuthenticateWithDriverId() throws {

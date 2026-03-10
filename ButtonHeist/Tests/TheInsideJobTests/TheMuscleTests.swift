@@ -34,7 +34,7 @@ final class TheMuscleTests: XCTestCase {
         muscle.onClientAuthenticated = { [unowned self] clientId, respond in
             self.authenticatedCallbacks.append((clientId, respond))
         }
-        muscle.disconnectClientsForSession = { _ in }
+
     }
 
     override func tearDown() {
@@ -46,7 +46,7 @@ final class TheMuscleTests: XCTestCase {
     // MARK: - Encoding helpers
 
     private func encodeAuth(token: String, driverId: String? = nil) -> Data {
-        let payload = AuthenticatePayload(token: token, forceSession: nil, driverId: driverId)
+        let payload = AuthenticatePayload(token: token, driverId: driverId)
         let message = ClientMessage.authenticate(payload)
         // swiftlint:disable:next force_try
         return try! JSONEncoder().encode(message)
@@ -180,7 +180,6 @@ final class TheMuscleTests: XCTestCase {
         muscle.markClientAuthenticated = { [unowned self] clientId in self.markedAuthenticated.append(clientId) }
         muscle.disconnectClient = { [unowned self] clientId in self.disconnectedClients.append(clientId) }
         muscle.onClientAuthenticated = { [unowned self] clientId, respond in self.authenticatedCallbacks.append((clientId, respond)) }
-        muscle.disconnectClientsForSession = { _ in }
 
         // Authenticate a client
         let data = encodeAuth(token: "test-token")
