@@ -171,6 +171,18 @@ Before pushing any commit, verify the following:
 - Keep commits atomic and focused on a single logical change.
 - **Squash merge PRs into main.** When merging a PR to `main`, use squash merge with a single descriptive commit message that summarizes the entire change.
 
+## Strict Build Policy
+
+All targets build with **warnings as errors** (`SWIFT_TREAT_WARNINGS_AS_ERRORS = YES`) and **strict concurrency** (`SWIFT_STRICT_CONCURRENCY = complete`). SwiftLint runs on every build via a build phase. All three must pass cleanly — no `// swiftlint:disable`, no `@preconcurrency import`, no `nonisolated(unsafe)` escape hatches, no `#warning` left behind.
+
+The goal is to use the features of the language — structured concurrency, Sendable checking, actor isolation — rather than silencing the compiler. If a warning surfaces, fix the design, don't suppress the diagnostic. If SwiftLint flags a pattern, refactor to satisfy the rule rather than disabling it inline.
+
+When adding or changing code:
+- Fix any new warnings introduced by your change before committing.
+- Do not raise the SwiftLint `disabled_rules` list or add file-level disable comments.
+- Do not weaken the concurrency strictness level for any target.
+- If an upstream dependency produces warnings, isolate it behind a wrapper rather than lowering the project settings.
+
 ## Versioning and Releases
 
 - **SemVer** (MAJOR.MINOR.PATCH). Current baseline: 0.0.1. See `docs/VERSIONING.md` for rules.
