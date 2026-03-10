@@ -30,28 +30,28 @@ extension TheFence {
 
     // MARK: - Handler: Gestures
 
-    func handleGesture(command: String, args: [String: Any]) async throws -> FenceResponse {
+    func handleGesture(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case "one_finger_tap":
+        case .oneFingerTap:
             return try await handleOneFingerTap(args)
-        case "long_press":
+        case .longPress:
             return try await handleLongPress(args)
-        case "swipe":
+        case .swipe:
             return try await handleSwipe(args)
-        case "drag":
+        case .drag:
             return try await handleDrag(args)
-        case "pinch":
+        case .pinch:
             return try await handlePinch(args)
-        case "rotate":
+        case .rotate:
             return try await handleRotate(args)
-        case "two_finger_tap":
+        case .twoFingerTap:
             return try await handleTwoFingerTap(args)
-        case "draw_path":
+        case .drawPath:
             return try await handleDrawPath(args)
-        case "draw_bezier":
+        case .drawBezier:
             return try await handleDrawBezier(args)
         default:
-            return .error("Unknown gesture: \(command)")
+            return .error("Unknown gesture: \(command.rawValue)")
         }
     }
 
@@ -206,9 +206,9 @@ extension TheFence {
 
     // MARK: - Handler: Scroll Actions
 
-    func handleScrollAction(command: String, args: [String: Any]) async throws -> FenceResponse {
+    func handleScrollAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case "scroll":
+        case .scroll:
             guard let directionValue = stringArg(args, "direction") else {
                 return .error("direction is required for scroll. Valid: up, down, left, right, next, previous")
             }
@@ -221,12 +221,12 @@ extension TheFence {
             return try await sendAction(
                 .scroll(ScrollTarget(elementTarget: elementTarget(args), direction: direction))
             )
-        case "scroll_to_visible":
+        case .scrollToVisible:
             guard let target = elementTarget(args) else {
                 return .error("Must specify element (identifier or order) for scroll_to_visible")
             }
             return try await sendAction(.scrollToVisible(target))
-        case "scroll_to_edge":
+        case .scrollToEdge:
             guard let edgeValue = stringArg(args, "edge") else {
                 return .error("edge is required for scroll_to_edge. Valid: top, bottom, left, right")
             }
@@ -238,30 +238,30 @@ extension TheFence {
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         default:
-            return .error("Unknown scroll action: \(command)")
+            return .error("Unknown scroll action: \(command.rawValue)")
         }
     }
 
     // MARK: - Handler: Accessibility Actions
 
-    func handleAccessibilityAction(command: String, args: [String: Any]) async throws -> FenceResponse {
+    func handleAccessibilityAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case "activate":
+        case .activate:
             guard let target = elementTarget(args) else {
                 return .error("Must specify element identifier or order")
             }
             return try await sendAction(.activate(target))
-        case "increment":
+        case .increment:
             guard let target = elementTarget(args) else {
                 return .error("Must specify element identifier or order")
             }
             return try await sendAction(.increment(target))
-        case "decrement":
+        case .decrement:
             guard let target = elementTarget(args) else {
                 return .error("Must specify element identifier or order")
             }
             return try await sendAction(.decrement(target))
-        case "perform_custom_action":
+        case .performCustomAction:
             guard let target = elementTarget(args) else {
                 return .error("Must specify element identifier or order")
             }
@@ -270,7 +270,7 @@ extension TheFence {
             }
             return try await sendAction(.performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName)))
         default:
-            return .error("Unknown accessibility action: \(command)")
+            return .error("Unknown accessibility action: \(command.rawValue)")
         }
     }
 
@@ -291,8 +291,11 @@ extension TheFence {
     }
 
     func handleEditAction(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let action = stringArg(args, "action") else {
-            return .error("action is required (copy, paste, cut, select, selectAll)")
+        guard let actionString = stringArg(args, "action") else {
+            return .error("action is required (\(EditAction.allCases.map(\.rawValue).joined(separator: ", ")))")
+        }
+        guard let action = EditAction(rawValue: actionString) else {
+            return .error("Invalid action '\(actionString)'. Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
         }
         return try await sendAction(.editAction(EditActionTarget(action: action)))
     }

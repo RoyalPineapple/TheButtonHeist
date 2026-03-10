@@ -253,25 +253,6 @@ final class TheSafecracker {
 
     // MARK: - Edit Actions (via Responder Chain)
 
-    /// Standard edit actions that can be invoked on the first responder.
-    enum EditAction: String, CaseIterable {
-        case copy
-        case paste
-        case cut
-        case select
-        case selectAll
-
-        var selector: Selector {
-            switch self {
-            case .copy:      return #selector(UIResponderStandardEditActions.copy(_:))
-            case .paste:     return #selector(UIResponderStandardEditActions.paste(_:))
-            case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
-            case .select:    return #selector(UIResponderStandardEditActions.select(_:))
-            case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
-            }
-        }
-    }
-
     /// Perform a standard edit action on the current first responder.
     /// Uses UIApplication.sendAction to route through the responder chain,
     /// following KIF's pattern of bypassing the edit menu UI entirely.
@@ -492,6 +473,20 @@ final class TheSafecracker {
         return nil
     }
 
+}
+
+// MARK: - EditAction + Selector
+
+extension EditAction {
+    var selector: Selector {
+        switch self {
+        case .copy:      return #selector(UIResponderStandardEditActions.copy(_:))
+        case .paste:     return #selector(UIResponderStandardEditActions.paste(_:))
+        case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
+        case .select:    return #selector(UIResponderStandardEditActions.select(_:))
+        case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
+        }
+    }
 }
 
 #endif // DEBUG

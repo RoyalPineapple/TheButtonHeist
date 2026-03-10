@@ -1,5 +1,6 @@
 import ArgumentParser
 import ButtonHeist
+import TheScore
 
 // MARK: - Copy
 
@@ -18,7 +19,7 @@ struct CopyCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        try await sendEditAction("copy", connection: connection, timeout: timeout, format: output.format)
+        try await sendEditAction(.copy, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -38,7 +39,7 @@ struct PasteCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        try await sendEditAction("paste", connection: connection, timeout: timeout, format: output.format)
+        try await sendEditAction(.paste, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -58,7 +59,7 @@ struct CutCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        try await sendEditAction("cut", connection: connection, timeout: timeout, format: output.format)
+        try await sendEditAction(.cut, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -78,7 +79,7 @@ struct SelectCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        try await sendEditAction("select", connection: connection, timeout: timeout, format: output.format)
+        try await sendEditAction(.select, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -98,7 +99,7 @@ struct SelectAllCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        try await sendEditAction("selectAll", connection: connection, timeout: timeout, format: output.format)
+        try await sendEditAction(.selectAll, connection: connection, timeout: timeout, format: output.format)
     }
 }
 
@@ -106,7 +107,7 @@ struct SelectAllCommand: AsyncParsableCommand {
 
 @ButtonHeistActor
 private func sendEditAction(
-    _ action: String,
+    _ action: EditAction,
     connection: ConnectionOptions,
     timeout: Double,
     format: OutputFormat?
@@ -116,8 +117,8 @@ private func sendEditAction(
     defer { connector.disconnect() }
     let client = connector.client
 
-    if !connection.quiet { logStatus("Sending \(action)...") }
+    if !connection.quiet { logStatus("Sending \(action.rawValue)...") }
     client.send(.editAction(EditActionTarget(action: action)))
     let result = try await client.waitForActionResult(timeout: timeout)
-    outputActionResult(result, format: format, quiet: connection.quiet, verb: action)
+    outputActionResult(result, format: format, quiet: connection.quiet, verb: action.rawValue)
 }
