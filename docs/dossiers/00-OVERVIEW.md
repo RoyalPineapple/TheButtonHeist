@@ -2,7 +2,7 @@
 
 ## The Heist Metaphor
 
-ButtonHeist is a remote iOS UI automation system structured as a heist crew. An iOS framework (TheInsideJob) embeds inside a target app as a TCP server, while macOS tooling discovers, connects, and sends commands to interact with the app's UI programmatically.
+ButtonHeist is a remote iOS UI automation system structured as a heist crew. An iOS framework (TheInsideJob) embeds inside a target app as a TLS-encrypted server, while macOS tooling discovers, connects (with certificate fingerprint pinning via Bonjour), and sends commands to interact with the app's UI programmatically.
 
 ## Crew Roster
 
@@ -10,7 +10,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
 | [TheScore](01-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
-| [TheGetaway](02-THEGETAWAY.md) | The Getaway | iOS server transport (SimpleSocketServer, ServerTransport) |
+| [TheGetaway](02-THEGETAWAY.md) | The Getaway | iOS server transport with TLS encryption (SimpleSocketServer, ServerTransport, TLSIdentity) |
 
 ### Inside Team (iOS - runs in-process)
 | Crew Member | Alias | Primary Role |
@@ -45,7 +45,12 @@ graph TD
     MCP["ButtonHeistMCP - (MCP Server)"]
     TestApp["AccessibilityTestApp"]
 
+    Crypto["swift-crypto"]
+    X509["swift-certificates"]
+
     TheScore --> TheGetaway
+    Crypto --> TheGetaway
+    X509 --> TheGetaway
     TheScore --> TheInsideJob
     TheGetaway --> TheInsideJob
     TheScore --> ButtonHeist
@@ -74,7 +79,7 @@ sequenceDiagram
     CLI->>TF: execute({"command":"activate","identifier":"btn"})
     TF->>TH: connectWithDiscovery()
     TH->>DC: connect(to: device)
-    DC->>SS: TCP connect
+    DC->>SS: TLS connect (cert fingerprint pinned via Bonjour TXT)
     SS->>TM2: onClientConnected
     TM2-->>DC: authRequired
     DC->>SS: authenticate(token)

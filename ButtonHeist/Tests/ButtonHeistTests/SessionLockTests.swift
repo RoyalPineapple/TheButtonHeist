@@ -13,15 +13,14 @@ final class SessionLockTests: XCTestCase {
         )
     }
 
-    private func encode(_ message: ServerMessage) -> Data {
-        // swiftlint:disable:next force_try
-        try! JSONEncoder().encode(ResponseEnvelope(message: message))
+    private func encode(_ message: ServerMessage) throws -> Data {
+        try JSONEncoder().encode(ResponseEnvelope(message: message))
     }
 
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testSessionLockedDisconnectsClient() {
+    func testSessionLockedDisconnectsClient() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
         conn.isConnected = true
 
@@ -31,7 +30,7 @@ final class SessionLockTests: XCTestCase {
         }
 
         let payload = SessionLockedPayload(message: "Session held by another driver", activeConnections: 1)
-        conn.handleMessage(encode(.sessionLocked(payload)))
+        try conn.handleMessage(encode(.sessionLocked(payload)))
 
         XCTAssertFalse(conn.isConnected)
         if case .sessionLocked(let msg) = disconnectReason {
@@ -42,7 +41,7 @@ final class SessionLockTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSessionLockedCallbackFires() {
+    func testSessionLockedCallbackFires() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
         conn.isConnected = true
 
@@ -52,7 +51,7 @@ final class SessionLockTests: XCTestCase {
         }
 
         let payload = SessionLockedPayload(message: "Another driver active", activeConnections: 3)
-        conn.handleMessage(encode(.sessionLocked(payload)))
+        try conn.handleMessage(encode(.sessionLocked(payload)))
 
         XCTAssertNotNil(receivedPayload)
         XCTAssertEqual(receivedPayload?.message, "Another driver active")

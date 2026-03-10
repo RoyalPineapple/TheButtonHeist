@@ -1,5 +1,6 @@
 import Foundation
-@preconcurrency import Security
+import Network
+import Security
 import Crypto
 import X509
 import SwiftASN1
@@ -7,10 +8,16 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thegetaway", category: "tls")
 
-public struct TLSIdentity: Sendable {
-    public let identity: SecIdentity
-    public let certificate: SecCertificate
-    public let fingerprint: String
+public actor TLSIdentity {
+    private let identity: SecIdentity
+    private let certificate: SecCertificate
+    public nonisolated let fingerprint: String
+
+    private init(identity: SecIdentity, certificate: SecCertificate, fingerprint: String) {
+        self.identity = identity
+        self.certificate = certificate
+        self.fingerprint = fingerprint
+    }
 
     /// Retrieve an existing identity from the Keychain, or create and store a new one.
     public static func getOrCreate(label: String = "com.buttonheist.tls") throws -> TLSIdentity {
@@ -34,7 +41,8 @@ public struct TLSIdentity: Sendable {
         }
     }
 
-    /// Create an in-memory identity without Keychain persistence.
+    /// Create an ephemeral identity by temporarily storing items in the Keychain
+    /// for `SecIdentity` creation, then immediately removing them.
     public static func createEphemeral() throws -> TLSIdentity {
         let (privateKey, derBytes) = try generateCertificate()
         let secCert = try makeSecCertificate(derBytes: derBytes)
@@ -57,6 +65,27 @@ public struct TLSIdentity: Sendable {
                 throw TLSIdentityError.keychainError(status)
             }
         }
+    }
+
+    // MARK: - TLS Parameters
+
+    /// Build NWParameters configured for TLS using this identity.
+    /// Actor-isolated so SecIdentity never crosses isolation boundaries.
+    public func makeTLSParameters() -> NWParameters? {
+        let tlsOptions = NWProtocolTLS.Options()
+        guard let secIdentity = sec_identity_create(identity) else {
+            logger.warning("sec_identity_create failed for TLS identity")
+            return nil
+        }
+        sec_protocol_options_set_local_identity(
+            tlsOptions.securityProtocolOptions,
+            secIdentity
+        )
+        sec_protocol_options_set_min_tls_protocol_version(
+            tlsOptions.securityProtocolOptions,
+            .TLSv12
+        )
+        return NWParameters(tls: tlsOptions)
     }
 
     // MARK: - Certificate Generation
@@ -117,8 +146,8 @@ public struct TLSIdentity: Sendable {
             throw TLSIdentityError.keychainError(status)
         }
 
-        // swiftlint:disable:next force_cast
-        let secIdentity = identityRef as! SecIdentity
+        // SecItemCopyMatching returns CFTypeRef; bridge to SecIdentity
+        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
         var certRef: SecCertificate?
         let certStatus = SecIdentityCopyCertificate(secIdentity, &certRef)
         guard certStatus == errSecSuccess, let cert = certRef else {
@@ -184,8 +213,7 @@ public struct TLSIdentity: Sendable {
         guard identityStatus == errSecSuccess, let identityRef = identityResult else {
             throw TLSIdentityError.keychainError(identityStatus)
         }
-        // swiftlint:disable:next force_cast
-        return identityRef as! SecIdentity
+        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
     }
 
     private static func createInMemoryIdentity(
@@ -193,6 +221,23 @@ public struct TLSIdentity: Sendable {
         certificate: SecCertificate
     ) throws -> SecIdentity {
         let tempLabel = "com.buttonheist.tls.ephemeral.\(UUID().uuidString)"
+
+        // Clean up temporary Keychain items when we're done.
+        // The SecIdentity object is retained in memory after the entries are deleted.
+        defer {
+            let certDeleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassCertificate,
+                kSecAttrLabel as String: tempLabel,
+            ]
+            SecItemDelete(certDeleteQuery as CFDictionary)
+
+            let keyDeleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrLabel as String: tempLabel,
+            ]
+            SecItemDelete(keyDeleteQuery as CFDictionary)
+        }
+
         let keyData = privateKey.x963Representation
         let keyAttributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -235,8 +280,7 @@ public struct TLSIdentity: Sendable {
             throw TLSIdentityError.keychainError(identityStatus)
         }
 
-        // swiftlint:disable:next force_cast
-        return identityRef as! SecIdentity
+        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
     }
 }
 

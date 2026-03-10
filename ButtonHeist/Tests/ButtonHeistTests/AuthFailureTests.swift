@@ -28,15 +28,14 @@ final class AuthFailureTests: XCTestCase {
         )
     }
 
-    private func encode(_ message: ServerMessage) -> Data {
-        // swiftlint:disable:next force_try
-        try! JSONEncoder().encode(ResponseEnvelope(message: message))
+    private func encode(_ message: ServerMessage) throws -> Data {
+        try JSONEncoder().encode(ResponseEnvelope(message: message))
     }
 
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testAuthFailedCallbackFires() {
+    func testAuthFailedCallbackFires() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
         conn.isConnected = true
 
@@ -45,14 +44,14 @@ final class AuthFailureTests: XCTestCase {
             authFailedReason = reason
         }
 
-        conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
+        try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
 
         XCTAssertNotNil(authFailedReason)
         XCTAssertTrue(authFailedReason!.contains("Invalid token"))
     }
 
     @ButtonHeistActor
-    func testAuthFailedFiresBeforeDisconnected() {
+    func testAuthFailedFiresBeforeDisconnected() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
         conn.isConnected = true
 
@@ -64,7 +63,7 @@ final class AuthFailureTests: XCTestCase {
             callOrder.append("disconnected")
         }
 
-        conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
+        try conn.handleMessage(encode(.authFailed("Invalid token. Retry without a token to request a fresh session.")))
 
         XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
     }

@@ -83,8 +83,9 @@ public final class ServerTransport {
     ///   - bindToLoopback: If true, bind to loopback only
     /// - Returns: Actual port number bound
     @discardableResult
-    public func start(port: UInt16 = 0, bindToLoopback: Bool = false) throws -> UInt16 {
-        try server.start(port: port, bindToLoopback: bindToLoopback, tlsIdentity: tlsIdentity?.identity)
+    public func start(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
+        let params = await tlsIdentity?.makeTLSParameters()
+        return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params)
     }
 
     /// Stop the TCP server and any Bonjour advertisement.
