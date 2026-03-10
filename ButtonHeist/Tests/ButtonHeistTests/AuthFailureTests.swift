@@ -3,6 +3,20 @@ import Network
 import TheGetaway
 @testable import ButtonHeist
 
+/// Thread-safe ordered log for tracking callback invocation order.
+private final class CallOrder: @unchecked Sendable {
+    private var entries: [String] = []
+    private let lock = NSLock()
+
+    var first: String? {
+        lock.withLock { entries.first }
+    }
+
+    func append(_ entry: String) {
+        lock.withLock { entries.append(entry) }
+    }
+}
+
 /// Tests for auth failure handling over real TCP connections.
 /// Validates that authFailed fires correctly and isn't swallowed by the subsequent disconnect.
 final class AuthFailureTests: XCTestCase {
@@ -93,7 +107,7 @@ final class AuthFailureTests: XCTestCase {
             }
         }
 
-        var callOrder: [String] = []
+        let callOrder = CallOrder()
         let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!)
         let device = DiscoveredDevice(id: "test", name: "test", endpoint: endpoint)
         await ButtonHeistActor.run {

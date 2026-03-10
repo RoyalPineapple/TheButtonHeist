@@ -19,6 +19,7 @@ let project = Project(
     settings: .settings(base: [
         "SWIFT_VERSION": "5.0",
         "LastSwiftMigration": "2620",
+        "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [
         // MARK: - Shared Protocol Types (cross-platform)
