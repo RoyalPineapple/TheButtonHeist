@@ -87,7 +87,7 @@ struct SelectCommand: AsyncParsableCommand {
 
 struct SelectAllCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "select-all",
+        commandName: "select_all",
         abstract: "Select all text via the responder chain"
     )
 
