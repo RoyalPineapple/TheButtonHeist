@@ -1,6 +1,4 @@
 import ArgumentParser
-import Foundation
-import Darwin
 import ButtonHeist
 
 // MARK: - Copy
@@ -109,7 +107,7 @@ struct SelectAllCommand: AsyncParsableCommand {
 @ButtonHeistActor
 private func sendEditAction(_ action: String, connection: ConnectionOptions,
                              timeout: Double, format: OutputFormat?) async throws {
-    let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+    let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
     try await connector.connect()
     defer { connector.disconnect() }
     let client = connector.client

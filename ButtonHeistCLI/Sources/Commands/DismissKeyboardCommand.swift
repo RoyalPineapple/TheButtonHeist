@@ -1,6 +1,4 @@
 import ArgumentParser
-import Foundation
-import Darwin
 import ButtonHeist
 
 struct DismissKeyboardCommand: AsyncParsableCommand {
@@ -17,7 +15,7 @@ struct DismissKeyboardCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client

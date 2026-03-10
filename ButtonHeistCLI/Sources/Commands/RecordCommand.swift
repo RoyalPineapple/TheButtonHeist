@@ -35,7 +35,7 @@ struct RecordCommand: AsyncParsableCommand {
     func run() async throws {
         let connector = DeviceConnector(
             deviceFilter: connection.device, token: connection.token,
-            quiet: connection.quiet, force: connection.force
+            quiet: connection.quiet
         )
         try await connector.connect()
         defer { connector.disconnect() }
