@@ -1,6 +1,6 @@
 # ButtonHeist - Concept Map
 
-> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-11 | Commit: 7c86f2d | Strategy: parallel-map-reduce (incremental)
 
 ## Core Concepts
 
@@ -14,14 +14,14 @@
 |------------|------|------|-------------|
 | **TheScore** | The Plan | Shared | Cross-platform wire protocol types. 29 client messages, 15 server messages, element models, action results. Protocol v5.0. ServerInfo includes tlsActive field. |
 | **TheInsideJob** | Inside Operative | iOS | TCP server singleton (@MainActor). Creates TLSIdentity on start, manages server lifecycle, accessibility polling, app lifecycle. Dispatch logic split into TheInsideJob+Dispatch.swift with three-stage routing. |
-| **TheSafecracker** | Specialist | iOS | Synthetic touch/input engine. Split into 7 files by concern. Multi-touch gestures (pinch, rotate, two-finger tap) in TheSafecracker+MultiTouch.swift. Text input via UIKeyboardImpl. |
+| **TheSafecracker** | Specialist | iOS | Synthetic touch/input engine. Split into 7 files by concern. Multi-touch gestures (pinch, rotate, two-finger tap) in TheSafecracker+MultiTouch.swift. Text input via UIKeyboardImpl. Edit actions via EditAction.selector extension. |
 | **TheBagman** | Score Handler | iOS | Element cache and UI observer. Conversion logic (element/tree/delta) split into TheBagman+Conversion.swift. Computes InterfaceDelta diffs, captures screenshots. |
 | **TheMuscle** | Bouncer | iOS | Auth and session management. Token validation, UI approval (Allow/Deny), session locking (one driver at a time with timeout), observer tracking. Auth occurs after TLS handshake. |
 | **TheStakeout** | Lookout | iOS | Screen recording engine. H.264/MP4 via AVAssetWriter. Configurable FPS, scale, inactivity timeout, file size limits. Tracks interaction events. |
 | **TheFingerprints** | Evidence | iOS | Visual touch indicators. Translucent circles on a passthrough overlay window. |
 | **ThePlant** | Advance Man | iOS | ObjC +load hook that auto-starts TheInsideJob on framework load (DEBUG only). |
 | **TheMastermind** | Coordinator | macOS | Observable client API wrapping TheHandoff. @Observable state for SwiftUI, async waitFor* methods with request-ID correlation. |
-| **TheFence** | Fence/Dealer | macOS | Centralized command dispatch facade. Split into TheFence.swift (core), TheFence+Handlers.swift (command handlers), TheFence+Formatting.swift (FenceResponse + output). |
+| **TheFence** | Fence/Dealer | macOS | Centralized command dispatch facade. Split into TheFence.swift (core), TheFence+Handlers.swift (command handlers), TheFence+Formatting.swift (FenceResponse + output), TheFence+CommandCatalog.swift (Command enum). Dispatch uses typed Command enum with exhaustive switch. |
 | **TheHandoff** | Handoff | macOS | Client-side session manager. Bonjour discovery, TLS connection with fingerprint pinning, keepalive (ping 3s), auto-reconnect (60 attempts at 1s). |
 | **Transport Layer** | *(in TheInsideJob)* | iOS | TLS-encrypted TCP server transport and Bonjour advertisement. Contains TLSIdentity (certificate management + expiry tracking), SimpleSocketServer (TCP with TLS), ServerTransport (unified server+Bonjour layer). Formerly a separate module (TheGetaway). |
 
@@ -34,6 +34,9 @@
 | **InterfaceDelta** | Compact diff: noChange, valuesChanged, elementsChanged, or screenChanged |
 | **ActionResult** | Result with success/failure, method used (18 cases), message, delta, animation status |
 | **ActionTarget** | Element targeting by accessibility identifier (string) or traversal order (int) |
+| **EditAction** | Public enum in TheScore: copy, paste, cut, select, selectAll. String-backed, CaseIterable. Moved from TheSafecracker (private) to TheScore (public, shared). |
+| **EditActionTarget** | Target for edit actions. `.action` field is typed `EditAction` (was `String`). |
+| **TheFence.Command** | Canonical String-backed CaseIterable enum (29 cases). Replaces former CommandCatalog.all string array. Parsed at execute(request:) boundary; typed values flow through dispatch. |
 | **InteractionEvent** | Record of single interaction during recording: timestamp, command, result, delta |
 | **FenceResponse** | Typed response enum (in TheFence+Formatting.swift) with humanFormatted() and jsonDict() output methods |
 | **DiscoveredDevice** | Discovered iOS device: service name, endpoint, simulator UDID, installation ID, session status, certFingerprint |
@@ -56,6 +59,8 @@
 | **Session Lock** | Exclusive driver access. One driver identity controls the app at a time. Auto-releases after 30s inactivity on disconnect. |
 | **Watch Mode** | Read-only observer connections. Auto-subscribed to broadcasts, cannot send commands or claim sessions. |
 | **Activation-First Pattern** | Try accessibilityActivate() first, fall back to synthetic tap at activation point. |
+| **Command Enum Pattern** | Design pattern where all valid command names are defined as cases of a String-backed CaseIterable enum (TheFence.Command). Strings enter at system boundaries (execute(request:)), are parsed to the enum immediately, and flow as typed values through dispatch and handlers. Provides compile-time exhaustiveness checking. |
+| **Enum-at-Boundary** | Same pattern applied to EditAction, SwipeDirection, ScrollDirection, ScrollEdge. Raw strings converted to enums at system boundaries; only typed values flow internally. |
 | **Synthetic Touch Injection** | IOKit HID events + private UIKit APIs for programmatic touch synthesis (based on KIF). |
 | **PerformInteraction Pipeline** | Standard flow: refresh -> snapshot before -> execute -> snapshot after -> compute delta -> respond. |
 | **Three-Stage Dispatch** | TheInsideJob routes interaction messages through three dispatch methods: accessibility, touch, then text/scroll. Each returns Bool; first match wins. |
@@ -112,8 +117,8 @@ MCP → TheFence
 
 ### 5. CLI (ButtonHeistCLI)
 - **Scope**: macOS command-line tool
-- **Concepts**: CLI Commands (18 subcommands), REPL Session, ElementTargetOptions, OutputOptions
-- **Boundary**: Thin interface over TheFence. Canonical test client.
+- **Concepts**: CLI Commands (21 subcommands with snake_case naming), REPL Session (with compoundAliases for EditAction), ElementTargetOptions, OutputOptions
+- **Boundary**: Thin interface over TheFence. Canonical test client. All commands use snake_case names matching TheFence.Command rawValues.
 
 ### 6. MCP Server (ButtonHeistMCP)
 - **Scope**: macOS MCP tool server

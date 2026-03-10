@@ -1,6 +1,6 @@
 # ButtonHeist - Architecture
 
-> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-11 | Commit: 7c86f2d | Strategy: parallel-map-reduce (incremental)
 
 ## Architecture Diagram
 
@@ -8,13 +8,14 @@
 graph TB
     subgraph consumers["Consumer Interfaces"]
         Agent["AI Agent<br/>(Claude Code)"] -->|MCP tool calls| MCP["ButtonHeistMCP<br/>14 tools"]
-        Agent -->|Bash| CLI["buttonheist CLI<br/>29 commands"]
+        Agent -->|Bash| CLI["buttonheist CLI<br/>21 subcommands (snake_case)"]
     end
 
     subgraph dispatch["Command Dispatch"]
         MCP --> TF["TheFence<br/>@ButtonHeistActor"]
         CLI --> TF
-        TF --> TFH["TheFence+Handlers<br/>command handlers"]
+        TF -->|"parse string → Command enum"| CMD["TheFence.Command<br/>29-case CaseIterable enum"]
+        CMD --> TFH["TheFence+Handlers<br/>exhaustive switch dispatch"]
         TF --> TFF["TheFence+Formatting<br/>response formatting"]
         TF --> TM["TheMastermind<br/>@Observable"]
     end
@@ -62,12 +63,13 @@ graph TB
 |---------|-------------|
 | **Client-Server (Distributed)** | iOS framework embeds as TLS-encrypted TCP server; macOS tooling discovers, connects with certificate fingerprint pinning, and sends commands over newline-delimited JSON. |
 | **Trust-on-First-Sight (TOFU) TLS** | Self-signed ECDSA P-256 certificates with fingerprint pinning via Bonjour TXT records. No CA required. Server generates identity, publishes SHA-256 fingerprint; client verifies during TLS handshake. |
-| **Facade / Command Dispatch** | TheFence centralizes all 29 commands. CLI and MCP are thin wrappers over TheFence.execute(). Handlers extracted to TheFence+Handlers.swift. |
+| **Facade / Command Dispatch (Typed)** | TheFence centralizes all 29 commands behind a typed Command enum (String-backed, CaseIterable). CLI and MCP parse raw strings at the boundary into Command cases. Dispatch uses compile-time exhaustive switch — no raw string matching in the core. |
+| **Enums Over Raw Strings** | All known-set values use typed enums (TheFence.Command, EditAction, SwipeDirection, ScrollDirection, ScrollEdge). Raw strings converted to enums at system boundaries; only typed values flow internally. |
 | **Observer Pattern (Reactive)** | TheMastermind uses @Observable for SwiftUI. iOS server uses polling-and-broadcast for hierarchy changes. |
 | **Layered Architecture** | Strict dependency direction: TheScore -> TheInsideJob / TheButtonHeist -> TheFence -> CLI/MCP. |
 | **Heist Crew Metaphor** | Domain-driven naming where each component is a heist crew role with clear responsibility. |
 | **Extension-Based File Organization** | Large types decomposed into focused Swift extensions using Type+Concern.swift naming. Each extension file owns a single responsibility. Keeps files under ~350 lines while preserving public API. |
-| **Warnings-as-Errors Build Policy** | All SPM targets treat warnings as errors (`-warnings-as-errors`), enforcing a zero-warning policy as a build quality gate. |
+| **Warnings-as-Errors Build Policy** | All targets build with warnings as errors, strict concurrency (complete), and SwiftLint on every build. Zero suppression policy. |
 
 ## Layers
 
@@ -92,12 +94,12 @@ graph TB
 - **Dependencies**: Shared Protocol Layer, Transport Layer
 
 ### 5. Command Dispatch Layer
-- **Components**: TheFence + TheFence+Handlers + TheFence+Formatting, CommandCatalog
-- **Purpose**: Centralized command routing, session management, auto-reconnect
+- **Components**: TheFence + TheFence+Handlers + TheFence+Formatting + TheFence+CommandCatalog (Command enum)
+- **Purpose**: Centralized typed command routing via Command enum, session management, auto-reconnect, response formatting
 - **Dependencies**: macOS Client Layer
 
 ### 6. Consumer Interface Layer
-- **Components**: ButtonHeistCLI, ButtonHeistMCP
+- **Components**: ButtonHeistCLI (21 subcommands, snake_case naming), ButtonHeistMCP (14 tools)
 - **Purpose**: User-facing CLI and AI agent MCP tool interfaces
 - **Dependencies**: Command Dispatch Layer
 
@@ -112,10 +114,11 @@ graph TB
 6. During TLS handshake, verify block extracts leaf certificate, computes SHA-256 fingerprint, compares against expected value from discovery
 7. On match: TLS connection established, auth flow proceeds; On mismatch: connection rejected with .certificateMismatch
 
-### Command Execution (activate element)
-1. CLI/MCP calls `TheFence.execute(request:)` with command dictionary
-2. TheFence auto-connects via TheMastermind if needed (discovery + TLS + auth)
-3. TheFence dispatches to handler in TheFence+Handlers.swift, sends ClientMessage over TLS-encrypted TCP
+### Command Execution (typed dispatch)
+1. CLI/MCP calls `TheFence.execute(request:)` with command dictionary containing string command name
+2. TheFence parses string to Command enum case at the boundary (type-safe from this point)
+3. TheFence auto-connects via TheMastermind if needed (discovery + TLS + auth)
+4. TheFence dispatches to handler via exhaustive switch on Command enum in TheFence+Handlers.swift, sends ClientMessage over TLS-encrypted TCP
 4. TheInsideJob receives message, routes via TheInsideJob+Dispatch.swift (three-stage dispatch)
 5. TheBagman refreshes accessibility data, TheSafecracker executes action
 6. TheInsideJob computes interface delta via TheBagman+Conversion and returns ActionResult

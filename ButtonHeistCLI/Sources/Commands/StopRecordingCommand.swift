@@ -3,7 +3,7 @@ import ButtonHeist
 
 struct StopRecordingCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "stop-recording",
+        commandName: "stop_recording",
         abstract: "Stop an in-progress screen recording"
     )
 

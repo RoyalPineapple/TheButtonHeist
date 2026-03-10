@@ -1289,12 +1289,12 @@ USAGE: buttonheist touch <subcommand>
 
 SUBCOMMANDS:
   one_finger_tap          Tap at a point or element
-  longpress               Long press at a point or element
+  long_press              Long press at a point or element
   swipe                   Swipe between two points or in a direction
   drag                    Drag from one point to another
   pinch                   Pinch/zoom at a point or element
   rotate                  Rotate at a point or element
-  two-finger-tap          Tap with two fingers at a point or element
+  two_finger_tap          Tap with two fingers at a point or element
 ```
 
 All subcommands accept `--identifier <id>` or `--index <n>` to target an element, or coordinate options (`--x`, `--y`, `--from-x`, `--from-y`, `--to-x`, `--to-y`) for explicit positioning, and `--device` to target a specific device.
@@ -1349,12 +1349,12 @@ OPTIONS:
   --device <filter>       Target a specific device
 ```
 
-### buttonheist scroll-to-visible
+### buttonheist scroll_to_visible
 
 Scroll until a target element is fully visible in the viewport.
 
 ```
-USAGE: buttonheist scroll-to-visible [OPTIONS]
+USAGE: buttonheist scroll_to_visible [OPTIONS]
 
 OPTIONS:
   --identifier <id>       Element identifier
@@ -1365,12 +1365,12 @@ OPTIONS:
   --device <filter>       Target a specific device
 ```
 
-### buttonheist scroll-to-edge
+### buttonheist scroll_to_edge
 
 Scroll the nearest scroll view ancestor to an edge.
 
 ```
-USAGE: buttonheist scroll-to-edge [OPTIONS]
+USAGE: buttonheist scroll_to_edge [OPTIONS]
 
 OPTIONS:
   --identifier <id>       Element identifier
@@ -1464,12 +1464,12 @@ OPTIONS:
   --device <filter>           Target a specific device
 ```
 
-### buttonheist stop-recording
+### buttonheist stop_recording
 
 Explicitly stop an in-progress recording. The recording payload is broadcast to all connected clients, so the original `record` process (running in background) receives it and writes the file.
 
 ```
-USAGE: buttonheist stop-recording [OPTIONS]
+USAGE: buttonheist stop_recording [OPTIONS]
 
 OPTIONS:
   --timeout <seconds>     Connection timeout (default: 10)
@@ -1676,12 +1676,12 @@ buttonheist screenshot --output screen.png
 # Touch gestures (low-level escape hatches)
 buttonheist touch one_finger_tap --x 100 --y 200
 buttonheist touch one_finger_tap --identifier loginButton
-buttonheist touch longpress --identifier myButton --duration 1.0
+buttonheist touch long_press --identifier myButton --duration 1.0
 buttonheist touch swipe --identifier list --direction up
 buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
 buttonheist touch pinch --identifier mapView --scale 2.0
 buttonheist touch rotate --x 200 --y 300 --angle 1.57
-buttonheist touch two-finger-tap --identifier zoomControl
+buttonheist touch two_finger_tap --identifier zoomControl
 
 # Text entry
 buttonheist type --text "Hello World" --identifier nameField
@@ -1690,6 +1690,6 @@ buttonheist type --delete 5 --text "World!" --identifier nameField
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
 buttonheist scroll --index 3 --direction down
-buttonheist scroll-to-visible --identifier "buttonheist.longList.last"
-buttonheist scroll-to-edge --identifier "buttonheist.longList.item-0" --edge bottom
+buttonheist scroll_to_visible --identifier "buttonheist.longList.last"
+buttonheist scroll_to_edge --identifier "buttonheist.longList.item-0" --edge bottom
 ```
