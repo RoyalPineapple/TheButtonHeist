@@ -217,7 +217,7 @@ Common issues that USB bypasses:
 
 ## Connection Scopes
 
-By default, TheInsideJob only accepts connections from simulators (loopback) and USB (CoreDevice IPv6 ULA). Network/WiFi connections are rejected unless explicitly allowed via the `INSIDEJOB_SCOPE` environment variable:
+By default, TheInsideJob only accepts connections from simulators (loopback) and USB devices. Network/WiFi connections are rejected unless explicitly allowed via the `INSIDEJOB_SCOPE` environment variable:
 
 ```bash
 # Default: simulator and USB only
@@ -230,12 +230,12 @@ INSIDEJOB_SCOPE=simulator,usb,network
 INSIDEJOB_SCOPE=usb
 ```
 
-The scope filter classifies incoming connections by remote address:
+The scope filter classifies connections once they reach the `.ready` state, using typed `NWEndpoint.Host` values and interface detection:
 - **simulator**: Loopback (`::1`, `127.0.0.1`)
-- **usb**: CoreDevice IPv6 ULA tunnel (`fd` prefix)
+- **usb**: `anpi` interface (Apple Network Private Interface — CoreDevice USB tunnel)
 - **network**: Everything else (WiFi, LAN, public)
 
-Connections from disallowed scopes are rejected immediately at the TCP level, before authentication.
+Connections from disallowed scopes are rejected at the `.ready` state, before authentication.
 
 ## See Also
 

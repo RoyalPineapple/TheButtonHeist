@@ -5,7 +5,7 @@ import Network
 ///
 /// Each scope corresponds to a network path:
 /// - `simulator`: Loopback connections (`::1`, `127.0.0.1`) — iOS Simulator on the same Mac
-/// - `usb`: CoreDevice IPv6 tunnel (`fd??:` ULA prefix) — physical device over USB
+/// - `usb`: `anpi` interface (Apple Network Private Interface) — physical device over USB
 /// - `network`: Everything else — WiFi, LAN, or broader network
 ///
 /// By default, only simulator and USB are allowed. Set `INSIDEJOB_SCOPE` to change:
@@ -37,30 +37,24 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     ///
     /// - IPv4/IPv6 loopback → `.simulator`
     /// - `anpi` interface (Apple Network Private Interface) → `.usb` (CoreDevice tunnel)
-    /// - IPv6 ULA (`fd00::/8`) on non-`anpi` interface → `.network` (regular ULA, not USB)
     /// - Everything else → `.network`
     ///
     /// Pass `interfaces` from `NWConnection.currentPath?.availableInterfaces` after the
     /// connection reaches `.ready` for precise CoreDevice USB detection.
     public static func classify(host: NWEndpoint.Host, interfaces: [NWInterface] = []) -> ConnectionScope {
+        // Loopback = simulator
         switch host {
         case .ipv4(let addr):
-            if addr == .loopback { return .simulator }
-            if addr.rawValue.first == 127 { return .simulator }
-            return .network
-
+            if addr == .loopback || addr.rawValue.first == 127 { return .simulator }
         case .ipv6(let addr):
             if addr == .loopback { return .simulator }
-            // CoreDevice USB: check for anpi (Apple Network Private Interface)
-            let isAnpi = interfaces.contains { $0.name.hasPrefix("anpi") }
-            if isAnpi { return .usb }
-            // fd00::/8 ULA without anpi — treat as USB only if no interface info available
-            // (pre-.ready fallback). With interface info, non-anpi ULA is network.
-            if addr.rawValue.first == 0xfd && interfaces.isEmpty { return .usb }
-            return .network
-
         default:
-            return .network
+            break
         }
+
+        // anpi = USB (Apple Network Private Interface, CoreDevice tunnel)
+        if interfaces.contains(where: { $0.name.hasPrefix("anpi") }) { return .usb }
+
+        return .network
     }
 }
