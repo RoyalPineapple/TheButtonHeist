@@ -1,6 +1,5 @@
 import Foundation
 import Network
-@preconcurrency import Security
 import os.log
 
 /// TCP server using Network framework.
@@ -51,13 +50,10 @@ public actor SimpleSocketServer {
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     /// - Returns: Actual port number bound
-    public func startAsync(port: UInt16 = 0, bindToLoopback: Bool = false, tlsIdentity: SecIdentity? = nil) async throws -> UInt16 {
-        let parameters: NWParameters
-        if let tlsIdentity {
-            parameters = Self.makeTLSParameters(identity: tlsIdentity)
+    public func startAsync(port: UInt16 = 0, bindToLoopback: Bool = false, tlsParameters: NWParameters? = nil) async throws -> UInt16 {
+        let parameters: NWParameters = tlsParameters ?? NWParameters.tcp
+        if tlsParameters != nil {
             logger.info("TLS configured for server")
-        } else {
-            parameters = NWParameters.tcp
         }
         let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
         parameters.requiredLocalEndpoint = .hostPort(
@@ -169,16 +165,16 @@ public actor SimpleSocketServer {
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
     /// - Returns: Actual port number bound
-    nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false, tlsIdentity: SecIdentity? = nil) throws -> UInt16 {
+    nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false, tlsParameters: NWParameters? = nil) throws -> UInt16 {
         let semaphore = DispatchSemaphore(value: 0)
         nonisolated(unsafe) var result: Result<UInt16, Error>?
         let server = self
         let portValue = port
         let loopback = bindToLoopback
-        let identity = tlsIdentity
+        let params = tlsParameters
         Task.detached { @Sendable in
             do {
-                let port = try await server.startAsync(port: portValue, bindToLoopback: loopback, tlsIdentity: identity)
+                let port = try await server.startAsync(port: portValue, bindToLoopback: loopback, tlsParameters: params)
                 result = .success(port)
             } catch {
                 result = .failure(error)
@@ -355,23 +351,6 @@ public actor SimpleSocketServer {
         } else {
             receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
         }
-    }
-
-    // MARK: - TLS
-
-    private static func makeTLSParameters(identity: SecIdentity) -> NWParameters {
-        let tlsOptions = NWProtocolTLS.Options()
-        if let secIdentity = sec_identity_create(identity) {
-            sec_protocol_options_set_local_identity(
-                tlsOptions.securityProtocolOptions,
-                secIdentity
-            )
-        }
-        sec_protocol_options_set_min_tls_protocol_version(
-            tlsOptions.securityProtocolOptions,
-            .TLSv12
-        )
-        return NWParameters(tls: tlsOptions)
     }
 
     // MARK: - Errors

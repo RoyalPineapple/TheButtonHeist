@@ -101,9 +101,9 @@ final class TLSIdentityTests: XCTestCase {
         try TLSIdentity.delete(label: label)
     }
 
-    func testEphemeralIdentityProducesValidSecIdentity() throws {
+    func testEphemeralIdentityProducesValidTLSParameters() async throws {
         let identity = try TLSIdentity.createEphemeral()
-        let secId = sec_identity_create(identity.identity)
-        XCTAssertNotNil(secId, "sec_identity_create must succeed for Network framework TLS")
+        let params = await identity.makeTLSParameters()
+        XCTAssertNotNil(params, "makeTLSParameters must succeed for valid ephemeral identity")
     }
 }

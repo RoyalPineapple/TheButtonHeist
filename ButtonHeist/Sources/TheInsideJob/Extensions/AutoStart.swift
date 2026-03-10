@@ -62,7 +62,7 @@ public func theInsideJobAutoStartFromLoad() {
         autoStartLogger.debug("MainActor task executing...")
         do {
             TheInsideJob.configure(token: token, instanceId: instanceId)
-            try TheInsideJob.shared.start()
+            try await TheInsideJob.shared.start()
             TheInsideJob.shared.startPolling(interval: interval)
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {

@@ -1,31 +1,41 @@
 # TheGetaway - iOS Server Transport
 
 > **Module:** `ButtonHeist/Sources/TheGetaway/`
-> **Platform:** iOS 17.0+ / macOS 14.0+ (Network framework)
-> **Role:** Server-side TCP transport — accepts client connections on the iOS side
+> **Platform:** iOS 17.0+ (Network framework)
+> **Role:** Server-side TLS/TCP transport — accepts client connections on the iOS side
 
 ## Responsibilities
 
 TheGetaway provides the server-side transport layer used by TheInsideJob:
 
-1. **TCP server** (`SimpleSocketServer`) - accepts client connections via NWListener
-2. **Server transport** (`ServerTransport`) - protocol abstraction for server-side networking
+1. **TLS/TCP server** (`SimpleSocketServer`) - accepts client connections via NWListener with optional TLS encryption
+2. **Server transport** (`ServerTransport`) - protocol abstraction for server-side networking, advertises `certfp` in Bonjour TXT records
+3. **TLS identity** (`TLSIdentity`) - runtime-generated self-signed ECDSA certificates with SHA-256 fingerprint pinning and Keychain persistence
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TG["TheGetaway Module"]
-        Server["SimpleSocketServer - NWListener TCP server"]
+        Server["SimpleSocketServer - NWListener TLS/TCP server"]
         Transport["ServerTransport - Protocol abstraction"]
+        TLS["TLSIdentity - ECDSA cert + SHA-256 fingerprint"]
     end
 
     subgraph External["Network"]
-        TCP["TCP Socket - Newline-delimited JSON"]
+        Conn["TLS 1.2+ / TCP fallback - Newline-delimited JSON"]
     end
 
-    Server <-.-> TCP
+    subgraph Deps["External Dependencies"]
+        Crypto["swift-crypto - SHA-256"]
+        X509["swift-certificates - X.509 generation"]
+    end
+
+    TLS --> Server
+    Server <-.-> Conn
     Transport --> Server
+    TLS --> Crypto
+    TLS --> X509
 ```
 
 ## SimpleSocketServer Internal Architecture

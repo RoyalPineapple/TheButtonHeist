@@ -1,7 +1,7 @@
 import Foundation
 import Network
 import Crypto
-@preconcurrency import Security
+import Security
 import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")

@@ -83,7 +83,7 @@ public final class TheInsideJob {
     // MARK: - Public Methods
 
     /// Start the server
-    public func start() throws {
+    public func start() async throws {
         guard !isRunning else { return }
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
@@ -100,7 +100,7 @@ public final class TheInsideJob {
         let t = ServerTransport(tlsIdentity: identity)
         wireTransport(t)
 
-        let actualPort = try t.start()
+        let actualPort = try await t.start()
         self.transport = t
         isRunning = true
 
@@ -529,27 +529,30 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Resuming server...")
 
-        do {
-            let t = ServerTransport()
-            wireTransport(t)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let t = ServerTransport()
+                self.wireTransport(t)
 
-            let actualPort = try t.start()
-            self.transport = t
+                let actualPort = try await t.start()
+                self.transport = t
 
-            insideJobLogger.info("Server resumed on port \(actualPort)")
-            advertiseService(port: actualPort)
+                insideJobLogger.info("Server resumed on port \(actualPort)")
+                self.advertiseService(port: actualPort)
 
-            startAccessibilityObservation()
+                self.startAccessibilityObservation()
 
-            if isPollingEnabled {
-                startPollingLoop()
+                if self.isPollingEnabled {
+                    self.startPollingLoop()
+                }
+
+                insideJobLogger.info("Server resume complete")
+            } catch {
+                insideJobLogger.error("Failed to resume server: \(error)")
+                self.isRunning = false
+                self.isSuspended = false
             }
-
-            insideJobLogger.info("Server resume complete")
-        } catch {
-            insideJobLogger.error("Failed to resume server: \(error)")
-            isRunning = false
-            isSuspended = false
         }
     }
 }

@@ -14,41 +14,40 @@ final class AuthFlowIntegrationTests: XCTestCase {
         )
     }
 
-    private func encode(_ message: ServerMessage) -> Data {
-        // swiftlint:disable:next force_try
-        try! JSONEncoder().encode(ResponseEnvelope(message: message))
+    private func encode(_ message: ServerMessage) throws -> Data {
+        try JSONEncoder().encode(ResponseEnvelope(message: message))
     }
 
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testAuthRequiredTriggersAuthenticate() {
+    func testAuthRequiredTriggersAuthenticate() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-secret-token")
         conn.isConnected = true
 
         // Feeding authRequired should trigger send(.authenticate(...)) internally.
         // Without a real NWConnection, send() is a no-op (guards on connection != nil).
         // We verify this doesn't crash and the token is preserved.
-        conn.handleMessage(encode(.authRequired))
+        try conn.handleMessage(encode(.authRequired))
 
         XCTAssertEqual(conn.token, "test-secret-token")
     }
 
     @ButtonHeistActor
-    func testEmptyTokenStillSendsAuthenticate() {
+    func testEmptyTokenStillSendsAuthenticate() throws {
         // When token is empty, DeviceConnection still sends .authenticate
         // (this triggers the UI approval flow on the server side)
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
         conn.isConnected = true
 
-        conn.handleMessage(encode(.authRequired))
+        try conn.handleMessage(encode(.authRequired))
 
         // Token should remain empty (no crash, no mutation)
         XCTAssertEqual(conn.token, "")
     }
 
     @ButtonHeistActor
-    func testAuthApprovedUpdatesToken() {
+    func testAuthApprovedUpdatesToken() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
         conn.isConnected = true
 
@@ -58,14 +57,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
         }
 
         let approvalToken = "auto-generated-uuid-token"
-        conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: approvalToken))))
+        try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: approvalToken))))
 
         XCTAssertEqual(approvedToken, approvalToken)
         XCTAssertEqual(conn.token, approvalToken)
     }
 
     @ButtonHeistActor
-    func testAuthApprovedFollowedByInfo() {
+    func testAuthApprovedFollowedByInfo() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
         conn.isConnected = true
 
@@ -76,7 +75,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         conn.onConnected = { connectedFired = true }
 
         // Simulate approval then info (the normal success flow)
-        conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: "new-token"))))
+        try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: "new-token"))))
 
         let info = ServerInfo(
             protocolVersion: "5.0",
@@ -87,14 +86,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
             screenWidth: 393,
             screenHeight: 852
         )
-        conn.handleMessage(encode(.info(info)))
+        try conn.handleMessage(encode(.info(info)))
 
         XCTAssertTrue(connectedFired, "onConnected should fire after receiving info")
         XCTAssertEqual(receivedInfo?.appName, "TestApp")
     }
 
     @ButtonHeistActor
-    func testAuthDeniedFiresCallbackAndDisconnects() {
+    func testAuthDeniedFiresCallbackAndDisconnects() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
         conn.isConnected = true
 
@@ -103,7 +102,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         conn.onAuthFailed = { reason in authFailedReason = reason }
         conn.onDisconnected = { reason in disconnectReason = reason }
 
-        conn.handleMessage(encode(.authFailed("Connection denied by user")))
+        try conn.handleMessage(encode(.authFailed("Connection denied by user")))
 
         XCTAssertEqual(authFailedReason, "Connection denied by user")
         XCTAssertFalse(conn.isConnected)
@@ -115,14 +114,14 @@ final class AuthFlowIntegrationTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testObserveModeUsesWatch() {
+    func testObserveModeUsesWatch() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
         conn.isConnected = true
         conn.observeMode = true
 
         // send() will be a no-op without real connection, but we verify
         // observeMode is correctly set and handleMessage doesn't crash
-        conn.handleMessage(encode(.authRequired))
+        try conn.handleMessage(encode(.authRequired))
 
         XCTAssertTrue(conn.observeMode)
     }
