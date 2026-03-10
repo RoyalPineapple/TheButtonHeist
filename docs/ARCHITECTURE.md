@@ -208,7 +208,7 @@ TheSafecracker (stateful, @MainActor)
 - Session locking: single-driver exclusivity with release timer
   - **Release timer** (`INSIDEJOB_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
 - Track active session driver identity and connections
-- **Observer support**: Track read-only observer connections (`observerClients`). Observers are auto-approved by default (no token required). Set `INSIDEJOB_WATCH_AUTH=1` (env) or `InsideJobWatchAuth=true` (Info.plist) to require a valid token for watch connections.
+- **Observer support**: Track read-only observer connections (`observerClients`). Observers are auto-approved by default (no token required). Set `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (Info.plist) to require a valid token for watch connections.
 
 **Integration**: TheMuscle communicates back to TheInsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
@@ -245,7 +245,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 - `SimpleSocketServer` - Network framework TCP server (NWListener, IPv6 dual-stack), used by TheInsideJob via ServerTransport
 - `DeviceConnection` - TCP client with NWConnection service resolution and data transport
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, tokenHash, instanceId, sessionActive)
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, instanceId, sessionActive)
 
 ### TheFence (Command Dispatch Layer)
 
@@ -256,7 +256,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 **Architecture**:
 ```
 TheFence (@ButtonHeistActor)
-├── Configuration (deviceFilter, connectionTimeout, forceSession, token, autoReconnect)
+├── Configuration (deviceFilter, connectionTimeout, token, autoReconnect)
 ├── TheMastermind (private client instance)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
@@ -266,7 +266,7 @@ TheFence (@ButtonHeistActor)
 
 **Key Types**:
 - `TheFence` - Main command dispatch class, `@ButtonHeistActor`-isolated
-- `TheFence.Configuration` - Connection settings (device filter, timeout, force, token, auto-reconnect)
+- `TheFence.Configuration` - Connection settings (device filter, timeout, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
 - `TheFence.CommandCatalog` - Single source of truth for the 29 supported commands
@@ -295,7 +295,7 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 - 14 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
-- Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_FORCE`, `BUTTONHEIST_SESSION_TIMEOUT`
+- Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
 
 ### ButtonHeist (macOS Client Framework)
 
@@ -388,7 +388,7 @@ sequenceDiagram
     IJ->>NS: publish("_buttonheist._tcp")
     Note over NS: Service name: "{AppName}#{instanceId}"<br>instanceId = INSIDEJOB_ID or UUID prefix
     IJ->>NS: setTXTRecord()
-    Note over NS: simudid, tokenhash, instanceid
+    Note over NS: simudid, instanceid, installationid
 
     HC->>NB: start(for: "_buttonheist._tcp")
     NB-->>HC: service found
@@ -402,8 +402,6 @@ When running multiple instances (e.g., multiple simulators), each instance has a
 
 - **Instance ID**: Configurable via `INSIDEJOB_ID` env var, or defaults to first 8 chars of a per-launch UUID. Appears in the Bonjour service name (e.g., `MyApp#a1b2c3d4`) and TXT record.
 - **Simulator UDID**: The `SIMULATOR_UDID` environment variable, automatically set by the iOS Simulator. Published in the Bonjour TXT record under key `simudid`.
-- **Token Hash**: SHA256 hash prefix of the auth token. Published in the TXT record under key `tokenhash` for pre-connection filtering.
-
 Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The matching logic is case-insensitive and supports prefix matching for IDs, allowing partial UDID matching (e.g., `--device DEADBEEF`).
 
 ### Connection Flow
@@ -459,10 +457,10 @@ sequenceDiagram
     WC->>IJ: watch(token:"")
     Note over IJ: TheMuscle routes to handleWatchRequest
 
-    alt Default (INSIDEJOB_WATCH_AUTH not set)
+    alt Default (INSIDEJOB_RESTRICT_WATCHERS not set)
         TM-->>IJ: auto-approved
         IJ-->>WC: info(ServerInfo)
-    else INSIDEJOB_WATCH_AUTH=1
+    else INSIDEJOB_RESTRICT_WATCHERS=1
         alt Valid token
             TM-->>IJ: approved
             IJ-->>WC: info(ServerInfo)
@@ -624,7 +622,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 | `INSIDEJOB_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
-| `INSIDEJOB_WATCH_AUTH` / `InsideJobWatchAuth` | Set to `"1"` (env) or `true` (plist) to require a valid token for watch (observer) connections | not set (observers auto-approved) |
+| `INSIDEJOB_RESTRICT_WATCHERS` / `InsideJobRestrictWatchers` | Set to `"1"` (env) or `true` (plist) to require a valid token for watch (observer) connections | not set (observers auto-approved) |
 
 ### Info.plist Keys (fallback)
 ```xml

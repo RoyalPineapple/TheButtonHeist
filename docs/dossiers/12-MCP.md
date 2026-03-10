@@ -31,7 +31,6 @@ graph TD
     subgraph Config["Environment Config"]
         Device["BUTTONHEIST_DEVICE"]
         Token["BUTTONHEIST_TOKEN"]
-        Force["BUTTONHEIST_FORCE"]
         Timeout["BUTTONHEIST_SESSION_TIMEOUT"]
     end
 

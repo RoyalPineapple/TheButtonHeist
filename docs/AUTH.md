@@ -193,7 +193,7 @@ sequenceDiagram
 
 ### Restricted (Token Required)
 
-Set `INSIDEJOB_WATCH_AUTH=1` (env) or `InsideJobWatchAuth=true` (Info.plist) on the server to require a valid token for watch connections:
+Set `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (Info.plist) on the server to require a valid token for watch connections:
 
 ```mermaid
 sequenceDiagram
@@ -215,7 +215,7 @@ sequenceDiagram
 | Session lock | Claims exclusive session | No session lock |
 | Commands | Full command set | Read-only (no commands) |
 | Default auth | Token required | Auto-approved |
-| Restricted auth | N/A | `INSIDEJOB_WATCH_AUTH=1` / `InsideJobWatchAuth` plist |
+| Restricted auth | N/A | `INSIDEJOB_RESTRICT_WATCHERS=1` / `InsideJobRestrictWatchers` plist |
 | UI approval | Supported (empty token) | Not supported |
 | Broadcasts | When subscribed | Always (auto-subscribed) |
 
@@ -223,19 +223,9 @@ sequenceDiagram
 
 | Method | Key | Example |
 |--------|-----|---------|
-| Environment variable (server) | `INSIDEJOB_WATCH_AUTH` | `INSIDEJOB_WATCH_AUTH=1` (require token) |
-| Info.plist key (server) | `InsideJobWatchAuth` | `true` (require token) |
+| Environment variable (server) | `INSIDEJOB_RESTRICT_WATCHERS` | `INSIDEJOB_RESTRICT_WATCHERS=1` (require token) |
+| Info.plist key (server) | `InsideJobRestrictWatchers` | `true` (require token) |
 | CLI flag (client) | `--token` | `buttonheist watch --token my-secret-token` |
-
-## Bonjour Token Hash
-
-The server publishes a SHA256 hash prefix of its token in the Bonjour TXT record:
-
-```
-tokenhash = SHA256(token).prefix(8 bytes).hexEncoded   // 16 hex chars
-```
-
-Clients can use this to identify the correct server instance before connecting — useful when multiple apps are running. The hash prevents exposing the actual token over mDNS.
 
 ## Security Limits
 
