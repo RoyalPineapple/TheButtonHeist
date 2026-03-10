@@ -84,7 +84,7 @@ struct DiscoveryRegistry {
 }
 
 @ButtonHeistActor
-public final class DeviceDiscovery {
+public final class DeviceDiscovery: DeviceDiscovering {
 
     private var browser: NWBrowser?
     private var registry = DiscoveryRegistry()
@@ -94,9 +94,7 @@ public final class DeviceDiscovery {
         registry.devices
     }
 
-    public var onDeviceFound: ((DiscoveredDevice) -> Void)?
-    public var onDeviceLost: ((DiscoveredDevice) -> Void)?
-    public var onStateChange: ((Bool) -> Void)?
+    public var onEvent: ((DiscoveryEvent) -> Void)?
 
     public init() {}
 
@@ -136,7 +134,7 @@ public final class DeviceDiscovery {
     }
 
     private func handleStateUpdate(_ state: NWBrowser.State) {
-        onStateChange?(state == .ready)
+        onEvent?(.stateChanged(isReady: state == .ready))
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>, changes: Set<NWBrowser.Result.Change>) {
@@ -217,10 +215,10 @@ public final class DeviceDiscovery {
         for mutation in mutations {
             switch mutation {
             case .found(let device):
-                onDeviceFound?(device)
+                onEvent?(.found(device))
             case .lost(let device):
                 logger.info("Device lost: \(device.name)")
-                onDeviceLost?(device)
+                onEvent?(.lost(device))
             }
         }
     }

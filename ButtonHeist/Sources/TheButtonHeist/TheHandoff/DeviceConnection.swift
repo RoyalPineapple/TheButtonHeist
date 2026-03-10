@@ -42,7 +42,7 @@ public enum DisconnectReason: Error, LocalizedError {
 
 /// Connection client using Network framework.
 @ButtonHeistActor
-public final class DeviceConnection {
+public final class DeviceConnection: DeviceConnecting {
 
     private static let maxBufferSize = 10_000_000 // 10 MB
 
@@ -50,23 +50,9 @@ public final class DeviceConnection {
     private let device: DiscoveredDevice
     private(set) var token: String?
     private var receiveBuffer = Data()
-    // Internal for testing (see DeviceConnectionTLSTests)
-    var isConnected = false
+    public var isConnected = false
 
-    public var onConnected: (() -> Void)?
-    public var onDisconnected: ((DisconnectReason) -> Void)?
-    public var onServerInfo: ((ServerInfo) -> Void)?
-    public var onInterface: ((Interface, String?) -> Void)?
-    public var onActionResult: ((ActionResult, String?) -> Void)?
-    public var onScreen: ((ScreenPayload, String?) -> Void)?
-    public var onRecordingStarted: (() -> Void)?
-    public var onRecording: ((RecordingPayload) -> Void)?
-    public var onRecordingError: ((String) -> Void)?
-    public var onError: ((String) -> Void)?
-    public var onAuthApproved: ((String?) -> Void)?
-    public var onSessionLocked: ((SessionLockedPayload) -> Void)?
-    public var onAuthFailed: ((String) -> Void)?
-    public var onInteraction: ((InteractionEvent) -> Void)?
+    public var onEvent: ((ConnectionEvent) -> Void)?
 
     /// When true, send .watch instead of .authenticate on authRequired
     public var observeMode: Bool = false
@@ -87,7 +73,7 @@ public final class DeviceConnection {
 
         guard let expectedFingerprint else {
             logger.error("No TLS fingerprint available — refusing plain TCP connection")
-            onDisconnected?(.certificateMismatch)
+            onEvent?(.disconnected(.certificateMismatch))
             return
         }
 
@@ -137,12 +123,10 @@ public final class DeviceConnection {
             logger.info("Connected")
             isConnected = true
             startReceiving()
-            // Don't fire onConnected yet — wait for auth to complete.
-            // onConnected is fired when we receive the server info message (post-auth).
         case .failed(let error):
             logger.error("Connection failed: \(error)")
             isConnected = false
-            onDisconnected?(.networkError(error))
+            onEvent?(.disconnected(.networkError(error)))
         case .cancelled:
             logger.info("Connection cancelled")
             isConnected = false
@@ -173,7 +157,7 @@ public final class DeviceConnection {
         if let error {
             logger.error("Receive error: \(error)")
             isConnected = false
-            onDisconnected?(.networkError(error))
+            onEvent?(.disconnected(.networkError(error)))
             return
         }
 
@@ -183,7 +167,7 @@ public final class DeviceConnection {
             if receiveBuffer.count > Self.maxBufferSize {
                 logger.error("Server exceeded max buffer size, disconnecting")
                 disconnect()
-                onDisconnected?(.bufferOverflow)
+                onEvent?(.disconnected(.bufferOverflow))
                 return
             }
 
@@ -193,7 +177,7 @@ public final class DeviceConnection {
         if isComplete {
             logger.info("Connection closed by server")
             isConnected = false
-            onDisconnected?(.serverClosed)
+            onEvent?(.disconnected(.serverClosed))
         } else {
             receiveNext(connection: connection)
         }
@@ -217,95 +201,50 @@ public final class DeviceConnection {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
-            onError?("Failed to decode server message")
+            onEvent?(.message(.error("Failed to decode server message"), requestId: nil))
             return
         }
 
         switch message {
-        case .authRequired, .authFailed, .authApproved, .sessionLocked:
-            handleAuthMessage(message)
-        case .recordingStarted, .recordingStopped, .recording, .recordingError:
-            handleRecordingMessage(message)
-        case .info, .interface, .actionResult, .screen, .error, .pong, .interaction:
-            handleResponseMessage(message, requestId: requestId)
-        }
-    }
-
-    private func handleAuthMessage(_ message: ServerMessage) {
-        switch message {
         case .authRequired:
-            if observeMode {
-                logger.info("Auth required, sending watch request")
-                send(.watch(WatchPayload(token: token ?? "")))
-            } else {
-                logger.info("Auth required, sending token")
-                send(.authenticate(AuthenticatePayload(
-                    token: token ?? "",
-                    driverId: driverId
-                )))
-            }
+            handleAuthRequired()
         case .authFailed(let reason):
             logger.error("Auth failed: \(reason)")
-            onAuthFailed?(reason)
+            onEvent?(.message(.authFailed(reason), requestId: nil))
             disconnect()
-            onDisconnected?(.authFailed(reason))
+            onEvent?(.disconnected(.authFailed(reason)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token
-            onAuthApproved?(payload.token)
+            onEvent?(.message(.authApproved(payload), requestId: nil))
         case .sessionLocked(let payload):
             logger.warning("Session locked: \(payload.message)")
-            onSessionLocked?(payload)
+            onEvent?(.message(.sessionLocked(payload), requestId: nil))
             disconnect()
-            onDisconnected?(.sessionLocked(payload.message))
-        default:
-            break
-        }
-    }
-
-    private func handleRecordingMessage(_ message: ServerMessage) {
-        switch message {
-        case .recordingStarted:
-            logger.info("Recording started")
-            onRecordingStarted?()
-        case .recordingStopped:
-            logger.debug("Recording stop acknowledged")
-        case .recording(let payload):
-            logger.debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
-            onRecording?(payload)
-        case .recordingError(let message):
-            logger.error("Recording error: \(message)")
-            onRecordingError?(message)
-        default:
-            break
-        }
-    }
-
-    private func handleResponseMessage(_ message: ServerMessage, requestId: String?) {
-        switch message {
+            onEvent?(.disconnected(.sessionLocked(payload.message)))
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
-            onServerInfo?(info)
-            onConnected?()
-        case .interface(let payload):
-            logger.debug("Received interface: \(payload.elements.count) elements")
-            onInterface?(payload, requestId)
-        case .actionResult(let result):
-            logger.debug("Received action result: \(result.success)")
-            onActionResult?(result, requestId)
-        case .error(let errorMessage):
-            logger.error("Received error: \(errorMessage)")
-            onError?(errorMessage)
+            onEvent?(.connected)
+            onEvent?(.message(.info(info), requestId: requestId))
+        case .recordingStopped:
+            logger.debug("Recording stop acknowledged")
         case .pong:
             logger.debug("Received pong")
-        case .screen(let payload):
-            logger.debug("Received screen: \(payload.pngData.count) chars base64")
-            onScreen?(payload, requestId)
-        case .interaction(let event):
-            logger.debug("Received interaction: \(event.result.method.rawValue)")
-            onInteraction?(event)
         default:
-            break
+            onEvent?(.message(message, requestId: requestId))
+        }
+    }
+
+    private func handleAuthRequired() {
+        if observeMode {
+            logger.info("Auth required, sending watch request")
+            send(.watch(WatchPayload(token: token ?? "")))
+        } else {
+            logger.info("Auth required, sending token")
+            send(.authenticate(AuthenticatePayload(
+                token: token ?? "",
+                driverId: driverId
+            )))
         }
     }
 

@@ -1,6 +1,6 @@
 # ButtonHeist - Architecture
 
-> Generated: 2025-03-10 | Commit: ee2a60b | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
 
 ## Architecture Diagram
 
@@ -21,13 +21,19 @@ graph TB
 
     subgraph transport["Transport"]
         TM --> DD["DeviceDiscovery<br/>NWBrowser / Bonjour"]
-        TM --> DC["DeviceConnection<br/>NWConnection"]
+        DD -->|extracts certfp<br/>from TXT record| FP["TLS Fingerprint"]
+        TM --> DC["DeviceConnection<br/>NWConnection + TLS"]
+        DC -->|verifies fingerprint<br/>during handshake| FP
     end
 
-    DC <-->|"TCP<br/>Newline-delimited JSON<br/>WiFi or USB"| SS
+    DC <-->|"TLS 1.3 (P-256 ECDSA)<br/>Newline-delimited JSON<br/>WiFi or USB"| SS
 
     subgraph ios["iOS App Process"]
-        SS["SimpleSocketServer<br/>NWListener"] --> IJ["TheInsideJob<br/>@MainActor coordinator"]
+        TLSI["TLSIdentity<br/>Self-signed cert<br/>Keychain persistence"] -->|NWParameters| SS
+        TLSI -->|sha256 fingerprint| ST
+        SS["SimpleSocketServer<br/>NWListener + TLS"] --> IJ["TheInsideJob<br/>@MainActor coordinator"]
+        ST["ServerTransport<br/>TCP + TLS + Bonjour"] --> SS
+        ST -->|certfp in TXT record| Bonjour["NetService<br/>_buttonheist._tcp"]
         IJ --> IJD["TheInsideJob+Dispatch<br/>message routing"]
         IJD --> TBag["TheBagman<br/>Element cache + delta"]
         IJD --> TSC["TheSafecracker<br/>Touch + text injection"]
@@ -42,7 +48,7 @@ graph TB
 
     subgraph shared["Shared"]
         TS["TheScore<br/>Wire protocol types"]
-        TG["TheGetaway<br/>Server transport"]
+        TG["TheGetaway<br/>Server transport + TLS"]
     end
 
     TS -.->|used by| IJ
@@ -54,7 +60,8 @@ graph TB
 
 | Pattern | Description |
 |---------|-------------|
-| **Client-Server (Distributed)** | iOS framework embeds as TCP server; macOS tooling discovers, connects, and sends commands over newline-delimited JSON. |
+| **Client-Server (Distributed)** | iOS framework embeds as TLS-encrypted TCP server; macOS tooling discovers, connects with certificate fingerprint pinning, and sends commands over newline-delimited JSON. |
+| **Trust-on-First-Sight (TOFU) TLS** | Self-signed ECDSA P-256 certificates with fingerprint pinning via Bonjour TXT records. No CA required. Server generates identity, publishes SHA-256 fingerprint; client verifies during TLS handshake. |
 | **Facade / Command Dispatch** | TheFence centralizes all 29 commands. CLI and MCP are thin wrappers over TheFence.execute(). Handlers extracted to TheFence+Handlers.swift. |
 | **Observer Pattern (Reactive)** | TheMastermind uses @Observable for SwiftUI. iOS server uses polling-and-broadcast for hierarchy changes. |
 | **Layered Architecture** | Strict dependency direction: TheScore -> TheGetaway -> TheInsideJob / TheButtonHeist -> TheFence -> CLI/MCP. |
@@ -70,8 +77,8 @@ graph TB
 - **Dependencies**: None
 
 ### 2. Transport Layer
-- **Components**: TheGetaway (SimpleSocketServer, ServerTransport), DeviceConnection, DeviceDiscovery
-- **Purpose**: TCP server/client networking, Bonjour discovery, connection management
+- **Components**: TheGetaway (SimpleSocketServer, ServerTransport, TLSIdentity), DeviceConnection, DeviceDiscovery
+- **Purpose**: TLS-encrypted TCP server/client networking, Bonjour discovery, certificate identity management, connection lifecycle
 - **Dependencies**: Shared Protocol Layer
 
 ### 3. iOS Server Layer
@@ -81,7 +88,7 @@ graph TB
 
 ### 4. macOS Client Layer
 - **Components**: ButtonHeist framework, TheMastermind (@Observable)
-- **Purpose**: Observable client API wrapping discovery, connection, and state management
+- **Purpose**: Observable client API wrapping discovery, TLS connection, and state management
 - **Dependencies**: Shared Protocol Layer, Transport Layer
 
 ### 5. Command Dispatch Layer
@@ -96,39 +103,48 @@ graph TB
 
 ## Key Interaction Flows
 
+### TLS Connection Establishment
+1. TheInsideJob calls TLSIdentity.getOrCreate() to obtain or generate a self-signed ECDSA P-256 certificate with Keychain persistence
+2. ServerTransport creates NWListener with TLS parameters from TLSIdentity.makeTLSParameters() (TLS 1.3 minimum)
+3. ServerTransport advertises Bonjour service with TXT record containing certfp (sha256:hex fingerprint) and transport=tls
+4. DeviceDiscovery extracts certfp from Bonjour TXT record into DiscoveredDevice.certFingerprint
+5. DeviceConnection.connect() refuses plain TCP if no fingerprint available, builds TLS NWParameters with sec_protocol_options_set_verify_block
+6. During TLS handshake, verify block extracts leaf certificate, computes SHA-256 fingerprint, compares against expected value from discovery
+7. On match: TLS connection established, auth flow proceeds; On mismatch: connection rejected with .certificateMismatch
+
 ### Command Execution (activate element)
 1. CLI/MCP calls `TheFence.execute(request:)` with command dictionary
-2. TheFence auto-connects via TheMastermind if needed (discovery + TCP + auth)
-3. TheFence dispatches to handler in TheFence+Handlers.swift, sends ClientMessage over TCP
+2. TheFence auto-connects via TheMastermind if needed (discovery + TLS + auth)
+3. TheFence dispatches to handler in TheFence+Handlers.swift, sends ClientMessage over TLS-encrypted TCP
 4. TheInsideJob receives message, routes via TheInsideJob+Dispatch.swift (three-stage dispatch)
 5. TheBagman refreshes accessibility data, TheSafecracker executes action
 6. TheInsideJob computes interface delta via TheBagman+Conversion and returns ActionResult
-7. Response propagates back: TCP -> TheMastermind -> TheFence -> TheFence+Formatting -> CLI/MCP
+7. Response propagates back: TLS/TCP -> TheMastermind -> TheFence -> TheFence+Formatting -> CLI/MCP
 
 ### Device Discovery
-1. TheInsideJob starts SimpleSocketServer on OS-assigned port
-2. TheInsideJob publishes Bonjour service (`_buttonheist._tcp`) with TXT record
+1. TheInsideJob starts SimpleSocketServer with TLS parameters on OS-assigned port
+2. TheInsideJob publishes Bonjour service (`_buttonheist._tcp`) with TXT record including certfp and transport=tls
 3. TheMastermind starts NWBrowser for `_buttonheist._tcp`
-4. NWBrowser discovers service, extracts TXT record metadata
-5. Device added to discoveredDevices array
+4. NWBrowser discovers service, DeviceDiscovery extracts TXT record metadata including certFingerprint
+5. Device added to discoveredDevices array with TLS fingerprint
 
 ### Authentication
-1. TCP connection established
+1. TLS connection established with fingerprint verification
 2. Server sends `authRequired` challenge
 3. Client sends `authenticate(token)` or `watch(token)`
 4. TheMuscle validates token or presents UI approval dialog
-5. On success: server sends `info(ServerInfo)`, client subscribes
+5. On success: server sends `info(ServerInfo)` with tlsActive=true, client subscribes
 6. On failure: server sends `authFailed`, disconnects after 100ms
 
 ### Interface Polling & Broadcasting
 1. Polling timer fires (default 1.0s interval)
 2. TheBagman parses accessibility hierarchy via elementVisitor
 3. Elements flattened via TheBagman+Conversion and hashed
-4. If hash changed: broadcast interface + screen to all subscribed clients
+4. If hash changed: broadcast interface + screen to all subscribed clients over TLS
 5. Debounced by 300ms for UI notification coalescing
 
 ### Touch Dispatch Pipeline
-1. TheInsideJob+Dispatch receives ClientMessage
+1. TheInsideJob+Dispatch receives ClientMessage over TLS
 2. Routes through dispatchAccessibilityInteraction, dispatchTouchInteraction, or dispatchTextAndScrollInteraction
 3. Each dispatcher delegates to TheSafecracker methods
 4. Multi-touch gestures (pinch, rotate, two-finger tap) handled by TheSafecracker+MultiTouch
@@ -136,20 +152,22 @@ graph TB
 ## Data Flow
 
 ### State Management
-- **Strategy**: In-memory state with network synchronization
-- **iOS**: TheInsideJob singleton holds element cache (TheBagman), auth state (TheMuscle), recording state (TheStakeout)
+- **Strategy**: In-memory state with TLS-encrypted network synchronization
+- **iOS**: TheInsideJob singleton holds element cache (TheBagman), auth state (TheMuscle), recording state (TheStakeout), TLS identity (TLSIdentity persisted in Keychain)
 - **macOS**: TheMastermind (@Observable) holds client-side state
-- **Lifecycle**: Server state = app process lifetime; client state = connection duration; session locks released after 30s timeout
+- **Lifecycle**: Server state = app process lifetime; client state = TLS connection duration; session locks released after 30s timeout; TLS identity persists across launches via Keychain
 
 ### Data Pipelines
 
 | Pipeline | Input | Processing | Output |
 |----------|-------|-----------|--------|
-| UI Element Extraction | Live view hierarchy | AccessibilityHierarchyParser -> elementVisitor -> TheBagman+Conversion -> flatten -> hash | Interface (JSON) broadcast |
-| Screen Capture | Window hierarchy | drawHierarchy -> PNG -> base64 | ScreenPayload broadcast |
-| Action Execution | ClientMessage + target | TheInsideJob+Dispatch routes -> TheSafecracker executes -> TheBagman+Conversion.computeDelta | ActionResult with InterfaceDelta |
+| TLS Identity Provisioning | Keychain lookup or ECDSA P-256 key generation | TLSIdentity.getOrCreate() -> Keychain load or generate X.509 cert -> DER serialize -> SHA-256 fingerprint | SecIdentity for NWListener TLS, fingerprint for Bonjour TXT |
+| TLS Fingerprint Distribution | TLSIdentity.fingerprint (sha256:hex) | ServerTransport publishes certfp in Bonjour TXT -> DeviceDiscovery extracts to DiscoveredDevice.certFingerprint | Client-side expectedFingerprint for TLS verification |
+| UI Element Extraction | Live view hierarchy | AccessibilityHierarchyParser -> elementVisitor -> TheBagman+Conversion -> flatten -> hash | Interface (JSON) broadcast over TLS |
+| Screen Capture | Window hierarchy | drawHierarchy -> PNG -> base64 | ScreenPayload broadcast over TLS |
+| Action Execution | ClientMessage + target | TheInsideJob+Dispatch routes -> TheSafecracker executes -> TheBagman+Conversion.computeDelta | ActionResult with InterfaceDelta over TLS |
 | Response Formatting | FenceResponse enum | TheFence+Formatting: humanFormatted() or jsonDict() | Text or JSON for CLI/MCP |
-| Screen Recording | startRecording config | Frame capture loop -> AVAssetWriter H.264 -> interaction log | RecordingPayload (base64 MP4) |
+| Screen Recording | startRecording config | Frame capture loop -> AVAssetWriter H.264 -> interaction log | RecordingPayload (base64 MP4) over TLS |
 
 ## Technology Stack
 
@@ -159,11 +177,12 @@ graph TB
 | **Platforms** | iOS 17.0+, macOS 14.0 |
 | **Build Tools** | Tuist (Xcode project gen), SPM (CLI, MCP), SwiftLint |
 | **Build Policy** | `-warnings-as-errors` on all SPM targets (zero-warning gate) |
-| **Networking** | Network.framework (TCP, Bonjour), custom wire protocol v4.0 (NDJSON) |
+| **Networking** | Network.framework (TCP, TLS 1.3, Bonjour), custom wire protocol v5.0 (NDJSON) |
+| **TLS** | Self-signed ECDSA P-256 via swift-certificates (X509), SHA-256 fingerprints via swift-crypto (Crypto), Keychain persistence via Security.framework |
 | **Media** | AVFoundation (AVAssetWriter for H.264/MP4), UIGraphicsImageRenderer (screenshots) |
 | **Touch** | IOKit (HID events via private API), UIKeyboardImpl (text input) |
-| **Concurrency** | @MainActor (iOS), @ButtonHeistActor (macOS), async/await, GCD (socket I/O) |
-| **Protocols** | Custom wire protocol v4.0, Bonjour/mDNS, MCP (Model Context Protocol) |
+| **Concurrency** | @MainActor (iOS), @ButtonHeistActor (macOS), async/await, actor (TLSIdentity, SimpleSocketServer), GCD (socket I/O) |
+| **Protocols** | Custom wire protocol v5.0, Bonjour/mDNS, MCP (Model Context Protocol) |
 
 ## Deployment Model
 
@@ -178,8 +197,11 @@ graph TB
 
 | Integration | Type | Details |
 |------------|------|---------|
+| Apple Security Framework / Keychain | System | TLS identity persistence — certificates and private keys stored in Keychain |
+| swift-certificates (X509) | SPM (1.0.0+) | X.509 certificate generation for self-signed TLS identities |
+| swift-crypto (Crypto) | SPM (3.0.0+) | SHA-256 fingerprint computation for TLS certificate pinning |
 | AccessibilitySnapshot | Git submodule (fork) | Hierarchy parsing with elementVisitor closure + Hashable |
-| Apple Network Framework | System | NWListener, NWConnection, NWBrowser for TCP + Bonjour |
+| Apple Network Framework | System | NWListener, NWConnection, NWBrowser, NWProtocolTLS for TCP + TLS 1.3 + Bonjour |
 | AVFoundation | System | AVAssetWriter for H.264/MP4 screen recording |
 | IOKit (Private) | System (dlsym) | Multi-finger HID event creation for touch synthesis |
 | MCP Swift SDK | SPM (0.11.0+) | Model Context Protocol server for AI agent tools |

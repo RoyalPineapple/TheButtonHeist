@@ -2,7 +2,7 @@
 
 **Version**: 5.0
 
-This document specifies the communication protocol between TheInsideJob (iOS) and clients (TheWheelman, CLI, Python scripts).
+This document specifies the communication protocol between TheInsideJob (iOS) and clients (TheGetaway, CLI, Python scripts).
 
 ## Transport
 
@@ -500,7 +500,7 @@ Sent after successful authentication. Contains device and app metadata.
 
 ```json
 {"info":{"_0":{
-  "protocolVersion":"4.0",
+  "protocolVersion":"5.0",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
