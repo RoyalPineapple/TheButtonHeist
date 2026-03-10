@@ -102,7 +102,7 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 14 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop-recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, copy, paste, cut, select, select_all, dismiss-keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop_recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, get_interface, wait_for_idle, copy, paste, cut, select, select_all, dismiss_keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 

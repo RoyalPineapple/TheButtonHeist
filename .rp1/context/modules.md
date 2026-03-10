@@ -1,16 +1,16 @@
 # ButtonHeist - Modules
 
-> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-11 | Commit: 7c86f2d | Strategy: parallel-map-reduce (incremental)
 
 ## Module Overview
 
 | Module | Type | Files | LOC | Purpose |
 |--------|------|-------|-----|---------|
 | TheScore | Framework | 4 | 1,111 | Shared wire protocol types and message definitions |
-| TheButtonHeist | Framework | 12 | 2,769 | macOS client: TheFence (3 files), TheMastermind, TheHandoff (TLS-aware) |
+| TheButtonHeist | Framework | 13 | 2,745 | macOS client: TheFence (4 files: core, handlers, formatting, command catalog), TheMastermind, TheHandoff (TLS-aware) |
 | TheInsideJob | Framework | 19 | 4,460 | iOS server: accessibility, gestures, recording, auth, TLS config |
 | *(Transport layer)* | *(merged)* | — | — | *TLS transport (TLSIdentity, ServerTransport, SimpleSocketServer) merged into TheInsideJob* |
-| ButtonHeistCLI | Executable | 21 | 1,932 | CLI tool with 29 commands |
+| ButtonHeistCLI | Executable | 23 | 2,047 | CLI tool with 21 subcommands (snake_case naming) |
 | ButtonHeistMCP | Executable | 2 | 470 | MCP server with 14 AI agent tools |
 | TestApp | App | 28 | 1,954 | SwiftUI + UIKit demo apps |
 | Tests | Test Suite | 22 | 3,397 | Unit and integration tests |
@@ -22,20 +22,20 @@
 **Purpose**: Cross-platform wire protocol types. No UIKit dependency. Consumed by both iOS server and macOS clients.
 
 **Key Files**:
-- `ButtonHeist/Sources/TheScore/ClientMessages.swift` - 29 client-to-server message cases
+- `ButtonHeist/Sources/TheScore/ClientMessages.swift` - 29 client-to-server message cases, EditAction enum (public)
 - `ButtonHeist/Sources/TheScore/ServerMessages.swift` - 15 server-to-client message cases, ServerInfo.tlsActive
 - `ButtonHeist/Sources/TheScore/Elements.swift` - HeistElement, Interface, InterfaceDelta models
 - `ButtonHeist/Sources/TheScore/Messages.swift` - RequestEnvelope, ResponseEnvelope, constants, protocolVersion 5.0
 
-**Public API**: ClientMessage, ServerMessage, RequestEnvelope, ResponseEnvelope, HeistElement, Interface, ActionResult, InterfaceDelta, ActionTarget, ScreenPayload, RecordingPayload, ServerInfo (tlsActive), InteractionEvent, ElementAction, RecordingConfig, buttonHeistServiceType, protocolVersion
+**Public API**: ClientMessage, ServerMessage, RequestEnvelope, ResponseEnvelope, HeistElement, Interface, ActionResult, InterfaceDelta, ActionTarget, EditAction (new: public enum), EditActionTarget (action: EditAction), ScreenPayload, RecordingPayload, ServerInfo (tlsActive), InteractionEvent, ElementAction, RecordingConfig, SwipeDirection, ScrollDirection, ScrollEdge, buttonHeistServiceType, protocolVersion
 
-**Contracts**: All types Codable + Sendable. Protocol v5.0. Service type: `_buttonheist._tcp`.
+**Contracts**: All types Codable + Sendable. Protocol v5.0. Service type: `_buttonheist._tcp`. EditAction is a public String-backed enum (was private in TheSafecracker). EditActionTarget.action is typed EditAction (was String).
 
 ---
 
 ### TheButtonHeist (macOS Client Framework)
 
-**Purpose**: Client-side framework. TheFence split into 3 files (core, handlers, formatting). TheMastermind (Observable coordinator), TheHandoff (TLS-aware discovery + connection lifecycle), ButtonHeistActor.
+**Purpose**: Client-side framework. TheFence split into 4 files (core, handlers, formatting, command catalog). TheMastermind (Observable coordinator), TheHandoff (TLS-aware discovery + connection lifecycle), ButtonHeistActor.
 
 **Key Files**:
 - `ButtonHeist/Sources/TheButtonHeist/TheFence.swift` - Command dispatch core (~303 lines)
@@ -55,14 +55,14 @@
 | **TheFence** | Core dispatch, connection management, sendAndAwait<T> pattern (~303 lines) |
 | **TheFence+Handlers** | Command handler implementations for interface, screen, gestures, text, scroll, recording (329 lines) |
 | **TheFence+Formatting** | FenceResponse enum with humanFormatted() and jsonDict() output (360 lines) |
-| **CommandCatalog** | Canonical command list + version string (buttonHeistVersion). Source of truth for CLI/MCP. |
+| **TheFence.Command** | String-backed CaseIterable enum (29 cases). Replaces former CommandCatalog. Source of truth for CLI/MCP. All snake_case rawValues. |
 | **TheMastermind** | @Observable wrapper over TheHandoff. Async waitFor* methods with requestId correlation. Generic waitForResponse<T>. |
 | **TheHandoff** | Device lifecycle: Bonjour discovery, TLS connect, keepalive (3s), auto-reconnect (60x1s). Persistent driver ID. |
 | **DeviceDiscovery** | NWBrowser for `_buttonheist._tcp`. TXT record parsing including certfp extraction. DiscoveryRegistry deduplication. |
 | **DeviceConnection** | TLS-encrypted NWConnection client. Fingerprint pinning via sec_protocol_options_set_verify_block. Refuses plain TCP. Auth handshake, NDJSON framing, 10MB buffer. DisconnectReason.certificateMismatch. |
 | **DiscoveredDevice** | Device metadata: service name, endpoint, simulator UDID, installation ID, session status, certFingerprint (sha256:hex). |
 
-**Public API**: TheFence, TheFence.Configuration, CommandCatalog, TheMastermind, TheHandoff, DeviceDiscovery, DeviceConnection, DiscoveredDevice (certFingerprint), FenceResponse, FenceError, ButtonHeistActor, DisconnectReason (certificateMismatch), buttonHeistVersion
+**Public API**: TheFence, TheFence.Command (replaces CommandCatalog), TheFence.Configuration, TheMastermind, TheHandoff, DeviceDiscovery, DeviceConnection, DiscoveredDevice (certFingerprint), FenceResponse, FenceError, ButtonHeistActor, DisconnectReason (certificateMismatch), Timeouts, buttonHeistVersion
 
 **Dependencies**: TheScore (@_exported import), Crypto (swift-crypto)
 
@@ -127,17 +127,19 @@
 
 ### ButtonHeistCLI (CLI Tool)
 
-**Purpose**: Command-line client using ArgumentParser. 18 subcommands + persistent REPL session mode. Canonical test client.
+**Purpose**: Command-line client using ArgumentParser. 21 subcommands (snake_case naming) + persistent REPL session mode. Canonical test client.
 
 **Key Files**:
-- `ButtonHeistCLI/Sources/Support/main.swift` - Entry point, command hierarchy
+- `ButtonHeistCLI/Sources/Support/main.swift` - Entry point, 21 registered subcommands
 - `ButtonHeistCLI/Sources/Session/SessionCommand.swift` - Session command
-- `ButtonHeistCLI/Sources/Session/SessionRepl.swift` - Interactive REPL
+- `ButtonHeistCLI/Sources/Session/SessionRepl.swift` - Interactive REPL with compoundAliases for edit actions
+- `ButtonHeistCLI/Sources/Commands/GetInterfaceCommand.swift` - New: standalone get_interface command
+- `ButtonHeistCLI/Sources/Commands/WaitForIdleCommand.swift` - New: standalone wait_for_idle command
 - `ButtonHeistCLI/Sources/Support/DeviceConnector.swift` - Connection helper
 - `ButtonHeistCLI/Sources/Support/ElementTargetOptions.swift` - Shared --identifier/--index options
 - `ButtonHeistCLI/Sources/Support/OutputOptions.swift` - Shared --format option
 
-**Commands**: activate, list, action, scroll, scroll-to-visible, scroll-to-edge, touch, type, screenshot, session, record, stop-recording, copy, paste, cut, select, select-all, dismiss-keyboard
+**Commands**: activate, list, action, scroll, scroll_to_visible, scroll_to_edge, touch, type, screenshot, get_interface, wait_for_idle, session, record, stop_recording, copy, paste, cut, select, select_all, dismiss_keyboard
 
 **Dependencies**: TheButtonHeist (TheFence), ArgumentParser
 
@@ -219,12 +221,15 @@ TestApp (embeds TheInsideJob + TheScore)
 |---------|-------------|---------|
 | **TLS Transport Encryption** | End-to-end TLS 1.3 with self-signed ECDSA P-256 certificates and SHA-256 fingerprint pinning via Bonjour TXT records. No CA required. | TheInsideJob, TheButtonHeist, TheScore |
 | **Heist Crew Metaphor** | Every component named after a heist role | All |
-| **Extension-Based File Splitting** | Large files decomposed into Type+Concern.swift extensions (TheFence 3 files, TheInsideJob 2, TheSafecracker 7, TheBagman 2) | TheButtonHeist, TheInsideJob |
+| **Extension-Based File Splitting** | Large files decomposed into Type+Concern.swift extensions (TheFence 4 files, TheInsideJob 2, TheSafecracker 7, TheBagman 2) | TheButtonHeist, TheInsideJob |
 | **Protocol Symmetry** | TheScore types used identically on both sides | TheScore, TheButtonHeist, TheInsideJob |
 | **Layered Command Dispatch** | CLI/MCP -> TheFence -> TheMastermind -> TLS/TCP -> TheInsideJob | All |
 | **Interaction Pipeline** | Refresh -> snapshot -> execute -> delta -> respond | TheInsideJob, TheSafecracker, TheBagman |
 | **Three-Stage Dispatch** | Accessibility -> touch -> text/scroll routing chain | TheInsideJob |
 | **Request-ID Correlation** | UUID requestIds threaded through envelopes for multiplexed responses | TheButtonHeist, TheScore, TheInsideJob |
-| **Dual Client Architecture** | CLI + MCP both wrap TheFence with same CommandCatalog | ButtonHeistCLI, ButtonHeistMCP, TheButtonHeist |
+| **Typed Enum at Boundary** | TheFence.Command and EditAction enums replace raw strings. Strings parsed to enums at system boundary; typed values flow internally. Compile-time exhaustiveness checking. | TheScore, TheButtonHeist, ButtonHeistCLI, ButtonHeistMCP |
+| **CLI/MCP Sync Contract** | TheFence.Command enum is single source of truth. CLI subcommands, REPL aliases, and MCP tool definitions must stay in sync with Command.allCases. | TheButtonHeist, ButtonHeistCLI, ButtonHeistMCP |
+| **Shared Type Migration (EditAction)** | EditAction moved from private iOS-only scope (TheSafecracker) to public shared protocol (TheScore). TheSafecracker extends with UIKit-specific selector mapping. TheFence and CLI consume for validation and aliases. | TheScore, TheButtonHeist, TheInsideJob, ButtonHeistCLI |
+| **Dual Client Architecture** | CLI + MCP both wrap TheFence with same Command enum | ButtonHeistCLI, ButtonHeistMCP, TheButtonHeist |
 | **Global Actor Isolation** | @ButtonHeistActor (macOS), @MainActor (iOS), actor (SimpleSocketServer, TLSIdentity) | All |
 | **Warnings-as-Errors** | All SPM targets enforce zero-warning build policy | All |

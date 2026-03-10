@@ -1,6 +1,6 @@
 # ButtonHeist - Project Index
 
-> Generated: 2026-03-10 | Commit: 402d50e | Strategy: parallel-map-reduce (incremental)
+> Generated: 2026-03-11 | Commit: 7c86f2d | Strategy: parallel-map-reduce (incremental)
 
 ## Overview
 
@@ -10,7 +10,7 @@
 - **Language**: Swift 6.0 (strict concurrency), Objective-C (minor)
 - **Platforms**: iOS 17.0+ (server framework), macOS 14.0 (client tooling)
 - **Build System**: Tuist (Xcode project generation) + Swift Package Manager (CLI, MCP)
-- **Build Policy**: `-warnings-as-errors` on all SPM targets
+- **Build Policy**: Warnings as errors, strict concurrency (complete), SwiftLint on every build
 - **License**: Apache License 2.0
 
 ## Frameworks & Dependencies
