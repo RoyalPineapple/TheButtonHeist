@@ -144,9 +144,9 @@ extension Array where Element == DiscoveredDevice {
         return first { $0.matches(filter: filter) }
     }
 
-    /// Probe all devices in parallel and return only those that are TCP-reachable.
-    /// Uses a plain TCP connect to each device's endpoint; stale mDNS cache entries
-    /// will fail with TCP RST while live devices complete the handshake.
+    /// Probe all devices in parallel and return only those that are reachable.
+    /// Uses a UDP path probe to each device's endpoint; stale mDNS cache entries
+    /// will fail while live devices establish a viable path.
     public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: DiscoveredDevice?.self) { group in
             for device in self {

@@ -246,18 +246,21 @@ public actor SimpleSocketServer {
             case .ready:
                 // Scope filtering at .ready: interface info is now available for precise USB detection
                 if let scopeFilter {
-                    if let host = Self.extractRemoteHost(from: connection) {
-                        let interfaces = connection.currentPath?.availableInterfaces ?? []
-                        let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
-                        let hostDescription = "\(host)"
-                        let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
-                        if !scopeFilter.contains(scope) {
-                            logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
-                            Task { await self.removeClient(clientId) }
-                            return
-                        }
-                        logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                    guard let host = Self.extractRemoteHost(from: connection) else {
+                        logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
+                        Task { await self.removeClient(clientId) }
+                        return
                     }
+                    let interfaces = connection.currentPath?.availableInterfaces ?? []
+                    let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
+                    let hostDescription = "\(host)"
+                    let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
+                    if !scopeFilter.contains(scope) {
+                        logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                        Task { await self.removeClient(clientId) }
+                        return
+                    }
+                    logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                 }
                 logger.info("Client \(clientId) connected")
                 self.onClientConnected?(clientId)
