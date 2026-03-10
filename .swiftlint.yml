@@ -58,3 +58,7 @@ type_name:
 cyclomatic_complexity:
   warning: 15
   error: 35
+
+inclusive_language:
+  override_allowed_terms:
+    - mastermind
