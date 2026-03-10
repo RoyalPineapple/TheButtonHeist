@@ -19,6 +19,7 @@ TheScore is the protocol bible. It defines:
 9. **Server info** (`ServerInfo`)
 10. **Protocol constants** (service type, version)
 11. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
+12. **Connection scope types** (`ConnectionScope`) - configurable connection source filtering (simulator, USB, network) with address classification and environment variable parsing
 
 ## Architecture Diagram
 
