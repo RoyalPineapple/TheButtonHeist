@@ -22,11 +22,10 @@ TheInsideJob advertises itself using Bonjour:
 - **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
 - **TXT Record**:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
-  - `tokenhash` — SHA256 hash prefix of the auth token (first 8 bytes, hex-encoded). Used for pre-connection filtering.
   - `instanceid` — Human-readable instance identifier
   - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, token hash, instance ID, or session state without establishing a TCP connection first.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first.
 
 ### USB (CoreDevice IPv6 Tunnel)
 When connected via USB, macOS creates an IPv6 tunnel:
@@ -65,7 +64,7 @@ sequenceDiagram
         Server-->>Client: actionResult
     else Watch (observer) connection
         Client->>Server: watch(token:"")
-        Note over Server: Auto-approved (default)<br>or token-checked if INSIDEJOB_WATCH_AUTH=1
+        Note over Server: Auto-approved (default)<br>or token-checked if INSIDEJOB_RESTRICT_WATCHERS=1
         Server-->>Client: info
         Note over Client: Auto-subscribed to broadcasts
     end
@@ -442,7 +441,7 @@ Connect as a read-only observer. Sent instead of `authenticate` after receiving 
 {"watch":{"_0":{"token":""}}}
 ```
 
-By default, watch connections are auto-approved without a token. If the server has `INSIDEJOB_WATCH_AUTH=1` set, a valid token is required.
+By default, watch connections are auto-approved without a token. If the server has `INSIDEJOB_RESTRICT_WATCHERS=1` set, a valid token is required.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -1137,7 +1136,6 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
-| `forceSession` | `Bool?` | When true, request force-takeover of an active session (currently accepted but not acted upon) |
 | `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
@@ -1151,7 +1149,7 @@ A single recorded interaction event captured during a Stakeout recording.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `token` | `String` | Auth token. Empty string for default open access. Required when `INSIDEJOB_WATCH_AUTH=1` is set on the server. |
+| `token` | `String` | Auth token. Empty string for default open access. Required when `INSIDEJOB_RESTRICT_WATCHERS=1` is set on the server. |
 
 ## Implementation Notes
 
@@ -1164,7 +1162,7 @@ Token-based authentication is required for driver connections:
 3. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
-6. For observers: auto-approved by default (no token required). When `INSIDEJOB_WATCH_AUTH=1` is set, a valid token is required.
+6. For observers: auto-approved by default (no token required). When `INSIDEJOB_RESTRICT_WATCHERS=1` is set, a valid token is required.
 
 The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 

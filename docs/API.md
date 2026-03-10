@@ -31,7 +31,7 @@ INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated eac
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
 INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
-INSIDEJOB_WATCH_AUTH=1               # Require valid token for watch (observer) connections (default: auto-approve)
+INSIDEJOB_RESTRICT_WATCHERS=1        # Require valid token for watch (observer) connections (default: auto-approve)
 ```
 
 **Info.plist (fallback):**
@@ -395,14 +395,6 @@ public var onSessionLocked: ((SessionLockedPayload) -> Void)?
 
 Called when the server rejects the connection because another driver holds the active session. The `connectionState` will be set to `.failed` with the payload message. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking) for details.
 
-##### forceSession
-
-```swift
-public var forceSession: Bool
-```
-
-When `true`, the next connection sends `forceSession: true` in the auth handshake, forcibly taking over any existing session. Default: `false`.
-
 ##### driverId
 
 ```swift
@@ -552,7 +544,6 @@ public final class TheFence
 public struct Configuration {
     public var deviceFilter: String?        // Target device by name/ID/UDID
     public var connectionTimeout: TimeInterval // Default: 30
-    public var forceSession: Bool           // Force-takeover existing session
     public var token: String?               // Auth token (falls back to BUTTONHEIST_TOKEN env)
     public var autoReconnect: Bool          // Auto-reconnect on disconnect (default: true)
 }
@@ -742,7 +733,6 @@ Specialized accessibility actions. For general element interaction, use `activat
 |----------|-------------|
 | `BUTTONHEIST_DEVICE` | Default device filter |
 | `BUTTONHEIST_TOKEN` | Auth token |
-| `BUTTONHEIST_FORCE` | Set to `1` to force session takeover |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
 | `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout in seconds (default: 60). Disconnects from device after inactivity; next tool call auto-reconnects |
 
@@ -795,7 +785,6 @@ Represents a discovered TheInsideJob device.
 - `endpoint: NWEndpoint` - Network endpoint for connection
 - `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
 - `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
-- `tokenHash: String?` - Token hash from Bonjour TXT record (for pre-connection filtering)
 - `instanceId: String?` - Instance identifier from Bonjour TXT record
 
 #### Computed Properties
@@ -877,7 +866,6 @@ public struct AuthenticatePayload: Codable, Sendable
 #### Properties
 
 - `token: String` - Auth token for authentication
-- `forceSession: Bool?` - When `true`, forcibly takes over any existing session (v3.1)
 - `driverId: String?` - Driver identity for session locking (v3.1). When set, used instead of token for session identity.
 
 ### SessionLockedPayload
@@ -1217,7 +1205,6 @@ All subcommands that connect to a device accept these connection options:
 | Option | Description |
 |--------|-------------|
 | `--device <filter>` | Target a specific device by name, ID prefix, simulator UDID, or vendor ID |
-| `--force` | Force-takeover session from another driver |
 
 ### Environment Variables
 
@@ -1399,7 +1386,6 @@ OPTIONS:
   -f, --format <format>           Output format: human, json (default: human)
   -t, --timeout <seconds>         Timeout waiting for device (default: 0 = no timeout)
   --session-timeout <seconds>     Idle timeout — exit if no command received (0 = disabled)
-  --force                         Force-takeover session from another driver
   --token <token>                 Auth token from a previous connection
   --device <filter>               Target a specific device
 ```
@@ -1494,7 +1480,7 @@ USAGE: buttonheist watch [OPTIONS]
 OPTIONS:
   --device <filter>       Target a specific device by name, ID prefix, or index
   -t, --timeout <seconds> Connection timeout (default: 30)
-  --token <token>         Auth token (only needed if server requires INSIDEJOB_WATCH_AUTH)
+  --token <token>         Auth token (only needed if server requires INSIDEJOB_RESTRICT_WATCHERS)
 ```
 
 **Output**: Newline-delimited JSON objects, each with a `type` field:

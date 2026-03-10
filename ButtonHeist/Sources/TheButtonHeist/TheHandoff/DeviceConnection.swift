@@ -64,15 +64,12 @@ public final class DeviceConnection {
 
     /// When true, send .watch instead of .authenticate on authRequired
     public var observeMode: Bool = false
-    /// When true, send forceSession in the auth handshake to take over an existing session
-    public var forceSession: Bool
     /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
     public var driverId: String?
 
-    public init(device: DiscoveredDevice, token: String? = nil, forceSession: Bool = false, driverId: String? = nil) {
+    public init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
         self.device = device
         self.token = token
-        self.forceSession = forceSession
         self.driverId = driverId
     }
 
@@ -214,7 +211,6 @@ public final class DeviceConnection {
                 logger.info("Auth required, sending token")
                 send(.authenticate(AuthenticatePayload(
                     token: token ?? "",
-                    forceSession: forceSession ? true : nil,
                     driverId: driverId
                 )))
             }

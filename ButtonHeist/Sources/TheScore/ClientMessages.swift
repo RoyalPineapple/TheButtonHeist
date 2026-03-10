@@ -442,14 +442,11 @@ public struct WaitForIdleTarget: Codable, Sendable {
 /// Payload for authenticate message
 public struct AuthenticatePayload: Codable, Sendable {
     public let token: String
-    /// When true, forcibly take over the active session (disconnects existing session holder)
-    public let forceSession: Bool?
     /// Unique driver identity for session locking. When set, the server uses this
     /// (instead of the auth token) to distinguish drivers. Set via BUTTONHEIST_DRIVER_ID.
     public let driverId: String?
-    public init(token: String, forceSession: Bool? = nil, driverId: String? = nil) {
+    public init(token: String, driverId: String? = nil) {
         self.token = token
-        self.forceSession = forceSession
         self.driverId = driverId
     }
 }

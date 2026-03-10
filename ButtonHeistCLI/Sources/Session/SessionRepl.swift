@@ -16,7 +16,6 @@ final class ReplSession {
         deviceFilter: String?,
         connectionTimeout: Double,
         format: OutputFormat,
-        force: Bool = false,
         token: String? = nil,
         sessionTimeout: Double = 0
     ) {
@@ -33,7 +32,6 @@ final class ReplSession {
             configuration: .init(
                 deviceFilter: deviceFilter,
                 connectionTimeout: connectionTimeout,
-                forceSession: force,
                 token: token,
                 autoReconnect: true
             )
