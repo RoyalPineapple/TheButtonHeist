@@ -57,7 +57,7 @@ struct ConnectionScopeTests {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("::1")) == .simulator)
     }
 
-@Test func classifiesPrivateIPv4AsNetwork() {
+    @Test func classifiesPrivateIPv4AsNetwork() {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100")) == .network)
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("10.0.0.5")) == .network)
     }
