@@ -84,6 +84,16 @@ struct ConnectionScopeTests {
         #expect(ConnectionScope.classify(host: NWEndpoint.Host("example.local")) == .network)
     }
 
+    // MARK: - classify with loopback interface
+
+    @Test func classifiesLoopbackInterfaceAsSimulator() {
+        // Simulator may connect via link-local address on lo0
+        let lo0 = MockInterface(name: "lo0")
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("169.254.239.217"), interfaces: [lo0]) == .simulator)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("fe80::1"), interfaces: [lo0]) == .simulator)
+        #expect(ConnectionScope.classify(host: NWEndpoint.Host("192.168.1.100"), interfaces: [lo0]) == .simulator)
+    }
+
     // MARK: - classify with interfaces (anpi detection)
 
     @Test func classifiesAnpiInterfaceAsUSB() {
