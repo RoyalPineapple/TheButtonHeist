@@ -1,14 +1,9 @@
 import Foundation
 import Network
 import os
-private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
+import TheScore
 
-/// How a device was discovered or is reachable.
-public enum ConnectionType: String, Sendable {
-    case simulator
-    case usb
-    case network
-}
+private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
 
 /// A discovered iOS device running TheInsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
@@ -55,7 +50,7 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
     }
 
-    public var connectionType: ConnectionType {
+    public var connectionType: ConnectionScope {
         if simulatorUDID != nil { return .simulator }
         if id.hasPrefix("usb-") { return .usb }
         return .network
@@ -148,17 +143,17 @@ extension Array where Element == DiscoveredDevice {
     /// Uses a UDP path probe to each device's endpoint; stale mDNS cache entries
     /// will fail while live devices establish a viable path.
     public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
-        await withTaskGroup(of: DiscoveredDevice?.self) { group in
-            for device in self {
+        await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
+            for (index, device) in self.enumerated() {
                 group.addTask {
-                    await device.isReachable(timeout: timeout) ? device : nil
+                    await device.isReachable(timeout: timeout) ? (index, device) : (index, nil)
                 }
             }
-            var result: [DiscoveredDevice] = []
-            for await device in group {
-                if let device { result.append(device) }
+            var indexed: [(Int, DiscoveredDevice)] = []
+            for await (index, device) in group {
+                if let device { indexed.append((index, device)) }
             }
-            return result
+            return indexed.sorted { $0.0 < $1.0 }.map(\.1)
         }
     }
 }
