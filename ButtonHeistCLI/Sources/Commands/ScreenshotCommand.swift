@@ -18,7 +18,7 @@ struct ScreenshotCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client

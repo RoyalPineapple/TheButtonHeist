@@ -1,6 +1,4 @@
 import ArgumentParser
-import Foundation
-import Darwin
 import ButtonHeist
 
 struct ScrollToEdgeCommand: AsyncParsableCommand {
@@ -36,7 +34,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
             throw ValidationError("Invalid edge '\(edge)'. Valid: top, bottom, left, right")
         }
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet, force: connection.force)
+        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
         let client = connector.client
