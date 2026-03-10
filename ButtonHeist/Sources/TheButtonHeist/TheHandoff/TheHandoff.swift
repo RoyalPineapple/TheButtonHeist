@@ -49,6 +49,8 @@ public final class TheHandoff {
     public var token: String?
     public var forceSession: Bool = false
     public var observeMode: Bool = false
+    /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
+    /// When nil, a persistent auto-generated ID is used instead.
     public var driverId: String?
     public var autoSubscribe: Bool = true
 
@@ -58,6 +60,23 @@ public final class TheHandoff {
     private var connection: DeviceConnection?
     private var keepaliveTask: Task<Void, Never>?
     private var autoReconnectInstalled = false
+
+    /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
+    var effectiveDriverId: String {
+        if let driverId, !driverId.isEmpty { return driverId }
+        return Self.persistentDriverId
+    }
+
+    private static let driverIdKey = "com.buttonheist.driver-id"
+
+    private static let persistentDriverId: String = {
+        if let existing = UserDefaults.standard.string(forKey: driverIdKey), !existing.isEmpty {
+            return existing
+        }
+        let generated = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(generated, forKey: driverIdKey)
+        return generated
+    }()
 
     // MARK: - Init
 
@@ -106,7 +125,7 @@ public final class TheHandoff {
     public func connect(to device: DiscoveredDevice) {
         disconnect()
 
-        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: driverId)
+        connection = DeviceConnection(device: device, token: token, forceSession: forceSession, driverId: effectiveDriverId)
         connection?.observeMode = observeMode
 
         connection?.onConnected = { [weak self] in
@@ -245,8 +264,19 @@ public final class TheHandoff {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        guard let device = discoveredDevices.first(matching: filter) else {
-            throw ConnectionError.noDeviceFound
+        let device: DiscoveredDevice
+        if let filter {
+            guard let match = discoveredDevices.first(matching: filter) else {
+                throw ConnectionError.noDeviceFound
+            }
+            device = match
+        } else if discoveredDevices.count == 1 {
+            device = discoveredDevices[0]
+        } else {
+            throw ConnectionError.noMatchingDevice(
+                filter: "(none)",
+                available: discoveredDevices.map(\.name)
+            )
         }
 
         onStatus?("Found: \(displayName(for: device))")
