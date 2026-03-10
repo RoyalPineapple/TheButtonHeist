@@ -38,23 +38,6 @@ let project = Project(
             ])
         ),
 
-        // MARK: - Server Transport (iOS-only, embeds in iOS apps alongside TheInsideJob)
-        .target(
-            name: "TheGetaway",
-            destinations: [.iPhone, .iPad],
-            product: .framework,
-            bundleId: "com.buttonheist.thegetaway",
-            deploymentTargets: .iOS("17.0"),
-            infoPlist: .default,
-            sources: ["ButtonHeist/Sources/TheGetaway/**"],
-            scripts: [swiftlintScript],
-            dependencies: [
-                .target(name: "TheScore"),
-                .external(name: "X509"),
-                .external(name: "Crypto"),
-            ]
-        ),
-
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
@@ -74,8 +57,9 @@ let project = Project(
             scripts: [swiftlintScript],
             dependencies: [
                 .target(name: "TheScore"),
-                .target(name: "TheGetaway"),
                 .external(name: "AccessibilitySnapshotParser"),
+                .external(name: "X509"),
+                .external(name: "Crypto"),
             ]
         ),
 
@@ -136,7 +120,6 @@ let project = Project(
             dependencies: [
                 .target(name: "TheInsideJob"),
                 .target(name: "TheScore"),
-                .target(name: "TheGetaway"),
                 .external(name: "Crypto"),
                 .project(target: "AccessibilityTestApp", path: "TestApp"),
             ],

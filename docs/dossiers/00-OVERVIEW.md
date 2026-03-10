@@ -10,7 +10,6 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
 | [TheScore](01-THESCORE.md) | The Score | Shared wire protocol types (cross-platform) |
-| [TheGetaway](02-THEGETAWAY.md) | The Getaway | iOS server transport with TLS encryption (SimpleSocketServer, ServerTransport, TLSIdentity) |
 
 ### Inside Team (iOS - runs in-process)
 | Crew Member | Alias | Primary Role |
@@ -19,7 +18,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | [TheSafecracker](04-THESAFECRACKER.md) | The Specialist | Touch injection, text input, gesture synthesis |
 | [TheStakeout](05-THESTAKEOUT.md) | The Lookout | Screen recording, video encoding |
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
-| [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling |
+| [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
 | [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, animation detection |
 
@@ -36,8 +35,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ```mermaid
 graph TD
     TheScore["TheScore - (Shared Protocol)"]
-    TheGetaway["TheGetaway - (iOS Server Transport)"]
-    TheInsideJob["TheInsideJob - (iOS Server)"]
+    TheInsideJob["TheInsideJob - (iOS Server + Transport)"]
     TheBagman["TheBagman - (Element Cache & Delta)"]
     ThePlant["ThePlant - (Auto-Start)"]
     ButtonHeist["ButtonHeist - (macOS Client Framework)"]
@@ -48,11 +46,9 @@ graph TD
     Crypto["swift-crypto"]
     X509["swift-certificates"]
 
-    TheScore --> TheGetaway
-    Crypto --> TheGetaway
-    X509 --> TheGetaway
     TheScore --> TheInsideJob
-    TheGetaway --> TheInsideJob
+    Crypto --> TheInsideJob
+    X509 --> TheInsideJob
     TheScore --> ButtonHeist
     ButtonHeist --> CLI
     ButtonHeist --> MCP

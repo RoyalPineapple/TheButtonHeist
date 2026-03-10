@@ -2,7 +2,7 @@ import XCTest
 import Network
 import Security
 import Crypto
-@testable import TheGetaway
+@testable import TheInsideJob
 
 /// Integration tests for TLS transport over real TCP connections.
 /// Verifies end-to-end TLS handshake, fingerprint pinning, and data exchange.
