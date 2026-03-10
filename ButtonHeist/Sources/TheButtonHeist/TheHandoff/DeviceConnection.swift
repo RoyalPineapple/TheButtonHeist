@@ -85,13 +85,14 @@ public final class DeviceConnection {
     public func connect() {
         logger.info("Connecting to \(self.device.name)...")
 
-        let parameters: NWParameters
-        if let expectedFingerprint {
-            parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
-            logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
-        } else {
-            parameters = .tcp
+        guard let expectedFingerprint else {
+            logger.error("No TLS fingerprint available — refusing plain TCP connection")
+            onDisconnected?(.certificateMismatch)
+            return
         }
+
+        let parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
+        logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
 

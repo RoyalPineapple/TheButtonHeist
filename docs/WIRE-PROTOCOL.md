@@ -25,10 +25,10 @@ TheInsideJob advertises itself using Bonjour:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
   - `instanceid` — Human-readable instance identifier
   - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
-  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>` (v5.0+)
-  - `transport` — `"tls"` when TLS transport is active (v5.0+)
+  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>` (v5.0+, always present)
+  - `transport` — `"tls"` (v5.0+, always present)
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake.
+The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake. TLS is required — clients must refuse connections to servers that do not advertise a `certfp`.
 
 > **Security note**: The `certfp` value is delivered via mDNS, which provides no integrity protection. An attacker on the same network segment could spoof Bonjour responses with a different fingerprint. This is acceptable for a local development tool but does not provide the same guarantees as a PKI-based certificate chain. The fingerprint prevents passive eavesdropping and verifies the server identity hasn't changed between discovery and connection.
 
@@ -732,7 +732,7 @@ Error message.
 | `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
 | `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
 | `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
-| `tlsActive` | `Bool?` | Whether TLS transport encryption is active (nil for servers < v5.0) |
+| `tlsActive` | `Bool?` | Whether TLS transport encryption is active (always `true` for v5.0+, nil for servers < v5.0) |
 
 ### Interface
 

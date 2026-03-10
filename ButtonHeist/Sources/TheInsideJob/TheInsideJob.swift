@@ -89,16 +89,15 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let identity: TLSIdentity?
+        let identity: TLSIdentity
         do {
-            let created = try TLSIdentity.getOrCreate()
-            insideJobLogger.info("TLS identity ready: \(created.fingerprint)")
-            identity = created
+            identity = try TLSIdentity.getOrCreate()
+            insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
         } catch {
-            insideJobLogger.warning("TLS identity creation failed: \(error)")
-            identity = try? TLSIdentity.createEphemeral()
+            insideJobLogger.warning("Keychain identity failed, using ephemeral: \(error)")
+            identity = try TLSIdentity.createEphemeral()
         }
-        self.tlsActive = identity != nil
+        self.tlsActive = true
         let t = ServerTransport(tlsIdentity: identity)
         wireTransport(t)
 
@@ -542,17 +541,17 @@ public final class TheInsideJob {
             do {
                 try Task.checkCancellation()
 
-                let identity: TLSIdentity?
+                let identity: TLSIdentity
                 do {
                     identity = try TLSIdentity.getOrCreate()
                 } catch {
-                    insideJobLogger.warning("TLS identity creation failed on resume: \(error)")
-                    identity = try? TLSIdentity.createEphemeral()
+                    insideJobLogger.warning("Keychain identity failed on resume, using ephemeral: \(error)")
+                    identity = try TLSIdentity.createEphemeral()
                 }
 
                 try Task.checkCancellation()
 
-                self.tlsActive = identity != nil
+                self.tlsActive = true
 
                 let t = ServerTransport(tlsIdentity: identity)
                 self.wireTransport(t)
