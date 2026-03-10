@@ -51,7 +51,13 @@ public enum FenceResponse {
         var output = "\(devices.count) device(s):\n"
         for (index, device) in devices.enumerated() {
             let id = device.shortId ?? "----"
-            output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))\n"
+            let typeLabel: String
+            switch device.connectionType {
+            case .simulator: typeLabel = "sim"
+            case .usb: typeLabel = "usb"
+            case .device: typeLabel = "device"
+            }
+            output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))  [\(typeLabel)]\n"
         }
         return output.trimmingCharacters(in: .newlines)
     }
@@ -116,6 +122,7 @@ public enum FenceResponse {
                 "name": device.name,
                 "appName": device.appName,
                 "deviceName": device.deviceName,
+                "connectionType": device.connectionType.rawValue,
             ]
             if let shortId = device.shortId { payload["shortId"] = shortId }
             if let simulatorUDID = device.simulatorUDID { payload["simulatorUDID"] = simulatorUDID }

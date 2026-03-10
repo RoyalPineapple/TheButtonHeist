@@ -1,0 +1,50 @@
+import Foundation
+
+/// Defines which connection sources a server will accept.
+///
+/// Each scope corresponds to a network path:
+/// - `simulator`: Loopback connections (`::1`, `127.0.0.1`) — iOS Simulator on the same Mac
+/// - `usb`: CoreDevice IPv6 tunnel (`fd??:` ULA prefix) — physical device over USB
+/// - `network`: Everything else — WiFi, LAN, or broader network
+///
+/// By default, all scopes are allowed. Set `INSIDEJOB_SCOPE` to restrict:
+/// ```
+/// INSIDEJOB_SCOPE=simulator,usb  // reject WiFi connections
+/// INSIDEJOB_SCOPE=usb            // USB only
+/// ```
+public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
+    case simulator
+    case usb
+    case network
+
+    /// Parse a comma-separated scope string (e.g. "simulator,usb").
+    /// Returns nil for empty/invalid input (caller should fall back to defaults).
+    public static func parse(_ value: String) -> Set<ConnectionScope>? {
+        let scopes = value
+            .split(separator: ",")
+            .compactMap { ConnectionScope(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased()) }
+        return scopes.isEmpty ? nil : Set(scopes)
+    }
+
+    /// All scopes allowed.
+    public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
+
+    /// Classify a remote address string into a connection scope.
+    ///
+    /// - `::1` or `127.0.0.1` → `.simulator` (loopback)
+    /// - `fd??:` prefix → `.usb` (CoreDevice IPv6 ULA tunnel)
+    /// - Everything else → `.network`
+    public static func classify(remoteAddress: String) -> ConnectionScope {
+        let addr = remoteAddress.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        if addr == "::1" || addr == "127.0.0.1" || addr.hasPrefix("127.") {
+            return .simulator
+        }
+
+        if addr.lowercased().hasPrefix("fd") {
+            return .usb
+        }
+
+        return .network
+    }
+}

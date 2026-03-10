@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import TheScore
 import os.log
 
 /// TCP server using Network framework.
@@ -38,9 +39,14 @@ public actor SimpleSocketServer {
     /// Called for messages from unauthenticated clients (before auth succeeds)
     nonisolated(unsafe) public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
+    /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
+    private let allowedScopes: Set<ConnectionScope>
+
     private let queue = DispatchQueue(label: "com.buttonheist.thewheelman.server")
 
-    public init() {}
+    public init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+        self.allowedScopes = allowedScopes
+    }
 
     // MARK: - Public API (async, actor-isolated)
 
@@ -229,6 +235,18 @@ public actor SimpleSocketServer {
             return
         }
 
+        // Scope filtering: classify the remote address and reject disallowed scopes
+        if allowedScopes != ConnectionScope.all {
+            let remoteAddress = Self.extractRemoteAddress(from: connection)
+            let scope = ConnectionScope.classify(remoteAddress: remoteAddress)
+            if !allowedScopes.contains(scope) {
+                logger.warning("Rejecting \(scope.rawValue) connection from \(remoteAddress)")
+                connection.cancel()
+                return
+            }
+            logger.info("Accepted \(scope.rawValue) connection from \(remoteAddress)")
+        }
+
         clientCounter += 1
         let clientId = clientCounter
         connections[clientId] = connection
@@ -351,6 +369,16 @@ public actor SimpleSocketServer {
         } else {
             receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
         }
+    }
+
+    /// Extract the remote IP address string from an NWConnection's endpoint.
+    nonisolated private static func extractRemoteAddress(from connection: NWConnection) -> String {
+        if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
+            return "\(host)"
+        }
+        // Fall back to endpoint description for connections not yet established
+        let description = "\(connection.endpoint)"
+        return description
     }
 
     // MARK: - Errors

@@ -1,7 +1,7 @@
 import Foundation
 import Network
-import TheScore
 import os.log
+import TheScore
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "transport")
 
@@ -66,8 +66,8 @@ public final class ServerTransport {
 
     // MARK: - Init
 
-    public init(tlsIdentity: TLSIdentity? = nil) {
-        self.server = SimpleSocketServer()
+    public init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+        self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.tlsIdentity = tlsIdentity
     }
 
