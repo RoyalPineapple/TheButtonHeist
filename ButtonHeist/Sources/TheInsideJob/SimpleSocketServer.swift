@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import TheScore
 import os.log
 
 /// TCP server using Network framework.
@@ -38,9 +39,14 @@ public actor SimpleSocketServer {
     /// Called for messages from unauthenticated clients (before auth succeeds)
     nonisolated(unsafe) public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
+    /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
+    private let allowedScopes: Set<ConnectionScope>
+
     private let queue = DispatchQueue(label: "com.buttonheist.thewheelman.server")
 
-    public init() {}
+    public init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
+        self.allowedScopes = allowedScopes
+    }
 
     // MARK: - Public API (async, actor-isolated)
 
@@ -232,11 +238,30 @@ public actor SimpleSocketServer {
         clientCounter += 1
         let clientId = clientCounter
         connections[clientId] = connection
+        let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
 
         connection.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
             case .ready:
+                // Scope filtering at .ready: interface info is now available for precise USB detection
+                if let scopeFilter {
+                    guard let host = Self.extractRemoteHost(from: connection) else {
+                        logger.warning("Cannot classify connection endpoint, rejecting (scope filter active)")
+                        Task { await self.removeClient(clientId) }
+                        return
+                    }
+                    let interfaces = connection.currentPath?.availableInterfaces ?? []
+                    let scope = ConnectionScope.classify(host: host, interfaces: interfaces)
+                    let hostDescription = "\(host)"
+                    let interfaceNames = interfaces.map(\.name).joined(separator: ", ")
+                    if !scopeFilter.contains(scope) {
+                        logger.warning("Rejecting \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                        Task { await self.removeClient(clientId) }
+                        return
+                    }
+                    logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
+                }
                 logger.info("Client \(clientId) connected")
                 self.onClientConnected?(clientId)
             case .failed(let error):
@@ -351,6 +376,18 @@ public actor SimpleSocketServer {
         } else {
             receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
         }
+    }
+
+    /// Extract the remote host from an NWConnection using typed Network framework values.
+    /// Checks the connection endpoint directly (always available), with currentPath as fallback.
+    nonisolated private static func extractRemoteHost(from connection: NWConnection) -> NWEndpoint.Host? {
+        if case .hostPort(let host, _) = connection.endpoint {
+            return host
+        }
+        if case .hostPort(let host, _) = connection.currentPath?.remoteEndpoint {
+            return host
+        }
+        return nil
     }
 
     // MARK: - Errors

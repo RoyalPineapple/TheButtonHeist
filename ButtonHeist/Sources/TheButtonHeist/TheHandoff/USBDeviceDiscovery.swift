@@ -11,25 +11,28 @@ private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: 
 /// and their IPv6 tunnel addresses. Produces `DiscoveredDevice` instances that work
 /// identically to Bonjour-discovered devices — same wire protocol, same connection path.
 ///
-/// Subprocess execution runs off the main thread to avoid blocking the UI.
-@MainActor
-public final class USBDeviceDiscovery {
+/// Subprocess execution runs on detached tasks to avoid blocking the actor.
+@ButtonHeistActor
+public final class USBDeviceDiscovery: DeviceDiscovering {
 
     private let port: UInt16
     private var pollTask: Task<Void, Never>?
     private var knownDevices: [String: DiscoveredDevice] = [:]
 
-    public var onDeviceFound: ((DiscoveredDevice) -> Void)?
-    public var onDeviceLost: ((DiscoveredDevice) -> Void)?
+    public var onEvent: ((DiscoveryEvent) -> Void)?
 
-    /// - Parameter port: The InsideJob port to connect to
+    public var discoveredDevices: [DiscoveredDevice] {
+        Array(knownDevices.values)
+    }
+
+    /// - Parameter port: The InsideJob port to connect to on the device
     public init(port: UInt16) {
         self.port = port
     }
 
     public func start() {
         logger.info("Starting USB device discovery (port \(self.port))")
-        // Run immediately, then poll every 3 seconds
+        onEvent?(.stateChanged(isReady: true))
         startPolling()
     }
 
@@ -45,30 +48,26 @@ public final class USBDeviceDiscovery {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.poll()
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
     }
 
     private func poll() async {
-        // Run subprocess work off the main thread
         let (connectedDevices, ipv6Address) = await Task.detached { () -> ([String], String?) in
             let devices = Self.discoverConnectedDevices()
             let address = Self.findIPv6Tunnel()
             return (devices, address)
         }.value
 
-        // Back on @MainActor — safe to update state and fire callbacks
         guard let ipv6Address else {
-            // No tunnel — remove all USB devices
             for (id, device) in knownDevices {
                 knownDevices.removeValue(forKey: id)
-                onDeviceLost?(device)
+                onEvent?(.lost(device))
             }
             return
         }
 
-        // Build set of current device IDs
         var currentIDs = Set<String>()
 
         for deviceName in connectedDevices {
@@ -91,20 +90,18 @@ public final class USBDeviceDiscovery {
                 )
                 knownDevices[id] = device
                 logger.info("USB device found: \(deviceName) at \(ipv6Address):\(self.port)")
-                onDeviceFound?(device)
+                onEvent?(.found(device))
             }
         }
 
-        // Remove devices that are no longer connected
         for (id, device) in knownDevices where !currentIDs.contains(id) {
             knownDevices.removeValue(forKey: id)
             logger.info("USB device lost: \(device.name)")
-            onDeviceLost?(device)
+            onEvent?(.lost(device))
         }
     }
 
     /// Run `xcrun devicectl list devices` and return names of connected devices.
-    /// Runs on the calling thread — call from a background context.
     nonisolated private static func discoverConnectedDevices() -> [String] {
         guard let output = runProcess("/usr/bin/xcrun", arguments: ["devicectl", "list", "devices"], timeout: 10) else {
             return []
@@ -112,13 +109,10 @@ public final class USBDeviceDiscovery {
 
         var devices: [String] = []
         for line in output.components(separatedBy: "\n") {
-            // Lines with "connected" status indicate USB-attached devices
             guard line.contains("connected") else { continue }
-            // Skip header lines
             guard !line.contains("Identifier") && !line.contains("---") else { continue }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            // Device name is the first column
             let columns = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
             if let name = columns.first, !name.isEmpty {
                 devices.append(name)
@@ -128,15 +122,11 @@ public final class USBDeviceDiscovery {
     }
 
     /// Run `lsof -i -P -n` and extract the CoreDevice IPv6 tunnel address.
-    /// Returns an address like `fd9a:6190:eed7::1` or nil.
-    /// Runs on the calling thread — call from a background context.
     nonisolated private static func findIPv6Tunnel() -> String? {
         guard let output = runProcess("/usr/sbin/lsof", arguments: ["-i", "-P", "-n"], timeout: 5) else {
             return nil
         }
 
-        // Look for CoreDevice tunnel entries with fd-prefixed IPv6 ULA addresses
-        // Pattern: [fd9a:6190:eed7::1] or [fd9a:6190:eed7::2]
         let pattern = #"\[(fd[0-9a-f:]+)::[12]\]"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
               let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
@@ -148,8 +138,6 @@ public final class USBDeviceDiscovery {
         return "\(prefix)::1"
     }
 
-    /// Run a subprocess and return its stdout, or nil on failure.
-    /// Blocking — must be called from a background context, never the main thread.
     nonisolated private static func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
@@ -166,7 +154,6 @@ public final class USBDeviceDiscovery {
             return nil
         }
 
-        // Read output (blocking)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
