@@ -33,11 +33,15 @@ extension TheSafecracker {
             }
 
             if !keyboardAppeared {
-                return .failure(.typeText, message: "Keyboard did not appear. Ensure the software keyboard is enabled (Simulator > I/O > Keyboard > uncheck 'Connect Hardware Keyboard').")
+                let msg = "Keyboard did not appear. Ensure the software keyboard is enabled " +
+                    "(Simulator > I/O > Keyboard > uncheck 'Connect Hardware Keyboard')."
+                return .failure(.typeText, message: msg)
             }
         } else {
             if !isKeyboardVisible() {
-                return .failure(.typeText, message: "Keyboard not visible. Provide an elementTarget to focus a text field, or ensure the keyboard is already showing.")
+                let msg = "Keyboard not visible. Provide an elementTarget to focus " +
+                    "a text field, or ensure the keyboard is already showing."
+                return .failure(.typeText, message: msg)
             }
         }
 

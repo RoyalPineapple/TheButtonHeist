@@ -297,78 +297,12 @@ public final class TheInsideJob {
         }
     }
 
-    /// Route interaction messages to TheSafecracker through the standard
-    /// refresh-snapshot-execute-delta pipeline.
-    private func dispatchInteraction(_ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void) async {
-        switch message {
-        case .activate(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeActivate(target) }
-        case .increment(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeIncrement(target) }
-        case .decrement(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeDecrement(target) }
-        case .performCustomAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeCustomAction(target) }
-        case .editAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeEditAction(target) }
-        case .resignFirstResponder:
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
-        case .touchTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTap(target) }
-        case .touchLongPress(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeLongPress(target) }
-        case .touchSwipe(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeSwipe(target) }
-        case .touchDrag(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrag(target) }
-        case .touchPinch(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executePinch(target) }
-        case .touchRotate(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeRotate(target) }
-        case .touchTwoFingerTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
-        case .touchDrawPath(let target):
-            guard target.points.count <= 10_000 else {
-                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)")
-                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
-                return
-            }
-            await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.theSafecracker.executeDrawPath(target)
-            }
-        case .touchDrawBezier(let target):
-            guard target.segments.count <= 1_000 else {
-                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many segments (max 1,000)")
-                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
-                return
-            }
-            await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.theSafecracker.executeDrawBezier(target)
-            }
-        case .typeText(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
-        case .scroll(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScroll(target) }
-        case .scrollToVisible(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
-        case .scrollToEdge(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
-        default:
-            insideJobLogger.error("Unhandled message type in dispatchInteraction")
-            sendMessage(.actionResult(ActionResult(
-                success: false,
-                method: .activate,
-                message: "Unhandled command"
-            )), requestId: requestId, respond: respond)
-        }
-    }
-
     // MARK: - Interaction Dispatch
 
     /// Standard interaction pattern: refresh → snapshot → execute → delta → respond
     /// TheSafecracker handles all interaction concerns (touch visualization, element refresh for read-back).
     /// When a recording is active, captures the command and before/after interface state.
-    private func performInteraction(
+    func performInteraction(
         command: ClientMessage,
         requestId: String? = nil,
         respond: @escaping (Data) -> Void,

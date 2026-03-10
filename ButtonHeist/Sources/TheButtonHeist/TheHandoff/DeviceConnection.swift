@@ -203,6 +203,17 @@ public final class DeviceConnection {
         }
 
         switch message {
+        case .authRequired, .authFailed, .authApproved, .sessionLocked:
+            handleAuthMessage(message)
+        case .recordingStarted, .recordingStopped, .recording, .recordingError:
+            handleRecordingMessage(message)
+        case .info, .interface, .actionResult, .screen, .error, .pong, .interaction:
+            handleResponseMessage(message, requestId: requestId)
+        }
+    }
+
+    private func handleAuthMessage(_ message: ServerMessage) {
+        switch message {
         case .authRequired:
             if observeMode {
                 logger.info("Auth required, sending watch request")
@@ -223,6 +234,36 @@ public final class DeviceConnection {
             logger.info("Auth approved via UI, received token")
             token = payload.token
             onAuthApproved?(payload.token)
+        case .sessionLocked(let payload):
+            logger.warning("Session locked: \(payload.message)")
+            onSessionLocked?(payload)
+            disconnect()
+            onDisconnected?(.sessionLocked(payload.message))
+        default:
+            break
+        }
+    }
+
+    private func handleRecordingMessage(_ message: ServerMessage) {
+        switch message {
+        case .recordingStarted:
+            logger.info("Recording started")
+            onRecordingStarted?()
+        case .recordingStopped:
+            logger.debug("Recording stop acknowledged")
+        case .recording(let payload):
+            logger.debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
+            onRecording?(payload)
+        case .recordingError(let message):
+            logger.error("Recording error: \(message)")
+            onRecordingError?(message)
+        default:
+            break
+        }
+    }
+
+    private func handleResponseMessage(_ message: ServerMessage, requestId: String?) {
+        switch message {
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
             onServerInfo?(info)
@@ -241,25 +282,11 @@ public final class DeviceConnection {
         case .screen(let payload):
             logger.debug("Received screen: \(payload.pngData.count) chars base64")
             onScreen?(payload, requestId)
-        case .sessionLocked(let payload):
-            logger.warning("Session locked: \(payload.message)")
-            onSessionLocked?(payload)
-            disconnect()
-            onDisconnected?(.sessionLocked(payload.message))
-        case .recordingStarted:
-            logger.info("Recording started")
-            onRecordingStarted?()
-        case .recordingStopped:
-            logger.debug("Recording stop acknowledged")
-        case .recording(let payload):
-            logger.debug("Received recording: \(payload.frameCount) frames, \(String(format: "%.1f", payload.duration))s")
-            onRecording?(payload)
-        case .recordingError(let message):
-            logger.error("Recording error: \(message)")
-            onRecordingError?(message)
         case .interaction(let event):
             logger.debug("Received interaction: \(event.result.method.rawValue)")
             onInteraction?(event)
+        default:
+            break
         }
     }
 

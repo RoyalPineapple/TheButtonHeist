@@ -39,7 +39,10 @@ struct TouchCommand: AsyncParsableCommand {
 // MARK: - Tap
 
 struct TapSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(commandName: "one_finger_tap", abstract: "Tap at a point or element (prefer 'activate' for element interactions)")
+    static let configuration = CommandConfiguration(
+        commandName: "one_finger_tap",
+        abstract: "Tap at a point or element (prefer 'activate' for element interactions)"
+    )
 
     @OptionGroup var element: ElementTargetOptions
 

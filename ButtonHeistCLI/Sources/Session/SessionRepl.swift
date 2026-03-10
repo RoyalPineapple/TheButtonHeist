@@ -108,7 +108,7 @@ final class ReplSession {
             guard
                 let data = line.data(using: .utf8),
                 let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let _ = object["command"] as? String
+                object["command"] is String
             else {
                 return (.error("Invalid JSON or missing 'command' field"), nil)
             }
