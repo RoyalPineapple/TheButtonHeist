@@ -15,6 +15,7 @@ enum ToolDefinitions {
         waitForIdle, startRecording, stopRecording, listDevices,
         gesture, accessibilityAction,
         scroll, scrollToVisible, scrollToEdge,
+        runBatch, getSessionState,
     ]
 
     // MARK: - Individual Tools
@@ -278,5 +279,53 @@ enum ToolDefinitions {
             "required": .array([.string("type")]),
             "additionalProperties": false,
         ]
+    )
+
+    static let runBatch = Tool(
+        name: "run_batch",
+        description: """
+            Execute a batch of Button Heist commands in a single MCP call. \
+            Each step is a JSON request matching the CLI session format (must include 'command'). \
+            The policy controls whether the batch stops on first error or continues.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "steps": [
+                    "type": "array",
+                    "description": "Ordered list of Button Heist requests to execute",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "command": ["type": "string", "description": "Fence command (e.g., activate, type_text, scroll)"],
+                        ],
+                        "required": .array([.string("command")]),
+                        "additionalProperties": true,
+                    ],
+                ],
+                "policy": [
+                    "type": "string",
+                    "enum": .array(["stop_on_error", "continue_on_error"].map { .string($0) }),
+                    "description": "Batch policy: stop_on_error (default) or continue_on_error",
+                ],
+            ],
+            "required": .array([.string("steps")]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let getSessionState = Tool(
+        name: "get_session_state",
+        description: """
+            Inspect the current Button Heist session state without performing any actions. \
+            Returns connection status, active device/app identity, recording state, client timeouts, \
+            and a lightweight summary of the last action (if any).
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": .object([:]),
+            "additionalProperties": false,
+        ],
+        annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 }
