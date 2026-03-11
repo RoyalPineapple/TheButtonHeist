@@ -37,5 +37,7 @@ extension TheFence {
         case dismissKeyboard = "dismiss_keyboard"
         case startRecording = "start_recording"
         case stopRecording = "stop_recording"
+        case runBatch = "run_batch"
+        case getSessionState = "get_session_state"
     }
 }

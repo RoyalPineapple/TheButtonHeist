@@ -287,6 +287,7 @@ extension TheFence {
         ))) { requestId in
             try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
         }
+        lastActionResult = result
         return .action(result: result)
     }
 
