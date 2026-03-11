@@ -20,6 +20,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 graph TD
     subgraph TheMuscle["TheMuscle (@MainActor)"]
         TokenRes["Token Resolution - explicit > env var > plist > auto-generated UUID"]
+        HelloGate["Hello Gate - require clientHello before auth/watch/status"]
         AuthFlow["Auth Flow - validate token / show UI prompt"]
         SessionMgr["Session Manager - driver identity tracking"]
         Timer["Release Timer - fires when all connections drop"]
@@ -27,8 +28,9 @@ graph TD
 
     WatchMgr["Observer Manager - observer tracking, auto-approve"]
 
-    Client["Remote Client"] -->|authenticate(token)| AuthFlow
-    Client -->|watch(token)| WatchMgr
+    Client["Remote Client"] -->|clientHello| HelloGate
+    HelloGate -->|authenticate(token)| AuthFlow
+    HelloGate -->|watch(token)| WatchMgr
     AuthFlow -->|valid| SessionMgr
     AuthFlow -->|empty| UIPrompt["UIAlertController - Allow / Deny"]
     AuthFlow -->|invalid| Reject["authFailed + disconnect"]
@@ -37,7 +39,7 @@ graph TD
     SessionMgr -->|different driver| Lock["sessionLocked"]
 
     Timer -->|all disconnected, timeout elapsed| Release["releaseSession()"]
-    Release -->|invalidates token| TokenRes
+    Release -->|session cleared| TokenRes
 ```
 
 ## Auth Flow Detail
@@ -49,6 +51,8 @@ sequenceDiagram
     participant UI as UIAlertController
 
     C->>M: TCP connect
+    M-->>C: serverHello
+    C->>M: clientHello
     M-->>C: authRequired
 
     alt Token provided and matches
@@ -91,7 +95,7 @@ stateDiagram-v2
     ActiveSession --> SessionLocked: different driverId tries to connect
 
     ActiveSession --> ReleaseTimer: all connections drop
-    ReleaseTimer --> NoSession: timeout elapsed (also invalidates token)
+    ReleaseTimer --> NoSession: timeout elapsed
     ReleaseTimer --> ActiveSession: client reconnects
 ```
 
@@ -110,33 +114,31 @@ stateDiagram-v2
 
 ### HIGH PRIORITY
 
-**Empty token allows any network process to trigger UI prompt** (`TheMuscle.swift:108`)
-- Any process on the local network can connect and send `authenticate(token: "")`
+**Empty token allows any hello-complete network client to trigger UI prompt** (`TheMuscle.swift`)
+- Any process on the local network can connect, complete the hello handshake, and send `authenticate(token: "")`
 - This triggers a `UIAlertController` on the device
 - Documented behavior, but potential for annoyance/DoS in shared network environments
 - Consider: should there be a way to disable UI approval flow entirely?
 
-**Release timer invalidates auth token** (`TheMuscle.swift`)
-- When the release timer fires (all connections dropped for timeout duration), `releaseSession()` is called AND the token is invalidated
-- A fresh UUID is generated, meaning the previous token no longer works
-- This is aggressive: if a client temporarily loses connectivity for >30s, it cannot reconnect without re-discovering the new token
+**Hello validation is tracked separately from auth/session state** (`TheMuscle.swift`)
+- `helloValidatedClients` is now a distinct pre-auth gate before `authenticate`, `watch`, or pre-auth `status`
+- This is the right behavior, but it means three connection states now exist: connected, hello-complete, authenticated
+- Any future auth changes need to preserve those distinctions or disconnections will get subtle
 
 ### MEDIUM PRIORITY
 
-**Repeated `100_000_000` nanosecond delay** (`TheMuscle.swift:125, 189, 249`)
-```swift
-try? await Task.sleep(nanoseconds: 100_000_000)  // appears 3 times
-```
-- Used as a "give client time to receive the message before disconnect" delay
-- Should be a named constant
+**Disconnect grace period still uses a fixed constant**
+- `disconnectGracePeriod` is now centralized, which is better than duplicated literals
+- It is still a hardcoded transport behavior rather than a documented protocol timing guarantee
+- If clients ever need slower links, this may need revisiting
 
 **Token resolution generates new UUID every launch** (`TheMuscle.swift`)
 - `UUID().uuidString` on every launch — tokens are ephemeral unless `INSIDEJOB_TOKEN` is set
 - Previously-approved clients must re-authenticate after app restart
 
-**No unit tests for TheMuscle**
-- Session locking logic (driver identity matching, timer behavior) is complex
-- Could be tested with mock server/client without UIKit dependency
+**TheMuscle test coverage is still narrower than the state machine**
+- There are now unit tests for hello/auth flows and protocol mismatch handling
+- Session locking logic and timer behavior remain more complex than the current test surface
 
 ### LOW PRIORITY
 

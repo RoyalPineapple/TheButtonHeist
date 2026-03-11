@@ -142,10 +142,9 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
-    func testActionResultBackwardCompatibility() throws {
-        // Simulate JSON from an older version that doesn't include "value" key
+    func testActionResultWithoutOptionalFieldsFromExplicitJSON() throws {
         let json = """
-        {"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}
+        {"type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)

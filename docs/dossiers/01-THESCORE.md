@@ -8,8 +8,8 @@
 
 TheScore is the protocol bible. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` - 29 cases, including `watch`)
-2. **All server-to-client messages** (`ServerMessage` - 15 cases, including `interaction`)
+1. **All client-to-server messages** (`ClientMessage` - 31 cases, including `clientHello`, `status`, and `watch`)
+2. **All server-to-client messages** (`ServerMessage` - 18 cases, including `serverHello`, `protocolMismatch`, and `interaction`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
 5. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
@@ -27,8 +27,8 @@ TheScore is the protocol bible. It defines:
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
         Messages["Messages.swift - Constants: serviceType, protocolVersion"]
-        Client["ClientMessages.swift - RequestEnvelope, ClientMessage enum (29 cases)"]
-        Server["ServerMessages.swift - ResponseEnvelope, ServerMessage enum (15 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
+        Client["ClientMessages.swift - RequestEnvelope, ClientMessage enum (31 cases)"]
+        Server["ServerMessages.swift - ResponseEnvelope, ServerMessage enum (18 cases) - ActionResult, InterfaceDelta, - ScreenPayload, RecordingPayload"]
         Elements["Elements.swift - HeistElement, Interface, - ElementNode, ElementAction, - Group, HeistCustomContent"]
     end
 
@@ -52,10 +52,11 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (29 cases)"]
+    subgraph ClientMessages["ClientMessage (31 cases)"]
+        Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
-        Ping["ping"]
+        Ping["ping / status"]
         Query["requestInterface / requestScreen / waitForIdle"]
         Actions["activate / increment / decrement - performCustomAction"]
         Touch["touchTap / touchLongPress / touchSwipe - touchDrag / touchPinch / touchRotate - touchTwoFingerTap / touchDrawPath / touchDrawBezier"]
@@ -65,7 +66,8 @@ graph TD
         Watch["watch(WatchPayload)"]
     end
 
-    subgraph ServerMessages["ServerMessage (15 cases)"]
+    subgraph ServerMessages["ServerMessage (18 cases)"]
+        HelloResp["serverHello / protocolMismatch"]
         AuthResp["authRequired / authFailed / authApproved"]
         Info["info(ServerInfo)"]
         Data["interface(Interface) / screen(ScreenPayload)"]
@@ -154,9 +156,9 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"5.0"` (envelope correlation + watch mode + TLS transport)
+- **Protocol version:** `"6.0"` (explicit `type` / `payload` envelopes + exact hello/version matching)
 - **Service type:** `_buttonheist._tcp`
-- **Encoding:** `Codable` with standard `JSONEncoder`/`JSONDecoder`
+- **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
 
 ## Items Flagged for Review
@@ -182,12 +184,12 @@ classDiagram
 
 ### LOW PRIORITY
 
-**Protocol version is a string, not a numeric**
-- `protocolVersion = "5.0"` - no formal version comparison logic exists
-- Clients and servers don't negotiate or validate versions
-- If a version mismatch occurs, messages may silently fail to decode
+**Nested tree encoding still exposes Swift synthesized shape**
+- Top-level request/response envelopes are now explicit `type` / `payload`
+- `ElementNode.container` still encodes as `{"container":{"_0":Group,"children":[...]}}`
+- Accurate, but awkward compared to the rest of the wire model
 
 **No formal schema validation**
 - Messages rely entirely on `Codable` for validation
 - An invalid JSON field silently produces a decode error (caught by `try?` in receivers)
-- No explicit schema version negotiation in the handshake
+- Exact protocol matching now happens during `serverHello` / `clientHello`

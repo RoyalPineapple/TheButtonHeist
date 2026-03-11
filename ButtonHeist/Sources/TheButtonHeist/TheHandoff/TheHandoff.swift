@@ -203,7 +203,9 @@ public final class TheHandoff {
         case .status(let payload):
             // Status messages do not currently have a dedicated callback; for now we just log them
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
-        case .authRequired, .pong, .recordingStopped:
+        case .protocolMismatch(let payload):
+            onError?("Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)")
+        case .serverHello, .authRequired, .pong, .recordingStopped:
             break
         }
     }

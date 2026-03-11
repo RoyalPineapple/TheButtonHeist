@@ -125,44 +125,46 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 ```bash
 # Using netcat (must authenticate first)
 nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
-# Server sends: {"authRequired":{}}
-# Send: {"authenticate":{"_0":{"token":"your-token"}}}
-# Server sends: {"info":{"_0":{...}}}
-# Send: {"requestInterface":{}}
+# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
+# Send: {"protocolVersion":"6.0","requestId":null,"type":"clientHello"}
+# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
+# Send: {"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
+# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"info","payload":{...}}
+# Send: {"protocolVersion":"6.0","requestId":null,"type":"requestInterface"}
 ```
 
 ## Message Protocol
 
-Messages are newline-delimited JSON. Swift enums encode with `_0` wrapper for associated values. The protocol requires authentication before any commands are accepted.
+Messages are newline-delimited JSON using explicit `type` and optional `payload` fields. The protocol now requires `serverHello` / `clientHello` version negotiation before authentication or status probes.
 
 ### Authenticate
 ```json
-{"authenticate":{"_0":{"token":"your-secret-token"}}}
+{"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"your-secret-token"}}
 ```
 
 ### Request Interface
 ```json
-{"requestInterface":{}}
+{"protocolVersion":"6.0","requestId":null,"type":"requestInterface"}
 ```
 
 ### Activate Element (by order index)
 ```json
-{"activate":{"_0":{"order":6}}}
+{"protocolVersion":"6.0","requestId":null,"type":"activate","payload":{"order":6}}
 ```
 
 ### Activate Element (by identifier)
 ```json
-{"activate":{"_0":{"identifier":"loginButton"}}}
+{"protocolVersion":"6.0","requestId":null,"type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 ### Tap at Coordinates
 ```json
-{"touchTap":{"_0":{"pointX":196.5,"pointY":659}}}
+{"protocolVersion":"6.0","requestId":null,"type":"touchTap","payload":{"pointX":196.5,"pointY":659}}
 ```
 
 ### Ping
 ```json
-{"ping":{}}
+{"protocolVersion":"6.0","requestId":null,"type":"ping"}
 ```
 
 ## Implementation Details

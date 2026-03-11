@@ -6,10 +6,16 @@ import CoreGraphics
 /// Wraps a server message with the echoed requestId for response correlation.
 /// Push broadcasts (subscription updates) use requestId = nil.
 public struct ResponseEnvelope: Codable, Sendable {
+    public let protocolVersion: String
     public let requestId: String?
     public let message: ServerMessage
 
     public init(requestId: String? = nil, message: ServerMessage) {
+        self.init(wireProtocolVersion: currentWireProtocolVersion, requestId: requestId, message: message)
+    }
+
+    public init(wireProtocolVersion: String, requestId: String? = nil, message: ServerMessage) {
+        self.protocolVersion = wireProtocolVersion
         self.requestId = requestId
         self.message = message
     }
@@ -18,6 +24,12 @@ public struct ResponseEnvelope: Codable, Sendable {
 // MARK: - Server -> Client Messages
 
 public enum ServerMessage: Codable, Sendable {
+    /// Version-negotiation hello sent immediately on connection.
+    case serverHello
+
+    /// Exact protocol version mismatch.
+    case protocolMismatch(ProtocolMismatchPayload)
+
     /// Server requires authentication (sent immediately on connection)
     case authRequired
 
@@ -70,6 +82,16 @@ public enum ServerMessage: Codable, Sendable {
     /// Lightweight server health + identity snapshot.
     /// Returned in response to ClientMessage.status without acquiring a session.
     case status(StatusPayload)
+}
+
+public struct ProtocolMismatchPayload: Codable, Sendable {
+    public let expectedProtocolVersion: String
+    public let receivedProtocolVersion: String
+
+    public init(expectedProtocolVersion: String, receivedProtocolVersion: String) {
+        self.expectedProtocolVersion = expectedProtocolVersion
+        self.receivedProtocolVersion = receivedProtocolVersion
+    }
 }
 
 /// Top-level status payload returned by the Inside Job server.

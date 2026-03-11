@@ -6,10 +6,6 @@ import os.log
 
 private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
 
-private struct ServerMessageEnvelope: Decodable {
-    let message: ServerMessage
-}
-
 /// Structured reason for why a connection was closed.
 public enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
@@ -17,6 +13,7 @@ public enum DisconnectReason: Error, LocalizedError {
     case serverClosed
     case authFailed(String)
     case sessionLocked(String)
+    case protocolMismatch(String)
     case localDisconnect
     case certificateMismatch
 
@@ -32,6 +29,8 @@ public enum DisconnectReason: Error, LocalizedError {
             return "Auth failed: \(reason)"
         case .sessionLocked(let message):
             return "Session locked: \(message)"
+        case .protocolMismatch(let message):
+            return "Protocol mismatch: \(message)"
         case .localDisconnect:
             return "Disconnected by client"
         case .certificateMismatch:
@@ -201,7 +200,7 @@ public final class DeviceConnection: DeviceConnecting {
     // Internal for testing (see AuthFlowIntegrationTests, AuthFailureTests)
     func handleMessage(_ data: Data) {
         logger.debug("Parsing message: \(data.count) bytes")
-        guard let (requestId, message) = decodeEnvelope(from: data) else {
+        guard let envelope = decodeEnvelope(from: data) else {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
@@ -209,7 +208,28 @@ public final class DeviceConnection: DeviceConnecting {
             return
         }
 
-        switch message {
+        if envelope.protocolVersion != protocolVersion {
+            let message = "expected \(protocolVersion), got \(envelope.protocolVersion)"
+            logger.error("Protocol mismatch: \(message)")
+            onEvent?(.message(.protocolMismatch(ProtocolMismatchPayload(
+                expectedProtocolVersion: protocolVersion,
+                receivedProtocolVersion: envelope.protocolVersion
+            )), requestId: envelope.requestId))
+            disconnect()
+            onEvent?(.disconnected(.protocolMismatch(message)))
+            return
+        }
+
+        switch envelope.message {
+        case .serverHello:
+            logger.info("Received server hello")
+            send(.clientHello)
+        case .protocolMismatch(let payload):
+            let message = "expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)"
+            logger.error("Protocol mismatch: \(message)")
+            onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId))
+            disconnect()
+            onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
             if autoRespondToAuthRequired {
                 handleAuthRequired()
@@ -233,13 +253,13 @@ public final class DeviceConnection: DeviceConnecting {
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
             onEvent?(.connected)
-            onEvent?(.message(.info(info), requestId: requestId))
+            onEvent?(.message(.info(info), requestId: envelope.requestId))
         case .recordingStopped:
             logger.debug("Recording stop acknowledged")
         case .pong:
             logger.debug("Received pong")
         default:
-            onEvent?(.message(message, requestId: requestId))
+            onEvent?(.message(envelope.message, requestId: envelope.requestId))
         }
     }
 
@@ -295,21 +315,7 @@ public final class DeviceConnection: DeviceConnecting {
         return NWParameters(tls: tlsOptions)
     }
 
-    private func decodeEnvelope(from data: Data) -> (requestId: String?, message: ServerMessage)? {
-        let decoder = JSONDecoder()
-
-        if let envelope = try? decoder.decode(ResponseEnvelope.self, from: data) {
-            return (envelope.requestId, envelope.message)
-        }
-
-        if let envelope = try? decoder.decode(ServerMessageEnvelope.self, from: data) {
-            return (nil, envelope.message)
-        }
-
-        if let message = try? decoder.decode(ServerMessage.self, from: data) {
-            return (nil, message)
-        }
-
-        return nil
+    private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {
+        try? JSONDecoder().decode(ResponseEnvelope.self, from: data)
     }
 }

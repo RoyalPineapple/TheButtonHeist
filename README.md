@@ -285,7 +285,7 @@ git submodule update --remote ai-fuzzer
 **Technical docs:**
 - [Architecture](docs/ARCHITECTURE.md) — System design and data flow diagrams
 - [API Reference](docs/API.md) — Complete API for all modules
-- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v3.1 specification
+- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v6.0 specification
 - [Authentication](docs/AUTH.md) — Token auth, session locking, UI approval
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 

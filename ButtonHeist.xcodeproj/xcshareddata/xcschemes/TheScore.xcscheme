@@ -28,17 +28,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DCA40E9CBA58FAD77D4C6A4E"
-               BuildableName = "TheScoreTests.xctest"
-               BlueprintName = "TheScoreTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
