@@ -29,7 +29,11 @@ let package = Package(
             name: "TheInsideJob",
             dependencies: [
                 "TheScore",
-                .product(name: "AccessibilitySnapshotParser", package: "AccessibilitySnapshot"),
+                .product(
+                    name: "AccessibilitySnapshotParser",
+                    package: "AccessibilitySnapshot",
+                    condition: .when(platforms: [.iOS])
+                ),
                 .product(name: "X509", package: "swift-certificates"),
                 .product(name: "Crypto", package: "swift-crypto"),
             ],

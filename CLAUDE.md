@@ -29,6 +29,29 @@ tuist generate
 
 **Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
 
+## Canonical Test Runner
+
+Use `tuist test` as the canonical way to run tests in this repository.
+
+- Do not use `swift test` for normal verification. SwiftPM does not model the hosted iOS test setup correctly and can produce misleading failures in this mixed macOS/iOS repo.
+- Do not use raw `xcodebuild test` as the default workflow. Use it only when debugging Tuist or Xcode behavior.
+- Do not use bare `tuist test` in this workspace. The default `ButtonHeist-Workspace` scheme mixes macOS and iOS targets and can pick an unintended destination.
+- Always run `tuist test` with an explicit scheme. For iOS-hosted tests, also pass an explicit simulator device and OS.
+
+Recommended commands:
+
+```bash
+tuist test TheScoreTests
+tuist test ButtonHeistTests
+tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1
+```
+
+If Tuist reports missing external dependencies, run:
+
+```bash
+tuist install
+```
+
 ### Adding a dependency
 
 1. Add the package to `Tuist/Package.swift`
@@ -131,9 +154,9 @@ Before pushing any commit, verify the following:
 ### 2. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScoreTests test
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests test
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJobTests -destination 'platform=iOS Simulator,name=iPhone 16' test
+  tuist test TheScoreTests
+  tuist test ButtonHeistTests
+  tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 26.1
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
@@ -158,6 +181,14 @@ Before pushing any commit, verify the following:
 - Tests should be automatable (no manual verification required).
 
 ## Testing Philosophy
+
+### One True Way
+
+`tuist test` is the one true way to run tests in this repository.
+
+- `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
+- `TheInsideJobTests` must run as a hosted iOS test bundle via the `AccessibilityTestApp` test host, so always use the `TheInsideJobTests` scheme with an explicit simulator destination.
+- Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 
 ### Determinism First
 
