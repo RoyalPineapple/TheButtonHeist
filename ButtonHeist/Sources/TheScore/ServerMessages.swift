@@ -66,6 +66,68 @@ public enum ServerMessage: Codable, Sendable {
 
     /// An action was performed by the driver — broadcast to observers
     case interaction(InteractionEvent)
+
+    /// Lightweight server health + identity snapshot.
+    /// Returned in response to ClientMessage.status without acquiring a session.
+    case status(StatusPayload)
+}
+
+/// Top-level status payload returned by the Inside Job server.
+public struct StatusPayload: Codable, Sendable {
+    public let identity: StatusIdentity
+    public let session: StatusSession
+
+    public init(identity: StatusIdentity, session: StatusSession) {
+        self.identity = identity
+        self.session = session
+    }
+}
+
+/// App/device identity for a running Inside Job instance.
+public struct StatusIdentity: Codable, Sendable {
+    public let appName: String
+    public let bundleIdentifier: String
+    public let appBuild: String
+    public let deviceName: String
+    public let systemVersion: String
+    public let buttonHeistVersion: String
+
+    public init(
+        appName: String,
+        bundleIdentifier: String,
+        appBuild: String,
+        deviceName: String,
+        systemVersion: String,
+        buttonHeistVersion: String
+    ) {
+        self.appName = appName
+        self.bundleIdentifier = bundleIdentifier
+        self.appBuild = appBuild
+        self.deviceName = deviceName
+        self.systemVersion = systemVersion
+        self.buttonHeistVersion = buttonHeistVersion
+    }
+}
+
+/// Session-level availability information for this instance.
+public struct StatusSession: Codable, Sendable {
+    /// Whether a driver session is currently active on this instance.
+    public let active: Bool
+    /// Whether additional watcher connections are allowed for this active session.
+    /// When `active == false`, this is always false (no watching inactive sessions).
+    public let watchersAllowed: Bool
+    /// Number of active connections in the session (driver + watchers).
+    public let activeConnections: Int
+
+    public init(
+        active: Bool,
+        watchersAllowed: Bool,
+        activeConnections: Int
+    ) {
+        self.active = active
+        self.watchersAllowed = watchersAllowed
+        self.activeConnections = activeConnections
+    }
 }
 
 // MARK: - Action Results
