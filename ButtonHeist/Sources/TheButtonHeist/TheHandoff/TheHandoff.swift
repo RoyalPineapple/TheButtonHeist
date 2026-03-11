@@ -259,34 +259,7 @@ public final class TheHandoff {
         startDiscovery()
 
         let discoveryTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
-        let discoveryStart = DispatchTime.now().uptimeNanoseconds
-        while discoveredDevices.first(matching: filter) == nil {
-            if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryTimeout {
-                if let filter {
-                    throw ConnectionError.noMatchingDevice(
-                        filter: filter,
-                        available: discoveredDevices.map(\.name)
-                    )
-                }
-                throw ConnectionError.noDeviceFound
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        let device: DiscoveredDevice
-        if let filter {
-            guard let match = discoveredDevices.first(matching: filter) else {
-                throw ConnectionError.noDeviceFound
-            }
-            device = match
-        } else if discoveredDevices.count == 1 {
-            device = discoveredDevices[0]
-        } else {
-            throw ConnectionError.noMatchingDevice(
-                filter: "(none)",
-                available: discoveredDevices.map(\.name)
-            )
-        }
+        let device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
 
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
@@ -348,6 +321,94 @@ public final class TheHandoff {
         }
 
         onStatus?("Connected to \(displayName(for: device))")
+    }
+
+    private func resolveReachableDevice(
+        filter: String?,
+        discoveryTimeout: UInt64
+    ) async throws -> DiscoveredDevice {
+        if let directDevice = directConnectDevice(from: filter) {
+            return directDevice
+        }
+
+        let start = DispatchTime.now().uptimeNanoseconds
+        var lastSignature = ""
+        var stableAt = start
+        var probedSignature: String?
+
+        while true {
+            let now = DispatchTime.now().uptimeNanoseconds
+            let discovered = discoveredDevices
+            let signature = discoverySignature(for: discovered)
+
+            if signature != lastSignature {
+                lastSignature = signature
+                stableAt = now
+            }
+
+            let stabilized = !discovered.isEmpty && now - stableAt >= 500_000_000
+            if stabilized && probedSignature != signature {
+                let reachable = await discovered.reachable()
+                if let device = selectDevice(from: reachable, filter: filter) {
+                    return device
+                }
+                probedSignature = signature
+            }
+
+            if now - start > discoveryTimeout {
+                return try await finalDeviceSelection(filter: filter)
+            }
+
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    private func finalDeviceSelection(filter: String?) async throws -> DiscoveredDevice {
+        let reachable = await discoveredDevices.reachable()
+        if let device = selectDevice(from: reachable, filter: filter) {
+            return device
+        }
+
+        if let filter {
+            throw ConnectionError.noMatchingDevice(
+                filter: filter,
+                available: reachable.map(\.name)
+            )
+        }
+
+        throw ConnectionError.noDeviceFound
+    }
+
+    private func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
+        if let filter {
+            return devices.first(matching: filter)
+        }
+
+        guard devices.count == 1 else {
+            return nil
+        }
+
+        return devices[0]
+    }
+
+    private func discoverySignature(for devices: [DiscoveredDevice]) -> String {
+        devices.map(\.id).sorted().joined(separator: "|")
+    }
+
+    private func directConnectDevice(from filter: String?) -> DiscoveredDevice? {
+        guard let filter else { return nil }
+        guard let separator = filter.lastIndex(of: ":") else { return nil }
+
+        let host = String(filter[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let portString = String(filter[filter.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !host.isEmpty,
+              let port = UInt16(portString),
+              port > 0 else {
+            return nil
+        }
+
+        return DiscoveredDevice(host: host, port: port)
     }
 
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
