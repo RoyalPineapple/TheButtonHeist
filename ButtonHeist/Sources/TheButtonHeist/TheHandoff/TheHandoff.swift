@@ -144,6 +144,8 @@ public final class TheHandoff {
         connection?.onEvent = { [weak self] event in
             guard let self else { return }
             switch event {
+            case .transportReady:
+                break
             case .connected:
                 self.connectedDevice = device
                 self.isConnected = true

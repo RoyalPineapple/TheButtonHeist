@@ -160,16 +160,25 @@ extension Array where Element == DiscoveredDevice {
 }
 
 @ButtonHeistActor
-private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterval) async -> Bool {
+var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { device in
     let connection = DeviceConnection(device: device, token: nil, driverId: nil)
+    connection.autoRespondToAuthRequired = false
+    return connection
+}
+
+@ButtonHeistActor
+private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterval) async -> Bool {
+    let connection = makeReachabilityConnection(device)
     var reachable = false
     var finished = false
 
     connection.onEvent = { event in
         switch event {
-        case .connected:
+        case .transportReady:
             // Once TCP/TLS is up, send a lightweight status probe.
             connection.send(.status)
+        case .connected:
+            break
         case .message(let message, _):
             if case .status = message {
                 reachabilityLogger.debug("Status reachable: \(device.name, privacy: .public)")

@@ -154,7 +154,7 @@ public final class TheFence {
             return .ok(message: "bye")
         }
 
-        if !isStarted || client.connectionState != .connected {
+        if command != .getSessionState && (!isStarted || client.connectionState != .connected) {
             try await start()
         }
 

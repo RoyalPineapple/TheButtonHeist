@@ -200,4 +200,32 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected ok(bye), got \(response)")
         }
     }
+
+    @ButtonHeistActor
+    func testGetSessionStateDoesNotConnectWhenDisconnected() async throws {
+        let device = DiscoveredDevice(
+            id: "mock-device",
+            name: "MockApp#test",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        let mockConnection = MockConnection()
+
+        let fence = TheFence()
+        fence.client.handoff.makeDiscovery = { mockDiscovery }
+        fence.client.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        let response = try await fence.execute(request: ["command": "get_session_state"])
+
+        if case .sessionState(let payload) = response {
+            XCTAssertEqual(payload["connected"] as? Bool, false)
+        } else {
+            XCTFail("Expected sessionState response, got \(response)")
+        }
+
+        XCTAssertEqual(mockDiscovery.startCount, 0)
+        XCTAssertEqual(mockConnection.connectCount, 0)
+    }
 }

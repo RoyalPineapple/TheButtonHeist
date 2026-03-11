@@ -1,6 +1,7 @@
 import XCTest
 import Network
 @testable import ButtonHeist
+import TheScore
 
 final class DiscoveredDeviceTests: XCTestCase {
 
@@ -465,5 +466,50 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.instanceId, "my-instance")
         XCTAssertEqual(device.sessionActive, true)
         XCTAssertEqual(device.certFingerprint, fingerprint)
+    }
+
+    @ButtonHeistActor
+    func testReachableSendsStatusAfterTransportReady() async {
+        let device = DiscoveredDevice(
+            id: "test",
+            name: "ReachableApp#abc123",
+            endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockConnection = MockConnection()
+        mockConnection.emitTransportReadyOnConnect = true
+        mockConnection.autoResponse = { message in
+            switch message {
+            case .status:
+                return .status(StatusPayload(
+                    identity: StatusIdentity(
+                        appName: "ReachableApp",
+                        bundleIdentifier: "com.test.reachable",
+                        appBuild: "1",
+                        deviceName: "Simulator",
+                        systemVersion: "18.5",
+                        buttonHeistVersion: "5.0"
+                    ),
+                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                ))
+            default:
+                XCTFail("Unexpected probe message: \(message)")
+                return .error("unexpected")
+            }
+        }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in mockConnection }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let reachable = await [device].reachable(timeout: 0.2)
+
+        XCTAssertEqual(reachable, [device])
+        XCTAssertEqual(mockConnection.sent.count, 1)
+        if case .status = mockConnection.sent.first?.0 {
+            // Expected
+        } else {
+            XCTFail("Reachability should send exactly one status probe")
+        }
     }
 }
