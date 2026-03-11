@@ -7,10 +7,16 @@ import CoreGraphics
 /// When `requestId` is present, the server echoes it in the corresponding response
 /// so the client can match request-response pairs. Push broadcasts have no requestId.
 public struct RequestEnvelope: Codable, Sendable {
+    public let protocolVersion: String
     public let requestId: String?
     public let message: ClientMessage
 
     public init(requestId: String? = nil, message: ClientMessage) {
+        self.init(wireProtocolVersion: currentWireProtocolVersion, requestId: requestId, message: message)
+    }
+
+    public init(wireProtocolVersion: String, requestId: String? = nil, message: ClientMessage) {
+        self.protocolVersion = wireProtocolVersion
         self.requestId = requestId
         self.message = message
     }
@@ -19,6 +25,9 @@ public struct RequestEnvelope: Codable, Sendable {
 // MARK: - Client -> Server Messages
 
 public enum ClientMessage: Codable, Sendable {
+    /// Version-negotiation hello sent immediately after receiving serverHello.
+    case clientHello
+
     /// Authenticate with a token (must be first message sent)
     case authenticate(AuthenticatePayload)
 

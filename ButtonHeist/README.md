@@ -40,7 +40,7 @@ The cross-platform type library. No UIKit or AppKit imports — just pure `Codab
   - `ServerMessage` (8 cases — auth challenge, info, interface, action results, screen, errors)
   - Target structs: `ActionTarget`, `TouchTapTarget`, `SwipeTarget`, `PinchTarget`, `DrawBezierTarget`, etc.
   - Response types: `ServerInfo`, `Interface`, `HeistElement`, `ActionResult`, `InterfaceDelta`, `ScreenPayload`
-  - Constants: `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"3.1"`)
+  - Constants: `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"6.0"`)
 ## TheInsideJob — iOS Server
 
 **Location**: `Sources/TheInsideJob/`
@@ -106,7 +106,7 @@ Cross-platform networking used by both iOS (server-side) and macOS (client-side)
 | `SimpleSocketServer.swift` | TCP server (Network framework). IPv6 dual-stack, auth tracking, rate limiting (30 msg/sec), 5 max connections, 10 MB buffer limit |
 | `DeviceConnection.swift` | TCP client. Connects to a `DiscoveredDevice`, handles auth handshake automatically |
 | `DeviceDiscovery.swift` | Bonjour browser (`NWBrowser`). Discovers `_buttonheist._tcp` services, extracts TXT record metadata |
-| `DiscoveredDevice.swift` | Device model — name, endpoint, shortId, simulatorUDID, vendorIdentifier. Supports flexible filter matching |
+| `DiscoveredDevice.swift` | Device model — name, endpoint, shortId, simulatorUDID, installationId, instanceId, sessionActive, certFingerprint. Supports flexible filter matching |
 
 ## ButtonHeist — macOS Client
 
@@ -124,5 +124,5 @@ Single-import macOS framework. `import ButtonHeist` gives you `TheMastermind` an
 
 - [Architecture](../docs/ARCHITECTURE.md) — Full system design with data flow diagrams
 - [API Reference](../docs/API.md) — Complete API documentation for all modules
-- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v3.1 message format specification
+- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v6.0 message format specification
 - [Project Overview](../README.md) — Quick start and getting connected

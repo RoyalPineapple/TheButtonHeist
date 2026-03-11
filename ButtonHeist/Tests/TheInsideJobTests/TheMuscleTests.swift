@@ -56,6 +56,24 @@ final class TheMuscleTests: XCTestCase {
         (try? JSONDecoder().decode(ResponseEnvelope.self, from: data))?.message
     }
 
+    private func performHello(clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
+        guard let data = try? JSONEncoder().encode(RequestEnvelope(message: .clientHello)) else {
+            XCTFail("Failed to encode clientHello")
+            return
+        }
+        muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+    }
+
+    private func authenticate(
+        clientId: Int,
+        token: String,
+        driverId: String? = nil,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        performHello(clientId: clientId, respond: respond)
+        muscle.handleUnauthenticatedMessage(clientId, data: encodeAuth(token: token, driverId: driverId), respond: respond)
+    }
+
     private func respondSink() -> @Sendable (Data) -> Void {
         // No-op respond closure for tests that don't need to inspect responses.
         // Use collectResponses() when you need to check what was sent back.
@@ -77,9 +95,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testValidTokenAuthenticates() {
         let (respond, responses) = collectResponses()
-        let data = encodeAuth(token: "test-token")
-
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respond)
+        authenticate(clientId: 1, token: "test-token", respond: respond)
 
         XCTAssertTrue(markedAuthenticated.contains(1), "Client should be marked authenticated")
         XCTAssertTrue(muscle.authenticatedClientIDs.contains(1))
@@ -94,9 +110,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testInvalidTokenRejected() {
         let (respond, responses) = collectResponses()
-        let data = encodeAuth(token: "wrong-token")
-
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respond)
+        authenticate(clientId: 1, token: "wrong-token", respond: respond)
 
         XCTAssertFalse(markedAuthenticated.contains(1), "Client should not be marked authenticated")
         XCTAssertFalse(muscle.authenticatedClientIDs.contains(1))
@@ -112,9 +126,7 @@ final class TheMuscleTests: XCTestCase {
 
     func testEmptyTokenTriggersPendingApproval() {
         let (respond, _) = collectResponses()
-        let data = encodeAuth(token: "")
-
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respond)
+        authenticate(clientId: 1, token: "", respond: respond)
 
         // Client should NOT be authenticated yet — waiting for UI approval
         XCTAssertFalse(markedAuthenticated.contains(1))
@@ -134,17 +146,15 @@ final class TheMuscleTests: XCTestCase {
     // MARK: - Session Rules Tests
 
     func testNoSessionValidTokenAcquires() {
-        let data = encodeAuth(token: "test-token")
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
 
         XCTAssertNotNil(muscle.activeSessionDriverId, "Session should be claimed")
         XCTAssertTrue(muscle.activeSessionConnections.contains(1))
     }
 
     func testSameDriverAllowed() {
-        let data = encodeAuth(token: "test-token")
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
-        muscle.handleUnauthenticatedMessage(2, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
         XCTAssertTrue(muscle.activeSessionConnections.contains(1))
         XCTAssertTrue(muscle.activeSessionConnections.contains(2))
@@ -153,13 +163,11 @@ final class TheMuscleTests: XCTestCase {
 
     func testDifferentDriverBusy() {
         // Driver A connects
-        let dataA = encodeAuth(token: "test-token", driverId: "driver-a")
-        muscle.handleUnauthenticatedMessage(1, data: dataA, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
 
         // Driver B tries to connect
         let (respond, responses) = collectResponses()
-        let dataB = encodeAuth(token: "test-token", driverId: "driver-b")
-        muscle.handleUnauthenticatedMessage(2, data: dataB, respond: respond)
+        authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
 
         XCTAssertFalse(markedAuthenticated.contains(2), "Driver B should not be authenticated")
         XCTAssertFalse(muscle.activeSessionConnections.contains(2))
@@ -182,8 +190,7 @@ final class TheMuscleTests: XCTestCase {
         muscle.onClientAuthenticated = { [unowned self] clientId, respond in self.authenticatedCallbacks.append((clientId, respond)) }
 
         // Authenticate a client
-        let data = encodeAuth(token: "test-token")
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
         XCTAssertNotNil(muscle.activeSessionDriverId)
 
         // Disconnect the client — session release timer starts (default 30s, too slow for tests)
@@ -193,14 +200,12 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testSameDriverRejoinsAfterDisconnect() {
-        let data = encodeAuth(token: "test-token")
-
         // Client 1 connects and disconnects
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
         muscle.handleClientDisconnected(1)
 
         // Client 2 with same driver reconnects before timeout
-        muscle.handleUnauthenticatedMessage(2, data: data, respond: respondSink())
+        authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
         XCTAssertTrue(muscle.activeSessionConnections.contains(2), "Same driver should rejoin session")
         XCTAssertTrue(markedAuthenticated.contains(2))
@@ -208,14 +213,12 @@ final class TheMuscleTests: XCTestCase {
 
     func testDifferentDriverBlockedDuringGracePeriod() {
         // Driver A connects and disconnects (release timer running)
-        let dataA = encodeAuth(token: "test-token", driverId: "driver-a")
-        muscle.handleUnauthenticatedMessage(1, data: dataA, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
         muscle.handleClientDisconnected(1)
 
         // Driver B tries during grace period
         let (respond, responses) = collectResponses()
-        let dataB = encodeAuth(token: "test-token", driverId: "driver-b")
-        muscle.handleUnauthenticatedMessage(2, data: dataB, respond: respond)
+        authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasSessionLocked = serverMessages.contains { msg in
@@ -231,8 +234,7 @@ final class TheMuscleTests: XCTestCase {
         let originalToken = muscle.authToken
 
         // Authenticate, disconnect, tearDown to force session release
-        let data = encodeAuth(token: "test-token")
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
         muscle.handleClientDisconnected(1)
 
         // Token should remain the same after session release path
@@ -243,8 +245,7 @@ final class TheMuscleTests: XCTestCase {
         let originalToken = muscle.authToken
 
         for i in 1...5 {
-            let data = encodeAuth(token: originalToken)
-            muscle.handleUnauthenticatedMessage(i, data: data, respond: respondSink())
+            authenticate(clientId: i, token: originalToken, respond: respondSink())
             muscle.handleClientDisconnected(i)
         }
 

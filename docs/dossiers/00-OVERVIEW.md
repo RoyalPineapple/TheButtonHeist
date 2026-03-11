@@ -77,6 +77,8 @@ sequenceDiagram
     TH->>DC: connect(to: device)
     DC->>SS: TLS connect (cert fingerprint pinned via Bonjour TXT)
     SS->>TM2: onClientConnected
+    TM2-->>DC: serverHello
+    DC->>SS: clientHello
     TM2-->>DC: authRequired
     DC->>SS: authenticate(token)
     TM2-->>DC: info(ServerInfo)

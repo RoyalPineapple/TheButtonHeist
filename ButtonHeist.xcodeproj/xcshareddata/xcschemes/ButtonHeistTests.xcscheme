@@ -14,20 +14,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E59AC4213C28C64460B66331"
-               BuildableName = "ButtonHeistTests.xctest"
-               BlueprintName = "ButtonHeistTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "01AB9D7BD988A7ADF961852B"
                BuildableName = "ButtonHeist.framework"
                BlueprintName = "ButtonHeist"
@@ -56,17 +42,6 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E59AC4213C28C64460B66331"
-               BuildableName = "ButtonHeistTests.xctest"
-               BlueprintName = "ButtonHeistTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
@@ -82,9 +57,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E59AC4213C28C64460B66331"
-            BuildableName = "ButtonHeistTests.xctest"
-            BlueprintName = "ButtonHeistTests"
+            BlueprintIdentifier = "01AB9D7BD988A7ADF961852B"
+            BuildableName = "ButtonHeist.framework"
+            BlueprintName = "ButtonHeist"
             ReferencedContainer = "container:ButtonHeist.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -98,9 +73,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E59AC4213C28C64460B66331"
-            BuildableName = "ButtonHeistTests.xctest"
-            BlueprintName = "ButtonHeistTests"
+            BlueprintIdentifier = "01AB9D7BD988A7ADF961852B"
+            BuildableName = "ButtonHeist.framework"
+            BlueprintName = "ButtonHeist"
             ReferencedContainer = "container:ButtonHeist.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

@@ -247,7 +247,7 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 - `TLSIdentity` - Runtime-generated self-signed ECDSA (P-256) certificate management with Keychain persistence and SHA-256 fingerprint computation. Uses `swift-certificates` for X.509 generation.
 - `DeviceConnection` - TLS/TCP client with NWConnection service resolution, data transport, and certificate fingerprint verification via `sec_protocol_verify_block`
 - `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records including `certfp` for TLS fingerprint pinning
-- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, instanceId, sessionActive, certFingerprint)
+- `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, displayDeviceName, instanceId, sessionActive, certFingerprint)
 
 ### TheFence (Command Dispatch Layer)
 
@@ -330,7 +330,7 @@ TheMastermind (@Observable, @ButtonHeistActor)
 
 **Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, TheWheelman automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connect. Note: TheFence explicitly disables `autoSubscribe` for CLI/MCP use. The `watch` command enables `autoSubscribe` for its read-only observer connection.
 
-**Observe Mode**: When `observeMode` is set on TheWheelman, the client sends `watch(WatchPayload)` instead of `authenticate` in response to `authRequired`. This establishes a read-only observer connection that receives all broadcasts (interface updates, screen captures, interaction events) without claiming a session lock. Observers coexist with active driver sessions.
+**Observe Mode**: When `observeMode` is set on TheWheelman, the client completes the `serverHello` / `clientHello` handshake, waits for `authRequired`, then sends `watch(WatchPayload)` instead of `authenticate`. This establishes a read-only observer connection that receives all broadcasts (interface updates, screen captures, interaction events) without claiming a session lock. Observers coexist with active driver sessions.
 
 **Connection State Machine**:
 ```mermaid
@@ -390,11 +390,11 @@ sequenceDiagram
     IJ->>NS: publish("_buttonheist._tcp")
     Note over NS: Service name: "{AppName}#{instanceId}"<br>instanceId = INSIDEJOB_ID or UUID prefix
     IJ->>NS: setTXTRecord()
-    Note over NS: simudid, instanceid, installationid
+    Note over NS: simudid, installationid,<br>instanceid, devicename,<br>sessionactive, certfp, transport
 
     HC->>NB: start(for: "_buttonheist._tcp")
     NB-->>HC: service found
-    Note over HC: Extract TXT record →<br>simulatorUDID, vendorIdentifier
+    Note over HC: Extract TXT record →<br>simulatorUDID, installationId,<br>instanceId, sessionActive, certFingerprint
     HC->>HC: discoveredDevices.append(device)
 ```
 
@@ -416,6 +416,8 @@ sequenceDiagram
 
     HC->>IJ: connect(to: device)
     Note over HC,IJ: TCP connection established (NWConnection)
+    IJ-->>HC: serverHello
+    HC->>IJ: clientHello
     IJ-->>HC: authRequired
 
     HC->>IJ: authenticate(token)
@@ -454,6 +456,8 @@ sequenceDiagram
 
     WC->>IJ: connect(to: device)
     Note over WC,IJ: TCP connection established
+    IJ-->>WC: serverHello
+    WC->>IJ: clientHello
     IJ-->>WC: authRequired
 
     WC->>IJ: watch(token:"")
@@ -566,7 +570,7 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 5.0
+- Protocol version: 6.0
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections are auto-approved by default.
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.

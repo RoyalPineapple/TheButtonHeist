@@ -70,20 +70,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E59AC4213C28C64460B66331"
-               BuildableName = "ButtonHeistTests.xctest"
-               BlueprintName = "ButtonHeistTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "0C402B96BBD3B71C0DF7855E"
                BuildableName = "CCryptoBoringSSL.framework"
                BlueprintName = "CCryptoBoringSSL"
@@ -185,20 +171,6 @@
                BlueprintIdentifier = "DE504387EAB6C70F9E30849E"
                BuildableName = "TheScore.framework"
                BlueprintName = "TheScore"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DCA40E9CBA58FAD77D4C6A4E"
-               BuildableName = "TheScoreTests.xctest"
-               BlueprintName = "TheScoreTests"
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -327,31 +299,9 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E59AC4213C28C64460B66331"
-               BuildableName = "ButtonHeistTests.xctest"
-               BlueprintName = "ButtonHeistTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "7E0F23D58CBD2EF0C15E34EB"
                BuildableName = "TheInsideJobTests.xctest"
                BlueprintName = "TheInsideJobTests"
-               ReferencedContainer = "container:ButtonHeist.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DCA40E9CBA58FAD77D4C6A4E"
-               BuildableName = "TheScoreTests.xctest"
-               BlueprintName = "TheScoreTests"
                ReferencedContainer = "container:ButtonHeist.xcodeproj">
             </BuildableReference>
          </TestableReference>

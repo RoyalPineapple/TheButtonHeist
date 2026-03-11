@@ -786,7 +786,7 @@ Specialized accessibility actions. For general element interaction, use `activat
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "5.0"  // Protocol v5.0 with envelope correlation, watch mode, and TLS transport
+public let protocolVersion = "6.0"  // Protocol v6.0 with explicit type/payload envelopes and strict hello/version matching
 ```
 
 ### ConnectionState
@@ -816,9 +816,11 @@ Represents a discovered TheInsideJob device.
 - `name: String` - Service name (v3 format: "AppName#instanceId")
 - `endpoint: NWEndpoint` - Network endpoint for connection
 - `simulatorUDID: String?` - Simulator UDID from Bonjour TXT record (nil on physical devices)
-- `vendorIdentifier: String?` - Vendor identifier from Bonjour TXT record
+- `installationId: String?` - Stable installation identifier from Bonjour TXT record
+- `displayDeviceName: String?` - Human-readable device name from Bonjour TXT record
 - `instanceId: String?` - Instance identifier from Bonjour TXT record
-- `certFingerprint: String?` - TLS certificate SHA-256 fingerprint from Bonjour TXT record (format: `sha256:<hex>`, v5.0+)
+- `sessionActive: Bool?` - Whether the device currently has an active session
+- `certFingerprint: String?` - TLS certificate SHA-256 fingerprint from Bonjour TXT record (format: `sha256:<hex>`)
 
 #### Computed Properties
 
@@ -836,7 +838,8 @@ Messages sent from client to server.
 
 #### Cases
 
-- `authenticate(AuthenticatePayload)` - Authenticate with a token (must be first message sent)
+- `clientHello` - Version-negotiation hello sent immediately after `serverHello`
+- `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
 - `requestInterface` - Request current hierarchy
 - `subscribe` - Subscribe to automatic updates
 - `unsubscribe` - Unsubscribe from updates
@@ -864,7 +867,7 @@ Messages sent from client to server.
 - `requestScreen` - Request PNG screenshot
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
-- `status` - Lightweight unauthenticated status probe (identity + availability, no session claim)
+- `status` - Lightweight status probe allowed after the hello handshake and before auth (identity + availability, no session claim)
 
 ### ServerMessage
 
@@ -876,7 +879,9 @@ Messages sent from server to client.
 
 #### Cases
 
-- `authRequired` - Server requires authentication (sent immediately on connection)
+- `serverHello` - Server hello sent immediately on connection; client must answer with `clientHello`
+- `protocolMismatch(ProtocolMismatchPayload)` - Exact protocol version mismatch; server disconnects after sending this
+- `authRequired` - Server requires authentication (sent after a successful hello/version handshake)
 - `authFailed(String)` - Authentication failed (sent before disconnect)
 - `authApproved(AuthApprovedPayload)` - Connection approved via on-device UI (contains token for future use). See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
 - `info(ServerInfo)` - Device/app metadata (sent after successful auth)
@@ -939,7 +944,7 @@ public struct AuthenticatePayload: Codable, Sendable
 #### Properties
 
 - `token: String` - Auth token for authentication
-- `driverId: String?` - Driver identity for session locking (v3.1). When set, used instead of token for session identity.
+- `driverId: String?` - Driver identity for session locking. When set, used instead of token for session identity.
 
 ### SessionLockedPayload
 
@@ -1059,7 +1064,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "5.0")
+- `protocolVersion: String` - Protocol version (e.g., "6.0")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
