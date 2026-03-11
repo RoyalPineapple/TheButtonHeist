@@ -290,6 +290,7 @@ final class TheFenceTests: XCTestCase {
         }
 
         XCTAssertEqual(mockDiscovery.startCount, 1)
+        XCTAssertEqual(mockDiscovery.stopCount, 1)
         XCTAssertEqual(mockConnection.connectCount, 0)
     }
 }
