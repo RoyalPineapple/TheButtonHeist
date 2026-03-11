@@ -214,6 +214,63 @@ public final class TheMastermind {
         discoveredDevices = []
     }
 
+    /// Discover devices and validate each deduped advertisement as it appears.
+    public func discoverReachableDevices(
+        timeout: TimeInterval = 3.0,
+        probeTimeout: TimeInterval = 0.5,
+        retryInterval: TimeInterval = 0.2
+    ) async -> [DiscoveredDevice] {
+        startDiscovery()
+        defer { stopDiscovery() }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        var reachableIDs: Set<String> = []
+        var nextProbeAt: [String: Date] = [:]
+
+        while Date() < deadline {
+            let snapshot = discoveredDevices
+            let currentIDs = Set(snapshot.map(\.id))
+            reachableIDs = reachableIDs.filter { currentIDs.contains($0) }
+            nextProbeAt = nextProbeAt.filter { currentIDs.contains($0.key) }
+
+            let now = Date()
+            let dueDevices = snapshot.filter { device in
+                !reachableIDs.contains(device.id) &&
+                    (nextProbeAt[device.id] ?? .distantPast) <= now
+            }
+
+            if !dueDevices.isEmpty {
+                let probed = await withTaskGroup(of: (String, Bool).self, returning: [(String, Bool)].self) { group in
+                    for device in dueDevices {
+                        group.addTask {
+                            (device.id, await device.isReachable(timeout: probeTimeout))
+                        }
+                    }
+
+                    var results: [(String, Bool)] = []
+                    for await result in group {
+                        results.append(result)
+                    }
+                    return results
+                }
+
+                let retryAt = Date().addingTimeInterval(retryInterval)
+                for (id, isReachable) in probed {
+                    if isReachable {
+                        reachableIDs.insert(id)
+                        nextProbeAt.removeValue(forKey: id)
+                    } else {
+                        nextProbeAt[id] = retryAt
+                    }
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        return discoveredDevices.filter { reachableIDs.contains($0.id) }
+    }
+
     // MARK: - Connection (delegated)
 
     public func connect(to device: DiscoveredDevice) {

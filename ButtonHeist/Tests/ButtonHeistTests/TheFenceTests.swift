@@ -228,4 +228,68 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(mockDiscovery.startCount, 0)
         XCTAssertEqual(mockConnection.connectCount, 0)
     }
+
+    @ButtonHeistActor
+    func testListDevicesFiltersOutUnreachableDevicesWithoutConnecting() async throws {
+        let reachableDevice = DiscoveredDevice(
+            id: "reachable-device",
+            name: "ReachableApp#live",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:reachable"
+        )
+        let staleDevice = DiscoveredDevice(
+            id: "stale-device",
+            name: "StaleApp#dead",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 2),
+            certFingerprint: "sha256:stale"
+        )
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [reachableDevice, staleDevice]
+        let mockConnection = MockConnection()
+
+        let fence = TheFence()
+        fence.client.handoff.makeDiscovery = { mockDiscovery }
+        fence.client.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { device in
+            let connection = MockConnection()
+            connection.emitTransportReadyOnConnect = true
+            if device.id == reachableDevice.id {
+                connection.autoResponse = { message in
+                    switch message {
+                    case .status:
+                        return .status(StatusPayload(
+                            identity: StatusIdentity(
+                                appName: "ReachableApp",
+                                bundleIdentifier: "com.test.reachable",
+                                appBuild: "1",
+                                deviceName: "Simulator",
+                                systemVersion: "18.5",
+                                buttonHeistVersion: "5.0"
+                            ),
+                            session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                        ))
+                    default:
+                        XCTFail("Unexpected probe message: \(message)")
+                        return .error("unexpected")
+                    }
+                }
+            }
+            return connection
+        }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let response = try await fence.execute(request: ["command": "list_devices"])
+
+        if case .devices(let devices) = response {
+            XCTAssertEqual(devices, [reachableDevice])
+        } else {
+            XCTFail("Expected devices response, got \(response)")
+        }
+
+        XCTAssertEqual(mockDiscovery.startCount, 1)
+        XCTAssertEqual(mockConnection.connectCount, 0)
+    }
 }
