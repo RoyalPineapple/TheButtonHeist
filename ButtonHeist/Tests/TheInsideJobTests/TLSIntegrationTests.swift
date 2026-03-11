@@ -2,6 +2,7 @@ import XCTest
 import Network
 import Security
 import Crypto
+import TheScore
 @testable import TheInsideJob
 
 /// Integration tests for TLS transport over real TCP connections.
@@ -131,6 +132,100 @@ final class TLSIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
+    func testUnauthenticatedStatusProbeRoundTripsOverTLS() async throws {
+        let identity = try TLSIdentity.createEphemeral()
+        let transport = ServerTransport(tlsIdentity: identity)
+        let server = transport.server
+        defer { transport.stop() }
+
+        let port = try await transport.start(port: 0, bindToLoopback: true)
+
+        transport.onClientConnected = { clientId in
+            guard let authRequired = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else {
+                XCTFail("Failed to encode authRequired response")
+                return
+            }
+            server.send(authRequired, to: clientId)
+        }
+
+        transport.onUnauthenticatedData = { _, data, respond in
+            let decoder = JSONDecoder()
+            guard let envelope = try? decoder.decode(RequestEnvelope.self, from: data) else {
+                XCTFail("Expected RequestEnvelope for unauthenticated status probe")
+                return
+            }
+            guard case .status = envelope.message else {
+                XCTFail("Expected unauthenticated status probe, got \(envelope.message)")
+                return
+            }
+
+            let payload = StatusPayload(
+                identity: StatusIdentity(
+                    appName: "ReachableApp",
+                    bundleIdentifier: "com.test.reachable",
+                    appBuild: "42",
+                    deviceName: "Loopback Simulator",
+                    systemVersion: "18.0",
+                    buttonHeistVersion: protocolVersion
+                ),
+                session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+            )
+            guard let response = try? JSONEncoder().encode(
+                ResponseEnvelope(requestId: envelope.requestId, message: .status(payload))
+            ) else {
+                XCTFail("Failed to encode status response")
+                return
+            }
+            respond(response)
+        }
+
+        let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
+        let connection = NWConnection(
+            host: .ipv6(.loopback),
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: clientParams
+        )
+
+        let clientReady = expectation(description: "client ready")
+        connection.stateUpdateHandler = { state in
+            if case .ready = state {
+                clientReady.fulfill()
+            }
+        }
+        connection.start(queue: .global())
+        await fulfillment(of: [clientReady], timeout: 5.0)
+
+        let authRequiredData = try await receiveData(from: connection)
+        let authRequired = try decodeResponseEnvelope(from: authRequiredData)
+        if case .authRequired = authRequired.message {
+            // Expected
+        } else {
+            XCTFail("Expected authRequired before status probe")
+        }
+
+        let requestId = UUID().uuidString
+        var request = try JSONEncoder().encode(RequestEnvelope(requestId: requestId, message: .status))
+        request.append(0x0A)
+        connection.send(content: request, completion: .contentProcessed { error in
+            XCTAssertNil(error, "Unauthenticated status probe should send successfully")
+        })
+
+        let statusData = try await receiveData(from: connection)
+        let statusResponse = try decodeResponseEnvelope(from: statusData)
+        XCTAssertEqual(statusResponse.requestId, requestId)
+
+        if case .status(let payload) = statusResponse.message {
+            XCTAssertEqual(payload.identity.appName, "ReachableApp")
+            XCTAssertEqual(payload.identity.bundleIdentifier, "com.test.reachable")
+            XCTAssertEqual(payload.session.active, false)
+            XCTAssertEqual(payload.session.activeConnections, 0)
+        } else {
+            XCTFail("Expected status payload in unauthenticated probe response")
+        }
+
+        connection.cancel()
+    }
+
     // MARK: - Helpers
 
     private static func makeClientTLSParameters(expectedFingerprint: String) -> NWParameters {
@@ -176,5 +271,10 @@ final class TLSIntegrationTests: XCTestCase {
                 }
             }
         }
+    }
+
+    private func decodeResponseEnvelope(from data: Data) throws -> ResponseEnvelope {
+        let trimmed = data.last == 0x0A ? Data(data.dropLast()) : data
+        return try JSONDecoder().decode(ResponseEnvelope.self, from: trimmed)
     }
 }

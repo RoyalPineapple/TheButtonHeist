@@ -10,11 +10,17 @@ final class MockConnection: DeviceConnecting {
     var observeMode = false
     var onEvent: ((ConnectionEvent) -> Void)?
     var sent: [(ClientMessage, String?)] = []
+    var connectCount = 0
+    var emitTransportReadyOnConnect = false
 
     var serverInfo: ServerInfo?
 
     func connect() {
+        connectCount += 1
         isConnected = true
+        if emitTransportReadyOnConnect {
+            onEvent?(.transportReady)
+        }
         onEvent?(.connected)
         if let info = serverInfo {
             onEvent?(.message(.info(info), requestId: nil))
@@ -27,7 +33,7 @@ final class MockConnection: DeviceConnecting {
 
     func send(_ message: ClientMessage, requestId: String?) {
         sent.append((message, requestId))
-        if let requestId, let handler = autoResponse {
+        if let handler = autoResponse {
             let response = handler(message)
             Task { @ButtonHeistActor [self] in
                 self.onEvent?(.message(response, requestId: requestId))
@@ -42,8 +48,10 @@ final class MockConnection: DeviceConnecting {
 final class MockDiscovery: DeviceDiscovering {
     var discoveredDevices: [DiscoveredDevice] = []
     var onEvent: ((DiscoveryEvent) -> Void)?
+    var startCount = 0
 
     func start() {
+        startCount += 1
         onEvent?(.stateChanged(isReady: true))
         for device in discoveredDevices {
             onEvent?(.found(device))

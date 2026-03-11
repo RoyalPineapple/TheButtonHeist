@@ -53,6 +53,8 @@ public final class DeviceConnection: DeviceConnecting {
     public var isConnected = false
 
     public var onEvent: ((ConnectionEvent) -> Void)?
+    public var autoRespondToAuthRequired = true
+    var onSend: ((ClientMessage, String?) -> Void)?
 
     /// When true, send .watch instead of .authenticate on authRequired
     public var observeMode: Bool = false
@@ -100,6 +102,7 @@ public final class DeviceConnection: DeviceConnecting {
     }
 
     public func send(_ message: ClientMessage, requestId: String? = nil) {
+        onSend?(message, requestId)
         guard let connection, isConnected else { return }
         let envelope = RequestEnvelope(requestId: requestId, message: message)
         guard var data = try? JSONEncoder().encode(envelope) else {
@@ -122,6 +125,7 @@ public final class DeviceConnection: DeviceConnecting {
         case .ready:
             logger.info("Connected")
             isConnected = true
+            onEvent?(.transportReady)
             startReceiving()
         case .failed(let error):
             logger.error("Connection failed: \(error)")
@@ -207,7 +211,11 @@ public final class DeviceConnection: DeviceConnecting {
 
         switch message {
         case .authRequired:
-            handleAuthRequired()
+            if autoRespondToAuthRequired {
+                handleAuthRequired()
+            } else {
+                onEvent?(.message(.authRequired, requestId: nil))
+            }
         case .authFailed(let reason):
             logger.error("Auth failed: \(reason)")
             onEvent?(.message(.authFailed(reason), requestId: nil))

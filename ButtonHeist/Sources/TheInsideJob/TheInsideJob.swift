@@ -211,7 +211,14 @@ public final class TheInsideJob {
 
         t.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
-                self?.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+                guard let self else { return }
+                // Allow status probes before authentication for lightweight reachability.
+                if let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                   case .status = envelope.message {
+                    await self.handleClientMessage(clientId, data: data, respond: respond)
+                } else {
+                    self.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+                }
             }
         }
     }
@@ -292,6 +299,9 @@ public final class TheInsideJob {
         case .ping:
             muscle.noteClientActivity(clientId)
             sendMessage(.pong, requestId: requestId, respond: respond)
+        case .status:
+            let payload = makeStatusPayload()
+            sendMessage(.status(payload), requestId: requestId, respond: respond)
 
         // Observation
         case .requestScreen:
@@ -319,6 +329,35 @@ public final class TheInsideJob {
                 await dispatchInteraction(message, requestId: requestId, respond: respond)
             }
         }
+    }
+
+    private func makeStatusPayload() -> StatusPayload {
+        let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
+        let bundleId = Bundle.main.bundleIdentifier ?? ""
+        let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        let deviceName = UIDevice.current.name
+        let systemVersion = UIDevice.current.systemVersion
+
+        let identity = StatusIdentity(
+            appName: appName,
+            bundleIdentifier: bundleId,
+            appBuild: appBuild,
+            deviceName: deviceName,
+            systemVersion: systemVersion,
+            buttonHeistVersion: protocolVersion
+        )
+
+        let active = muscle.isSessionActive
+        let watchersAllowed = active && muscle.watchersAllowed
+        let activeConnections = muscle.activeSessionConnectionCount
+
+        let session = StatusSession(
+            active: active,
+            watchersAllowed: watchersAllowed,
+            activeConnections: activeConnections
+        )
+
+        return StatusPayload(identity: identity, session: session)
     }
 
     // MARK: - Interaction Dispatch

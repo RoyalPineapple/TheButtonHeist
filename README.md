@@ -7,6 +7,7 @@ The Button Heist gives AI agents (and humans) full control over iOS apps. Embed 
 ## Features
 
 - **MCP server** — AI agents like Claude or Codex drive any iOS app through native tool calls
+- **Batch automation** — Run multiple Fence commands in one `run_batch` call and inspect client-side connection state with `get_session_state`
 - **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
 - **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
 - **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
@@ -50,7 +51,7 @@ Engage the team for your next job via MCP or CLI.
 | Character | What they do |
 |-----------|--------------|
 | **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, `watch`, and more. |
-| **ButtonHeistMCP** | Agent interface. 14 tools that call through TheFence so AI agents can run the job natively. |
+| **ButtonHeistMCP** | Agent interface. 16 tools that call through TheFence so AI agents can run the job natively, including `run_batch` and `get_session_state`. |
 
 ## Architecture
 
@@ -101,7 +102,7 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 | **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeistMCP** | macOS | MCP server — 14 tools dispatching through TheFence | [ButtonHeistMCP/](ButtonHeistMCP/) |
+| **ButtonHeistMCP** | macOS | MCP server — 16 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
 | **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop_recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, get_interface, wait_for_idle, copy, paste, cut, select, select_all, dismiss_keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
@@ -171,6 +172,14 @@ Agent: "I'll tap the login button"
 Agent: "Let me type an email address"
 → calls type_text(text: "user@example.com", identifier: "emailField")
 → gets the field's current value back
+
+Agent: "Check whether I already have a live session"
+→ calls get_session_state
+→ gets connection state, device/app identity, timeouts, recording flag, and last-action summary
+
+Agent: "Run the next three steps as one operation"
+→ calls run_batch with an ordered `steps` array
+→ gets per-step results plus `completedSteps`, `failedIndex`, and total timing
 ```
 For device targeting, command reference, and internals: **[ButtonHeistMCP/](ButtonHeistMCP/)**
 
@@ -179,6 +188,7 @@ For device targeting, command reference, and internals: **[ButtonHeistMCP/](Butt
 ```bash
 buttonheist list                                    # Discover devices
 buttonheist session                                 # Persistent session (get_interface, activate, etc.)
+printf '{"command":"get_session_state"}\n' | buttonheist session --format json
 buttonheist activate --identifier loginButton       # Activate a button
 buttonheist touch tap --x 100 --y 200               # Tap coordinates
 buttonheist touch swipe --identifier list --direction up  # Swipe a list
@@ -192,7 +202,7 @@ Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)**
 
 ### 4. Connect over USB
 
-USB devices are discovered automatically alongside WiFi. Both appear in `buttonheist list`:
+USB devices are discovered automatically alongside WiFi. `buttonheist list` verifies each candidate with a lightweight status probe before printing it, so stale Bonjour entries are filtered out:
 
 ```bash
 buttonheist list

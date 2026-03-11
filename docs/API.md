@@ -597,11 +597,13 @@ public enum Command: String, CaseIterable, Sendable {
     case help, status, quit, exit
     case listDevices = "list_devices"
     case getInterface = "get_interface"
-    // ... 29 total cases
+    case runBatch = "run_batch"
+    case getSessionState = "get_session_state"
+    // ... 31 total cases
 }
 ```
 
-Single source of truth for the 29 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for the 31 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
@@ -628,6 +630,8 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `screenshotData(pngData:width:height:)` | Screenshot as base64 PNG |
 | `recording(path:payload:)` | Recording saved to path |
 | `recordingData(payload:)` | Recording as base64 video |
+| `batch(results:completedSteps:failedIndex:totalTimingMs:)` | Batched command results with aggregate timing and optional failure index |
+| `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 
 ### FenceError
 
@@ -680,7 +684,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 
 ### Overview
 
-MCP server exposing 14 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server exposing 16 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -704,6 +708,8 @@ cd ButtonHeistMCP && swift build -c release
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order` |
 | `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order` |
+| `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
+| `get_session_state` | Read-only summary of the current macOS-side session state | — |
 
 All tools use strict schemas (`additionalProperties: false`) — only documented parameters are accepted.
 
@@ -838,6 +844,7 @@ Messages sent from client to server.
 - `requestScreen` - Request PNG screenshot
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
+- `status` - Lightweight unauthenticated status probe (identity + availability, no session claim)
 
 ### ServerMessage
 
@@ -863,6 +870,45 @@ Messages sent from server to client.
 - `recordingStopped` - Recording stop acknowledged
 - `recording(RecordingPayload)` - Completed recording (H.264/MP4 as base64)
 - `recordingError(String)` - Recording failed
+- `status(StatusPayload)` - Lightweight server identity and session availability snapshot
+
+### StatusPayload
+
+```swift
+public struct StatusPayload: Codable, Sendable
+```
+
+#### Properties
+
+- `identity: StatusIdentity` - App/device identity for the reachable Inside Job instance
+- `session: StatusSession` - Current session availability and connection counts
+
+### StatusIdentity
+
+```swift
+public struct StatusIdentity: Codable, Sendable
+```
+
+#### Properties
+
+- `appName: String` - App name from the target bundle
+- `bundleIdentifier: String` - Target app bundle identifier
+- `appBuild: String` - Target app build number
+- `deviceName: String` - Device name reported by UIKit
+- `systemVersion: String` - iOS version string
+- `buttonHeistVersion: String` - Protocol version exposed by Inside Job
+
+### StatusSession
+
+```swift
+public struct StatusSession: Codable, Sendable
+```
+
+#### Properties
+
+- `active: Bool` - Whether a driver session is active
+- `watchersAllowed: Bool` - Whether observer connections are allowed for the active session
+- `activeConnections: Int` - Number of connections in the current session
 
 ### AuthenticatePayload
 
@@ -1226,7 +1272,7 @@ Flags always take precedence over environment variables.
 
 ### buttonheist list
 
-List discovered devices.
+List discovered devices that answer a lightweight `status` probe.
 
 ```
 USAGE: buttonheist list [OPTIONS]
@@ -1236,7 +1282,7 @@ OPTIONS:
   -f, --format <format>   Output format: human, json (default: human)
 ```
 
-Human output shows device index, short ID, app name, device name, and any device identifiers (simulator UDID or vendor identifier). JSON output includes all fields.
+Human output shows device index, short ID, app name, device name, and any device identifiers (simulator UDID or vendor identifier). Before printing, the CLI verifies each discovered endpoint with an unauthenticated `status` RPC so stale Bonjour entries are filtered out. JSON output includes all fields.
 
 ### buttonheist activate
 
@@ -1425,6 +1471,12 @@ echo 'tap myButton' | buttonheist session --format json
 
 # JSON commands still work
 echo '{"command":"get_interface"}' | buttonheist session --format json
+
+# Read the current client-side session state without reconnect side effects
+echo '{"command":"get_session_state"}' | buttonheist session --format json
+
+# Execute multiple commands in one request
+echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_idle","timeout":2}]}' | buttonheist session --format json
 
 # Start a session with a 5-minute idle timeout (for agent use)
 buttonheist session --format json --session-timeout 300
