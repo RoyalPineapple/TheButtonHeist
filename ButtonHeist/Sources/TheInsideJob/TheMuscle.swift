@@ -256,6 +256,25 @@ final class TheMuscle {
         logger.info("Token invalidated, new token: \(self.authToken, privacy: .sensitive)")
     }
 
+    // MARK: - Status Accessors
+
+    /// Whether a driver session is currently active on this Inside Job instance.
+    var isSessionActive: Bool {
+        activeSessionDriverId != nil
+    }
+
+    /// Whether watchers are allowed for the current session.
+    /// For now this is derived from restrictWatchers: when restrictWatchers is false,
+    /// observers are allowed once a session is active; when true, only the driver may connect.
+    var watchersAllowed: Bool {
+        isSessionActive && !restrictWatchers
+    }
+
+    /// Number of active connections participating in the session (driver + any watchers).
+    var activeSessionConnectionCount: Int {
+        activeSessionConnections.count
+    }
+
     // MARK: - Observer Auth
 
     /// Handle a watch request from an unauthenticated client.

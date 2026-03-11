@@ -142,4 +142,27 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         XCTAssertTrue(conn.observeMode)
     }
+
+    @ButtonHeistActor
+    func testPassiveModeDoesNotAutoAuthenticateOnAuthRequired() throws {
+        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        conn.isConnected = true
+        conn.autoRespondToAuthRequired = false
+
+        var receivedAuthRequired = false
+        var sentMessages: [ClientMessage] = []
+        conn.onEvent = { event in
+            if case .message(.authRequired, _) = event {
+                receivedAuthRequired = true
+            }
+        }
+        conn.onSend = { message, _ in
+            sentMessages.append(message)
+        }
+
+        try conn.handleMessage(encode(.authRequired))
+
+        XCTAssertTrue(receivedAuthRequired)
+        XCTAssertTrue(sentMessages.isEmpty, "Passive probes must not send auth replies")
+    }
 }

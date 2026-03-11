@@ -154,7 +154,7 @@ public final class TheFence {
             return .ok(message: "bye")
         }
 
-        if !isStarted || client.connectionState != .connected {
+        if command != .getSessionState && (!isStarted || client.connectionState != .connected) {
             try await start()
         }
 
@@ -207,6 +207,10 @@ public final class TheFence {
             return try await handleStartRecording(args)
         case .stopRecording:
             return try await handleStopRecording(args)
+        case .runBatch:
+            return try await handleRunBatch(args)
+        case .getSessionState:
+            return .sessionState(payload: currentSessionState())
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
@@ -218,6 +222,7 @@ public final class TheFence {
         let result: ActionResult = try await sendAndAwait(message) { requestId in
             try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
+        lastActionResult = result
         return .action(result: result)
     }
 
@@ -274,6 +279,86 @@ public final class TheFence {
         let order = intArg(dictionary, "order")
         guard identifier != nil || order != nil else { return nil }
         return ActionTarget(identifier: identifier, order: order)
+    }
+
+    // MARK: - Last Action Tracking
+
+    var lastActionResult: ActionResult?
+
+    // MARK: - Batch Execution
+
+    private func handleRunBatch(_ args: [String: Any]) async throws -> FenceResponse {
+        guard let steps = args["steps"] as? [[String: Any]], !steps.isEmpty else {
+            throw FenceError.invalidRequest("run_batch requires a non-empty 'steps' array")
+        }
+        let policy = (args["policy"] as? String) ?? "stop_on_error"
+
+        var results: [[String: Any]] = []
+        var failedIndex: Int?
+        let batchStart = CFAbsoluteTimeGetCurrent()
+
+        for (index, step) in steps.enumerated() {
+            do {
+                let response = try await execute(request: step)
+                if let dict = response.jsonDict() {
+                    results.append(dict)
+                } else {
+                    results.append(["status": "ok"])
+                }
+
+                let isError = (results.last?["status"] as? String) == "error"
+                if isError && policy == "stop_on_error" {
+                    failedIndex = index
+                    break
+                }
+            } catch {
+                let errorDict: [String: Any] = [
+                    "status": "error",
+                    "message": error.localizedDescription,
+                ]
+                results.append(errorDict)
+                if policy == "stop_on_error" {
+                    failedIndex = index
+                    break
+                }
+            }
+        }
+
+        let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
+        return .batch(
+            results: results,
+            completedSteps: results.count,
+            failedIndex: failedIndex,
+            totalTimingMs: totalMs
+        )
+    }
+
+    // MARK: - Session State
+
+    func currentSessionState() -> [String: Any] {
+        let connected = client.connectionState == .connected
+        var payload: [String: Any] = [
+            "status": "ok",
+            "connected": connected,
+        ]
+        if let device = client.connectedDevice {
+            payload["deviceName"] = client.displayName(for: device)
+            payload["appName"] = device.appName
+            payload["connectionType"] = device.connectionType.rawValue
+            if let shortId = device.shortId { payload["shortId"] = shortId }
+        }
+        payload["isRecording"] = client.isRecording
+        payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
+        payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
+
+        if let last = lastActionResult {
+            payload["lastAction"] = [
+                "method": last.method.rawValue,
+                "success": last.success,
+                "message": last.message as Any,
+            ]
+        }
+        return payload
     }
 }
 

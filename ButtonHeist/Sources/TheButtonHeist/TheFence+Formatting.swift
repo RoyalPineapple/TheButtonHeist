@@ -13,6 +13,8 @@ public enum FenceResponse {
     case screenshotData(pngData: String, width: Double, height: Double)
     case recording(path: String, payload: RecordingPayload)
     case recordingData(payload: RecordingPayload)
+    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
+    case sessionState(payload: [String: Any])
 
     // MARK: - Human Formatting
 
@@ -43,6 +45,14 @@ public enum FenceResponse {
             return formatRecordingHuman(path: path, payload: payload)
         case .recordingData(let payload):
             return formatRecordingDataHuman(payload)
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs):
+            var text = "Batch: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
+            if let idx = failedIndex { text += " (failed at step \(idx))" }
+            return text
+        case .sessionState(let payload):
+            let connected = payload["connected"] as? Bool ?? false
+            let device = payload["deviceName"] as? String ?? "unknown"
+            return connected ? "Session: connected to \(device)" : "Session: not connected"
         }
     }
 
@@ -113,6 +123,17 @@ public enum FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
+        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs):
+            var dict: [String: Any] = [
+                "status": failedIndex == nil ? "ok" : "partial",
+                "results": results,
+                "completedSteps": completedSteps,
+                "totalTimingMs": totalTimingMs,
+            ]
+            if let idx = failedIndex { dict["failedIndex"] = idx }
+            return dict
+        case .sessionState(let payload):
+            return payload
         }
     }
 
@@ -140,9 +161,34 @@ public enum FenceResponse {
         if let value = result.value { payload["value"] = value }
         if result.animating == true { payload["animating"] = true }
         if let delta = result.interfaceDelta {
-            payload["delta"] = deltaDictionary(delta)
+            let deltaDict = deltaDictionary(delta)
+            payload["delta"] = deltaDict
+
+            if let kind = deltaDict["kind"] { payload["kind"] = kind }
+            payload["valueChanges"] = deltaDict["valueChanges"] ?? NSNull()
+            payload["elementsAdded"] = deltaDict["added"].map { $0 } ?? NSNull()
+            payload["elementsRemoved"] = deltaDict["removedOrders"].map { $0 } ?? NSNull()
+        } else {
+            payload["kind"] = "noChange"
+            payload["valueChanges"] = NSNull()
+            payload["elementsAdded"] = NSNull()
+            payload["elementsRemoved"] = NSNull()
         }
+
+        if !result.success {
+            payload["errorClass"] = Self.actionErrorClass(result)
+        }
+
         return payload
+    }
+
+    private static func actionErrorClass(_ result: ActionResult) -> String {
+        let msg = (result.message ?? "").lowercased()
+        if msg.contains("not found") || msg.contains("no element") { return "elementNotFound" }
+        if msg.contains("timeout") || msg.contains("timed out") { return "timeout" }
+        if msg.contains("not supported") || msg.contains("unsupported") { return "unsupported" }
+        if msg.contains("keyboard") || msg.contains("first responder") { return "inputError" }
+        return "actionFailed"
     }
 
     private func recordingJsonDict(path: String, payload: RecordingPayload) -> [String: Any] {

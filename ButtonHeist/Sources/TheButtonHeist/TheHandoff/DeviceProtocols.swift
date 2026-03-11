@@ -3,6 +3,7 @@ import Foundation
 // MARK: - Event Enums
 
 public enum ConnectionEvent {
+    case transportReady
     case connected
     case disconnected(DisconnectReason)
     case message(ServerMessage, requestId: String?)

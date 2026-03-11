@@ -26,6 +26,36 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testStatusEncodeDecode() throws {
+        let payload = StatusPayload(
+            identity: StatusIdentity(
+                appName: "ReachableApp",
+                bundleIdentifier: "com.test.reachable",
+                appBuild: "42",
+                deviceName: "iPhone",
+                systemVersion: "18.0",
+                buttonHeistVersion: "5.0"
+            ),
+            session: StatusSession(
+                active: true,
+                watchersAllowed: false,
+                activeConnections: 1
+            )
+        )
+        let message = ServerMessage.status(payload)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .status(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload.identity.appName, "ReachableApp")
+            XCTAssertEqual(decodedPayload.identity.bundleIdentifier, "com.test.reachable")
+            XCTAssertEqual(decodedPayload.session.active, true)
+            XCTAssertEqual(decodedPayload.session.activeConnections, 1)
+        } else {
+            XCTFail("Expected status, got \(decoded)")
+        }
+    }
+
     func testInterfaceEncodeDecode() throws {
         let element = HeistElement(
             order: 0,

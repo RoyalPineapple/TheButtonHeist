@@ -34,6 +34,9 @@ public enum ClientMessage: Codable, Sendable {
     /// Ping for keepalive
     case ping
 
+    /// Lightweight status probe (identity + availability, no session claim)
+    case status
+
     // MARK: - Action Commands
 
     /// Activate an element

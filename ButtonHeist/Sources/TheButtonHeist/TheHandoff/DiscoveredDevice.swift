@@ -140,13 +140,14 @@ extension Array where Element == DiscoveredDevice {
     }
 
     /// Probe all devices in parallel and return only those that are reachable.
-    /// Uses a UDP path probe to each device's endpoint; stale mDNS cache entries
-    /// will fail while live devices establish a viable path.
+    /// Uses the Inside Job status RPC as a lightweight liveness check; devices
+    /// that fail to respond with a valid status payload are treated as stale.
     public func reachable(timeout: TimeInterval = 1.5) async -> [DiscoveredDevice] {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {
-                    await device.isReachable(timeout: timeout) ? (index, device) : (index, nil)
+                    let reachable = await probeReachability(for: device, timeout: timeout)
+                    return reachable ? (index, device) : (index, nil)
                 }
             }
             var indexed: [(Int, DiscoveredDevice)] = []
@@ -158,41 +159,51 @@ extension Array where Element == DiscoveredDevice {
     }
 }
 
-extension DiscoveredDevice {
-    /// Check if the device's host is reachable via a UDP path probe.
-    /// Uses UDP to avoid consuming TCP connection slots on the server.
-    /// Returns true if the network path becomes viable within the timeout.
-    nonisolated func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
-        let endpoint = self.endpoint
-        let deviceName = self.name
-        let probeQueue = DispatchQueue(label: "com.buttonheist.reachability-probe")
-        let resumed = OSAllocatedUnfairLock(initialState: false)
-        return await withCheckedContinuation { continuation in
-            let conn = NWConnection(to: endpoint, using: .udp)
-            conn.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
-                    reachabilityLogger.debug("Reachable: \(deviceName)")
-                    conn.cancel()
-                    continuation.resume(returning: true)
-                case .failed, .cancelled:
-                    guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
-                    reachabilityLogger.debug("Unreachable: \(deviceName)")
-                    conn.cancel()
-                    continuation.resume(returning: false)
-                default:
-                    break
-                }
-            }
-            conn.start(queue: probeQueue)
+@ButtonHeistActor
+var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { device in
+    let connection = DeviceConnection(device: device, token: nil, driverId: nil)
+    connection.autoRespondToAuthRequired = false
+    return connection
+}
 
-            probeQueue.asyncAfter(deadline: .now() + timeout) {
-                guard resumed.withLock({ flag in guard !flag else { return false }; flag = true; return true }) else { return }
-                reachabilityLogger.debug("Probe timeout: \(deviceName)")
-                conn.cancel()
-                continuation.resume(returning: false)
+@ButtonHeistActor
+private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterval) async -> Bool {
+    let connection = makeReachabilityConnection(device)
+    var reachable = false
+    var finished = false
+
+    connection.onEvent = { event in
+        switch event {
+        case .transportReady:
+            // Once TCP/TLS is up, send a lightweight status probe.
+            connection.send(.status)
+        case .connected:
+            break
+        case .message(let message, _):
+            if case .status = message {
+                reachabilityLogger.debug("Status reachable: \(device.name, privacy: .public)")
+                reachable = true
+                finished = true
+                connection.disconnect()
+            }
+        case .disconnected:
+            if !finished {
+                finished = true
             }
         }
     }
+
+    connection.connect()
+
+    let deadline = Date().addingTimeInterval(timeout)
+    while !finished && Date() < deadline {
+        try? await Task.sleep(nanoseconds: 100_000_000)
+    }
+
+    if !finished {
+        reachabilityLogger.debug("Status probe timeout: \(device.name, privacy: .public)")
+        connection.disconnect()
+    }
+
+    return reachable
 }

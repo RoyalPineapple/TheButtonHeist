@@ -144,6 +144,8 @@ public final class TheHandoff {
         connection?.onEvent = { [weak self] event in
             guard let self else { return }
             switch event {
+            case .transportReady:
+                break
             case .connected:
                 self.connectedDevice = device
                 self.isConnected = true
@@ -194,6 +196,9 @@ public final class TheHandoff {
             onAuthFailed?(reason)
         case .interaction(let event):
             onInteraction?(event)
+        case .status(let payload):
+            // Status messages do not currently have a dedicated callback; for now we just log them
+            logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .authRequired, .pong, .recordingStopped:
             break
         }

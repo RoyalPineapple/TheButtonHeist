@@ -49,7 +49,11 @@ sequenceDiagram
     Note over Client,Server: All subsequent messages encrypted
     Server-->>Client: authRequired (auth challenge)
 
-    alt Driver connection
+    alt Reachability probe
+        Client->>Server: status
+        Server-->>Client: status(StatusPayload)
+        Client->>Server: TCP Close
+    else Driver connection
         Client->>Server: authenticate(token)
 
         alt Success + session acquired
@@ -439,6 +443,14 @@ Keepalive ping.
 {"ping":{}}
 ```
 
+### status
+
+Lightweight status probe. Unlike normal driver commands, this message may be sent before authentication and does not claim a session. It is intended for reachability checks and identity discovery.
+
+```json
+{"status":{}}
+```
+
 ### watch
 
 Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive all broadcasts (interface, screen, interaction events) but cannot send commands or claim a session.
@@ -512,6 +524,28 @@ Sent after successful authentication. Contains device and app metadata.
   "listeningPort":52341,
   "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
   "vendorIdentifier":null
+}}}
+```
+
+### status
+
+Sent in response to a `status` probe. This response is valid before authentication and returns app identity plus session availability without claiming the session.
+
+```json
+{"status":{"_0":{
+  "identity":{
+    "appName":"MyApp",
+    "bundleIdentifier":"com.example.myapp",
+    "appBuild":"42",
+    "deviceName":"iPhone 15 Pro",
+    "systemVersion":"18.0",
+    "buttonHeistVersion":"5.0"
+  },
+  "session":{
+    "active":false,
+    "watchersAllowed":false,
+    "activeConnections":0
+  }
 }}}
 ```
 
@@ -1152,6 +1186,32 @@ A single recorded interaction event captured during a Stakeout recording.
 | `message` | `String` | Human-readable description |
 | `activeConnections` | `Int` | Number of active connections in the current session |
 
+### StatusPayload
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `identity` | `StatusIdentity` | App/device identity for the reachable Inside Job instance |
+| `session` | `StatusSession` | Current session availability and connection counts |
+
+### StatusIdentity
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `appName` | `String` | App name from the target bundle |
+| `bundleIdentifier` | `String` | Bundle identifier of the running app |
+| `appBuild` | `String` | Build number from `CFBundleVersion` |
+| `deviceName` | `String` | Device name reported by UIKit |
+| `systemVersion` | `String` | iOS version string |
+| `buttonHeistVersion` | `String` | Protocol version exposed by Inside Job |
+
+### StatusSession
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `active` | `Bool` | Whether a driver session is active |
+| `watchersAllowed` | `Bool` | Whether observer connections are allowed for the active session |
+| `activeConnections` | `Int` | Number of connections in the current session |
+
 ### WatchPayload
 
 | Field | Type | Description |
@@ -1165,7 +1225,7 @@ A single recorded interaction event captured during a Stakeout recording.
 Token-based authentication is required for driver connections:
 
 1. Server sends `authRequired` immediately on TCP connect
-2. Client must respond with `authenticate` (for drivers) or `watch` (for observers). Any other message causes immediate disconnection.
+2. Client must respond with `authenticate` (for drivers) or `watch` (for observers). The one exception is `status`, which is allowed before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
 3. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
 4. On auth failure, server sends `authFailed` and disconnects after a brief delay
 5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
