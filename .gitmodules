@@ -5,3 +5,4 @@
 [submodule "ai-fuzzer"]
 	path = ai-fuzzer
 	url = git@github.com:RoyalPineapple/ai-fuzzer.git
+	branch = main

@@ -140,6 +140,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AB38BE4BC9B6E28962A4DD23"
+               BuildableName = "CryptoExtras.framework"
+               BlueprintName = "CryptoExtras"
+               ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "D510020B0587B40B98CC4C49"
                BuildableName = "SwiftASN1.framework"
                BlueprintName = "SwiftASN1"
@@ -308,9 +322,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D78133E6C37712ADEA1A5F89"
-               BuildableName = "swift-crypto__CryptoExtras.bundle"
-               BlueprintName = "swift-crypto__CryptoExtras"
+               BlueprintIdentifier = "E3354C967CE85E16AF5C99E9"
+               BuildableName = "swift-crypto_CryptoExtras.bundle"
+               BlueprintName = "swift-crypto_CryptoExtras"
                ReferencedContainer = "container:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>

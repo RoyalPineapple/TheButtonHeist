@@ -242,6 +242,8 @@ ButtonHeist/
 
 The AI fuzzer lives in its own repository and is included here as a Git submodule at `ai-fuzzer/`.
 
+This submodule is configured to track the `main` branch when you run `git submodule update --remote ai-fuzzer`. Git still pins a specific submodule commit in this repository, so the checked-in SHA only moves when someone updates the submodule and commits the new pin.
+
 - To initialize it in a fresh clone:
 
 ```bash
