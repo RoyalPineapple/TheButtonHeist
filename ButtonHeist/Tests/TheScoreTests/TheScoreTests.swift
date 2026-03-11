@@ -79,6 +79,7 @@ final class MessageIntegrationTests: XCTestCase {
             .subscribe,
             .requestInterface,
             .ping,
+            .status,
             .unsubscribe,
             .requestScreen
         ]
@@ -95,6 +96,17 @@ final class MessageIntegrationTests: XCTestCase {
             )),
             .interface(Interface(timestamp: Date(), elements: [])),
             .pong,
+            .status(StatusPayload(
+                identity: StatusIdentity(
+                    appName: "Test",
+                    bundleIdentifier: "com.test",
+                    appBuild: "1",
+                    deviceName: "Device",
+                    systemVersion: "17.0",
+                    buttonHeistVersion: protocolVersion
+                ),
+                session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+            )),
             .error("Test error"),
             .screen(ScreenPayload(pngData: "base64data", width: 390, height: 844))
         ]

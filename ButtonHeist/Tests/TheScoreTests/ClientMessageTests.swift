@@ -51,6 +51,18 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    func testStatusEncodeDecode() throws {
+        let message = ClientMessage.status
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .status = decoded {
+            // Success
+        } else {
+            XCTFail("Expected status, got \(decoded)")
+        }
+    }
+
     func testRequestScreenshotEncodeDecode() throws {
         let message = ClientMessage.requestScreen
         let data = try JSONEncoder().encode(message)
