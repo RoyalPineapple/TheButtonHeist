@@ -154,7 +154,8 @@ public final class TheFence {
             return .ok(message: "bye")
         }
 
-        if command != .getSessionState && (!isStarted || client.connectionState != .connected) {
+        if command != .getSessionState && command != .listDevices &&
+            (!isStarted || client.connectionState != .connected) {
             try await start()
         }
 
@@ -183,7 +184,7 @@ public final class TheFence {
                 deviceName: client.connectedDevice.map { client.displayName(for: $0) }
             )
         case .listDevices:
-            return .devices(client.discoveredDevices)
+            return .devices(await client.discoverReachableDevices())
         case .getInterface:
             return .interface(try await handleGetInterface())
         case .getScreen:

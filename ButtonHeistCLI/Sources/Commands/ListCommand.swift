@@ -18,45 +18,18 @@ struct ListCommand: AsyncParsableCommand {
     mutating func run() async throws {
         let client = TheMastermind()
         logStatus("Discovering devices...")
-        client.startDiscovery()
-
-        let deadline = DispatchTime.now().uptimeNanoseconds + UInt64(timeout * 1_000_000_000)
-        var lastCount = 0
-        var stableAt = DispatchTime.now().uptimeNanoseconds
-
-        while DispatchTime.now().uptimeNanoseconds < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            let count = client.discoveredDevices.count
-            if count != lastCount {
-                lastCount = count
-                stableAt = DispatchTime.now().uptimeNanoseconds
-            }
-            if count > 0 && (DispatchTime.now().uptimeNanoseconds - stableAt) > 500_000_000 {
-                break
-            }
-        }
-
-        let discovered = client.discoveredDevices
-        client.stopDiscovery()
+        let discovered = await client.discoverReachableDevices(timeout: timeout)
 
         if discovered.isEmpty {
             logStatus("No devices found.")
             return
         }
 
-        logStatus("Verifying \(discovered.count) device(s)...")
-        let devices = await discovered.reachable()
-
-        if devices.isEmpty {
-            logStatus("No reachable devices found (\(discovered.count) stale).")
-            return
-        }
-
         switch format ?? .auto {
         case .json:
-            outputJSON(devices)
+            outputJSON(discovered)
         case .human:
-            outputHuman(devices)
+            outputHuman(discovered)
         }
     }
 

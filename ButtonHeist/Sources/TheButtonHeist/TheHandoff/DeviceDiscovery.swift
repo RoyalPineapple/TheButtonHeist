@@ -88,7 +88,9 @@ public final class DeviceDiscovery: DeviceDiscovering {
 
     private var browser: NWBrowser?
     private var registry = DiscoveryRegistry()
+    private var reachabilityTask: Task<Void, Never>?
     private let browserQueue = DispatchQueue(label: "com.buttonheist.thewheelman.discovery.browser")
+    private let reachabilityValidationInterval: TimeInterval
 
     public var discoveredDevices: [DiscoveredDevice] {
         registry.devices
@@ -96,7 +98,9 @@ public final class DeviceDiscovery: DeviceDiscovering {
 
     public var onEvent: ((DiscoveryEvent) -> Void)?
 
-    public init() {}
+    public init(reachabilityValidationInterval: TimeInterval = 3.0) {
+        self.reachabilityValidationInterval = reachabilityValidationInterval
+    }
 
     public func start() {
         logger.info("Starting Bonjour discovery for type: \(buttonHeistServiceType)")
@@ -124,10 +128,13 @@ public final class DeviceDiscovery: DeviceDiscovering {
         }
 
         browser?.start(queue: browserQueue)
+        startReachabilityValidation()
         logger.info("Browser started")
     }
 
     public func stop() {
+        reachabilityTask?.cancel()
+        reachabilityTask = nil
         browser?.cancel()
         browser = nil
         registry = DiscoveryRegistry()
@@ -220,6 +227,44 @@ public final class DeviceDiscovery: DeviceDiscovering {
                 logger.info("Device lost: \(device.name)")
                 onEvent?(.lost(device))
             }
+        }
+    }
+
+    private func startReachabilityValidation() {
+        reachabilityTask?.cancel()
+        reachabilityTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(self.reachabilityValidationInterval * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self.validateVisibleDevicesReachability()
+            }
+        }
+    }
+
+    private func validateVisibleDevicesReachability() async {
+        let visibleDevices = registry.devices
+        guard !visibleDevices.isEmpty else { return }
+
+        let unreachableServiceNames = await withTaskGroup(of: String?.self, returning: [String].self) { group in
+            for device in visibleDevices {
+                group.addTask {
+                    await device.isReachable(timeout: 0.75) ? nil : device.id
+                }
+            }
+
+            var unreachable: [String] = []
+            for await serviceName in group {
+                if let serviceName {
+                    unreachable.append(serviceName)
+                }
+            }
+            return unreachable
+        }
+
+        for serviceName in unreachableServiceNames {
+            logger.info("Evicting unreachable device advertisement: \(serviceName)")
+            apply(registry.recordLost(serviceName: serviceName))
         }
     }
 }
