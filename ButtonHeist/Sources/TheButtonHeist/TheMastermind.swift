@@ -220,8 +220,15 @@ public final class TheMastermind {
         probeTimeout: TimeInterval = 0.5,
         retryInterval: TimeInterval = 0.2
     ) async -> [DiscoveredDevice] {
-        startDiscovery()
-        defer { stopDiscovery() }
+        let startedTemporaryDiscovery = !handoff.hasActiveDiscoverySession
+        if startedTemporaryDiscovery {
+            startDiscovery()
+        }
+        defer {
+            if startedTemporaryDiscovery {
+                stopDiscovery()
+            }
+        }
 
         let deadline = Date().addingTimeInterval(timeout)
         var reachableIDs: Set<String> = []

@@ -49,6 +49,7 @@ final class MockDiscovery: DeviceDiscovering {
     var discoveredDevices: [DiscoveredDevice] = []
     var onEvent: ((DiscoveryEvent) -> Void)?
     var startCount = 0
+    var stopCount = 0
 
     func start() {
         startCount += 1
@@ -58,5 +59,7 @@ final class MockDiscovery: DeviceDiscovering {
         }
     }
 
-    func stop() {}
+    func stop() {
+        stopCount += 1
+    }
 }

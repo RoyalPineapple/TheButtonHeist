@@ -431,6 +431,26 @@ public func stopDiscovery()
 
 Stop device discovery.
 
+##### discoverReachableDevices(timeout:probeTimeout:retryInterval:)
+
+```swift
+public func discoverReachableDevices(
+    timeout: TimeInterval = 3.0,
+    probeTimeout: TimeInterval = 0.5,
+    retryInterval: TimeInterval = 0.2
+) async -> [DiscoveredDevice]
+```
+
+Discover devices and return only those that respond to a lightweight `status` probe.
+If discovery is already active, this reuses the existing session; otherwise it starts a temporary discovery session and stops it before returning.
+
+**Parameters**:
+- `timeout`: Total time to wait for discovery and probe retries.
+- `probeTimeout`: Per-device timeout for each reachability probe.
+- `retryInterval`: Delay before retrying a device that did not answer the previous probe.
+
+**Returns**: Reachable deduplicated devices visible during the discovery window.
+
 ##### connect(to:)
 
 ```swift

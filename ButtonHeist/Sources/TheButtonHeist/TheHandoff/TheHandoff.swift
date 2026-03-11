@@ -67,6 +67,10 @@ public final class TheHandoff {
     private var keepaliveTask: Task<Void, Never>?
     private var autoReconnectInstalled = false
 
+    var hasActiveDiscoverySession: Bool {
+        discovery != nil
+    }
+
     /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
     var effectiveDriverId: String {
         if let driverId, !driverId.isEmpty { return driverId }
@@ -98,8 +102,8 @@ public final class TheHandoff {
     // MARK: - Discovery
 
     public func startDiscovery() {
-        logger.info("startDiscovery called, isDiscovering=\(self.isDiscovering)")
-        guard !isDiscovering else {
+        logger.info("startDiscovery called, hasSession=\(self.hasActiveDiscoverySession)")
+        guard discovery == nil else {
             logger.info("Already discovering, skipping")
             return
         }
