@@ -146,7 +146,7 @@ extension Array where Element == DiscoveredDevice {
         await withTaskGroup(of: (Int, DiscoveredDevice?).self) { group in
             for (index, device) in self.enumerated() {
                 group.addTask {
-                    let reachable = await probeReachability(for: device, timeout: timeout)
+                    let reachable = await device.isReachable(timeout: timeout)
                     return reachable ? (index, device) : (index, nil)
                 }
             }
@@ -156,6 +156,12 @@ extension Array where Element == DiscoveredDevice {
             }
             return indexed.sorted { $0.0 < $1.0 }.map(\.1)
         }
+    }
+}
+
+extension DiscoveredDevice {
+    func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
+        await probeReachability(for: self, timeout: timeout)
     }
 }
 
