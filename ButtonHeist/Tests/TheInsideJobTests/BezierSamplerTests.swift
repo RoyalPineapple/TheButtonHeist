@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import XCTest
 import CoreGraphics
 import TheScore
@@ -83,3 +84,4 @@ final class BezierSamplerTests: XCTestCase {
         XCTAssertEqual(samples[0].y, 50)
     }
 }
+#endif // canImport(UIKit)
