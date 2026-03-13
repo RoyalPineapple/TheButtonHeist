@@ -72,14 +72,18 @@ public final class DeviceConnection: DeviceConnecting {
     public func connect() {
         logger.info("Connecting to \(self.device.name)...")
 
-        guard let expectedFingerprint else {
+        let parameters: NWParameters
+        if let expectedFingerprint {
+            parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
+            logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
+        } else if Self.isLoopbackEndpoint(device.endpoint) {
+            parameters = Self.makeLoopbackTLSParameters()
+            logger.warning("No TLS fingerprint available for loopback endpoint, allowing direct simulator connection")
+        } else {
             logger.error("No TLS fingerprint available — refusing plain TCP connection")
             onEvent?(.disconnected(.certificateMismatch))
             return
         }
-
-        let parameters = Self.makeTLSParameters(expectedFingerprint: expectedFingerprint)
-        logger.info("TLS enabled, verifying fingerprint: \(expectedFingerprint.prefix(20))...")
 
         let conn = NWConnection(to: device.endpoint, using: parameters)
 
@@ -313,6 +317,40 @@ public final class DeviceConnection: DeviceConnecting {
         )
 
         return NWParameters(tls: tlsOptions)
+    }
+
+    private nonisolated static func makeLoopbackTLSParameters() -> NWParameters {
+        let tlsOptions = NWProtocolTLS.Options()
+
+        sec_protocol_options_set_min_tls_protocol_version(
+            tlsOptions.securityProtocolOptions,
+            .TLSv13
+        )
+
+        sec_protocol_options_set_verify_block(
+            tlsOptions.securityProtocolOptions,
+            { _, _, completionHandler in
+                completionHandler(true)
+            },
+            DispatchQueue(label: "com.buttonheist.tls.loopback")
+        )
+
+        return NWParameters(tls: tlsOptions)
+    }
+
+    private nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
+        guard case .hostPort(let host, _) = endpoint else { return false }
+
+        switch host {
+        case .ipv4(let addr):
+            return addr == .loopback || addr.rawValue.first == 127
+        case .ipv6(let addr):
+            return addr == .loopback
+        case .name(let name, _):
+            return name.lowercased() == "localhost"
+        @unknown default:
+            return false
+        }
     }
 
     private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {
