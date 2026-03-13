@@ -276,6 +276,7 @@ final class TheMuscle {
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
+        helloValidatedClients.removeAll()
         subscribedClients.removeAll()
         observerClients.removeAll()
         pendingObserverClients.removeAll()

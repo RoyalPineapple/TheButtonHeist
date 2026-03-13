@@ -264,14 +264,16 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testTearDownClearsState() {
-        let data = encodeAuth(token: "test-token")
-        muscle.handleUnauthenticatedMessage(1, data: data, respond: respondSink())
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
+
+        XCTAssertTrue(muscle.helloValidatedClients.contains(1))
 
         muscle.tearDown()
 
         XCTAssertNil(muscle.activeSessionDriverId)
         XCTAssertTrue(muscle.activeSessionConnections.isEmpty)
         XCTAssertTrue(muscle.authenticatedClientIDs.isEmpty)
+        XCTAssertTrue(muscle.helloValidatedClients.isEmpty)
         XCTAssertEqual(muscle.authenticatedClientCount, 0)
     }
 }
