@@ -1,0 +1,5 @@
+[tools]
+tuist = "4.40.0"
+
+[hooks]
+postinstall = "git config core.hooksPath scripts"
