@@ -28,7 +28,7 @@ public enum ClientMessage: Codable, Sendable {
     /// Version-negotiation hello sent immediately after receiving serverHello.
     case clientHello
 
-    /// Authenticate with a token (must be first message sent)
+    /// Authenticate with a token (sent after clientHello handshake completes)
     case authenticate(AuthenticatePayload)
 
     /// Request current interface (UI element hierarchy)

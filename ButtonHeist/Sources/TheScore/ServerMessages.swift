@@ -30,7 +30,7 @@ public enum ServerMessage: Codable, Sendable {
     /// Exact protocol version mismatch.
     case protocolMismatch(ProtocolMismatchPayload)
 
-    /// Server requires authentication (sent immediately on connection)
+    /// Server requires authentication (sent after successful hello handshake)
     case authRequired
 
     /// Authentication failed (sent before disconnect)
