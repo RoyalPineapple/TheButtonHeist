@@ -191,8 +191,8 @@ public final class TheInsideJob {
 
         t.onClientConnected = { [weak self] clientId in
             Task { @MainActor in
-                insideJobLogger.info("Client \(clientId) connected, awaiting auth")
-                self?.muscle.sendAuthRequired(clientId: clientId)
+                insideJobLogger.info("Client \(clientId) connected, awaiting hello")
+                self?.muscle.sendServerHello(clientId: clientId)
             }
         }
 
@@ -212,9 +212,10 @@ public final class TheInsideJob {
         t.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 guard let self else { return }
-                // Allow status probes before authentication for lightweight reachability.
+                // Allow status probes after the version handshake, before full authentication.
                 if let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
-                   case .status = envelope.message {
+                   case .status = envelope.message,
+                   self.muscle.helloValidatedClients.contains(clientId) {
                     await self.handleClientMessage(clientId, data: data, respond: respond)
                 } else {
                     self.muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
@@ -287,7 +288,7 @@ public final class TheInsideJob {
 
         switch message {
         // Protocol messages
-        case .authenticate, .watch:
+        case .clientHello, .authenticate, .watch:
             break // Already handled via onUnauthenticatedData path
         case .requestInterface:
             insideJobLogger.debug("Interface requested by client \(clientId)")

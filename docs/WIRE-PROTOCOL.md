@@ -1,6 +1,6 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 5.0
+**Version**: 6.0
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
@@ -23,10 +23,12 @@ TheInsideJob advertises itself using Bonjour:
 - **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
 - **TXT Record**:
   - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
+  - `installationid` — Stable per-installation identifier for device discovery and filtering
   - `instanceid` — Human-readable instance identifier
+  - `devicename` — Human-readable device name
   - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
-  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>` (v5.0+, always present)
-  - `transport` — `"tls"` (v5.0+, always present)
+  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>`
+  - `transport` — `"tls"`
 
 The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake. TLS is required — clients must refuse connections to servers that do not advertise a `certfp`.
 
@@ -47,20 +49,28 @@ sequenceDiagram
 
     Client->>Server: TLS Handshake (verify certfp from Bonjour TXT)
     Note over Client,Server: All subsequent messages encrypted
-    Server-->>Client: authRequired (auth challenge)
+    Server-->>Client: serverHello
 
-    alt Reachability probe
+    alt Protocol mismatch
+        Client-->>Server: clientHello
+        Server-->>Client: protocolMismatch
+        Server--xClient: TCP Close
+    else Reachability probe
+        Client->>Server: clientHello
+        Server-->>Client: authRequired
         Client->>Server: status
         Server-->>Client: status(StatusPayload)
         Client->>Server: TCP Close
     else Driver connection
+        Client->>Server: clientHello
+        Server-->>Client: authRequired
         Client->>Server: authenticate(token)
 
         alt Success + session acquired
             Server-->>Client: info
         else Bad token
             Server-->>Client: authFailed → disconnect
-        else v3.1: session held by another driver
+        else Session held by another driver
             Server-->>Client: sessionLocked → disconnect
         end
 
@@ -73,6 +83,8 @@ sequenceDiagram
         Client->>Server: activate / touchTap / touchDrag ...
         Server-->>Client: actionResult
     else Watch (observer) connection
+        Client->>Server: clientHello
+        Server-->>Client: authRequired
         Client->>Server: watch(token:"")
         Note over Server: Auto-approved (default)<br>or token-checked if INSIDEJOB_RESTRICT_WATCHERS=1
         Server-->>Client: info
@@ -91,42 +103,52 @@ sequenceDiagram
 
 ## Message Format
 
-All messages are JSON objects terminated by a newline (`\n`). Swift enums with associated values encode with `_0` wrapper.
+All messages are JSON objects terminated by a newline (`\n`). Version 6.0 uses explicit envelopes with a `type` discriminator and optional `payload`, rather than relying on Swift enum synthesis.
 
 ### Request/Response Envelopes
 
-All messages are wrapped in envelope types for request-response correlation:
+All messages are wrapped in envelope types for request-response correlation. Examples below omit `requestId` unless the correlation behavior is relevant.
 
 **Client → Server** (`RequestEnvelope`):
 ```json
-{"requestId":"abc-123","message":{"activate":{"_0":{"identifier":"loginButton"}}}}
+{"protocolVersion":"6.0","requestId":"abc-123","type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 **Server → Client** (`ResponseEnvelope`):
 ```json
-{"requestId":"abc-123","message":{"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}}
+{"protocolVersion":"6.0","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 ```
 
 When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Push broadcasts (interface updates, screen captures, interaction events) have `requestId: null`.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `protocolVersion` | `String` | Exact wire protocol version. Client and server must match exactly. |
 | `requestId` | `String?` | Optional correlation ID; echoed in the response |
-| `message` | `ClientMessage` / `ServerMessage` | The actual message payload |
+| `type` | `String` | Explicit message discriminator |
+| `payload` | `Object / String / null` | Optional message payload |
 
 ## Client → Server Messages
 
-### authenticate
+### clientHello
 
-Authenticate with the server. Must be the first message sent after receiving `authRequired`. Sending any other message before authenticating will result in immediate disconnection.
+Version handshake sent immediately after `serverHello`.
 
 ```json
-{"authenticate":{"_0":{"token":"your-secret-token"}}}
+{"protocolVersion":"6.0","type":"clientHello"}
 ```
 
-**With driver identity** (v3.1):
+### authenticate
+
+Authenticate with the server. Must be sent after a successful `clientHello` / `authRequired` handshake. Sending any other command before the handshake completes will result in immediate disconnection.
+
 ```json
-{"authenticate":{"_0":{"token":"your-secret-token","driverId":"agent-1"}}}
+{"protocolVersion":"6.0","type":"authenticate","payload":{"token":"your-secret-token"}}
+```
+
+**With driver identity:**
+```json
+{"protocolVersion":"6.0","type":"authenticate","payload":{"token":"your-secret-token","driverId":"agent-1"}}
 ```
 
 The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
@@ -136,7 +158,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 Request current UI element interface.
 
 ```json
-{"requestInterface":{}}
+{"protocolVersion":"6.0","type":"requestInterface"}
 ```
 
 ### subscribe
@@ -144,7 +166,7 @@ Request current UI element interface.
 Subscribe to automatic interface and screen updates.
 
 ```json
-{"subscribe":{}}
+{"protocolVersion":"6.0","type":"subscribe"}
 ```
 
 ### unsubscribe
@@ -152,7 +174,7 @@ Subscribe to automatic interface and screen updates.
 Unsubscribe from automatic updates.
 
 ```json
-{"unsubscribe":{}}
+{"protocolVersion":"6.0","type":"unsubscribe"}
 ```
 
 ### activate
@@ -161,12 +183,12 @@ Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector
 
 **By identifier:**
 ```json
-{"activate":{"_0":{"identifier":"loginButton"}}}
+{"protocolVersion":"6.0","type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 **By traversal index:**
 ```json
-{"activate":{"_0":{"order":5}}}
+{"protocolVersion":"6.0","type":"activate","payload":{"order":5}}
 ```
 
 ### touchTap
@@ -175,12 +197,12 @@ Tap at coordinates or on an element using synthetic touch injection via TheSafec
 
 **At coordinates:**
 ```json
-{"touchTap":{"_0":{"pointX":196.5,"pointY":659.0}}}
+{"protocolVersion":"6.0","type":"touchTap","payload":{"pointX":196.5,"pointY":659.0}}
 ```
 
 **On element by identifier:**
 ```json
-{"touchTap":{"_0":{"elementTarget":{"identifier":"submitButton"}}}}
+{"protocolVersion":"6.0","type":"touchTap","payload":{"elementTarget":{"identifier":"submitButton"}}}
 ```
 
 ### touchLongPress
@@ -188,12 +210,12 @@ Tap at coordinates or on an element using synthetic touch injection via TheSafec
 Long press at coordinates or on an element.
 
 ```json
-{"touchLongPress":{"_0":{"pointX":100,"pointY":200,"duration":1.0}}}
+{"protocolVersion":"6.0","type":"touchLongPress","payload":{"pointX":100,"pointY":200,"duration":1.0}}
 ```
 
 **On element (default 0.5s):**
 ```json
-{"touchLongPress":{"_0":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}}
+{"protocolVersion":"6.0","type":"touchLongPress","payload":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}
 ```
 
 ### touchSwipe
@@ -202,12 +224,12 @@ Swipe between two points or in a direction from an element.
 
 **With explicit coordinates:**
 ```json
-{"touchSwipe":{"_0":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}}
+{"protocolVersion":"6.0","type":"touchSwipe","payload":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}
 ```
 
 **From element in direction:**
 ```json
-{"touchSwipe":{"_0":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}}
+{"protocolVersion":"6.0","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up","distance":300}}
 ```
 
 ### touchDrag
@@ -216,12 +238,12 @@ Drag from one point to another (slower than swipe, for sliders/reordering).
 
 **With explicit coordinates:**
 ```json
-{"touchDrag":{"_0":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}}
+{"protocolVersion":"6.0","type":"touchDrag","payload":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}
 ```
 
 **From element:**
 ```json
-{"touchDrag":{"_0":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}}
+{"protocolVersion":"6.0","type":"touchDrag","payload":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}
 ```
 
 ### touchPinch
@@ -229,12 +251,12 @@ Drag from one point to another (slower than swipe, for sliders/reordering).
 Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
 
 ```json
-{"touchPinch":{"_0":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}}
+{"protocolVersion":"6.0","type":"touchPinch","payload":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}
 ```
 
 **On element:**
 ```json
-{"touchPinch":{"_0":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}}
+{"protocolVersion":"6.0","type":"touchPinch","payload":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}
 ```
 
 ### touchRotate
@@ -242,7 +264,7 @@ Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
 Rotation gesture centered at a point. Angle in radians.
 
 ```json
-{"touchRotate":{"_0":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}}
+{"protocolVersion":"6.0","type":"touchRotate","payload":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}
 ```
 
 ### touchTwoFingerTap
@@ -250,7 +272,7 @@ Rotation gesture centered at a point. Angle in radians.
 Two-finger tap at a point or element.
 
 ```json
-{"touchTwoFingerTap":{"_0":{"centerX":200,"centerY":300,"spread":40}}}
+{"protocolVersion":"6.0","type":"touchTwoFingerTap","payload":{"centerX":200,"centerY":300,"spread":40}}
 ```
 
 ### touchDrawPath
@@ -258,12 +280,12 @@ Two-finger tap at a point or element.
 Draw along a path by tracing through a sequence of waypoints. Supports duration (seconds) or velocity (points/second) for timing.
 
 ```json
-{"touchDrawPath":{"_0":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}}
+{"protocolVersion":"6.0","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}
 ```
 
 **With velocity:**
 ```json
-{"touchDrawPath":{"_0":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}}
+{"protocolVersion":"6.0","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}
 ```
 
 ### touchDrawBezier
@@ -271,12 +293,12 @@ Draw along a path by tracing through a sequence of waypoints. Supports duration 
 Draw along cubic bezier curves. The server samples the curves to a polyline, then traces using the drawPath engine.
 
 ```json
-{"touchDrawBezier":{"_0":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}}
+{"protocolVersion":"6.0","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}
 ```
 
 **With samples and velocity:**
 ```json
-{"touchDrawBezier":{"_0":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}}
+{"protocolVersion":"6.0","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}
 ```
 
 ### increment
@@ -285,12 +307,12 @@ Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on 
 
 **By identifier:**
 ```json
-{"increment":{"_0":{"identifier":"volumeSlider"}}}
+{"protocolVersion":"6.0","type":"increment","payload":{"identifier":"volumeSlider"}}
 ```
 
 **By traversal index:**
 ```json
-{"increment":{"_0":{"order":8}}}
+{"protocolVersion":"6.0","type":"increment","payload":{"order":8}}
 ```
 
 ### decrement
@@ -299,7 +321,7 @@ Decrement an adjustable element. Calls `decrement()` on the element's view.
 
 **By identifier:**
 ```json
-{"decrement":{"_0":{"identifier":"volumeSlider"}}}
+{"protocolVersion":"6.0","type":"decrement","payload":{"identifier":"volumeSlider"}}
 ```
 
 ### performCustomAction
@@ -307,7 +329,7 @@ Decrement an adjustable element. Calls `decrement()` on the element's view.
 Invoke a named custom action on an element. The action name must match one of the element's `actions`.
 
 ```json
-{"performCustomAction":{"_0":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}}
+{"protocolVersion":"6.0","type":"performCustomAction","payload":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}
 ```
 
 ### typeText
@@ -316,17 +338,17 @@ Type text character-by-character by injecting into the keyboard input system (vi
 
 **Type text into a field (taps element to focus first):**
 ```json
-{"typeText":{"_0":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}}
+{"protocolVersion":"6.0","type":"typeText","payload":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}
 ```
 
 **Delete 3 characters:**
 ```json
-{"typeText":{"_0":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}}
+{"protocolVersion":"6.0","type":"typeText","payload":{"deleteCount":3,"elementTarget":{"identifier":"nameField"}}}
 ```
 
 **Delete then retype (correction):**
 ```json
-{"typeText":{"_0":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}}
+{"protocolVersion":"6.0","type":"typeText","payload":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}
 ```
 
 ### requestScreen
@@ -334,7 +356,7 @@ Type text character-by-character by injecting into the keyboard input system (vi
 Request a PNG capture of the current screen.
 
 ```json
-{"requestScreen":{}}
+{"protocolVersion":"6.0","type":"requestScreen"}
 ```
 
 ### startRecording
@@ -342,7 +364,7 @@ Request a PNG capture of the current screen.
 Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). Recording auto-stops when no screen changes and no real interactions (actions, touches, typing) are received for the inactivity timeout. Pings and keepalive messages do not reset the inactivity timer.
 
 ```json
-{"startRecording":{"_0":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}}
+{"protocolVersion":"6.0","type":"startRecording","payload":{"fps":8,"scale":0.5,"inactivityTimeout":5.0,"maxDuration":60.0}}
 ```
 
 All fields are optional — defaults are applied server-side.
@@ -359,7 +381,7 @@ All fields are optional — defaults are applied server-side.
 Stop an active recording. The server finalizes the video and sends a `recording` message.
 
 ```json
-{"stopRecording":{}}
+{"protocolVersion":"6.0","type":"stopRecording"}
 ```
 
 ### scroll
@@ -368,12 +390,12 @@ Scroll the nearest scroll view ancestor of a target element by approximately one
 
 **By identifier:**
 ```json
-{"scroll":{"_0":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}}
+{"protocolVersion":"6.0","type":"scroll","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}
 ```
 
 **By traversal index:**
 ```json
-{"scroll":{"_0":{"elementTarget":{"order":10},"direction":"down"}}}
+{"protocolVersion":"6.0","type":"scroll","payload":{"elementTarget":{"order":10},"direction":"down"}}
 ```
 
 Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
@@ -384,12 +406,12 @@ Scroll the nearest scroll view ancestor until the target element's accessibility
 
 **By identifier:**
 ```json
-{"scrollToVisible":{"_0":{"identifier":"buttonheist.longList.last"}}}
+{"protocolVersion":"6.0","type":"scrollToVisible","payload":{"identifier":"buttonheist.longList.last"}}
 ```
 
 **By traversal index:**
 ```json
-{"scrollToVisible":{"_0":{"order":99}}}
+{"protocolVersion":"6.0","type":"scrollToVisible","payload":{"order":99}}
 ```
 
 ### scrollToEdge
@@ -398,7 +420,7 @@ Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
 
 **By identifier:**
 ```json
-{"scrollToEdge":{"_0":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}}
+{"protocolVersion":"6.0","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
 ```
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
@@ -408,7 +430,7 @@ Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
 Perform a standard edit action via the responder chain.
 
 ```json
-{"editAction":{"_0":{"action":"copy"}}}
+{"protocolVersion":"6.0","type":"editAction","payload":{"action":"copy"}}
 ```
 
 Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
@@ -418,7 +440,7 @@ Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
 Dismiss the keyboard by resigning first responder.
 
 ```json
-{"resignFirstResponder":{}}
+{"protocolVersion":"6.0","type":"resignFirstResponder"}
 ```
 
 ### waitForIdle
@@ -426,7 +448,7 @@ Dismiss the keyboard by resigning first responder.
 Wait for all animations to complete, then return the settled interface.
 
 ```json
-{"waitForIdle":{"_0":{"timeout":5.0}}}
+{"protocolVersion":"6.0","type":"waitForIdle","payload":{"timeout":5.0}}
 ```
 
 | Field | Type | Description |
@@ -440,7 +462,7 @@ Returns an `actionResult` with `method: "waitForIdle"`, an `interfaceDelta` cont
 Keepalive ping.
 
 ```json
-{"ping":{}}
+{"protocolVersion":"6.0","type":"ping"}
 ```
 
 ### status
@@ -448,7 +470,7 @@ Keepalive ping.
 Lightweight status probe. Unlike normal driver commands, this message may be sent before authentication and does not claim a session. It is intended for reachability checks and identity discovery.
 
 ```json
-{"status":{}}
+{"protocolVersion":"6.0","type":"status"}
 ```
 
 ### watch
@@ -456,7 +478,7 @@ Lightweight status probe. Unlike normal driver commands, this message may be sen
 Connect as a read-only observer. Sent instead of `authenticate` after receiving `authRequired`. Observers receive all broadcasts (interface, screen, interaction events) but cannot send commands or claim a session.
 
 ```json
-{"watch":{"_0":{"token":""}}}
+{"protocolVersion":"6.0","type":"watch","payload":{"token":""}}
 ```
 
 By default, watch connections are auto-approved without a token. If the server has `INSIDEJOB_RESTRICT_WATCHERS=1` set, a valid token is required.
@@ -467,12 +489,28 @@ By default, watch connections are auto-approved without a token. If the server h
 
 ## Server → Client Messages
 
-### authRequired
+### serverHello
 
-Sent immediately on connection. Indicates the client must authenticate before any other interaction.
+Sent immediately on connection. The client must verify `protocolVersion` and respond with `clientHello`.
 
 ```json
-{"authRequired":{}}
+{"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
+```
+
+### protocolMismatch
+
+Sent when the peer's `protocolVersion` does not exactly match the server's current wire version. The server closes the connection immediately after sending this message.
+
+```json
+{"protocolVersion":"6.0","requestId":null,"type":"protocolMismatch","payload":{"expectedProtocolVersion":"6.0","receivedProtocolVersion":"5.0"}}
+```
+
+### authRequired
+
+Sent after a successful hello/version handshake. Indicates the client must authenticate before any other interaction.
+
+```json
+{"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
 ```
 
 ### authFailed
@@ -480,7 +518,7 @@ Sent immediately on connection. Indicates the client must authenticate before an
 Sent when the client provides an invalid token or when a UI approval request is denied. The server disconnects shortly after.
 
 ```json
-{"authFailed":{"_0":"Invalid token"}}
+{"protocolVersion":"6.0","type":"authFailed","payload":"Invalid token"}
 ```
 
 ### authApproved
@@ -488,7 +526,7 @@ Sent when the client provides an invalid token or when a UI approval request is 
 Sent when a connection is approved via the on-device UI (see [UI Approval Flow](#ui-approval-flow)). Contains the auth token for future reconnections.
 
 ```json
-{"authApproved":{"_0":{"token":"auto-generated-uuid-token"}}}
+{"protocolVersion":"6.0","type":"authApproved","payload":{"token":"auto-generated-uuid-token"}}
 ```
 
 After receiving `authApproved`, the client should store the token and use it for future `authenticate` messages to skip the approval flow.
@@ -498,7 +536,7 @@ After receiving `authApproved`, the client should store the token and use it for
 Sent when the server's session is held by a different driver. The server disconnects the client shortly after sending this message. See [Session Locking](#session-locking).
 
 ```json
-{"sessionLocked":{"_0":{"message":"Session is locked by another driver","activeConnections":1}}}
+{"protocolVersion":"6.0","type":"sessionLocked","payload":{"message":"Session is locked by another driver","activeConnections":1}}
 ```
 
 | Field | Type | Description |
@@ -511,8 +549,8 @@ Sent when the server's session is held by a different driver. The server disconn
 Sent after successful authentication. Contains device and app metadata.
 
 ```json
-{"info":{"_0":{
-  "protocolVersion":"5.0",
+{"protocolVersion":"6.0","type":"info","payload":{
+  "protocolVersion":"6.0",
   "appName":"MyApp",
   "bundleIdentifier":"com.example.myapp",
   "deviceName":"iPhone 15 Pro",
@@ -523,8 +561,9 @@ Sent after successful authentication. Contains device and app metadata.
   "instanceIdentifier":"my-instance",
   "listeningPort":52341,
   "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
-  "vendorIdentifier":null
-}}}
+  "vendorIdentifier":null,
+  "tlsActive":true
+}}
 ```
 
 ### status
@@ -532,21 +571,21 @@ Sent after successful authentication. Contains device and app metadata.
 Sent in response to a `status` probe. This response is valid before authentication and returns app identity plus session availability without claiming the session.
 
 ```json
-{"status":{"_0":{
+{"protocolVersion":"6.0","type":"status","payload":{
   "identity":{
     "appName":"MyApp",
     "bundleIdentifier":"com.example.myapp",
     "appBuild":"42",
     "deviceName":"iPhone 15 Pro",
     "systemVersion":"18.0",
-    "buttonHeistVersion":"5.0"
+    "buttonHeistVersion":"6.0"
   },
   "session":{
     "active":false,
     "watchersAllowed":false,
     "activeConnections":0
   }
-}}}
+}}
 ```
 
 ### interface
@@ -554,7 +593,7 @@ Sent in response to a `status` probe. This response is valid before authenticati
 UI element interface. Contains a flat element list and an optional tree structure.
 
 ```json
-{"interface":{"_0":{
+{"protocolVersion":"6.0","type":"interface","payload":{
   "timestamp":"2026-02-03T10:30:45.123Z",
   "elements":[
     {
@@ -583,14 +622,14 @@ UI element interface. Contains a flat element list and an optional tree structur
     }
   ],
   "tree":[
-    {"element":{"_0":0}},
-    {"container":{"_0":[
-      {"type":"semanticGroup","label":"Form","value":null,"identifier":null,
+    {"element":{"order":0}},
+    {"container":{
+      "_0":{"type":"semanticGroup","label":"Form","value":null,"identifier":null,
        "frameX":0.0,"frameY":88.0,"frameWidth":393.0,"frameHeight":600.0},
-      [{"element":{"_0":1}}]
-    ]}}
+      "children":[{"element":{"order":1}}]
+    }}
   ]
-}}}
+}}
 ```
 
 The `tree` field is optional. When present, it provides the hierarchical container structure that the flat `elements` list does not capture.
@@ -600,20 +639,20 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
 
 ```json
-{"actionResult":{"_0":{
+{"protocolVersion":"6.0","type":"actionResult","payload":{
   "success":true,
   "method":"syntheticTap",
   "message":null
-}}}
+}}
 ```
 
 For `typeText`, the response includes the current text field value:
 ```json
-{"actionResult":{"_0":{
+{"protocolVersion":"6.0","type":"actionResult","payload":{
   "success":true,
   "method":"typeText",
   "value":"Hello World"
-}}}
+}}
 ```
 
 Possible methods:
@@ -641,11 +680,11 @@ Possible methods:
 
 The optional `message` field provides additional context, especially for failures:
 ```json
-{"actionResult":{"_0":{
+{"protocolVersion":"6.0","type":"actionResult","payload":{
   "success":false,
   "method":"elementNotFound",
   "message":"Element is disabled (has 'notEnabled' trait)"
-}}}
+}}
 ```
 
 ### screen
@@ -653,12 +692,12 @@ The optional `message` field provides additional context, especially for failure
 PNG capture of the current screen.
 
 ```json
-{"screen":{"_0":{
+{"protocolVersion":"6.0","type":"screen","payload":{
   "pngData":"iVBORw0KGgo...",
   "width":393.0,
   "height":852.0,
   "timestamp":"2026-02-03T10:30:45.123Z"
-}}}
+}}
 ```
 
 The `pngData` field is base64-encoded PNG image data.
@@ -668,7 +707,7 @@ The `pngData` field is base64-encoded PNG image data.
 Response to `ping`.
 
 ```json
-{"pong":{}}
+{"protocolVersion":"6.0","type":"pong"}
 ```
 
 ### recordingStarted
@@ -676,7 +715,7 @@ Response to `ping`.
 Acknowledgement that recording has begun.
 
 ```json
-{"recordingStarted":{}}
+{"protocolVersion":"6.0","type":"recordingStarted"}
 ```
 
 ### recordingStopped
@@ -684,7 +723,7 @@ Acknowledgement that recording has begun.
 Acknowledgement that the `stopRecording` command was received. The actual video payload will follow as a `recording` broadcast. Also sent if recording was already auto-stopping (inactivity or max duration).
 
 ```json
-{"recordingStopped":{}}
+{"protocolVersion":"6.0","type":"recordingStopped"}
 ```
 
 ### recording
@@ -692,7 +731,7 @@ Acknowledgement that the `stopRecording` command was received. The actual video 
 Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
 
 ```json
-{"recording":{"_0":{
+{"protocolVersion":"6.0","type":"recording","payload":{
   "videoData":"AAAAIGZ0eXBpc29t...",
   "width":390,
   "height":844,
@@ -705,12 +744,12 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
   "interactionLog":[
     {
       "timestamp":1.2,
-      "command":{"activate":{"_0":{"identifier":"loginButton"}}},
+      "command":{"type":"activate","payload":{"identifier":"loginButton"}},
       "result":{"success":true,"method":"syntheticTap"},
       "interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}
     }
   ]
-}}}
+}}
 ```
 
 The `videoData` field is base64-encoded MP4 video data. The raw file size is capped at 7MB to stay within the 10MB wire protocol buffer limit after base64 encoding. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and interface delta during the recording. It is `null` or absent when no interactions occurred.
@@ -722,7 +761,7 @@ Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
 Recording failed with an error.
 
 ```json
-{"recordingError":{"_0":"AVAssetWriter failed to start"}}
+{"protocolVersion":"6.0","type":"recordingError","payload":"AVAssetWriter failed to start"}
 ```
 
 ### interaction
@@ -730,7 +769,7 @@ Recording failed with an error.
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"interaction":{"_0":{"timestamp":1709472045.123,"command":{"activate":{"_0":{"identifier":"loginButton"}}},"result":{"success":true,"method":"syntheticTap"},"interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}}}}
+{"protocolVersion":"6.0","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap"},"interfaceDelta":{"kind":"valuesChanged","elementCount":12,"valueChanges":[{"order":3,"identifier":"loginButton","oldValue":null,"newValue":"Loading..."}]}}}
 ```
 
 | Field | Type | Description |
@@ -745,7 +784,7 @@ Broadcast to all subscribed clients (including observers) after a driver perform
 Error message.
 
 ```json
-{"error":{"_0":"Root view not available"}}
+{"protocolVersion":"6.0","type":"error","payload":"Root view not available"}
 ```
 
 ## Data Types
@@ -754,19 +793,19 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (e.g., "5.0") |
+| `protocolVersion` | `String` | Protocol version (currently `"6.0"`) |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
 | `systemVersion` | `String` | iOS version (e.g., "17.0") |
 | `screenWidth` | `Double` | Screen width in points |
 | `screenHeight` | `Double` | Screen height in points |
-| `instanceId` | `String?` | Per-launch session UUID (nil for servers < v2.1) |
+| `instanceId` | `String?` | Per-launch session UUID |
 | `instanceIdentifier` | `String?` | Human-readable instance identifier from `INSIDEJOB_ID` env var (falls back to shortId) |
-| `listeningPort` | `UInt16?` | Port the server is listening on (nil for servers < v2.1) |
+| `listeningPort` | `UInt16?` | Port the server is listening on |
 | `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
 | `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
-| `tlsActive` | `Bool?` | Whether TLS transport encryption is active (always `true` for v5.0+, nil for servers < v5.0) |
+| `tlsActive` | `Bool?` | Whether TLS transport encryption is active |
 
 ### Interface
 
@@ -799,10 +838,10 @@ Error message.
 
 ### ElementNode
 
-Recursive enum representing the tree structure:
+Recursive enum representing the tree structure. The current synthesized JSON encoding is:
 
-- `element(order: Int)` - Leaf node referencing an element by its index in the flat `elements` array
-- `container(Group, children: [ElementNode])` - Container node with metadata and children
+- `{"element":{"order":Int}}` - Leaf node referencing an element by its index in the flat `elements` array
+- `{"container":{"_0":Group,"children":[ElementNode]}}` - Container node with metadata and children
 
 ### Group
 
@@ -1088,88 +1127,94 @@ A single recorded interaction event captured during a Stakeout recording.
 ```
 # Client connects to fd9a:6190:eed7::1 on the Bonjour-advertised port
 
+# Server sends hello immediately after connect
+{"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
+
+# Client acknowledges exact protocol match
+{"protocolVersion":"6.0","requestId":null,"type":"clientHello"}
+
 # Server sends auth challenge
-{"authRequired":{}}
+{"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
 
 # Client authenticates
-{"authenticate":{"_0":{"token":"my-secret-token"}}}
+{"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"my-secret-token"}}
 
 # Server sends info after successful auth
-{"info":{"_0":{"protocolVersion":"5.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}}
+{"protocolVersion":"6.0","requestId":null,"type":"info","payload":{"protocolVersion":"6.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
 
 # Client subscribes to updates
-{"subscribe":{}}
+{"protocolVersion":"6.0","type":"subscribe"}
 
 # Client requests interface
-{"requestInterface":{}}
+{"protocolVersion":"6.0","type":"requestInterface"}
 
 # Server responds with interface (flat + tree)
-{"interface":{"_0":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}}
+{"protocolVersion":"6.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","elements":[...],"tree":[...]}}
 
 # Client requests screen capture
-{"requestScreen":{}}
+{"protocolVersion":"6.0","type":"requestScreen"}
 
 # Server responds with screen capture
-{"screen":{"_0":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}}
+{"protocolVersion":"6.0","type":"screen","payload":{"pngData":"iVBORw0KGgo...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:14.200Z"}}
 
 # Client activates a button
-{"activate":{"_0":{"identifier":"loginButton"}}}
+{"protocolVersion":"6.0","type":"activate","payload":{"identifier":"loginButton"}}
 
 # Server confirms action
-{"actionResult":{"_0":{"success":true,"method":"syntheticTap","message":null}}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"syntheticTap","message":null}}
 
 # Client increments a slider
-{"increment":{"_0":{"identifier":"volumeSlider"}}}
+{"protocolVersion":"6.0","type":"increment","payload":{"identifier":"volumeSlider"}}
 
 # Server confirms
-{"actionResult":{"_0":{"success":true,"method":"increment","message":null}}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"increment","message":null}}
 
 # Client performs custom action
-{"performCustomAction":{"_0":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}}
+{"protocolVersion":"6.0","type":"performCustomAction","payload":{"elementTarget":{"identifier":"messageCell"},"actionName":"Delete"}}
 
 # Server confirms
-{"actionResult":{"_0":{"success":true,"method":"customAction","message":null}}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"customAction","message":null}}
 
 # Client types text into a field
-{"typeText":{"_0":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}}
+{"protocolVersion":"6.0","type":"typeText","payload":{"text":"Hello World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms with current field value
-{"actionResult":{"_0":{"success":true,"method":"typeText","value":"Hello World"}}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"typeText","value":"Hello World"}}
 
 # Client corrects a typo (delete 5 chars, retype)
-{"typeText":{"_0":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}}
+{"protocolVersion":"6.0","type":"typeText","payload":{"deleteCount":5,"text":"World","elementTarget":{"identifier":"nameField"}}}
 
 # Server confirms correction
-{"actionResult":{"_0":{"success":true,"method":"typeText","value":"Hello World"}}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"typeText","value":"Hello World"}}
 
 # Client starts recording
-{"startRecording":{"_0":{"fps":8}}}
+{"protocolVersion":"6.0","type":"startRecording","payload":{"fps":8}}
 
 # Server acknowledges
-{"recordingStarted":{}}
+{"protocolVersion":"6.0","type":"recordingStarted"}
 
 # Client interacts while recording...
-{"activate":{"_0":{"identifier":"loginButton"}}}
-{"actionResult":{"_0":{"success":true,"method":"syntheticTap"}}}
+{"protocolVersion":"6.0","type":"activate","payload":{"identifier":"loginButton"}}
+{"protocolVersion":"6.0","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
 
 # Client stops recording
-{"stopRecording":{}}
+{"protocolVersion":"6.0","type":"stopRecording"}
 
 # Server acknowledges stop command
-{"recordingStopped":{}}
+{"protocolVersion":"6.0","type":"recordingStopped"}
 
 # Server sends completed recording
-{"recording":{"_0":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}}
+{"protocolVersion":"6.0","type":"recording","payload":{"videoData":"AAAAIGZ0eXBpc29t...","width":390,"height":844,"duration":5.2,"frameCount":42,"fps":8,"startTime":"2026-02-24T10:30:00.000Z","endTime":"2026-02-24T10:30:05.200Z","stopReason":"manual"}}
 
 # Client sends keepalive
-{"ping":{}}
+{"protocolVersion":"6.0","type":"ping"}
 
 # Server responds
-{"pong":{}}
+{"protocolVersion":"6.0","type":"pong"}
 
 # Server auto-pushes interface change
-{"interface":{"_0":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}}
-{"screen":{"_0":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}}
+{"protocolVersion":"6.0","type":"interface","payload":{"timestamp":"2026-02-03T14:08:15.500Z","elements":[...],"tree":[...]}}
+{"protocolVersion":"6.0","type":"screen","payload":{"pngData":"...","width":393.0,"height":852.0,"timestamp":"2026-02-03T14:08:15.550Z"}}
 ```
 
 ### AuthenticatePayload
@@ -1177,7 +1222,7 @@ A single recorded interaction event captured during a Stakeout recording.
 | Field | Type | Description |
 |-------|------|-------------|
 | `token` | `String` | Auth token for driver identification |
-| `driverId` | `String?` | Unique driver identity for session locking (v3.1). When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
+| `driverId` | `String?` | Unique driver identity for session locking. When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
 
 ### SessionLockedPayload
 
@@ -1224,18 +1269,20 @@ A single recorded interaction event captured during a Stakeout recording.
 
 Token-based authentication is required for driver connections:
 
-1. Server sends `authRequired` immediately on TCP connect
-2. Client must respond with `authenticate` (for drivers) or `watch` (for observers). The one exception is `status`, which is allowed before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
-3. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
-4. On auth failure, server sends `authFailed` and disconnects after a brief delay
-5. On session conflict (v3.1), server sends `sessionLocked` and disconnects
-6. For observers: auto-approved by default (no token required). When `INSIDEJOB_RESTRICT_WATCHERS=1` is set, a valid token is required.
+1. Server sends `serverHello` immediately on TCP connect
+2. Client must respond with `clientHello` using the exact same `protocolVersion`
+3. Server sends `authRequired`
+4. Client must respond with `authenticate` (for drivers) or `watch` (for observers). The one exception is `status`, which is allowed after the hello handshake but before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
+5. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
+6. On auth failure, server sends `authFailed` and disconnects after a brief delay
+7. On session conflict, server sends `sessionLocked` and disconnects
+8. For observers: auto-approved by default (no token required). When `INSIDEJOB_RESTRICT_WATCHERS=1` is set, a valid token is required.
 
 The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken` Info.plist key. If not set, a random UUID is auto-generated each launch (ephemeral — not persisted). The token is logged to the console at startup. Clients set the token via the `BUTTONHEIST_TOKEN` environment variable.
 
 ### Session Locking
 
-Protocol v3.1 introduces session locking to prevent multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
+Session locking prevents multiple drivers from interfering with each other. Only one driver can control a TheInsideJob host at a time.
 
 **Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist action`, `buttonheist screenshot`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
 
@@ -1243,7 +1290,7 @@ Protocol v3.1 introduces session locking to prevent multiple drivers from interf
 1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var
 2. `token` as fallback (when `driverId` is absent) — all same-token connections are one "driver"
 
-This maintains backward compatibility: existing clients without `driverId` use token-based identity. Setting `BUTTONHEIST_DRIVER_ID` enables multiple drivers sharing the same auth token to be distinguished.
+If `driverId` is absent, the auth token is used as the driver identity. Setting `BUTTONHEIST_DRIVER_ID` enables multiple drivers sharing the same auth token to be distinguished.
 
 #### Session Lifecycle
 
@@ -1300,6 +1347,8 @@ sequenceDiagram
     participant Server as Server (UI approval mode)
 
     Client->>Server: TCP Connect
+    Server-->>Client: serverHello
+    Client->>Server: clientHello
     Server-->>Client: authRequired
     Client->>Server: authenticate(token:"") (empty token)
     Note over Server: UIAlertController: "Allow / Deny"

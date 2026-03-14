@@ -4,7 +4,7 @@ Every TCP connection must authenticate before it can send commands. This documen
 
 ## Overview
 
-Authentication is mandatory for driver connections. When a client connects, the server sends an `authRequired` challenge. The client must respond with either `authenticate` (for drivers) or `watch` (for observers). Any other message before authenticating causes immediate disconnection.
+Authentication is mandatory for driver connections. When a client connects, the server first sends `serverHello`. The client must respond with `clientHello` using the exact same `protocolVersion`, then wait for `authRequired`. After that, it responds with either `authenticate` (for drivers) or `watch` (for observers). Any other message before the handshake completes causes immediate disconnection.
 
 There are three connection modes:
 
@@ -71,8 +71,9 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: serverHello
+    Client->>TheInsideJob: clientHello
     TheInsideJob->>Client: authRequired
-    Note right of TheInsideJob: TheMuscle.sendAuthRequired
     Client->>TheInsideJob: authenticate(token)
     Note right of TheInsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → markAuthenticated
     TheInsideJob->>Client: info
@@ -91,6 +92,8 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: serverHello
+    Client->>TheInsideJob: clientHello
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"")
     Note right of TheInsideJob: token is empty<br/>→ store in pendingApprovalClients<br/>→ show UIAlertController
@@ -118,6 +121,8 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: serverHello
+    Client->>TheInsideJob: clientHello
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"")
     Note right of TheInsideJob: → show UIAlertController
@@ -138,6 +143,8 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Client->>TheInsideJob: TCP Connect
+    TheInsideJob->>Client: serverHello
+    Client->>TheInsideJob: clientHello
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token:"wrong")
     Note right of TheInsideJob: token doesn't match
@@ -154,24 +161,26 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"requestId":null,"message":{"authRequired":{}}}
-{"requestId":null,"message":{"authApproved":{"_0":{"token":"A1B2C3D4-E5F6-..."}}}}
-{"requestId":null,"message":{"authFailed":{"_0":"Invalid token. Retry without a token to request a fresh session."}}}
+{"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
+{"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
+{"protocolVersion":"6.0","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"protocolVersion":"6.0","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"requestId":"req-1","message":{"authenticate":{"_0":{"token":"my-secret-token"}}}}
-{"requestId":"req-2","message":{"authenticate":{"_0":{"token":""}}}}
-{"requestId":null,"message":{"watch":{"_0":{"token":""}}}}
+{"protocolVersion":"6.0","requestId":null,"type":"clientHello"}
+{"protocolVersion":"6.0","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"protocolVersion":"6.0","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"protocolVersion":"6.0","requestId":null,"type":"watch","payload":{"token":""}}
 ```
 
 An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.
 
 ## Watch (Observer) Connections
 
-Watch connections use a separate auth flow from driver connections. Instead of `authenticate`, the client sends `watch` in response to `authRequired`.
+Watch connections use a separate auth flow from driver connections. After `serverHello` / `clientHello` / `authRequired`, the client sends `watch` instead of `authenticate`.
 
 ### Default (Open Access)
 
@@ -183,6 +192,8 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Observer->>TheInsideJob: TCP Connect
+    TheInsideJob->>Observer: serverHello
+    Observer->>TheInsideJob: clientHello
     TheInsideJob->>Observer: authRequired
     Observer->>TheInsideJob: watch(token:"")
     Note right of TheInsideJob: TheMuscle auto-approves observer
@@ -201,6 +212,8 @@ sequenceDiagram
     participant TheInsideJob as TheInsideJob (iOS)
 
     Observer->>TheInsideJob: TCP Connect
+    TheInsideJob->>Observer: serverHello
+    Observer->>TheInsideJob: clientHello
     TheInsideJob->>Observer: authRequired
     Observer->>TheInsideJob: watch(token:"valid-token")
     Note right of TheInsideJob: TheMuscle validates token
@@ -247,7 +260,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | **TheMuscle** | Token resolution, validation, UI approval, session locking, observer management, `invalidateToken()`. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, `authenticatedClientIDs`, `observerClients`. Routes `watch` messages via `handleWatchRequest`. |
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
-| **DeviceConnection** | Client-side auth handling. Sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
+| **DeviceConnection** | Client-side handshake and auth handling. Verifies `protocolVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
 | **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. |
 
 ## Related Documentation

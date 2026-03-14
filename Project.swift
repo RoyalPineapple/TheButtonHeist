@@ -14,8 +14,21 @@ let swiftlintScript: TargetScript = .post(
     basedOnDependencyAnalysis: false
 )
 
+func frameworkScheme(name: String) -> Scheme {
+    .scheme(
+        name: name,
+        buildAction: .buildAction(targets: [
+            .target(name),
+        ]),
+        runAction: .runAction(executable: .target(name))
+    )
+}
+
 let project = Project(
     name: "ButtonHeist",
+    options: .options(
+        automaticSchemesOptions: .disabled
+    ),
     settings: .settings(base: [
         "SWIFT_VERSION": "5.0",
         "LastSwiftMigration": "2620",
@@ -132,6 +145,9 @@ let project = Project(
         ),
     ],
     schemes: [
+        frameworkScheme(name: "TheScore"),
+        frameworkScheme(name: "ButtonHeist"),
+        frameworkScheme(name: "TheInsideJob"),
         .scheme(
             name: "TheScoreTests",
             buildAction: .buildAction(targets: [

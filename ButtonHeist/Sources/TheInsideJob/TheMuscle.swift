@@ -30,6 +30,7 @@ final class TheMuscle {
     private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
     private(set) var authenticatedClientCount: Int = 0
     private(set) var authenticatedClientIDs: Set<Int> = []
+    private(set) var helloValidatedClients: Set<Int> = []
     private weak var presentedAlert: UIAlertController?
 
     // MARK: - Subscription Tracking
@@ -102,8 +103,8 @@ final class TheMuscle {
 
     // MARK: - Public API
 
-    func sendAuthRequired(clientId: Int) {
-        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else { return }
+    func sendServerHello(clientId: Int) {
+        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: .serverHello)) else { return }
         sendToClient?(data, clientId)
     }
 
@@ -142,14 +143,44 @@ final class TheMuscle {
             return
         }
 
+        guard envelope.protocolVersion == protocolVersion else {
+            sendMessage(
+                .protocolMismatch(ProtocolMismatchPayload(
+                    expectedProtocolVersion: protocolVersion,
+                    receivedProtocolVersion: envelope.protocolVersion
+                )),
+                respond: respond
+            )
+            logger.warning("Client \(clientId) protocol mismatch: expected \(protocolVersion), got \(envelope.protocolVersion)")
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                self?.disconnectClient?(clientId)
+            }
+            return
+        }
+
         switch envelope.message {
+        case .clientHello:
+            helloValidatedClients.insert(clientId)
+            sendMessage(.authRequired, respond: respond)
+            return
         case .watch(let payload):
+            guard helloValidatedClients.contains(clientId) else {
+                logger.warning("Client \(clientId) attempted watch before hello")
+                disconnectClient?(clientId)
+                return
+            }
             handleWatchRequest(clientId, payload: payload, respond: respond)
             return
         case .authenticate:
-            break // Fall through to existing auth logic below
+            guard helloValidatedClients.contains(clientId) else {
+                logger.warning("Client \(clientId) attempted auth before hello")
+                disconnectClient?(clientId)
+                return
+            }
+            // Fall through to existing auth logic below
         default:
-            logger.warning("Client \(clientId) sent non-auth message before authenticating, disconnecting")
+            logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
             disconnectClient?(clientId)
             return
         }
@@ -199,6 +230,7 @@ final class TheMuscle {
         subscribedClients.remove(clientId)
         observerClients.remove(clientId)
         pendingObserverClients.remove(clientId)
+        helloValidatedClients.remove(clientId)
         if authenticatedClientIDs.remove(clientId) != nil {
             updateAuthenticatedCount(delta: -1)
         }
@@ -244,6 +276,7 @@ final class TheMuscle {
         authenticatedClientIDs.removeAll()
         authenticatedClientCount = 0
         clientDriverIds.removeAll()
+        helloValidatedClients.removeAll()
         subscribedClients.removeAll()
         observerClients.removeAll()
         pendingObserverClients.removeAll()
