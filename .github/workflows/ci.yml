@@ -53,14 +53,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-deps-
 
-      - name: Cache Tuist binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.tuist/Cache
-          key: ${{ runner.os }}-tuist-cache-${{ hashFiles('Tuist/Package.swift') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-cache-
-
       - name: Install Tuist dependencies
         timeout-minutes: 5
         run: tuist install
@@ -76,10 +68,6 @@ jobs:
             echo "::endgroup::"
             exit 1
           }
-
-      - name: Warm binary cache
-        timeout-minutes: 5
-        run: tuist cache --external-only
 
       - name: Run macOS tests
         timeout-minutes: 10
@@ -114,21 +102,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-deps-
 
-      - name: Cache Tuist binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.tuist/Cache
-          key: ${{ runner.os }}-tuist-cache-${{ hashFiles('Tuist/Package.swift') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-cache-
-
       - name: Install Tuist dependencies
         timeout-minutes: 5
         run: tuist install
-
-      - name: Warm binary cache
-        timeout-minutes: 5
-        run: tuist cache --external-only
 
       - name: Boot simulator
         timeout-minutes: 3
