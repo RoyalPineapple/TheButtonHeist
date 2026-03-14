@@ -263,7 +263,7 @@ TheFence (@ButtonHeistActor)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → FenceResponse
-└── Command.allCases (31 supported commands)
+└── Command.allCases (32 supported commands)
 ```
 
 **Key Types**:
@@ -271,7 +271,7 @@ TheFence (@ButtonHeistActor)
 - `TheFence.Configuration` - Connection settings (device filter, timeout, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
-- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 31 supported commands
+- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 32 supported commands
 
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
