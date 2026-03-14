@@ -25,7 +25,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Init required submodules
-        run: git submodule update --init --recursive AccessibilitySnapshot
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive AccessibilitySnapshot
 
       - name: Install Tuist
         run: |
