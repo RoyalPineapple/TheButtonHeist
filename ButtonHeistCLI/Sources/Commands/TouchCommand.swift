@@ -1,5 +1,4 @@
 import ArgumentParser
-import Foundation
 import ButtonHeist
 
 struct TouchCommand: AsyncParsableCommand {
@@ -7,20 +6,17 @@ struct TouchCommand: AsyncParsableCommand {
         commandName: "touch",
         abstract: "Simulate touch gestures on the connected iOS device",
         discussion: """
-            Send touch gestures to the connected iOS app.
+            Low-level touch gestures. For tapping buttons and controls, prefer \
+            `buttonheist activate` which uses accessibility-first interaction.
 
             Examples:
-              buttonheist touch one_finger_tap --identifier "myButton"
               buttonheist touch one_finger_tap --x 100 --y 200
               buttonheist touch long_press --identifier "myButton" --duration 1.0
               buttonheist touch swipe --identifier "list" --direction up
-              buttonheist touch swipe --from-x 200 --from-y 400 --to-x 200 --to-y 100
               buttonheist touch drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
               buttonheist touch pinch --identifier "mapView" --scale 2.0
               buttonheist touch rotate --x 200 --y 300 --angle 1.57
               buttonheist touch two_finger_tap --identifier "zoomControl"
-              buttonheist touch draw_path --points "100,400 200,300 300,400"
-              buttonheist touch draw_bezier --bezier-file curve.json
             """,
         subcommands: [
             TapSubcommand.self,
@@ -30,8 +26,6 @@ struct TouchCommand: AsyncParsableCommand {
             PinchSubcommand.self,
             RotateSubcommand.self,
             TwoFingerTapSubcommand.self,
-            DrawPathSubcommand.self,
-            DrawBezierSubcommand.self,
         ]
     )
 }
@@ -41,7 +35,17 @@ struct TouchCommand: AsyncParsableCommand {
 struct TapSubcommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "one_finger_tap",
-        abstract: "Tap at a point or element (prefer 'activate' for element interactions)"
+        abstract: "Raw synthetic tap at coordinates or element center",
+        discussion: """
+            Performs a direct synthetic tap without accessibility semantics. \
+            For interacting with buttons, links, and controls, prefer \
+            `buttonheist activate` which tries accessibilityActivate() first \
+            and is more reliable across different UI frameworks.
+
+            Use one_finger_tap when you need precise coordinate-based taps \
+            or when accessibility activation is not appropriate (e.g., tapping \
+            a specific point on a canvas or map).
+            """
     )
 
     @OptionGroup var element: ElementTargetOptions
@@ -348,149 +352,6 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
         } else {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
         }
-
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
-    }
-}
-
-// MARK: - Draw Path
-
-struct DrawPathSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "draw_path",
-        abstract: "Draw along a path of points",
-        discussion: """
-            Trace a finger through a sequence of waypoints.
-
-            Examples:
-              buttonheist touch draw_path --points "100,200 150,250 200,300"
-              buttonheist touch draw_path --path-file shape.json
-              buttonheist touch draw_path --points "100,400 200,300 300,400" --velocity 500
-            """
-    )
-
-    @Option(name: .long, help: "Inline points as 'x1,y1 x2,y2 ...'")
-    var points: String?
-
-    @Option(name: .customLong("path-file"), help: "JSON file with array of {x, y} objects")
-    var pathFile: String?
-
-    @Option(name: .long, help: "Total duration in seconds")
-    var duration: Double?
-
-    @Option(name: .long, help: "Speed in points per second")
-    var velocity: Double?
-
-    @OptionGroup var connection: ConnectionOptions
-    @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 30.0
-
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let pathPoints: [PathPoint]
-
-        if let pointsStr = points {
-            pathPoints = try parseInlinePoints(pointsStr)
-        } else if let file = pathFile {
-            pathPoints = try loadPathFile(file)
-        } else {
-            throw ValidationError("Must specify --points or --path-file")
-        }
-
-        guard pathPoints.count >= 2 else {
-            throw ValidationError("Path requires at least 2 points")
-        }
-
-        let message = ClientMessage.touchDrawPath(DrawPathTarget(
-            points: pathPoints,
-            duration: duration,
-            velocity: velocity
-        ))
-
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
-    }
-
-    private func parseInlinePoints(_ str: String) throws -> [PathPoint] {
-        let pairs = str.split(separator: " ")
-        return try pairs.map { pair in
-            let coords = pair.split(separator: ",")
-            guard coords.count == 2,
-                  let x = Double(coords[0]),
-                  let y = Double(coords[1]) else {
-                throw ValidationError("Invalid point format '\(pair)'. Expected 'x,y'")
-            }
-            return PathPoint(x: x, y: y)
-        }
-    }
-
-    private func loadPathFile(_ path: String) throws -> [PathPoint] {
-        let url = URL(fileURLWithPath: path)
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode([PathPoint].self, from: data)
-    }
-}
-
-// MARK: - Draw Bezier
-
-struct DrawBezierSubcommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "draw_bezier",
-        abstract: "Draw along a cubic bezier curve",
-        discussion: """
-            Trace a finger along cubic bezier curve segments. The curve is sampled
-            to a polyline server-side before execution.
-
-            The bezier file is a JSON object:
-            {
-              "startX": 100, "startY": 400,
-              "segments": [
-                {"cp1X": 100, "cp1Y": 200, "cp2X": 300, "cp2Y": 200, "endX": 300, "endY": 400}
-              ]
-            }
-
-            Examples:
-              buttonheist touch draw_bezier --bezier-file curve.json
-              buttonheist touch draw_bezier --bezier-file curve.json --samples 40 --velocity 300
-            """
-    )
-
-    @Option(name: .customLong("bezier-file"), help: "JSON file with bezier path definition")
-    var bezierFile: String
-
-    @Option(name: .long, help: "Samples per bezier segment (default 20)")
-    var samples: Int?
-
-    @Option(name: .long, help: "Total duration in seconds")
-    var duration: Double?
-
-    @Option(name: .long, help: "Speed in points per second")
-    var velocity: Double?
-
-    @OptionGroup var connection: ConnectionOptions
-    @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 30.0
-
-    @ButtonHeistActor
-    mutating func run() async throws {
-        let url = URL(fileURLWithPath: bezierFile)
-        let data = try Data(contentsOf: url)
-        let target = try JSONDecoder().decode(DrawBezierTarget.self, from: data)
-
-        guard !target.segments.isEmpty else {
-            throw ValidationError("Bezier path requires at least 1 segment")
-        }
-
-        let message = ClientMessage.touchDrawBezier(DrawBezierTarget(
-            startX: target.startX, startY: target.startY,
-            segments: target.segments,
-            samplesPerSegment: samples ?? target.samplesPerSegment,
-            duration: duration ?? target.duration,
-            velocity: velocity ?? target.velocity
-        ))
 
         try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
     }
