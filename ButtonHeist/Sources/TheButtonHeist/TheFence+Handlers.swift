@@ -111,7 +111,8 @@ extension TheFence {
         return try await sendAction(
             .touchDrag(DragTarget(
                 elementTarget: elementTarget(args),
-                startX: doubleArg(args, "startX"), startY: doubleArg(args, "startY"),
+                startX: doubleArg(args, "startX") ?? doubleArg(args, "x"),
+                startY: doubleArg(args, "startY") ?? doubleArg(args, "y"),
                 endX: endX, endY: endY, duration: doubleArg(args, "duration")
             ))
         )
@@ -124,7 +125,8 @@ extension TheFence {
         return try await sendAction(
             .touchPinch(PinchTarget(
                 elementTarget: elementTarget(args),
-                centerX: doubleArg(args, "centerX"), centerY: doubleArg(args, "centerY"),
+                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
+                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 scale: scale, spread: doubleArg(args, "spread"),
                 duration: doubleArg(args, "duration")
             ))
@@ -138,7 +140,8 @@ extension TheFence {
         return try await sendAction(
             .touchRotate(RotateTarget(
                 elementTarget: elementTarget(args),
-                centerX: doubleArg(args, "centerX"), centerY: doubleArg(args, "centerY"),
+                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
+                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 angle: angle, radius: doubleArg(args, "radius"),
                 duration: doubleArg(args, "duration")
             ))
@@ -149,7 +152,8 @@ extension TheFence {
         return try await sendAction(
             .touchTwoFingerTap(TwoFingerTapTarget(
                 elementTarget: elementTarget(args),
-                centerX: doubleArg(args, "centerX"), centerY: doubleArg(args, "centerY"),
+                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
+                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 spread: doubleArg(args, "spread")
             ))
         )

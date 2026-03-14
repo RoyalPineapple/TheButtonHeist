@@ -117,6 +117,8 @@ APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
+The AccessibilityTestApp has `InsideJobPort` set in its Info.plist, so the server always binds to a fixed port. Override with `SIMCTL_CHILD_INSIDEJOB_PORT=<port>` if needed.
+
 ### 4. Build the CLI and add to PATH
 
 ```bash
@@ -128,11 +130,21 @@ This uses the repo-relative path so it works in any workspace.
 
 ### 5. Verify
 
+**If Bonjour works** (no firewall stealth mode):
+
 ```bash
 timeout 5 dns-sd -B _buttonheist._tcp .
 ```
 
-Should show an `Add` entry with the app name. The CLI commands (`buttonheist session`, `buttonheist activate`, `buttonheist action`, etc.) should now work.
+Should show an `Add` entry with the app name.
+
+**If Bonjour is broken** (MDM stealth mode — see `docs/BONJOUR_TROUBLESHOOTING.md`):
+
+```bash
+BUTTONHEIST_DEVICE=127.0.0.1:$INSIDEJOB_PORT BUTTONHEIST_TOKEN="$APP_TOKEN" buttonheist session
+```
+
+Connect directly to the fixed port. The `.mcp.json` in this repo is already configured with the matching port.
 
 ## Pre-Commit Checklist
 

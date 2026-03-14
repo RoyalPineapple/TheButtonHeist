@@ -1,7 +1,10 @@
 {
   "mcpServers": {
     "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp"
+      "command": "./scripts/buttonheist-mcp.sh",
+      "env": {
+        "BUTTONHEIST_TOKEN": "INJECTED-TOKEN-12345"
+      }
     }
   }
 }

@@ -11,6 +11,7 @@ private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", 
 /// - INSIDEJOB_TOKEN / InsideJobToken: Auth token (auto-generated if not set)
 /// - INSIDEJOB_ID / InsideJobInstanceId: Human-readable instance identifier
 /// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
+/// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
 @_cdecl("TheInsideJob_autoStartFromLoad")
 public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("========== AUTO-START BEGIN ==========")
@@ -56,12 +57,22 @@ public func theInsideJobAutoStartFromLoad() {
         instanceId = plistId
     }
 
+    // Get preferred port (0 = any available)
+    var port: UInt16 = 0
+    if let envPort = ProcessInfo.processInfo.environment["INSIDEJOB_PORT"],
+       let parsed = UInt16(envPort), parsed > 0 {
+        port = parsed
+    } else if let plistPort = Bundle.main.object(forInfoDictionaryKey: "InsideJobPort") as? Int,
+              plistPort > 0, plistPort <= UInt16.max {
+        port = UInt16(plistPort)
+    }
+
     autoStartLogger.info("Starting with polling interval: \(interval)")
 
     Task { @MainActor in
         autoStartLogger.debug("MainActor task executing...")
         do {
-            TheInsideJob.configure(token: token, instanceId: instanceId)
+            TheInsideJob.configure(token: token, instanceId: instanceId, port: port)
             try await TheInsideJob.shared.start()
             TheInsideJob.shared.startPolling(interval: interval)
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
