@@ -91,7 +91,7 @@ Configure the shared instance with an auth token, instance identifier, allowed s
 - `token`: Auth token for client authentication. If nil, auto-generated at startup.
 - `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
 - `allowedScopes`: Set of connection scopes the server will accept. If nil, all scopes are allowed.
-- `port`: Preferred TCP port for the server. If 0 (the default), the port is read from the `InsideJobPort` Info.plist key or the `INSIDEJOB_PORT` environment variable. Falls back to an OS-assigned port if none is specified.
+- `port`: Preferred TCP port for the server. Pass 0 (the default) for an OS-assigned ephemeral port. The Info.plist (`InsideJobPort`) and environment variable (`INSIDEJOB_PORT`) fallback is handled by the auto-start mechanism in `AutoStart.swift`, not by `configure()` itself.
 
 **Note**: Normally not needed - use Info.plist or environment variable configuration instead.
 
