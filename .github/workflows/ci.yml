@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  swiftlint:
+    runs-on: macos-15
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --strict
+
+  macos-tests:
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive AccessibilitySnapshot
+
+      - name: Install Tuist
+        run: |
+          brew tap tuist/tuist
+          brew install --formula tuist
+
+      - name: Install Tuist dependencies and regenerate project
+        run: |
+          tuist install
+          tuist generate
+
+      - name: Run macOS tests
+        run: |
+          set -eo pipefail
+          tuist test TheScoreTests --no-selective-testing
+          tuist test ButtonHeistTests --no-selective-testing
+
+  ios-tests:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    env:
+      CI_SIMULATOR_NAME: CI iPhone 16 Pro
+      CI_SIMULATOR_DEVICE: iPhone 16 Pro
+      CI_SIMULATOR_OS: "18.5"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive AccessibilitySnapshot
+
+      - name: Install Tuist
+        run: |
+          brew tap tuist/tuist
+          brew install --formula tuist
+
+      - name: Show Xcode and simulator environment
+        run: |
+          set -eo pipefail
+          xcode-select -p
+          xcodebuild -version
+          xcrun simctl list runtimes available
+          xcrun simctl list devicetypes
+
+      - name: Create CI simulator
+        id: simulator
+        run: |
+          set -eo pipefail
+
+          runtime_id="$(
+            xcrun simctl list runtimes -j | jq -r \
+              --arg version "$CI_SIMULATOR_OS" \
+              '.runtimes[]
+              | select(.platform == "iOS" and .isAvailable == true and .version == $version)
+              | .identifier' | head -n 1
+          )"
+          if [[ -z "$runtime_id" ]]; then
+            echo "Expected iOS runtime $CI_SIMULATOR_OS is not installed on the runner."
+            exit 1
+          fi
+
+          device_type_id="$(
+            xcrun simctl list devicetypes -j | jq -r \
+              --arg name "$CI_SIMULATOR_DEVICE" \
+              '.devicetypes[]
+              | select(.name == $name)
+              | .identifier' | head -n 1
+          )"
+          if [[ -z "$device_type_id" ]]; then
+            echo "Expected simulator device type '$CI_SIMULATOR_DEVICE' is not installed on the runner."
+            exit 1
+          fi
+
+          existing_udids="$(
+            xcrun simctl list devices available -j | jq -r \
+              --arg name "$CI_SIMULATOR_NAME" \
+              '.devices[]?[]
+              | select(.name == $name)
+              | .udid'
+          )"
+          if [[ -n "$existing_udids" ]]; then
+            while IFS= read -r udid; do
+              [[ -n "$udid" ]] && xcrun simctl delete "$udid"
+            done <<< "$existing_udids"
+          fi
+
+          simulator_udid="$(
+            xcrun simctl create "$CI_SIMULATOR_NAME" "$device_type_id" "$runtime_id"
+          )"
+
+          xcrun simctl boot "$simulator_udid"
+          xcrun simctl bootstatus "$simulator_udid" -b
+
+          echo "simulator_udid=$simulator_udid" >> "$GITHUB_OUTPUT"
+          echo "Created simulator $CI_SIMULATOR_NAME ($simulator_udid) on iOS $CI_SIMULATOR_OS"
+
+      - name: Install Tuist dependencies and regenerate project
+        run: |
+          tuist install
+          tuist generate
+
+      - name: Run iOS tests
+        run: |
+          set -eo pipefail
+          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_DEVICE" --os "$CI_SIMULATOR_OS" --no-selective-testing
+
+      - name: Shutdown CI simulator
+        if: always() && steps.simulator.outputs.simulator_udid != ''
+        run: |
+          xcrun simctl shutdown "${{ steps.simulator.outputs.simulator_udid }}" || true
+          xcrun simctl delete "${{ steps.simulator.outputs.simulator_udid }}" || true
