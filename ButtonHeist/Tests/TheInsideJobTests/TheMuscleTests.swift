@@ -276,5 +276,80 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(muscle.helloValidatedClients.isEmpty)
         XCTAssertEqual(muscle.authenticatedClientCount, 0)
     }
+
+    // MARK: - Brute-Force Protection Tests
+
+    func testSingleFailedAttemptNotLockedOut() {
+        let (respond, responses) = collectResponses()
+        authenticate(clientId: 1, token: "wrong-token", respond: respond)
+
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let hasAuthFailed = serverMessages.contains { msg in
+            if case .authFailed(let reason) = msg { return !reason.contains("Too many") }
+            return false
+        }
+        XCTAssertTrue(hasAuthFailed, "First failed attempt should get normal authFailed, not lockout")
+    }
+
+    func testLockoutAfterMaxFailedAttempts() {
+        // Send 5 failed attempts (max)
+        for _ in 1...5 {
+            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        }
+
+        // 6th attempt should be locked out
+        let (respond, responses) = collectResponses()
+        authenticate(clientId: 1, token: "wrong-token", respond: respond)
+
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let hasLockout = serverMessages.contains { msg in
+            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            return false
+        }
+        XCTAssertTrue(hasLockout, "Should receive lockout message after exceeding max failed attempts")
+    }
+
+    func testLockoutDoesNotAffectOtherClients() {
+        // Lock out client 1
+        for _ in 1...5 {
+            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        }
+
+        // Client 2 should still be able to authenticate
+        let (respond, _) = collectResponses()
+        authenticate(clientId: 2, token: "test-token", respond: respond)
+
+        XCTAssertTrue(markedAuthenticated.contains(2), "Other clients should not be affected by lockout")
+    }
+
+    func testSuccessfulAuthClearsFailedAttempts() {
+        // Fail 3 times
+        for _ in 1...3 {
+            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        }
+
+        // Succeed
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        XCTAssertTrue(markedAuthenticated.contains(1), "Should authenticate after failed attempts below threshold")
+
+        // Disconnect and try failing again — counter should be reset
+        muscle.handleClientDisconnected(1)
+
+        // Should get 5 more attempts before lockout (counter was cleared)
+        for _ in 1...5 {
+            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        }
+
+        // 6th attempt after reset should be locked out
+        let (respond, responses) = collectResponses()
+        authenticate(clientId: 1, token: "wrong-token", respond: respond)
+
+        let serverMessages = responses().compactMap { decodeServerMessage($0) }
+        let hasLockout = serverMessages.contains { msg in
+            if case .authFailed(let reason) = msg { return reason.contains("Too many") }
+            return false
+        }
+        XCTAssertTrue(hasLockout, "Should lock out again after counter reset and 5 more failures")
+    }
 }
 #endif // canImport(UIKit)
