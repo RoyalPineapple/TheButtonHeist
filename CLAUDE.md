@@ -29,6 +29,8 @@ tuist generate
 
 **Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
 
+**Never commit hardcoded absolute paths in `.xcodeproj` files.** Xcode resolves `SRCROOT` automatically from the `.xcodeproj` location — never set it explicitly in build settings. Hardcoded paths like `SRCROOT = /Users/...` break builds for every other developer and CI. If you see absolute paths in a generated `.pbxproj`, do not commit them — investigate and fix the Tuist configuration instead.
+
 ## Canonical Test Runner
 
 Use `tuist test` as the canonical way to run tests in this repository.
