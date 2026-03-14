@@ -10,11 +10,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  CI_SIMULATOR_NAME: CI iPhone 16 Pro
-  CI_SIMULATOR_DEVICE: iPhone 16 Pro
-  CI_SIMULATOR_OS: "18.5"
-
 jobs:
   swiftlint:
     runs-on: macos-15
@@ -30,9 +25,43 @@ jobs:
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
-  build-and-test:
+  macos-tests:
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive AccessibilitySnapshot
+
+      - name: Install Tuist
+        run: |
+          brew tap tuist/tuist
+          brew install --formula tuist
+
+      - name: Install Tuist dependencies and regenerate project
+        run: |
+          tuist install
+          tuist generate
+
+      - name: Run macOS tests
+        run: |
+          set -eo pipefail
+          tuist test TheScoreTests --no-selective-testing
+          tuist test ButtonHeistTests --no-selective-testing
+
+  ios-tests:
     runs-on: macos-15
     timeout-minutes: 30
+
+    env:
+      CI_SIMULATOR_NAME: CI iPhone 16 Pro
+      CI_SIMULATOR_DEVICE: iPhone 16 Pro
+      CI_SIMULATOR_OS: "18.5"
 
     steps:
       - name: Checkout repository
@@ -113,19 +142,10 @@ jobs:
           tuist install
           tuist generate
 
-      - name: Build macOS and iOS targets
+      - name: Run iOS tests
         run: |
           set -eo pipefail
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob -destination "generic/platform=iOS" build
-
-      - name: Run tests
-        run: |
-          set -eo pipefail
-          tuist test TheScoreTests
-          tuist test ButtonHeistTests
-          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_DEVICE" --os "$CI_SIMULATOR_OS"
+          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_DEVICE" --os "$CI_SIMULATOR_OS" --no-selective-testing
 
       - name: Shutdown CI simulator
         if: always() && steps.simulator.outputs.simulator_udid != ''
