@@ -27,33 +27,7 @@ final class DeviceConnector {
         if !quiet { logStatus("Searching for iOS devices...") }
         client.startDiscovery()
 
-        // Wait for at least one matching device
-        let startTime = DispatchTime.now()
-        while matchingDevice() == nil {
-            if DispatchTime.now().uptimeNanoseconds - startTime.uptimeNanoseconds > discoveryTimeout {
-                if let filter = deviceFilter {
-                    throw FenceError.noMatchingDevice(filter: filter,
-                        available: client.discoveredDevices.map { $0.name })
-                }
-                throw FenceError.noDeviceFound
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        let device: DiscoveredDevice
-        if let filter = deviceFilter {
-            guard let match = client.discoveredDevices.first(matching: filter) else {
-                throw FenceError.noDeviceFound
-            }
-            device = match
-        } else if client.discoveredDevices.count == 1 {
-            device = client.discoveredDevices[0]
-        } else {
-            throw FenceError.noMatchingDevice(
-                filter: "(none)",
-                available: client.discoveredDevices.map(\.name)
-            )
-        }
+        let device = try await resolveReachableDevice()
 
         if !quiet {
             logStatus("Found: \(client.displayName(for: device))")
@@ -68,6 +42,24 @@ final class DeviceConnector {
     }
 
     // MARK: - Private
+
+    private func resolveReachableDevice() async throws -> DiscoveredDevice {
+        let resolver = DeviceResolver(
+            filter: deviceFilter,
+            discoveryTimeout: discoveryTimeout,
+            getDiscoveredDevices: { [client] in client.discoveredDevices }
+        )
+        do {
+            return try await resolver.resolve()
+        } catch let error as DeviceResolver.ResolutionError {
+            switch error {
+            case .noDeviceFound:
+                throw FenceError.noDeviceFound
+            case .noMatchingDevice(let filter, let available):
+                throw FenceError.noMatchingDevice(filter: filter, available: available)
+            }
+        }
+    }
 
     private func connectToDevice(_ device: DiscoveredDevice) async throws {
         if !quiet { logStatus("Connecting...") }
@@ -102,10 +94,5 @@ final class DeviceConnector {
         }
 
         if !quiet { logStatus("Connected") }
-    }
-
-    /// Find first device matching the filter (or first device if no filter)
-    private func matchingDevice() -> DiscoveredDevice? {
-        client.discoveredDevices.first(matching: deviceFilter)
     }
 }

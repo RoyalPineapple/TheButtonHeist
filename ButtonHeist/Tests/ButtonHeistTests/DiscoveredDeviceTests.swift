@@ -419,6 +419,19 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertNil(device.sessionActive)
     }
 
+    func testDirectConnectTargetParsesLoopbackFilters() {
+        let ipv4 = DiscoveredDevice.directConnectTarget(from: "127.0.0.1:8080")
+        XCTAssertEqual(ipv4?.id, "127.0.0.1:8080")
+
+        let ipv6 = DiscoveredDevice.directConnectTarget(from: "[::1]:9090")
+        XCTAssertEqual(ipv6?.id, "::1:9090")
+    }
+
+    func testDirectConnectTargetRejectsNonLoopbackHostFilters() {
+        XCTAssertNil(DiscoveredDevice.directConnectTarget(from: "example.com:8080"))
+        XCTAssertNil(DiscoveredDevice.directConnectTarget(from: "QA:1"))
+    }
+
     // MARK: - TLS Certificate Fingerprint
 
     func testCertFingerprintStored() {
