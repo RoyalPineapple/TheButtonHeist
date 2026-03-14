@@ -100,8 +100,9 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     private static func isLoopbackHost(_ host: String) -> Bool {
         let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized == "localhost" ||
-            normalized == "::1" ||
+        // Only trust IP addresses, not hostnames like "localhost" (spoofable via /etc/hosts).
+        // Use 127.0.0.1 or ::1 instead.
+        return normalized == "::1" ||
             normalized == "0:0:0:0:0:0:0:1" ||
             normalized.hasPrefix("127.")
     }

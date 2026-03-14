@@ -29,6 +29,7 @@ let project = Project(
                 "CFBundleDisplayName": "A11y SwiftUI",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
+                "InsideJobPort": 1455,
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
