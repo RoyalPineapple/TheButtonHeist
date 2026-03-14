@@ -65,10 +65,6 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
-      - name: Warm binary cache
-        timeout-minutes: 5
-        run: tuist cache --external-only
-
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
@@ -80,6 +76,10 @@ jobs:
             echo "::endgroup::"
             exit 1
           }
+
+      - name: Warm binary cache
+        timeout-minutes: 5
+        run: tuist cache --external-only
 
       - name: Run macOS tests
         timeout-minutes: 10
