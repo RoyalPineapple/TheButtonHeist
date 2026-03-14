@@ -24,7 +24,18 @@ final class TheMuscle {
     /// Grace period (100ms) before disconnecting a rejected client, giving them time to read the error.
     private static let disconnectGracePeriod: UInt64 = 100_000_000
 
+    /// Maximum consecutive failed auth attempts before temporary lockout.
+    private static let maxFailedAttempts = 5
+
+    /// Lockout duration after exceeding maxFailedAttempts.
+    private static let lockoutDuration: TimeInterval = 30
+
     // MARK: - Properties
+
+    /// Tracks failed auth attempts per client ID for brute-force protection.
+    private var failedAuthAttempts: [Int: Int] = [:]
+    /// Clients temporarily locked out after too many failed attempts.
+    private var lockedOutClients: [Int: Date] = [:]
 
     private(set) var authToken: String
     private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
@@ -187,6 +198,18 @@ final class TheMuscle {
 
         guard case .authenticate(let payload) = envelope.message else { return }
 
+        // Check lockout before processing auth
+        if let lockoutExpiry = lockedOutClients[clientId], Date() < lockoutExpiry {
+            sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
+            logger.warning("Client \(clientId) locked out, rejecting")
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                self?.disconnectClient?(clientId)
+            }
+            return
+        }
+        lockedOutClients.removeValue(forKey: clientId)
+
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
@@ -201,8 +224,14 @@ final class TheMuscle {
 
         guard payload.token == authToken else {
             // Wrong token → reject with guidance to retry without a token
+            let attempts = (failedAuthAttempts[clientId] ?? 0) + 1
+            failedAuthAttempts[clientId] = attempts
+            if attempts >= TheMuscle.maxFailedAttempts {
+                lockedOutClients[clientId] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
+                logger.warning("Client \(clientId) locked out after \(attempts) failed attempts")
+            }
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
-            logger.warning("Client \(clientId) sent invalid token, rejected")
+            logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
@@ -211,6 +240,7 @@ final class TheMuscle {
         }
 
         // Token matches → authenticate and acquire session
+        failedAuthAttempts.removeValue(forKey: clientId)
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
