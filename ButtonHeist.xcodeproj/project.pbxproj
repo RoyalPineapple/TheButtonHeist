@@ -1256,14 +1256,8 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -1319,10 +1313,6 @@
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJob-Info.plist";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -1373,10 +1363,6 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -1556,7 +1542,6 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/bordeaux-v1";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
@@ -1620,7 +1605,6 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/bordeaux-v1";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -1650,14 +1634,8 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",

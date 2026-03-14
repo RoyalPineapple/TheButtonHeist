@@ -562,7 +562,6 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/bordeaux-v1/TestApp";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -574,14 +573,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -631,14 +626,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -688,14 +679,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -791,7 +778,6 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/bordeaux-v1/TestApp";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 			};
 			name = Debug;
@@ -802,14 +788,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "$(BUTTONHEIST_TEAM_ID)";
+				DEVELOPMENT_TEAM = "";
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",

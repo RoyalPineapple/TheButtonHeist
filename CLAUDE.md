@@ -147,9 +147,9 @@ Before pushing any commit, verify the following:
   ```
 - For device builds, include signing:
   ```bash
-  BUTTONHEIST_TEAM_ID=YOUR_TEAM_ID xcodebuild -workspace ButtonHeist.xcworkspace \
-    -scheme AccessibilityTestApp -destination 'platform=iOS,name=Device' \
-    -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic build
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
+    -destination 'platform=iOS,name=Device' -allowProvisioningUpdates \
+    CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID build
   ```
 
 ### 2. Tests Pass

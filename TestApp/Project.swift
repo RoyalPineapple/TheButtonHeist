@@ -39,7 +39,7 @@ let project = Project(
             ],
             settings: .settings(base: [
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "$(BUTTONHEIST_TEAM_ID)",
+                "DEVELOPMENT_TEAM": "",
             ])
         ),
 
@@ -76,7 +76,7 @@ let project = Project(
             ],
             settings: .settings(base: [
                 "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "$(BUTTONHEIST_TEAM_ID)",
+                "DEVELOPMENT_TEAM": "",
             ])
         ),
     ]
