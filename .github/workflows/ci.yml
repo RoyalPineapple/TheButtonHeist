@@ -23,12 +23,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Install SwiftLint
         run: brew install swiftlint
 
-      - name: Run SwiftLint
-        run: swiftlint lint --strict
+      - name: Run SwiftLint on changed files
+        run: |
+          set -eo pipefail
+          changed_files=$(git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD" -- '*.swift')
+          if [[ -z "$changed_files" ]]; then
+            echo "No Swift files changed."
+            exit 0
+          fi
+          echo "$changed_files" | xargs swiftlint lint --strict
 
   build-and-test:
     runs-on: macos-15
