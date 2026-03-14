@@ -63,10 +63,7 @@ final class TLSIntegrationTests: XCTestCase {
         let echoReceived = expectation(description: "server received message")
 
         let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { [weak self] clientId, _ in
-                self?.server.markAuthenticated(clientId)
-            },
-            onDataReceived: { _, data, respond in
+            onUnauthenticatedData: { _, data, respond in
                 respond(data)
                 echoReceived.fulfill()
             }
@@ -258,18 +255,31 @@ final class TLSIntegrationTests: XCTestCase {
     }
 
     private func receiveData(from connection: NWConnection, timeout: TimeInterval = 5.0) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let content {
-                    continuation.resume(returning: content)
-                } else {
-                    continuation.resume(
-                        throwing: NSError(domain: "test", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data"])
-                    )
+        try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask {
+                try await withCheckedThrowingContinuation { continuation in
+                    connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else if let content {
+                            continuation.resume(returning: content)
+                        } else {
+                            continuation.resume(
+                                throwing: NSError(domain: "test", code: -1, userInfo: [NSLocalizedDescriptionKey: "No data"])
+                            )
+                        }
+                    }
                 }
             }
+            group.addTask {
+                try await Task.sleep(for: .seconds(timeout))
+                throw NSError(domain: "test", code: -2, userInfo: [
+                    NSLocalizedDescriptionKey: "receiveData timed out after \(timeout)s"
+                ])
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
         }
     }
 
