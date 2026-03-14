@@ -17,6 +17,9 @@ class TouchCanvasUIView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         backgroundColor = .systemBackground
+        isAccessibilityElement = true
+        accessibilityTraits = .allowsDirectInteraction
+        accessibilityLabel = "Touch Canvas"
     }
 
     required init?(coder: NSCoder) { fatalError() }
