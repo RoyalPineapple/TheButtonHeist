@@ -9,7 +9,7 @@ final class ReplSession {
     private let sessionTimeout: TimeInterval
     private var isRunning = true
     private var shouldExit = false
-    private nonisolated(unsafe) var lastCommandTime = ContinuousClock.now
+    private var lastCommandTime = ContinuousClock.now
     private var timeoutTask: Task<Void, Never>?
 
     init(

@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import os.log
+import os
 
 private let logger = Logger(subsystem: "com.buttonheist", category: "mastermind")
 
@@ -386,19 +386,27 @@ public final class TheMastermind {
         install: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
     ) async throws -> T {
         try await withCheckedThrowingContinuation { continuation in
-            nonisolated(unsafe) var didResume = false
+            let didResume = OSAllocatedUnfairLock(initialState: false)
 
             let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if !didResume {
-                    didResume = true
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
                     continuation.resume(throwing: ActionError.timeout)
                 }
             }
 
             install { result in
-                if !didResume {
-                    didResume = true
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
                     timeoutTask.cancel()
                     continuation.resume(with: result)
                 }

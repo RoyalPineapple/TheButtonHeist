@@ -69,4 +69,31 @@ final class DeviceConnectionTLSTests: XCTestCase {
         let connection = DeviceConnection(device: device, token: "my-token", driverId: "driver-1")
         XCTAssertEqual(connection.token, "my-token")
     }
+
+    // MARK: - Loopback Detection
+
+    func testIPv4LoopbackDetected() {
+        let endpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: 8080)
+        XCTAssertTrue(DeviceConnection.isLoopbackEndpoint(endpoint))
+    }
+
+    func testIPv6LoopbackDetected() {
+        let endpoint = NWEndpoint.hostPort(host: .ipv6(.loopback), port: 8080)
+        XCTAssertTrue(DeviceConnection.isLoopbackEndpoint(endpoint))
+    }
+
+    func testHostnameLocalhostNotTreatedAsLoopback() {
+        let endpoint = NWEndpoint.hostPort(host: .name("localhost", nil), port: 8080)
+        XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint), "Hostname 'localhost' must not be treated as loopback")
+    }
+
+    func testRemoteIPNotLoopback() {
+        let endpoint = NWEndpoint.hostPort(host: .ipv4(.init("192.168.1.1")!), port: 8080)
+        XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint))
+    }
+
+    func testServiceEndpointNotLoopback() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        XCTAssertFalse(DeviceConnection.isLoopbackEndpoint(endpoint))
+    }
 }
