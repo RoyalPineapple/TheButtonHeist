@@ -43,10 +43,8 @@ jobs:
           brew tap tuist/tuist
           brew install --formula tuist
 
-      - name: Install Tuist dependencies and regenerate project
-        run: |
-          tuist install
-          tuist generate
+      - name: Install Tuist dependencies
+        run: tuist install
 
       - name: Run macOS tests
         run: |
@@ -72,10 +70,8 @@ jobs:
           brew tap tuist/tuist
           brew install --formula tuist
 
-      - name: Install Tuist dependencies and regenerate project
-        run: |
-          tuist install
-          tuist generate
+      - name: Install Tuist dependencies
+        run: tuist install
 
       - name: Run iOS tests
         run: |
