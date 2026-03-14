@@ -7,12 +7,10 @@ This document describes the internal architecture of ButtonHeist and how its com
 ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
 1. **TheScore** - Cross-platform shared types (messages, models)
-2. **TheWheelman** - Cross-platform networking library (TCP server/client, Bonjour discovery)
-3. **TheInsideJob** - iOS framework embedded in the app being inspected
-4. **ButtonHeist** - macOS client framework (single import for Mac consumers), includes `TheMastermind` and `TheFence`
-5. **TheFence** - Command dispatch layer for CLI and MCP (takes orders, delivers goods)
-6. **buttonheist CLI** - Command-line tool for driving iOS apps (thin wrapper over TheFence)
-7. **ButtonHeistMCP** - MCP server for AI agent tool use (thin wrapper over TheFence)
+2. **TheInsideJob** - iOS framework embedded in the app being inspected
+3. **ButtonHeist** - macOS client framework containing `TheMastermind`, `TheFence`, and the internal `TheHandoff` connection stack
+4. **buttonheist CLI** - Command-line tool for driving iOS apps
+5. **ButtonHeistMCP** - MCP server for AI agent tool use
 
 ```mermaid
 graph TB
@@ -23,9 +21,9 @@ graph TB
         MCP --> TF["TheFence<br>(Command Dispatch)"]
         CLI --> TF
         TF --> TM["TheMastermind<br>(@Observable wrapper)"]
-        TM --> TW["TheWheelman<br>(Discovery + Connection)"]
-        TW --> DD["Device Discovery<br>(TheWheelman)"]
-        TW --> DC["Device Connection<br>(TheWheelman)"]
+        TM --> TH["TheHandoff<br>(Discovery + Connection)"]
+        TH --> DD["DeviceDiscovery / USBDeviceDiscovery"]
+        TH --> DC["DeviceConnection"]
     end
 
     DC <-->|"WiFi (Bonjour + TCP)<br>or USB (IPv6 + TCP)"| IJ
@@ -64,7 +62,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 4.0 with envelope correlation, watch mode, and session locking
+- Protocol version 5.0 with TLS transport metadata, envelope correlation, watch mode, and session locking
 
 ### TheInsideJob
 
@@ -79,7 +77,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   Extensions/Polling.swift        — polling loop, interface broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
 │
-├── ServerTransport (from TheWheelman; wraps SimpleSocketServer + Bonjour via NetService)
+├── ServerTransport (TLS listener + Bonjour advertisement)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
@@ -138,7 +136,7 @@ When the framework loads:
 - Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, and watch mode (v4.0)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v5.0)
 
 ### TheSafecracker (Touch Gesture & Text Input System)
 
@@ -238,15 +236,17 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 10. Default resolution is 1x point size (native pixels / screen scale), configurable from 0.25x to 1.0x native
 11. On completion, the video is base64-encoded and the interaction log (if non-empty) is included in the `recording(RecordingPayload)` message
 
-### TheWheelman
+### TheHandoff + Transport
 
-**Purpose**: Cross-platform (iOS+macOS) networking library. Provides TCP server, client connections, and Bonjour discovery.
+**Purpose**: Discovery and connection logic split between the macOS client stack and the iOS server transport.
 
 **Key Types**:
-- `SimpleSocketServer` - Network framework TCP/TLS server (NWListener, IPv6 dual-stack), used by TheInsideJob via ServerTransport. Supports optional TLS via `NWProtocolTLS` with self-signed certificates.
-- `TLSIdentity` - Runtime-generated self-signed ECDSA (P-256) certificate management with Keychain persistence and SHA-256 fingerprint computation. Uses `swift-certificates` for X.509 generation.
-- `DeviceConnection` - TLS/TCP client with NWConnection service resolution, data transport, and certificate fingerprint verification via `sec_protocol_verify_block`
-- `DeviceDiscovery` - NWBrowser-based Bonjour browsing for `_buttonheist._tcp`, extracts TXT records including `certfp` for TLS fingerprint pinning
+- `ServerTransport` - iOS-side TLS listener and Bonjour advertiser used by `TheInsideJob`
+- `TLSIdentity` - Runtime-generated self-signed ECDSA (P-256) certificate management and fingerprinting
+- `TheHandoff` - macOS-side coordinator for discovery, connection lifecycle, reconnection, and message routing
+- `DeviceDiscovery` - Bonjour browser for simulator/network discovery
+- `USBDeviceDiscovery` - USB tunnel discovery for physical devices
+- `DeviceConnection` - TLS/TCP client with fingerprint verification
 - `DiscoveredDevice` - Discovered device metadata (id, name, endpoint, simulatorUDID, installationId, displayDeviceName, instanceId, sessionActive, certFingerprint)
 
 ### TheFence (Command Dispatch Layer)
@@ -263,7 +263,7 @@ TheFence (@ButtonHeistActor)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → FenceResponse
-└── Command.allCases (29 supported commands)
+└── Command.allCases (31 supported commands)
 ```
 
 **Key Types**:
@@ -271,7 +271,7 @@ TheFence (@ButtonHeistActor)
 - `TheFence.Configuration` - Connection settings (device filter, timeout, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
-- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 29 supported commands
+- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 31 supported commands
 
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
@@ -281,7 +281,7 @@ TheFence (@ButtonHeistActor)
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 14 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 16 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -289,28 +289,29 @@ TheFence (@ButtonHeistActor)
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 14 tool schemas (get_interface, activate, type_text, swipe, get_screen, wait_for_idle, start_recording, stop_recording, list_devices, gesture, accessibility_action, scroll, scroll_to_visible, scroll_to_edge)
+├── ToolDefinitions.swift — 16 tool schemas, adding `run_batch` and `get_session_state`
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 14 tools dispatch through `fence.execute(request:)`
+- 16 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports TheScore and TheWheelman, provides `TheMastermind` (client API) and `TheFence` (command dispatch).
+**Purpose**: Single-import macOS framework. Re-exports `TheScore` and provides `TheMastermind`, `TheFence`, and the internal `TheHandoff` transport stack.
 
 **Usage**: `import ButtonHeist` gives access to all types (TheMastermind, TheFence, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
 TheMastermind (@Observable, @ButtonHeistActor)
-├── TheWheelman (from TheWheelman)
-│   ├── DeviceDiscovery (NWBrowser for "_buttonheist._tcp")
-│   └── DeviceConnection (NWConnection + data transport)
+├── TheHandoff
+│   ├── DeviceDiscovery (Bonjour)
+│   ├── USBDeviceDiscovery (CoreDevice tunnels)
+│   └── DeviceConnection (TLS transport + fingerprint verification)
 └── Observable Properties
     ├── discoveredDevices: [DiscoveredDevice]
     ├── connectedDevice: DiscoveredDevice?
@@ -328,9 +329,9 @@ TheMastermind (@Observable, @ButtonHeistActor)
 2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
 3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
 
-**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, TheWheelman automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connect. Note: TheFence explicitly disables `autoSubscribe` for CLI/MCP use. The `watch` command enables `autoSubscribe` for its read-only observer connection.
+**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, `TheHandoff` sends `subscribe`, `requestInterface`, and `requestScreen` after connecting. `TheFence` explicitly disables this for CLI and MCP command execution.
 
-**Observe Mode**: When `observeMode` is set on TheWheelman, the client completes the `serverHello` / `clientHello` handshake, waits for `authRequired`, then sends `watch(WatchPayload)` instead of `authenticate`. This establishes a read-only observer connection that receives all broadcasts (interface updates, screen captures, interaction events) without claiming a session lock. Observers coexist with active driver sessions.
+**Observe Mode**: When `observeMode` is enabled on `TheHandoff`, the underlying `DeviceConnection` completes the `serverHello` / `clientHello` handshake, waits for `authRequired`, then sends `watch(WatchPayload)` instead of `authenticate`. This establishes a read-only observer connection that receives broadcasts without claiming a session lock.
 
 **Connection State Machine**:
 ```mermaid
@@ -351,7 +352,7 @@ AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the M
 **Via MCP (preferred for AI agents)**:
 ```
 Agent → MCP tool call: get_interface {}
-  └── ButtonHeistMCP → TheFence → TheMastermind → TheWheelman → TheInsideJob
+  └── ButtonHeistMCP → TheFence → TheMastermind → TheHandoff → TheInsideJob
   └── Response: JSON interface with elements
 
 Agent → MCP tool call: activate {identifier: "loginButton"}
@@ -362,7 +363,7 @@ Agent → MCP tool call: activate {identifier: "loginButton"}
 **Via CLI (Bash tool calls)**:
 ```
 1. Stateless commands (one-shot, reconnects each time)
-   └── Bash: buttonheist session (or one-shot get_interface via session)
+   └── Bash: buttonheist get_interface --format json
    └── Bash: buttonheist screenshot --output /tmp/screen.png
    └── Bash: buttonheist touch one_finger_tap --identifier loginButton
 
