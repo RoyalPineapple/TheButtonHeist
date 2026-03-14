@@ -13,6 +13,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 3. **Session locking** - ensures only one "driver" controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
 5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, auto-approves by default or validates token when `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (plist) is set
+6. **Brute-force protection** - tracks failed auth attempts per remote IP address (`failedAuthAttempts`, `lockedOutAddresses`). After 5 consecutive failures from the same address, that address is locked out for 30 seconds. Lockout persists across TCP reconnections since it's keyed on IP, not client ID. Successful authentication clears the counter for that address
 
 ## Architecture Diagram
 
@@ -55,12 +56,18 @@ sequenceDiagram
     C->>M: clientHello
     M-->>C: authRequired
 
-    alt Token provided and matches
+    alt Address locked out (5+ failures in 30s)
+        C->>M: authenticate(token: any)
+        M-->>C: authFailed("Too many failed attempts")
+        M->>M: disconnect after 100ms
+    else Token provided and matches
         C->>M: authenticate(token: "abc123")
+        M->>M: clear failedAuthAttempts for address
         M->>M: acquireSession(driverId, clientId)
         M-->>C: info(ServerInfo)
     else Token provided but wrong
         C->>M: authenticate(token: "wrong")
+        M->>M: increment failedAuthAttempts for address
         M-->>C: authFailed("Invalid token")
         M->>M: disconnect after 100ms
     else Empty token (UI approval)

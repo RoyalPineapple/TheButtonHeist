@@ -35,7 +35,7 @@ public final class ServerTransport {
 
     // MARK: - Callbacks (set before start, forwarded to actor on start)
 
-    public var onClientConnected: (@Sendable (Int) -> Void)?
+    public var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
     public var onClientDisconnected: (@Sendable (Int) -> Void)?
     public var onDataReceived: SimpleSocketServer.DataHandler?
     public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?

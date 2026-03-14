@@ -31,7 +31,7 @@ final class TLSIntegrationTests: XCTestCase {
 
         let connected = expectation(description: "client connected to server")
         let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { _ in connected.fulfill() }
+            onClientConnected: { _, _ in connected.fulfill() }
         )
         let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
         XCTAssertGreaterThan(port, 0)
@@ -63,7 +63,7 @@ final class TLSIntegrationTests: XCTestCase {
         let echoReceived = expectation(description: "server received message")
 
         let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { [weak self] clientId in
+            onClientConnected: { [weak self] clientId, _ in
                 self?.server.markAuthenticated(clientId)
             },
             onDataReceived: { _, data, respond in
@@ -138,7 +138,7 @@ final class TLSIntegrationTests: XCTestCase {
         let server = transport.server
         defer { transport.stop() }
 
-        transport.onClientConnected = { clientId in
+        transport.onClientConnected = { clientId, _ in
             guard let authRequired = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else {
                 XCTFail("Failed to encode authRequired response")
                 return
