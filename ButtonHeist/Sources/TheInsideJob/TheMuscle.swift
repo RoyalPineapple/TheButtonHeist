@@ -178,7 +178,7 @@ final class TheMuscle {
                 disconnectClient?(clientId)
                 return
             }
-             // Fall through to existing auth logic below
+            // Fall through to existing auth logic below
         default:
             logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
             disconnectClient?(clientId)

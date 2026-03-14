@@ -1140,7 +1140,7 @@ A single recorded interaction event captured during a Stakeout recording.
 {"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"my-secret-token"}}
 
 # Server sends info after successful auth
-{"protocolVersion":"6.0","requestId":null,"type":"info","payload":{"protocolVersion":"6.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}}
+{"protocolVersion":"6.0","requestId":null,"type":"info","payload":{"protocolVersion":"6.0","appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
 
 # Client subscribes to updates
 {"protocolVersion":"6.0","type":"subscribe"}
