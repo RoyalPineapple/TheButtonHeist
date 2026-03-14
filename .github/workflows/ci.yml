@@ -50,9 +50,11 @@ jobs:
             ${{ runner.os }}-tuist-
 
       - name: Install Tuist dependencies
+        timeout-minutes: 5
         run: tuist install
 
       - name: Verify generated project is up to date
+        timeout-minutes: 3
         run: |
           tuist generate
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
@@ -64,6 +66,7 @@ jobs:
           }
 
       - name: Run macOS tests
+        timeout-minutes: 10
         run: |
           set -eo pipefail
           tuist test TheScoreTests --no-selective-testing
@@ -94,9 +97,11 @@ jobs:
             ${{ runner.os }}-tuist-
 
       - name: Install Tuist dependencies
+        timeout-minutes: 5
         run: tuist install
 
       - name: Boot simulator
+        timeout-minutes: 3
         run: |
           set -eo pipefail
           # Find the newest available iOS 18.x iPhone 16 Pro and boot it
@@ -125,6 +130,7 @@ jobs:
           xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
+        timeout-minutes: 10
         run: |
           set -eo pipefail
           echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
