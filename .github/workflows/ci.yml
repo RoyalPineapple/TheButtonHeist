@@ -43,6 +43,14 @@ jobs:
           brew tap tuist/tuist
           brew install --formula tuist
 
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
+        with:
+          path: Tuist/.build
+          key: ${{ runner.os }}-tuist-${{ hashFiles('Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-
+
       - name: Install Tuist dependencies
         run: tuist install
 
@@ -69,6 +77,14 @@ jobs:
         run: |
           brew tap tuist/tuist
           brew install --formula tuist
+
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
+        with:
+          path: Tuist/.build
+          key: ${{ runner.os }}-tuist-${{ hashFiles('Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-
 
       - name: Install Tuist dependencies
         run: tuist install
