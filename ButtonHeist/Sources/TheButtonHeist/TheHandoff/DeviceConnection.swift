@@ -338,7 +338,7 @@ public final class DeviceConnection: DeviceConnecting {
         return NWParameters(tls: tlsOptions)
     }
 
-    private nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
+    nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
         guard case .hostPort(let host, _) = endpoint else { return false }
 
         switch host {
@@ -346,8 +346,8 @@ public final class DeviceConnection: DeviceConnecting {
             return addr == .loopback || addr.rawValue.first == 127
         case .ipv6(let addr):
             return addr == .loopback
-        case .name(let name, _):
-            return name.lowercased() == "localhost"
+        case .name:
+            return false
         @unknown default:
             return false
         }

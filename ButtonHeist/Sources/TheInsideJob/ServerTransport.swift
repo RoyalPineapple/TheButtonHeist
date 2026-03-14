@@ -33,31 +33,12 @@ public final class ServerTransport {
     /// Current TXT record entries (preserved across updates).
     private var currentTXT: [String: Data] = [:]
 
-    // MARK: - Callbacks (set before start)
+    // MARK: - Callbacks (set before start, forwarded to actor on start)
 
-    /// Called when a new client connects.
-    public var onClientConnected: (@Sendable (Int) -> Void)? {
-        get { server.onClientConnected }
-        set { server.onClientConnected = newValue }
-    }
-
-    /// Called when a client disconnects.
-    public var onClientDisconnected: (@Sendable (Int) -> Void)? {
-        get { server.onClientDisconnected }
-        set { server.onClientDisconnected = newValue }
-    }
-
-    /// Called when an authenticated client sends data.
-    public var onDataReceived: SimpleSocketServer.DataHandler? {
-        get { server.onDataReceived }
-        set { server.onDataReceived = newValue }
-    }
-
-    /// Called when an unauthenticated client sends data (before auth succeeds).
-    public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? {
-        get { server.onUnauthenticatedData }
-        set { server.onUnauthenticatedData = newValue }
-    }
+    public var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
+    public var onClientDisconnected: (@Sendable (Int) -> Void)?
+    public var onDataReceived: SimpleSocketServer.DataHandler?
+    public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
     /// The port the server is listening on (0 if not started).
     public var listeningPort: UInt16 {
@@ -85,7 +66,13 @@ public final class ServerTransport {
     @discardableResult
     public func start(port: UInt16 = 0, bindToLoopback: Bool = false) async throws -> UInt16 {
         let params = await tlsIdentity?.makeTLSParameters()
-        return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params)
+        let callbacks = SimpleSocketServer.Callbacks(
+            onClientConnected: onClientConnected,
+            onClientDisconnected: onClientDisconnected,
+            onDataReceived: onDataReceived,
+            onUnauthenticatedData: onUnauthenticatedData
+        )
+        return try await server.startAsync(port: port, bindToLoopback: bindToLoopback, tlsParameters: params, callbacks: callbacks)
     }
 
     /// Stop the TCP server and any Bonjour advertisement.

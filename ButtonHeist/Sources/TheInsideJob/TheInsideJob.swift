@@ -16,7 +16,7 @@ public final class TheInsideJob {
 
     /// Shared instance - use `configure(token:instanceId:)` before first access.
     /// Once configured, subsequent calls to `configure()` are no-ops.
-    nonisolated(unsafe) private static var _shared: TheInsideJob?
+    private static var _shared: TheInsideJob?
 
     /// The shared TheInsideJob singleton. Lazily created on first access.
     public static var shared: TheInsideJob {
@@ -189,9 +189,12 @@ public final class TheInsideJob {
             t?.updateTXTRecord(["sessionactive": isActive ? "1" : "0"])
         }
 
-        t.onClientConnected = { [weak self] clientId in
+        t.onClientConnected = { [weak self] clientId, remoteAddress in
             Task { @MainActor in
-                insideJobLogger.info("Client \(clientId) connected, awaiting hello")
+                insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
+                if let remoteAddress {
+                    self?.muscle.registerClientAddress(clientId, address: remoteAddress)
+                }
                 self?.muscle.sendServerHello(clientId: clientId)
             }
         }

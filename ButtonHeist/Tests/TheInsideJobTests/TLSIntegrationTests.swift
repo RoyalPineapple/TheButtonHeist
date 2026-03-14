@@ -29,13 +29,12 @@ final class TLSIntegrationTests: XCTestCase {
         let tlsParams = await identity.makeTLSParameters()
         XCTAssertNotNil(tlsParams, "TLS parameters must be created")
 
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams)
-        XCTAssertGreaterThan(port, 0)
-
         let connected = expectation(description: "client connected to server")
-        server.onClientConnected = { _ in
-            connected.fulfill()
-        }
+        let callbacks = SimpleSocketServer.Callbacks(
+            onClientConnected: { _, _ in connected.fulfill() }
+        )
+        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
+        XCTAssertGreaterThan(port, 0)
 
         let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
@@ -60,18 +59,19 @@ final class TLSIntegrationTests: XCTestCase {
         let identity = try TLSIdentity.createEphemeral()
         let tlsParams = await identity.makeTLSParameters()!
 
-        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams)
-
         let echoMessage = Data("hello-tls\n".utf8)
         let echoReceived = expectation(description: "server received message")
 
-        server.onClientConnected = { clientId in
-            self.server.markAuthenticated(clientId)
-        }
-        server.onDataReceived = { _, data, respond in
-            respond(data)
-            echoReceived.fulfill()
-        }
+        let callbacks = SimpleSocketServer.Callbacks(
+            onClientConnected: { [weak self] clientId, _ in
+                self?.server.markAuthenticated(clientId)
+            },
+            onDataReceived: { _, data, respond in
+                respond(data)
+                echoReceived.fulfill()
+            }
+        )
+        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
 
         let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
@@ -138,9 +138,7 @@ final class TLSIntegrationTests: XCTestCase {
         let server = transport.server
         defer { transport.stop() }
 
-        let port = try await transport.start(port: 0, bindToLoopback: true)
-
-        transport.onClientConnected = { clientId in
+        transport.onClientConnected = { clientId, _ in
             guard let authRequired = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else {
                 XCTFail("Failed to encode authRequired response")
                 return
@@ -178,6 +176,8 @@ final class TLSIntegrationTests: XCTestCase {
             }
             respond(response)
         }
+
+        let port = try await transport.start(port: 0, bindToLoopback: true)
 
         let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(

@@ -24,7 +24,20 @@ final class TheMuscle {
     /// Grace period (100ms) before disconnecting a rejected client, giving them time to read the error.
     private static let disconnectGracePeriod: UInt64 = 100_000_000
 
+    /// Maximum consecutive failed auth attempts before temporary lockout.
+    private static let maxFailedAttempts = 5
+
+    /// Lockout duration after exceeding maxFailedAttempts.
+    private static let lockoutDuration: TimeInterval = 30
+
     // MARK: - Properties
+
+    /// Tracks failed auth attempts per remote address for brute-force protection.
+    private var failedAuthAttempts: [String: Int] = [:]
+    /// Remote addresses temporarily locked out after too many failed attempts.
+    private var lockedOutAddresses: [String: Date] = [:]
+    /// Maps client IDs to their remote address for lockout tracking across reconnections.
+    private var clientAddresses: [Int: String] = [:]
 
     private(set) var authToken: String
     private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
@@ -102,6 +115,11 @@ final class TheMuscle {
     }
 
     // MARK: - Public API
+
+    /// Register the remote address for a client (called when TCP connection is established).
+    func registerClientAddress(_ clientId: Int, address: String) {
+        clientAddresses[clientId] = address
+    }
 
     func sendServerHello(clientId: Int) {
         guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: .serverHello)) else { return }
@@ -187,6 +205,19 @@ final class TheMuscle {
 
         guard case .authenticate(let payload) = envelope.message else { return }
 
+        // Check lockout before processing auth (keyed on remote address to persist across reconnections)
+        let address = clientAddresses[clientId]
+        if let address, let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
+            sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
+            logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                self?.disconnectClient?(clientId)
+            }
+            return
+        }
+        if let address { lockedOutAddresses.removeValue(forKey: address) }
+
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
@@ -201,8 +232,15 @@ final class TheMuscle {
 
         guard payload.token == authToken else {
             // Wrong token → reject with guidance to retry without a token
+            let attemptKey = address ?? "unknown-\(clientId)"
+            let attempts = (failedAuthAttempts[attemptKey] ?? 0) + 1
+            failedAuthAttempts[attemptKey] = attempts
+            if attempts >= TheMuscle.maxFailedAttempts {
+                lockedOutAddresses[attemptKey] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
+                logger.warning("Address \(attemptKey) locked out after \(attempts) failed attempts")
+            }
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
-            logger.warning("Client \(clientId) sent invalid token, rejected")
+            logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
@@ -211,6 +249,7 @@ final class TheMuscle {
         }
 
         // Token matches → authenticate and acquire session
+        if let address { failedAuthAttempts.removeValue(forKey: address) }
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
@@ -227,6 +266,7 @@ final class TheMuscle {
     func handleClientDisconnected(_ clientId: Int) {
         pendingApprovalClients.removeValue(forKey: clientId)
         clientDriverIds.removeValue(forKey: clientId)
+        clientAddresses.removeValue(forKey: clientId)
         subscribedClients.remove(clientId)
         observerClients.remove(clientId)
         pendingObserverClients.remove(clientId)
