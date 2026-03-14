@@ -174,6 +174,138 @@ final class TheMastermindTests: XCTestCase {
         XCTAssertTrue(client.handoff.isConnected)
     }
 
+    func testConnectWithDiscoveryReprobesDeviceThatBecomesReachableWithoutRediscovery() async throws {
+        let delayedDevice = DiscoveredDevice(
+            id: "delayed-device",
+            name: "AccessibilityTestApp#booting",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 3),
+            certFingerprint: "sha256:delayed"
+        )
+
+        let client = TheMastermind()
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [delayedDevice]
+        client.handoff.makeDiscovery = { mockDiscovery }
+
+        client.handoff.makeConnection = { _, _, _ in
+            let connection = MockConnection()
+            connection.serverInfo = ServerInfo(
+                protocolVersion: "5.0",
+                appName: "AccessibilityTestApp",
+                bundleIdentifier: "com.buttonheist.testapp",
+                deviceName: "iPhone 16 Pro",
+                systemVersion: "26.1",
+                screenWidth: 402,
+                screenHeight: 874
+            )
+            return connection
+        }
+
+        var probeAttempts = 0
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { device in
+            let connection = MockConnection()
+            if device.id == delayedDevice.id {
+                if probeAttempts == 0 {
+                    connection.connectEventsOverride = [
+                        .transportReady,
+                        .disconnected(.serverClosed),
+                    ]
+                } else {
+                    connection.emitTransportReadyOnConnect = true
+                    connection.autoResponse = { message in
+                        switch message {
+                        case .status:
+                            return .status(StatusPayload(
+                                identity: StatusIdentity(
+                                    appName: "AccessibilityTestApp",
+                                    bundleIdentifier: "com.buttonheist.testapp",
+                                    appBuild: "1",
+                                    deviceName: "iPhone 16 Pro",
+                                    systemVersion: "26.1",
+                                    buttonHeistVersion: "5.0"
+                                ),
+                                session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                            ))
+                        default:
+                            XCTFail("Unexpected probe message: \(message)")
+                            return .error("unexpected")
+                        }
+                    }
+                }
+                probeAttempts += 1
+            }
+            return connection
+        }
+        defer { makeReachabilityConnection = previousFactory }
+
+        let start = Date()
+        try await client.handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+
+        XCTAssertEqual(client.handoff.connectedDevice, delayedDevice)
+        XCTAssertTrue(client.handoff.isConnected)
+        XCTAssertGreaterThanOrEqual(probeAttempts, 2)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 4.5)
+    }
+
+    func testConnectWithDiscoveryWithoutFilterThrowsWhenMultipleReachableDevicesExist() async throws {
+        let firstDevice = DiscoveredDevice(
+            id: "first-device",
+            name: "AccessibilityTestApp#first",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 4),
+            certFingerprint: "sha256:first"
+        )
+        let secondDevice = DiscoveredDevice(
+            id: "second-device",
+            name: "AccessibilityTestApp#second",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 5),
+            certFingerprint: "sha256:second"
+        )
+
+        let client = TheMastermind()
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [firstDevice, secondDevice]
+        client.handoff.makeDiscovery = { mockDiscovery }
+
+        let previousFactory = makeReachabilityConnection
+        makeReachabilityConnection = { _ in
+            let connection = MockConnection()
+            connection.emitTransportReadyOnConnect = true
+            connection.autoResponse = { message in
+                switch message {
+                case .status:
+                    return .status(StatusPayload(
+                        identity: StatusIdentity(
+                            appName: "AccessibilityTestApp",
+                            bundleIdentifier: "com.buttonheist.testapp",
+                            appBuild: "1",
+                            deviceName: "iPhone 16 Pro",
+                            systemVersion: "26.1",
+                            buttonHeistVersion: "5.0"
+                        ),
+                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                    ))
+                default:
+                    XCTFail("Unexpected probe message: \(message)")
+                    return .error("unexpected")
+                }
+            }
+            return connection
+        }
+        defer { makeReachabilityConnection = previousFactory }
+
+        do {
+            try await client.handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+            XCTFail("Expected noMatchingDevice to be thrown")
+        } catch let error as TheHandoff.ConnectionError {
+            guard case .noMatchingDevice(let filter, let available) = error else {
+                return XCTFail("Expected noMatchingDevice, got \(error)")
+            }
+            XCTAssertEqual(filter, "(none)")
+            XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
+        }
+    }
+
     // MARK: - waitForRecording
 
     func testWaitForRecordingSuccess() async throws {

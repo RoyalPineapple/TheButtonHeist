@@ -57,6 +57,26 @@ final class TheFenceHandlerTests: XCTestCase {
         let fence = TheFence()
         fence.client.handoff.makeDiscovery = { mockDisc }
         fence.client.handoff.makeConnection = { _, _, _ in mockConn }
+
+        makeReachabilityConnection = { _ in
+            let probe = MockConnection()
+            probe.emitTransportReadyOnConnect = true
+            probe.autoResponse = { message in
+                if case .status = message {
+                    return .status(StatusPayload(
+                        identity: StatusIdentity(
+                            appName: "Mock", bundleIdentifier: "com.test",
+                            appBuild: "1", deviceName: "Mock",
+                            systemVersion: "18.0", buttonHeistVersion: "0.0.1"
+                        ),
+                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                    ))
+                }
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return probe
+        }
+
         return (fence, mockConn)
     }
 

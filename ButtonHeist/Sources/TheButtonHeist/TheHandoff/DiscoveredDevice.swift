@@ -50,6 +50,17 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.init(id: "\(host):\(port)", name: "\(host):\(port)", endpoint: endpoint)
     }
 
+    /// Parse a direct loopback connection target from a filter string.
+    /// Accepts `localhost`, `127.x.x.x`, and IPv6 loopback forms with a port.
+    public static func directConnectTarget(from filter: String?) -> DiscoveredDevice? {
+        guard let filter else { return nil }
+        let trimmed = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let (host, port) = parseHostPort(from: trimmed), isLoopbackHost(host) else {
+            return nil
+        }
+        return DiscoveredDevice(host: host, port: port)
+    }
+
     public var connectionType: ConnectionScope {
         if simulatorUDID != nil { return .simulator }
         if id.hasPrefix("usb-") { return .usb }
@@ -62,6 +73,37 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
 
     public static func == (lhs: DiscoveredDevice, rhs: DiscoveredDevice) -> Bool {
         lhs.id == rhs.id
+    }
+
+    private static func parseHostPort(from value: String) -> (String, UInt16)? {
+        guard !value.isEmpty else { return nil }
+
+        if value.hasPrefix("["),
+           let closingBracket = value.firstIndex(of: "]"),
+           let separator = value.index(closingBracket, offsetBy: 1, limitedBy: value.endIndex),
+           separator < value.endIndex,
+           value[separator] == ":" {
+            let host = String(value[value.index(after: value.startIndex)..<closingBracket])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let portString = String(value[value.index(after: separator)...])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
+            return (host, port)
+        }
+
+        guard let separator = value.lastIndex(of: ":") else { return nil }
+        let host = String(value[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let portString = String(value[value.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
+        return (host, port)
+    }
+
+    private static func isLoopbackHost(_ host: String) -> Bool {
+        let normalized = host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "localhost" ||
+            normalized == "::1" ||
+            normalized == "0:0:0:0:0:0:0:1" ||
+            normalized.hasPrefix("127.")
     }
 
     private static func normalizedIdentifier(_ value: String?) -> String? {
