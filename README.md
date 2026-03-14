@@ -89,11 +89,6 @@ graph TD
     end
 ```
 
-**End-to-end:**
-```
-AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → TheHandoff → TLS → TheInsideJob
-```
-
 ## Modules
 
 | Module | Platform | Description | Details |
