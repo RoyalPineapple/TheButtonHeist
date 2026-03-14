@@ -54,6 +54,14 @@ jobs:
       - name: Install Tuist dependencies
         run: tuist install
 
+      - name: Verify generated project is up to date
+        run: |
+          tuist generate
+          git diff --exit-code || {
+            echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
+            exit 1
+          }
+
       - name: Run macOS tests
         run: |
           set -eo pipefail
