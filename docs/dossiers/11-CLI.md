@@ -26,16 +26,15 @@ graph TD
         subgraph Commands["Subcommands"]
             List["list"]
             Activate["activate"]
-            Action["action"]
+            Action["action --type increment/decrement/custom/edit/dismiss_keyboard"]
             Scroll["scroll / scroll_to_visible / scroll_to_edge"]
-            Touch["touch - one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap / draw_path / draw_bezier"]
+            Swipe["swipe (top-level)"]
+            Touch["touch - one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap"]
             TypeCmd["type"]
             Screenshot["screenshot"]
             GetInterface["get_interface"]
             WaitForIdle["wait_for_idle"]
             Record["record / stop_recording"]
-            TextEdit["copy / paste / cut / select / select_all"]
-            Dismiss["dismiss_keyboard"]
             Session["session - ReplSession"]
         end
 
@@ -49,14 +48,13 @@ graph TD
     Activate --> Direct
     Action --> Direct
     Scroll --> Direct
+    Swipe --> Direct
     Touch --> Direct
     TypeCmd --> Direct
     Screenshot --> Direct
     GetInterface --> Direct
     WaitForIdle --> Direct
     Record --> Direct
-    TextEdit --> Direct
-    Dismiss --> Direct
     Session --> REPL
 
     Direct --> TheMastermind["TheMastermind"]
@@ -83,6 +81,18 @@ flowchart LR
         S6 --> S4
     end
 ```
+
+## MCP Parity
+
+The CLI is designed to mirror the MCP tool surface. Key mappings:
+
+| MCP Tool | CLI Command | Notes |
+|----------|-------------|-------|
+| `activate` | `activate` | Direct match |
+| `swipe` | `swipe` | Top-level in both |
+| `gesture` | `touch` | Grouped gestures |
+| `accessibility_action` | `action --type` | Both group increment/decrement/custom/edit/dismiss_keyboard |
+| `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
 
 ## Session Notes
 
