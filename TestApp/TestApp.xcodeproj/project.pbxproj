@@ -581,10 +581,6 @@
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/UIKitTestApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -638,10 +634,6 @@
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/AccessibilityTestApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -691,10 +683,6 @@
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
@@ -804,10 +792,6 @@
 				ENABLE_PREVIEWS = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
-					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(inherited)",
 					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
