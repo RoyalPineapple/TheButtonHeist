@@ -3,7 +3,7 @@ import Network
 import os
 import TheScore
 
-private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thewheelman", category: "reachability")
+private let reachabilityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "reachability")
 
 /// A discovered iOS device running TheInsideJob
 public struct DiscoveredDevice: Identifiable, Hashable, Sendable {

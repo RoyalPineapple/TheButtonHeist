@@ -4,8 +4,7 @@ import Foundation
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let currentWireProtocolVersion = "6.0"
-public let protocolVersion = currentWireProtocolVersion
+public let protocolVersion = "6.0"
 
 /// Explicit wire message discriminator used at JSON boundaries.
 public enum WireMessageType: String, Codable, CaseIterable, Sendable {

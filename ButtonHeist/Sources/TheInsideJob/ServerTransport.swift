@@ -3,7 +3,7 @@ import Network
 import os.log
 import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "transport")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "transport")
 
 /// Server-side transport layer for TheInsideJob.
 ///

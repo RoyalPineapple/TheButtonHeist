@@ -6,7 +6,7 @@ import os.log
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "server")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
 public actor SimpleSocketServer {
     public typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
@@ -42,7 +42,7 @@ public actor SimpleSocketServer {
     /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
     private let allowedScopes: Set<ConnectionScope>
 
-    private let queue = DispatchQueue(label: "com.buttonheist.thewheelman.server")
+    private let queue = DispatchQueue(label: "com.buttonheist.thehandoff.server")
 
     public init(allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.allowedScopes = allowedScopes

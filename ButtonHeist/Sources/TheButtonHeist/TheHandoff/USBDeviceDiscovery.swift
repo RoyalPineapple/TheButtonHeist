@@ -3,7 +3,7 @@ import Foundation
 import Network
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "usb-discovery")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "usb-discovery")
 
 /// Discovers iOS devices connected over USB via CoreDevice IPv6 tunnels.
 ///
