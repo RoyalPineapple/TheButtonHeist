@@ -307,7 +307,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 
 ## CLI/MCP Sync Contract
 
-- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 14 purpose-built tools that each dispatch to `TheFence`.
+- `buttonheist session` is a thin interface over `TheFence`; the MCP server exposes 16 purpose-built tools that each dispatch to `TheFence`.
 - The command source of truth is `TheFence.Command` enum in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`.
 - Any command add/remove/rename must update the `Command` enum in the same change.
 - MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `Command.allCases`.
