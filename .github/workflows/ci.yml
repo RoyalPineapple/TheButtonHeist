@@ -39,9 +39,7 @@ jobs:
           git submodule update --init --recursive AccessibilitySnapshot
 
       - name: Install Tuist
-        run: |
-          brew tap tuist/tuist
-          brew install --formula tuist
+        uses: jdx/mise-action@v2
 
       - name: Cache Tuist dependencies
         uses: actions/cache@v4
@@ -82,9 +80,7 @@ jobs:
           git submodule update --init --recursive AccessibilitySnapshot
 
       - name: Install Tuist
-        run: |
-          brew tap tuist/tuist
-          brew install --formula tuist
+        uses: jdx/mise-action@v2
 
       - name: Cache Tuist dependencies
         uses: actions/cache@v4
