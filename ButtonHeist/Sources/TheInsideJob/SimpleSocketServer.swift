@@ -32,13 +32,13 @@ public actor SimpleSocketServer {
     // MARK: - Callbacks
 
     public struct Callbacks: Sendable {
-        public var onClientConnected: (@Sendable (Int) -> Void)?
+        public var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
         public var onClientDisconnected: (@Sendable (Int) -> Void)?
         public var onDataReceived: DataHandler?
         public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
         public init(
-            onClientConnected: (@Sendable (Int) -> Void)? = nil,
+            onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
             onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
             onDataReceived: DataHandler? = nil,
             onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
@@ -290,8 +290,9 @@ public actor SimpleSocketServer {
                     }
                     logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                 }
+                let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
                 logger.info("Client \(clientId) connected")
-                Task { await self.notifyClientConnected(clientId) }
+                Task { await self.notifyClientConnected(clientId, address: remoteAddress) }
             case .failed(let error):
                 logger.error("Client \(clientId) failed: \(error)")
                 Task { await self.removeClient(clientId) }
@@ -306,8 +307,8 @@ public actor SimpleSocketServer {
         startReceiving(clientId: clientId, connection: connection)
     }
 
-    private func notifyClientConnected(_ clientId: Int) {
-        callbacks.onClientConnected?(clientId)
+    private func notifyClientConnected(_ clientId: Int, address: String?) {
+        callbacks.onClientConnected?(clientId, address)
     }
 
     private func notifyClientDisconnected(_ clientId: Int) {

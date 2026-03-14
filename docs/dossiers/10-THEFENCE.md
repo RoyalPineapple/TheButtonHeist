@@ -14,6 +14,7 @@ TheFence is the brain of the outside operation:
 4. **Argument parsing** - extracts typed args from JSON dictionaries
 5. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
 6. **Session management** - persistent connection for CLI session and MCP modes
+7. **Output path validation** - rejects `..` path components in `get_screen` and `stop_recording` output paths to prevent path traversal; resolves paths via `URL.standardized` before writing
 
 ## Architecture Diagram
 

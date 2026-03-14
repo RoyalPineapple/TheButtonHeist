@@ -189,9 +189,12 @@ public final class TheInsideJob {
             t?.updateTXTRecord(["sessionactive": isActive ? "1" : "0"])
         }
 
-        t.onClientConnected = { [weak self] clientId in
+        t.onClientConnected = { [weak self] clientId, remoteAddress in
             Task { @MainActor in
-                insideJobLogger.info("Client \(clientId) connected, awaiting hello")
+                insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
+                if let remoteAddress {
+                    self?.muscle.registerClientAddress(clientId, address: remoteAddress)
+                }
                 self?.muscle.sendServerHello(clientId: clientId)
             }
         }

@@ -68,8 +68,10 @@ final class TheMuscleTests: XCTestCase {
         clientId: Int,
         token: String,
         driverId: String? = nil,
+        address: String = "127.0.0.1",
         respond: @escaping @Sendable (Data) -> Void
     ) {
+        muscle.registerClientAddress(clientId, address: address)
         performHello(clientId: clientId, respond: respond)
         muscle.handleUnauthenticatedMessage(clientId, data: encodeAuth(token: token, driverId: driverId), respond: respond)
     }
@@ -292,57 +294,63 @@ final class TheMuscleTests: XCTestCase {
     }
 
     func testLockoutAfterMaxFailedAttempts() {
-        // Send 5 failed attempts (max)
-        for _ in 1...5 {
-            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        // Send 5 failed attempts from different clientIds but same address (simulates reconnection)
+        for i in 1...5 {
+            authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
+            muscle.handleClientDisconnected(i)
         }
 
-        // 6th attempt should be locked out
+        // 6th attempt from same address with new clientId should be locked out
         let (respond, responses) = collectResponses()
-        authenticate(clientId: 1, token: "wrong-token", respond: respond)
+        authenticate(clientId: 6, token: "wrong-token", address: "192.168.1.100", respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
             if case .authFailed(let reason) = msg { return reason.contains("Too many") }
             return false
         }
-        XCTAssertTrue(hasLockout, "Should receive lockout message after exceeding max failed attempts")
+        XCTAssertTrue(hasLockout, "Should receive lockout message after exceeding max failed attempts across reconnections")
     }
 
-    func testLockoutDoesNotAffectOtherClients() {
-        // Lock out client 1
-        for _ in 1...5 {
-            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+    func testLockoutDoesNotAffectOtherAddresses() {
+        // Lock out address 192.168.1.100
+        for i in 1...5 {
+            authenticate(clientId: i, token: "wrong-token", address: "192.168.1.100", respond: respondSink())
+            muscle.handleClientDisconnected(i)
         }
 
-        // Client 2 should still be able to authenticate
+        // Client from different address should still be able to authenticate
         let (respond, _) = collectResponses()
-        authenticate(clientId: 2, token: "test-token", respond: respond)
+        authenticate(clientId: 10, token: "test-token", address: "192.168.1.200", respond: respond)
 
-        XCTAssertTrue(markedAuthenticated.contains(2), "Other clients should not be affected by lockout")
+        XCTAssertTrue(markedAuthenticated.contains(10), "Clients from other addresses should not be affected by lockout")
     }
 
     func testSuccessfulAuthClearsFailedAttempts() {
-        // Fail 3 times
-        for _ in 1...3 {
-            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        let address = "192.168.1.100"
+
+        // Fail 3 times from same address with different clientIds
+        for i in 1...3 {
+            authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            muscle.handleClientDisconnected(i)
         }
 
-        // Succeed
-        authenticate(clientId: 1, token: "test-token", respond: respondSink())
-        XCTAssertTrue(markedAuthenticated.contains(1), "Should authenticate after failed attempts below threshold")
+        // Succeed from same address
+        authenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
+        XCTAssertTrue(markedAuthenticated.contains(4), "Should authenticate after failed attempts below threshold")
 
         // Disconnect and try failing again — counter should be reset
-        muscle.handleClientDisconnected(1)
+        muscle.handleClientDisconnected(4)
 
-        // Should get 5 more attempts before lockout (counter was cleared)
-        for _ in 1...5 {
-            authenticate(clientId: 1, token: "wrong-token", respond: respondSink())
+        // Should get 5 more attempts before lockout (counter was cleared on successful auth)
+        for i in 5...9 {
+            authenticate(clientId: i, token: "wrong-token", address: address, respond: respondSink())
+            muscle.handleClientDisconnected(i)
         }
 
         // 6th attempt after reset should be locked out
         let (respond, responses) = collectResponses()
-        authenticate(clientId: 1, token: "wrong-token", respond: respond)
+        authenticate(clientId: 10, token: "wrong-token", address: address, respond: respond)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let hasLockout = serverMessages.contains { msg in
