@@ -1333,7 +1333,7 @@ buttonheist activate --index 3
 
 ### buttonheist action
 
-Perform accessibility actions on UI elements. For activating elements (buttons, links, controls), use `buttonheist activate` instead.
+Perform accessibility actions on UI elements. Mirrors the MCP `accessibility_action` tool. For activating elements (buttons, links, controls), use `buttonheist activate` instead.
 
 ```
 USAGE: buttonheist action [OPTIONS]
@@ -1341,25 +1341,50 @@ USAGE: buttonheist action [OPTIONS]
 OPTIONS:
   --identifier <id>       Element identifier
   --index <n>             Traversal index
-  --type <type>           Action type: activate, increment, decrement, one_finger_tap, custom
-                          (default: activate)
+  --type <type>           Action type: increment, decrement, custom, edit, dismiss_keyboard
   --custom-action <name>  Custom action name (required when type is 'custom')
-  --x <x>                 X coordinate (for tap type)
-  --y <y>                 Y coordinate (for tap type)
+  --edit-action <action>  Edit action: copy, paste, cut, select, select_all (required when type is 'edit')
   -t, --timeout <seconds> Timeout in seconds (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
 ```
 
+Examples:
+```bash
+buttonheist action --type increment --identifier volumeSlider
+buttonheist action --type custom --identifier myCell --custom-action "Delete"
+buttonheist action --type edit --edit-action copy
+buttonheist action --type dismiss_keyboard
+```
+
+### buttonheist swipe
+
+Swipe on an element or between coordinates. Promoted to top-level for parity with the MCP `swipe` tool. Also available as `buttonheist touch swipe`.
+
+```
+USAGE: buttonheist swipe [OPTIONS]
+
+OPTIONS:
+  --identifier <id>       Element identifier
+  --index <n>             Element index
+  --direction <dir>       Swipe direction: up, down, left, right
+  --from-x, --from-y      Start coordinates
+  --to-x, --to-y          End coordinates
+  --distance <points>     Swipe distance (for direction-based, default: 200)
+  --duration <seconds>    Swipe duration (default: 0.15)
+  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  --device <filter>       Target a specific device
+```
+
 ### buttonheist touch
 
-Simulate touch gestures on the connected iOS device.
+Low-level touch gestures. For tapping buttons and controls, prefer `buttonheist activate`.
 
 ```
 USAGE: buttonheist touch <subcommand>
 
 SUBCOMMANDS:
-  one_finger_tap          Tap at a point or element
+  one_finger_tap          Raw synthetic tap at coordinates or element center
   long_press              Long press at a point or element
   swipe                   Swipe between two points or in a direction
   drag                    Drag from one point to another
