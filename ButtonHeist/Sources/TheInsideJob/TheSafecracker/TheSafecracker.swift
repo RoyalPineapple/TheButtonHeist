@@ -74,8 +74,9 @@ final class TheSafecracker {
             forName: UIResponder.keyboardDidChangeFrameNotification,
             object: nil,
             queue: .main
-        ) { notification in
+        ) { [weak self] notification in
             MainActor.assumeIsolated {
+                guard let self else { return }
                 guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
                     return
                 }
