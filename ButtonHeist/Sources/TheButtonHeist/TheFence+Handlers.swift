@@ -19,11 +19,15 @@ extension TheFence {
             try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
+            guard !resolvedURL.path.contains("..") else {
+                return .error("Invalid output path: must not contain '..' components")
+            }
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
-            try pngData.write(to: URL(fileURLWithPath: outputPath))
-            return .screenshot(path: outputPath, width: screen.width, height: screen.height)
+            try pngData.write(to: resolvedURL)
+            return .screenshot(path: resolvedURL.path, width: screen.width, height: screen.height)
         }
         return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
     }
@@ -320,11 +324,15 @@ extension TheFence {
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
+            guard !resolvedURL.path.contains("..") else {
+                return .error("Invalid output path: must not contain '..' components")
+            }
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
-            try videoData.write(to: URL(fileURLWithPath: outputPath))
-            return .recording(path: outputPath, payload: recording)
+            try videoData.write(to: resolvedURL)
+            return .recording(path: resolvedURL.path, payload: recording)
         }
         return .recordingData(payload: recording)
     }

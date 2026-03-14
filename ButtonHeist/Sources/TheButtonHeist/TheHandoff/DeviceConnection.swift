@@ -346,8 +346,8 @@ public final class DeviceConnection: DeviceConnecting {
             return addr == .loopback || addr.rawValue.first == 127
         case .ipv6(let addr):
             return addr == .loopback
-        case .name(let name, _):
-            return name.lowercased() == "localhost"
+        case .name:
+            return false
         @unknown default:
             return false
         }
