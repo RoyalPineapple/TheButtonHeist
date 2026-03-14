@@ -93,6 +93,15 @@ jobs:
       - name: Install Tuist dependencies
         run: tuist install
 
+      - name: Boot simulator
+        run: |
+          SIM_UDID=$(xcrun simctl list devices available -j \
+            | python3 -c "import sys,json; devs=json.load(sys.stdin)['devices']; \
+              print(next(d['udid'] for k,v in devs.items() for d in v \
+              if d['name']=='iPhone 16 Pro' and '18.5' in k and d['isAvailable']))")
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+
       - name: Run iOS tests
         run: |
           set -eo pipefail
