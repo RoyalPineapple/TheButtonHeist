@@ -7,13 +7,13 @@ The Button Heist gives AI agents (and humans) full control over iOS apps. Embed 
 ## Features
 
 - **MCP server** — AI agents like Claude or Codex drive any iOS app through native tool calls
-- **Batch automation** — Run multiple Fence commands in one `run_batch` call and inspect client-side connection state with `get_session_state`
-- **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
 - **Full gesture simulation** — Tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, draw bezier
 - **Multi-touch** — Simultaneous multi-finger gesture injection via IOKit HID events
-- **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
-- **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Text input** — Type text, delete characters, read back values — via UIKeyboardImpl injection
+- **Real-time inspection** — See UI elements and screenshots update as the app changes
+- **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
+- **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
+- **Batch automation** — Run multiple Fence commands in one `run_batch` call and inspect client-side connection state with `get_session_state`
 - **TLS encryption** — All traffic encrypted with TLS 1.2+. Self-signed ECDSA certificates generated at runtime, verified via SHA-256 fingerprint pinning through Bonjour
 - **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
 - **Auto-start** — TheInsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
