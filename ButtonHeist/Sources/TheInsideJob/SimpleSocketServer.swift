@@ -61,10 +61,6 @@ public actor SimpleSocketServer {
         self.allowedScopes = allowedScopes
     }
 
-    public func configure(callbacks: Callbacks) {
-        self.callbacks = callbacks
-    }
-
     // MARK: - Public API (async, actor-isolated)
 
     /// Start the server on the specified port (async version).
@@ -314,13 +310,17 @@ public actor SimpleSocketServer {
         callbacks.onClientConnected?(clientId)
     }
 
+    private func notifyClientDisconnected(_ clientId: Int) {
+        callbacks.onClientDisconnected?(clientId)
+    }
+
     private func removeClient(_ clientId: Int) {
         let conn = connections.removeValue(forKey: clientId)
         authenticatedClients.remove(clientId)
         clientMessageTimestamps.removeValue(forKey: clientId)
 
         conn?.cancel()
-        callbacks.onClientDisconnected?(clientId)
+        notifyClientDisconnected(clientId)
     }
 
     private func isRateLimited(_ clientId: Int) -> Bool {
