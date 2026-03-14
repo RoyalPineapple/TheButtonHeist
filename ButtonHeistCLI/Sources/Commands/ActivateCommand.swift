@@ -6,10 +6,13 @@ struct ActivateCommand: AsyncParsableCommand {
         commandName: "activate",
         abstract: "Activate a UI element (primary interaction command)",
         discussion: """
-            Uses the activation-first pattern: tries accessibilityActivate() \
-            (like VoiceOver) first, then falls back to synthetic tap at the \
-            element's activation point. This is the most reliable way to \
-            interact with buttons, links, and controls.
+            This is the primary way to interact with UI elements. It uses an \
+            accessibility-first pattern: tries accessibilityActivate() (like \
+            VoiceOver) first, then falls back to a synthetic tap at the \
+            element's activation point.
+
+            For raw coordinate-based taps without accessibility semantics, \
+            use `buttonheist touch one_finger_tap` instead.
 
             Examples:
               buttonheist activate --identifier loginButton

@@ -85,7 +85,6 @@
 		C7C2040B34E358C9BDE7C21C /* swift-crypto_CryptoBoringWrapper.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		CA8DB44843A29EE5482011BE /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9554F39FBD74E02DB6F040EC /* TheFence.swift */; };
 		CB9A2AB183D9522F7E8DD4C1 /* TheFence+Handlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83137EE544169770435091EA /* TheFence+Handlers.swift */; };
-		D0C1E44F2545E6F62A38BA54 /* TheFenceSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3EA65F009A28CA1D8F7B8F7 /* TheFenceSecurityTests.swift */; };
 		D1CABD6D09423256E7BA63A3 /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558658BD430870069086F3A8 /* DiscoveredDevice.swift */; };
 		D207FAE9BC6BD64E7765BB78 /* TheBagman+Conversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 144A5EA0D6BE40725DC8F36F /* TheBagman+Conversion.swift */; };
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
@@ -298,7 +297,6 @@
 		C9506D9D84CD17AEC619D171 /* DiscoveredDeviceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDeviceTests.swift; sourceTree = "<group>"; };
 		CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Actions.swift"; sourceTree = "<group>"; };
 		D0BAD5A4EB504A85EF99890C /* TheInsideJob-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheInsideJob-Info.plist"; sourceTree = "<group>"; };
-		D3EA65F009A28CA1D8F7B8F7 /* TheFenceSecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceSecurityTests.swift; sourceTree = "<group>"; };
 		D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProtocols.swift; sourceTree = "<group>"; };
 		D94936AF5E9BDD58D63A4D4C /* TLSIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIntegrationTests.swift; sourceTree = "<group>"; };
 		D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CryptoBoringWrapper.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -386,7 +384,6 @@
 				5B12846943603FCF34BBBFCA /* Mocks.swift */,
 				1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */,
 				6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */,
-				D3EA65F009A28CA1D8F7B8F7 /* TheFenceSecurityTests.swift */,
 				7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */,
 				C52109DAE44BD0E9A96B8047 /* TheMastermindTests.swift */,
 			);
@@ -997,7 +994,6 @@
 				9C5A844A6040C6C5A5073D35 /* Mocks.swift in Sources */,
 				3EB1B7099693FEACF46E8F37 /* SessionLockTests.swift in Sources */,
 				E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */,
-				D0C1E44F2545E6F62A38BA54 /* TheFenceSecurityTests.swift in Sources */,
 				172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */,
 				6A855CBF2E2A25A0115F3021 /* TheMastermindTests.swift in Sources */,
 			);
@@ -1558,7 +1554,7 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/san-jose-v1";
+				SRCROOT = /Users/aodawa/conductor/workspaces/accra/spokane;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
@@ -1622,7 +1618,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SRCROOT = "/Users/aodawa/conductor/workspaces/accra/san-jose-v1";
+				SRCROOT = /Users/aodawa/conductor/workspaces/accra/spokane;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 5.0;
 			};
