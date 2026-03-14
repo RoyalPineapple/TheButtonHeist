@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Init required submodules
         run: |
@@ -39,16 +43,34 @@ jobs:
           git submodule update --init --recursive AccessibilitySnapshot
 
       - name: Install Tuist
-        run: |
-          brew tap tuist/tuist
-          brew install --formula tuist
+        uses: jdx/mise-action@v2
 
-      - name: Install Tuist dependencies and regenerate project
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
+        with:
+          path: Tuist/.build
+          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-deps-
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
+
+      - name: Verify generated project is up to date
+        timeout-minutes: 3
         run: |
-          tuist install
           tuist generate
+          git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
+            echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
+            echo "::group::Diff"
+            git diff -- '*.pbxproj' '*.xcworkspacedata'
+            echo "::endgroup::"
+            exit 1
+          }
 
       - name: Run macOS tests
+        timeout-minutes: 10
         run: |
           set -eo pipefail
           tuist test TheScoreTests --no-selective-testing
@@ -58,14 +80,11 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
 
-    env:
-      CI_SIMULATOR_NAME: CI iPhone 16 Pro
-      CI_SIMULATOR_DEVICE: iPhone 16 Pro
-      CI_SIMULATOR_OS: "18.5"
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Init required submodules
         run: |
@@ -73,82 +92,52 @@ jobs:
           git submodule update --init --recursive AccessibilitySnapshot
 
       - name: Install Tuist
-        run: |
-          brew tap tuist/tuist
-          brew install --formula tuist
+        uses: jdx/mise-action@v2
 
-      - name: Show Xcode and simulator environment
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
+        with:
+          path: Tuist/.build
+          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-deps-
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
+
+      - name: Boot simulator
+        timeout-minutes: 3
         run: |
           set -eo pipefail
-          xcode-select -p
-          xcodebuild -version
-          xcrun simctl list runtimes available
-          xcrun simctl list devicetypes
-
-      - name: Create CI simulator
-        id: simulator
-        run: |
-          set -eo pipefail
-
-          runtime_id="$(
-            xcrun simctl list runtimes -j | jq -r \
-              --arg version "$CI_SIMULATOR_OS" \
-              '.runtimes[]
-              | select(.platform == "iOS" and .isAvailable == true and .version == $version)
-              | .identifier' | head -n 1
-          )"
-          if [[ -z "$runtime_id" ]]; then
-            echo "Expected iOS runtime $CI_SIMULATOR_OS is not installed on the runner."
-            exit 1
-          fi
-
-          device_type_id="$(
-            xcrun simctl list devicetypes -j | jq -r \
-              --arg name "$CI_SIMULATOR_DEVICE" \
-              '.devicetypes[]
-              | select(.name == $name)
-              | .identifier' | head -n 1
-          )"
-          if [[ -z "$device_type_id" ]]; then
-            echo "Expected simulator device type '$CI_SIMULATOR_DEVICE' is not installed on the runner."
-            exit 1
-          fi
-
-          existing_udids="$(
-            xcrun simctl list devices available -j | jq -r \
-              --arg name "$CI_SIMULATOR_NAME" \
-              '.devices[]?[]
-              | select(.name == $name)
-              | .udid'
-          )"
-          if [[ -n "$existing_udids" ]]; then
-            while IFS= read -r udid; do
-              [[ -n "$udid" ]] && xcrun simctl delete "$udid"
-            done <<< "$existing_udids"
-          fi
-
-          simulator_udid="$(
-            xcrun simctl create "$CI_SIMULATOR_NAME" "$device_type_id" "$runtime_id"
-          )"
-
-          xcrun simctl boot "$simulator_udid"
-          xcrun simctl bootstatus "$simulator_udid" -b
-
-          echo "simulator_udid=$simulator_udid" >> "$GITHUB_OUTPUT"
-          echo "Created simulator $CI_SIMULATOR_NAME ($simulator_udid) on iOS $CI_SIMULATOR_OS"
-
-      - name: Install Tuist dependencies and regenerate project
-        run: |
-          tuist install
-          tuist generate
+          # Find the newest available iOS 18.x iPhone 16 Pro and boot it
+          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
+          import subprocess, json
+          runtimes = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
+              if rt["platform"] != "iOS" or not rt["isAvailable"]:
+                  continue
+              if not rt["version"].startswith("18."):
+                  continue
+              for dev in devices.get(rt["identifier"], []):
+                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
+                      print(dev["udid"], rt["version"])
+                      raise SystemExit(0)
+          raise SystemExit("No iPhone 16 Pro found on iOS 18.x")
+          PYEOF
+          )
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
+          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
+        timeout-minutes: 10
         run: |
           set -eo pipefail
-          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_DEVICE" --os "$CI_SIMULATOR_OS" --no-selective-testing
-
-      - name: Shutdown CI simulator
-        if: always() && steps.simulator.outputs.simulator_udid != ''
-        run: |
-          xcrun simctl shutdown "${{ steps.simulator.outputs.simulator_udid }}" || true
-          xcrun simctl delete "${{ steps.simulator.outputs.simulator_udid }}" || true
+          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
+          tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os "$SIM_OS" --no-selective-testing
