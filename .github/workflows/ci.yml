@@ -16,6 +16,20 @@ env:
   CI_SIMULATOR_OS: "18.5"
 
 jobs:
+  swiftlint:
+    runs-on: macos-15
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --strict
+
   build-and-test:
     runs-on: macos-15
     timeout-minutes: 30
