@@ -13,7 +13,6 @@ The Button Heist gives AI agents (and humans) full control over iOS apps. Embed 
 - **Real-time inspection** — See UI elements and screenshots update as the app changes
 - **Screen recording** — Record H.264/MP4 video of interaction sequences with auto-stop on inactivity
 - **Fingerprint tracking** — Visual touch indicators track finger positions during gestures, visible on-device and in recordings
-- **Batch automation** — Run multiple Fence commands in one `run_batch` call and inspect client-side connection state with `get_session_state`
 - **TLS encryption** — All traffic encrypted with TLS 1.2+. Self-signed ECDSA certificates generated at runtime, verified via SHA-256 fingerprint pinning through Bonjour
 - **Token auth** — Token-based authentication with auto-generated or configured secrets, plus on-device Allow/Deny approval for new connections
 - **Auto-start** — TheInsideJob starts automatically when your app launches (ObjC `+load`, DEBUG only)
