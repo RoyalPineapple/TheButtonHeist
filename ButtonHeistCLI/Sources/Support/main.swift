@@ -8,25 +8,43 @@ struct ButtonHeistApp: AsyncParsableCommand {
         commandName: "buttonheist",
         abstract: "Inspect and interact with iOS app UI elements.",
         discussion: """
-            Connects to an iOS app and provides commands for inspecting the UI element
-            hierarchy, performing actions, and automating SwiftUI/UIKit apps.
+            Quick start — the five commands you need most:
+              buttonheist list                              # Find devices
+              buttonheist get_interface                     # Inspect UI hierarchy
+              buttonheist activate --identifier "myButton"  # Tap a control
+              buttonheist type --text "hello"               # Type text
+              buttonheist screenshot                        # Capture screen
 
-            Examples:
-              buttonheist activate --identifier "myButton"  # Activate element
-              buttonheist list                              # Show available devices
-              buttonheist session                           # Interactive session
-              buttonheist touch one_finger_tap --x 100 --y 200  # Low-level tap
+            Use `buttonheist session` for an interactive REPL with all commands.
             """,
         version: buttonHeistVersion,
-        subcommands: [ActivateCommand.self, ListCommand.self, ActionCommand.self,
-                       ScrollCommand.self, ScrollToVisibleCommand.self, ScrollToEdgeCommand.self,
-                       TouchCommand.self, TypeCommand.self, ScreenshotCommand.self,
-                       GetInterfaceCommand.self, WaitForIdleCommand.self,
-                       SessionCommand.self,
-                       RecordCommand.self, StopRecordingCommand.self,
-                       CopyCommand.self, PasteCommand.self, CutCommand.self,
-                       SelectCommand.self, SelectAllCommand.self,
-                       DismissKeyboardCommand.self]
+        subcommands: [
+            // Primary — what you need 90% of the time
+            ListCommand.self,
+            GetInterfaceCommand.self,
+            ActivateCommand.self,
+            TypeCommand.self,
+            ScreenshotCommand.self,
+            ScrollCommand.self,
+            SessionCommand.self,
+
+            // Navigation
+            ScrollToVisibleCommand.self,
+            ScrollToEdgeCommand.self,
+
+            // Accessibility & text editing
+            ActionCommand.self,
+            EditCommand.self,
+            DismissKeyboardCommand.self,
+
+            // Gestures
+            TouchCommand.self,
+
+            // Recording & diagnostics
+            RecordCommand.self,
+            StopRecordingCommand.self,
+            WaitForIdleCommand.self,
+        ]
     )
 }
 

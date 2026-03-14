@@ -2,20 +2,35 @@ import ArgumentParser
 import ButtonHeist
 import TheScore
 
-// MARK: - Copy
-
-struct CopyCommand: AsyncParsableCommand {
+struct EditCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "copy",
-        abstract: "Copy selected text via the responder chain"
+        commandName: "edit",
+        abstract: "Text editing via the responder chain (copy, paste, cut, select, select_all)",
+        discussion: """
+            Sends standard edit actions through the iOS responder chain.
+
+            Examples:
+              buttonheist edit copy
+              buttonheist edit paste
+              buttonheist edit select_all
+            """,
+        subcommands: [
+            CopySubcommand.self,
+            PasteSubcommand.self,
+            CutSubcommand.self,
+            SelectSubcommand.self,
+            SelectAllSubcommand.self,
+        ]
     )
+}
 
+// MARK: - Subcommands
+
+struct CopySubcommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "copy", abstract: "Copy selected text")
     @OptionGroup var connection: ConnectionOptions
-
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds") var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -23,19 +38,11 @@ struct CopyCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Paste
-
-struct PasteCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "paste",
-        abstract: "Paste clipboard text via the responder chain"
-    )
-
+struct PasteSubcommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "paste", abstract: "Paste clipboard text")
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds") var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -43,19 +50,11 @@ struct PasteCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Cut
-
-struct CutCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "cut",
-        abstract: "Cut selected text via the responder chain"
-    )
-
+struct CutSubcommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "cut", abstract: "Cut selected text")
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds") var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -63,19 +62,11 @@ struct CutCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Select
-
-struct SelectCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "select",
-        abstract: "Select text at insertion point via the responder chain"
-    )
-
+struct SelectSubcommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "select", abstract: "Select text at insertion point")
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds") var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
@@ -83,19 +74,11 @@ struct SelectCommand: AsyncParsableCommand {
     }
 }
 
-// MARK: - Select All
-
-struct SelectAllCommand: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "select_all",
-        abstract: "Select all text via the responder chain"
-    )
-
+struct SelectAllSubcommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "select_all", abstract: "Select all text")
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
-
-    @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    @Option(name: .shortAndLong, help: "Timeout in seconds") var timeout: Double = 10.0
 
     @ButtonHeistActor
     mutating func run() async throws {
