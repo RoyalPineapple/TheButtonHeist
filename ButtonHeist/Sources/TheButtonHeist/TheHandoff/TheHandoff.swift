@@ -261,34 +261,7 @@ public final class TheHandoff {
         startDiscovery()
 
         let discoveryTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
-        let discoveryStart = DispatchTime.now().uptimeNanoseconds
-        while discoveredDevices.first(matching: filter) == nil {
-            if DispatchTime.now().uptimeNanoseconds - discoveryStart > discoveryTimeout {
-                if let filter {
-                    throw ConnectionError.noMatchingDevice(
-                        filter: filter,
-                        available: discoveredDevices.map(\.name)
-                    )
-                }
-                throw ConnectionError.noDeviceFound
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        let device: DiscoveredDevice
-        if let filter {
-            guard let match = discoveredDevices.first(matching: filter) else {
-                throw ConnectionError.noDeviceFound
-            }
-            device = match
-        } else if discoveredDevices.count == 1 {
-            device = discoveredDevices[0]
-        } else {
-            throw ConnectionError.noMatchingDevice(
-                filter: "(none)",
-                available: discoveredDevices.map(\.name)
-            )
-        }
+        let device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
 
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
@@ -350,6 +323,27 @@ public final class TheHandoff {
         }
 
         onStatus?("Connected to \(displayName(for: device))")
+    }
+
+    private func resolveReachableDevice(
+        filter: String?,
+        discoveryTimeout: UInt64
+    ) async throws -> DiscoveredDevice {
+        let resolver = DeviceResolver(
+            filter: filter,
+            discoveryTimeout: discoveryTimeout,
+            getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
+        )
+        do {
+            return try await resolver.resolve()
+        } catch let error as DeviceResolver.ResolutionError {
+            switch error {
+            case .noDeviceFound:
+                throw ConnectionError.noDeviceFound
+            case .noMatchingDevice(let filter, let available):
+                throw ConnectionError.noMatchingDevice(filter: filter, available: available)
+            }
+        }
     }
 
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.

@@ -12,12 +12,19 @@ final class MockConnection: DeviceConnecting {
     var sent: [(ClientMessage, String?)] = []
     var connectCount = 0
     var emitTransportReadyOnConnect = false
+    var connectEventsOverride: [ConnectionEvent]?
 
     var serverInfo: ServerInfo?
 
     func connect() {
         connectCount += 1
         isConnected = true
+        if let connectEventsOverride {
+            for event in connectEventsOverride {
+                onEvent?(event)
+            }
+            return
+        }
         if emitTransportReadyOnConnect {
             onEvent?(.transportReady)
         }
