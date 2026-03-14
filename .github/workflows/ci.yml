@@ -106,7 +106,7 @@ jobs:
           set -eo pipefail
           tuist test TheScoreTests
           tuist test ButtonHeistTests
-          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_NAME" --os "$CI_SIMULATOR_OS"
+          tuist test TheInsideJobTests --platform ios --device "$CI_SIMULATOR_DEVICE" --os "$CI_SIMULATOR_OS"
 
       - name: Shutdown CI simulator
         if: always() && steps.simulator.outputs.simulator_udid != ''
