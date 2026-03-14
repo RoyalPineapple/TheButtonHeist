@@ -26,16 +26,15 @@ struct ButtonHeistApp: AsyncParsableCommand {
             TypeCommand.self,
             ScreenshotCommand.self,
             ScrollCommand.self,
+            SwipeSubcommand.self,
             SessionCommand.self,
 
             // Navigation
             ScrollToVisibleCommand.self,
             ScrollToEdgeCommand.self,
 
-            // Accessibility & text editing
+            // Accessibility actions (mirrors MCP accessibility_action)
             ActionCommand.self,
-            EditCommand.self,
-            DismissKeyboardCommand.self,
 
             // Gestures
             TouchCommand.self,
