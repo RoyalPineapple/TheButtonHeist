@@ -25,6 +25,7 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
+| [TheHandoff](02-THEHANDOFF.md) | The Logistics | Device discovery, TLS connection, keepalive, auto-reconnect |
 | [TheMastermind](09-THEMASTERMIND.md) | The Outside Coordinator | Observable macOS client API (wraps TheHandoff) |
 | [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch for CLI/MCP |
 | [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
