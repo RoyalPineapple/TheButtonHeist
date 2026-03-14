@@ -338,7 +338,7 @@ public final class DeviceConnection: DeviceConnecting {
         return NWParameters(tls: tlsOptions)
     }
 
-    private nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
+    nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
         guard case .hostPort(let host, _) = endpoint else { return false }
 
         switch host {
