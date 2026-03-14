@@ -94,8 +94,10 @@ jobs:
           echo "simulator_udid=$simulator_udid" >> "$GITHUB_OUTPUT"
           echo "Created simulator $CI_SIMULATOR_NAME ($simulator_udid) on iOS $CI_SIMULATOR_OS"
 
-      - name: Install Tuist dependencies
-        run: tuist install
+      - name: Install Tuist dependencies and regenerate project
+        run: |
+          tuist install
+          tuist generate
 
       - name: Build macOS and iOS targets
         run: |
