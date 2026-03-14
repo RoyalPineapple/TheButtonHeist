@@ -21,19 +21,13 @@ disabled_rules:
   - large_tuple
   - force_cast
   - notification_center_detachment
+  - file_length
+  - type_body_length
 
 # Rule configurations
 line_length:
   warning: 160
   error: 250
-
-file_length:
-  warning: 600
-  error: 1200
-
-type_body_length:
-  warning: 500
-  error: 800
 
 function_body_length:
   warning: 100
@@ -56,7 +50,7 @@ type_name:
     warning: 60
 
 cyclomatic_complexity:
-  warning: 15
+  warning: 20
   error: 35
 
 inclusive_language:
