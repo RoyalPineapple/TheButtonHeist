@@ -79,17 +79,19 @@ Whether the server is currently running. This property is private; external code
 
 #### Methods
 
-##### configure(token:instanceId:)
+##### configure(token:instanceId:allowedScopes:port:)
 
 ```swift
-public static func configure(token: String? = nil, instanceId: String? = nil)
+public static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0)
 ```
 
-Configure the shared instance with an auth token and instance identifier. Must be called before `start()` if not using Info.plist/environment variables.
+Configure the shared instance with an auth token, instance identifier, allowed scopes, and preferred port. Must be called before `start()` if not using Info.plist/environment variables.
 
 **Parameters**:
 - `token`: Auth token for client authentication. If nil, auto-generated at startup.
 - `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
+- `allowedScopes`: Set of connection scopes the server will accept. If nil, all scopes are allowed.
+- `port`: Preferred TCP port for the server. If 0 (the default), the port is read from the `InsideJobPort` Info.plist key or the `INSIDEJOB_PORT` environment variable. Falls back to an OS-assigned port if none is specified.
 
 **Note**: Normally not needed - use Info.plist or environment variable configuration instead.
 
