@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+    echo "warning: SwiftLint not installed, skipping pre-commit lint"
+    exit 0
+fi
+
+# Lint only staged Swift files
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.swift')
+if [[ -z "$staged" ]]; then
+    exit 0
+fi
+
+swiftlint lint --strict --quiet -- $staged

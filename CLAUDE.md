@@ -268,7 +268,9 @@ Writing tests before implementation keeps the design honest. If a test is hard t
 
 ## Strict Build Policy
 
-All targets build with **warnings as errors** (`SWIFT_TREAT_WARNINGS_AS_ERRORS = YES`) and **strict concurrency** (`SWIFT_STRICT_CONCURRENCY = complete`). SwiftLint runs on every build via a build phase. All three must pass cleanly — no `// swiftlint:disable`, no `@preconcurrency import`, no `nonisolated(unsafe)` escape hatches, no `#warning` left behind.
+All targets build with **warnings as errors** (`SWIFT_TREAT_WARNINGS_AS_ERRORS = YES`) and **strict concurrency** (`SWIFT_STRICT_CONCURRENCY = complete`). SwiftLint runs as a pre-commit hook (via `scripts/pre-commit`) and in CI as a dedicated job. All three must pass cleanly — no `// swiftlint:disable`, no `@preconcurrency import`, no `nonisolated(unsafe)` escape hatches, no `#warning` left behind.
+
+The pre-commit hook is configured automatically when you run `mise install` (via the `postinstall` hook in `mise.toml`).
 
 The goal is to use the features of the language — structured concurrency, Sendable checking, actor isolation — rather than silencing the compiler. If a warning surfaces, fix the design, don't suppress the diagnostic. If SwiftLint flags a pattern, refactor to satisfy the rule rather than disabling it inline.
 
