@@ -45,6 +45,16 @@
 - Opening braces on the same line
 - No trailing whitespace
 
+## Code Signing
+
+Device builds require your Apple Development Team ID. Set the environment variable before building:
+
+```bash
+export BUTTONHEIST_TEAM_ID="YOUR_TEAM_ID"
+```
+
+You can add this to your `~/.zshrc` or `~/.bashrc` so it persists across sessions. Simulator builds do not require this variable.
+
 ## Making Changes
 
 ### Branch Naming

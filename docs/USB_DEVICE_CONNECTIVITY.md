@@ -76,13 +76,14 @@ Target a USB device in `.mcp.json`:
 
 ### Command Line Build
 
+Device builds require the `BUTTONHEIST_TEAM_ID` environment variable. See the **Code Signing** section in [CONTRIBUTING.md](../CONTRIBUTING.md) for setup.
+
 ```bash
 xcodebuild -workspace ButtonHeist.xcworkspace \
   -scheme AccessibilityTestApp \
   -destination 'platform=iOS,name=Your Device Name' \
   -allowProvisioningUpdates \
   CODE_SIGN_STYLE=Automatic \
-  DEVELOPMENT_TEAM=YOUR_TEAM_ID \
   build
 ```
 
