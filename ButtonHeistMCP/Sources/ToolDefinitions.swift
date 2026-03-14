@@ -223,7 +223,7 @@ enum ToolDefinitions {
             pinch: scale required (>1 zoom in, <1 zoom out). \
             rotate: angle required (radians). \
             draw_path: points array of {x, y} objects. \
-            draw_bezier: curves array of bezier curve objects.
+            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}.
             """,
         inputSchema: [
             "type": "object",
@@ -240,13 +240,15 @@ enum ToolDefinitions {
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "x": ["type": "number", "description": "X coordinate"],
                 "y": ["type": "number", "description": "Y coordinate"],
+                "startX": ["type": "number", "description": "Start X coordinate (draw_bezier)"],
+                "startY": ["type": "number", "description": "Start Y coordinate (draw_bezier)"],
                 "endX": ["type": "number", "description": "End X coordinate (drag)"],
                 "endY": ["type": "number", "description": "End Y coordinate (drag)"],
-                "duration": ["type": "number", "description": "Duration in seconds (long_press)"],
+                "duration": ["type": "number", "description": "Duration in seconds (long_press, draw_path, draw_bezier)"],
                 "scale": ["type": "number", "description": "Pinch scale factor (>1 zoom in, <1 zoom out)"],
                 "angle": ["type": "number", "description": "Rotation angle in radians"],
                 "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
-                "curves": ["type": "array", "description": "Array of bezier curve objects (draw_bezier)"],
+                "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
             ],
             "required": .array([.string("type")]),
             "additionalProperties": false,
