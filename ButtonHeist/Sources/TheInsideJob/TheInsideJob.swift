@@ -16,7 +16,7 @@ public final class TheInsideJob {
 
     /// Shared instance - use `configure(token:instanceId:)` before first access.
     /// Once configured, subsequent calls to `configure()` are no-ops.
-    nonisolated(unsafe) private static var _shared: TheInsideJob?
+    private static var _shared: TheInsideJob?
 
     /// The shared TheInsideJob singleton. Lazily created on first access.
     public static var shared: TheInsideJob {

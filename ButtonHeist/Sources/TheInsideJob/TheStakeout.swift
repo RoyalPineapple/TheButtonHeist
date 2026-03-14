@@ -317,12 +317,14 @@ final class TheStakeout {
         let url = outputURL
         let interactions = self.interactionLog
 
-        nonisolated(unsafe) let writerRef = writer
         writer.finishWriting { [weak self] in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard let self else { return }
                 defer { self.cleanup() }
-                let writer = writerRef
+                guard let writer = self.assetWriter else {
+                    self.deliverError(.finalizationFailed("Writer deallocated"))
+                    return
+                }
                 if writer.status == .failed {
                     self.deliverError(.finalizationFailed(writer.error?.localizedDescription ?? "Unknown"))
                     return

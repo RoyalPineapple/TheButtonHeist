@@ -1,7 +1,7 @@
 import Foundation
 import Network
 import TheScore
-import os.log
+import os
 
 /// TCP server using Network framework.
 /// Manages connections, newline-delimited message framing, and broadcasting.
@@ -23,21 +23,34 @@ public actor SimpleSocketServer {
     private var authenticatedClients: Set<Int> = []
     private var clientMessageTimestamps: [Int: [Date]] = [:]
 
-    // nonisolated(unsafe) allows sync read from any context.
-    // Written exactly once during start(), before any concurrent access.
-    nonisolated(unsafe) private var _syncListeningPort: UInt16 = 0
+    private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
     public nonisolated var listeningPort: UInt16 {
-        _syncListeningPort
+        _syncListeningPort.withLock { $0 }
     }
 
-    // Callbacks — set before start(), not mutated after.
-    // nonisolated(unsafe) so callers can set them synchronously.
-    nonisolated(unsafe) public var onClientConnected: (@Sendable (Int) -> Void)?
-    nonisolated(unsafe) public var onClientDisconnected: (@Sendable (Int) -> Void)?
-    nonisolated(unsafe) public var onDataReceived: DataHandler?
-    /// Called for messages from unauthenticated clients (before auth succeeds)
-    nonisolated(unsafe) public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+    // MARK: - Callbacks
+
+    public struct Callbacks: Sendable {
+        public var onClientConnected: (@Sendable (Int) -> Void)?
+        public var onClientDisconnected: (@Sendable (Int) -> Void)?
+        public var onDataReceived: DataHandler?
+        public var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
+
+        public init(
+            onClientConnected: (@Sendable (Int) -> Void)? = nil,
+            onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
+            onDataReceived: DataHandler? = nil,
+            onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
+        ) {
+            self.onClientConnected = onClientConnected
+            self.onClientDisconnected = onClientDisconnected
+            self.onDataReceived = onDataReceived
+            self.onUnauthenticatedData = onUnauthenticatedData
+        }
+    }
+
+    private var callbacks = Callbacks()
 
     /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
     private let allowedScopes: Set<ConnectionScope>
@@ -48,6 +61,10 @@ public actor SimpleSocketServer {
         self.allowedScopes = allowedScopes
     }
 
+    public func configure(callbacks: Callbacks) {
+        self.callbacks = callbacks
+    }
+
     // MARK: - Public API (async, actor-isolated)
 
     /// Start the server on the specified port (async version).
@@ -55,8 +72,15 @@ public actor SimpleSocketServer {
     /// - Parameters:
     ///   - port: Port to listen on (0 = any available)
     ///   - bindToLoopback: If true, bind to loopback only (simulator builds)
+    ///   - callbacks: Optional callbacks to install before starting
     /// - Returns: Actual port number bound
-    public func startAsync(port: UInt16 = 0, bindToLoopback: Bool = false, tlsParameters: NWParameters? = nil) async throws -> UInt16 {
+    public func startAsync(
+        port: UInt16 = 0,
+        bindToLoopback: Bool = false,
+        tlsParameters: NWParameters? = nil,
+        callbacks: Callbacks? = nil
+    ) async throws -> UInt16 {
+        if let callbacks { self.callbacks = callbacks }
         let parameters: NWParameters = tlsParameters ?? NWParameters.tcp
         if tlsParameters != nil {
             logger.info("TLS configured for server")
@@ -70,12 +94,16 @@ public actor SimpleSocketServer {
         let newListener = try NWListener(using: parameters)
 
         let actualPort: UInt16 = try await withCheckedThrowingContinuation { continuation in
-            nonisolated(unsafe) var resumed = false
+            let resumed = OSAllocatedUnfairLock(initialState: false)
             newListener.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    guard !resumed else { return }
-                    resumed = true
+                    let shouldResume = resumed.withLock { flag -> Bool in
+                        guard !flag else { return false }
+                        flag = true
+                        return true
+                    }
+                    guard shouldResume else { return }
                     if let port = newListener.port?.rawValue {
                         logger.info("Listening on port \(port)")
                         continuation.resume(returning: port)
@@ -83,8 +111,12 @@ public actor SimpleSocketServer {
                         continuation.resume(throwing: ServerError.failedToBindPort)
                     }
                 case .failed(let error):
-                    guard !resumed else { return }
-                    resumed = true
+                    let shouldResume = resumed.withLock { flag -> Bool in
+                        guard !flag else { return false }
+                        flag = true
+                        return true
+                    }
+                    guard shouldResume else { return }
                     logger.error("Listener failed: \(error)")
                     continuation.resume(throwing: error)
                 default:
@@ -102,7 +134,7 @@ public actor SimpleSocketServer {
 
         self.listener = newListener
         self._listeningPort = actualPort
-        self._syncListeningPort = actualPort
+        self._syncListeningPort.withLock { $0 = actualPort }
 
         return actualPort
     }
@@ -173,7 +205,7 @@ public actor SimpleSocketServer {
     /// - Returns: Actual port number bound
     nonisolated public func start(port: UInt16 = 0, bindToLoopback: Bool = false, tlsParameters: NWParameters? = nil) throws -> UInt16 {
         let semaphore = DispatchSemaphore(value: 0)
-        nonisolated(unsafe) var result: Result<UInt16, Error>?
+        let resultBox = OSAllocatedUnfairLock<Result<UInt16, Error>?>(initialState: nil)
         let server = self
         let portValue = port
         let loopback = bindToLoopback
@@ -181,14 +213,14 @@ public actor SimpleSocketServer {
         Task.detached { @Sendable in
             do {
                 let port = try await server.startAsync(port: portValue, bindToLoopback: loopback, tlsParameters: params)
-                result = .success(port)
+                resultBox.withLock { $0 = .success(port) }
             } catch {
-                result = .failure(error)
+                resultBox.withLock { $0 = .failure(error) }
             }
             semaphore.signal()
         }
         semaphore.wait()
-        switch result! {
+        switch resultBox.withLock({ $0 })! {
         case .success(let port): return port
         case .failure(let error): throw error
         }
@@ -263,7 +295,7 @@ public actor SimpleSocketServer {
                     logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
                 }
                 logger.info("Client \(clientId) connected")
-                self.onClientConnected?(clientId)
+                Task { await self.notifyClientConnected(clientId) }
             case .failed(let error):
                 logger.error("Client \(clientId) failed: \(error)")
                 Task { await self.removeClient(clientId) }
@@ -278,13 +310,17 @@ public actor SimpleSocketServer {
         startReceiving(clientId: clientId, connection: connection)
     }
 
+    private func notifyClientConnected(_ clientId: Int) {
+        callbacks.onClientConnected?(clientId)
+    }
+
     private func removeClient(_ clientId: Int) {
         let conn = connections.removeValue(forKey: clientId)
         authenticatedClients.remove(clientId)
         clientMessageTimestamps.removeValue(forKey: clientId)
 
         conn?.cancel()
-        onClientDisconnected?(clientId)
+        callbacks.onClientDisconnected?(clientId)
     }
 
     private func isRateLimited(_ clientId: Int) -> Bool {
@@ -353,7 +389,7 @@ public actor SimpleSocketServer {
                     if isRateLimited(clientId) {
                         logger.warning("Client \(clientId) rate limited, dropping message")
                     } else {
-                        onDataReceived?(clientId, messageData) { [weak self] response in
+                        callbacks.onDataReceived?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
                             Task { await self._send(response, to: clientId) }
                         }
@@ -362,7 +398,7 @@ public actor SimpleSocketServer {
                     if isRateLimited(clientId) {
                         logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
                     } else {
-                        onUnauthenticatedData?(clientId, messageData) { [weak self] response in
+                        callbacks.onUnauthenticatedData?(clientId, messageData) { [weak self] response in
                             guard let self else { return }
                             Task { await self._send(response, to: clientId) }
                         }
