@@ -67,7 +67,7 @@ final class AuthMessageTests: XCTestCase {
 
     func testAuthApprovedFromRawJSON() throws {
         let json = """
-        {"authApproved":{"_0":{"token":"abc-123"}}}
+        {"type":"authApproved","payload":{"token":"abc-123"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -212,7 +212,7 @@ final class AuthMessageTests: XCTestCase {
 
     func testAuthRequiredFromRawJSON() throws {
         let json = """
-        {"authRequired":{}}
+        {"type":"authRequired"}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -223,7 +223,7 @@ final class AuthMessageTests: XCTestCase {
 
     func testAuthFailedFromRawJSON() throws {
         let json = """
-        {"authFailed":{"_0":"Bad token"}}
+        {"type":"authFailed","payload":"Bad token"}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -236,7 +236,7 @@ final class AuthMessageTests: XCTestCase {
 
     func testAuthenticateFromRawJSON() throws {
         let json = """
-        {"authenticate":{"_0":{"token":"abc123"}}}
+        {"type":"authenticate","payload":{"token":"abc123"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
@@ -265,7 +265,7 @@ final class AuthMessageTests: XCTestCase {
 
     func testSessionLockedFromRawJSON() throws {
         let json = """
-        {"sessionLocked":{"_0":{"message":"Locked by driver","activeConnections":1}}}
+        {"type":"sessionLocked","payload":{"message":"Locked by driver","activeConnections":1}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
@@ -293,10 +293,9 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
-    func testAuthenticateWithoutDriverIdBackwardCompat() throws {
-        // Old-style JSON without driverId should still decode
+    func testAuthenticateWithoutDriverIdFromExplicitJSON() throws {
         let json = """
-        {"authenticate":{"_0":{"token":"old-client"}}}
+        {"type":"authenticate","payload":{"token":"old-client"}}
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
