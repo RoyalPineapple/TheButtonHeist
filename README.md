@@ -50,7 +50,7 @@ Engage the team for your next job via MCP or CLI.
 
 | Character | What they do |
 |-----------|--------------|
-| **ButtonHeistCLI** | Your orders. `list`, `activate`, `touch`, `type`, `screenshot`, `session`, `watch`, and more. |
+| **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more. |
 | **ButtonHeistMCP** | Agent interface. 16 tools that call through TheFence so AI agents can run the job natively, including `run_batch` and `get_session_state`. |
 
 ## Architecture
@@ -103,13 +103,13 @@ AI Agent → MCP (stdio) → buttonheist-mcp → TheFence → TheMastermind → 
 | **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
 | **ButtonHeistMCP** | macOS | MCP server — 16 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool: list, activate, action, touch, type, screenshot, record, stop_recording, session, watch, scroll, scroll_to_visible, scroll_to_edge, get_interface, wait_for_idle, copy, paste, cut, select, select_all, dismiss_keyboard | [ButtonHeistCLI/](ButtonHeistCLI/) |
+| **buttonheist** | macOS | CLI tool for device discovery, sessions, actions, gestures, screenshots, recording, scrolling, and text/edit commands | [ButtonHeistCLI/](ButtonHeistCLI/) |
 
 ## Quick Start
 
 ### 1. Add TheInsideJob to Your iOS App
 
-Import TheInsideJob. It auto-starts via ObjC `+load` — no code changes needed beyond the import.
+Get `TheInsideJob` inside the building by linking or embedding it in your iOS target, then import it somewhere on your app's startup path. Once the framework is loaded, ObjC `+load` starts the operation for you - no extra bootstrap code, no ceremony.
 
 ```swift
 import SwiftUI
@@ -185,17 +185,21 @@ For device targeting, command reference, and internals: **[ButtonHeistMCP/](Butt
 
 ### 3. Connect with the CLI
 
+If you want to work the job yourself instead of handing it to an agent, the CLI is the straight shot.
+
 ```bash
-buttonheist list                                    # Discover devices
-buttonheist session                                 # Persistent session (get_interface, activate, etc.)
-printf '{"command":"get_session_state"}\n' | buttonheist session --format json
-buttonheist activate --identifier loginButton       # Activate a button
-buttonheist touch tap --x 100 --y 200               # Tap coordinates
-buttonheist touch swipe --identifier list --direction up  # Swipe a list
-buttonheist type --text "Hello" --identifier nameField    # Type text
-buttonheist screenshot --output screen.png          # Capture screenshot
-buttonheist record --output demo.mp4                # Record screen (auto-stops on inactivity)
-buttonheist watch                                   # Stream live session as read-only observer
+cd ButtonHeistCLI && swift build -c release && cd ..
+BH=./ButtonHeistCLI/.build/release/buttonheist
+
+$BH list                                                  # Discover devices
+$BH session                                               # Persistent session (get_interface, activate, etc.)
+printf '{"command":"get_session_state"}\n' | $BH session --format json
+$BH activate --identifier loginButton                     # Activate a button
+$BH touch one_finger_tap --x 100 --y 200                 # Tap coordinates
+$BH touch swipe --identifier list --direction up         # Swipe a list
+$BH type --text "Hello" --identifier nameField           # Type text
+$BH screenshot --output screen.png                       # Capture screenshot
+$BH record --output demo.mp4                             # Record screen (auto-stops on inactivity)
 ```
 
 Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)** 
@@ -205,7 +209,7 @@ Full CLI reference: **[ButtonHeistCLI/](ButtonHeistCLI/)**
 USB devices are discovered automatically alongside WiFi. `buttonheist list` verifies each candidate with a lightweight status probe before printing it, so stale Bonjour entries are filtered out:
 
 ```bash
-buttonheist list
+$BH list
 # [0] a1b2c3d4  AccessibilityTestApp  (WiFi)
 # [1] usb-iPhone  iPhone (USB)
 ```
@@ -216,12 +220,18 @@ See [docs/USB_DEVICE_CONNECTIVITY.md](docs/USB_DEVICE_CONNECTIVITY.md) for detai
 
 ### Prerequisites
 
-- Xcode 15+
+- Xcode with Swift 6 package support
 - iOS 17+ / macOS 14+
+- `git submodule update --init --recursive`
+- [Tuist](https://tuist.io)
 
 ### Building
 
+When you're setting up the hideout from a fresh clone, generate the workspace through Tuist and then open it in Xcode:
+
 ```bash
+git submodule update --init --recursive
+tuist generate
 open ButtonHeist.xcworkspace
 ```
 
