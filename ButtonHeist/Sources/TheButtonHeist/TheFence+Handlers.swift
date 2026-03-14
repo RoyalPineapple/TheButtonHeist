@@ -19,10 +19,10 @@ extension TheFence {
             try await client.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
-            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
-            guard !resolvedURL.path.contains("..") else {
+            guard !outputPath.split(separator: "/").contains("..") else {
                 return .error("Invalid output path: must not contain '..' components")
             }
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
@@ -324,10 +324,10 @@ extension TheFence {
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
-            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
-            guard !resolvedURL.path.contains("..") else {
+            guard !outputPath.split(separator: "/").contains("..") else {
                 return .error("Invalid output path: must not contain '..' components")
             }
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
