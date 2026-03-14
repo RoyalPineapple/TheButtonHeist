@@ -25,7 +25,9 @@ __pycache__
 
 # Internal working directories
 thoughts/
-.rp1/work/
+.rp1/
+.context/
+.fuzzer-data/
 session/
 reports/
 research/

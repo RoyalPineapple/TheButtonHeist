@@ -316,8 +316,8 @@ public final class TheHandoff {
         onSessionLocked = savedOnSessionLocked
 
         if let connectionError {
-            if let wheelmanError = connectionError as? ConnectionError {
-                throw wheelmanError
+            if let handoffError = connectionError as? ConnectionError {
+                throw handoffError
             }
             throw ConnectionError.connectionFailed("\(type(of: connectionError)): \(connectionError.localizedDescription)")
         }

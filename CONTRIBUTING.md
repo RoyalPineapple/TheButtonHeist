@@ -75,9 +75,9 @@ tuist generate
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme ButtonHeist build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 
 cd ButtonHeistCLI && swift build -c release
 cd ../ButtonHeistMCP && swift build -c release

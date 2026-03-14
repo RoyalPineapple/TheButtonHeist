@@ -2,7 +2,7 @@ import Foundation
 import Network
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "discovery")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "discovery")
 
 enum DiscoveryMutation: Equatable {
     case found(DiscoveredDevice)
@@ -89,7 +89,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
     private var browser: NWBrowser?
     private var registry = DiscoveryRegistry()
     private var reachabilityTask: Task<Void, Never>?
-    private let browserQueue = DispatchQueue(label: "com.buttonheist.thewheelman.discovery.browser")
+    private let browserQueue = DispatchQueue(label: "com.buttonheist.thehandoff.discovery.browser")
     private let reachabilityValidationInterval: TimeInterval
 
     public var discoveredDevices: [DiscoveredDevice] {

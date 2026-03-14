@@ -12,7 +12,7 @@ public struct RequestEnvelope: Codable, Sendable {
     public let message: ClientMessage
 
     public init(requestId: String? = nil, message: ClientMessage) {
-        self.init(wireProtocolVersion: currentWireProtocolVersion, requestId: requestId, message: message)
+        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId, message: message)
     }
 
     public init(wireProtocolVersion: String, requestId: String? = nil, message: ClientMessage) {

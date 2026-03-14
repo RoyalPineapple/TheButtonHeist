@@ -4,7 +4,7 @@ import Crypto
 import Security
 import os.log
 
-private let logger = Logger(subsystem: "com.buttonheist.thewheelman", category: "connection")
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")
 
 /// Structured reason for why a connection was closed.
 public enum DisconnectReason: Error, LocalizedError {

@@ -139,8 +139,6 @@ let project = Project(
             settings: .settings(base: [
                 "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/AccessibilityTestApp.app/AccessibilityTestApp",
                 "BUNDLE_LOADER": "$(TEST_HOST)",
-                "CODE_SIGN_STYLE": "Automatic",
-                "DEVELOPMENT_TEAM": "Y4XC6NM5DD",
             ])
         ),
     ],
