@@ -55,8 +55,11 @@ jobs:
       - name: Verify generated project is up to date
         run: |
           tuist generate
-          git diff --exit-code || {
+          git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
             echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
+            echo "::group::Diff"
+            git diff -- '*.pbxproj' '*.xcworkspacedata'
+            echo "::endgroup::"
             exit 1
           }
 
@@ -95,14 +98,34 @@ jobs:
 
       - name: Boot simulator
         run: |
-          SIM_UDID=$(xcrun simctl list devices available -j \
-            | python3 -c "import sys,json; devs=json.load(sys.stdin)['devices']; \
-              print(next(d['udid'] for k,v in devs.items() for d in v \
-              if d['name']=='iPhone 16 Pro' and '18.5' in k and d['isAvailable']))")
+          set -eo pipefail
+          # Find the newest available iOS 18.x iPhone 16 Pro and boot it
+          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
+          import subprocess, json
+          runtimes = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
+              if rt["platform"] != "iOS" or not rt["isAvailable"]:
+                  continue
+              if not rt["version"].startswith("18."):
+                  continue
+              for dev in devices.get(rt["identifier"], []):
+                  if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
+                      print(dev["udid"], rt["version"])
+                      raise SystemExit(0)
+          raise SystemExit("No iPhone 16 Pro found on iOS 18.x")
+          PYEOF
+          )
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
+          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
           xcrun simctl boot "$SIM_UDID" || true
           xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
         run: |
           set -eo pipefail
-          tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os 18.5 --no-selective-testing
+          echo "Running tests on iPhone 16 Pro (iOS $SIM_OS)"
+          tuist test TheInsideJobTests --platform ios --device "iPhone 16 Pro" --os "$SIM_OS" --no-selective-testing
