@@ -1,19 +1,6 @@
 import ProjectDescription
 import ProjectDescriptionHelpers
 
-let swiftlintScript: TargetScript = .post(
-    script: """
-    if command -v swiftlint >/dev/null 2>&1; then
-        swiftlint --fix --quiet
-        swiftlint lint --quiet
-    else
-        echo "warning: SwiftLint not installed"
-    fi
-    """,
-    name: "SwiftLint",
-    basedOnDependencyAnalysis: false
-)
-
 func frameworkScheme(name: String) -> Scheme {
     .scheme(
         name: name,
@@ -44,7 +31,7 @@ let project = Project(
             deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheScore/**"],
-            scripts: [swiftlintScript],
+
             settings: .settings(base: [
                 "SWIFT_VERSION": "5.0",
                 "LastSwiftMigration": "2620",
@@ -67,7 +54,7 @@ let project = Project(
             headers: .headers(
                 public: ["ButtonHeist/Sources/ThePlant/include/**"]
             ),
-            scripts: [swiftlintScript],
+
             dependencies: [
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotParser"),
@@ -85,7 +72,7 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             infoPlist: .default,
             sources: ["ButtonHeist/Sources/TheButtonHeist/**"],
-            scripts: [swiftlintScript],
+
             dependencies: [
                 .target(name: "TheScore"),
                 .external(name: "Crypto"),
