@@ -39,7 +39,14 @@ struct ButtonsActionsDemo: View {
                     .disabled(true)
                     .accessibilityIdentifier("buttonheist.actions.disabledButton")
 
-                Menu("Options Menu") {
+                // Menu temporarily replaced with a Button that shows a confirmation dialog
+                // to work around AccessibilitySnapshotParser hanging on SwiftUI Menu internals
+                Button("Options Menu") {
+                    lastAction = "Menu tapped"
+                    NSLog("[ControlsDemo] Options menu tapped")
+                }
+                .accessibilityIdentifier("buttonheist.actions.optionsMenu")
+                .contextMenu {
                     Button("Option A") {
                         lastAction = "Menu: Option A"
                         NSLog("[ControlsDemo] Menu option A selected")
@@ -53,7 +60,6 @@ struct ButtonsActionsDemo: View {
                         NSLog("[ControlsDemo] Menu delete selected")
                     }
                 }
-                .accessibilityIdentifier("buttonheist.actions.optionsMenu")
 
                 Text("Swipe actions item")
                     .accessibilityIdentifier("buttonheist.actions.customActionsItem")

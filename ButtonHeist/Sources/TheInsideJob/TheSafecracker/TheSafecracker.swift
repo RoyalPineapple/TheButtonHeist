@@ -60,6 +60,41 @@ final class TheSafecracker {
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
     nonisolated static let maxInterKeyDelay: UInt64 = 500_000_000
 
+    // MARK: - Keyboard Visibility (Notification-Based)
+
+    /// Tracks keyboard visibility via `UIKeyboardDidChangeFrameNotification`,
+    /// matching KIF's approach. The view-hierarchy walk (`UIInputSetHostView`)
+    /// broke on iOS 26 because the keyboard window no longer appears in
+    /// `UIWindowScene.windows`.
+    private var keyboardVisible = false
+    private var keyboardObserver: NSObjectProtocol?
+
+    func startKeyboardTracking() {
+        keyboardObserver = NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardDidChangeFrameNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+                    return
+                }
+                let screenBounds = UIScreen.main.bounds
+                self.keyboardVisible = endFrame.intersects(screenBounds)
+                    && endFrame.height > 0
+                    && endFrame.origin.y < screenBounds.height
+            }
+        }
+    }
+
+    func stopKeyboardTracking() {
+        if let observer = keyboardObserver {
+            NotificationCenter.default.removeObserver(observer)
+            keyboardObserver = nil
+        }
+    }
+
     // MARK: - Internal Touch State
 
     private var activeTouches: [UITouch] = []
@@ -215,8 +250,17 @@ final class TheSafecracker {
     // MARK: - Public: Text Input (via UIKeyboardImpl)
 
     /// Check if the software keyboard is currently visible.
+    /// Uses notification-based tracking (KIF's approach) with a fallback
+    /// to checking UIKeyboardImpl for an active input delegate.
     func isKeyboardVisible() -> Bool {
-        findKeyboardFrame() != nil
+        if keyboardVisible { return true }
+        // Fallback: check if UIKeyboardImpl has an active delegate (key input responder)
+        guard let impl = getKeyboardImpl() else { return false }
+        let sel = NSSelectorFromString("delegate")
+        guard impl.responds(to: sel),
+              let delegate = impl.perform(sel)?.takeUnretainedValue() else { return false }
+        // Verify the delegate conforms to UIKeyInput (like KIF's hasKeyInputResponder)
+        return delegate is UIKeyInput
     }
 
     /// Type text by injecting characters into the active keyboard.
@@ -299,33 +343,6 @@ final class TheSafecracker {
         guard (kbClass as AnyObject).responds(to: sel),
               let result = (kbClass as AnyObject).perform(sel) else { return nil }
         return result.takeUnretainedValue()
-    }
-
-    /// Find the keyboard frame by looking for UIInputSetHostView in the window hierarchy.
-    private func findKeyboardFrame() -> CGRect? {
-        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        for window in allWindows {
-            if let frame = findInputHostFrame(in: window) {
-                return frame
-            }
-        }
-        return nil
-    }
-
-    private func findInputHostFrame(in view: UIView) -> CGRect? {
-        let className = String(describing: type(of: view))
-        let minimumKeyboardHeight: CGFloat = 100
-        if className == "UIInputSetHostView" && view.frame.height > minimumKeyboardHeight && !view.isHidden {
-            return view.convert(view.bounds, to: nil)
-        }
-        for sub in view.subviews {
-            if let frame = findInputHostFrame(in: sub) {
-                return frame
-            }
-        }
-        return nil
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)

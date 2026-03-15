@@ -28,12 +28,12 @@ public final class TheInsideJob {
 
     /// Configure the shared instance. Must be called before `start()`.
     /// Second and subsequent calls are no-ops.
-    public static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil) {
+    public static func configure(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
         if _shared != nil {
             insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
             return
         }
-        _shared = TheInsideJob(token: token, instanceId: instanceId, allowedScopes: allowedScopes)
+        _shared = TheInsideJob(token: token, instanceId: instanceId, allowedScopes: allowedScopes, port: port)
     }
 
     // MARK: - Properties
@@ -41,6 +41,7 @@ public final class TheInsideJob {
     private var transport: ServerTransport?
     let muscle: TheMuscle
     private let instanceId: String?
+    private let preferredPort: UInt16
     private let installationId: String
     private let sessionId = UUID()
     let bagman = TheBagman()
@@ -74,9 +75,10 @@ public final class TheInsideJob {
 
     // MARK: - Initialization
 
-    public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil) {
+    public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
         self.muscle = TheMuscle(explicitToken: token)
         self.instanceId = instanceId
+        self.preferredPort = port
         self.installationId = Self.loadInstallationId()
         self.theSafecracker.bagman = self.bagman
 
@@ -110,7 +112,7 @@ public final class TheInsideJob {
         let t = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
         wireTransport(t)
 
-        let actualPort = try await t.start()
+        let actualPort = try await t.start(port: preferredPort)
         self.transport = t
         isRunning = true
 
@@ -126,6 +128,7 @@ public final class TheInsideJob {
         // Prevent the screen from locking while TheInsideJob is running
         UIApplication.shared.isIdleTimerDisabled = true
 
+        theSafecracker.startKeyboardTracking()
         startAccessibilityObservation()
         startLifecycleObservation()
 
@@ -139,6 +142,7 @@ public final class TheInsideJob {
         resumeTask?.cancel()
         resumeTask = nil
         stopPolling()
+        theSafecracker.stopKeyboardTracking()
 
         transport?.stopAdvertising()
         transport?.stop()
@@ -610,7 +614,7 @@ public final class TheInsideJob {
                 let t = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
                 self.wireTransport(t)
 
-                let actualPort = try await t.start()
+                let actualPort = try await t.start(port: preferredPort)
 
                 try Task.checkCancellation()
 
