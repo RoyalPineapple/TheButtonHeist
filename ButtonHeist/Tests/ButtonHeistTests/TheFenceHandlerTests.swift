@@ -314,6 +314,23 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDragXYAliasForStartXY() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "drag", "x": 100.0, "y": 300.0, "endX": 300.0, "endY": 600.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .touchDrag(let target) = message else {
+            XCTFail("Expected touchDrag message")
+            return
+        }
+        XCTAssertEqual(target.startX, 100.0)
+        XCTAssertEqual(target.startY, 300.0)
+        XCTAssertEqual(target.endX, 300.0)
+        XCTAssertEqual(target.endY, 600.0)
+    }
+
+    @ButtonHeistActor
     func testPinchMissingScale() async {
         await assertValidationError(
             ["command": "pinch"],
@@ -329,6 +346,53 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPinchXYAliasForCenterXY() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "pinch", "scale": 2.0, "x": 200.0, "y": 500.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .touchPinch(let target) = message else {
+            XCTFail("Expected touchPinch message")
+            return
+        }
+        XCTAssertEqual(target.centerX, 200.0)
+        XCTAssertEqual(target.centerY, 500.0)
+    }
+
+    @ButtonHeistActor
+    func testPinchCenterXYTakesPrecedenceOverXY() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "pinch", "scale": 2.0,
+            "centerX": 100.0, "centerY": 300.0,
+            "x": 999.0, "y": 999.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .touchPinch(let target) = message else {
+            XCTFail("Expected touchPinch message")
+            return
+        }
+        XCTAssertEqual(target.centerX, 100.0)
+        XCTAssertEqual(target.centerY, 300.0)
+    }
+
+    @ButtonHeistActor
+    func testRotateXYAliasForCenterXY() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "rotate", "angle": 1.57, "x": 150.0, "y": 400.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .touchRotate(let target) = message else {
+            XCTFail("Expected touchRotate message")
+            return
+        }
+        XCTAssertEqual(target.centerX, 150.0)
+        XCTAssertEqual(target.centerY, 400.0)
+    }
+
+    @ButtonHeistActor
     func testRotateMissingAngle() async {
         await assertValidationError(
             ["command": "rotate"],
@@ -341,6 +405,23 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             ["command": "rotate", "angle": 1.57]
         )
+    }
+
+    // MARK: - Two Finger Tap
+
+    @ButtonHeistActor
+    func testTwoFingerTapXYAliasForCenterXY() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "two_finger_tap", "x": 200.0, "y": 500.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .touchTwoFingerTap(let target) = message else {
+            XCTFail("Expected touchTwoFingerTap message")
+            return
+        }
+        XCTAssertEqual(target.centerX, 200.0)
+        XCTAssertEqual(target.centerY, 500.0)
     }
 
     // MARK: - Draw Path Validation
