@@ -19,7 +19,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// let port = try transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
 /// ```
-public final class ServerTransport {
+public final class ServerTransport: NSObject {
 
     /// The underlying TCP server (actor-isolated).
     public let server: SimpleSocketServer
@@ -50,6 +50,7 @@ public final class ServerTransport {
     public init(tlsIdentity: TLSIdentity? = nil, allowedScopes: Set<ConnectionScope> = ConnectionScope.all) {
         self.server = SimpleSocketServer(allowedScopes: allowedScopes)
         self.tlsIdentity = tlsIdentity
+        super.init()
     }
 
     deinit {
@@ -140,6 +141,7 @@ public final class ServerTransport {
         service.setTXTRecord(NetService.data(fromTXTRecord: txtDict))
 
         netService = service
+        netService?.delegate = self
         netService?.publish()
         logger.info("Advertising as '\(serviceName)' on port \(port)")
     }
@@ -188,5 +190,20 @@ public final class ServerTransport {
     /// Disconnect a specific client.
     public func disconnect(clientId: Int) {
         server.disconnect(clientId: clientId)
+    }
+}
+
+// MARK: - NetServiceDelegate
+
+extension ServerTransport: NetServiceDelegate {
+
+    public func netServiceDidPublish(_ sender: NetService) {
+        logger.info("Bonjour service published: '\(sender.name)' on port \(sender.port)")
+    }
+
+    public func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
+        let code = errorDict[NetService.errorCode]?.intValue ?? -1
+        let domain = errorDict[NetService.errorDomain]?.intValue ?? -1
+        logger.error("Bonjour publish failed for '\(sender.name)': error \(code) domain \(domain)")
     }
 }
