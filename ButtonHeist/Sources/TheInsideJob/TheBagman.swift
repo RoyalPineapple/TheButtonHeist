@@ -231,6 +231,99 @@ final class TheBagman {
             .map { ($0, $0 as UIView) }
     }
 
+    // MARK: - Navigation Transition Tracking
+
+    private var navigationObservationTask: Task<Void, Never>?
+
+    /// Returns true if any UINavigationController in the window hierarchy has an active transition.
+    func hasActiveNavigationTransition() -> Bool {
+        findNavigationControllers().contains { $0.transitionCoordinator != nil }
+    }
+
+    /// Find all UINavigationControllers in the traversable window hierarchy.
+    private func findNavigationControllers() -> [UINavigationController] {
+        var result: [UINavigationController] = []
+        for (window, _) in getTraversableWindows() {
+            collectNavigationControllers(from: window.rootViewController, into: &result)
+        }
+        return result
+    }
+
+    private func collectNavigationControllers(from vc: UIViewController?, into result: inout [UINavigationController]) {
+        guard let vc else { return }
+        if let nav = vc as? UINavigationController {
+            result.append(nav)
+        }
+        if let presented = vc.presentedViewController {
+            collectNavigationControllers(from: presented, into: &result)
+        }
+        for child in vc.children {
+            collectNavigationControllers(from: child, into: &result)
+        }
+    }
+
+    /// Wait for any active UIKit navigation transition to complete.
+    /// Returns immediately if no transition is in progress.
+    ///
+    /// Re-queries `hasActiveNavigationTransition()` each iteration rather than
+    /// holding a reference to the initial controller, so cancelled interactive
+    /// back gestures and mid-flight controller changes are handled correctly.
+    ///
+    /// - Returns: true if a transition was awaited, false if none was active.
+    @discardableResult
+    func waitForNavigationTransition() async -> Bool {
+        guard hasActiveNavigationTransition() else { return false }
+
+        var attempts = 0
+        while hasActiveNavigationTransition() && attempts < 50 {
+            await yieldToMainQueue()
+            attempts += 1
+        }
+
+        if attempts == 50 {
+            insideJobLogger.warning("waitForNavigationTransition: timed out — hierarchy may be dirty")
+        }
+
+        // One final cycle for any deferred UIKit accessibility tree updates.
+        await yieldToMainQueue()
+        return true
+    }
+
+    /// Yield one main-queue cycle to let UIKit process pending completion blocks
+    /// (e.g. transition coordinator callbacks, view removal after navigation pop).
+    /// Safe to call from async context; compatible with Swift 6 strict concurrency.
+    func yieldToMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Begin observing navigation transitions. Calls `onTransitionComplete` when
+    /// a push/pop finishes so TheInsideJob can proactively broadcast the updated
+    /// hierarchy to subscribers.
+    func startNavigationObservation(onTransitionComplete: @escaping @MainActor () -> Void) {
+        navigationObservationTask?.cancel()
+        navigationObservationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms poll
+                guard let self, !Task.isCancelled else { return }
+                if self.hasActiveNavigationTransition() {
+                    await self.waitForNavigationTransition()
+                    if !Task.isCancelled {
+                        onTransitionComplete()
+                    }
+                }
+            }
+        }
+    }
+
+    func stopNavigationObservation() {
+        navigationObservationTask?.cancel()
+        navigationObservationTask = nil
+    }
+
     // MARK: - Animation Detection
 
     /// Animation key prefixes to ignore during detection.
@@ -296,32 +389,69 @@ final class TheBagman {
             return ActionResult(success: false, method: method, message: message, value: value)
         }
 
-        // Quick check: if no animations, just yield briefly for the tree to update.
-        if !hasActiveAnimations() {
-            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
-        } else {
-            // Animations active — wait for them to end (fast for toggles/menus)
-            // or cap at 0.25s (avoids blocking on long simulator springs).
+        // Yield one cycle before checking anything. UIKit defers navigation pops
+        // (triggered by accessibilityActivate on a Back button) to the next RunLoop
+        // cycle — without this yield, transitionCoordinator is still nil and
+        // hasActiveAnimations() is still false even though a navigation is imminent.
+        await yieldToMainQueue()
+
+        // Now that UIKit has had a chance to start any deferred navigation, check
+        // for an active transition coordinator and wait for it to complete.
+        let wasNavTransition = await waitForNavigationTransition()
+
+        if wasNavTransition {
+            // Transition coordinator finished — hierarchy is clean.
+        } else if hasActiveAnimations() {
+            // Non-navigation animations active (toggles, menus, etc.) — wait
+            // for them to end, then yield one RunLoop cycle for layout.
             _ = await waitForAnimationsToSettle(timeout: 0.25)
-            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms layout
+            await yieldToMainQueue()
         }
+        // else: no transition, no animations — the initial yield was sufficient.
 
         var afterTree = refreshAccessibilityData()
         var afterElements = snapshotElements()
         var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
 
-        // If the screen changed and animations are still running (navigation push),
-        // wait up to 350ms for the hierarchy to stabilize rather than sleeping a fixed 1s.
-        if delta.kind != .noChange && hasActiveAnimations() {
-            let pollInterval: UInt64 = 35_000_000 // 35ms
-            let maxWait: UInt64 = 350_000_000 // 350ms
-            var elapsed: UInt64 = 0
+        // After a screen change, poll until the hierarchy stabilizes.
+        //
+        // This handles two cases:
+        //   1. UIKit navigation: CALayer animations are active, old VC's view is in the
+        //      transition container alongside the new VC's view.
+        //   2. SwiftUI / Workflow navigation: no CALayer animations are detected, but the
+        //      outgoing view tree is still present during the state-machine transition.
+        //
+        // In both cases, the fix is the same: keep re-snapshotting until the hierarchy
+        // stops changing (2 consecutive identical samples), capped at 350ms.
+        // After any screen or structural change, pump the main queue until the accessibility
+        // hierarchy stabilizes (2 consecutive identical snapshots).
+        //
+        // We use yieldToMainQueue() instead of Task.sleep() so that pending work on the
+        // main queue — including framework render cycles (Workflow, SwiftUI state updates,
+        // UIKit navigation cleanup) — gets to execute between each sample. Task.sleep only
+        // suspends the task; it does not drain the queue. With rapid yields, frameworks
+        // that defer view removal to the next render cycle will complete within a few
+        // iterations, typically <10ms total, rather than the fixed 35ms poll interval.
+        if delta.kind == .screenChanged || delta.kind == .elementsChanged || hasActiveAnimations() {
+            // Poll with small sleeps until the hierarchy settles at a new state.
+            //
+            // yieldToMainQueue() alone is insufficient here: framework render cycles
+            // (Workflow/ReactiveSwift, SwiftUI state machines) run asynchronously and
+            // need actual wall-clock time — not just dispatch queue draining — to complete.
+            // 10ms sleeps give async schedulers time to fire between samples.
+            //
+            // We use two exit conditions:
+            //   1. Changed + stable: hierarchy moved to a new signature and held it for
+            //      2 consecutive samples → framework transition is complete.
+            //   2. Unchanged for 100ms: hierarchy never changed → already at final state.
+            let deadline = Date().addingTimeInterval(0.5)
+            let firstSignature = hierarchySignature(afterElements)
+            let unchangedDeadline = Date().addingTimeInterval(0.3)
+            var lastSignature = firstSignature
             var stableSamples = 0
-            var lastSignature = hierarchySignature(afterElements)
 
-            while elapsed < maxWait {
-                try? await Task.sleep(nanoseconds: pollInterval)
-                elapsed += pollInterval
+            while Date() < deadline {
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
                 afterTree = refreshAccessibilityData()
                 afterElements = snapshotElements()
@@ -335,7 +465,12 @@ final class TheBagman {
                     lastSignature = signature
                 }
 
-                if !hasActiveAnimations() || stableSamples >= 2 {
+                // Changed from initial state and stable: framework transition complete.
+                if stableSamples >= 2 && lastSignature != firstSignature {
+                    break
+                }
+                // Hierarchy unchanged for 300ms wall-clock time: already at final state.
+                if signature == firstSignature && Date() >= unchangedDeadline {
                     break
                 }
             }

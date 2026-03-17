@@ -131,8 +131,23 @@ public final class TheInsideJob {
         theSafecracker.startKeyboardTracking()
         startAccessibilityObservation()
         startLifecycleObservation()
+        startNavigationTransitionObservation()
 
         insideJobLogger.info("Server started successfully")
+    }
+
+    // MARK: - Navigation Transition Observation
+
+    private func startNavigationTransitionObservation() {
+        bagman.startNavigationObservation { [weak self] in
+            guard let self else { return }
+            insideJobLogger.debug("Navigation transition completed — broadcasting hierarchy update")
+            self.scheduleHierarchyUpdate()
+        }
+    }
+
+    private func stopNavigationTransitionObservation() {
+        bagman.stopNavigationObservation()
     }
 
     /// Stop the server
@@ -152,6 +167,7 @@ public final class TheInsideJob {
 
         stopAccessibilityObservation()
         stopLifecycleObservation()
+        stopNavigationTransitionObservation()
 
         insideJobLogger.info("Server stopped")
     }
@@ -581,6 +597,7 @@ public final class TheInsideJob {
         muscle.tearDown()
 
         stopAccessibilityObservation()
+        stopNavigationTransitionObservation()
 
         bagman.clearCache()
 
@@ -624,6 +641,7 @@ public final class TheInsideJob {
                 self.advertiseService(port: actualPort)
 
                 self.startAccessibilityObservation()
+                self.startNavigationTransitionObservation()
 
                 if self.isPollingEnabled {
                     self.startPollingLoop()
