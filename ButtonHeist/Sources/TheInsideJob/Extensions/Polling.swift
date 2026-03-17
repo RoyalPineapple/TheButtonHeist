@@ -83,14 +83,11 @@ extension TheInsideJob {
     // MARK: - Interface Sending
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        // Yield once so any deferred navigation pop UIKit queued on the last RunLoop
-        // cycle has a chance to start before we check for a transition coordinator.
-        await bagman.yieldToMainQueue()
-
-        let wasNavTransition = await bagman.waitForNavigationTransition()
-
-        if !wasNavTransition && bagman.hasActiveAnimations() {
-            // Non-navigation animations — wait for them to settle.
+        // Only wait if there's actually something to wait for — avoids adding latency
+        // to the common idle case where the app is fully at rest.
+        if bagman.hasActiveNavigationTransition() {
+            _ = await bagman.waitForNavigationTransition()
+        } else if bagman.hasActiveAnimations() {
             _ = await bagman.waitForAnimationsToSettle(timeout: 0.5)
             await bagman.yieldToMainQueue()
         }
