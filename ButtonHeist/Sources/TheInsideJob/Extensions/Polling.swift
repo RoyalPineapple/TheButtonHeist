@@ -83,9 +83,16 @@ extension TheInsideJob {
     // MARK: - Interface Sending
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        // If animating, wait briefly for fast animations to end.
-        if bagman.hasActiveAnimations() {
+        // Yield once so any deferred navigation pop UIKit queued on the last RunLoop
+        // cycle has a chance to start before we check for a transition coordinator.
+        await bagman.yieldToMainQueue()
+
+        let wasNavTransition = await bagman.waitForNavigationTransition()
+
+        if !wasNavTransition && bagman.hasActiveAnimations() {
+            // Non-navigation animations — wait for them to settle.
             _ = await bagman.waitForAnimationsToSettle(timeout: 0.5)
+            await bagman.yieldToMainQueue()
         }
 
         guard let hierarchyTree = bagman.refreshAccessibilityData() else {
