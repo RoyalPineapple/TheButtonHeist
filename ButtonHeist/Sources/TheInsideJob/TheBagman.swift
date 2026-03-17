@@ -233,8 +233,7 @@ final class TheBagman {
 
     // MARK: - Navigation Transition Tracking
 
-    /// Continuation that resolves when the current navigation transition completes.
-    private var transitionContinuation: CheckedContinuation<Void, Never>?
+    private var navigationObservationTask: Task<Void, Never>?
 
     /// Returns true if any UINavigationController in the window hierarchy has an active transition.
     func hasActiveNavigationTransition() -> Bool {
@@ -263,27 +262,26 @@ final class TheBagman {
         }
     }
 
-    /// Wait for any active navigation transition to complete.
+    /// Wait for any active UIKit navigation transition to complete.
     /// Returns immediately if no transition is in progress.
     ///
-    /// Polls until `transitionCoordinator` becomes nil — this happens after UIKit has
-    /// fully processed the transition including view removal from the hierarchy. Using the
-    /// coordinator's completion callback is insufficient because it fires concurrently with
-    /// UIKit's view cleanup, not after it.
+    /// Re-queries `hasActiveNavigationTransition()` each iteration rather than
+    /// holding a reference to the initial controller, so cancelled interactive
+    /// back gestures and mid-flight controller changes are handled correctly.
     ///
     /// - Returns: true if a transition was awaited, false if none was active.
     @discardableResult
     func waitForNavigationTransition() async -> Bool {
-        guard let nav = findNavigationControllers().first(where: { $0.transitionCoordinator != nil }) else {
-            return false
-        }
+        guard hasActiveNavigationTransition() else { return false }
 
-        // Yield one cycle at a time until the transition coordinator is cleared.
-        // UIKit sets transitionCoordinator to nil after view removal is complete.
         var attempts = 0
-        while nav.transitionCoordinator != nil && attempts < 50 {
+        while hasActiveNavigationTransition() && attempts < 50 {
             await yieldToMainQueue()
             attempts += 1
+        }
+
+        if attempts == 50 {
+            insideJobLogger.warning("waitForNavigationTransition: timed out — hierarchy may be dirty")
         }
 
         // One final cycle for any deferred UIKit accessibility tree updates.
@@ -293,8 +291,7 @@ final class TheBagman {
 
     /// Yield one main-queue cycle to let UIKit process pending completion blocks
     /// (e.g. transition coordinator callbacks, view removal after navigation pop).
-    /// Safe to call from async context; semantically equivalent to RunLoop.main.run
-    /// but compatible with Swift 6 strict concurrency.
+    /// Safe to call from async context; compatible with Swift 6 strict concurrency.
     func yieldToMainQueue() async {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
@@ -303,10 +300,10 @@ final class TheBagman {
         }
     }
 
-    /// Begin observing navigation transitions. Call `onTransitionComplete` when
-    /// a push/pop finishes, allowing TheInsideJob to proactively broadcast
-    /// the updated hierarchy to subscribers.
-    func startNavigationObservation(onTransitionComplete: @escaping () -> Void) {
+    /// Begin observing navigation transitions. Calls `onTransitionComplete` when
+    /// a push/pop finishes so TheInsideJob can proactively broadcast the updated
+    /// hierarchy to subscribers.
+    func startNavigationObservation(onTransitionComplete: @escaping @MainActor () -> Void) {
         navigationObservationTask?.cancel()
         navigationObservationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -326,8 +323,6 @@ final class TheBagman {
         navigationObservationTask?.cancel()
         navigationObservationTask = nil
     }
-
-    private var navigationObservationTask: Task<Void, Never>?
 
     // MARK: - Animation Detection
 
@@ -451,13 +446,12 @@ final class TheBagman {
             //   2. Unchanged for 100ms: hierarchy never changed → already at final state.
             let deadline = Date().addingTimeInterval(0.5)
             let firstSignature = hierarchySignature(afterElements)
+            let unchangedDeadline = Date().addingTimeInterval(0.3)
             var lastSignature = firstSignature
             var stableSamples = 0
-            var unchangedMs: UInt64 = 0
-            let pollNs: UInt64 = 10_000_000 // 10ms
 
             while Date() < deadline {
-                try? await Task.sleep(nanoseconds: pollNs)
+                try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
 
                 afterTree = refreshAccessibilityData()
                 afterElements = snapshotElements()
@@ -466,19 +460,17 @@ final class TheBagman {
                 let signature = hierarchySignature(afterElements)
                 if signature == lastSignature {
                     stableSamples += 1
-                    if signature == firstSignature { unchangedMs += 10 }
                 } else {
                     stableSamples = 0
                     lastSignature = signature
                 }
 
-                // Changed from initial state and now stable: transition complete.
+                // Changed from initial state and stable: framework transition complete.
                 if stableSamples >= 2 && lastSignature != firstSignature {
                     break
                 }
-                // Never changed after 300ms: already at the correct final state
-                // (or framework render cycle is complete and this IS the final state).
-                if unchangedMs >= 300 {
+                // Hierarchy unchanged for 300ms wall-clock time: already at final state.
+                if signature == firstSignature && Date() >= unchangedDeadline {
                     break
                 }
             }
