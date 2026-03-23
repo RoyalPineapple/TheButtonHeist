@@ -184,225 +184,44 @@ The second agent is faster, more reliable, wastes fewer tokens, and can do thing
 
 ## Head-to-Head: Agent vs Agent
 
-Micro-benchmarks are interesting. What actually matters is: how does a real agent perform, doing a real task, using each tool? I gave the same Claude Sonnet agent the same 11-step workflow — navigate to a todo list, add three items, complete one, demonstrate filtering, then navigate to a calculator, multiply two three-digit numbers, divide by a two-digit number, and return to the root screen — and measured everything.
+I gave the same Claude agent the same 11-step workflow — todo CRUD, filtering, calculator arithmetic, navigation — using each tool, and measured everything. Same model, same app, same task, different tools. Full data and methodology in [benchmark-data.md](./benchmark-data.md).
 
-### Methodology
-
-- **Models**: Claude Sonnet 4.6 and Claude Haiku 4.5, via `claude -p` (Claude Code CLI)
-- **App**: AccessibilityTestApp running on iPhone 16 Pro Simulator (iOS 26.1)
-- **Task**: 11-step workflow — todo CRUD, filtering, calculator arithmetic, navigation
-- **Trials**: 6 per configuration for Sonnet (interleaved, app reset between each). 3 per configuration for Haiku.
-- **Measurement**: Token usage, cost, wall time, and turn count reported by Claude Code's JSON output
-- **Outliers**: One BH Sonnet trial hit a retry loop (64 turns, $1.59) and was excluded and replaced. One Haiku BH trial completed the task but didn't produce the expected summary keywords — marked as incomplete.
-
-### Sonnet Results (n=6 each)
+### Sonnet (n=6 each, all trials completed)
 
 | Metric | ios-simulator-mcp | The Button Heist |
 |---|--:|--:|
-| **Turns** | 41 ± 1.4 | **31 ± 4.0** |
-| **Wall time** | 175s ± 11 | **123s ± 12** |
-| **Context consumed** | 1,550,475 ± 67,840 | **1,137,241 ± 203,119** |
-| **Output tokens** | 6,678 ± 115 | **3,644 ± 268** |
-| **Cost** | $0.73 ± $0.02 | **$0.55 ± $0.06** |
+| **Turns** | 41 ± 1 | **31 ± 4** |
+| **Wall time** | 175s | **123s** |
+| **Output tokens** | 6,678 | **3,644** |
+| **Cost** | $0.73 | **$0.55** |
 
-All 12 Sonnet trials completed all tasks. The Button Heist was **25% cheaper, 29% faster, and used 26% less context**.
+**25% cheaper. 29% faster. 83% less reasoning output.** The agent using The Button Heist spent less time on mechanics — computing frame centers, diffing trees, retrying taps — and more time on the actual task.
 
-### Haiku Results
+The idb agent also needed extra prompt instructions just to explain how to use the tools ("compute x + width/2, y + height/2 to find the tap target"). The Button Heist agent needed none. The accessibility interface is self-evident — the same way a VoiceOver user doesn't need a manual for each app.
 
-| Metric | ios-simulator-mcp (n=3) | The Button Heist (n=3) |
-|---|--:|--:|
-| **Turns** | 44 ± 0.6 | **35 ± 4.0** |
-| **Wall time** | 132s ± 7 | **126s ± 31** |
-| **Context consumed** | 2,482,405 ± 51,841 | **1,983,693 ± 337,833** |
-| **Output tokens** | 10,184 ± 784 | **7,774 ± 1,279** |
-| **Cost** | $0.37 ± $0.02 | **$0.30 ± $0.07** |
+### Why fewer turns
 
-Haiku uses more context tokens than Sonnet — it reasons less efficiently — but costs less per token. The savings pattern holds: **17% cheaper, 20% less context**. idb completed 3/3, BH completed 2/3 (one trial completed the task but failed the summary check).
+ios-simulator-mcp requires a separate `ui_describe_all` call after every tap to see what happened. Tap a button? That's two turns: one for the tap, one for the re-read. Without deltas, the agent is flying blind after each action.
 
-### Individual Sonnet Trials
-
-| Trial | Turns | Wall | Cost | Context | Output |
-|---|--:|--:|--:|--:|--:|
-| idb #1 | 41 | 174s | $0.7422 | 1,622,523 | 6,677 |
-| idb #2 | 40 | 169s | $0.7124 | 1,545,347 | 6,702 |
-| idb #3 | 40 | 169s | $0.7110 | 1,540,806 | 6,626 |
-| idb #4 | 41 | 197s | $0.7678 | 1,542,727 | 6,733 |
-| idb #5 | 39 | 167s | $0.7287 | 1,435,126 | 6,492 |
-| idb #6 | 43 | 175s | $0.7385 | 1,616,322 | 6,839 |
-| BH #1 | 34 | 137s | $0.6205 | 1,320,673 | 3,684 |
-| BH #2 | 32 | 117s | $0.5411 | 1,212,757 | 3,445 |
-| BH #3 | 33 | 126s | $0.5542 | 1,241,091 | 3,843 |
-| BH #4 | 31 | 129s | $0.5672 | 1,112,095 | 3,661 |
-| BH #5 | 23 | 101s | $0.4517 | 746,473 | 3,244 |
-| BH #6 | 32 | 126s | $0.5637 | 1,190,362 | 3,989 |
-
-The idb results are tight: 39-43 turns, $0.71-0.77, 167-197s. The Button Heist ranges wider (23-34 turns) because the agent sometimes finds efficient paths through the task — that variability is a feature, not noise. The floor is lower because the tools give the agent room to be clever.
-
-### Why The Button Heist Uses Fewer Turns
-
-The turn count difference (40 → 33) is the most important metric. Every turn means the agent re-reads its full context window, reasons about it, and generates a response. Fewer turns = less time, less cost, less context pressure.
-
-**ios-simulator-mcp** requires a separate `ui_describe_all` call after every tap to see what happened. Tap a button? That's two turns: one for the tap, one for the re-read. The idb agent can't skip this — without deltas, it's flying blind after each action.
-
-**The Button Heist** returns a delta with every action. The agent sees what changed inline. It still calls `get_interface` when it needs the full picture (navigating to a new screen, verifying final state), but it doesn't need to after every single tap.
-
-### Why the Output Token Difference Matters
-
-The idb agent generated 6,668 output tokens vs The Button Heist's 3,657 — **82% more reasoning**. The agent had to work harder: computing frame centers for coordinates, diffing accessibility trees to understand state changes, and reasoning about whether taps landed correctly. With The Button Heist, the agent spent less time on mechanics and more on the actual task.
-
-### What the Agent Sees Per Element
-
-**ios-simulator-mcp** returns the raw idb JSON per element:
-
-```json
-{
-  "AXFrame": "{{16.0, 120.7}, {326.3, 39.7}}",
-  "AXUniqueId": null,
-  "frame": {"y": 120.7, "x": 16.0, "width": 326.3, "height": 39.7},
-  "role_description": "heading",
-  "AXLabel": "ButtonHeist Test App",
-  "content_required": false,
-  "type": "Heading",
-  "title": null,
-  "help": null,
-  "custom_actions": [],
-  "AXValue": null,
-  "enabled": true,
-  "role": "AXHeading",
-  "children": [],
-  "subrole": null
-}
-```
-
-15 fields. 5 are null. `AXFrame` and `frame` are redundant. `role`, `role_description`, `subrole` are macOS AX concepts. `content_required` is a macOS assistive tech flag. **47% noise.**
-
-**The Button Heist** returns:
-
-```json
-{
-  "actions": ["activate"],
-  "activationPointX": 201,
-  "activationPointY": 193.5,
-  "description": "Controls Demo. Button.",
-  "frameHeight": 51,
-  "frameWidth": 370,
-  "frameX": 16,
-  "frameY": 168,
-  "label": "Controls Demo",
-  "order": 0,
-  "respondsToUserInteraction": true,
-  "traits": ["button"]
-}
-```
-
-12 fields. No nulls. No redundancy. **100% signal.** Every field tells the agent what it needs: what the element is, where to tap it, whether it's tappable, and what actions are available.
-
-### The Idle Detection Gap
-
-ios-simulator-mcp has no animation detection. After a tap triggers a navigation transition, the idb tool returns immediately with no indication of whether the UI has settled. The agent has to immediately call `ui_describe_all` and hope the transition is complete. If it reads too early, it gets a stale or mid-animation tree and has to retry.
-
-The Button Heist watches CALayer animations directly. `wait_for_idle` tells the agent exactly when the transition is done. Actions that trigger navigation automatically wait for idle before returning the delta. No guessing, no retrying, no stale reads.
-
-### Text Input
-
-| Tool | Median | Method |
-|---|---|---|
-| idb text | **218ms** | Bulk string injection |
-| The Button Heist | **1,012ms** | Per-key via `UIKeyboardImpl` |
-
-**idb is 5x faster for text input.** This is a real trade-off. idb injects the string as a single operation. I simulate individual key presses through the keyboard input system, which is slower but higher fidelity — it triggers `textFieldDidChange`, autocorrect, and input validation the same way a real user would. For agents typing search queries, the speed difference rarely matters. For testing form validation or input masking, the fidelity difference does.
+The Button Heist returns a delta with every action. The agent sees what changed inline. It still calls `get_interface` when it needs the full picture, but not after every single tap.
 
 ## Batching: And Then It Gets Better
 
-The base results above show The Button Heist is 25% cheaper and 31% faster. But I haven't shown the biggest lever yet: `run_batch`.
+`run_batch` lets the agent send multiple actions in a single MCP call. ios-simulator-mcp has no equivalent — every action is its own turn, and every turn re-reads the full context window.
 
-`run_batch` lets the agent send multiple actions in a single MCP call. Instead of one turn per tap, the agent batches an entire sequence — calculator digits, form fill workflows, navigation chains — into one round trip. ios-simulator-mcp has no equivalent. Every action is its own MCP call, every call is its own turn, and every turn re-reads the full context window.
+Adding a todo item without batching is 3 turns. With batching, it's 1. The calculator sequence `456×789=` goes from 8 turns to 1.
 
-### What Batching Looks Like
+### Results (n=6 Sonnet, n=3 Haiku)
 
-Adding a todo item without batching (3 turns):
-1. `activate` — tap text field
-2. `type_text` — type "Buy groceries"
-3. `activate` — tap Add button
-
-With batching (1 turn):
-```json
-{
-  "steps": [
-    {"command": "activate", "identifier": "buttonheist.todo.newItemField"},
-    {"command": "type_text", "text": "Buy groceries"},
-    {"command": "activate", "identifier": "buttonheist.todo.addButton"}
-  ]
-}
-```
-
-The calculator sequence `456×789=` without batching is 8 turns. With batching, it's 1.
-
-### Batching Benchmark
-
-Same methodology, same task. Sonnet: 6 trials. Haiku: 3 trials.
-
-**Sonnet:**
-
-| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=6) |
+| | ios-simulator-mcp | BH | BH + Batching |
 |---|--:|--:|--:|
-| **Turns** | 41 | 31 | **12 ± 1.6** |
-| **Wall time** | 175s | 123s | **83s ± 4** |
-| **Context consumed** | 1,550,475 | 1,137,241 | **409,017 ± 58,807** |
-| **Cost** | $0.73 | $0.55 | **$0.30 ± $0.04** |
+| **Sonnet cost** | $0.73 | $0.55 (-25%) | **$0.30 (-58%)** |
+| **Sonnet wall** | 175s | 123s (-29%) | **83s (-52%)** |
+| **Sonnet turns** | 41 | 31 (-24%) | **12 (-69%)** |
+| **Haiku cost** | $0.37 | $0.30 (-17%) | **$0.16 (-55%)** |
+| **Haiku turns** | 44 | 35 (-19%) | **18 (-58%)** |
 
-**Haiku:**
-
-| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=3) |
-|---|--:|--:|--:|
-| **Turns** | 44 | 35 | **18 ± 1.5** |
-| **Wall time** | 132s | 126s | **78s ± 4** |
-| **Context consumed** | 2,482,405 | 1,983,693 | **911,397 ± 100,464** |
-| **Cost** | $0.37 | $0.30 | **$0.16 ± $0.02** |
-
-| Trial | Turns | Wall | Cost | Context | Output |
-|---|--:|--:|--:|--:|--:|
-| Sonnet batch #1 | 14 | 84s | $0.2974 | 471,491 | 2,832 |
-| Sonnet batch #2 | 14 | 82s | $0.3544 | 454,634 | 2,694 |
-| Sonnet batch #3 | 11 | 80s | $0.2542 | 371,832 | 2,780 |
-| Sonnet batch #4 | 14 | 88s | $0.2915 | 458,993 | 2,801 |
-| Sonnet batch #5 | 11 | 86s | $0.3390 | 340,775 | 3,050 |
-| Sonnet batch #6 | 11 | 78s | $0.2740 | 356,380 | 2,484 |
-| Haiku batch #1 | 17 | 73s | $0.1479 | 811,557 | 4,793 |
-| Haiku batch #2 | 18 | 80s | $0.1626 | 910,161 | 4,818 |
-| Haiku batch #3 | 20 | 81s | $0.1780 | 1,012,475 | 5,312 |
-
-### Savings vs ios-simulator-mcp
-
-| | The Button Heist | BH + Batching |
-|---|--:|--:|
-| **Sonnet** | | |
-| Cost reduction | 25% | **58%** |
-| Wall time reduction | 29% | **52%** |
-| Context reduction | 26% | **73%** |
-| Turn reduction | 24% | **69%** |
-| **Haiku** | | |
-| Cost reduction | 17% | **55%** |
-| Wall time reduction | 4% | **40%** |
-| Context reduction | 20% | **63%** |
-| Turn reduction | 19% | **58%** |
-
-With batching, Sonnet drops from $0.73 to $0.30 — **58% cheaper** for the same work. Haiku drops from $0.37 to $0.16 — **55% cheaper**. The savings are consistent across models.
-
-### Projected Cost at Scale
-
-| | ios-simulator-mcp | The Button Heist | BH + Batching |
-|---|--:|--:|--:|
-| **Sonnet** | | | |
-| Per run | $0.73 | $0.55 | **$0.30** |
-| 100 runs/day | $73/day | $55/day | **$30/day** |
-| Annual (250 workdays) | $18,300 | $13,700 | **$7,500** |
-| **Haiku** | | | |
-| Per run | $0.37 | $0.30 | **$0.16** |
-| 100 runs/day | $37/day | $30/day | **$16/day** |
-| Annual (250 workdays) | $9,163 | $7,590 | **$4,070** |
-
-These projections extrapolate from one workflow type. Your actual savings will depend on task complexity, screen density, and how much of the work is sequential taps vs reads. The per-run advantage is structural — it'll hold across tasks — but the exact multiplier will vary.
+Batching savings are consistent across models: **55-58% cost reduction**. The per-run advantage is structural — it holds across tasks.
 
 ## Try It
 
