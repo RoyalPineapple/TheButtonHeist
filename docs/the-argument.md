@@ -201,7 +201,7 @@ Micro-benchmarks are interesting. What actually matters is: how does a real agen
 | **Output tokens (avg)** | 6,668 | **3,657** |
 | **Cost (avg)** | $0.72 | **$0.57** |
 
-Both tools completed all tasks in all trials. The Button Heist was **21% cheaper, 26% faster, and used 20% less context**.
+Both tools completed all tasks in all trials. The Button Heist was **21% cheaper, 26% faster, and used 20% less context**. Three trials per configuration — enough to show the pattern is consistent, not enough for tight confidence intervals.
 
 ### Individual Trials
 
@@ -353,6 +353,8 @@ Batching cuts turns from 40 to 13, wall time from 171s to 82s, and context usage
 | 100 runs/day | $72/day | $57/day | **$30/day** |
 | Annual (250 workdays) | $18,046 | $14,298 | **$7,550** |
 | Annual savings vs idb | — | $3,748 | **$10,496** |
+
+These projections extrapolate from one workflow type. Your actual savings will depend on task complexity, screen density, and how much of the work is sequential taps vs reads. The per-run advantage is structural — it'll hold across tasks — but the exact multiplier will vary.
 
 ## Try It
 
