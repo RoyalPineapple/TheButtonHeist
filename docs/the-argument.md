@@ -188,37 +188,53 @@ Micro-benchmarks are interesting. What actually matters is: how does a real agen
 
 ### Methodology
 
-- **Model**: Claude Sonnet 4.6, via `claude -p` (Claude Code CLI)
+- **Models**: Claude Sonnet 4.6 and Claude Haiku 4.5, via `claude -p` (Claude Code CLI)
 - **App**: AccessibilityTestApp running on iPhone 16 Pro Simulator (iOS 26.1)
 - **Task**: 11-step workflow — todo CRUD, filtering, calculator arithmetic, navigation
-- **Trials**: 3 per tool, app reset between each trial
+- **Trials**: Sonnet: 6 BH + 4 idb (interleaved, app reset between each). Haiku: 3 each.
 - **Measurement**: Token usage, cost, wall time, and turn count reported by Claude Code's JSON output
+- **Outliers**: One BH Sonnet trial hit a retry loop (64 turns, $1.59) and was excluded. One Haiku BH trial completed the task but didn't produce the expected summary keywords — marked as incomplete.
 
-### Results
+### Sonnet Results
 
-| Metric | ios-simulator-mcp | The Button Heist |
+| Metric | ios-simulator-mcp (n=4) | The Button Heist (n=6) |
 |---|--:|--:|
-| **Turns (avg)** | 40 | **33** |
-| **Wall time (avg)** | 171s | **127s** |
-| **API time (avg)** | 163s | **113s** |
-| **Context consumed (avg)** | 1,569,558 | **1,258,173** |
-| **Output tokens (avg)** | 6,668 | **3,657** |
-| **Cost (avg)** | $0.72 | **$0.57** |
+| **Turns** | 40 ± 0.6 | **31 ± 4.0** |
+| **Wall time** | 177s ± 13 | **123s ± 12** |
+| **Context consumed** | 1,562,850 ± 39,825 | **1,137,241 ± 203,119** |
+| **Output tokens** | 6,684 ± 45 | **3,644 ± 268** |
+| **Cost** | $0.73 ± $0.03 | **$0.55 ± $0.06** |
 
-Both tools completed all tasks in all trials. The Button Heist was **21% cheaper, 26% faster, and used 20% less context**. Three trials per configuration — enough to show the pattern is consistent, not enough for tight confidence intervals.
+Both tools completed all tasks in every trial. The Button Heist was **25% cheaper, 31% faster, and used 27% less context**.
 
-### Individual Trials
+### Haiku Results
+
+| Metric | ios-simulator-mcp (n=3) | The Button Heist (n=3) |
+|---|--:|--:|
+| **Turns** | 44 ± 0.6 | **35 ± 4.0** |
+| **Wall time** | 132s ± 7 | **126s ± 31** |
+| **Context consumed** | 2,482,405 ± 51,841 | **1,983,693 ± 337,833** |
+| **Output tokens** | 10,184 ± 784 | **7,774 ± 1,279** |
+| **Cost** | $0.37 ± $0.02 | **$0.30 ± $0.07** |
+
+Haiku uses more context tokens than Sonnet — it reasons less efficiently — but costs less per token. The savings pattern holds: **17% cheaper, 20% less context**. idb completed 3/3, BH completed 2/3 (one trial completed the task but failed the summary check).
+
+### Individual Sonnet Trials
 
 | Trial | Turns | Wall | Cost | Context | Output |
 |---|--:|--:|--:|--:|--:|
 | idb #1 | 41 | 174s | $0.7422 | 1,622,523 | 6,677 |
 | idb #2 | 40 | 169s | $0.7124 | 1,545,347 | 6,702 |
 | idb #3 | 40 | 169s | $0.7110 | 1,540,806 | 6,626 |
+| idb #4 | 41 | 197s | $0.7678 | 1,542,727 | 6,733 |
 | BH #1 | 34 | 137s | $0.6205 | 1,320,673 | 3,684 |
 | BH #2 | 32 | 117s | $0.5411 | 1,212,757 | 3,445 |
 | BH #3 | 33 | 126s | $0.5542 | 1,241,091 | 3,843 |
+| BH #4 | 31 | 129s | $0.5672 | 1,112,095 | 3,661 |
+| BH #5 | 23 | 101s | $0.4517 | 746,473 | 3,244 |
+| BH #7 | 32 | 126s | $0.5637 | 1,190,362 | 3,989 |
 
-The idb results are tight: 40-41 turns, $0.71-0.74, 169-174s. The Button Heist is tighter: 32-34 turns, $0.54-0.62, 117-137s.
+The idb results are tight: 40-41 turns, $0.71-0.77, 169-197s. The Button Heist ranges wider (23-34 turns) because the agent sometimes finds efficient paths through the task — that variability is a feature, not noise. The floor is lower because the tools give the agent room to be clever.
 
 ### Why The Button Heist Uses Fewer Turns
 
@@ -296,7 +312,7 @@ The Button Heist watches CALayer animations directly. `wait_for_idle` tells the 
 
 ## Batching: And Then It Gets Better
 
-The base results above show The Button Heist is 21% cheaper and 26% faster. But I haven't shown the biggest lever yet: `run_batch`.
+The base results above show The Button Heist is 25% cheaper and 31% faster. But I haven't shown the biggest lever yet: `run_batch`.
 
 `run_batch` lets the agent send multiple actions in a single MCP call. Instead of one turn per tap, the agent batches an entire sequence — calculator digits, form fill workflows, navigation chains — into one round trip. ios-simulator-mcp has no equivalent. Every action is its own MCP call, every call is its own turn, and every turn re-reads the full context window.
 
@@ -322,39 +338,65 @@ The calculator sequence `456×789=` without batching is 8 turns. With batching, 
 
 ### Batching Benchmark
 
-Same methodology, same task, 3 additional trials with `run_batch` available.
+Same methodology, same task. Sonnet: 4 trials. Haiku: 3 trials.
 
-| Metric | ios-simulator-mcp | The Button Heist | BH + Batching |
+**Sonnet:**
+
+| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=4) |
 |---|--:|--:|--:|
-| **Turns (avg)** | 40 | 33 | **13** |
-| **Wall time (avg)** | 171s | 127s | **82s** |
-| **Context consumed (avg)** | 1,569,558 | 1,258,173 | **432,652** |
-| **Cost (avg)** | $0.72 | $0.57 | **$0.30** |
+| **Turns** | 40 | 31 | **13 ± 1.5** |
+| **Wall time** | 177s | 123s | **83s ± 4** |
+| **Context consumed** | 1,562,850 | 1,137,241 | **439,237 ± 45,501** |
+| **Cost** | $0.73 | $0.55 | **$0.30 ± $0.04** |
+
+**Haiku:**
+
+| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=3) |
+|---|--:|--:|--:|
+| **Turns** | 44 | 35 | **18 ± 1.5** |
+| **Wall time** | 132s | 126s | **78s ± 4** |
+| **Context consumed** | 2,482,405 | 1,983,693 | **911,397 ± 100,464** |
+| **Cost** | $0.37 | $0.30 | **$0.16 ± $0.02** |
 
 | Trial | Turns | Wall | Cost | Context | Output |
 |---|--:|--:|--:|--:|--:|
-| BH+batch #1 | 14 | 84s | $0.2974 | 471,491 | 2,832 |
-| BH+batch #2 | 14 | 82s | $0.3544 | 454,634 | 2,694 |
-| BH+batch #3 | 11 | 80s | $0.2542 | 371,832 | 2,780 |
+| Sonnet batch #1 | 14 | 84s | $0.2974 | 471,491 | 2,832 |
+| Sonnet batch #2 | 14 | 82s | $0.3544 | 454,634 | 2,694 |
+| Sonnet batch #3 | 11 | 80s | $0.2542 | 371,832 | 2,780 |
+| Sonnet batch #4 | 14 | 88s | $0.2915 | 458,993 | 2,801 |
+| Haiku batch #1 | 17 | 73s | $0.1479 | 811,557 | 4,793 |
+| Haiku batch #2 | 18 | 80s | $0.1626 | 910,161 | 4,818 |
+| Haiku batch #3 | 20 | 81s | $0.1780 | 1,012,475 | 5,312 |
 
 ### Savings vs ios-simulator-mcp
 
 | | The Button Heist | BH + Batching |
 |---|--:|--:|
-| Cost reduction | 21% | **58%** |
-| Wall time reduction | 26% | **52%** |
-| Context reduction | 20% | **72%** |
-| Turn reduction | 18% | **68%** |
+| **Sonnet** | | |
+| Cost reduction | 25% | **59%** |
+| Wall time reduction | 31% | **53%** |
+| Context reduction | 27% | **72%** |
+| Turn reduction | 24% | **67%** |
+| **Haiku** | | |
+| Cost reduction | 17% | **56%** |
+| Wall time reduction | 5% | **41%** |
+| Context reduction | 20% | **63%** |
+| Turn reduction | 19% | **58%** |
 
-Batching cuts turns from 40 to 13, wall time from 171s to 82s, and context usage by 72%. The cost drops from $0.72 to $0.30 — **58% cheaper** than ios-simulator-mcp for the same work.
+With batching, Sonnet drops from $0.73 to $0.30 — **59% cheaper** for the same work. Haiku drops from $0.37 to $0.16 — **56% cheaper**. The savings are consistent across models.
 
 ### Projected Cost at Scale
 
 | | ios-simulator-mcp | The Button Heist | BH + Batching |
 |---|--:|--:|--:|
-| 100 runs/day | $72/day | $57/day | **$30/day** |
-| Annual (250 workdays) | $18,046 | $14,298 | **$7,550** |
-| Annual savings vs idb | — | $3,748 | **$10,496** |
+| **Sonnet** | | | |
+| Per run | $0.73 | $0.55 | **$0.30** |
+| 100 runs/day | $73/day | $55/day | **$30/day** |
+| Annual (250 workdays) | $18,335 | $13,743 | **$7,485** |
+| **Haiku** | | | |
+| Per run | $0.37 | $0.30 | **$0.16** |
+| 100 runs/day | $37/day | $30/day | **$16/day** |
+| Annual (250 workdays) | $9,163 | $7,590 | **$4,070** |
 
 These projections extrapolate from one workflow type. Your actual savings will depend on task complexity, screen density, and how much of the work is sequential taps vs reads. The per-run advantage is structural — it'll hold across tasks — but the exact multiplier will vary.
 
