@@ -1,10 +1,10 @@
-# Button Heist
+# The Button Heist
 
 I've been experimenting with this for the last couple of months. It's very much 0.0.1, but it pulls together a few threads I've been thinking about for a long time.
 
 ## Where This Comes From
 
-Part of it goes back to the mobile test engineering days with Dimitris and jmartin, and to my time working on KIF — including the predicate system and the building-block API.
+Part of it goes back to the mobile test engineering days and to my time working on KIF — including the predicate system and the building-block API.
 
 I've always had pretty strong feelings about KIF. It got some really important things right. It used the real `UIAccessibility` interface, so it was implicitly validating the accessibility surface of the app, and because it ran in-process it gave us a useful kind of grey-box testing when we needed to get our hands dirty.
 
@@ -12,21 +12,27 @@ But KIF was also brittle as hell. The touch injection was never really the probl
 
 At the same time, I've never been satisfied with the alternatives. XCUITest gives you a more reliable test model in some ways, but I keep running into the limits of its abstraction — especially as I've been adding more advanced accessibility support to our design system. It obscures the real accessibility surface, including actual accessibility values, and it has no support for things like custom actions.
 
-More recently, on the UI systems side, I've been working on the accessibility parser in AccessibilitySnapshot. One of the things I helped push there was separating the parser from the snapshot renderer so it could produce a structured, codable graph of the accessibility tree — not just a snapshot-oriented view model.
+The missing piece was always structured data. KIF had the right architecture — in-process, real `UIAccessibility` objects, real touches — but it never had a way to parse the accessibility tree into something a consumer could reason about holistically. It only knew how to search for one element at a time.
 
-Button Heist is the connection between those two ideas. Instead of the old KIF flow where the test searches for elements from the outside, parse the `UIAccessibility` tree up front and hand that structured interface to the agent directly. Then keep the good parts of KIF: in-process interaction, touch injection, and the ability to get your fingers dirty when needed. With a little extra plumbing, it mirrors the VoiceOver pattern too: try `accessibilityActivate()` first, then fall back to tapping the correct activation point if that fails.
+That's what my more recent work on the accessibility parser in AccessibilitySnapshot was building toward. Separating the parser from the snapshot renderer so it could produce a structured, codable graph of the full accessibility tree — not just a snapshot-oriented view model, but typed elements with containers, traversal order, activation points, custom actions, and custom content. The complete picture of what VoiceOver sees, as data.
 
-## The Core Idea: Inside-Out, Not Outside-In
+The Button Heist is the connection between those two threads. Take the parser's structured output and hand it to an agent as the interface. Keep the good parts of KIF: in-process interaction, touch injection, and the ability to get your fingers dirty when needed. Mirror the VoiceOver interaction pattern: try `accessibilityActivate()` first, then fall back to tapping the correct activation point if that fails.
 
-For folks who've used [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), the difference I care about is that Button Heist is an **inside-out** model — structured `UIAccessibility` data plus in-process interaction — rather than an **outside-in** loop over screenshots and coordinates.
+KIF proved that `UIAccessibility` has the right shape for programmatic UI interaction — and that in-process access is what gives you the fingers to actually use it. The parser turns that into structured data an agent can consume. The Button Heist connects them and replaces the part that broke: instead of brittle predicate-based search, parse the whole tree proactively and let the agent decide what to do with it.
+
+## The Core Idea: Accessibility Is the Agent Interface
+
+Agents are blind. Unless you spend tokens on machine vision for every interaction (slow, expensive, non-deterministic), an agent interacting with an iOS app cannot see the screen. It's in exactly the same position as a VoiceOver user.
+
+Apple solved this decades ago. `UIAccessibility` is a full-fidelity interface designed for users who navigate without vision — what elements exist, what they're called, what they do, how to interact with them, what order to traverse them in. If accessibility is the right interface for non-sighted users, it's the right interface for non-sighted agents. And if you're going to give agents that interface, give them the whole thing.
+
+For folks who've used [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), the difference I care about is that The Button Heist is an **inside-out** model — structured `UIAccessibility` data plus in-process interaction — rather than an **outside-in** loop over screenshots and coordinates.
+
+ios-simulator-mcp doesn't give agents the real accessibility interface. It provides the tree *after* it's been translated through `AXPTranslator` into macOS accessibility vocabulary and serialized across five process boundaries. iOS-specific properties that have no macOS equivalent — activation points, custom content, custom rotors, `respondsToUserInteraction` — are dropped. What the agent receives is a degraded hybrid with the most useful iOS-native properties missing.
+
+The Button Heist reads `UIAccessibility` objects directly, in-process, with full fidelity. The agent gets the same data VoiceOver gets. Every property, every action, every traversal hint — nothing lost in translation. It doesn't matter whether the app uses UIKit, SwiftUI, or both — they're all `UIAccessibility` objects at the accessibility layer.
 
 That means less output for the agent to chew through, much less dependence on machine vision, and the ability to return structured diffs after actions instead of forcing the agent to re-parse the whole screen every time. Because it's living in-process, it can also proactively push screen changes instead of making the agent poll for everything.
-
-Agents are blind. Unless you spend tokens on machine vision for every interaction (slow, expensive, non-deterministic), an agent interacting with an iOS app cannot see the screen. It's in exactly the same position as a VoiceOver user. Apple solved this decades ago with `UIAccessibility` — a full-fidelity interface designed for users who navigate without vision. Agents should get the same interface. Not a translation of it. Not a screenshot of it. The real thing.
-
-ios-simulator-mcp doesn't give agents the real thing. It provides the accessibility tree *after* it's been translated through `AXPTranslator` into macOS accessibility vocabulary and serialized across five process boundaries. iOS-specific properties that have no macOS equivalent — activation points, custom content, custom rotors, `respondsToUserInteraction` — are dropped. What the agent receives is a degraded hybrid with the most useful iOS-native properties missing.
-
-Button Heist reads `UIAccessibility` objects directly, in-process, with full fidelity. The agent gets the same data VoiceOver gets. Every property, every action, every traversal hint — nothing lost in translation. It doesn't matter whether the app uses UIKit, SwiftUI, or both — they're all `UIAccessibility` objects at the accessibility layer.
 
 ## What ios-simulator-mcp Actually Does
 
@@ -98,7 +104,7 @@ I synthesize multi-finger `IOHIDEvent` sequences. Pinch, rotate, two-finger tap,
 
 Side-by-side comparison of what the agent receives per element:
 
-| Property | ios-simulator-mcp (via idb) | Button Heist |
+| Property | ios-simulator-mcp (via idb) | The Button Heist |
 |---|---|---|
 | Label | `AXLabel` | `label` |
 | Value | `AXValue` | `value` |
@@ -121,19 +127,19 @@ The left column is what macOS Accessibility sees after `AXPTranslator` converts 
 
 ios-simulator-mcp only works with the iOS Simulator. It's in the name. There's no path to physical devices — the entire stack (idb, CoreSimulator XPC, AXPTranslator) is simulator infrastructure.
 
-Button Heist connects to real devices over USB via `xcrun devicectl`. Same embedded framework, same `UIAccessibility` data, same touch injection. The app doesn't know or care whether it's running on a simulator or a phone.
+The Button Heist connects to real devices over USB via `xcrun devicectl`. Same embedded framework, same `UIAccessibility` data, same touch injection. The app doesn't know or care whether it's running on a simulator or a phone.
 
-This matters because we don't ship simulator builds. We ship to real hardware — real iPhones connected to real Square readers. An agent that can only interact with the simulator can never verify that a payment flow works end-to-end with actual hardware. It can't test Bluetooth pairing with a reader, NFC tap behavior, or any of the device-specific paths that only exist on physical hardware. Button Heist can. Same agent, same tools, pointed at a real device with real Square hardware attached.
+This matters because we don't ship simulator builds. We ship to real hardware — real iPhones connected to real Square readers. An agent that can only interact with the simulator can never verify that a payment flow works end-to-end with actual hardware. It can't test Bluetooth pairing with a reader, NFC tap behavior, or any of the device-specific paths that only exist on physical hardware. The Button Heist can. Same agent, same tools, pointed at a real device with real Square hardware attached.
 
 ### idb is deprecated
 
 Facebook has archived `idb`. The community is maintaining it, but without official support. ios-simulator-mcp's entire stack depends on it. Every `idb` bug or incompatibility with a new Xcode version is now a community problem, not a Facebook problem.
 
-Button Heist has no external dependency on deprecated tooling. The embedded framework operates on `UIAccessibility` objects — the same protocol that UIKit and SwiftUI both conform to.
+The Button Heist has no external dependency on deprecated tooling. The embedded framework operates on `UIAccessibility` objects — the same protocol that UIKit and SwiftUI both conform to.
 
 ## The Cost of Switching
 
-I know what you're thinking: ios-simulator-mcp works with any app, zero setup. Button Heist requires linking TheInsideJob into the app's debug build.
+I know what you're thinking: ios-simulator-mcp works with any app, zero setup. The Button Heist requires linking TheInsideJob into the app's debug build.
 
 That's real, but it's a familiar cost. We already embed debug frameworks:
 
@@ -152,15 +158,15 @@ I'm not going to pretend there aren't trade-offs:
 
 1. **Zero integration.** Works with any app. No project changes. If you want to poke at a third-party app, ios-simulator-mcp just works.
 
-2. **`npx` install.** `npx ios-simulator-mcp` and you're running. Button Heist requires cloning and building from source. I need to close this gap.
+2. **`npx` install.** `npx ios-simulator-mcp` and you're running. The Button Heist requires cloning and building from source. I need to close this gap.
 
-3. **App install and launch.** `idb install` and `idb launch` are built in. Button Heist requires manual `xcrun simctl install` / `simctl launch`. Solvable — just haven't wired it up yet.
+3. **App install and launch.** `idb install` and `idb launch` are built in. The Button Heist requires manual `xcrun simctl install` / `simctl launch`. Solvable — just haven't wired it up yet.
 
 4. **Simulator lifecycle.** They can open and manage Simulator.app. I don't manage the simulator at all.
 
 5. **Anthropic blog mention.** ios-simulator-mcp was featured in Anthropic's engineering blog. That matters for discoverability and trust.
 
-Items 2-4 are gaps I can close without architectural changes. Items 1 and 5 are structural — Button Heist will never be zero-integration (and shouldn't try to be), and discoverability requires going public.
+Items 2-4 are gaps I can close without architectural changes. Items 1 and 5 are structural — The Button Heist will never be zero-integration (and shouldn't try to be), and discoverability requires going public.
 
 ## Why This Matters for Your Workflow
 
@@ -168,7 +174,7 @@ Forget the abstract argument. Here's what happens in daily development.
 
 **An agent using ios-simulator-mcp** taps a button, waits an arbitrary duration, re-fetches the entire accessibility tree, parses hundreds of elements to figure out what changed, sometimes taps the wrong spot because it computed the frame center instead of the activation point, can't scroll to a specific element without a retry loop, and can't interact with steppers, sliders, or custom controls without coordinate hacks.
 
-**An agent using Button Heist** taps a button by calling `accessibilityActivate()`, gets back a delta showing exactly what changed, knows the UI is settled because `wait_for_idle` told it so, scrolls to any element with `scroll_to_visible`, and interacts with any control using the semantic action Apple designed for it.
+**An agent using The Button Heist** taps a button by calling `accessibilityActivate()`, gets back a delta showing exactly what changed, knows the UI is settled because `wait_for_idle` told it so, scrolls to any element with `scroll_to_visible`, and interacts with any control using the semantic action Apple designed for it.
 
 The second agent is faster, more reliable, wastes fewer tokens, and can do things the first agent literally cannot (multi-touch, accessibility actions, animation-aware waiting). That difference compounds with every interaction.
 
@@ -186,7 +192,7 @@ Micro-benchmarks are interesting. What actually matters is: how does a real agen
 
 ### Results
 
-| Metric | ios-simulator-mcp | Button Heist |
+| Metric | ios-simulator-mcp | The Button Heist |
 |---|--:|--:|
 | **Turns (avg)** | 40 | **33** |
 | **Wall time (avg)** | 171s | **127s** |
@@ -195,7 +201,7 @@ Micro-benchmarks are interesting. What actually matters is: how does a real agen
 | **Output tokens (avg)** | 6,668 | **3,657** |
 | **Cost (avg)** | $0.72 | **$0.57** |
 
-Both tools completed all tasks in all trials. Button Heist was **21% cheaper, 26% faster, and used 20% less context**.
+Both tools completed all tasks in all trials. The Button Heist was **21% cheaper, 26% faster, and used 20% less context**.
 
 ### Individual Trials
 
@@ -208,19 +214,19 @@ Both tools completed all tasks in all trials. Button Heist was **21% cheaper, 26
 | BH #2 | 32 | 117s | $0.5411 | 1,212,757 | 3,445 |
 | BH #3 | 33 | 126s | $0.5542 | 1,241,091 | 3,843 |
 
-The idb results are tight: 40-41 turns, $0.71-0.74, 169-174s. Button Heist is tighter: 32-34 turns, $0.54-0.62, 117-137s.
+The idb results are tight: 40-41 turns, $0.71-0.74, 169-174s. The Button Heist is tighter: 32-34 turns, $0.54-0.62, 117-137s.
 
-### Why Button Heist Uses Fewer Turns
+### Why The Button Heist Uses Fewer Turns
 
 The turn count difference (40 → 33) is the most important metric. Every turn means the agent re-reads its full context window, reasons about it, and generates a response. Fewer turns = less time, less cost, less context pressure.
 
 **ios-simulator-mcp** requires a separate `ui_describe_all` call after every tap to see what happened. Tap a button? That's two turns: one for the tap, one for the re-read. The idb agent can't skip this — without deltas, it's flying blind after each action.
 
-**Button Heist** returns a delta with every action. The agent sees what changed inline. It still calls `get_interface` when it needs the full picture (navigating to a new screen, verifying final state), but it doesn't need to after every single tap.
+**The Button Heist** returns a delta with every action. The agent sees what changed inline. It still calls `get_interface` when it needs the full picture (navigating to a new screen, verifying final state), but it doesn't need to after every single tap.
 
 ### Why the Output Token Difference Matters
 
-The idb agent generated 6,668 output tokens vs Button Heist's 3,657 — **82% more reasoning**. The agent had to work harder: computing frame centers for coordinates, diffing accessibility trees to understand state changes, and reasoning about whether taps landed correctly. With Button Heist, the agent spent less time on mechanics and more on the actual task.
+The idb agent generated 6,668 output tokens vs The Button Heist's 3,657 — **82% more reasoning**. The agent had to work harder: computing frame centers for coordinates, diffing accessibility trees to understand state changes, and reasoning about whether taps landed correctly. With The Button Heist, the agent spent less time on mechanics and more on the actual task.
 
 ### What the Agent Sees Per Element
 
@@ -248,7 +254,7 @@ The idb agent generated 6,668 output tokens vs Button Heist's 3,657 — **82% mo
 
 15 fields. 5 are null. `AXFrame` and `frame` are redundant. `role`, `role_description`, `subrole` are macOS AX concepts. `content_required` is a macOS assistive tech flag. **47% noise.**
 
-**Button Heist** returns:
+**The Button Heist** returns:
 
 ```json
 {
@@ -273,20 +279,20 @@ The idb agent generated 6,668 output tokens vs Button Heist's 3,657 — **82% mo
 
 ios-simulator-mcp has no animation detection. After a tap triggers a navigation transition, the idb tool returns immediately with no indication of whether the UI has settled. The agent has to immediately call `ui_describe_all` and hope the transition is complete. If it reads too early, it gets a stale or mid-animation tree and has to retry.
 
-Button Heist watches CALayer animations directly. `wait_for_idle` tells the agent exactly when the transition is done. Actions that trigger navigation automatically wait for idle before returning the delta. No guessing, no retrying, no stale reads.
+The Button Heist watches CALayer animations directly. `wait_for_idle` tells the agent exactly when the transition is done. Actions that trigger navigation automatically wait for idle before returning the delta. No guessing, no retrying, no stale reads.
 
 ### Text Input
 
 | Tool | Median | Method |
 |---|---|---|
 | idb text | **218ms** | Bulk string injection |
-| Button Heist | **1,012ms** | Per-key via `UIKeyboardImpl` |
+| The Button Heist | **1,012ms** | Per-key via `UIKeyboardImpl` |
 
 **idb is 5x faster for text input.** This is a real trade-off. idb injects the string as a single operation. I simulate individual key presses through the keyboard input system, which is slower but higher fidelity — it triggers `textFieldDidChange`, autocorrect, and input validation the same way a real user would. For agents typing search queries, the speed difference rarely matters. For testing form validation or input masking, the fidelity difference does.
 
 ## Batching: And Then It Gets Better
 
-The base results above show Button Heist is 21% cheaper and 26% faster. But I haven't shown the biggest lever yet: `run_batch`.
+The base results above show The Button Heist is 21% cheaper and 26% faster. But I haven't shown the biggest lever yet: `run_batch`.
 
 `run_batch` lets the agent send multiple actions in a single MCP call. Instead of one turn per tap, the agent batches an entire sequence — calculator digits, form fill workflows, navigation chains — into one round trip. ios-simulator-mcp has no equivalent. Every action is its own MCP call, every call is its own turn, and every turn re-reads the full context window.
 
@@ -314,7 +320,7 @@ The calculator sequence `456×789=` without batching is 8 turns. With batching, 
 
 Same methodology, same task, 3 additional trials with `run_batch` available.
 
-| Metric | ios-simulator-mcp | Button Heist | BH + Batching |
+| Metric | ios-simulator-mcp | The Button Heist | BH + Batching |
 |---|--:|--:|--:|
 | **Turns (avg)** | 40 | 33 | **13** |
 | **Wall time (avg)** | 171s | 127s | **82s** |
@@ -329,7 +335,7 @@ Same methodology, same task, 3 additional trials with `run_batch` available.
 
 ### Savings vs ios-simulator-mcp
 
-| | Button Heist | BH + Batching |
+| | The Button Heist | BH + Batching |
 |---|--:|--:|
 | Cost reduction | 21% | **58%** |
 | Wall time reduction | 26% | **52%** |
@@ -340,7 +346,7 @@ Batching cuts turns from 40 to 13, wall time from 171s to 82s, and context usage
 
 ### Projected Cost at Scale
 
-| | ios-simulator-mcp | Button Heist | BH + Batching |
+| | ios-simulator-mcp | The Button Heist | BH + Batching |
 |---|--:|--:|--:|
 | 100 runs/day | $72/day | $57/day | **$30/day** |
 | Annual (250 workdays) | $18,046 | $14,298 | **$7,550** |
@@ -350,7 +356,7 @@ Batching cuts turns from 40 to 13, wall time from 171s to 82s, and context usage
 
 ios-simulator-mcp got us started. It's fine for basic agent interaction — tap, screenshot, read the tree.
 
-Button Heist is what comes next. Agents that reliably navigate complex UIs, interact with custom controls, understand what changed after each action, don't waste tokens re-fetching the world after every tap, and work on real devices with real Square hardware.
+The Button Heist is what comes next. Agents that reliably navigate complex UIs, interact with custom controls, understand what changed after each action, don't waste tokens re-fetching the world after every tap, and work on real devices with real Square hardware.
 
 The embedding cost is the same cost we already pay for Reveal. The capabilities it unlocks — deltas, idle detection, real touches, semantic actions, full-fidelity `UIAccessibility` data — aren't missing features in ios-simulator-mcp. They're architectural impossibilities for any tool running outside the app process.
 
