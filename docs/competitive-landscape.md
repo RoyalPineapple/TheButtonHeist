@@ -168,7 +168,7 @@ Official MCP support built into the Maestro mobile testing framework. 14 tools. 
 
 **Capabilities**: `list_devices`, `start_device`, `launch_app`, `stop_app`, `tap_on`, `input_text`, `take_screenshot`, `inspect_view_hierarchy`, `run_flow`.
 
-**Key limitations vs us**: Maestro DSL/flow files are the primary abstraction — agents work within Maestro's paradigm, not arbitrary UI control. 14 tools vs our 16. No multi-touch, no interface deltas, no animation detection.
+**Key limitations vs us**: Maestro DSL/flow files are the primary abstraction — agents work within Maestro's paradigm, not arbitrary UI control. No multi-touch, no interface deltas, no animation detection.
 
 **Assessment**: Strong choice for teams already using Maestro for mobile testing. The flow-based paradigm is a constraint for exploratory UI interaction — agents can't freely navigate the way they can with Button Heist.
 
