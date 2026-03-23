@@ -191,21 +191,21 @@ Micro-benchmarks are interesting. What actually matters is: how does a real agen
 - **Models**: Claude Sonnet 4.6 and Claude Haiku 4.5, via `claude -p` (Claude Code CLI)
 - **App**: AccessibilityTestApp running on iPhone 16 Pro Simulator (iOS 26.1)
 - **Task**: 11-step workflow — todo CRUD, filtering, calculator arithmetic, navigation
-- **Trials**: Sonnet: 6 BH + 4 idb (interleaved, app reset between each). Haiku: 3 each.
+- **Trials**: 6 per configuration for Sonnet (interleaved, app reset between each). 3 per configuration for Haiku.
 - **Measurement**: Token usage, cost, wall time, and turn count reported by Claude Code's JSON output
-- **Outliers**: One BH Sonnet trial hit a retry loop (64 turns, $1.59) and was excluded. One Haiku BH trial completed the task but didn't produce the expected summary keywords — marked as incomplete.
+- **Outliers**: One BH Sonnet trial hit a retry loop (64 turns, $1.59) and was excluded and replaced. One Haiku BH trial completed the task but didn't produce the expected summary keywords — marked as incomplete.
 
-### Sonnet Results
+### Sonnet Results (n=6 each)
 
-| Metric | ios-simulator-mcp (n=4) | The Button Heist (n=6) |
+| Metric | ios-simulator-mcp | The Button Heist |
 |---|--:|--:|
-| **Turns** | 40 ± 0.6 | **31 ± 4.0** |
-| **Wall time** | 177s ± 13 | **123s ± 12** |
-| **Context consumed** | 1,562,850 ± 39,825 | **1,137,241 ± 203,119** |
-| **Output tokens** | 6,684 ± 45 | **3,644 ± 268** |
-| **Cost** | $0.73 ± $0.03 | **$0.55 ± $0.06** |
+| **Turns** | 41 ± 1.4 | **31 ± 4.0** |
+| **Wall time** | 175s ± 11 | **123s ± 12** |
+| **Context consumed** | 1,550,475 ± 67,840 | **1,137,241 ± 203,119** |
+| **Output tokens** | 6,678 ± 115 | **3,644 ± 268** |
+| **Cost** | $0.73 ± $0.02 | **$0.55 ± $0.06** |
 
-Both tools completed all tasks in every trial. The Button Heist was **25% cheaper, 31% faster, and used 27% less context**.
+All 12 Sonnet trials completed all tasks. The Button Heist was **25% cheaper, 29% faster, and used 26% less context**.
 
 ### Haiku Results
 
@@ -227,14 +227,16 @@ Haiku uses more context tokens than Sonnet — it reasons less efficiently — b
 | idb #2 | 40 | 169s | $0.7124 | 1,545,347 | 6,702 |
 | idb #3 | 40 | 169s | $0.7110 | 1,540,806 | 6,626 |
 | idb #4 | 41 | 197s | $0.7678 | 1,542,727 | 6,733 |
+| idb #5 | 39 | 167s | $0.7287 | 1,435,126 | 6,492 |
+| idb #6 | 43 | 175s | $0.7385 | 1,616,322 | 6,839 |
 | BH #1 | 34 | 137s | $0.6205 | 1,320,673 | 3,684 |
 | BH #2 | 32 | 117s | $0.5411 | 1,212,757 | 3,445 |
 | BH #3 | 33 | 126s | $0.5542 | 1,241,091 | 3,843 |
 | BH #4 | 31 | 129s | $0.5672 | 1,112,095 | 3,661 |
 | BH #5 | 23 | 101s | $0.4517 | 746,473 | 3,244 |
-| BH #7 | 32 | 126s | $0.5637 | 1,190,362 | 3,989 |
+| BH #6 | 32 | 126s | $0.5637 | 1,190,362 | 3,989 |
 
-The idb results are tight: 40-41 turns, $0.71-0.77, 169-197s. The Button Heist ranges wider (23-34 turns) because the agent sometimes finds efficient paths through the task — that variability is a feature, not noise. The floor is lower because the tools give the agent room to be clever.
+The idb results are tight: 39-43 turns, $0.71-0.77, 167-197s. The Button Heist ranges wider (23-34 turns) because the agent sometimes finds efficient paths through the task — that variability is a feature, not noise. The floor is lower because the tools give the agent room to be clever.
 
 ### Why The Button Heist Uses Fewer Turns
 
@@ -340,15 +342,15 @@ The calculator sequence `456×789=` without batching is 8 turns. With batching, 
 
 ### Batching Benchmark
 
-Same methodology, same task. Sonnet: 4 trials. Haiku: 3 trials.
+Same methodology, same task. Sonnet: 6 trials. Haiku: 3 trials.
 
 **Sonnet:**
 
-| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=4) |
+| Metric | ios-simulator-mcp | The Button Heist | BH + Batching (n=6) |
 |---|--:|--:|--:|
-| **Turns** | 40 | 31 | **13 ± 1.5** |
-| **Wall time** | 177s | 123s | **83s ± 4** |
-| **Context consumed** | 1,562,850 | 1,137,241 | **439,237 ± 45,501** |
+| **Turns** | 41 | 31 | **12 ± 1.6** |
+| **Wall time** | 175s | 123s | **83s ± 4** |
+| **Context consumed** | 1,550,475 | 1,137,241 | **409,017 ± 58,807** |
 | **Cost** | $0.73 | $0.55 | **$0.30 ± $0.04** |
 
 **Haiku:**
@@ -366,6 +368,8 @@ Same methodology, same task. Sonnet: 4 trials. Haiku: 3 trials.
 | Sonnet batch #2 | 14 | 82s | $0.3544 | 454,634 | 2,694 |
 | Sonnet batch #3 | 11 | 80s | $0.2542 | 371,832 | 2,780 |
 | Sonnet batch #4 | 14 | 88s | $0.2915 | 458,993 | 2,801 |
+| Sonnet batch #5 | 11 | 86s | $0.3390 | 340,775 | 3,050 |
+| Sonnet batch #6 | 11 | 78s | $0.2740 | 356,380 | 2,484 |
 | Haiku batch #1 | 17 | 73s | $0.1479 | 811,557 | 4,793 |
 | Haiku batch #2 | 18 | 80s | $0.1626 | 910,161 | 4,818 |
 | Haiku batch #3 | 20 | 81s | $0.1780 | 1,012,475 | 5,312 |
@@ -375,17 +379,17 @@ Same methodology, same task. Sonnet: 4 trials. Haiku: 3 trials.
 | | The Button Heist | BH + Batching |
 |---|--:|--:|
 | **Sonnet** | | |
-| Cost reduction | 25% | **59%** |
-| Wall time reduction | 31% | **53%** |
-| Context reduction | 27% | **72%** |
-| Turn reduction | 24% | **67%** |
+| Cost reduction | 25% | **58%** |
+| Wall time reduction | 29% | **52%** |
+| Context reduction | 26% | **73%** |
+| Turn reduction | 24% | **69%** |
 | **Haiku** | | |
-| Cost reduction | 17% | **56%** |
-| Wall time reduction | 5% | **41%** |
+| Cost reduction | 17% | **55%** |
+| Wall time reduction | 4% | **40%** |
 | Context reduction | 20% | **63%** |
 | Turn reduction | 19% | **58%** |
 
-With batching, Sonnet drops from $0.73 to $0.30 — **59% cheaper** for the same work. Haiku drops from $0.37 to $0.16 — **56% cheaper**. The savings are consistent across models.
+With batching, Sonnet drops from $0.73 to $0.30 — **58% cheaper** for the same work. Haiku drops from $0.37 to $0.16 — **55% cheaper**. The savings are consistent across models.
 
 ### Projected Cost at Scale
 
@@ -394,7 +398,7 @@ With batching, Sonnet drops from $0.73 to $0.30 — **59% cheaper** for the same
 | **Sonnet** | | | |
 | Per run | $0.73 | $0.55 | **$0.30** |
 | 100 runs/day | $73/day | $55/day | **$30/day** |
-| Annual (250 workdays) | $18,335 | $13,743 | **$7,485** |
+| Annual (250 workdays) | $18,300 | $13,700 | **$7,500** |
 | **Haiku** | | | |
 | Per run | $0.37 | $0.30 | **$0.16** |
 | 100 runs/day | $37/day | $30/day | **$16/day** |
