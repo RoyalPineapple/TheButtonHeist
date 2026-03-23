@@ -174,15 +174,6 @@ The idb agent generated 6,678 output tokens vs The Button Heist's 3,644 — **83
 
 12 fields. No nulls. No redundancy. **100% signal.** Every field tells the agent what it needs: what the element is, where to tap it, whether it's tappable, and what actions are available.
 
-## Text Input
-
-| Tool | Median | Method |
-|---|---|---|
-| idb text | **218ms** | Bulk string injection |
-| The Button Heist | **1,012ms** | Per-key via `UIKeyboardImpl` |
-
-**idb is 5x faster for text input.** idb injects the string as a single operation. The Button Heist simulates individual key presses through the keyboard input system, which is slower but higher fidelity — it triggers `textFieldDidChange`, autocorrect, and input validation the same way a real user would.
-
 ## Projected Cost at Scale
 
 | | ios-simulator-mcp | The Button Heist | BH + Batching |
