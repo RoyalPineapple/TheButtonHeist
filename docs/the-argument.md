@@ -1,36 +1,32 @@
-# The Argument for Button Heist
+# Button Heist
 
-## The Situation
+I've been experimenting with this for the last couple of months. It's very much 0.0.1, but it pulls together a few threads I've been thinking about for a long time.
 
-A bunch of you are using [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp) to let AI agents interact with our iOS apps. It works. `npx ios-simulator-mcp`, point your MCP client at it, and an agent can screenshot the simulator, read the accessibility tree, and tap coordinates.
+## Where This Comes From
 
-I built something better. This is my case for why you should switch.
+Part of it goes back to the mobile test engineering days with Dimitris and jmartin, and to my time working on KIF — including the predicate system and the building-block API.
 
-## The Core Insight: Accessibility Is the Agent Interface
+I've always had pretty strong feelings about KIF. It got some really important things right. It used the real `UIAccessibility` interface, so it was implicitly validating the accessibility surface of the app, and because it ran in-process it gave us a useful kind of grey-box testing when we needed to get our hands dirty.
 
-Agents are blind. Unless you spend tokens on machine vision for every interaction (slow, expensive, non-deterministic), an agent interacting with an iOS app cannot see the screen. It's in exactly the same position as a VoiceOver user.
+But KIF was also brittle as hell. The touch injection was never really the problem. The problem was the architecture around search: building predicates with things like `usingLabel(...)` and `usingTraits(...)`, recursively walking the hierarchy, and then failing either to find the right view or to prove that it was tappable enough to safely interact with. That search stage is where a huge amount of KIF flake came from.
 
-Apple solved this problem decades ago. The `UIAccessibility` protocol gives non-sighted users a complete, structured representation of the interface: what elements exist, what they're called, what they do, how to interact with them, what order to traverse them in, and what changed. It's not a debugging aid — it's a full-fidelity interface designed for users who navigate without vision.
+At the same time, I've never been satisfied with the alternatives. XCUITest gives you a more reliable test model in some ways, but I keep running into the limits of its abstraction — especially as I've been adding more advanced accessibility support to our design system. It obscures the real accessibility surface, including actual accessibility values, and it has no support for things like custom actions.
 
-Agents should get the same interface. Not a translation of it. Not a screenshot of it. The actual `UIAccessibility` data — activation points, custom content, custom actions, traversal order, `respondsToUserInteraction` — that Apple designed for exactly this use case.
+More recently, on the UI systems side, I've been working on the accessibility parser in AccessibilitySnapshot. One of the things I helped push there was separating the parser from the snapshot renderer so it could produce a structured, codable graph of the accessibility tree — not just a snapshot-oriented view model.
 
-ios-simulator-mcp doesn't provide this. It provides the accessibility tree *after* it's been translated through `AXPTranslator` into macOS accessibility vocabulary and serialized across five process boundaries. iOS-specific properties that have no macOS equivalent — activation points, custom content, custom rotors, `respondsToUserInteraction` — are dropped. What the agent receives is a degraded hybrid: part iOS accessibility, part macOS AX translation, with the most useful iOS-native properties missing.
+Button Heist is the connection between those two ideas. Instead of the old KIF flow where the test searches for elements from the outside, parse the `UIAccessibility` tree up front and hand that structured interface to the agent directly. Then keep the good parts of KIF: in-process interaction, touch injection, and the ability to get your fingers dirty when needed. With a little extra plumbing, it mirrors the VoiceOver pattern too: try `accessibilityActivate()` first, then fall back to tapping the correct activation point if that fails.
 
-Button Heist provides the real thing. I read `UIAccessibility` objects directly, in-process, with full fidelity. The agent gets the same data VoiceOver gets. Every property, every action, every traversal hint — nothing lost in translation.
+## The Core Idea: Inside-Out, Not Outside-In
 
-This isn't new territory. We already made this exact architectural choice — **KIF over XCUITest**.
+For folks who've used [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp), the difference I care about is that Button Heist is an **inside-out** model — structured `UIAccessibility` data plus in-process interaction — rather than an **outside-in** loop over screenshots and coordinates.
 
-KIF runs in-process. It finds elements via `UIAccessibility` identifiers and labels, taps them by calling accessibility actions, and waits for the UI to settle. XCUITest runs out-of-process. It communicates with the app through XPC, gets a serialized representation of the accessibility tree, and injects touches externally. The team chose KIF because in-process access is faster, more reliable, and gives deeper control. The techniques are proven across decades of KIF tests in our codebase.
+That means less output for the agent to chew through, much less dependence on machine vision, and the ability to return structured diffs after actions instead of forcing the agent to re-parse the whole screen every time. Because it's living in-process, it can also proactively push screen changes instead of making the agent poll for everything.
 
-**KIF is to XCUITest as Button Heist is to ios-simulator-mcp.** Same trade-off, same answer. In-process beats out-of-process for the same reasons: full-fidelity `UIAccessibility` data, real touch injection, direct element interaction, animation-aware waiting.
+Agents are blind. Unless you spend tokens on machine vision for every interaction (slow, expensive, non-deterministic), an agent interacting with an iOS app cannot see the screen. It's in exactly the same position as a VoiceOver user. Apple solved this decades ago with `UIAccessibility` — a full-fidelity interface designed for users who navigate without vision. Agents should get the same interface. Not a translation of it. Not a screenshot of it. The real thing.
 
-Now — everyone wants to get off KIF. It's brittle. Tests break when the UI changes. But the brittleness isn't in the in-process architecture. It's in the deterministic scripting model: KIF searches for a specific element by a specific identifier, taps it, asserts a specific outcome. When the UI changes, the script breaks. The searching is rigid, the assertions are rigid, and maintaining hundreds of these scripts is a grind.
+ios-simulator-mcp doesn't give agents the real thing. It provides the accessibility tree *after* it's been translated through `AXPTranslator` into macOS accessibility vocabulary and serialized across five process boundaries. iOS-specific properties that have no macOS equivalent — activation points, custom content, custom rotors, `respondsToUserInteraction` — are dropped. What the agent receives is a degraded hybrid with the most useful iOS-native properties missing.
 
-Button Heist keeps the part of KIF that works — in-process `UIAccessibility` access, real touch injection, direct element interaction — and replaces the part that doesn't. Instead of brittle search-and-assert scripts, I proactively parse the full accessibility tree and hand it to an agent. The agent decides what to tap based on what's actually on screen, not what a test script assumed would be there. When the UI changes, the agent adapts. No scripts to update, no identifiers to chase, no assertion failures to triage.
-
-KIF proved the architecture. Button Heist fixes the control model.
-
-If accessibility is the right interface for non-sighted users, it's the right interface for non-sighted agents. And if you're going to give agents that interface, give them the whole thing.
+Button Heist reads `UIAccessibility` objects directly, in-process, with full fidelity. The agent gets the same data VoiceOver gets. Every property, every action, every traversal hint — nothing lost in translation. It doesn't matter whether the app uses UIKit, SwiftUI, or both — they're all `UIAccessibility` objects at the accessibility layer.
 
 ## What ios-simulator-mcp Actually Does
 
@@ -224,7 +220,7 @@ The turn count difference (40 → 33) is the most important metric. Every turn m
 
 ### Why the Output Token Difference Matters
 
-The idb agent generated 6,668 output tokens vs Button Heist's 3,657 — **45% more reasoning**. The agent had to work harder: computing frame centers for coordinates, diffing accessibility trees to understand state changes, and reasoning about whether taps landed correctly. With Button Heist, the agent spent less time on mechanics and more on the actual task.
+The idb agent generated 6,668 output tokens vs Button Heist's 3,657 — **82% more reasoning**. The agent had to work harder: computing frame centers for coordinates, diffing accessibility trees to understand state changes, and reasoning about whether taps landed correctly. With Button Heist, the agent spent less time on mechanics and more on the actual task.
 
 ### What the Agent Sees Per Element
 

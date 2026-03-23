@@ -2,31 +2,6 @@
 
 The space of MCP servers that let AI agents control mobile UIs has exploded since late 2024. This document maps the full competitive landscape, categorized by architecture and approach, with Button Heist positioned against each.
 
-## Market Map
-
-```mermaid
-quadrantChart
-    title Depth of UI Access vs Integration Effort
-    x-axis "Zero-Config" --> "SDK Embedding Required"
-    y-axis "Surface-Level (coordinates + screenshots)" --> "Deep (accessibility tree + live objects)"
-    quadrant-1 "Deep Access, Higher Integration"
-    quadrant-2 "Deep Access, Easy Setup"
-    quadrant-3 "Surface Access, Easy Setup"
-    quadrant-4 "Surface Access, Higher Integration"
-    Button Heist: [0.85, 0.95]
-    flutter-skill: [0.80, 0.75]
-    mobile-mcp: [0.25, 0.65]
-    XcodeBuildMCP: [0.15, 0.55]
-    ios-simulator-mcp: [0.10, 0.50]
-    InditexTech: [0.10, 0.50]
-    appium-mcp: [0.35, 0.55]
-    Maestro MCP: [0.20, 0.60]
-    Midscene: [0.30, 0.25]
-    MobAI: [0.25, 0.45]
-    iosef: [0.10, 0.50]
-    BrowserStack: [0.15, 0.40]
-```
-
 ## Architecture Taxonomy
 
 Every tool in this space falls into one of five architectural categories. The category determines what data the tool can access and how reliably it can interact with apps.
