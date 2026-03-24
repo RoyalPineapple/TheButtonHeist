@@ -20,7 +20,8 @@ ButtonHeist is a remote iOS UI automation system structured as a heist crew. An 
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
-| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, animation detection |
+| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, screen capture |
+| [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
@@ -38,6 +39,7 @@ graph TD
     TheScore["TheScore - (Shared Protocol)"]
     TheInsideJob["TheInsideJob - (iOS Server + Transport)"]
     TheBagman["TheBagman - (Element Cache & Delta)"]
+    TheTripwire["TheTripwire - (Animation & VC Identity)"]
     ThePlant["ThePlant - (Auto-Start)"]
     ButtonHeist["ButtonHeist - (macOS Client Framework)"]
     CLI["ButtonHeistCLI - (CLI)"]
@@ -54,6 +56,8 @@ graph TD
     ButtonHeist --> CLI
     ButtonHeist --> MCP
     TheInsideJob --> TheBagman
+    TheInsideJob --> TheTripwire
+    TheTripwire --> TheBagman
     TheInsideJob --> ThePlant
     TheInsideJob --> TestApp
     ThePlant --> TestApp
