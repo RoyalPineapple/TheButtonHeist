@@ -10,6 +10,28 @@ enum ToolDefinitions {
     // Agents that need the actual video file should pass the "output" parameter
     // in stop_recording to write to disk and receive only the file path.
 
+    // Shared expect property for action tools — matches the batch step schema
+    static let expectProperty: Value = [
+        "description": """
+            Outcome signal for this action. Delivery is always checked implicitly. \
+            String values: "screen_changed" (did the view controller change?), \
+            "layout_changed" (were elements added or removed? does not match value-only changes). \
+            Object value: {"value": "expected"} to check the post-action field value.
+            """,
+        "oneOf": .array([
+            [
+                "type": "string",
+                "enum": .array(["screen_changed", "layout_changed"].map { .string($0) }),
+            ],
+            [
+                "type": "object",
+                "properties": ["value": ["type": "string"]],
+                "required": .array([.string("value")]),
+                "additionalProperties": false,
+            ],
+        ]),
+    ]
+
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, startRecording, stopRecording, listDevices,
@@ -44,6 +66,7 @@ enum ToolDefinitions {
             "properties": [
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "expect": expectProperty,
             ],
             "additionalProperties": false,
         ]
@@ -62,6 +85,7 @@ enum ToolDefinitions {
                 "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
                 "identifier": ["type": "string", "description": "Element to tap for focus (reads value back)"],
                 "order": ["type": "integer", "description": "Element order index to tap for focus"],
+                "expect": expectProperty,
             ],
             "additionalProperties": false,
         ]
@@ -85,6 +109,7 @@ enum ToolDefinitions {
                 "endY": ["type": "number", "description": "End Y coordinate"],
                 "distance": ["type": "number", "description": "Swipe distance in points (for direction-based)"],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
+                "expect": expectProperty,
             ],
             "additionalProperties": false,
         ]
@@ -171,6 +196,7 @@ enum ToolDefinitions {
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
                     "description": "Scroll direction",
                 ],
+                "expect": expectProperty,
             ],
             "required": .array([.string("direction")]),
             "additionalProperties": false,
@@ -185,6 +211,7 @@ enum ToolDefinitions {
             "properties": [
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "expect": expectProperty,
             ],
             "additionalProperties": false,
         ]
@@ -203,6 +230,7 @@ enum ToolDefinitions {
                     "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
                     "description": "Edge to scroll to",
                 ],
+                "expect": expectProperty,
             ],
             "required": .array([.string("edge")]),
             "additionalProperties": false,
@@ -249,6 +277,7 @@ enum ToolDefinitions {
                 "angle": ["type": "number", "description": "Rotation angle in radians"],
                 "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
                 "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
+                "expect": expectProperty,
             ],
             "required": .array([.string("type")]),
             "additionalProperties": false,
@@ -277,6 +306,7 @@ enum ToolDefinitions {
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "actionName": ["type": "string", "description": "Custom action name (for perform_custom_action)"],
                 "action": ["type": "string", "description": "Edit action: copy, paste, cut, select, selectAll (for edit_action)"],
+                "expect": expectProperty,
             ],
             "required": .array([.string("type")]),
             "additionalProperties": false,
@@ -304,26 +334,7 @@ enum ToolDefinitions {
                         "type": "object",
                         "properties": [
                             "command": ["type": "string", "description": "Fence command (e.g., activate, type_text, scroll)"],
-                            "expect": [
-                                "description": """
-                                    Outcome signal for this step. Delivery is always checked implicitly. \
-                                    String values: "screen_changed" (did the view controller change?), \
-                                    "layout_changed" (were elements added or removed? does not match value-only changes). \
-                                    Object value: {"value": "expected"} to check the post-action field value.
-                                    """,
-                                "oneOf": .array([
-                                    [
-                                        "type": "string",
-                                        "enum": .array(["screen_changed", "layout_changed"].map { .string($0) }),
-                                    ],
-                                    [
-                                        "type": "object",
-                                        "properties": ["value": ["type": "string"]],
-                                        "required": .array([.string("value")]),
-                                        "additionalProperties": false,
-                                    ],
-                                ]),
-                            ],
+                            "expect": expectProperty,
                         ],
                         "required": .array([.string("command")]),
                         "additionalProperties": true,
