@@ -14,13 +14,13 @@ TheScore is the protocol bible. It defines:
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
 5. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
 6. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) - outcome classifiers for actions
-6. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
-7. **Interaction events** (`InteractionEvent`) - wire-level command/result recording, also broadcast live to observers
-8. **Watch payload** (`WatchPayload`) - observer connection parameters
-9. **Server info** (`ServerInfo`)
-10. **Protocol constants** (service type, version)
-11. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
-12. **Connection scope types** (`ConnectionScope`) - configurable connection source filtering (simulator, USB, network) with address classification and environment variable parsing
+7. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
+8. **Interaction events** (`InteractionEvent`) - wire-level command/result recording, also broadcast live to observers
+9. **Watch payload** (`WatchPayload`) - observer connection parameters
+10. **Server info** (`ServerInfo`)
+11. **Protocol constants** (service type, version)
+12. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
+13. **Connection scope types** (`ConnectionScope`) - configurable connection source filtering (simulator, USB, network) with address classification and environment variable parsing
 
 ## Architecture Diagram
 
