@@ -717,19 +717,19 @@ cd ButtonHeistMCP && swift build -c release
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `get_interface` | Get UI element hierarchy | — |
-| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern) | `identifier`, `order` |
-| `type_text` | Type text / delete characters | `text`, `deleteCount`, `identifier`, `order` |
-| `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY` |
+| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern) | `identifier`, `order`, `expect` |
+| `type_text` | Type text / delete characters | `text`, `deleteCount`, `identifier`, `order`, `expect` |
+| `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_idle` | Wait for animations to settle | `timeout` |
 | `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
 | `list_devices` | List discovered iOS devices | — |
-| `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier` |
-| `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard` |
-| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order` |
-| `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order` |
-| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order` |
+| `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
+| `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`; `expect` |
+| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
+| `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order`, `expect` |
+| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
 | `get_session_state` | Read-only summary of the current macOS-side session state | — |
 
