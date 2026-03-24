@@ -2,12 +2,6 @@
 #if DEBUG
 import UIKit
 
-private typealias RawPointerFn = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Void
-private typealias IntFn = @convention(c) (AnyObject, Selector, Int) -> Void
-private typealias BoolFn = @convention(c) (AnyObject, Selector, Bool) -> Void
-private typealias DoubleFn = @convention(c) (AnyObject, Selector, Double) -> Void
-private typealias PointBoolFn = @convention(c) (AnyObject, Selector, CGPoint, Bool) -> Void
-
 extension TheSafecracker {
 
     /// Factory for creating synthetic UITouch instances using private APIs.
@@ -16,33 +10,28 @@ extension TheSafecracker {
 
         static func createTouch(at point: CGPoint, in window: UIWindow, view: UIView, phase: UITouch.Phase) -> UITouch? {
             let touch = UITouch()
-            performObjSelector(on: touch, selector: "setWindow:", with: window)
-            performObjSelector(on: touch, selector: "setView:", with: view)
+            ObjCRuntime.message("setWindow:", to: touch)?.call(window)
+            ObjCRuntime.message("setView:", to: touch)?.call(view)
             setTouchLocation(touch, point: point, resetPrevious: true)
-            performIntSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
-            performIntSelector(on: touch, selector: "setTapCount:", with: 1)
-            performBoolSelector(on: touch, selector: "_setIsFirstTouchForView:", with: true)
-            performBoolSelector(on: touch, selector: "setIsTap:", with: true)
-            let timestamp = ProcessInfo.processInfo.systemUptime
-            performDoubleSelector(on: touch, selector: "setTimestamp:", with: timestamp)
+            ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
+            ObjCRuntime.message("setTapCount:", to: touch)?.call(1)
+            ObjCRuntime.message("_setIsFirstTouchForView:", to: touch)?.call(true)
+            ObjCRuntime.message("setIsTap:", to: touch)?.call(true)
+            ObjCRuntime.message("setTimestamp:", to: touch)?.call(ProcessInfo.processInfo.systemUptime)
             return touch
         }
 
         static func setPhase(_ touch: UITouch, phase: UITouch.Phase) {
-            performIntSelector(on: touch, selector: "setPhase:", with: phase.rawValue)
-            let timestamp = ProcessInfo.processInfo.systemUptime
-            performDoubleSelector(on: touch, selector: "setTimestamp:", with: timestamp)
+            ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
+            ObjCRuntime.message("setTimestamp:", to: touch)?.call(ProcessInfo.processInfo.systemUptime)
         }
 
         static func setHIDEvent(_ touch: UITouch, event: UnsafeMutableRawPointer) {
-            let selector = NSSelectorFromString("_setHidEvent:")
-            guard touch.responds(to: selector) else {
+            guard let msg = ObjCRuntime.message("_setHidEvent:", to: touch) else {
                 insideJobLogger.error("UITouch doesn't respond to _setHidEvent:")
                 return
             }
-            if let imp = touch.method(for: selector) {
-                unsafeBitCast(imp, to: RawPointerFn.self)(touch, selector, event)
-            }
+            msg.call(event)
         }
 
         static func setLocation(_ touch: UITouch, point: CGPoint) {
@@ -50,48 +39,15 @@ extension TheSafecracker {
         }
 
         static func setGestureView(_ touch: UITouch, view: UIView) {
-            performObjSelector(on: touch, selector: "setGestureView:", with: view)
-        }
-
-        private static func performObjSelector(on object: NSObject, selector: String, with value: AnyObject) {
-            let sel = NSSelectorFromString(selector)
-            guard object.responds(to: sel) else { return }
-            _ = object.perform(sel, with: value)
-        }
-
-        private static func performIntSelector(on object: NSObject, selector: String, with value: Int) {
-            let sel = NSSelectorFromString(selector)
-            guard object.responds(to: sel) else { return }
-            if let imp = object.method(for: sel) {
-                unsafeBitCast(imp, to: IntFn.self)(object, sel, value)
-            }
-        }
-
-        private static func performBoolSelector(on object: NSObject, selector: String, with value: Bool) {
-            let sel = NSSelectorFromString(selector)
-            guard object.responds(to: sel) else { return }
-            if let imp = object.method(for: sel) {
-                unsafeBitCast(imp, to: BoolFn.self)(object, sel, value)
-            }
-        }
-
-        private static func performDoubleSelector(on object: NSObject, selector: String, with value: Double) {
-            let sel = NSSelectorFromString(selector)
-            guard object.responds(to: sel) else { return }
-            if let imp = object.method(for: sel) {
-                unsafeBitCast(imp, to: DoubleFn.self)(object, sel, value)
-            }
+            ObjCRuntime.message("setGestureView:", to: touch)?.call(view)
         }
 
         private static func setTouchLocation(_ touch: UITouch, point: CGPoint, resetPrevious: Bool) {
-            let selector = NSSelectorFromString("_setLocationInWindow:resetPrevious:")
-            guard touch.responds(to: selector) else {
+            guard let msg = ObjCRuntime.message("_setLocationInWindow:resetPrevious:", to: touch) else {
                 touch.setValue(point, forKey: "locationInWindow")
                 return
             }
-            if let imp = touch.method(for: selector) {
-                unsafeBitCast(imp, to: PointBoolFn.self)(touch, selector, point, resetPrevious)
-            }
+            msg.call(point, resetPrevious)
         }
     }
 }

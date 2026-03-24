@@ -447,7 +447,7 @@ extension TheSafecracker {
         }
     }
 
-    func executeTwoFingerTap(_ target: TwoFingerTapTarget) -> InteractionResult {
+    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> InteractionResult {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -456,7 +456,7 @@ extension TheSafecracker {
             return result
         case .success(let center):
             let spread = target.spread ?? 40.0
-            let success = twoFingerTap(at: center, spread: CGFloat(spread))
+            let success = await twoFingerTap(at: center, spread: CGFloat(spread))
             if success { fingerprints.showFingerprint(at: center) }
             return InteractionResult(success: success, method: .syntheticTwoFingerTap, message: nil, value: nil)
         }

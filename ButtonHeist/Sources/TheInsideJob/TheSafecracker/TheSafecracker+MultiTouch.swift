@@ -103,13 +103,16 @@ extension TheSafecracker {
     }
 
     /// Simulate a two-finger tap at a screen point.
+    /// Yields to the main run loop between began and ended phases so that
+    /// SwiftUI gesture recognizers have time to process the began event.
     /// - Parameters:
     ///   - center: Center point between the two fingers
     ///   - spread: Distance between the two fingers (default 40pt)
-    func twoFingerTap(at center: CGPoint, spread: CGFloat = 40) -> Bool {
+    func twoFingerTap(at center: CGPoint, spread: CGFloat = 40) async -> Bool {
         let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
         let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
         guard touchesDown(at: [p1, p2]) else { return false }
+        try? await Task.sleep(nanoseconds: TheSafecracker.gestureYieldDelay)
         return touchesUp()
     }
 

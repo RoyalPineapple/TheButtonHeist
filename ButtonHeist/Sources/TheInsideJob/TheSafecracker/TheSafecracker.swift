@@ -60,6 +60,10 @@ final class TheSafecracker {
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
     nonisolated static let maxInterKeyDelay: UInt64 = 500_000_000
 
+    /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
+    /// pipeline has run-loop time to transition from "possible" to "recognized".
+    nonisolated static let gestureYieldDelay: UInt64 = 50_000_000
+
     // MARK: - Keyboard Visibility (Notification-Based)
 
     /// Tracks keyboard visibility via `UIKeyboardDidChangeFrameNotification`,
@@ -114,7 +118,7 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard touchDown(at: point) else { return false }
-        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms — SwiftUI gestures need run loop time
+        try? await Task.sleep(nanoseconds: Self.gestureYieldDelay)
         return touchUp()
     }
 
@@ -258,12 +262,8 @@ final class TheSafecracker {
     /// to checking UIKeyboardImpl for an active input delegate.
     func isKeyboardVisible() -> Bool {
         if keyboardVisible { return true }
-        // Fallback: check if UIKeyboardImpl has an active delegate (key input responder)
         guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("delegate")
-        guard impl.responds(to: sel),
-              let delegate = impl.perform(sel)?.takeUnretainedValue() else { return false }
-        // Verify the delegate conforms to UIKeyInput (like KIF's hasKeyInputResponder)
+        let delegate: AnyObject? = ObjCRuntime.message("delegate", to: impl)?.call()
         return delegate is UIKeyInput
     }
 
@@ -274,10 +274,10 @@ final class TheSafecracker {
     ///   - text: The text to type, character by character
     ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
     func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("addInputString:")
+        guard let impl = getKeyboardImpl(),
+              let msg = ObjCRuntime.message("addInputString:", to: impl) else { return false }
         for char in text {
-            _ = impl.perform(sel, with: String(char))
+            msg.call(String(char) as AnyObject)
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
@@ -290,10 +290,10 @@ final class TheSafecracker {
     ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
     func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
-        guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("deleteFromInput")
+        guard let impl = getKeyboardImpl(),
+              let msg = ObjCRuntime.message("deleteFromInput", to: impl) else { return false }
         for _ in 0..<count {
-            _ = impl.perform(sel)
+            msg.call()
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
@@ -342,11 +342,7 @@ final class TheSafecracker {
     /// individual key views (which aren't accessible since iOS renders the keyboard
     /// in a remote process).
     private func getKeyboardImpl() -> AnyObject? {
-        guard let kbClass = NSClassFromString("UIKeyboardImpl") else { return nil }
-        let sel = NSSelectorFromString("activeInstance")
-        guard (kbClass as AnyObject).responds(to: sel),
-              let result = (kbClass as AnyObject).perform(sel) else { return nil }
-        return result.takeUnretainedValue()
+        ObjCRuntime.classMessage("activeInstance", on: "UIKeyboardImpl")?.call()
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
@@ -473,9 +469,6 @@ final class TheSafecracker {
 
     // MARK: - Private
 
-    /// Find the correct window for a tap at the given screen point.
-    /// Iterates all windows frontmost-first (highest windowLevel first),
-    /// following KIF's pattern from UIApplication-KIFAdditions.m.
     /// Resolve the correct hit test target for a touch point.
     ///
     /// On iOS 18+, SwiftUI routes gesture events through `SwiftUI.UIKitGestureContainer`
@@ -495,41 +488,47 @@ final class TheSafecracker {
     private func resolveHitTestView(in window: UIWindow, at windowPoint: CGPoint) -> UIView {
         let standardHitView = window.hitTest(windowPoint, with: nil) ?? window
 
-        if #available(iOS 18.0, *) {
-            if let contextClass = NSClassFromString("_UIHitTestContext") {
-                let contextSel = NSSelectorFromString("contextWithPoint:radius:")
-                if (contextClass as AnyObject).responds(to: contextSel) {
-                    typealias ContextFn = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
-                    let contextImp = (contextClass as AnyObject).method(for: contextSel)
-                    let createContext = unsafeBitCast(contextImp, to: ContextFn.self)
+        guard #available(iOS 18.0, *),
+              let createMsg = ObjCRuntime.classMessage("contextWithPoint:radius:", on: "_UIHitTestContext") else {
+            return standardHitView
+        }
 
-                    if let context = createContext(contextClass as AnyObject, contextSel, windowPoint, 0) {
-                        let hitTestSel = NSSelectorFromString("_hitTestWithContext:")
-                        typealias HitTestFn = @convention(c) (AnyObject, Selector, AnyObject) -> AnyObject?
+        // Create a _UIHitTestContext for the touch point (mixed value args — use imp)
+        typealias ContextFn = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
+        guard let context = createMsg.imp(as: ContextFn.self)(createMsg.target, createMsg.selector, windowPoint, 0) else {
+            return standardHitView
+        }
 
-                        // Walk from the standard hitTest leaf up through ancestors.
-                        // The _UIHostingView is the one that returns UIKitGestureContainer.
-                        var currentView: UIView? = standardHitView
-                        while let view = currentView {
-                            if view.responds(to: hitTestSel),
-                               let imp = (view as AnyObject).method(for: hitTestSel) {
-                                let hitTest = unsafeBitCast(imp, to: HitTestFn.self)
-                                if let result = hitTest(view, hitTestSel, context) {
-                                    // UIKitGestureContainer is a UIResponder, not a UIView.
-                                    // unsafeBitCast is required — `as? UIView` silently returns nil.
-                                    return unsafeBitCast(result, to: UIView.self)
-                                }
-                            }
-                            currentView = view.superview
-                        }
-                    }
+        // Walk from the standard hitTest leaf up through ancestors.
+        // The _UIHostingView is the one that returns UIKitGestureContainer.
+        var currentView: UIView? = standardHitView
+        while let view = currentView {
+            if let msg = ObjCRuntime.message("_hitTestWithContext:", to: view),
+               let result: AnyObject = msg.call(context) {
+                // Runtime type guard: verify the result is a known gesture container
+                // or an actual UIView before bitcasting. Future iOS versions might
+                // return something incompatible.
+                if result is UIView {
+                    return result as! UIView // swiftlint:disable:this force_cast
                 }
+                let typeName = String(describing: type(of: result))
+                if typeName.hasSuffix("UIKitGestureContainer") {
+                    // UIKitGestureContainer is a UIResponder, not a UIView.
+                    // unsafeBitCast is required — `as? UIView` silently returns nil.
+                    return unsafeBitCast(result, to: UIView.self)
+                }
+                insideJobLogger.warning("_hitTestWithContext: returned unexpected type: \(typeName)")
             }
+            currentView = view.superview
         }
 
         return standardHitView
     }
 
+    /// Find the correct window for a tap at the given screen point.
+    /// Iterates all windows frontmost-first (highest windowLevel first),
+    /// following KIF's pattern from UIApplication-KIFAdditions.m.
+    /// Returns the first window whose hitTest succeeds at the point.
     private func windowForPoint(_ point: CGPoint) -> UIWindow? {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
