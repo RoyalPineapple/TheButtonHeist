@@ -87,7 +87,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── getTraversableWindows() — shared window access for TheBagman
 │   ├── topmostViewController() / isScreenChange() — VC identity for screen change detection
 │   ├── allClear() — sync gate: no relevant CAAnimation keys (filters _UIParallaxMotionEffect)
-│   └── waitForAllClear(timeout:treeHash:) — unified CADisplayLink settle (layers + optional tree hash)
+│   └── waitForAllClear(timeout:) — unified CADisplayLink settle (presentation layer fingerprinting)
 ├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
 │   └── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)

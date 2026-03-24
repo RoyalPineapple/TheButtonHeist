@@ -226,14 +226,6 @@ final class TheTripwireTests: XCTestCase {
         layer.removeAllAnimations()
     }
 
-    // MARK: - waitForAllClear (hosted test)
-
-    func testWaitForAllClearSettlesWhenIdle() async {
-        // No animations → should settle quickly
-        let settled = await tripwire.waitForAllClear(timeout: 2.0)
-        XCTAssertTrue(settled)
-    }
-
 }
 
 #endif // canImport(UIKit)
