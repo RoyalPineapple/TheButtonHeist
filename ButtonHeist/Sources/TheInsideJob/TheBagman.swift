@@ -243,7 +243,7 @@ final class TheBagman {
 
         // Wait for all clear: presentation layers settled AND accessibility tree stable.
         let start = CFAbsoluteTimeGetCurrent()
-        let settled = await tripwire.waitForAllClear(maxFrames: 10)
+        let settled = await tripwire.waitForAllClear(timeout: 1.0)
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
