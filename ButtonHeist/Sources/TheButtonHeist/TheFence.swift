@@ -367,6 +367,8 @@ public final class TheFence {
                 let isFailed: Bool
                 if case .action(_, let expectation) = response, let result = expectation {
                     isFailed = !result.met
+                } else if case .error = response {
+                    isFailed = true
                 } else {
                     isFailed = false
                 }

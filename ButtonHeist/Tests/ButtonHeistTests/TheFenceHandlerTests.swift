@@ -815,6 +815,31 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchStopsOnErrorResponse() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        // Step 0 is an unknown command → .error response. Step 1 should not run.
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "policy": "stop_on_error",
+            "steps": [
+                ["command": "not_a_real_command"],
+                ["command": "activate", "identifier": "btn1"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(let results, _, let failedIndex, _, _, _) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(results.count, 1, "Batch should stop after the error step")
+        XCTAssertEqual(failedIndex, 0, "Failed index should be the error step")
+    }
+
+    @ButtonHeistActor
     func testBatchWithNoExpectationsShowsZeroCounts() async throws {
         let (fence, mockConn) = makeConnectedFence()
         mockConn.autoResponse = { _ in
