@@ -9,16 +9,16 @@ extension TheInsideJob {
 
     func handleWaitForIdle(_ target: WaitForIdleTarget, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         let timeout = min(target.timeout ?? 5.0, 60.0)
-        let settled = await bagman.waitForAnimationsToSettle(timeout: timeout)
+        let settled = await tripwire.waitForAllClear(timeout: timeout)
 
         guard let hierarchyTree = bagman.refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
-        let elements = bagman.snapshotElements()
+        let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
-        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+        let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
 
         let result = ActionResult(
             success: true,
@@ -26,7 +26,7 @@ extension TheInsideJob {
             message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
             interfaceDelta: InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: elements.count,
+                elementCount: snapshot.elements.count,
                 newInterface: payload
             ),
             animating: settled ? nil : true

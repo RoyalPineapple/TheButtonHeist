@@ -2,7 +2,7 @@
 
 > **File:** `ButtonHeist/Sources/TheInsideJob/TheBagman.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Owns element cache, hierarchy parsing, delta computation, animation detection, and screen capture
+> **Role:** Owns element cache, hierarchy parsing, delta computation, and screen capture
 
 ## Responsibilities
 
@@ -12,10 +12,9 @@ TheBagman handles all the goods during TheInsideJob:
 2. **Weak object references** - maps elements to live `NSObject` instances via `elementObjects` dictionary
 3. **Hierarchy parsing** - drives `AccessibilityHierarchyParser` to traverse the accessibility tree
 4. **Element resolution** - finds elements by `identifier` or `order` for TheSafecracker
-5. **Delta computation** - compares before/after element snapshots to produce `InterfaceDelta`
-6. **Animation detection** - walks `CALayer` trees for active animation keys
-7. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
-8. **Action result assembly** - orchestrates post-action delays, diffs, stability checks, and frame capture
+5. **Delta computation** - compares before/after element snapshots to produce `InterfaceDelta` (receives screen change verdict from TheTripwire's VC identity check)
+6. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
+7. **Action result assembly** - orchestrates post-action diffs and frame capture (delegates all timing to TheTripwire's `waitForAllClear`)
 
 ## Architecture Diagram
 
@@ -26,10 +25,10 @@ graph TD
         WeakRefs["elementObjects: [AccessibilityElement: WeakObject]"]
         Parser["AccessibilityHierarchyParser"]
         Hash["lastHierarchyHash: Int"]
+        Tripwire["tripwire: TheTripwire (injected)"]
 
         subgraph Refresh["Refresh"]
             RefreshData["refreshAccessibilityData()"]
-            GetWindows["getTraversableWindows()"]
             ClearCache["clearCache()"]
         end
 
@@ -45,18 +44,13 @@ graph TD
         end
 
         subgraph Conversion["Element Conversion"]
-            Snapshot["snapshotElements() → [HeistElement]"]
+            Snapshot["snapshotElements() → ElementSnapshot"]
             Convert["convertElement() → HeistElement"]
             ConvertTree["convertHierarchyNode() → ElementNode"]
         end
 
         subgraph Delta["Delta Computation"]
-            ComputeDelta["computeDelta(before:after:afterTree:)"]
-        end
-
-        subgraph Animation["Animation Detection"]
-            HasAnim["hasActiveAnimations() → Bool"]
-            WaitSettle["waitForAnimationsToSettle(timeout:)"]
+            ComputeDelta["computeDelta(before:after:isScreenChange:)"]
         end
 
         subgraph Screen["Screen Capture"]
@@ -65,11 +59,12 @@ graph TD
         end
 
         subgraph ActionResult["Action Result Assembly"]
-            ResultDelta["actionResultWithDelta(success:method:...)"]
+            ResultDelta["actionResultWithDelta(beforeSnapshot:beforeVC:target:...)"]
         end
     end
 
     TheInsideJob["TheInsideJob"] --> TheBagman
+    TheTripwire["TheTripwire"] -.->|injected via init| TheBagman
     TheSafecracker["TheSafecracker"] -.->|weak var bagman| TheBagman
     TheStakeout["TheStakeout"] -.->|captureActionFrame()| TheBagman
 ```
@@ -100,35 +95,32 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Input["computeDelta(before, after, afterTree)"]
-    Input --> HashCheck{same hash?}
-    HashCheck -->|yes| NoChange[".noChange"]
-    HashCheck -->|no| BuildSets["Build ID sets from both sides"]
-    BuildSets --> ScreenCheck{commonIDs < maxCount/2?}
+    Input["computeDelta(before, after, isScreenChange)"]
+    Input --> ScreenCheck{isScreenChange?}
     ScreenCheck -->|yes| ScreenChanged[".screenChanged (full new interface)"]
-    ScreenCheck -->|no| Diff["Compute adds/removes/valueChanges"]
+    ScreenCheck -->|no| HashCheck{same hash?}
+    HashCheck -->|yes| NoChange[".noChange"]
+    HashCheck -->|no| Diff["Compute adds/removes/valueChanges"]
     Diff --> HasChanges{any structural changes?}
     HasChanges -->|adds or removes| ElementsChanged[".elementsChanged"]
     HasChanges -->|values only| ValuesChanged[".valuesChanged"]
     HasChanges -->|neither| NoChange
 ```
 
+Screen change detection is now determined by TheTripwire's view controller identity comparison rather than element overlap heuristics.
+
 ## Action Result Assembly
 
 ```mermaid
 flowchart TD
-    Start["actionResultWithDelta(...)"]
-    Start --> PostDelay["20ms delay if idle, - or waitForAnimationsToSettle(0.25s) + 10ms"]
-    PostDelay --> Refresh["refreshElements()"]
+    Start["actionResultWithDelta(beforeSnapshot:beforeVC:target:...)"]
+    Start --> WaitAllClear["tripwire.waitForAllClear(1.0s, treeHash: hierarchySignature)"]
+    WaitAllClear --> VCCheck["tripwire.isScreenChange(beforeVC, afterVC)"]
+    VCCheck --> Refresh["refreshAccessibilityData()"]
     Refresh --> Snapshot["snapshotElements() (after)"]
-    Snapshot --> Delta["computeDelta(before, after)"]
-    Delta --> Stability{"delta stable?"}
-    Stability -->|yes| Done["Build ActionResult"]
-    Stability -->|no| Poll["Poll 35ms intervals, max 350ms"]
-    Poll --> Stable{"2 identical samples?"}
-    Stable -->|yes| Done
-    Stable -->|timeout| Done
-    Done --> Frame["captureActionFrame() for recording"]
+    Snapshot --> Delta["computeDelta(before, after, isScreenChange)"]
+    Delta --> Lookup["Lookup acted-on element for elementLabel/Value/Traits"]
+    Lookup --> Frame["captureActionFrame() for recording"]
 ```
 
 ## Screen Capture
@@ -139,13 +131,10 @@ Two capture modes:
 
 Both use `UIGraphicsImageRenderer` with `drawHierarchy(in:afterScreenUpdates:)`.
 
-## Window Filtering
+## Dependencies
 
-`getTraversableWindows()` returns windows from the foreground active scene, filtered:
-- Excludes `FingerprintWindow` instances
-- Excludes hidden windows
-- Excludes zero-size windows
-- Sorted by `windowLevel` descending
+- **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), and screen change detection via VC identity
+- **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree
 
 ## Items Flagged for Review
 
@@ -155,10 +144,6 @@ Both use `UIGraphicsImageRenderer` with `drawHierarchy(in:afterScreenUpdates:)`.
 - Delta computation is pure data transformation — testable without UIKit dependency
 - Element resolution and conversion logic could also be unit tested
 - Currently untested
-
-**Animation detection filters `_UIParallaxMotionEffect` keys**
-- Active animation keys matching this prefix are ignored
-- If Apple adds other system animation prefixes, they won't be filtered
 
 ### LOW PRIORITY
 
