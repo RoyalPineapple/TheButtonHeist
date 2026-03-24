@@ -182,7 +182,7 @@ final class TheTripwire {
         private let startTime: CFAbsoluteTime
         private var previous: PresentationFingerprint
         private var quietFrames = 0
-        private let tripwire: TheTripwire
+        private weak var tripwire: TheTripwire?
         private var continuation: CheckedContinuation<Bool, Never>?
 
         // Optional tree hash stability tracking
@@ -213,6 +213,11 @@ final class TheTripwire {
         }
 
         @objc private func onFrame(_ link: CADisplayLink) {
+            guard let tripwire else {
+                finish(settled: false)
+                return
+            }
+
             // 1. Presentation layer fingerprint check
             let current = tripwire.takePresentationFingerprint()
 
