@@ -133,6 +133,9 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var hint: String?
     /// Accessibility traits as human-readable strings (e.g. ["button", "adjustable"])
     public var traits: [String]
+    /// Raw UIAccessibilityTraits bitmask — preserves private traits (e.g. back button 0x8000000)
+    /// that aren't in the named mapping. Used for topology-based screen change detection.
+    public var rawTraits: UInt64?
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
@@ -156,6 +159,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         identifier: String?,
         hint: String? = nil,
         traits: [String] = [],
+        rawTraits: UInt64? = nil,
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
@@ -173,6 +177,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.identifier = identifier
         self.hint = hint
         self.traits = traits
+        self.rawTraits = rawTraits
         self.frameX = frameX
         self.frameY = frameY
         self.frameWidth = frameWidth

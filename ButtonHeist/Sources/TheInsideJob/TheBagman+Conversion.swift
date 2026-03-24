@@ -48,6 +48,7 @@ extension TheBagman {
             identifier: element.identifier,
             hint: element.hint,
             traits: traitNames(element.traits),
+            rawTraits: element.traits.rawValue,
             frameX: frame.origin.x,
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
@@ -142,7 +143,7 @@ extension TheBagman {
     /// Compare two element snapshots and return a compact delta.
     ///
     /// Screen change detection is done by the caller via view controller identity —
-    /// `isScreenChange` is true when the topmost VC changed. This function handles
+    /// `isScreenChange` is true when the screen changed (VC identity or topology). This function handles
     /// the response payloads:
     /// - screen_changed → full new interface
     /// - layout_changed → elementsAdded/elementsRemoved diff

@@ -248,13 +248,17 @@ final class TheBagman {
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
-        // Screen change gate: did the view controller change?
-        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-        let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
-
         // Single read of the post-settle state
         let afterTree = refreshAccessibilityData()
         let afterSnapshot = snapshotElements()
+
+        // Screen change gate: VC identity OR accessibility topology (back button + header)
+        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let isScreenChange = tripwire.isScreenChange(
+            before: beforeVC, after: afterVC,
+            beforeElements: beforeSnapshot.elements,
+            afterElements: afterSnapshot.elements
+        )
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
             afterTree: afterTree, isScreenChange: isScreenChange
