@@ -71,6 +71,37 @@ After a tap triggers a navigation transition, The Button Heist watches `CALayer`
 
 `run_batch` lets the agent send multiple actions in a single MCP call. Adding a todo item (tap field, type text, tap Add) goes from 3 turns to 1. The calculator sequence `456×789=` goes from 8 turns to 1. Fewer turns means the agent re-reads its context window less often.
 
+### Expectations
+
+Actions now carry outcome signals. Every action gets an implicit delivery check — did the tap reach the element? On top of that, callers can attach an `expect` field that classifies the outcome they're looking for:
+
+```json
+{
+  "command": "run_batch",
+  "steps": [
+    {"command": "activate", "identifier": "loginButton", "expect": "screen_changed"},
+    {"command": "type_text", "text": "hello@example.com", "identifier": "emailField",
+     "expect": {"value": "hello@example.com"}},
+    {"command": "activate", "identifier": "submitButton", "expect": "screen_changed"}
+  ]
+}
+```
+
+Three tiers: `screen_changed` (did we navigate?), `layout_changed` (did elements get added or removed?), and `value` (does the field now contain what we typed?). The response reports what actually happened:
+
+```json
+{
+  "status": "ok",
+  "completedSteps": 3,
+  "expectations": {"checked": 3, "met": 3, "allMet": true},
+  "results": [...]
+}
+```
+
+If an expectation isn't met, the batch can stop immediately (under `stop_on_error`) with diagnostics showing what was expected vs what actually happened. The agent doesn't have to re-read the tree and reason about what went wrong — the tool tells it directly.
+
+This is the piece that turns batching from "fewer turns" into "fewer turns with built-in verification." The agent can express intent, execute, and confirm outcome in a single round trip. Without in-process access, this isn't possible — you'd need to re-read the full tree and have the agent figure out whether the screen changed, the layout shifted, or a value updated.
+
 ### Real devices
 
 The Button Heist works on physical devices, not just the simulator. Same framework, same data, same touch injection. That means an agent can test the full stack including hardware — an iPad connected to a Square Stand, for example.
@@ -140,6 +171,7 @@ Other differences:
 - **Accessibility actions**: can't call `accessibilityIncrement()`, `accessibilityDecrement()`, or custom actions.
 - **Multi-touch**: single-finger tap and swipe only.
 - **Batching**: not available.
+- **Expectations**: not possible. The agent has to re-read the tree and reason about what changed after every action.
 - **Physical devices**: simulator only.
 - **idb**: Facebook has archived it. Community-maintained without official support.
 

@@ -170,5 +170,15 @@ The idb agent generated 6,678 output tokens vs The Button Heist's 3,644 — **83
 }
 ```
 
-12 fields. No nulls. No redundancy. **100% signal.** Every field tells the agent what it needs: what the element is, where to tap it, whether it's tappable, and what actions are available.
+12 fields. No nulls. No redundancy.
+
+## Not Yet Benchmarked: Expectations
+
+The benchmarks above were run before the expectations system landed (#125). With expectations, the agent can attach outcome signals to batch steps:
+
+```json
+{"command": "activate", "identifier": "loginButton", "expect": "screen_changed"}
+```
+
+The response tells the agent whether each expectation was met, with diagnostics on failure. This should reduce turns further — the agent no longer needs to call `get_interface` to verify outcomes. Future benchmarks with expectations enabled would measure the incremental improvement over base batching.
 
