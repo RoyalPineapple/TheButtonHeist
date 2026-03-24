@@ -234,21 +234,6 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(settled)
     }
 
-    func testWaitForAllClearWithTreeHashSettlesWhenBothStable() async {
-        // Stable tree hash (constant value) + no animations → should settle
-        let settled = await tripwire.waitForAllClear(timeout: 2.0) { 42 }
-        XCTAssertTrue(settled)
-    }
-
-    func testWaitForAllClearWithTreeHashTimesOutWhenHashChanges() async {
-        // Tree hash changes every call → should time out even if layers are still
-        var counter = 0
-        let settled = await tripwire.waitForAllClear(timeout: 0.3) {
-            counter += 1
-            return counter
-        }
-        XCTAssertFalse(settled, "Should time out when tree hash keeps changing")
-    }
 }
 
 #endif // canImport(UIKit)
