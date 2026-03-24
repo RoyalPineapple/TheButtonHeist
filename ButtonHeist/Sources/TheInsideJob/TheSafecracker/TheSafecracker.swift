@@ -60,6 +60,10 @@ final class TheSafecracker {
     /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
     nonisolated static let maxInterKeyDelay: UInt64 = 500_000_000
 
+    /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
+    /// pipeline has run-loop time to transition from "possible" to "recognized".
+    nonisolated static let gestureYieldDelay: UInt64 = 50_000_000
+
     // MARK: - Keyboard Visibility (Notification-Based)
 
     /// Tracks keyboard visibility via `UIKeyboardDidChangeFrameNotification`,
@@ -97,7 +101,7 @@ final class TheSafecracker {
 
     // MARK: - Internal Touch State
 
-    private var activeTouches: [UITouch] = []
+    private var activeTouches: [SyntheticTouch] = []
     private var activeWindow: UIWindow?
 
     /// Called during continuous gestures with all current finger positions.
@@ -107,10 +111,14 @@ final class TheSafecracker {
     // MARK: - Public: Single-Finger Gestures
 
     /// Simulate a tap at the given screen coordinates.
+    /// Yields to the main run loop between began and ended phases so that
+    /// SwiftUI gesture recognizers (which process events asynchronously)
+    /// have a chance to transition from "possible" to "recognized".
     /// - Parameter point: Point in screen coordinates
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
-    func tap(at point: CGPoint) -> Bool {
+    func tap(at point: CGPoint) async -> Bool {
         guard touchDown(at: point) else { return false }
+        try? await Task.sleep(nanoseconds: Self.gestureYieldDelay)
         return touchUp()
     }
 
@@ -254,12 +262,8 @@ final class TheSafecracker {
     /// to checking UIKeyboardImpl for an active input delegate.
     func isKeyboardVisible() -> Bool {
         if keyboardVisible { return true }
-        // Fallback: check if UIKeyboardImpl has an active delegate (key input responder)
         guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("delegate")
-        guard impl.responds(to: sel),
-              let delegate = impl.perform(sel)?.takeUnretainedValue() else { return false }
-        // Verify the delegate conforms to UIKeyInput (like KIF's hasKeyInputResponder)
+        let delegate: AnyObject? = ObjCRuntime.message("delegate", to: impl)?.call()
         return delegate is UIKeyInput
     }
 
@@ -270,10 +274,10 @@ final class TheSafecracker {
     ///   - text: The text to type, character by character
     ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
     func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("addInputString:")
+        guard let impl = getKeyboardImpl(),
+              let msg = ObjCRuntime.message("addInputString:", to: impl) else { return false }
         for char in text {
-            _ = impl.perform(sel, with: String(char))
+            msg.call(String(char) as AnyObject)
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
@@ -286,10 +290,10 @@ final class TheSafecracker {
     ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
     func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
-        guard let impl = getKeyboardImpl() else { return false }
-        let sel = NSSelectorFromString("deleteFromInput")
+        guard let impl = getKeyboardImpl(),
+              let msg = ObjCRuntime.message("deleteFromInput", to: impl) else { return false }
         for _ in 0..<count {
-            _ = impl.perform(sel)
+            msg.call()
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
@@ -338,11 +342,7 @@ final class TheSafecracker {
     /// individual key views (which aren't accessible since iOS renders the keyboard
     /// in a remote process).
     private func getKeyboardImpl() -> AnyObject? {
-        guard let kbClass = NSClassFromString("UIKeyboardImpl") else { return nil }
-        let sel = NSSelectorFromString("activeInstance")
-        guard (kbClass as AnyObject).responds(to: sel),
-              let result = (kbClass as AnyObject).perform(sel) else { return nil }
-        return result.takeUnretainedValue()
+        ObjCRuntime.classMessage("activeInstance", on: "UIKeyboardImpl")?.call()
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
@@ -370,38 +370,22 @@ final class TheSafecracker {
             return false
         }
 
-        var touches: [UITouch] = []
-        var fingerData: [FingerTouchData] = []
-
+        var touches: [SyntheticTouch] = []
         for point in points {
-            let windowPoint = window.convert(point, from: nil)
-            guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                insideJobLogger.error("No view at point \(String(describing: point))")
-                return false
-            }
-            guard let touch = SyntheticTouchFactory.createTouch(
-                at: windowPoint, in: window, view: hitView, phase: .began
-            ) else {
+            let target = TouchTarget.resolve(at: point, in: window)
+            guard let touch = target.makeTouch(phase: .began) else {
                 insideJobLogger.error("Failed to create touch")
                 return false
             }
             touches.append(touch)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .began
-            ))
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in touches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
+        guard let event = TouchEvent(touches: touches) else {
             insideJobLogger.error("Failed to create began event")
             return false
         }
 
-        UIApplication.shared.sendEvent(event)
+        event.send()
         activeTouches = touches
         activeWindow = window
         return true
@@ -414,55 +398,30 @@ final class TheSafecracker {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
 
-        var fingerData: [FingerTouchData] = []
-
-        for (touch, point) in zip(activeTouches, points) {
-            let windowPoint = window.convert(point, from: nil)
-            SyntheticTouchFactory.setLocation(touch, point: windowPoint)
-            SyntheticTouchFactory.setPhase(touch, phase: .moved)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .moved
-            ))
+        for i in activeTouches.indices {
+            let windowPoint = window.convert(points[i], from: nil)
+            activeTouches[i].update(phase: .moved, location: windowPoint)
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in activeTouches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
-            return false
-        }
-
-        UIApplication.shared.sendEvent(event)
+        guard let event = TouchEvent(touches: activeTouches) else { return false }
+        event.send()
         return true
     }
 
     /// Lift all active touches.
     func touchesUp() -> Bool {
-        guard !activeTouches.isEmpty, let window = activeWindow else { return false }
+        guard !activeTouches.isEmpty else { return false }
 
-        var fingerData: [FingerTouchData] = []
-
-        for touch in activeTouches {
-            SyntheticTouchFactory.setPhase(touch, phase: .ended)
-            let windowPoint = touch.location(in: window)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .ended
-            ))
+        for i in activeTouches.indices {
+            activeTouches[i].update(phase: .ended)
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in activeTouches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
+        guard let event = TouchEvent(touches: activeTouches) else {
             insideJobLogger.error("Failed to create ended event")
             return false
         }
 
-        UIApplication.shared.sendEvent(event)
+        event.send()
         activeTouches = []
         activeWindow = nil
         return true
