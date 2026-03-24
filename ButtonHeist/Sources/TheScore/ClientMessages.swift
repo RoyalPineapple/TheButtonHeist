@@ -125,6 +125,44 @@ public enum ClientMessage: Codable, Sendable {
 
     /// Connect as a read-only observer (no session lock)
     case watch(WatchPayload)
+
+    /// Extract the element target from any action command, if present.
+    public var actionTarget: ActionTarget? {
+        switch self {
+        case .activate(let t), .increment(let t), .decrement(let t), .scrollToVisible(let t):
+            return t
+        case .performCustomAction(let t):
+            return t.elementTarget
+        case .editAction:
+            return nil
+        case .touchTap(let t):
+            return t.elementTarget
+        case .touchLongPress(let t):
+            return t.elementTarget
+        case .touchSwipe(let t):
+            return t.elementTarget
+        case .touchDrag(let t):
+            return t.elementTarget
+        case .touchPinch(let t):
+            return t.elementTarget
+        case .touchRotate(let t):
+            return t.elementTarget
+        case .touchTwoFingerTap(let t):
+            return t.elementTarget
+        case .touchDrawPath:
+            return nil
+        case .touchDrawBezier:
+            return nil
+        case .typeText(let t):
+            return t.elementTarget
+        case .scroll(let t):
+            return t.elementTarget
+        case .scrollToEdge(let t):
+            return t.elementTarget
+        default:
+            return nil
+        }
+    }
 }
 
 // MARK: - Action Targets

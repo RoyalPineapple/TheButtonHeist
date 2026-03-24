@@ -288,7 +288,11 @@ enum ToolDefinitions {
         description: """
             Execute a batch of Button Heist commands in a single MCP call. \
             Each step is a JSON request matching the CLI session format (must include 'command'). \
-            The policy controls whether the batch stops on first error or continues.
+            Every action implicitly checks delivery (success==true). \
+            Steps can include an 'expect' field to classify the expected outcome: \
+            "screen_changed", "layout_changed", or {"value": "expected text"}. \
+            Results report what actually happened — the caller decides what to do with it. \
+            The policy controls whether the batch stops on first error or unmet expectation.
             """,
         inputSchema: [
             "type": "object",
@@ -300,6 +304,26 @@ enum ToolDefinitions {
                         "type": "object",
                         "properties": [
                             "command": ["type": "string", "description": "Fence command (e.g., activate, type_text, scroll)"],
+                            "expect": [
+                                "description": """
+                                    Outcome signal for this step. Delivery is always checked implicitly. \
+                                    String values: "screen_changed" (did the view controller change?), \
+                                    "layout_changed" (were elements added or removed? does not match value-only changes). \
+                                    Object value: {"value": "expected"} to check the post-action field value.
+                                    """,
+                                "oneOf": .array([
+                                    [
+                                        "type": "string",
+                                        "enum": .array(["screen_changed", "layout_changed"].map { .string($0) }),
+                                    ],
+                                    [
+                                        "type": "object",
+                                        "properties": ["value": ["type": "string"]],
+                                        "required": .array([.string("value")]),
+                                        "additionalProperties": false,
+                                    ],
+                                ]),
+                            ],
                         ],
                         "required": .array([.string("command")]),
                         "additionalProperties": true,
