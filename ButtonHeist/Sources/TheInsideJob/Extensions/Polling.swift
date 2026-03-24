@@ -19,7 +19,7 @@ extension TheInsideJob {
 
     private func broadcastHierarchyUpdate() async {
         guard muscle.hasSubscribers else { return }
-        _ = await tripwire.waitForAllClear(maxFrames: 3)
+        _ = await tripwire.waitForAllClear(timeout: 0.25)
         guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
         let snapshot = bagman.snapshotElements()
@@ -85,7 +85,7 @@ extension TheInsideJob {
     // MARK: - Interface Sending
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        _ = await tripwire.waitForAllClear(maxFrames: 5)
+        _ = await tripwire.waitForAllClear(timeout: 0.5)
 
         guard let hierarchyTree = bagman.refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
