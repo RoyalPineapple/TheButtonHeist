@@ -230,7 +230,7 @@ final class TheTripwireTests: XCTestCase {
 
     func testWaitForAllClearSettlesWhenIdle() async {
         // No animations → should settle quickly
-        let settled = await tripwire.waitForAllClear(timeout: 2.0)
+        let settled = await tripwire.waitForAllClear(maxFrames: 20)
         XCTAssertTrue(settled)
     }
 
