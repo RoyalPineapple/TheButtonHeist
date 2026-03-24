@@ -70,18 +70,18 @@ struct ButtonHeistMCPServer {
             // Grouped tools — "type" field becomes the command
             case "gesture":
                 guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text("Missing required parameter: type")], isError: true)
+                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
                 }
                 request["command"] = type
 
             case "accessibility_action":
                 guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text("Missing required parameter: type")], isError: true)
+                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
                 }
                 request["command"] = type
 
             default:
-                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
+                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
             }
 
             let response = try await fence.execute(request: request)
@@ -89,7 +89,7 @@ struct ButtonHeistMCPServer {
             return try renderResponse(response)
         } catch {
             idleMonitor.resetTimer()
-            return .init(content: [.text(errorMessage(error))], isError: true)
+            return .init(content: [.text(text: errorMessage(error), annotations: nil, _meta: nil)], isError: true)
         }
     }
 
@@ -136,7 +136,7 @@ struct ButtonHeistMCPServer {
         var payload = response.jsonDict() ?? [:]
 
         if let pngData = payload["pngData"] as? String {
-            content.append(.image(data: pngData, mimeType: "image/png", metadata: nil))
+            content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
             payload["pngData"] = "<omitted base64 png data>"
         }
 
@@ -145,7 +145,7 @@ struct ButtonHeistMCPServer {
         }
 
         let isError = (payload["status"] as? String) == "error"
-        content.append(.text(try compactJSON(payload)))
+        content.append(.text(text: try compactJSON(payload), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
     }
 
