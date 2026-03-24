@@ -12,22 +12,23 @@ extension TheInsideJob {
         updateDebounceTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: updateDebounceInterval)
             if !Task.isCancelled {
-                broadcastHierarchyUpdate()
+                await broadcastHierarchyUpdate()
             }
         }
     }
 
-    private func broadcastHierarchyUpdate() {
+    private func broadcastHierarchyUpdate() async {
         guard muscle.hasSubscribers else { return }
+        _ = await tripwire.waitForAllClear(timeout: 0.25)
         guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
-        let elements = bagman.snapshotElements()
+        let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
-        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+        let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
 
         // Update hash for polling comparison
-        bagman.lastHierarchyHash = elements.hashValue
+        bagman.lastHierarchyHash = snapshot.elements.hashValue
 
         if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interface(payload))) {
             broadcastToSubscribed(data)
@@ -52,20 +53,21 @@ extension TheInsideJob {
 
     private func checkForChanges() {
         guard muscle.hasSubscribers else { return }
+        guard tripwire.allClear() else { return }
         guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
-        let elements = bagman.snapshotElements()
+        let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
         // Compute hash of current hierarchy
-        let currentHash = elements.hashValue
+        let currentHash = snapshot.elements.hashValue
 
         // Only broadcast if hierarchy changed
         if currentHash != bagman.lastHierarchyHash {
             bagman.lastHierarchyHash = currentHash
 
             // Broadcast hierarchy with tree
-            let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+            let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
             if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interface(payload))) {
                 broadcastToSubscribed(data)
             }
@@ -83,20 +85,17 @@ extension TheInsideJob {
     // MARK: - Interface Sending
 
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
-        // If animating, wait briefly for fast animations to end.
-        if bagman.hasActiveAnimations() {
-            _ = await bagman.waitForAnimationsToSettle(timeout: 0.5)
-        }
+        _ = await tripwire.waitForAllClear(timeout: 0.5)
 
         guard let hierarchyTree = bagman.refreshAccessibilityData() else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
-        let elements = bagman.snapshotElements()
+        let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
-        let payload = Interface(timestamp: Date(), elements: elements, tree: tree)
+        let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
     }
 }
