@@ -31,7 +31,7 @@ extension TheInsideJob {
     ) async -> Bool {
         switch message {
         case .activate(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeActivate(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeActivate(target) }
         case .increment(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
@@ -57,7 +57,7 @@ extension TheInsideJob {
     ) async -> Bool {
         switch message {
         case .touchTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTap(target) }
         case .touchLongPress(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeLongPress(target) }
         case .touchSwipe(let target):

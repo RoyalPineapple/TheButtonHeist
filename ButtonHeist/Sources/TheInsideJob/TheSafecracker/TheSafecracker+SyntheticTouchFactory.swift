@@ -49,6 +49,10 @@ extension TheSafecracker {
             setTouchLocation(touch, point: point, resetPrevious: false)
         }
 
+        static func setGestureView(_ touch: UITouch, view: UIView) {
+            performObjSelector(on: touch, selector: "setGestureView:", with: view)
+        }
+
         private static func performObjSelector(on object: NSObject, selector: String, with value: AnyObject) {
             let sel = NSSelectorFromString(selector)
             guard object.responds(to: sel) else { return }

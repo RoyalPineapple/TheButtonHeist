@@ -236,7 +236,7 @@ extension TheSafecracker {
 
     // MARK: - Accessibility Actions
 
-    func executeActivate(_ target: ActionTarget) -> InteractionResult {
+    func executeActivate(_ target: ActionTarget) async -> InteractionResult {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -256,15 +256,14 @@ extension TheSafecracker {
         }
 
         // Try accessibilityActivate via the live object reference
-        if bagman.activate(elementAt: index) {
+        let activateResult = bagman.activate(elementAt: index)
+        if activateResult {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
-        // Fall back to synthetic touch injection (activation-first philosophy:
-        // accessibilityActivate is always tried before synthetic tap)
-        insideJobLogger.debug("accessibilityActivate failed, falling back to synthetic tap at (\(point.x), \(point.y))")
-        if tap(at: point) {
+        // Fall back to synthetic touch injection
+        if await tap(at: point) {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
         }
@@ -345,7 +344,7 @@ extension TheSafecracker {
 
     // MARK: - Touch Gestures
 
-    func executeTap(_ target: TouchTapTarget) -> InteractionResult {
+    func executeTap(_ target: TouchTapTarget) async -> InteractionResult {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -353,7 +352,7 @@ extension TheSafecracker {
         case .failure(let result):
             return result
         case .success(let point):
-            if tap(at: point) {
+            if await tap(at: point) {
                 fingerprints.showFingerprint(at: point)
                 return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
