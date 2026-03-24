@@ -396,7 +396,8 @@ public final class TheInsideJob {
                 message: result.message,
                 value: result.value,
                 beforeSnapshot: beforeSnapshot,
-                beforeVC: beforeVC
+                beforeVC: beforeVC,
+                target: command.actionTarget
             )
         } else {
             actionResult = ActionResult(

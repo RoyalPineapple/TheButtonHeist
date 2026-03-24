@@ -647,12 +647,12 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `status(connected:deviceName:)` | Connection status |
 | `devices(_:)` | List of discovered devices |
 | `interface(_:)` | UI element snapshot |
-| `action(result:)` | Action outcome with delta |
+| `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
 | `screenshot(path:width:height:)` | Screenshot saved to path |
 | `screenshotData(pngData:width:height:)` | Screenshot as base64 PNG |
 | `recording(path:payload:)` | Recording saved to path |
 | `recordingData(payload:)` | Recording as base64 video |
-| `batch(results:completedSteps:failedIndex:totalTimingMs:)` | Batched command results with aggregate timing and optional failure index |
+| `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 
 ### FenceError
@@ -1206,6 +1206,42 @@ public enum ActionMethod: String, Codable, Sendable
 - `scrollToEdge` - Scroll view scrolled to an edge
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
+
+### ActionExpectation
+
+```swift
+public enum ActionExpectation: Codable, Sendable, Equatable
+```
+
+Outcome signal classifiers for actions. Attached to a request (not to a target type) so any action can opt in. Every action implicitly checks delivery (`success == true`); these tiers classify what kind of change the caller expected. Results report what actually happened — the caller decides what to do with it.
+
+#### Cases
+
+- `value(String)` - Expected the post-action field value to equal this string
+- `screenChanged` - Expected `interfaceDelta.kind == .screenChanged`
+- `layoutChanged` - Expected `interfaceDelta.kind == .elementsChanged` (also met by `.screenChanged`)
+
+#### Static Methods
+
+- `validateDelivery(_: ActionResult) -> ExpectationResult` - Baseline delivery check (always run implicitly). Returns result with `expectation: nil`.
+
+#### Methods
+
+- `validate(against: ActionResult) -> ExpectationResult` - Check this expectation against an action result.
+
+### ExpectationResult
+
+```swift
+public struct ExpectationResult: Codable, Sendable, Equatable
+```
+
+The outcome of checking an `ActionExpectation` against an `ActionResult`.
+
+#### Properties
+
+- `met: Bool` - Whether the expected outcome was observed
+- `expectation: ActionExpectation?` - The expectation that was checked. `nil` for implicit delivery check.
+- `actual: String?` - What was actually observed (for diagnostics when `met` is false)
 
 ### ScreenPayload
 

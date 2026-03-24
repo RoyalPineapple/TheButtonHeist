@@ -62,6 +62,7 @@
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
 		8A1C2908B07C993A9BC28DE0 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */; };
 		90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */; };
+		90C6F22C34DC98C0606D37D7 /* ActionExpectationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */; };
 		931B0CC777D0C21B1A21B1F5 /* AuthFlowIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C307C5131F207C1B1AAB9EE9 /* AuthFlowIntegrationTests.swift */; };
 		941DD066B32A0D60D5B6EB8B /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E836566E11E4B5CB5815D28 /* ServerTransport.swift */; };
 		9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33FA97BFD66D89E91027A83 /* TheMuscle.swift */; };
@@ -296,6 +297,7 @@
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityTests.swift; sourceTree = "<group>"; };
 		AD647E6B8282C97B896CBBB8 /* TLSIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentity.swift; sourceTree = "<group>"; };
+		AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExpectationTests.swift; sourceTree = "<group>"; };
 		B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
 		B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -596,6 +598,7 @@
 			isa = PBXGroup;
 			children = (
 				46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */,
+				AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */,
 				6BE8A7B3A58123142AC5A3C1 /* AuthMessageTests.swift */,
 				F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */,
 				FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */,
@@ -870,6 +873,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */,
+				90C6F22C34DC98C0606D37D7 /* ActionExpectationTests.swift in Sources */,
 				2A360A9CAC75AEA9C9993F93 /* AuthMessageTests.swift in Sources */,
 				04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */,
 				5016FC7A53548764BBC63C6A /* ConnectionScopeTests.swift in Sources */,
