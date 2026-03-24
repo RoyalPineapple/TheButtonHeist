@@ -50,11 +50,11 @@ extension TheSafecracker {
             ObjCRuntime.message("setView:", to: touch)?.call(responder)
             ObjCRuntime.message("setGestureView:", to: touch)?.call(responder)
 
-            guard let locationMsg = ObjCRuntime.message("_setLocationInWindow:resetPrevious:", to: touch) else {
+            if let locationMsg = ObjCRuntime.message("_setLocationInWindow:resetPrevious:", to: touch) {
+                locationMsg.call(windowPoint, true)
+            } else {
                 touch.setValue(windowPoint, forKey: "locationInWindow")
-                return nil
             }
-            locationMsg.call(windowPoint, true)
 
             ObjCRuntime.message("setPhase:", to: touch)?.call(phase.rawValue)
             ObjCRuntime.message("setTapCount:", to: touch)?.call(1)
@@ -158,10 +158,11 @@ extension TheSafecracker {
             }
 
             // Add touches to event (mixed object + value args — use imp)
-            for syntheticTouch in touches {
-                if let msg = ObjCRuntime.message("_addTouch:forDelayedDelivery:", to: event) {
-                    typealias AddTouchFn = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void // swiftlint:disable:this nesting
-                    msg.imp(as: AddTouchFn.self)(event, msg.selector, syntheticTouch.touch, false)
+            if let msg = ObjCRuntime.message("_addTouch:forDelayedDelivery:", to: event) {
+                typealias AddTouchFn = @convention(c) (AnyObject, Selector, UITouch, Bool) -> Void // swiftlint:disable:this nesting
+                let addTouch = msg.imp(as: AddTouchFn.self)
+                for syntheticTouch in touches {
+                    addTouch(event, msg.selector, syntheticTouch.touch, false)
                 }
             }
 

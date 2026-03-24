@@ -29,12 +29,9 @@ if let resultView = result as? UIView {  // ← silently returns nil!
 }
 ```
 
-The fix uses:
-```swift
-return unsafeBitCast(result, to: UIView.self)  // ← works because ObjC doesn't care
-```
+### The fix
 
-This is safe because `UITouch.setView:` and `setGestureView:` accept any `NSObject` via ObjC messaging — they don't actually require a `UIView` despite the method signature suggesting otherwise. **The poorly-named `setView:` API is what enables this to work.**
+Store the hit test result as `AnyObject` throughout the pipeline — never cast to `UIView`. The `TouchTarget.responder` field holds the raw result from `_hitTestWithContext:`, and it flows through to `UITouch.setView:` and `setGestureView:` via ObjC messaging (`ObjCRuntime.message(...).call(responder)`). Since these selectors accept any `NSObject` at the ObjC level, no cast is needed.
 
 ## View hierarchy (debugger trace)
 
@@ -57,12 +54,14 @@ SwiftUI.CGDrawingView                    ← hitTest returns this (rendering lea
 
 | File | Change |
 |------|--------|
-| `TheSafecracker.swift` | Added `resolveHitTestView(in:at:)` with `_UIHitTestContext` pathway, `setGestureView` on touch, async `tap(at:)` with 50ms yield |
-| `TheSafecracker+SyntheticTouchFactory.swift` | Added `setGestureView(_:view:)` |
-| `TheSafecracker+Actions.swift` | `executeActivate` and `executeTap` now async |
-| `TheInsideJob+Dispatch.swift` | Added `await` to activate and tap dispatch closures |
+| `SyntheticTouch.swift` | New. Type-safe pipeline: `TouchTarget.resolve` → `SyntheticTouch` → `TouchEvent`. Hit test resolution with `_UIHitTestContext`, `AnyObject` responder throughout |
+| `ObjCRuntime.swift` | New. Reusable ObjC message dispatch with typed `call()` overloads |
+| `TheSafecracker.swift` | Touch primitives now use pipeline. Extracted `gestureYieldDelay` constant. Keyboard methods use ObjCRuntime |
+| `TheSafecracker+MultiTouch.swift` | `twoFingerTap` now async with gesture yield |
+| `TheSafecracker+Actions.swift` | `executeTwoFingerTap` now async |
+| `TheInsideJob+Dispatch.swift` | `await` on twoFingerTap dispatch |
 | `TheSafecracker+TextEntry.swift` | `await tap(at:)` |
 
 ## Key lesson
 
-When working with Apple's private APIs across Swift/ObjC boundaries, `as? UIView` is not equivalent to ObjC's `isKindOfClass:UIView`. SwiftUI's internal types (`UIKitGestureContainer`) implement UIView-compatible ObjC interfaces without actually inheriting from `UIView`. Always use `unsafeBitCast` when the target API uses ObjC messaging (like `UITouch.setView:`).
+When working with Apple's private APIs across Swift/ObjC boundaries, `as? UIView` is not equivalent to ObjC's `isKindOfClass:UIView`. SwiftUI's internal types (`UIKitGestureContainer`) implement UIView-compatible ObjC interfaces without actually inheriting from `UIView`. The safest approach is to keep private API results as `AnyObject` and pass them through ObjC messaging — never cast to a Swift type that the runtime object doesn't actually inherit from.
