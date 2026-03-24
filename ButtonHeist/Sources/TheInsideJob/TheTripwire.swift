@@ -147,14 +147,8 @@ final class TheTripwire {
     /// Wait for the interface to become all clear.
     ///
     /// Monitors presentation layer movement via CADisplayLink (vsync-synced).
-    /// When `treeHash` is provided, also requires the accessibility tree hash
-    /// to stabilize (2 consecutive matching samples) before declaring all clear.
-    ///
     /// Returns true if settled before timeout, false if timed out.
-    func waitForAllClear(
-        timeout: TimeInterval = 1.0,
-        treeHash: (@MainActor () -> Int)? = nil
-    ) async -> Bool {
+    func waitForAllClear(timeout: TimeInterval = 1.0) async -> Bool {
         // Brief initial delay — SwiftUI needs a run loop tick to start animations.
         try? await Task.sleep(nanoseconds: 30_000_000) // 30ms
 
@@ -165,7 +159,6 @@ final class TheTripwire {
                 timeout: timeout,
                 initialFingerprint: previous,
                 tripwire: self,
-                treeHash: treeHash,
                 continuation: continuation
             )
             observer.start()
@@ -185,24 +178,16 @@ final class TheTripwire {
         private weak var tripwire: TheTripwire?
         private var continuation: CheckedContinuation<Bool, Never>?
 
-        // Optional tree hash stability tracking
-        private let treeHash: (@MainActor () -> Int)?
-        private var previousTreeHash: Int?
-        private var treeQuietFrames = 0
-
         init(
             timeout: TimeInterval,
             initialFingerprint: PresentationFingerprint,
             tripwire: TheTripwire,
-            treeHash: (@MainActor () -> Int)? = nil,
             continuation: CheckedContinuation<Bool, Never>
         ) {
             self.timeout = timeout
             self.startTime = CFAbsoluteTimeGetCurrent()
             self.previous = initialFingerprint
             self.tripwire = tripwire
-            self.treeHash = treeHash
-            self.previousTreeHash = treeHash?()
             self.continuation = continuation
         }
 
@@ -228,21 +213,7 @@ final class TheTripwire {
             }
             previous = current
 
-            // 2. Optional tree hash stability check
-            if let treeHash {
-                let currentHash = treeHash()
-                if currentHash == previousTreeHash {
-                    treeQuietFrames += 1
-                } else {
-                    treeQuietFrames = 0
-                    previousTreeHash = currentHash
-                }
-            }
-
-            // 3. Both must be quiet to declare all clear
-            let layersSettled = quietFrames >= 2
-            let treeSettled = treeHash == nil || treeQuietFrames >= 2
-            if layersSettled && treeSettled {
+            if quietFrames >= 2 {
                 finish(settled: true)
                 return
             }
