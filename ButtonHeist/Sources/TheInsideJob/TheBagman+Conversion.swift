@@ -259,14 +259,6 @@ extension TheBagman {
         )
     }
 
-    func hierarchySignature(_ elements: [HeistElement]) -> Int {
-        var hasher = Hasher()
-        hasher.combine(elements.count)
-        for element in elements {
-            hasher.combine(element)
-        }
-        return hasher.finalize()
-    }
 }
 
 // MARK: - Shape Helper
