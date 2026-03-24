@@ -512,8 +512,7 @@ final class TheSafecracker {
                         var currentView: UIView? = standardHitView
                         while let view = currentView {
                             if view.responds(to: hitTestSel),
-                               let imp = (view as AnyObject).method(for: hitTestSel)
-                            {
+                               let imp = (view as AnyObject).method(for: hitTestSel) {
                                 let hitTest = unsafeBitCast(imp, to: HitTestFn.self)
                                 if let result = hitTest(view, hitTestSel, context) {
                                     // UIKitGestureContainer is a UIResponder, not a UIView.
