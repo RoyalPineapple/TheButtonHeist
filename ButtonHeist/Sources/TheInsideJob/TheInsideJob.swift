@@ -44,7 +44,8 @@ public final class TheInsideJob {
     private let preferredPort: UInt16
     private let installationId: String
     private let sessionId = UUID()
-    let bagman = TheBagman()
+    let tripwire = TheTripwire()
+    let bagman: TheBagman
     let theSafecracker = TheSafecracker()
 
     private let allowedScopes: Set<ConnectionScope>
@@ -80,6 +81,7 @@ public final class TheInsideJob {
         self.instanceId = instanceId
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
+        self.bagman = TheBagman(tripwire: self.tripwire)
         self.theSafecracker.bagman = self.bagman
 
         if let scopes = allowedScopes {
@@ -381,7 +383,8 @@ public final class TheInsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeElements = bagman.snapshotElements()
+        let beforeSnapshot = bagman.snapshotElements()
+        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let result = await interaction()
 
@@ -392,7 +395,8 @@ public final class TheInsideJob {
                 method: result.method,
                 message: result.message,
                 value: result.value,
-                beforeElements: beforeElements
+                beforeSnapshot: beforeSnapshot,
+                beforeVC: beforeVC
             )
         } else {
             actionResult = ActionResult(
