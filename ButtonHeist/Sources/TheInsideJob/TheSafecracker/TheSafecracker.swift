@@ -107,10 +107,14 @@ final class TheSafecracker {
     // MARK: - Public: Single-Finger Gestures
 
     /// Simulate a tap at the given screen coordinates.
+    /// Yields to the main run loop between began and ended phases so that
+    /// SwiftUI gesture recognizers (which process events asynchronously)
+    /// have a chance to transition from "possible" to "recognized".
     /// - Parameter point: Point in screen coordinates
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
-    func tap(at point: CGPoint) -> Bool {
+    func tap(at point: CGPoint) async -> Bool {
         guard touchDown(at: point) else { return false }
+        try? await Task.sleep(nanoseconds: 50_000_000) // 50ms — SwiftUI gestures need run loop time
         return touchUp()
     }
 
@@ -375,16 +379,15 @@ final class TheSafecracker {
 
         for point in points {
             let windowPoint = window.convert(point, from: nil)
-            guard let hitView = window.hitTest(windowPoint, with: nil) else {
-                insideJobLogger.error("No view at point \(String(describing: point))")
-                return false
-            }
+            let hitView = resolveHitTestView(in: window, at: windowPoint)
             guard let touch = SyntheticTouchFactory.createTouch(
                 at: windowPoint, in: window, view: hitView, phase: .began
             ) else {
                 insideJobLogger.error("Failed to create touch")
                 return false
             }
+            // Set gestureView so gesture recognizers attached to this view receive the touch
+            SyntheticTouchFactory.setGestureView(touch, view: hitView)
             touches.append(touch)
             fingerData.append(FingerTouchData(
                 touch: touch, location: windowPoint, phase: .began
@@ -473,7 +476,61 @@ final class TheSafecracker {
     /// Find the correct window for a tap at the given screen point.
     /// Iterates all windows frontmost-first (highest windowLevel first),
     /// following KIF's pattern from UIApplication-KIFAdditions.m.
-    /// Returns the first window whose hitTest succeeds at the point.
+    /// Resolve the correct hit test target for a touch point.
+    ///
+    /// On iOS 18+, SwiftUI routes gesture events through `SwiftUI.UIKitGestureContainer`
+    /// — a `UIResponder` subclass that is NOT a `UIView` despite responding to UIView
+    /// selectors like `setView:` and `setGestureView:` via ObjC dynamic dispatch.
+    ///
+    /// Standard `hitTest:withEvent:` returns `SwiftUI.CGDrawingView` (a rendering leaf),
+    /// which doesn't participate in gesture recognition. To find the actual gesture target,
+    /// we use `_UIHitTestContext` + `_hitTestWithContext:` (same approach as KIF v3.11.2,
+    /// PR #1323). The `_UIHostingView` responds to `_hitTestWithContext:` and returns the
+    /// `UIKitGestureContainer` that owns SwiftUI's gesture recognizers.
+    ///
+    /// **Key pitfall**: The result must be `unsafeBitCast` to `UIView`, not `as? UIView`.
+    /// `UIKitGestureContainer` is a `UIResponder` that quacks like a `UIView` through ObjC
+    /// messaging but fails Swift's `is UIView` type check. `UITouch.setView:` accepts any
+    /// `NSObject` via ObjC, so the bitcast is safe for touch delivery.
+    private func resolveHitTestView(in window: UIWindow, at windowPoint: CGPoint) -> UIView {
+        let standardHitView = window.hitTest(windowPoint, with: nil) ?? window
+
+        if #available(iOS 18.0, *) {
+            if let contextClass = NSClassFromString("_UIHitTestContext") {
+                let contextSel = NSSelectorFromString("contextWithPoint:radius:")
+                if (contextClass as AnyObject).responds(to: contextSel) {
+                    typealias ContextFn = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
+                    let contextImp = (contextClass as AnyObject).method(for: contextSel)
+                    let createContext = unsafeBitCast(contextImp, to: ContextFn.self)
+
+                    if let context = createContext(contextClass as AnyObject, contextSel, windowPoint, 0) {
+                        let hitTestSel = NSSelectorFromString("_hitTestWithContext:")
+                        typealias HitTestFn = @convention(c) (AnyObject, Selector, AnyObject) -> AnyObject?
+
+                        // Walk from the standard hitTest leaf up through ancestors.
+                        // The _UIHostingView is the one that returns UIKitGestureContainer.
+                        var currentView: UIView? = standardHitView
+                        while let view = currentView {
+                            if view.responds(to: hitTestSel),
+                               let imp = (view as AnyObject).method(for: hitTestSel)
+                            {
+                                let hitTest = unsafeBitCast(imp, to: HitTestFn.self)
+                                if let result = hitTest(view, hitTestSel, context) {
+                                    // UIKitGestureContainer is a UIResponder, not a UIView.
+                                    // unsafeBitCast is required — `as? UIView` silently returns nil.
+                                    return unsafeBitCast(result, to: UIView.self)
+                                }
+                            }
+                            currentView = view.superview
+                        }
+                    }
+                }
+            }
+        }
+
+        return standardHitView
+    }
+
     private func windowForPoint(_ point: CGPoint) -> UIWindow? {
         let allWindows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
