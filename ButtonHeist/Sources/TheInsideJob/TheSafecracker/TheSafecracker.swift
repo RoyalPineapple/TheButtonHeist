@@ -101,7 +101,7 @@ final class TheSafecracker {
 
     // MARK: - Internal Touch State
 
-    private var activeTouches: [UITouch] = []
+    private var activeTouches: [SyntheticTouch] = []
     private var activeWindow: UIWindow?
 
     /// Called during continuous gestures with all current finger positions.
@@ -370,37 +370,22 @@ final class TheSafecracker {
             return false
         }
 
-        var touches: [UITouch] = []
-        var fingerData: [FingerTouchData] = []
-
+        var touches: [SyntheticTouch] = []
         for point in points {
-            let windowPoint = window.convert(point, from: nil)
-            let hitView = resolveHitTestView(in: window, at: windowPoint)
-            guard let touch = SyntheticTouchFactory.createTouch(
-                at: windowPoint, in: window, view: hitView, phase: .began
-            ) else {
+            let target = TouchTarget.resolve(at: point, in: window)
+            guard let touch = target.makeTouch(phase: .began) else {
                 insideJobLogger.error("Failed to create touch")
                 return false
             }
-            // Set gestureView so gesture recognizers attached to this view receive the touch
-            SyntheticTouchFactory.setGestureView(touch, view: hitView)
             touches.append(touch)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .began
-            ))
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in touches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(touches, hidEvent: hidEvent) else {
+        guard let event = TouchEvent(touches: touches) else {
             insideJobLogger.error("Failed to create began event")
             return false
         }
 
-        UIApplication.shared.sendEvent(event)
+        event.send()
         activeTouches = touches
         activeWindow = window
         return true
@@ -413,117 +398,36 @@ final class TheSafecracker {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
 
-        var fingerData: [FingerTouchData] = []
-
-        for (touch, point) in zip(activeTouches, points) {
-            let windowPoint = window.convert(point, from: nil)
-            SyntheticTouchFactory.setLocation(touch, point: windowPoint)
-            SyntheticTouchFactory.setPhase(touch, phase: .moved)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .moved
-            ))
+        for i in activeTouches.indices {
+            let windowPoint = window.convert(points[i], from: nil)
+            activeTouches[i].update(phase: .moved, location: windowPoint)
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in activeTouches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
-            return false
-        }
-
-        UIApplication.shared.sendEvent(event)
+        guard let event = TouchEvent(touches: activeTouches) else { return false }
+        event.send()
         return true
     }
 
     /// Lift all active touches.
     func touchesUp() -> Bool {
-        guard !activeTouches.isEmpty, let window = activeWindow else { return false }
+        guard !activeTouches.isEmpty else { return false }
 
-        var fingerData: [FingerTouchData] = []
-
-        for touch in activeTouches {
-            SyntheticTouchFactory.setPhase(touch, phase: .ended)
-            let windowPoint = touch.location(in: window)
-            fingerData.append(FingerTouchData(
-                touch: touch, location: windowPoint, phase: .ended
-            ))
+        for i in activeTouches.indices {
+            activeTouches[i].update(phase: .ended)
         }
 
-        let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
-        for touch in activeTouches {
-            if let hidEvent { SyntheticTouchFactory.setHIDEvent(touch, event: hidEvent) }
-        }
-
-        guard let event = SyntheticEventFactory.createEventForTouches(activeTouches, hidEvent: hidEvent) else {
+        guard let event = TouchEvent(touches: activeTouches) else {
             insideJobLogger.error("Failed to create ended event")
             return false
         }
 
-        UIApplication.shared.sendEvent(event)
+        event.send()
         activeTouches = []
         activeWindow = nil
         return true
     }
 
     // MARK: - Private
-
-    /// Resolve the correct hit test target for a touch point.
-    ///
-    /// On iOS 18+, SwiftUI routes gesture events through `SwiftUI.UIKitGestureContainer`
-    /// — a `UIResponder` subclass that is NOT a `UIView` despite responding to UIView
-    /// selectors like `setView:` and `setGestureView:` via ObjC dynamic dispatch.
-    ///
-    /// Standard `hitTest:withEvent:` returns `SwiftUI.CGDrawingView` (a rendering leaf),
-    /// which doesn't participate in gesture recognition. To find the actual gesture target,
-    /// we use `_UIHitTestContext` + `_hitTestWithContext:` (same approach as KIF v3.11.2,
-    /// PR #1323). The `_UIHostingView` responds to `_hitTestWithContext:` and returns the
-    /// `UIKitGestureContainer` that owns SwiftUI's gesture recognizers.
-    ///
-    /// **Key pitfall**: The result must be `unsafeBitCast` to `UIView`, not `as? UIView`.
-    /// `UIKitGestureContainer` is a `UIResponder` that quacks like a `UIView` through ObjC
-    /// messaging but fails Swift's `is UIView` type check. `UITouch.setView:` accepts any
-    /// `NSObject` via ObjC, so the bitcast is safe for touch delivery.
-    private func resolveHitTestView(in window: UIWindow, at windowPoint: CGPoint) -> UIView {
-        let standardHitView = window.hitTest(windowPoint, with: nil) ?? window
-
-        guard #available(iOS 18.0, *),
-              let createMsg = ObjCRuntime.classMessage("contextWithPoint:radius:", on: "_UIHitTestContext") else {
-            return standardHitView
-        }
-
-        // Create a _UIHitTestContext for the touch point (mixed value args — use imp)
-        typealias ContextFn = @convention(c) (AnyObject, Selector, CGPoint, CGFloat) -> AnyObject?
-        guard let context = createMsg.imp(as: ContextFn.self)(createMsg.target, createMsg.selector, windowPoint, 0) else {
-            return standardHitView
-        }
-
-        // Walk from the standard hitTest leaf up through ancestors.
-        // The _UIHostingView is the one that returns UIKitGestureContainer.
-        var currentView: UIView? = standardHitView
-        while let view = currentView {
-            if let msg = ObjCRuntime.message("_hitTestWithContext:", to: view),
-               let result: AnyObject = msg.call(context) {
-                // Runtime type guard: verify the result is a known gesture container
-                // or an actual UIView before bitcasting. Future iOS versions might
-                // return something incompatible.
-                if result is UIView {
-                    return result as! UIView // swiftlint:disable:this force_cast
-                }
-                let typeName = String(describing: type(of: result))
-                if typeName.hasSuffix("UIKitGestureContainer") {
-                    // UIKitGestureContainer is a UIResponder, not a UIView.
-                    // unsafeBitCast is required — `as? UIView` silently returns nil.
-                    return unsafeBitCast(result, to: UIView.self)
-                }
-                insideJobLogger.warning("_hitTestWithContext: returned unexpected type: \(typeName)")
-            }
-            currentView = view.superview
-        }
-
-        return standardHitView
-    }
 
     /// Find the correct window for a tap at the given screen point.
     /// Iterates all windows frontmost-first (highest windowLevel first),
