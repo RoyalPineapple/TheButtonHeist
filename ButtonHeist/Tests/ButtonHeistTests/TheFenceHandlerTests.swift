@@ -678,4 +678,162 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "edit_action", "action": "copy"]
         )
     }
+
+    // MARK: - Expectation Parsing
+
+    @ButtonHeistActor
+    func testParseExpectationNilWhenAbsent() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["command": "activate"])
+        XCTAssertNil(result)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationScreenChangedSnakeCase() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": "screen_changed"])
+        XCTAssertEqual(result, .screenChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationScreenChangedCamelCase() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": "screenChanged"])
+        XCTAssertEqual(result, .screenChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationLayoutChangedSnakeCase() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": "layout_changed"])
+        XCTAssertEqual(result, .layoutChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationLayoutChangedCamelCase() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": "layoutChanged"])
+        XCTAssertEqual(result, .layoutChanged)
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationValueObject() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": ["value": "hello"]])
+        XCTAssertEqual(result, .value("hello"))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationUnknownStringThrows() {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "bogus"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationInvalidObjectThrows() {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": ["wrong": "key"]])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Invalid expectation object"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationInvalidTypeThrows() {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": 42])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Invalid expectation type"))
+        }
+    }
+
+    // MARK: - Batch Expectation Counting
+
+    @ButtonHeistActor
+    func testBatchCountsOnlyExplicitExpectations() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        // Mock returns a successful action result with a valuesChanged delta
+        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 5)
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+        }
+
+        // Step 1 has expect → should count. Step 2 has no expect → should NOT count.
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "activate", "identifier": "btn1", "expect": "layout_changed"],
+                ["command": "activate", "identifier": "btn2"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(_, _, _, _, let checked, let met) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        // Only step 1 had "expect", so checked should be 1
+        XCTAssertEqual(checked, 1, "Only steps with explicit 'expect' should be counted")
+        // layout_changed expects elementsChanged or screenChanged, but delta is valuesChanged → not met
+        XCTAssertEqual(met, 0)
+    }
+
+    @ButtonHeistActor
+    func testBatchCountsMetExpectations() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 10)
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate, interfaceDelta: delta))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "activate", "identifier": "btn1", "expect": "screen_changed"],
+                ["command": "activate", "identifier": "btn2", "expect": "layout_changed"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(_, _, _, _, let checked, let met) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        // Both steps have expect and the delta is screenChanged (satisfies both tiers)
+        XCTAssertEqual(checked, 2)
+        XCTAssertEqual(met, 2)
+    }
+
+    @ButtonHeistActor
+    func testBatchWithNoExpectationsShowsZeroCounts() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .activate))
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "activate", "identifier": "btn1"],
+                ["command": "activate", "identifier": "btn2"],
+            ] as [[String: Any]],
+        ])
+
+        guard case .batch(_, _, _, _, let checked, let met) = response else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertEqual(checked, 0)
+        XCTAssertEqual(met, 0)
+    }
 }

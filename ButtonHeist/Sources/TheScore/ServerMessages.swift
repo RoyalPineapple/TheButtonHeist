@@ -165,6 +165,12 @@ public struct ActionResult: Codable, Sendable {
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public let animating: Bool?
+    /// Post-action accessibility label of the acted-on element
+    public let elementLabel: String?
+    /// Post-action accessibility value of the acted-on element
+    public let elementValue: String?
+    /// Post-action accessibility traits of the acted-on element (e.g. ["button", "selected"])
+    public let elementTraits: [String]?
 
     public init(
         success: Bool,
@@ -172,7 +178,10 @@ public struct ActionResult: Codable, Sendable {
         message: String? = nil,
         value: String? = nil,
         interfaceDelta: InterfaceDelta? = nil,
-        animating: Bool? = nil
+        animating: Bool? = nil,
+        elementLabel: String? = nil,
+        elementValue: String? = nil,
+        elementTraits: [String]? = nil
     ) {
         self.success = success
         self.method = method
@@ -180,6 +189,9 @@ public struct ActionResult: Codable, Sendable {
         self.value = value
         self.interfaceDelta = interfaceDelta
         self.animating = animating
+        self.elementLabel = elementLabel
+        self.elementValue = elementValue
+        self.elementTraits = elementTraits
     }
 }
 
@@ -241,6 +253,97 @@ public struct ValueChange: Codable, Sendable {
         self.identifier = identifier
         self.oldValue = oldValue
         self.newValue = newValue
+    }
+}
+
+// MARK: - Action Expectations
+
+/// Outcome signal classifiers for actions.
+/// Attached to a request (not to a target type) so any action can opt in.
+///
+/// Every action implicitly checks delivery (success == true). These tiers
+/// classify *what kind of change* the caller expected. The result tells
+/// the caller what actually happened — the caller decides what to do with it.
+///
+/// Superset rule: `screen_changed` is a superset of `layout_changed`.
+/// Expecting `layout_changed` is met by either `elementsChanged` or `screenChanged`.
+/// Expecting `screen_changed` is only met by `screenChanged`.
+/// Screen change is detected by view controller identity — if the topmost VC changed,
+/// the screen changed.
+public enum ActionExpectation: Codable, Sendable, Equatable {
+    /// Expected the post-action field value to equal this string.
+    case value(String)
+    /// Expected a screen-level change (VC identity changed).
+    case screenChanged
+    /// Expected elements to be added, removed, or the screen to change.
+    case layoutChanged
+}
+
+/// The outcome of checking an ActionExpectation against an ActionResult.
+public struct ExpectationResult: Codable, Sendable, Equatable {
+    /// Whether the expectation was met.
+    public let met: Bool
+    /// The expectation that was checked. Nil for implicit delivery check.
+    public let expectation: ActionExpectation?
+    /// What was actually observed (for diagnostics when `met` is false).
+    public let actual: String?
+
+    public init(met: Bool, expectation: ActionExpectation?, actual: String? = nil) {
+        self.met = met
+        self.expectation = expectation
+        self.actual = actual
+    }
+}
+
+extension ActionExpectation {
+    /// Check this expectation against an ActionResult.
+    public func validate(against result: ActionResult) -> ExpectationResult {
+        switch self {
+        case .value(let expected):
+            // Check typeText value, element value, and element label — first match wins
+            if result.value == expected {
+                return ExpectationResult(met: true, expectation: self, actual: result.value)
+            }
+            if result.elementValue == expected {
+                return ExpectationResult(met: true, expectation: self, actual: result.elementValue)
+            }
+            if result.elementLabel == expected {
+                return ExpectationResult(met: true, expectation: self, actual: result.elementLabel)
+            }
+            // Report what we actually found
+            let actual = result.value ?? result.elementValue ?? result.elementLabel
+            return ExpectationResult(
+                met: false,
+                expectation: self,
+                actual: actual
+            )
+        case .screenChanged:
+            let kind = result.interfaceDelta?.kind
+            return ExpectationResult(
+                met: kind == .screenChanged,
+                expectation: self,
+                actual: kind?.rawValue ?? "noChange"
+            )
+        case .layoutChanged:
+            // Superset rule: screen_changed implies layout_changed.
+            // A navigation push changes layout AND screen — layout_changed should pass.
+            let kind = result.interfaceDelta?.kind
+            let met = kind == .elementsChanged || kind == .screenChanged
+            return ExpectationResult(
+                met: met,
+                expectation: self,
+                actual: kind?.rawValue ?? "noChange"
+            )
+        }
+    }
+
+    /// Baseline delivery check — always run for every action.
+    public static func validateDelivery(_ result: ActionResult) -> ExpectationResult {
+        ExpectationResult(
+            met: result.success,
+            expectation: nil,
+            actual: result.success ? "delivered" : (result.message ?? "failed")
+        )
     }
 }
 

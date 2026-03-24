@@ -1,6 +1,6 @@
 # ButtonHeist Wire Protocol Specification
 
-**Version**: 6.0
+**Version**: 6.1
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
@@ -793,7 +793,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `protocolVersion` | `String` | Protocol version (currently `"6.0"`) |
+| `protocolVersion` | `String` | Protocol version (currently `"6.1"`) |
 | `appName` | `String` | App display name |
 | `bundleIdentifier` | `String` | App bundle identifier |
 | `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
@@ -1049,6 +1049,42 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 | `value` | `String?` | Current text field value (populated by `typeText`) |
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
+
+### ActionExpectation (Fence-level)
+
+Outcome signal classifiers attached to Fence requests via the `expect` field. Not a wire-protocol type — this is parsed by TheFence from the request dictionary and checked against the `ActionResult`.
+
+Every action implicitly checks delivery (`success == true`). If delivery fails, the response includes an `expectation` object with `met: false` and `status: "expectation_failed"` — no `expect` field needed.
+
+The `expect` field classifies what kind of outcome the caller was going for:
+
+| Value | Type | Description |
+|-------|------|-------------|
+| `"screen_changed"` | String | Expected `interfaceDelta.kind == "screenChanged"` |
+| `"layout_changed"` | String | Expected `interfaceDelta.kind == "elementsChanged"` |
+| `{"value": "expected"}` | Object | Expected post-action field value to match |
+
+When an expectation is checked, the Fence response includes an `expectation` object:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `met` | `Bool` | Whether the expectation was satisfied |
+| `expected` | `ActionExpectation?` | The expectation that was checked (JSON-encoded). `null` for implicit delivery check. |
+| `actual` | `String?` | What was actually observed (for diagnostics when `met` is false) |
+
+If `met` is false, the response `status` is set to `"expectation_failed"`.
+
+### Batch Expectations Summary
+
+When a `run_batch` response includes steps with expectations, the response includes an `expectations` summary:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `checked` | `Int` | Number of steps that had expectations checked |
+| `met` | `Int` | Number of expectations that were satisfied |
+| `allMet` | `Bool` | `true` if all checked expectations were met |
+
+Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed"`) stops the batch.
 
 ### InterfaceDelta
 

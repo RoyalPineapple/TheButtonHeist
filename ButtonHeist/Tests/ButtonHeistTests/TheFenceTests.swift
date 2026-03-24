@@ -125,6 +125,168 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json?["height"] as? Double, 844)
     }
 
+    // MARK: - FenceResponse: Action with Expectation (Human Formatting)
+
+    func testActionWithExpectationMetFormatting() {
+        let result = ActionResult(success: true, method: .activate)
+        let expectation = ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("[expectation met]"))
+    }
+
+    func testActionWithExpectationFailedFormatting() {
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 5))
+        let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("[expectation FAILED"))
+        XCTAssertTrue(text.contains("noChange"))
+    }
+
+    func testActionWithDeliveryFailureFormatting() {
+        let result = ActionResult(success: false, method: .activate, message: "not found")
+        let expectation = ExpectationResult(met: false, expectation: nil, actual: "not found")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("[expectation FAILED"))
+        XCTAssertTrue(text.contains("delivery"))
+    }
+
+    func testActionWithoutExpectationFormatting() {
+        let result = ActionResult(success: true, method: .activate)
+        let response = FenceResponse.action(result: result)
+        let text = response.humanFormatted()
+        XCTAssertFalse(text.contains("expectation"))
+    }
+
+    // MARK: - FenceResponse: Action with Expectation (JSON)
+
+    func testActionWithExpectationMetJSON() {
+        let result = ActionResult(success: true, method: .activate)
+        let expectation = ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "ok")
+        let expDict = json["expectation"] as? [String: Any]
+        XCTAssertNotNil(expDict)
+        XCTAssertEqual(expDict?["met"] as? Bool, true)
+        XCTAssertEqual(expDict?["actual"] as? String, "screenChanged")
+    }
+
+    func testActionWithExpectationFailedJSON() {
+        let result = ActionResult(success: true, method: .activate)
+        let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
+        let response = FenceResponse.action(result: result, expectation: expectation)
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "expectation_failed")
+        let expDict = json["expectation"] as? [String: Any]
+        XCTAssertEqual(expDict?["met"] as? Bool, false)
+    }
+
+    func testActionWithoutExpectationJSON() {
+        let result = ActionResult(success: true, method: .activate)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertNil(json["expectation"])
+    }
+
+    // MARK: - FenceResponse.expectationResultDict
+
+    func testExpectationResultDictMet() {
+        let result = ExpectationResult(met: true, expectation: .layoutChanged, actual: "elementsChanged")
+        let dict = FenceResponse.expectationResultDict(result)
+        XCTAssertEqual(dict["met"] as? Bool, true)
+        XCTAssertEqual(dict["actual"] as? String, "elementsChanged")
+        XCTAssertNotNil(dict["expected"])
+    }
+
+    func testExpectationResultDictDelivery() {
+        let result = ExpectationResult(met: true, expectation: nil, actual: "delivered")
+        let dict = FenceResponse.expectationResultDict(result)
+        XCTAssertEqual(dict["met"] as? Bool, true)
+        XCTAssertEqual(dict["actual"] as? String, "delivered")
+        XCTAssertNil(dict["expected"])
+    }
+
+    func testExpectationResultDictValueExpectation() {
+        let result = ExpectationResult(met: false, expectation: .value("hello"), actual: "goodbye")
+        let dict = FenceResponse.expectationResultDict(result)
+        XCTAssertEqual(dict["met"] as? Bool, false)
+        XCTAssertEqual(dict["actual"] as? String, "goodbye")
+        // "expected" should be the JSON-encoded ActionExpectation
+        let expected = dict["expected"]
+        XCTAssertNotNil(expected)
+    }
+
+    // MARK: - FenceResponse: Batch with Expectations
+
+    func testBatchWithExpectationsFormatting() {
+        let response = FenceResponse.batch(
+            results: [["status": "ok"], ["status": "ok"]],
+            completedSteps: 2, failedIndex: nil, totalTimingMs: 100,
+            expectationsChecked: 2, expectationsMet: 1
+        )
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("2 step(s) completed"))
+        XCTAssertTrue(text.contains("[expectations: 1/2 met]"))
+    }
+
+    func testBatchWithoutExpectationsFormatting() {
+        let response = FenceResponse.batch(
+            results: [["status": "ok"]],
+            completedSteps: 1, failedIndex: nil, totalTimingMs: 50
+        )
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("1 step(s) completed"))
+        XCTAssertFalse(text.contains("expectations"))
+    }
+
+    func testBatchWithFailedIndexFormatting() {
+        let response = FenceResponse.batch(
+            results: [["status": "ok"], ["status": "error"]],
+            completedSteps: 2, failedIndex: 1, totalTimingMs: 80
+        )
+        let text = response.humanFormatted()
+        XCTAssertTrue(text.contains("(failed at step 1)"))
+    }
+
+    func testBatchWithExpectationsJSON() {
+        let response = FenceResponse.batch(
+            results: [["status": "ok"]],
+            completedSteps: 1, failedIndex: nil, totalTimingMs: 50,
+            expectationsChecked: 3, expectationsMet: 2
+        )
+        let json = response.jsonDict()!
+        XCTAssertEqual(json["status"] as? String, "ok")
+        XCTAssertEqual(json["completedSteps"] as? Int, 1)
+        let expectations = json["expectations"] as? [String: Any]
+        XCTAssertNotNil(expectations)
+        XCTAssertEqual(expectations?["checked"] as? Int, 3)
+        XCTAssertEqual(expectations?["met"] as? Int, 2)
+        XCTAssertEqual(expectations?["allMet"] as? Bool, false)
+    }
+
+    func testBatchWithoutExpectationsJSON() {
+        let response = FenceResponse.batch(
+            results: [["status": "ok"]],
+            completedSteps: 1, failedIndex: nil, totalTimingMs: 50
+        )
+        let json = response.jsonDict()!
+        XCTAssertNil(json["expectations"])
+    }
+
+    func testBatchAllExpectationsMetJSON() {
+        let response = FenceResponse.batch(
+            results: [], completedSteps: 0, failedIndex: nil, totalTimingMs: 0,
+            expectationsChecked: 2, expectationsMet: 2
+        )
+        let json = response.jsonDict()!
+        let expectations = json["expectations"] as? [String: Any]
+        XCTAssertEqual(expectations?["allMet"] as? Bool, true)
+    }
+
     // MARK: - FenceError
 
     func testFenceErrorDescriptions() {

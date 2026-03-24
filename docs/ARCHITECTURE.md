@@ -62,7 +62,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 6.0 with TLS transport metadata, envelope correlation, watch mode, and session locking
+- Protocol version 6.1 with TLS transport metadata, envelope correlation, watch mode, session locking, and action outcome signals
 
 ### TheInsideJob
 
@@ -578,7 +578,7 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 6.0
+- Protocol version: 6.1
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections are auto-approved by default.
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.

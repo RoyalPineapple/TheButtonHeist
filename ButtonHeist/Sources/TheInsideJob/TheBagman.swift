@@ -235,7 +235,8 @@ final class TheBagman {
         message: String? = nil,
         value: String? = nil,
         beforeSnapshot: ElementSnapshot,
-        beforeVC: ObjectIdentifier? = nil
+        beforeVC: ObjectIdentifier? = nil,
+        target: ActionTarget? = nil
     ) async -> ActionResult {
         guard success else {
             return ActionResult(success: false, method: method, message: message, value: value)
@@ -262,12 +263,28 @@ final class TheBagman {
         // Capture a recording frame after the action completes
         captureActionFrame()
 
+        // Look up the acted-on element in the post-action parsed hierarchy
+        var elementLabel: String?
+        var elementValue: String?
+        var elementTraits: [String]?
+        if let target {
+            let postElement = findElement(for: target)
+            elementLabel = postElement?.label
+            elementValue = postElement?.value
+            if let traits = postElement?.traits {
+                elementTraits = traitNames(traits)
+            }
+        }
+
         return ActionResult(
             success: true,
             method: method,
             message: message,
             value: value,
-            interfaceDelta: delta
+            interfaceDelta: delta,
+            elementLabel: elementLabel,
+            elementValue: elementValue,
+            elementTraits: elementTraits
         )
     }
 
