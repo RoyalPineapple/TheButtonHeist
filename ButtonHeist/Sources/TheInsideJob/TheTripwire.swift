@@ -193,6 +193,9 @@ final class TheTripwire {
 
         func start() {
             let link = CADisplayLink(target: self, selector: #selector(onFrame))
+            // ~10 Hz: one layer-tree walk every ~100ms is plenty for detecting
+            // settle within human reaction time, and 6-12x cheaper than vsync.
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
             link.add(to: .main, forMode: .common)
             displayLink = link
         }
