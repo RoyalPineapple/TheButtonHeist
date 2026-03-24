@@ -130,112 +130,129 @@ extension TheBagman {
 extension TheBagman {
 
     /// Convert current cachedElements to wire HeistElements for delta comparison.
-    func snapshotElements() -> [HeistElement] {
-        cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+    struct ElementSnapshot {
+        let elements: [HeistElement]
+    }
+
+    func snapshotElements() -> ElementSnapshot {
+        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        return ElementSnapshot(elements: elements)
     }
 
     /// Compare two element snapshots and return a compact delta.
+    ///
+    /// Screen change detection is done by the caller via view controller identity —
+    /// `isScreenChange` is true when the topmost VC changed. This function handles
+    /// the response payloads:
+    /// - screen_changed → full new interface
+    /// - layout_changed → elementsAdded/elementsRemoved diff
+    /// - values_changed → valueChanges diff
+    /// - no_change → element count only
     func computeDelta(
-        before: [HeistElement],
-        after: [HeistElement],
-        afterTree: [AccessibilityHierarchy]?
+        before: ElementSnapshot,
+        after: ElementSnapshot,
+        afterTree: [AccessibilityHierarchy]?,
+        isScreenChange: Bool
     ) -> InterfaceDelta {
-        // Quick check: if hash is identical, nothing changed
-        if before.hashValue == after.hashValue && before == after {
-            return InterfaceDelta(kind: .noChange, elementCount: after.count)
-        }
+        let beforeEls = before.elements
+        let afterEls = after.elements
 
-        // Build identifier sets for screen-change detection
-        let oldIDs = Set(before.compactMap(\.identifier))
-        let newIDs = Set(after.compactMap(\.identifier))
-        let commonIDs = oldIDs.intersection(newIDs)
-        let maxCount = max(oldIDs.count, newIDs.count, 1)
-
-        // Screen change: fewer than 50% of identifiers overlap
-        if commonIDs.count < maxCount / 2 {
+        // Screen changed: VC identity differs → return full new interface
+        if isScreenChange {
             let tree = afterTree?.map { convertHierarchyNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: after, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), elements: afterEls, tree: tree)
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: after.count,
+                elementCount: afterEls.count,
                 newInterface: fullInterface
             )
         }
 
-        // Element-level diff
-        let oldByID = Dictionary(grouping: before, by: { $0.identifier ?? "" }).filter { !$0.key.isEmpty }
-        let newByID = Dictionary(grouping: after, by: { $0.identifier ?? "" }).filter { !$0.key.isEmpty }
+        // Same screen — quick check: if identical, nothing changed
+        if beforeEls.hashValue == afterEls.hashValue && beforeEls == afterEls {
+            return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
+        }
 
-        let addedIDs = newIDs.subtracting(oldIDs)
+        // Same screen, something changed — element-level diff
+        return computeElementDelta(beforeEls: beforeEls, afterEls: afterEls)
+    }
+
+    private func computeElementDelta(
+        beforeEls: [HeistElement],
+        afterEls: [HeistElement]
+    ) -> InterfaceDelta {
+        let allOldIDs = Set(beforeEls.compactMap(\.identifier))
+        let allNewIDs = Set(afterEls.compactMap(\.identifier))
+        let allCommonIDs = allOldIDs.intersection(allNewIDs)
+
+        let oldByID = Dictionary(grouping: beforeEls, by: { $0.identifier ?? "" })
+            .filter { !$0.key.isEmpty }
+        let newByID = Dictionary(grouping: afterEls, by: { $0.identifier ?? "" })
+            .filter { !$0.key.isEmpty }
+
+        let addedIDs = allNewIDs.subtracting(allOldIDs)
         let added = addedIDs.flatMap { newByID[$0] ?? [] }
 
-        let removedIDs = oldIDs.subtracting(newIDs)
+        let removedIDs = allOldIDs.subtracting(allNewIDs)
         let removedOrders = removedIDs.flatMap { oldByID[$0] ?? [] }.map(\.order)
 
         var valueChanges: [ValueChange] = []
-        // Identifier-based comparison: check value, description, and label
-        for id in commonIDs {
+        for id in allCommonIDs {
             if let oldEl = oldByID[id]?.first, let newEl = newByID[id]?.first {
                 if oldEl.value != newEl.value {
                     valueChanges.append(ValueChange(
-                        order: newEl.order,
-                        identifier: id,
-                        oldValue: oldEl.value,
-                        newValue: newEl.value
+                        order: newEl.order, identifier: id,
+                        oldValue: oldEl.value, newValue: newEl.value
                     ))
                 } else if oldEl.description != newEl.description || oldEl.label != newEl.label {
                     valueChanges.append(ValueChange(
-                        order: newEl.order,
-                        identifier: id,
-                        oldValue: oldEl.description,
-                        newValue: newEl.description
+                        order: newEl.order, identifier: id,
+                        oldValue: oldEl.description, newValue: newEl.description
                     ))
                 }
             }
         }
 
-        // Order-based comparison for elements without identifiers
-        // (catches segmented controls, unlabeled buttons, etc.)
-        let minCount = min(before.count, after.count)
+        let minCount = min(beforeEls.count, afterEls.count)
         for i in 0..<minCount {
-            let oldEl = before[i]
-            let newEl = after[i]
+            let oldEl = beforeEls[i]
+            let newEl = afterEls[i]
             if oldEl.identifier != nil && newEl.identifier != nil { continue }
             if oldEl.description != newEl.description
                 || oldEl.label != newEl.label
                 || oldEl.value != newEl.value {
                 valueChanges.append(ValueChange(
-                    order: newEl.order,
-                    identifier: newEl.identifier,
-                    oldValue: oldEl.description,
-                    newValue: newEl.description
+                    order: newEl.order, identifier: newEl.identifier,
+                    oldValue: oldEl.description, newValue: newEl.description
                 ))
             }
         }
 
         if added.isEmpty && removedOrders.isEmpty && valueChanges.isEmpty {
-            if before.count != after.count {
+            if beforeEls.count != afterEls.count {
                 return InterfaceDelta(
                     kind: .elementsChanged,
-                    elementCount: after.count,
-                    added: after.count > before.count ? Array(after.suffix(after.count - before.count)) : nil,
-                    removedOrders: after.count < before.count ? Array(after.count..<before.count) : nil
+                    elementCount: afterEls.count,
+                    added: afterEls.count > beforeEls.count
+                        ? Array(afterEls.suffix(afterEls.count - beforeEls.count)) : nil,
+                    removedOrders: afterEls.count < beforeEls.count
+                        ? Array(afterEls.count..<beforeEls.count) : nil
                 )
             }
-            return InterfaceDelta(kind: .noChange, elementCount: after.count)
+            return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
         }
 
         if added.isEmpty && removedOrders.isEmpty {
             return InterfaceDelta(
                 kind: .valuesChanged,
-                elementCount: after.count,
+                elementCount: afterEls.count,
                 valueChanges: valueChanges.isEmpty ? nil : valueChanges
             )
         }
 
         return InterfaceDelta(
             kind: .elementsChanged,
-            elementCount: after.count,
+            elementCount: afterEls.count,
             added: added.isEmpty ? nil : added,
             removedOrders: removedOrders.isEmpty ? nil : removedOrders,
             valueChanges: valueChanges.isEmpty ? nil : valueChanges

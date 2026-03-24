@@ -72,7 +72,8 @@ graph TB
 ```
 TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   TheInsideJob.swift              — core server lifecycle, client dispatch
-│   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, animation detection
+│   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, screen capture
+│   TheTripwire.swift               — timing coordinator: allClear/waitForAllClear, VC identity, fingerprinting
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
 │   Extensions/Polling.swift        — polling loop, interface broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
@@ -82,7 +83,13 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
+├── TheTripwire (timing coordinator: gates all UI-ready decisions)
+│   ├── getTraversableWindows() — shared window access for TheBagman
+│   ├── topmostViewController() / isScreenChange() — VC identity for screen change detection
+│   ├── allClear() — sync gate: no relevant CAAnimation keys (filters _UIParallaxMotionEffect)
+│   └── waitForAllClear(timeout:treeHash:) — unified CADisplayLink settle (layers + optional tree hash)
 ├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
+│   └── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
 │   │   TheSafecracker.swift             — touch primitives, keyboard helpers
 │   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures
