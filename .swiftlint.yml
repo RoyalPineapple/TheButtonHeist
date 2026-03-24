@@ -53,6 +53,10 @@ cyclomatic_complexity:
   warning: 20
   error: 35
 
+blanket_disable_command:
+  allowed_rules:
+    - nesting
+
 inclusive_language:
   override_allowed_terms:
     - mastermind

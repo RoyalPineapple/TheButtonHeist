@@ -18,7 +18,7 @@ extension TheSafecracker {
             }
 
             let point = element.activationPoint
-            if !tap(at: point) {
+            if await !tap(at: point) {
                 return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
             }
             fingerprints.showFingerprint(at: point)
