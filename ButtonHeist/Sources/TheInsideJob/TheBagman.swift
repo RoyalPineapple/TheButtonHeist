@@ -6,15 +6,20 @@ import TheScore
 
 /// The crew member who holds and manipulates the mcguffin (the UI elements).
 ///
-/// TheBagman owns the full lifecycle of the heist's target: reading the UI,
-/// storing element references, computing diffs, detecting animations, and
-/// capturing visual state. Live object pointers never leave TheBagman.
+/// TheBagman owns the accessibility data lifecycle: reading the UI, storing
+/// element references, computing diffs, and capturing visual state. Live
+/// object pointers never leave TheBagman. Uses TheTripwire for timing
+/// signals (when to read) and screen change detection (what kind of read).
 @MainActor
 final class TheBagman {
 
     /// Weak reference wrapper for accessibility objects (element cache).
     struct WeakObject {
         weak var object: NSObject?
+    }
+
+    init(tripwire: TheTripwire) {
+        self.tripwire = tripwire
     }
 
     // MARK: - Element Storage
@@ -173,7 +178,7 @@ final class TheBagman {
     /// Returns the hierarchy tree for callers that need it (e.g., sendInterface).
     @discardableResult
     func refreshAccessibilityData() -> [AccessibilityHierarchy]? {
-        let windows = getTraversableWindows()
+        let windows = tripwire.getTraversableWindows()
         guard !windows.isEmpty else { return nil }
 
         var allHierarchy: [AccessibilityHierarchy] = []
@@ -212,134 +217,47 @@ final class TheBagman {
         return allHierarchy
     }
 
-    /// Returns all windows that should be included in the accessibility traversal,
-    /// sorted by windowLevel descending (frontmost first).
-    /// Excludes our own overlay windows (TheFingerprints.FingerprintWindow).
-    func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-            return []
-        }
-
-        return windowScene.windows
-            .filter { window in
-                !(window is TheFingerprints.FingerprintWindow) &&
-                !window.isHidden &&
-                window.bounds.size != .zero
-            }
-            .sorted { $0.windowLevel > $1.windowLevel }
-            .map { ($0, $0 as UIView) }
-    }
-
-    // MARK: - Animation Detection
-
-    /// Animation key prefixes to ignore during detection.
-    /// These are persistent or internal animations that don't indicate meaningful UI transitions.
-    private static let ignoredAnimationKeyPrefixes: [String] = [
-        "_UIParallaxMotionEffect",
-    ]
-
-    /// Poll interval for checking animation state (10ms).
-    private static let animationPollInterval: UInt64 = 10_000_000
-
-    /// Returns true if any layer in the traversable window hierarchy has active animations.
-    func hasActiveAnimations() -> Bool {
-        getTraversableWindows().contains { layerTreeHasAnimations($0.window.layer) }
-    }
-
-    /// Iterative (stack-based) walk of the layer tree checking for animation keys.
-    private func layerTreeHasAnimations(_ root: CALayer) -> Bool {
-        var stack: [CALayer] = [root]
-        while let layer = stack.popLast() {
-            if let keys = layer.animationKeys(), !keys.isEmpty {
-                let hasRelevantAnimation = keys.contains { key in
-                    !Self.ignoredAnimationKeyPrefixes.contains { key.hasPrefix($0) }
-                }
-                if hasRelevantAnimation {
-                    return true
-                }
-            }
-            if let sublayers = layer.sublayers {
-                stack.append(contentsOf: sublayers)
-            }
-        }
-        return false
-    }
-
-    /// Wait until all animations in the traversable window hierarchy have completed,
-    /// or until the timeout expires.
-    /// - Returns: true if animations settled before timeout, false if timed out
-    func waitForAnimationsToSettle(timeout: TimeInterval = 2.0) async -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            try? await Task.sleep(nanoseconds: Self.animationPollInterval)
-            if !hasActiveAnimations() {
-                return true
-            }
-        }
-        return false
-    }
+    /// TheTripwire handles window access and animation detection.
+    let tripwire: TheTripwire
 
     // MARK: - Action Result with Delta
 
     /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
-    /// Waits briefly for animations to settle (0.5s). If the screen changed and animations
-    /// are still active (e.g. navigation spring), waits 1s more and re-snapshots.
+    /// Waits for all animations (UIKit and SwiftUI) to settle via presentation layer diffing,
+    /// then polls for accessibility tree stability as a safety net.
+    ///
+    /// Screen change detection uses view controller identity: if the topmost VC changed,
+    /// it's a screen change (returns full new interface). Otherwise, element-level diffing
+    /// determines layout_changed vs values_changed.
     func actionResultWithDelta(
         success: Bool,
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
-        beforeElements: [HeistElement]
+        beforeSnapshot: ElementSnapshot,
+        beforeVC: ObjectIdentifier? = nil
     ) async -> ActionResult {
         guard success else {
             return ActionResult(success: false, method: method, message: message, value: value)
         }
 
-        // Quick check: if no animations, just yield briefly for the tree to update.
-        if !hasActiveAnimations() {
-            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
-        } else {
-            // Animations active — wait for them to end (fast for toggles/menus)
-            // or cap at 0.25s (avoids blocking on long simulator springs).
-            _ = await waitForAnimationsToSettle(timeout: 0.25)
-            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms layout
-        }
+        // Wait for all clear: presentation layers settled AND accessibility tree stable.
+        let start = CFAbsoluteTimeGetCurrent()
+        let settled = await tripwire.waitForAllClear(timeout: 1.0)
+        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
-        var afterTree = refreshAccessibilityData()
-        var afterElements = snapshotElements()
-        var delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
+        // Screen change gate: did the view controller change?
+        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
 
-        // If the screen changed and animations are still running (navigation push),
-        // wait up to 350ms for the hierarchy to stabilize rather than sleeping a fixed 1s.
-        if delta.kind != .noChange && hasActiveAnimations() {
-            let pollInterval: UInt64 = 35_000_000 // 35ms
-            let maxWait: UInt64 = 350_000_000 // 350ms
-            var elapsed: UInt64 = 0
-            var stableSamples = 0
-            var lastSignature = hierarchySignature(afterElements)
-
-            while elapsed < maxWait {
-                try? await Task.sleep(nanoseconds: pollInterval)
-                elapsed += pollInterval
-
-                afterTree = refreshAccessibilityData()
-                afterElements = snapshotElements()
-                delta = computeDelta(before: beforeElements, after: afterElements, afterTree: afterTree)
-
-                let signature = hierarchySignature(afterElements)
-                if signature == lastSignature {
-                    stableSamples += 1
-                } else {
-                    stableSamples = 0
-                    lastSignature = signature
-                }
-
-                if !hasActiveAnimations() || stableSamples >= 2 {
-                    break
-                }
-            }
-        }
+        // Single read of the post-settle state
+        let afterTree = refreshAccessibilityData()
+        let afterSnapshot = snapshotElements()
+        let delta = computeDelta(
+            before: beforeSnapshot, after: afterSnapshot,
+            afterTree: afterTree, isScreenChange: isScreenChange
+        )
 
         // Capture a recording frame after the action completes
         captureActionFrame()
@@ -357,7 +275,7 @@ final class TheBagman {
 
     /// Capture the screen by compositing all traversable windows.
     func captureScreen() -> (image: UIImage, bounds: CGRect)? {
-        let windows = getTraversableWindows()
+        let windows = tripwire.getTraversableWindows()
         guard let background = windows.last else { return nil }
         let bounds = background.window.bounds
 
