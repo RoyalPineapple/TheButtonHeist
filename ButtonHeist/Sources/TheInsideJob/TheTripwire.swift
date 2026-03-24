@@ -144,11 +144,16 @@ final class TheTripwire {
         }
     }
 
+    /// Approximate frame rate used by the settle display link.
+    /// Used to convert caller-supplied seconds to frame counts at system boundaries.
+    static let settleFrameRate: Int = 10
+
     /// Wait for the interface to become all clear.
     ///
-    /// Monitors presentation layer movement via CADisplayLink (vsync-synced).
-    /// Returns true if settled before timeout, false if timed out.
-    func waitForAllClear(timeout: TimeInterval = 1.0) async -> Bool {
+    /// Monitors presentation layer movement via CADisplayLink (~10 Hz).
+    /// `maxFrames` is the budget in display-link ticks before giving up.
+    /// Returns true if settled before the budget expires, false if timed out.
+    func waitForAllClear(maxFrames: Int = 10) async -> Bool {
         // Brief initial delay — SwiftUI needs a run loop tick to start animations.
         try? await Task.sleep(nanoseconds: 30_000_000) // 30ms
 
@@ -156,7 +161,7 @@ final class TheTripwire {
 
         return await withCheckedContinuation { continuation in
             let observer = DisplayLinkObserver(
-                timeout: timeout,
+                maxFrames: maxFrames,
                 initialFingerprint: previous,
                 tripwire: self,
                 continuation: continuation
@@ -171,21 +176,20 @@ final class TheTripwire {
     /// The display link retains its target, so we invalidate it as soon as we're done.
     @MainActor private final class DisplayLinkObserver: NSObject {
         private var displayLink: CADisplayLink?
-        private let timeout: TimeInterval
-        private let startTime: CFAbsoluteTime
+        private let maxFrames: Int
+        private var framesElapsed = 0
         private var previous: PresentationFingerprint
         private var quietFrames = 0
         private weak var tripwire: TheTripwire?
         private var continuation: CheckedContinuation<Bool, Never>?
 
         init(
-            timeout: TimeInterval,
+            maxFrames: Int,
             initialFingerprint: PresentationFingerprint,
             tripwire: TheTripwire,
             continuation: CheckedContinuation<Bool, Never>
         ) {
-            self.timeout = timeout
-            self.startTime = CFAbsoluteTimeGetCurrent()
+            self.maxFrames = maxFrames
             self.previous = initialFingerprint
             self.tripwire = tripwire
             self.continuation = continuation
@@ -216,12 +220,14 @@ final class TheTripwire {
             }
             previous = current
 
+            framesElapsed += 1
+
             if quietFrames >= 2 {
                 finish(settled: true)
                 return
             }
 
-            if CFAbsoluteTimeGetCurrent() - startTime >= timeout {
+            if framesElapsed >= maxFrames {
                 finish(settled: false)
             }
         }
