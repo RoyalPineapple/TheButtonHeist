@@ -69,7 +69,7 @@ extension TheInsideJob {
         case .touchRotate(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeTwoFingerTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
             guard target.points.count <= 10_000 else {
                 let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)")

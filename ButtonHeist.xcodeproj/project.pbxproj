@@ -92,6 +92,7 @@
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BC478345C6BE0A8B155580 /* ObjCRuntime.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
 		E2F793CFC12A5894338CC018 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */; };
 		E3EB50B8FF78DE114640D797 /* TheStakeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01CD3D2D34C5473EB6B4E4D1 /* TheStakeout.swift */; };
@@ -234,6 +235,7 @@
 		1308BFFECC16AF7E933839EB /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		144A5EA0D6BE40725DC8F36F /* TheBagman+Conversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBagman+Conversion.swift"; sourceTree = "<group>"; };
+		14BC478345C6BE0A8B155580 /* ObjCRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObjCRuntime.swift; sourceTree = "<group>"; };
 		179DAF88825C7F500380DD4B /* TheFingerprints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFingerprints.swift; sourceTree = "<group>"; };
 		1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
 		19290497683B32A62E132809 /* TheInsideJob+Dispatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheInsideJob+Dispatch.swift"; sourceTree = "<group>"; };
@@ -527,6 +529,7 @@
 		9F1C7D991B4200C2941046D0 /* TheSafecracker */ = {
 			isa = PBXGroup;
 			children = (
+				14BC478345C6BE0A8B155580 /* ObjCRuntime.swift */,
 				1308BFFECC16AF7E933839EB /* TheSafecracker.swift */,
 				CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */,
 				78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */,
@@ -891,6 +894,7 @@
 				829B5C6336718013BECCF027 /* TheInsideJob+Dispatch.swift in Sources */,
 				D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */,
 				9C01EEBC0C435AE772D7ED9A /* TheMuscle.swift in Sources */,
+				DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */,
 				3CA92319C3F0C158E06E578A /* TheSafecracker+Actions.swift in Sources */,
 				FF72FE3ED77B03A1BC1CBA46 /* TheSafecracker+Bezier.swift in Sources */,
 				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
