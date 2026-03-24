@@ -8,13 +8,19 @@ public enum FenceResponse {
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
     case interface(Interface)
-    case action(result: ActionResult)
+    case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
     case recording(path: String, payload: RecordingPayload)
     case recordingData(payload: RecordingPayload)
-    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
+    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0)
     case sessionState(payload: [String: Any])
+
+    /// Extract the ActionResult if this response wraps one (for expectation checking).
+    var actionResult: ActionResult? {
+        if case .action(let result, _) = self { return result }
+        return nil
+    }
 
     // MARK: - Human Formatting
 
@@ -35,8 +41,19 @@ public enum FenceResponse {
             return formatDeviceList(devices)
         case .interface(let interface):
             return formatInterface(interface)
-        case .action(let result):
-            return formatActionResult(result)
+        case .action(let result, let expectation):
+            var text = formatActionResult(result)
+            if let expectation {
+                if expectation.met {
+                    text += "  [expectation met]"
+                } else {
+                    let tier = expectation.expectation
+                        .map(String.init(describing:)) ?? "delivery"
+                    text += "  [expectation FAILED: expected \(tier),"
+                    text += " got \(expectation.actual ?? "nil")]"
+                }
+            }
+            return text
         case .screenshot(let path, let width, let height):
             return "✓ Screenshot saved: \(path)  (\(Int(width)) × \(Int(height)))"
         case .screenshotData(let pngData, let width, let height):
@@ -45,9 +62,10 @@ public enum FenceResponse {
             return formatRecordingHuman(path: path, payload: payload)
         case .recordingData(let payload):
             return formatRecordingDataHuman(payload)
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs):
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
             var text = "Batch: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at step \(idx))" }
+            if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
             return text
         case .sessionState(let payload):
             let connected = payload["connected"] as? Bool ?? false
@@ -113,8 +131,15 @@ public enum FenceResponse {
             return devicesJsonDict(devices)
         case .interface(let interface):
             return ["status": "ok", "interface": interfaceDictionary(interface)]
-        case .action(let result):
-            return actionJsonDict(result)
+        case .action(let result, let expectation):
+            var dict = actionJsonDict(result)
+            if let expectation {
+                dict["expectation"] = Self.expectationResultDict(expectation)
+                if !expectation.met {
+                    dict["status"] = "expectation_failed"
+                }
+            }
+            return dict
         case .screenshot(let path, let width, let height):
             return ["status": "ok", "path": path, "width": width, "height": height]
         case .screenshotData(let pngData, let width, let height):
@@ -123,7 +148,7 @@ public enum FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
-        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs):
+        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
             var dict: [String: Any] = [
                 "status": failedIndex == nil ? "ok" : "partial",
                 "results": results,
@@ -131,6 +156,13 @@ public enum FenceResponse {
                 "totalTimingMs": totalTimingMs,
             ]
             if let idx = failedIndex { dict["failedIndex"] = idx }
+            if checked > 0 {
+                dict["expectations"] = [
+                    "checked": checked,
+                    "met": met,
+                    "allMet": checked == met,
+                ]
+            }
             return dict
         case .sessionState(let payload):
             return payload
@@ -175,11 +207,26 @@ public enum FenceResponse {
             payload["elementsRemoved"] = NSNull()
         }
 
+        if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
+        if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
+        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits }
+
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
         }
 
         return payload
+    }
+
+    static func expectationResultDict(_ result: ExpectationResult) -> [String: Any] {
+        var dict: [String: Any] = ["met": result.met]
+        if let actual = result.actual { dict["actual"] = actual }
+        let encoder = JSONEncoder()
+        if let data = try? encoder.encode(result.expectation),
+           let obj = try? JSONSerialization.jsonObject(with: data) {
+            dict["expected"] = obj
+        }
+        return dict
     }
 
     private static func actionErrorClass(_ result: ActionResult) -> String {

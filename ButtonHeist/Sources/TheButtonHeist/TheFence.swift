@@ -159,7 +159,21 @@ public final class TheFence {
             try await start()
         }
 
-        return try await dispatch(command: command, args: request)
+        let response = try await dispatch(command: command, args: request)
+
+        // Every action gets implicit delivery validation; higher tiers are additive
+        if let actionResult = response.actionResult {
+            let delivery = ActionExpectation.validateDelivery(actionResult)
+            if !delivery.met {
+                return .action(result: actionResult, expectation: delivery)
+            }
+            if let expectation = try parseExpectation(request) {
+                let validation = expectation.validate(against: actionResult)
+                return .action(result: actionResult, expectation: validation)
+            }
+        }
+
+        return response
     }
 
     private func connect() async throws {
@@ -282,33 +296,83 @@ public final class TheFence {
         return ActionTarget(identifier: identifier, order: order)
     }
 
+    // MARK: - Expectation Parsing
+
+    func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
+        guard let expect = dictionary["expect"] else { return nil }
+        if let str = expect as? String {
+            switch str {
+            case "screenChanged", "screen_changed": return .screenChanged
+            case "layoutChanged", "layout_changed": return .layoutChanged
+            default:
+                throw FenceError.invalidRequest(
+                    "Unknown expectation tier: \"\(str)\". " +
+                    "Valid: screen_changed, layout_changed, or {\"value\": \"…\"}"
+                )
+            }
+        }
+        if let dict = expect as? [String: Any] {
+            if let value = dict["value"] as? String {
+                return .value(value)
+            }
+            throw FenceError.invalidRequest("Invalid expectation object: expected {\"value\": \"expected\"}, got keys: \(dict.keys.sorted())")
+        }
+        throw FenceError.invalidRequest("Invalid expectation type: expected string or {\"value\": \"expected\"} object")
+    }
+
     // MARK: - Last Action Tracking
 
     var lastActionResult: ActionResult?
 
     // MARK: - Batch Execution
 
+    enum BatchPolicy: String, CaseIterable {
+        case stopOnError = "stop_on_error"
+        case continueOnError = "continue_on_error"
+    }
+
     private func handleRunBatch(_ args: [String: Any]) async throws -> FenceResponse {
         guard let steps = args["steps"] as? [[String: Any]], !steps.isEmpty else {
             throw FenceError.invalidRequest("run_batch requires a non-empty 'steps' array")
         }
-        let policy = (args["policy"] as? String) ?? "stop_on_error"
+        let policyString = (args["policy"] as? String) ?? BatchPolicy.stopOnError.rawValue
+        guard let policy = BatchPolicy(rawValue: policyString) else {
+            throw FenceError.invalidRequest(
+                "Unknown batch policy: \"\(policyString)\". " +
+                "Valid: \(BatchPolicy.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
 
         var results: [[String: Any]] = []
         var failedIndex: Int?
+        var expectationsMet = 0
+        var expectationsChecked = 0
         let batchStart = CFAbsoluteTimeGetCurrent()
 
         for (index, step) in steps.enumerated() {
             do {
                 let response = try await execute(request: step)
-                if let dict = response.jsonDict() {
-                    results.append(dict)
-                } else {
-                    results.append(["status": "ok"])
+                results.append(response.jsonDict() ?? ["status": "ok"])
+
+                // Count explicit tier expectations only — delivery failures have
+                // expectation.expectation == nil and should not inflate the count
+                if case .action(_, let expectation) = response,
+                   let result = expectation,
+                   result.expectation != nil {
+                    expectationsChecked += 1
+                    if result.met { expectationsMet += 1 }
                 }
 
-                let isError = (results.last?["status"] as? String) == "error"
-                if isError && policy == "stop_on_error" {
+                // Check for failure using the typed response, not serialized strings
+                let isFailed: Bool
+                if case .action(_, let expectation) = response, let result = expectation {
+                    isFailed = !result.met
+                } else if case .error = response {
+                    isFailed = true
+                } else {
+                    isFailed = false
+                }
+                if isFailed && policy == .stopOnError {
                     failedIndex = index
                     break
                 }
@@ -318,7 +382,7 @@ public final class TheFence {
                     "message": error.localizedDescription,
                 ]
                 results.append(errorDict)
-                if policy == "stop_on_error" {
+                if policy == .stopOnError {
                     failedIndex = index
                     break
                 }
@@ -330,7 +394,9 @@ public final class TheFence {
             results: results,
             completedSteps: results.count,
             failedIndex: failedIndex,
-            totalTimingMs: totalMs
+            totalTimingMs: totalMs,
+            expectationsChecked: expectationsChecked,
+            expectationsMet: expectationsMet
         )
     }
 

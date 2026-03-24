@@ -13,13 +13,14 @@ TheScore is the protocol bible. It defines:
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
 5. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`)
-6. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
-7. **Interaction events** (`InteractionEvent`) - wire-level command/result recording, also broadcast live to observers
-8. **Watch payload** (`WatchPayload`) - observer connection parameters
-9. **Server info** (`ServerInfo`)
-10. **Protocol constants** (service type, version)
-11. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
-12. **Connection scope types** (`ConnectionScope`) - configurable connection source filtering (simulator, USB, network) with address classification and environment variable parsing
+6. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) - outcome classifiers for actions
+7. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
+8. **Interaction events** (`InteractionEvent`) - wire-level command/result recording, also broadcast live to observers
+9. **Watch payload** (`WatchPayload`) - observer connection parameters
+10. **Server info** (`ServerInfo`)
+11. **Protocol constants** (service type, version)
+12. **`ButtonHeistActor`** - dedicated global actor for the host-side control plane (discovery, connection, session orchestration, command dispatch)
+13. **Connection scope types** (`ConnectionScope`) - configurable connection source filtering (simulator, USB, network) with address classification and environment variable parsing
 
 ## Architecture Diagram
 
@@ -151,12 +152,30 @@ classDiagram
 
     InteractionEvent --> ActionResult
     InteractionEvent --> InterfaceDelta
+
+    class ActionExpectation {
+        <<enum>>
+        value(String)
+        screenChanged
+        layoutChanged
+        +validate(against: ActionResult) ExpectationResult
+        +validateDelivery(ActionResult)$ ExpectationResult
+    }
+
+    class ExpectationResult {
+        +Bool met
+        +ActionExpectation? expectation
+        +String? actual
+    }
+
+    ActionExpectation --> ExpectationResult
+    ExpectationResult --> ActionResult
 ```
 
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.0"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"6.1"` (explicit `type` / `payload` envelopes + exact hello/version matching)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
