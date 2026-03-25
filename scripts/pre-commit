@@ -26,3 +26,17 @@ if [[ -z "$staged" ]]; then
 fi
 
 swiftlint lint --strict --quiet -- $staged
+
+# If Tuist config files are staged, regenerate and verify no drift
+tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift' 'Tuist/ProjectDescriptionHelpers/*.swift')
+if [[ -n "$tuist_files" ]]; then
+    echo "Tuist config changed — regenerating to check for drift..."
+    tuist generate --no-open >/dev/null 2>&1
+    drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
+    if [[ -n "$drift" ]]; then
+        echo "error: tuist generate produced unstaged changes:"
+        echo "$drift"
+        echo "Stage the regenerated project files before committing."
+        exit 1
+    fi
+fi
