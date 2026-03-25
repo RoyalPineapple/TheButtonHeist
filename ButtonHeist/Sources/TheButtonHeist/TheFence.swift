@@ -200,7 +200,7 @@ public final class TheFence {
         case .listDevices:
             return .devices(await client.discoverReachableDevices())
         case .getInterface:
-            let detail = (args["detail"] as? String) ?? "summary"
+            let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
             return .interface(try await handleGetInterface(), detail: detail)
         case .getScreen:
             return try await handleGetScreen(args)
