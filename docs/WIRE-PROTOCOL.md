@@ -1,4 +1,4 @@
-# ButtonHeist Wire Protocol Specification
+# Button Heist Wire Protocol Specification
 
 **Version**: 6.1
 

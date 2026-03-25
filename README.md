@@ -347,7 +347,6 @@ git submodule update --remote ai-fuzzer   # Update later
 
 **Project:**
 - [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app fuzzer built on Button Heist
-- [Contributing](CONTRIBUTING.md) — Development setup and guidelines
 
 ## License
 
