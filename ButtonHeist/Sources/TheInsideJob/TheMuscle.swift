@@ -206,8 +206,16 @@ final class TheMuscle {
         guard case .authenticate(let payload) = envelope.message else { return }
 
         // Check lockout before processing auth (keyed on remote address to persist across reconnections)
-        let address = clientAddresses[clientId]
-        if let address, let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
+        guard let address = clientAddresses[clientId] else {
+            logger.warning("Client \(clientId) has no registered address, rejecting auth")
+            sendMessage(.authFailed("Connection rejected."), respond: respond)
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                self?.disconnectClient?(clientId)
+            }
+            return
+        }
+        if let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
             sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
             logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
             Task { [weak self] in
@@ -216,7 +224,7 @@ final class TheMuscle {
             }
             return
         }
-        if let address { lockedOutAddresses.removeValue(forKey: address) }
+        lockedOutAddresses.removeValue(forKey: address)
 
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
@@ -232,12 +240,11 @@ final class TheMuscle {
 
         guard payload.token == authToken else {
             // Wrong token → reject with guidance to retry without a token
-            let attemptKey = address ?? "unknown-\(clientId)"
-            let attempts = (failedAuthAttempts[attemptKey] ?? 0) + 1
-            failedAuthAttempts[attemptKey] = attempts
+            let attempts = (failedAuthAttempts[address] ?? 0) + 1
+            failedAuthAttempts[address] = attempts
             if attempts >= TheMuscle.maxFailedAttempts {
-                lockedOutAddresses[attemptKey] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
-                logger.warning("Address \(attemptKey) locked out after \(attempts) failed attempts")
+                lockedOutAddresses[address] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
+                logger.warning("Address \(address) locked out after \(attempts) failed attempts")
             }
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
@@ -249,7 +256,7 @@ final class TheMuscle {
         }
 
         // Token matches → authenticate and acquire session
-        if let address { failedAuthAttempts.removeValue(forKey: address) }
+        failedAuthAttempts.removeValue(forKey: address)
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return

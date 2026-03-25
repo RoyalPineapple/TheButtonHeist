@@ -68,6 +68,8 @@ final class DeviceConnector {
         var connectionError: Error?
         client.onConnected = { _ in connected = true }
         client.onDisconnected = { reason in if connectionError == nil { connectionError = reason } }
+        // Intentional: print the token so anyone with debug console access can reconnect.
+        // This is a dev tool — if you can see the console, you already have full access.
         client.onAuthApproved = { token in
             if let token {
                 logStatus("BUTTONHEIST_TOKEN=\(token)")
