@@ -1,0 +1,17 @@
+{
+  "AXFrame": "{{16, 165}, {361, 51}}",
+  "AXUniqueId": null,
+  "frame": {"y": 165, "x": 16, "width": 361, "height": 51},
+  "role_description": "button",
+  "AXLabel": "Controls Demo",
+  "content_required": false,
+  "type": "Button",
+  "title": null,
+  "help": null,
+  "custom_actions": [],
+  "AXValue": null,
+  "enabled": true,
+  "role": "AXButton",
+  "children": [],
+  "subrole": null
+}

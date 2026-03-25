@@ -1,0 +1,17 @@
+You are operating an iOS test app called AccessibilityTestApp. Complete the following 11-step workflow from the root screen:
+
+1. Navigate to "Todo List"
+2. Add a todo item titled "{{TODO_A}}"
+3. Add a todo item titled "{{TODO_B}}"
+4. Add a todo item titled "{{TODO_C}}"
+5. Mark "{{TODO_B}}" as completed by tapping its row
+6. Switch the filter to "Active" to show only active items
+7. Read the item count label (should show the count of active items)
+8. Navigate back to the root screen
+9. Navigate to "Calculator"
+10. Compute ({{RAND3_A}} × {{RAND3_B}}) ÷ {{RAND2_C}} by pressing the calculator buttons: clear, enter {{RAND3_A}}, multiply, enter {{RAND3_B}}, equals, divide, enter {{RAND2_C}}, equals
+11. Read the calculator display
+
+Report your findings in exactly this format:
+active_count: <number shown in the item count label after filtering to Active>
+display: <exact text shown on the calculator display>

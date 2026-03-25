@@ -1,0 +1,5 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Controls Demo", then into "Adjustable Controls". The slider on this screen starts at 0 and steps by 10 per increment — increment it 7 times to reach a value of 70. Then increment the stepper until it reads 5. After setting both values, read the text of the last action label on this screen and note it. Then go back to the Controls Demo menu and navigate into "Toggles & Pickers". Enable the Subscribe toggle by activating it (it should switch to ON). Set the frequency picker to "Weekly" using the menu/popup picker for frequency. Set the priority to "High" using the segmented picker for priority. After making all three changes, read the text of the last action label on this screen. Report both last action labels exactly as they appear.
+
+Report your findings in exactly this format:
+adjustable_last_action: <exact text of the last action label on the Adjustable Controls screen>
+toggles_last_action: <exact text of the last action label on the Toggles & Pickers screen>

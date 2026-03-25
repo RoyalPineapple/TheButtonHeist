@@ -1,0 +1,7 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to the "Settings" section. Make the following changes in order: set the Color Scheme to "Dark", set the Accent Color to "Purple", and set the Text Size to "Large". After making all three changes, locate the "Current Values" section on the settings screen, which contains labels showing the live state of each setting. Read the exact text displayed in each of the four current value labels: the current color scheme label, the current accent color label, the current text size label, and the current username label. Report each value character-for-character as it appears, including any default or empty state for username.
+
+Report your findings in exactly this format:
+color_scheme: <text of current color scheme label>
+accent_color: <text of current accent color label>
+text_size: <text of current text size label>
+username: <text of current username label>
