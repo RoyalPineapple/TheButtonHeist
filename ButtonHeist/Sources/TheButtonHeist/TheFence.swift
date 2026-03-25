@@ -320,14 +320,11 @@ public final class TheFence {
             default:
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: screen_changed, layout_changed, {\"value\": \"…\"}, or {\"valueChanged\": {…}}"
+                    "Valid: screen_changed, layout_changed, or {\"valueChanged\": {…}}"
                 )
             }
         }
         if let dict = expect as? [String: Any] {
-            if let value = dict["value"] as? String {
-                return .value(value)
-            }
             if let vc = dict["valueChanged"] as? [String: Any] {
                 return .valueChanged(
                     heistId: vc["heistId"] as? String,
@@ -340,13 +337,12 @@ public final class TheFence {
                 return .valueChanged()
             }
             throw FenceError.invalidRequest(
-                "Invalid expectation object: expected {\"value\": \"…\"} or " +
-                "{\"valueChanged\": {…}}, got keys: \(dict.keys.sorted())"
+                "Invalid expectation object: expected {\"valueChanged\": {…}}, " +
+                "got keys: \(dict.keys.sorted())"
             )
         }
         throw FenceError.invalidRequest(
-            "Invalid expectation type: expected string or " +
-            "{\"value\": \"…\"} / {\"valueChanged\": {…}} object"
+            "Invalid expectation type: expected string or {\"valueChanged\": {…}} object"
         )
     }
 
