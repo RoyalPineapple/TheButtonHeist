@@ -35,7 +35,6 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 |---------|---------|
 | `list` | Discover reachable devices |
 | `activate` | Primary element interaction command |
-| `action` | Increment, decrement, or invoke custom accessibility actions |
 | `touch` | Low-level gesture escape hatch (9 subcommands) |
 | `type` | Type text and/or delete characters via keyboard injection |
 | `screenshot` | Capture a PNG screenshot |
@@ -47,8 +46,8 @@ Without `--device`, direct commands expect exactly one reachable target. No gues
 | `scroll` | Scroll a view by one page |
 | `scroll_to_visible` | Scroll until an element is visible |
 | `scroll_to_edge` | Scroll to a scroll-view edge |
-| `copy`, `paste`, `cut`, `select`, `select_all` | Text edit actions via the responder chain |
-| `dismiss_keyboard` | Resign first responder |
+| `swipe` | Convenience alias for `touch swipe` |
+| `action` | Accessibility actions: edit (copy/paste/cut/select/selectAll), increment, decrement, custom actions, dismiss keyboard |
 
 ### activate
 
@@ -144,7 +143,7 @@ buttonheist scroll_to_edge --edge bottom --identifier scrollView
 
 ## Touch Subcommands
 
-`buttonheist touch` is the lockpick set. Nine subcommands for when you need the crowbar instead of the key:
+`buttonheist touch` is the low-level gesture toolkit. Nine subcommands for coordinate-precise touch injection when `activate` isn't enough:
 
 | Subcommand | Key Flags | Description |
 |------------|-----------|-------------|
@@ -235,6 +234,7 @@ Override with `-f/--format human` or `-f/--format json`. Status messages always 
 | 1 | Connection failed |
 | 2 | No device found |
 | 3 | Timeout |
+| 4 | Authentication failed |
 | 99 | Unexpected error |
 
 ## Examples

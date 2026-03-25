@@ -36,11 +36,11 @@ Location: `Sources/TheScore/`
 
 `TheScore` is the paper trail. It keeps both sides of the operation speaking the same language — no UIKit, no AppKit, just pure `Codable` + `Sendable` types that cross the wire cleanly.
 
-- **`ClientMessage`** — 30 cases: auth, interface queries, gestures, text, screen capture, recording, watch
-- **`ServerMessage`** — 16 cases: auth challenge/approved/failed, info, interface, action results, screen, recording lifecycle, interaction events, session status
+- **`ClientMessage`** — 31 cases: auth, interface queries, gestures, text, screen capture, recording, watch, batch, session state
+- **`ServerMessage`** — 18 cases: auth challenge/approved/failed, info, interface, action results, screen, recording lifecycle, interaction events, session status, protocol mismatch
 - **Envelopes** — `RequestEnvelope` (client → server, optional `requestId`) and `ResponseEnvelope` (server → client, echoes `requestId`)
 - **Wire format** — Newline-delimited JSON (`0x0A` separator)
-- **Constants** — `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"6.0"`)
+- **Constants** — `buttonHeistServiceType` (`"_buttonheist._tcp"`), `protocolVersion` (`"6.1"`)
 
 Key supporting types: `ActionTarget`, `TouchTapTarget`, `SwipeTarget`, `PinchTarget`, `DrawBezierTarget`, `Interface`, `HeistElement`, `ActionResult`, `InterfaceDelta`, `ScreenPayload`, `RecordingPayload`.
 
@@ -110,7 +110,7 @@ The `activate` command is accessibility-first: it tries `accessibilityActivate()
 
 - Connection scope filtering: rejects connections at `.ready` using typed host classification (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE`.
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.0)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.1)
 
 ## ButtonHeist
 
@@ -140,4 +140,4 @@ Location: `Sources/TheButtonHeist/`
 - [Project Overview](../README.md)
 - [Architecture](../docs/ARCHITECTURE.md) — Full system design with data flow diagrams
 - [API Reference](../docs/API.md) — Complete API documentation for all modules
-- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v6.0 message format specification
+- [Wire Protocol](../docs/WIRE-PROTOCOL.md) — Protocol v6.1 message format specification
