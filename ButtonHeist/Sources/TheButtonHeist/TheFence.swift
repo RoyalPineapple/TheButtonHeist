@@ -217,6 +217,10 @@ public final class TheFence {
             return try await handleTypeText(args)
         case .editAction:
             return try await handleEditAction(args)
+        case .setPasteboard:
+            return try await handleSetPasteboard(args)
+        case .getPasteboard:
+            return try await handleGetPasteboard()
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
         case .startRecording:
@@ -276,6 +280,13 @@ public final class TheFence {
         if let value = dictionary[key] as? Int { return value }
         if let value = dictionary[key] as? Double { return Int(value) }
         if let value = dictionary[key] as? String { return Int(value) }
+        return nil
+    }
+
+    func boolArg(_ dictionary: [String: Any], _ key: String) -> Bool? {
+        if let value = dictionary[key] as? Bool { return value }
+        if let value = dictionary[key] as? Int { return value != 0 }
+        if let value = dictionary[key] as? String { return value == "true" || value == "1" }
         return nil
     }
 

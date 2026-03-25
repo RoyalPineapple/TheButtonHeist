@@ -53,8 +53,8 @@ extension TheSafecracker {
                     0,                    // z
                     isTouching ? 1.0 : 0, // tipPressure (1.0 while touching)
                     0,                    // twist
-                    15.0,                 // majorRadius (realistic finger size)
-                    15.0,                 // minorRadius
+                    5.0,                  // majorRadius (matches KIF)
+                    5.0,                  // minorRadius
                     1.0,                  // quality
                     1.0,                  // density
                     1.0,                  // irregularity

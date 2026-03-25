@@ -107,6 +107,12 @@ public enum ClientMessage: Codable, Sendable {
     /// Resign first responder (dismiss keyboard)
     case resignFirstResponder
 
+    /// Write text to the general pasteboard (in-app, avoids paste dialog for subsequent reads)
+    case setPasteboard(SetPasteboardTarget)
+
+    /// Read text from the general pasteboard
+    case getPasteboard
+
     /// Wait for all animations to complete, then return the settled interface
     case waitForIdle(WaitForIdleTarget)
 
@@ -461,13 +467,17 @@ public struct TypeTextTarget: Codable, Sendable {
     public let text: String?
     /// Number of times to tap the delete key before typing. Used for corrections.
     public let deleteCount: Int?
+    /// Clear all existing text before typing. Uses UITextInput select-all + delete
+    /// for a clean replacement without needing to know the current field length.
+    public let clearFirst: Bool?
     /// Optional element to tap first to bring up keyboard (text field).
     /// Also used to read back the current value after typing.
     public let elementTarget: ActionTarget?
 
-    public init(text: String? = nil, deleteCount: Int? = nil, elementTarget: ActionTarget? = nil) {
+    public init(text: String? = nil, deleteCount: Int? = nil, clearFirst: Bool? = nil, elementTarget: ActionTarget? = nil) {
         self.text = text
         self.deleteCount = deleteCount
+        self.clearFirst = clearFirst
         self.elementTarget = elementTarget
     }
 }
@@ -475,6 +485,16 @@ public struct TypeTextTarget: Codable, Sendable {
 /// Standard edit actions that can be dispatched via the responder chain.
 public enum EditAction: String, Codable, Sendable, CaseIterable {
     case copy, paste, cut, select, selectAll
+}
+
+/// Target for writing text to the general pasteboard.
+public struct SetPasteboardTarget: Codable, Sendable {
+    /// Text to write to the pasteboard
+    public let text: String
+
+    public init(text: String) {
+        self.text = text
+    }
 }
 
 /// Target for edit actions dispatched via the responder chain

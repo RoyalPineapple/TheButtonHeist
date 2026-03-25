@@ -646,7 +646,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextMissingBothFields() async {
         await assertValidationError(
             ["command": "type_text"],
-            contains: "Must specify text, deleteCount, or both"
+            contains: "Must specify text, deleteCount, clearFirst, or a combination"
         )
     }
 
@@ -676,6 +676,30 @@ final class TheFenceHandlerTests: XCTestCase {
     func testEditActionValidPassesValidation() async {
         await assertPassesValidation(
             ["command": "edit_action", "action": "copy"]
+        )
+    }
+
+    // MARK: - Pasteboard Validation
+
+    @ButtonHeistActor
+    func testSetPasteboardMissingText() async {
+        await assertValidationError(
+            ["command": "set_pasteboard"],
+            contains: "text is required"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSetPasteboardWithTextPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "set_pasteboard", "text": "hello"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testGetPasteboardPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "get_pasteboard"]
         )
     }
 
