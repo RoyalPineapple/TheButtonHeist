@@ -45,11 +45,21 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy from the connected iOS device. Returns a structured list \
-            of all accessible elements with their order, label, value, identifier, traits, frame, \
-            activation point, and available actions.
+            Get the current UI element hierarchy from the connected iOS device. Returns elements with \
+            heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
+            Target elements in subsequent calls using heistId.
             """,
-        inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "detail": [
+                    "type": "string",
+                    "enum": .array(["summary", "full"].map { .string($0) }),
+                    "description": "Level of detail: summary (default, no geometry) or full (includes frame, activation point, hints)",
+                ],
+            ],
+            "additionalProperties": false,
+        ],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -59,11 +69,13 @@ enum ToolDefinitions {
             Activate a UI element. This is the primary way to interact with buttons, links, and controls. \
             Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
             falls back to synthetic tap at the element's activation point. \
-            Provide identifier or order from get_interface.
+            Target by heistId (preferred), identifier, or order from get_interface.
             """,
         inputSchema: [
             "type": "object",
             "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "expect": expectProperty,
@@ -100,6 +112,7 @@ enum ToolDefinitions {
         inputSchema: [
             "type": "object",
             "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "direction": ["type": "string", "description": "Swipe direction: up, down, left, right"],
@@ -189,6 +202,7 @@ enum ToolDefinitions {
         inputSchema: [
             "type": "object",
             "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "direction": [
@@ -209,6 +223,7 @@ enum ToolDefinitions {
         inputSchema: [
             "type": "object",
             "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "expect": expectProperty,
@@ -223,6 +238,7 @@ enum ToolDefinitions {
         inputSchema: [
             "type": "object",
             "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "edge": [
@@ -264,6 +280,7 @@ enum ToolDefinitions {
                     ].map { .string($0) }),
                     "description": "Gesture type",
                 ],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "x": ["type": "number", "description": "X coordinate"],
@@ -302,6 +319,7 @@ enum ToolDefinitions {
                     "enum": .array(["increment", "decrement", "perform_custom_action", "edit_action", "dismiss_keyboard"].map { .string($0) }),
                     "description": "Action type",
                 ],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "actionName": ["type": "string", "description": "Custom action name (for perform_custom_action)"],
