@@ -49,9 +49,9 @@ The Button Heist also works on physical devices. Same framework, same tools, poi
 
 ## Benchmarks
 
-I ran the same Claude Sonnet agent through four tasks — a multi-screen workflow, calculator arithmetic, todo list CRUD, and a settings round-trip — using each tool. Same model, same app, randomized inputs, n=3 per cell. Full trial data in [benchmark-data.md](./benchmark-data.md).
+I ran the same Claude Sonnet agent through eight tasks — workflows, calculator, CRUD, settings, swipe actions, scrolling, stepper increments, and a search control — using each tool. Same model, same app, randomized inputs, n=3 per cell. BH and idb ran on separate dedicated simulators to avoid cross-tool interference; within each simulator, trial order was randomized. Full trial data in [benchmark-data.md](./benchmark-data.md).
 
-**Turns (mean, n=3 per cell):**
+**Turns (mean, n=3 per cell, rounded):**
 
 | Task | idb | BH | BH + Batch | BH + Expect |
 |---|--:|--:|--:|--:|
@@ -59,16 +59,24 @@ I ran the same Claude Sonnet agent through four tasks — a multi-screen workflo
 | **Calculator** | 23 | 15 | **5** | **5** |
 | **Todo CRUD** | 37 | 14 | **7** | **8** |
 | **Settings** | 31 | 11 | **10** | **13** |
+| **Swipe actions** | 24 | **7** | 9 | **8** |
+| **Scroll to find** | 19 | **15** | 29 | 20 |
+| **Stepper increment** | 27 | 15 | **10** | **11** |
+| **Search + tap** (control) | 23 | 15 | 19 | 18 |
+
+The first four tasks test general efficiency. The last four isolate specific capabilities:
+
+- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. idb must swipe to reveal the button, re-read the tree to find it, then tap it. **7 turns vs 24.**
+- **Stepper increment** (T11): BH calls `increment()` and gets the new value back in the delta. idb taps the stepper, then re-reads the entire tree to check the value. **10 turns vs 27 with batching.**
+- **Search + tap** (T12): Both tools handle search and tap similarly. This is a control — BH shows no meaningful advantage on tasks where the tools are equivalent. **15–19 turns vs 23.**
 
 Each column gives the agent more autonomy:
 
-- **BH base**: The agent gets richer data per element — activation points, available actions, interaction flags — so it understands the interface without extra reasoning. It doesn't need prompt instructions explaining how to compute tap coordinates. The accessibility data already tells it how to interact with each element. **35–65% fewer turns.**
-- **Batching**: The agent can express a multi-step intention in a single call and get back what happened at each step. It doesn't have to wait for a round trip between every tap. **68–81% fewer turns.**
-- **Expectations**: The agent can state what it expects to happen and get structured confirmation. It doesn't have to re-read the tree and reason about whether a tap worked — the tool tells it directly. **58–80% fewer turns.**
+- **BH base**: Richer data per element — activation points, available actions, `respondsToUserInteraction` — so the agent understands the interface without extra reasoning. No prompt coaching needed for coordinate math.
+- **Batching**: Multi-step intentions in a single call. Calculator collapses from 15 turns to 5. Each step returns what changed.
+- **Expectations**: Inline outcome verification. The agent doesn't re-read the tree — the tool reports whether the action worked.
 
-Batching and expectations both depend on running in-process — batching needs inline deltas between steps, and expectations need the framework to detect screen changes, layout mutations, and value updates without a full tree re-read.
-
-The per-task breakdown shows where each advantage applies. Calculator and todo CRUD collapse to 5–7 turns with batching — these are heavily sequential tasks where combining actions eliminates round trips. Settings shows a smaller improvement because the task is more interactive (picker selections) with less opportunity to batch.
+Batching is the big win. Expectations help on verification-heavy tasks but add overhead where the agent doesn't need confirmation. Both depend on running in-process — batching needs inline deltas, expectations need the framework to detect state changes without a full tree re-read.
 
 ## How It Compares to ios-simulator-mcp
 
