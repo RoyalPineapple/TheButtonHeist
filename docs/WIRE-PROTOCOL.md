@@ -353,7 +353,7 @@ Type text character-by-character by injecting into the keyboard input system, an
 
 **Clear existing text then type new text:**
 ```json
-{"protocolVersion":"6.0","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
+{"protocolVersion":"6.1","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
 ```
 
 | Field | Type | Description |
@@ -452,7 +452,7 @@ Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
 Write text to the general pasteboard from within the app. Content written by the app itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
 
 ```json
-{"protocolVersion":"6.0","type":"setPasteboard","payload":{"text":"clipboard content"}}
+{"protocolVersion":"6.1","type":"setPasteboard","payload":{"text":"clipboard content"}}
 ```
 
 | Field | Type | Description |
@@ -464,7 +464,7 @@ Write text to the general pasteboard from within the app. Content written by the
 Read text from the general pasteboard.
 
 ```json
-{"protocolVersion":"6.0","type":"getPasteboard"}
+{"protocolVersion":"6.1","type":"getPasteboard"}
 ```
 
 No payload. Returns an `actionResult` with `method: "getPasteboard"` and the pasteboard text in `value`.

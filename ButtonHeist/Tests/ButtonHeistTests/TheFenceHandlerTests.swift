@@ -679,6 +679,30 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    // MARK: - Pasteboard Validation
+
+    @ButtonHeistActor
+    func testSetPasteboardMissingText() async {
+        await assertValidationError(
+            ["command": "set_pasteboard"],
+            contains: "text is required"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSetPasteboardWithTextPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "set_pasteboard", "text": "hello"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testGetPasteboardPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "get_pasteboard"]
+        )
+    }
+
     // MARK: - Expectation Parsing
 
     @ButtonHeistActor

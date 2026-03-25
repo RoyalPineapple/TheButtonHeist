@@ -35,6 +35,7 @@ graph TD
             GetInterface["get_interface"]
             WaitForIdle["wait_for_idle"]
             Record["record / stop_recording"]
+            Pasteboard["set_pasteboard / get_pasteboard"]
             Session["session - ReplSession"]
         end
 
@@ -55,6 +56,7 @@ graph TD
     GetInterface --> Direct
     WaitForIdle --> Direct
     Record --> Direct
+    Pasteboard --> Direct
     Session --> REPL
 
     Direct --> TheMastermind["TheMastermind"]

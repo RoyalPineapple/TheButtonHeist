@@ -8,7 +8,7 @@
 
 TheScore is the shared playbook. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` - 31 cases, including `clientHello`, `status`, and `watch`)
+1. **All client-to-server messages** (`ClientMessage` - 33 cases, including `clientHello`, `status`, `watch`, `setPasteboard`, and `getPasteboard`)
 2. **All server-to-client messages** (`ServerMessage` - 18 cases, including `serverHello`, `protocolMismatch`, and `interaction`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`)
@@ -53,7 +53,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (31 cases)"]
+    subgraph ClientMessages["ClientMessage (33 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
@@ -63,6 +63,7 @@ graph TD
         Touch["touchTap / touchLongPress / touchSwipe - touchDrag / touchPinch / touchRotate - touchTwoFingerTap / touchDrawPath / touchDrawBezier"]
         Scroll["scroll / scrollToVisible / scrollToEdge"]
         Text["typeText / editAction / resignFirstResponder"]
+        Pasteboard["setPasteboard / getPasteboard"]
         Recording["startRecording / stopRecording"]
         Watch["watch(WatchPayload)"]
     end

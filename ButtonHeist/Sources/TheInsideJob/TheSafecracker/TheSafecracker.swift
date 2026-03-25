@@ -295,8 +295,7 @@ final class TheSafecracker {
     func isInHardwareKeyboardMode() -> Bool {
         guard let impl = getKeyboardImpl() else { return false }
         guard let msg = ObjCRuntime.message("isInHardwareKeyboardMode", to: impl) else { return false }
-        let result: AnyObject? = msg.call()
-        return (result as? NSNumber)?.boolValue ?? false
+        return msg.callReturningBool()
     }
 
     /// Whether UIKeyboardImpl has a delegate (a responder accepting key input).
