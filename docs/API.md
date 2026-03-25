@@ -1241,11 +1241,14 @@ public enum ActionExpectation: Codable, Sendable, Equatable
 
 Outcome signal classifiers for actions. Attached to a request (not to a target type) so any action can opt in. Every action implicitly checks delivery (`success == true`); these tiers classify what kind of change the caller expected. Results report what actually happened — the caller decides what to do with it. In batches, a mismet expectation halts execution at the action that broke rather than letting later steps fail in a confusing state.
 
+Expectations follow a **"say what you know"** design: agents express what they care about and omit what they don't. Optional fields act as filters — provide more to tighten the check, fewer to loosen it. The framework scans the result for any match. This minimizes cognitive load on the caller.
+
 #### Cases
 
 - `value(String)` - Expected the post-action field value to equal this string
 - `screenChanged` - Expected `interfaceDelta.kind == .screenChanged`
 - `layoutChanged` - Expected `interfaceDelta.kind == .elementsChanged` (also met by `.screenChanged`)
+- `valueChanged(heistId: String?, oldValue: String?, newValue: String?)` - Expected a value change in `interfaceDelta.valueChanges`. All fields optional — provide what you know, omit what you don't. Met when any entry matches all provided fields.
 
 #### Static Methods
 
