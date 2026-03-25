@@ -75,7 +75,6 @@ enum ToolDefinitions {
             "type": "object",
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
                 "expect": expectProperty,
