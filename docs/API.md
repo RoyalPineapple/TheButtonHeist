@@ -1245,7 +1245,6 @@ Expectations follow a **"say what you know"** design: agents express what they c
 
 #### Cases
 
-- `value(String)` - Expected the post-action field value to equal this string
 - `screenChanged` - Expected `interfaceDelta.kind == .screenChanged`
 - `layoutChanged` - Expected `interfaceDelta.kind == .elementsChanged` (also met by `.screenChanged`)
 - `valueChanged(heistId: String?, oldValue: String?, newValue: String?)` - Expected a value change in `interfaceDelta.valueChanges`. All fields optional — provide what you know, omit what you don't. Met when any entry matches all provided fields.

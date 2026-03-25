@@ -49,7 +49,6 @@ Expectations follow a "say what you know" design. The agent expresses what it ca
 
 - `"screen_changed"` — did the view controller change?
 - `"layout_changed"` — were elements added or removed?
-- `{"value": "5"}` — does the target element's value match exactly?
 - `{"valueChanged": {"newValue": "5"}}` — did any element's value change to "5"?
 - `{"valueChanged": {"heistId": "counter", "oldValue": "3", "newValue": "5"}}` — did this specific element transition from "3" to "5"?
 - `{"valueChanged": {}}` — did any value change at all?

@@ -16,8 +16,7 @@ enum ToolDefinitions {
             Outcome signal for this action. Delivery is always checked implicitly. \
             String values: "screen_changed" (did the view controller change?), \
             "layout_changed" (were elements added or removed? does not match value-only changes). \
-            Object values: {"value": "expected"} to check the post-action field value, \
-            or {"valueChanged": {"newValue": "5"}} to check interface delta value changes. \
+            Object value: {"valueChanged": {"newValue": "5"}} to check interface delta value changes. \
             valueChanged follows "say what you know" — provide only the fields you care about \
             (heistId, oldValue, newValue). Omitted fields are wildcards.
             """,
@@ -25,12 +24,6 @@ enum ToolDefinitions {
             [
                 "type": "string",
                 "enum": .array(["screen_changed", "layout_changed"].map { .string($0) }),
-            ],
-            [
-                "type": "object",
-                "properties": ["value": ["type": "string"]],
-                "required": .array([.string("value")]),
-                "additionalProperties": false,
             ],
             [
                 "type": "object",
