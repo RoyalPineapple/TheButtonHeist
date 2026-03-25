@@ -283,8 +283,6 @@ public struct ValueChange: Codable, Sendable {
 /// Screen change is detected by view controller identity — if the topmost VC changed,
 /// the screen changed.
 public enum ActionExpectation: Codable, Sendable, Equatable {
-    /// Expected the post-action field value to equal this string.
-    case value(String)
     /// Expected a screen-level change (VC identity changed).
     case screenChanged
     /// Expected elements to be added, removed, or the screen to change.
@@ -315,24 +313,6 @@ extension ActionExpectation {
     /// Check this expectation against an ActionResult.
     public func validate(against result: ActionResult) -> ExpectationResult {
         switch self {
-        case .value(let expected):
-            // Check typeText value, element value, and element label — first match wins
-            if result.value == expected {
-                return ExpectationResult(met: true, expectation: self, actual: result.value)
-            }
-            if result.elementValue == expected {
-                return ExpectationResult(met: true, expectation: self, actual: result.elementValue)
-            }
-            if result.elementLabel == expected {
-                return ExpectationResult(met: true, expectation: self, actual: result.elementLabel)
-            }
-            // Report what we actually found
-            let actual = result.value ?? result.elementValue ?? result.elementLabel
-            return ExpectationResult(
-                met: false,
-                expectation: self,
-                actual: actual
-            )
         case .screenChanged:
             let kind = result.interfaceDelta?.kind
             return ExpectationResult(
