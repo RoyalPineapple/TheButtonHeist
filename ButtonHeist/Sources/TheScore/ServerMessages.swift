@@ -470,6 +470,8 @@ public enum ActionMethod: String, Codable, Sendable {
     case customAction
     case editAction
     case resignFirstResponder
+    case setPasteboard
+    case getPasteboard
     case waitForIdle
     case scroll
     case scrollToVisible

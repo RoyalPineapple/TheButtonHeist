@@ -717,7 +717,7 @@ cd ButtonHeistMCP && swift build -c release
 |------|-------------|----------------|
 | `get_interface` | Get UI element hierarchy | — |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern) | `identifier`, `order`, `expect` |
-| `type_text` | Type text / delete characters | `text`, `deleteCount`, `identifier`, `order`, `expect` |
+| `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `identifier`, `order`, `expect` |
 | `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_idle` | Wait for animations to settle | `timeout` |
@@ -729,6 +729,8 @@ cd ButtonHeistMCP && swift build -c release
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
 | `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
+| `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
+| `get_pasteboard` | Read text from the general pasteboard | `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
 | `get_session_state` | Read-only summary of the current macOS-side session state | — |
 
@@ -879,11 +881,15 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection
+- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection (falls back to UIKeyInput for hardware keyboard)
 - `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
+- `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
+- `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Scroll the nearest scroll view ancestor by one page
 - `scrollToVisible(ActionTarget)` - Scroll until the target element is visible in the viewport
 - `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
+- `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
+- `getPasteboard` - Read text from general pasteboard
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot
@@ -1219,6 +1225,8 @@ public enum ActionMethod: String, Codable, Sendable
 - `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Used custom action
 - `editAction` - Edit action via responder chain
+- `setPasteboard` - Text written to general pasteboard
+- `getPasteboard` - Text read from general pasteboard
 - `resignFirstResponder` - Keyboard dismissed
 - `waitForIdle` - Wait-for-idle completed
 - `scroll` - Scroll view scrolled by one page

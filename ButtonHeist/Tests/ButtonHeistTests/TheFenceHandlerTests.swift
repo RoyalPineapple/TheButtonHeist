@@ -646,7 +646,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testTypeTextMissingBothFields() async {
         await assertValidationError(
             ["command": "type_text"],
-            contains: "Must specify text, deleteCount, or both"
+            contains: "Must specify text, deleteCount, clearFirst, or a combination"
         )
     }
 

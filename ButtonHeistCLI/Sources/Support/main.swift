@@ -39,6 +39,10 @@ struct ButtonHeistApp: AsyncParsableCommand {
             // Gestures
             TouchCommand.self,
 
+            // Pasteboard
+            SetPasteboardCommand.self,
+            GetPasteboardCommand.self,
+
             // Recording & diagnostics
             RecordCommand.self,
             StopRecordingCommand.self,

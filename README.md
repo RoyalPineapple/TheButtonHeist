@@ -35,7 +35,7 @@ Same Claude Sonnet agent, same 11-step workflow (n=6):
 
 - **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
 - **Full gesture suite** — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw arbitrary paths and bezier curves
-- **Text input** — type characters, delete, read back values via UIKeyboardImpl injection. Edit actions: copy, paste, cut, select, selectAll
+- **Text input** — type characters, delete, clear fields, read back values — works with software and hardware keyboard modes. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the iOS "Allow Paste" dialog
 - **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (minimal scroll until element is on screen), `scroll_to_edge` (jump to top/bottom/left/right)
 - **Accessibility actions** — increment/decrement on adjustable elements, trigger named custom actions, dismiss keyboard
 
@@ -56,7 +56,7 @@ Same Claude Sonnet agent, same 11-step workflow (n=6):
 
 ### Agent Integration
 
-- **16 MCP tools** — purpose-built for AI agents. Video data stripped from context window (metadata only unless output path given)
+- **18 MCP tools** — purpose-built for AI agents. Video data stripped from context window (metadata only unless output path given)
 - **Batch execution** — `run_batch` sends ordered steps in one call. Per-step expectations, `stop_on_error` or `continue_on_error` policy, aggregated timing
 - **Session state** — `get_session_state` returns connection status, device identity, recording state, last-action summary
 - **Outcome expectations** — `expect` on any action: `"screen_changed"`, `"layout_changed"`, or `{"value": "text"}`. Framework reports; caller decides
@@ -81,7 +81,7 @@ Same Claude Sonnet agent, same 11-step workflow (n=6):
 graph TD
     AI["AI Agent<br/>(Claude, or any MCP client)"]
     HUMAN["A Human<br/>(You even)"]
-    MCP["buttonheist-mcp<br/>16 tools"]
+    MCP["buttonheist-mcp<br/>18 tools"]
     CLI["buttonheist CLI<br/>15 subcommands"]
     Client["TheFence / TheMastermind<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded in your app)"]
@@ -113,12 +113,13 @@ graph TD
 
 ### Modules
 
+<<<<<<< HEAD
 | Module | Platform | What it does |
 |--------|----------|-------------|
 | **TheScore** | iOS + macOS | Wire protocol: 31 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, protocol v6.1 |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
 | **ButtonHeist** | macOS | Client framework: TheFence (31-command dispatch), TheMastermind (@Observable coordinator), TheHandoff (discovery + connection) |
-| **ButtonHeistMCP** | macOS | MCP server: 16 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
+| **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
 | **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
 ### Meet the Crew
@@ -157,7 +158,24 @@ Every heist needs a team.
 | Name | Role |
 |------|------|
 | **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | Agent interface. 16 tools that call through TheFence so AI agents can run the job natively |
+| **ButtonHeistMCP** | Agent interface. 18 tools that call through TheFence so AI agents can run the job natively |
+||||||| parent of 8d3cf9f (Fix text input with hardware keyboard, align touch injection with KIF, add pasteboard tools)
+| Module | Platform | Description | Details |
+|--------|----------|-------------|---------|
+| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
+| **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeistMCP** | macOS | MCP server — 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
+| **buttonheist** | macOS | CLI tool for device discovery, sessions, actions, gestures, screenshots, recording, scrolling, and text/edit commands | [ButtonHeistCLI/](ButtonHeistCLI/) |
+=======
+| Module | Platform | Description | Details |
+|--------|----------|-------------|---------|
+| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
+| **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
+| **ButtonHeistMCP** | macOS | MCP server — 19 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
+| **buttonheist** | macOS | CLI tool for device discovery, sessions, actions, gestures, screenshots, recording, scrolling, and text/edit commands | [ButtonHeistCLI/](ButtonHeistCLI/) |
+>>>>>>> 8d3cf9f (Fix text input with hardware keyboard, align touch injection with KIF, add pasteboard tools)
 
 ## Quick Start
 

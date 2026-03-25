@@ -35,7 +35,7 @@ enum ToolDefinitions {
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, startRecording, stopRecording, listDevices,
-        gesture, accessibilityAction,
+        gesture, accessibilityAction, setPasteboard, getPasteboard,
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
     ]
@@ -94,6 +94,7 @@ enum ToolDefinitions {
             "properties": [
                 "text": ["type": "string", "description": "Text to type character-by-character"],
                 "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
+                "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
                 "identifier": ["type": "string", "description": "Element to tap for focus (reads value back)"],
                 "order": ["type": "integer", "description": "Element order index to tap for focus"],
                 "expect": expectProperty,
@@ -332,6 +333,40 @@ enum ToolDefinitions {
             "required": .array([.string("type")]),
             "additionalProperties": false,
         ]
+    )
+
+    static let setPasteboard = Tool(
+        name: "set_pasteboard",
+        description: """
+            Write text to the general pasteboard from within the app. Content written by the app \
+            itself does not trigger the iOS "Allow Paste" dialog when subsequently read. \
+            Use this for automation workflows that need clipboard content without system prompts.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "text": ["type": "string", "description": "Text to write to the pasteboard"],
+                "expect": expectProperty,
+            ],
+            "required": .array([.string("text")]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let getPasteboard = Tool(
+        name: "get_pasteboard",
+        description: """
+            Read text from the general pasteboard. If the content was written by another app, \
+            iOS may show an "Allow Paste" system dialog.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "expect": expectProperty,
+            ],
+            "additionalProperties": false,
+        ],
+        annotations: .init(readOnlyHint: true)
     )
 
     static let runBatch = Tool(
