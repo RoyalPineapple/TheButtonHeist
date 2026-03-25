@@ -1,4 +1,4 @@
-# ButtonHeist API Reference
+# Button Heist API Reference
 
 Complete API documentation for TheInsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
 

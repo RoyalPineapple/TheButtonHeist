@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ButtonHeist, please report it responsibly.
+If you discover a security vulnerability in Button Heist, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
@@ -32,7 +32,7 @@ Instead, please use [GitHub Security Advisories](https://github.com/RoyalPineapp
 
 ### Out of scope
 
-ButtonHeist intentionally uses private iOS APIs for synthetic touch injection and accessibility inspection. The following are **by design** and not considered vulnerabilities:
+Button Heist intentionally uses private iOS APIs for synthetic touch injection and accessibility inspection. The following are **by design** and not considered vulnerabilities:
 
 - Use of private UIKit/IOKit APIs (`UIApplication.sendEvent`, IOHIDEvent creation, UIKeyboardImpl)
 - ObjC runtime method swizzling and `+load` hooks

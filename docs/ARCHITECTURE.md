@@ -1,10 +1,10 @@
-# ButtonHeist Architecture
+# Button Heist Architecture
 
 This document describes the internal architecture of ButtonHeist and how its components interact.
 
 ## System Overview
 
-ButtonHeist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
+Button Heist is a distributed system that lets AI agents (and humans) inspect and control iOS apps. Its main components are:
 
 1. **TheScore** - Cross-platform shared types (messages, models)
 2. **TheInsideJob** - iOS framework embedded in the app being inspected

@@ -22,4 +22,3 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 ## See Also
 
 - [Project Overview](../README.md) — Quick start and architecture
-- [Contributing Guide](../CONTRIBUTING.md) — Development setup and code style

@@ -1,4 +1,4 @@
-# ButtonHeist Authentication
+# Button Heist Authentication
 
 Every TCP connection must authenticate before it can send commands. This document describes how authentication works end-to-end.
 

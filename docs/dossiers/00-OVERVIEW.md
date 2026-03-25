@@ -1,8 +1,8 @@
-# ButtonHeist Crew Dossiers - Overview
+# Button Heist Crew Dossiers - Overview
 
 ## The Heist Metaphor
 
-ButtonHeist is a remote iOS UI automation system structured as a heist crew. An iOS framework (TheInsideJob) embeds inside a target app as a TLS-encrypted server, while macOS tooling discovers, connects (with certificate fingerprint pinning via Bonjour), and sends commands to interact with the app's UI programmatically.
+Button Heist is a remote iOS UI automation system structured as a heist crew. An iOS framework (TheInsideJob) embeds inside a target app as a TLS-encrypted server, while macOS tooling discovers, connects (with certificate fingerprint pinning via Bonjour), and sends commands to interact with the app's UI programmatically.
 
 ## Crew Roster
 

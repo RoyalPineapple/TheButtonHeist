@@ -4,7 +4,7 @@ A quick orientation for anyone reviewing the ButtonHeist codebase for the first 
 
 ## What Is This?
 
-ButtonHeist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
+Button Heist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
 
 ## The 5-Command Happy Path
 
