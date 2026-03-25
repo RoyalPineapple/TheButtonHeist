@@ -92,11 +92,13 @@ public final class TheHandoff {
         let generated = UUID().uuidString.lowercased()
         let dir = fileURL.deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        FileManager.default.createFile(
+        if !FileManager.default.createFile(
             atPath: fileURL.path,
             contents: Data(generated.utf8),
             attributes: [.posixPermissions: 0o600]
-        )
+        ) {
+            logger.warning("Failed to persist driver-id to \(fileURL.path)")
+        }
         return generated
     }()
 
