@@ -4,7 +4,7 @@ A quick orientation for anyone reviewing the ButtonHeist codebase for the first 
 
 ## What Is This?
 
-ButtonHeist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
+Button Heist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
 
 ## The 5-Command Happy Path
 
@@ -56,7 +56,7 @@ Both CLI and MCP are thin shells. All business logic lives in `TheFence` and bel
 
 ## Wire Protocol
 
-Protocol v6.0. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
+Protocol v6.1. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
 
 ## Testing
 

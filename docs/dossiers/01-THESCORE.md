@@ -6,7 +6,7 @@
 
 ## Responsibilities
 
-TheScore is the protocol bible. It defines:
+TheScore is the shared playbook. It defines:
 
 1. **All client-to-server messages** (`ClientMessage` - 31 cases, including `clientHello`, `status`, and `watch`)
 2. **All server-to-client messages** (`ServerMessage` - 18 cases, including `serverHello`, `protocolMismatch`, and `interaction`)

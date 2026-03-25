@@ -1,6 +1,6 @@
 # Bonjour Troubleshooting
 
-ButtonHeist uses Bonjour (mDNS) to advertise and discover iOS app instances on the local network. When Bonjour is unavailable, direct connection via a fixed port is the recommended workaround.
+Button Heist uses Bonjour (mDNS) to advertise and discover iOS app instances on the local network. When Bonjour is unavailable, direct connection via a fixed port is the recommended workaround.
 
 ## Quick Diagnosis
 
