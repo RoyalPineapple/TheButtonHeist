@@ -218,7 +218,10 @@ enum ToolDefinitions {
 
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
-        description: "Scroll the nearest scroll view ancestor until the target element is fully visible. Target by heistId (preferred), identifier, or order from get_interface.",
+        description: """
+            Scroll the nearest scroll view ancestor until the target element is fully visible. \
+            Target by heistId (preferred), identifier, or order from get_interface.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
