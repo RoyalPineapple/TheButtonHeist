@@ -286,6 +286,8 @@ TheFence (@ButtonHeistActor)
 3. Dispatches to the appropriate command handler
 4. Returns a typed `FenceResponse`
 
+**Expectations and Batches**: Action commands accept an `expect` field to declare the expected outcome. In `run_batch`, the default `stop_on_error` policy halts at the first mismet expectation so `failedIndex` points at the action that broke, not a downstream step that failed in a stale state.
+
 ### ButtonHeistMCP (MCP Server)
 
 **Purpose**: Standalone MCP server that exposes 16 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
