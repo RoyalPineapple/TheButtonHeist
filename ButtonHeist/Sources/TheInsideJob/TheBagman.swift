@@ -202,6 +202,7 @@ final class TheBagman {
     func clearCache() {
         cachedElements.removeAll()
         elementObjects.removeAll()
+        lastSnapshot.removeAll()
         lastHierarchyHash = 0
     }
 

@@ -218,7 +218,7 @@ enum ToolDefinitions {
 
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
-        description: "Scroll the nearest scroll view ancestor until the target element is fully visible. Provide identifier or order from get_interface.",
+        description: "Scroll the nearest scroll view ancestor until the target element is fully visible. Target by heistId (preferred), identifier, or order from get_interface.",
         inputSchema: [
             "type": "object",
             "properties": [
@@ -305,8 +305,9 @@ enum ToolDefinitions {
         description: """
             Perform specialized accessibility actions on elements. For general element interaction, use 'activate' instead. \
             Set 'type' to one of: increment, decrement, perform_custom_action, edit_action, dismiss_keyboard. \
-            increment/decrement: require identifier or order (for sliders, steppers). \
-            perform_custom_action: requires identifier/order and actionName. \
+            Target by heistId (preferred), identifier, or order from get_interface. \
+            increment/decrement: for sliders, steppers. \
+            perform_custom_action: requires actionName. \
             edit_action: requires action (copy, paste, cut, select, selectAll). \
             dismiss_keyboard: no additional params.
             """,

@@ -1,13 +1,18 @@
 import Foundation
 import TheScore
 
+public enum InterfaceDetail: String, CaseIterable, Sendable {
+    case summary
+    case full
+}
+
 public enum FenceResponse {
     case ok(message: String)
     case error(String)
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface, detail: String = "summary")
+    case interface(Interface, detail: InterfaceDetail = .summary)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
@@ -130,7 +135,7 @@ public enum FenceResponse {
         case .devices(let devices):
             return devicesJsonDict(devices)
         case .interface(let interface, let detail):
-            return ["status": "ok", "detail": detail, "interface": interfaceDictionary(interface, detail: detail)]
+            return ["status": "ok", "detail": detail.rawValue, "interface": interfaceDictionary(interface, detail: detail)]
         case .action(let result, let expectation):
             var dict = actionJsonDict(result)
             if let expectation {
@@ -497,19 +502,19 @@ public enum FenceResponse {
 
     // MARK: - JSON Dictionary Helpers
 
-    private func interfaceDictionary(_ interface: Interface, detail: String = "full") -> [String: Any] {
+    private func interfaceDictionary(_ interface: Interface, detail: InterfaceDetail = .full) -> [String: Any] {
         let formatter = ISO8601DateFormatter()
         var payload: [String: Any] = [
             "timestamp": formatter.string(from: interface.timestamp),
             "elements": interface.elements.map { elementDictionary($0, detail: detail) }
         ]
-        if detail == "full", let tree = interface.tree {
+        if detail == .full, let tree = interface.tree {
             payload["tree"] = tree.map(elementNodeDictionary)
         }
         return payload
     }
 
-    private func elementDictionary(_ element: HeistElement, detail: String = "full") -> [String: Any] {
+    private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
             "order": element.order,
@@ -522,7 +527,7 @@ public enum FenceResponse {
         if let identifier = element.identifier { payload["identifier"] = identifier }
 
         // Geometry and extended fields only in full detail
-        if detail == "full" {
+        if detail == .full {
             payload["frameX"] = element.frameX
             payload["frameY"] = element.frameY
             payload["frameWidth"] = element.frameWidth

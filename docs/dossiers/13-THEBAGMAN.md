@@ -11,10 +11,12 @@ TheBagman handles all the goods during TheInsideJob:
 1. **Element cache** - maintains `cachedElements: [AccessibilityElement]` from the last hierarchy refresh
 2. **Weak object references** - maps elements to live `NSObject` instances via `elementObjects` dictionary
 3. **Hierarchy parsing** - drives `AccessibilityHierarchyParser` to traverse the accessibility tree
-4. **Element resolution** - finds elements by `identifier` or `order` for TheSafecracker
-5. **Delta computation** - compares before/after element snapshots to produce `InterfaceDelta` (receives screen change verdict from TheTripwire's VC identity check)
-6. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
-7. **Action result assembly** - orchestrates post-action diffs and frame capture (delegates all timing to TheTripwire's `waitForAllClear`)
+4. **Element resolution** - finds elements by `heistId`, `identifier`, or `order` for TheSafecracker
+5. **HeistId synthesis** - assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label), with disambiguation suffixes for duplicates
+6. **Topology-based screen change detection** - detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
+7. **Delta computation** - compares before/after element snapshots to produce `InterfaceDelta` (screen change is determined by VC identity from TheTripwire OR topology change from TheBagman)
+8. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
+9. **Action result assembly** - orchestrates post-action diffs and frame capture (delegates all timing to TheTripwire's `waitForAllClear`)
 
 ## Architecture Diagram
 
@@ -22,6 +24,7 @@ TheBagman handles all the goods during TheInsideJob:
 graph TD
     subgraph TheBagman["TheBagman (@MainActor, internal)"]
         Cache["cachedElements: [AccessibilityElement]"]
+        LastSnap["lastSnapshot: [HeistElement]"]
         WeakRefs["elementObjects: [AccessibilityElement: WeakObject]"]
         Parser["AccessibilityHierarchyParser"]
         Hash["lastHierarchyHash: Int"]
@@ -47,10 +50,12 @@ graph TD
             Snapshot["snapshotElements() → ElementSnapshot"]
             Convert["convertElement() → HeistElement"]
             ConvertTree["convertHierarchyNode() → ElementNode"]
+            AssignIds["assignHeistIds() — stable deterministic IDs"]
         end
 
         subgraph Delta["Delta Computation"]
             ComputeDelta["computeDelta(before:after:isScreenChange:)"]
+            TopoChanged["isTopologyChanged(before:after:)"]
         end
 
         subgraph Screen["Screen Capture"]
@@ -73,14 +78,17 @@ graph TD
 
 ```mermaid
 flowchart TD
-    Target["ActionTarget (identifier? / order?)"]
+    Target["ActionTarget (heistId? / identifier? / order?)"]
     Target --> FindElem["findElement(for: target)"]
-    FindElem --> ByIdent{identifier set?}
+    FindElem --> ByHeistId{heistId set?}
+    ByHeistId -->|yes| SearchHeistId["Lookup order from lastSnapshot by heistId"]
+    ByHeistId -->|no| ByIdent{identifier set?}
     ByIdent -->|yes| SearchIdent["Search cachedElements by identifier"]
     ByIdent -->|no| ByOrder{order set?}
     ByOrder -->|yes| IndexLookup["cachedElements[order]"]
     ByOrder -->|no| Nil["return nil"]
-    SearchIdent --> Found{found?}
+    SearchHeistId --> Found{found?}
+    SearchIdent --> Found
     IndexLookup --> Found
     Found -->|yes| Element["AccessibilityElement"]
     Found -->|no| Nil
@@ -107,18 +115,19 @@ flowchart TD
     HasChanges -->|neither| NoChange
 ```
 
-Screen change detection is now determined by TheTripwire's view controller identity comparison rather than element overlap heuristics.
+Screen change detection uses a two-gate check: TheTripwire's VC identity comparison (primary) OR TheBagman's topology detection (fallback for Workflow-style navigation where the VC is reused). Topology detection checks for back button trait appearance/disappearance and disjoint header labels.
 
 ## Action Result Assembly
 
 ```mermaid
 flowchart TD
-    Start["actionResultWithDelta(beforeSnapshot:beforeVC:target:...)"]
+    Start["actionResultWithDelta(beforeSnapshot:beforeVC:beforeCachedElements:target:...)"]
     Start --> WaitAllClear["tripwire.waitForAllClear(1.0s, treeHash: hierarchySignature)"]
-    WaitAllClear --> VCCheck["tripwire.isScreenChange(beforeVC, afterVC)"]
-    VCCheck --> Refresh["refreshAccessibilityData()"]
+    WaitAllClear --> Refresh["refreshAccessibilityData()"]
     Refresh --> Snapshot["snapshotElements() (after)"]
-    Snapshot --> Delta["computeDelta(before, after, isScreenChange)"]
+    Snapshot --> VCCheck["tripwire.isScreenChange(beforeVC, afterVC)"]
+    VCCheck --> TopoCheck["isTopologyChanged(before: beforeCachedElements, after: cachedElements)"]
+    TopoCheck --> Delta["computeDelta(before, after, isScreenChange: vcChanged || topoChanged)"]
     Delta --> Lookup["Lookup acted-on element for elementLabel/Value/Traits"]
     Lookup --> Frame["captureActionFrame() for recording"]
 ```
@@ -133,7 +142,7 @@ Both use `UIGraphicsImageRenderer` with `drawHierarchy(in:afterScreenUpdates:)`.
 
 ## Dependencies
 
-- **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), and screen change detection via VC identity
+- **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), and VC identity-based screen change detection (TheBagman supplements with topology-based detection)
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree
 
 ## Items Flagged for Review
