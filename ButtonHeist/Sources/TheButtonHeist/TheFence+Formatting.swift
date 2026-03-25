@@ -362,9 +362,69 @@ public enum FenceResponse {
 
     // MARK: - Compact Text Format (Token-Efficient)
 
+    /// Token-efficient output for LLM agents. One line per element, no geometry.
+    public func compactFormatted() -> String {
+        switch self {
+        case .ok(let message):
+            return message
+        case .error(let message):
+            return "error: \(message)"
+        case .help(let commands):
+            return commands.joined(separator: ", ")
+        case .status(let connected, let deviceName):
+            if connected, let name = deviceName { return "connected: \(name)" }
+            return "not connected"
+        case .devices(let devices):
+            if devices.isEmpty { return "no devices" }
+            return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
+                .joined(separator: "\n")
+        case .interface(let interface):
+            return Self.compactInterface(interface)
+        case .action(let result, let expectation):
+            return compactActionResult(result, expectation: expectation)
+        case .screenshot(let path, let width, let height):
+            return "screenshot: \(path) (\(Int(width))x\(Int(height)))"
+        case .screenshotData(_, let width, let height):
+            return "screenshot: \(Int(width))x\(Int(height))"
+        case .recording(let path, let payload):
+            return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
+        case .recordingData(let payload):
+            return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
+            var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
+            if let idx = failedIndex { text += " (failed at \(idx))" }
+            if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
+            return text
+        case .sessionState(let payload):
+            let connected = payload["connected"] as? Bool ?? false
+            return connected ? "session: connected" : "session: not connected"
+        }
+    }
+
+    private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
+        guard result.success else {
+            return "error: \(result.message ?? result.method.rawValue)"
+        }
+        var text: String
+        if let delta = result.interfaceDelta {
+            text = Self.compactDelta(delta, method: result.method.rawValue)
+        } else {
+            text = "\(result.method.rawValue): ok"
+        }
+        if let value = result.value {
+            text += "\nvalue: \"\(value)\""
+        }
+        if let expectation {
+            if !expectation.met {
+                text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
+            }
+        }
+        return text
+    }
+
     /// Compact one-line-per-element format for LLM agents.
     /// Geometry is omitted by default — agents can request it via `get_interface --detail full`.
-    static func compactElementLine(_ element: HeistElement) -> String {
+    public static func compactElementLine(_ element: HeistElement) -> String {
         var parts: [String] = []
         parts.append("[\(element.order)]")
         parts.append(element.heistId)
@@ -390,7 +450,7 @@ public enum FenceResponse {
         return parts.joined(separator: " ")
     }
 
-    static func compactInterface(_ interface: Interface) -> String {
+    public static func compactInterface(_ interface: Interface) -> String {
         var lines: [String] = ["\(interface.elements.count) elements"]
         for element in interface.elements {
             lines.append(compactElementLine(element))
@@ -398,7 +458,7 @@ public enum FenceResponse {
         return lines.joined(separator: "\n")
     }
 
-    static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
+    public static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
         switch delta.kind {
         case .noChange:
             return "\(method): no change"
