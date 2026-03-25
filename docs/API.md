@@ -1,4 +1,4 @@
-# ButtonHeist API Reference
+# Button Heist API Reference
 
 Complete API documentation for TheInsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
 
@@ -30,8 +30,7 @@ INSIDEJOB_DISABLE_FINGERPRINTS=true  # Suppress visual tap/gesture indicators
 INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
 INSIDEJOB_ID=my-instance             # Human-readable instance identifier
 INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (default: 30, min: 1)
-INSIDEJOB_SESSION_LEASE=30           # Session lease timeout — no pings within window releases session (default: 30, min: 10)
-INSIDEJOB_RESTRICT_WATCHERS=1        # Require valid token for watch (observer) connections (default: auto-approve)
+INSIDEJOB_RESTRICT_WATCHERS=0        # Allow unauthenticated watch (observer) connections (default: restricted, watchers require token)
 ```
 
 **Info.plist (fallback):**
@@ -809,7 +808,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "6.0"  // Protocol v6.0 with explicit type/payload envelopes and strict hello/version matching
+public let protocolVersion = "6.1"  // Protocol v6.1 with explicit type/payload envelopes and strict hello/version matching
 ```
 
 ### ConnectionState
@@ -1087,7 +1086,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "6.0")
+- `protocolVersion: String` - Protocol version (e.g., "6.1")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name

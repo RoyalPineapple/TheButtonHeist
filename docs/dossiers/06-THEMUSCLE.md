@@ -12,7 +12,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 2. **On-device UI approval** - shows Allow/Deny popup for empty-token connections
 3. **Session locking** - ensures only one "driver" controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
-5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, auto-approves by default or validates token when `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (plist) is set
+5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, validates token by default (`restrictWatchers` defaults to `true`). Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (plist) to allow unauthenticated observers
 6. **Brute-force protection** - tracks failed auth attempts per remote IP address (`failedAuthAttempts`, `lockedOutAddresses`). After 5 consecutive failures from the same address, that address is locked out for 30 seconds. Lockout persists across TCP reconnections since it's keyed on IP, not client ID. Successful authentication clears the counter for that address
 
 ## Architecture Diagram
@@ -27,7 +27,7 @@ graph TD
         Timer["Release Timer - fires when all connections drop"]
     end
 
-    WatchMgr["Observer Manager - observer tracking, auto-approve"]
+    WatchMgr["Observer Manager - observer tracking, token-checked by default"]
 
     Client["Remote Client"] -->|clientHello| HelloGate
     HelloGate -->|authenticate(token)| AuthFlow
