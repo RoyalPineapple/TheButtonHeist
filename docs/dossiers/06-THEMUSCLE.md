@@ -14,6 +14,7 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
 5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, validates token by default (`restrictWatchers` defaults to `true`). Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (plist) to allow unauthenticated observers
 6. **Brute-force protection** - tracks failed auth attempts per remote IP address (`failedAuthAttempts`, `lockedOutAddresses`). After 5 consecutive failures from the same address, that address is locked out for 30 seconds. Lockout persists across TCP reconnections since it's keyed on IP, not client ID. Successful authentication clears the counter for that address
+7. **Address-required auth gate** - clients must have a registered remote address (via `clientAddresses`) before auth is processed. Clients with no registered address are immediately rejected and disconnected, preventing lockout counter resets via reconnection
 
 ## Architecture Diagram
 
@@ -56,7 +57,11 @@ sequenceDiagram
     C->>M: clientHello
     M-->>C: authRequired
 
-    alt Address locked out (5+ failures in 30s)
+    alt No registered address
+        C->>M: authenticate(token: any)
+        M-->>C: authFailed("Connection rejected.")
+        M->>M: disconnect after grace period
+    else Address locked out (5+ failures in 30s)
         C->>M: authenticate(token: any)
         M-->>C: authFailed("Too many failed attempts")
         M->>M: disconnect after 100ms
