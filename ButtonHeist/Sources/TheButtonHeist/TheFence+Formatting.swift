@@ -7,7 +7,7 @@ public enum FenceResponse {
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface)
+    case interface(Interface, detail: String = "summary")
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
@@ -39,7 +39,7 @@ public enum FenceResponse {
             return "Not connected"
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface):
+        case .interface(let interface, _):
             return formatInterface(interface)
         case .action(let result, let expectation):
             var text = formatActionResult(result)
@@ -129,8 +129,8 @@ public enum FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface):
-            return ["status": "ok", "interface": interfaceDictionary(interface)]
+        case .interface(let interface, let detail):
+            return ["status": "ok", "detail": detail, "interface": interfaceDictionary(interface, detail: detail)]
         case .action(let result, let expectation):
             var dict = actionJsonDict(result)
             if let expectation {
@@ -193,18 +193,7 @@ public enum FenceResponse {
         if let value = result.value { payload["value"] = value }
         if result.animating == true { payload["animating"] = true }
         if let delta = result.interfaceDelta {
-            let deltaDict = deltaDictionary(delta)
-            payload["delta"] = deltaDict
-
-            if let kind = deltaDict["kind"] { payload["kind"] = kind }
-            payload["valueChanges"] = deltaDict["valueChanges"] ?? NSNull()
-            payload["elementsAdded"] = deltaDict["added"].map { $0 } ?? NSNull()
-            payload["elementsRemoved"] = deltaDict["removedOrders"].map { $0 } ?? NSNull()
-        } else {
-            payload["kind"] = "noChange"
-            payload["valueChanges"] = NSNull()
-            payload["elementsAdded"] = NSNull()
-            payload["elementsRemoved"] = NSNull()
+            payload["delta"] = deltaDictionary(delta)
         }
 
         if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
@@ -378,7 +367,7 @@ public enum FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface):
+        case .interface(let interface, _):
             return Self.compactInterface(interface)
         case .action(let result, let expectation):
             return compactActionResult(result, expectation: expectation)
@@ -508,44 +497,48 @@ public enum FenceResponse {
 
     // MARK: - JSON Dictionary Helpers
 
-    private func interfaceDictionary(_ interface: Interface) -> [String: Any] {
+    private func interfaceDictionary(_ interface: Interface, detail: String = "full") -> [String: Any] {
         let formatter = ISO8601DateFormatter()
         var payload: [String: Any] = [
             "timestamp": formatter.string(from: interface.timestamp),
-            "elements": interface.elements.map(elementDictionary)
+            "elements": interface.elements.map { elementDictionary($0, detail: detail) }
         ]
-        if let tree = interface.tree {
+        if detail == "full", let tree = interface.tree {
             payload["tree"] = tree.map(elementNodeDictionary)
         }
         return payload
     }
 
-    private func elementDictionary(_ element: HeistElement) -> [String: Any] {
+    private func elementDictionary(_ element: HeistElement, detail: String = "full") -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
             "order": element.order,
             "description": element.description,
             "traits": element.traits,
-            "frameX": element.frameX,
-            "frameY": element.frameY,
-            "frameWidth": element.frameWidth,
-            "frameHeight": element.frameHeight,
-            "activationPointX": element.activationPointX,
-            "activationPointY": element.activationPointY,
-            "respondsToUserInteraction": element.respondsToUserInteraction,
             "actions": element.actions.map(\.description),
         ]
         if let label = element.label { payload["label"] = label }
         if let value = element.value { payload["value"] = value }
         if let identifier = element.identifier { payload["identifier"] = identifier }
-        if let hint = element.hint { payload["hint"] = hint }
-        if let customContent = element.customContent {
-            payload["customContent"] = customContent.map {
-                [
-                    "label": $0.label,
-                    "value": $0.value,
-                    "isImportant": $0.isImportant
-                ]
+
+        // Geometry and extended fields only in full detail
+        if detail == "full" {
+            payload["frameX"] = element.frameX
+            payload["frameY"] = element.frameY
+            payload["frameWidth"] = element.frameWidth
+            payload["frameHeight"] = element.frameHeight
+            payload["activationPointX"] = element.activationPointX
+            payload["activationPointY"] = element.activationPointY
+            payload["respondsToUserInteraction"] = element.respondsToUserInteraction
+            if let hint = element.hint { payload["hint"] = hint }
+            if let customContent = element.customContent {
+                payload["customContent"] = customContent.map {
+                    [
+                        "label": $0.label,
+                        "value": $0.value,
+                        "isImportant": $0.isImportant
+                    ]
+                }
             }
         }
         return payload
@@ -585,7 +578,7 @@ public enum FenceResponse {
             "elementCount": delta.elementCount
         ]
         if let added = delta.added {
-            payload["added"] = added.map(elementDictionary)
+            payload["added"] = added.map { elementDictionary($0) }
         }
         if let removedOrders = delta.removedOrders {
             payload["removedOrders"] = removedOrders
