@@ -333,7 +333,10 @@ public final class TheFence {
                 "{\"valueChanged\": {…}}, got keys: \(dict.keys.sorted())"
             )
         }
-        throw FenceError.invalidRequest("Invalid expectation type: expected string or {\"value\": \"expected\"} object")
+        throw FenceError.invalidRequest(
+            "Invalid expectation type: expected string or " +
+            "{\"value\": \"…\"} / {\"valueChanged\": {…}} object"
+        )
     }
 
     // MARK: - Last Action Tracking

@@ -158,6 +158,7 @@ classDiagram
         value(String)
         screenChanged
         layoutChanged
+        valueChanged(heistId?, oldValue?, newValue?)
         +validate(against: ActionResult) ExpectationResult
         +validateDelivery(ActionResult)$ ExpectationResult
     }
