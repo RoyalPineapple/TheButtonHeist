@@ -259,19 +259,21 @@ extension TheBagman {
         let added = addedIDs.flatMap { newByID[$0] ?? [] }
 
         let removedIDs = allOldIDs.subtracting(allNewIDs)
-        let removedOrders = removedIDs.flatMap { oldByID[$0] ?? [] }.map(\.order)
+        let removedElements = removedIDs.flatMap { oldByID[$0] ?? [] }
+        let removedOrders = removedElements.map(\.order)
+        let removedHeistIds = removedElements.map(\.heistId)
 
         var valueChanges: [ValueChange] = []
         for id in allCommonIDs {
             if let oldEl = oldByID[id]?.first, let newEl = newByID[id]?.first {
                 if oldEl.value != newEl.value {
                     valueChanges.append(ValueChange(
-                        order: newEl.order, identifier: id,
+                        order: newEl.order, heistId: newEl.heistId, identifier: id,
                         oldValue: oldEl.value, newValue: newEl.value
                     ))
                 } else if oldEl.description != newEl.description || oldEl.label != newEl.label {
                     valueChanges.append(ValueChange(
-                        order: newEl.order, identifier: id,
+                        order: newEl.order, heistId: newEl.heistId, identifier: id,
                         oldValue: oldEl.description, newValue: newEl.description
                     ))
                 }
@@ -287,7 +289,7 @@ extension TheBagman {
                 || oldEl.label != newEl.label
                 || oldEl.value != newEl.value {
                 valueChanges.append(ValueChange(
-                    order: newEl.order, identifier: newEl.identifier,
+                    order: newEl.order, heistId: newEl.heistId, identifier: newEl.identifier,
                     oldValue: oldEl.description, newValue: newEl.description
                 ))
             }
@@ -320,6 +322,7 @@ extension TheBagman {
             elementCount: afterEls.count,
             added: added.isEmpty ? nil : added,
             removedOrders: removedOrders.isEmpty ? nil : removedOrders,
+            removedHeistIds: removedHeistIds.isEmpty ? nil : removedHeistIds,
             valueChanges: valueChanges.isEmpty ? nil : valueChanges
         )
     }

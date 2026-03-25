@@ -360,6 +360,92 @@ public enum FenceResponse {
         }
     }
 
+    // MARK: - Compact Text Format (Token-Efficient)
+
+    /// Compact one-line-per-element format for LLM agents.
+    /// Geometry is omitted by default — agents can request it via `get_interface --detail full`.
+    static func compactElementLine(_ element: HeistElement) -> String {
+        var parts: [String] = []
+        parts.append("[\(element.order)]")
+        parts.append(element.heistId)
+
+        if let label = element.label {
+            parts.append("\"\(label)\"")
+        }
+        if let value = element.value, !value.isEmpty {
+            parts.append("= \"\(value)\"")
+        }
+
+        let meaningful = element.traits.filter { $0 != "staticText" }
+        if !meaningful.isEmpty {
+            parts.append("[\(meaningful.joined(separator: ", "))]")
+        }
+
+        let actions = element.actions.map(\.description)
+            .filter { $0 != "activate" || element.traits.contains("button") == false }
+        if !actions.isEmpty {
+            parts.append("{\(actions.joined(separator: ", "))}")
+        }
+
+        return parts.joined(separator: " ")
+    }
+
+    static func compactInterface(_ interface: Interface) -> String {
+        var lines: [String] = ["\(interface.elements.count) elements"]
+        for element in interface.elements {
+            lines.append(compactElementLine(element))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    static func compactDelta(_ delta: InterfaceDelta, method: String) -> String {
+        switch delta.kind {
+        case .noChange:
+            return "\(method): no change"
+
+        case .valuesChanged:
+            var lines: [String] = ["\(method): values changed"]
+            for change in delta.valueChanges ?? [] {
+                let ref = change.heistId ?? change.identifier ?? "[\(change.order)]"
+                let old = change.oldValue ?? "nil"
+                let new = change.newValue ?? "nil"
+                lines.append("  \(ref): \"\(old)\" → \"\(new)\"")
+            }
+            return lines.joined(separator: "\n")
+
+        case .elementsChanged:
+            var lines: [String] = ["\(method): layout changed (\(delta.elementCount) elements)"]
+            if let added = delta.added, !added.isEmpty {
+                for el in added {
+                    lines.append("  + \(compactElementLine(el))")
+                }
+            }
+            if let removed = delta.removedHeistIds, !removed.isEmpty {
+                for id in removed {
+                    lines.append("  - \(id)")
+                }
+            } else if let removedOrders = delta.removedOrders, !removedOrders.isEmpty {
+                for order in removedOrders {
+                    lines.append("  - [\(order)]")
+                }
+            }
+            if let changes = delta.valueChanges, !changes.isEmpty {
+                for change in changes {
+                    let ref = change.heistId ?? change.identifier ?? "[\(change.order)]"
+                    lines.append("  ~ \(ref): \"\(change.oldValue ?? "nil")\" → \"\(change.newValue ?? "nil")\"")
+                }
+            }
+            return lines.joined(separator: "\n")
+
+        case .screenChanged:
+            var lines: [String] = ["\(method): screen changed"]
+            if let newInterface = delta.newInterface {
+                lines.append(compactInterface(newInterface))
+            }
+            return lines.joined(separator: "\n")
+        }
+    }
+
     // MARK: - JSON Dictionary Helpers
 
     private func interfaceDictionary(_ interface: Interface) -> [String: Any] {
@@ -444,9 +530,13 @@ public enum FenceResponse {
         if let removedOrders = delta.removedOrders {
             payload["removedOrders"] = removedOrders
         }
+        if let removedHeistIds = delta.removedHeistIds {
+            payload["removedHeistIds"] = removedHeistIds
+        }
         if let valueChanges = delta.valueChanges {
             payload["valueChanges"] = valueChanges.map { change in
                 var valuePayload: [String: Any] = ["order": change.order]
+                if let heistId = change.heistId { valuePayload["heistId"] = heistId }
                 if let identifier = change.identifier { valuePayload["identifier"] = identifier }
                 if let oldValue = change.oldValue { valuePayload["oldValue"] = oldValue }
                 if let newValue = change.newValue { valuePayload["newValue"] = newValue }
