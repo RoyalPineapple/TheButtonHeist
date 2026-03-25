@@ -74,7 +74,7 @@
   },
   "T11-increment": {
     "fields": {
-      "last_action": "Slider: 70"
+      "last_action": "Stepper: 5"
     },
     "match_mode": "contains"
   },
