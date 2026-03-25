@@ -40,6 +40,10 @@ extension TheInsideJob {
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeEditAction(target) }
+        case .setPasteboard(let target):
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeSetPasteboard(target) }
+        case .getPasteboard:
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeGetPasteboard() }
         case .resignFirstResponder:
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
         default:

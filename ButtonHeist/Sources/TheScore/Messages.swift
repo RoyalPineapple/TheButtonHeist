@@ -40,6 +40,8 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case touchDrawBezier
     case typeText
     case editAction
+    case setPasteboard
+    case getPasteboard
     case scroll
     case scrollToVisible
     case scrollToEdge

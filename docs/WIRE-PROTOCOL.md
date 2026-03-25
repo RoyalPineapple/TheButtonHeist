@@ -334,7 +334,7 @@ Invoke a named custom action on an element. The action name must match one of th
 
 ### typeText
 
-Type text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl), and/or delete characters. Returns the current text field value in the `actionResult`. The software keyboard must be visible.
+Type text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl.sharedInstance), and/or delete characters. Returns the current text field value in the `actionResult`. Works in both software and hardware keyboard modes.
 
 **Type text into a field (taps element to focus first):**
 ```json
@@ -350,6 +350,18 @@ Type text character-by-character by injecting into the keyboard input system (vi
 ```json
 {"protocolVersion":"6.1","type":"typeText","payload":{"deleteCount":4,"text":"orld","elementTarget":{"identifier":"nameField"}}}
 ```
+
+**Clear existing text then type new text:**
+```json
+{"protocolVersion":"6.1","type":"typeText","payload":{"clearFirst":true,"text":"replacement","elementTarget":{"identifier":"nameField"}}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String?` | Text to type character-by-character |
+| `deleteCount` | `Int?` | Number of delete key taps before typing |
+| `clearFirst` | `Bool?` | Clear all existing text before typing (select-all + delete) |
+| `elementTarget` | `ActionTarget?` | Element to tap for focus (also reads value back) |
 
 ### requestScreen
 
@@ -434,6 +446,28 @@ Perform a standard edit action via the responder chain.
 ```
 
 Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`.
+
+### setPasteboard
+
+Write text to the general pasteboard from within the app. Content written by the app itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
+
+```json
+{"protocolVersion":"6.1","type":"setPasteboard","payload":{"text":"clipboard content"}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `String` | Text to write to the pasteboard (required) |
+
+### getPasteboard
+
+Read text from the general pasteboard.
+
+```json
+{"protocolVersion":"6.1","type":"getPasteboard"}
+```
+
+No payload. Returns an `actionResult` with `method: "getPasteboard"` and the pasteboard text in `value`.
 
 ### resignFirstResponder
 
@@ -650,7 +684,7 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
 
 ```json
 {"protocolVersion":"6.1","type":"actionResult","payload":{
@@ -684,6 +718,9 @@ Possible methods:
 - `typeText` - Text injected via UIKeyboardImpl
 - `customAction` - Named custom action was invoked
 - `editAction` - Edit action performed via responder chain
+- `handleAlert` - System alert handled via IOHIDEventSystemClient
+- `setPasteboard` - Text written to general pasteboard
+- `getPasteboard` - Text read from general pasteboard
 - `resignFirstResponder` - First responder resigned (keyboard dismissed)
 - `waitForIdle` - Wait-for-idle completed
 - `scroll` - Scroll view scrolled by one page

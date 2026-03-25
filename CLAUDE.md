@@ -24,7 +24,7 @@ Re-run `tuist generate` after changing any `Project.swift`, `Workspace.swift`, o
 tuist install
 
 # Regenerate Xcode projects and workspace
-tuist generate
+tuist generate --no-open
 ```
 
 **Never edit `.xcodeproj` or `.xcworkspace` files directly.** Always modify the Tuist configuration (`Project.swift`, `Workspace.swift`, `Tuist/Package.swift`) and regenerate. After regenerating, commit the updated `.xcodeproj` and `.xcworkspace` files.
@@ -152,7 +152,14 @@ Connect directly to the fixed port. The `.mcp.json` in this repo is already conf
 
 Before pushing any commit, verify the following:
 
-### 1. Build Verification
+### 1. Regenerate Xcode Projects
+- **Always run `tuist generate` before pushing** to ensure the committed `.pbxproj` files match what Tuist produces. CI runs `tuist generate` and diffs — stale project files from local generates (duplicate build settings, hardcoded paths) will fail the check.
+  ```bash
+  tuist generate --no-open
+  git add -- '*.pbxproj' '*.xcworkspacedata'
+  ```
+
+### 2. Build Verification
 - **All targets must build successfully.** Run the full build:
   ```bash
   xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheScore build
@@ -166,7 +173,7 @@ Before pushing any commit, verify the following:
     CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID build
   ```
 
-### 2. Tests Pass
+### 3. Tests Pass
 - **All existing tests must pass.** Run the test suite:
   ```bash
   tuist test TheScoreTests --no-selective-testing
@@ -175,7 +182,7 @@ Before pushing any commit, verify the following:
   ```
 - If tests fail, fix the code or update tests to reflect intentional changes.
 
-### 3. Documentation Up to Date
+### 4. Documentation Up to Date
 - **Documentation must reflect the current implementation.** Check these files:
   - `README.md` - Quick start, features, usage examples
   - `docs/API.md` - Public API documentation
@@ -188,7 +195,7 @@ Before pushing any commit, verify the following:
   - Ensure code examples are correct and runnable
   - Verify Info.plist keys and default values are accurate
 
-### 4. Test Coverage for New Systems
+### 5. Test Coverage for New Systems
 - **Major new features require tests.** When introducing:
   - New message types → Add protocol tests
   - New API methods → Add unit tests

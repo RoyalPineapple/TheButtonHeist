@@ -333,6 +333,28 @@ extension TheSafecracker {
         return InteractionResult(success: success, method: .editAction, message: nil, value: nil)
     }
 
+    // MARK: - Pasteboard
+
+    func executeSetPasteboard(_ target: SetPasteboardTarget) -> InteractionResult {
+        UIPasteboard.general.string = target.text
+        return InteractionResult(
+            success: true,
+            method: .setPasteboard,
+            message: nil,
+            value: target.text
+        )
+    }
+
+    func executeGetPasteboard() -> InteractionResult {
+        let text = UIPasteboard.general.string
+        return InteractionResult(
+            success: true,
+            method: .getPasteboard,
+            message: text == nil ? "Pasteboard is empty or contains non-text data" : nil,
+            value: text
+        )
+    }
+
     func executeResignFirstResponder() -> InteractionResult {
         let success = resignFirstResponder()
         return InteractionResult(
