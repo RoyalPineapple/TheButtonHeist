@@ -5,13 +5,6 @@ final class ActionExpectationTests: XCTestCase {
 
     // MARK: - Codable Round-Trip
 
-    func testValueEncodeDecode() throws {
-        let expectation = ActionExpectation.value("hello")
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
     func testScreenChangedEncodeDecode() throws {
         let expectation = ActionExpectation.screenChanged
         let data = try JSONEncoder().encode(expectation)
@@ -29,7 +22,7 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - ExpectationResult Codable Round-Trip
 
     func testExpectationResultEncodeDecode() throws {
-        let result = ExpectationResult(met: false, expectation: .value("hello"), actual: "hell")
+        let result = ExpectationResult(met: false, expectation: .valueChanged(newValue: "hello"), actual: "counter: world → hell")
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ExpectationResult.self, from: data)
         XCTAssertEqual(decoded, result)
@@ -58,50 +51,6 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertFalse(result.met)
         XCTAssertNil(result.expectation)
         XCTAssertEqual(result.actual, "element not found")
-    }
-
-    // MARK: - Validation: value
-
-    func testValueMetWhenMatches() {
-        let action = makeResult(success: true, value: "hello")
-        let result = ActionExpectation.value("hello").validate(against: action)
-        XCTAssertTrue(result.met)
-        XCTAssertEqual(result.actual, "hello")
-    }
-
-    func testValueNotMetWhenMismatch() {
-        let action = makeResult(success: true, value: "hell")
-        let result = ActionExpectation.value("hello").validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "hell")
-    }
-
-    func testValueNotMetWhenNil() {
-        let action = makeResult(success: true, value: nil)
-        let result = ActionExpectation.value("hello").validate(against: action)
-        XCTAssertFalse(result.met)
-        XCTAssertNil(result.actual)
-    }
-
-    func testValueMetViaElementValue() {
-        let action = makeResult(success: true, elementValue: "hello")
-        let result = ActionExpectation.value("hello").validate(against: action)
-        XCTAssertTrue(result.met)
-        XCTAssertEqual(result.actual, "hello")
-    }
-
-    func testValueMetViaElementLabel() {
-        let action = makeResult(success: true, elementLabel: "hello")
-        let result = ActionExpectation.value("hello").validate(against: action)
-        XCTAssertTrue(result.met)
-        XCTAssertEqual(result.actual, "hello")
-    }
-
-    func testValuePrefersResultValueOverElementValue() {
-        let action = makeResult(success: true, value: "a", elementValue: "b")
-        let result = ActionExpectation.value("a").validate(against: action)
-        XCTAssertTrue(result.met)
-        XCTAssertEqual(result.actual, "a")
     }
 
     // MARK: - Validation: screenChanged

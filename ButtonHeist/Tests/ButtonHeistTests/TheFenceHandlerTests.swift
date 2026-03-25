@@ -741,13 +741,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationValueObject() throws {
-        let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": ["value": "hello"]])
-        XCTAssertEqual(result, .value("hello"))
-    }
-
-    @ButtonHeistActor
     func testParseExpectationUnknownStringThrows() {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": "bogus"])) { error in

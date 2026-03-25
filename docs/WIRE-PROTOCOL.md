@@ -1115,7 +1115,6 @@ The `expect` field classifies what kind of outcome the caller was going for. Exp
 |-------|------|-------------|
 | `"screen_changed"` | String | Expected `interfaceDelta.kind == "screenChanged"` |
 | `"layout_changed"` | String | Expected `interfaceDelta.kind == "elementsChanged"` |
-| `{"value": "expected"}` | Object | Expected post-action field value to match |
 | `{"valueChanged": {…}}` | Object | Expected a value change in `interfaceDelta.valueChanges` |
 
 #### valueChanged
