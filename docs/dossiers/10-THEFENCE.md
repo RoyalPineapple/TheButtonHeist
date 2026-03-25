@@ -16,6 +16,7 @@ TheFence is the brain of the outside operation:
 6. **Session management** - persistent connection for CLI session and MCP modes
 7. **Output path validation** - rejects `..` path components in `get_screen` and `stop_recording` output paths to prevent path traversal; resolves paths via `URL.standardized` before writing
 8. **Outcome signals** - parses `expect` field from requests, checks `ActionExpectation` against `ActionResult` after each action, reports what happened in responses and batch summaries
+9. **Batch early stop** - with `stop_on_error` (default), halts the batch at the first mismet expectation so `failedIndex` points at the action that broke, not a downstream symptom
 
 ## Architecture Diagram
 
