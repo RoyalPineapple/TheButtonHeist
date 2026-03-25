@@ -760,6 +760,40 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParseExpectationValueChangedWithSubObject() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": ["valueChanged": ["heistId": "counter", "newValue": "5"]]
+        ])
+        XCTAssertEqual(result, .valueChanged(heistId: "counter", newValue: "5"))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationValueChangedAllFields() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": ["valueChanged": ["heistId": "slider", "oldValue": "0", "newValue": "50"]]
+        ])
+        XCTAssertEqual(result, .valueChanged(heistId: "slider", oldValue: "0", newValue: "50"))
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationValueChangedBareKey() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation(["expect": ["valueChanged": true]])
+        XCTAssertEqual(result, .valueChanged())
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationValueChangedEmptyObject() throws {
+        let (fence, _) = makeConnectedFence()
+        let result = try fence.parseExpectation([
+            "expect": ["valueChanged": [String: Any]()]
+        ])
+        XCTAssertEqual(result, .valueChanged())
+    }
+
+    @ButtonHeistActor
     func testParseExpectationInvalidObjectThrows() {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": ["wrong": "key"]])) { error in

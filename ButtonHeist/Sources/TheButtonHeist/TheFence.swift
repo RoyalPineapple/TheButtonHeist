@@ -320,7 +320,7 @@ public final class TheFence {
             default:
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: screen_changed, layout_changed, or {\"value\": \"…\"}"
+                    "Valid: screen_changed, layout_changed, {\"value\": \"…\"}, or {\"valueChanged\": {…}}"
                 )
             }
         }
@@ -328,9 +328,26 @@ public final class TheFence {
             if let value = dict["value"] as? String {
                 return .value(value)
             }
-            throw FenceError.invalidRequest("Invalid expectation object: expected {\"value\": \"expected\"}, got keys: \(dict.keys.sorted())")
+            if let vc = dict["valueChanged"] as? [String: Any] {
+                return .valueChanged(
+                    heistId: vc["heistId"] as? String,
+                    oldValue: vc["oldValue"] as? String,
+                    newValue: vc["newValue"] as? String
+                )
+            }
+            // Accept bare "valueChanged" key with no sub-object (matches any value change)
+            if dict.keys.contains("valueChanged") {
+                return .valueChanged()
+            }
+            throw FenceError.invalidRequest(
+                "Invalid expectation object: expected {\"value\": \"…\"} or " +
+                "{\"valueChanged\": {…}}, got keys: \(dict.keys.sorted())"
+            )
         }
-        throw FenceError.invalidRequest("Invalid expectation type: expected string or {\"value\": \"expected\"} object")
+        throw FenceError.invalidRequest(
+            "Invalid expectation type: expected string or " +
+            "{\"value\": \"…\"} / {\"valueChanged\": {…}} object"
+        )
     }
 
     // MARK: - Last Action Tracking
