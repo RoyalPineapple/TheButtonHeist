@@ -153,6 +153,133 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertEqual(result.actual, "screenChanged")
     }
 
+    // MARK: - Codable: valueChanged
+
+    func testValueChangedNewValueOnlyEncodeDecode() throws {
+        let expectation = ActionExpectation.valueChanged(newValue: "5")
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testValueChangedAllFieldsEncodeDecode() throws {
+        let expectation = ActionExpectation.valueChanged(heistId: "counter", oldValue: "3", newValue: "5")
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testValueChangedNoFieldsEncodeDecode() throws {
+        let expectation = ActionExpectation.valueChanged()
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    // MARK: - Validation: valueChanged
+
+    func testValueChangedMetWhenNewValueMatches() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "5")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testValueChangedNotMetWhenNoMatch() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "4")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
+    func testValueChangedMetWhenHeistIdAndNewValueMatch() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [
+                ValueChange(order: 0, heistId: "other", oldValue: "1", newValue: "5"),
+                ValueChange(order: 1, heistId: "counter", oldValue: "3", newValue: "5"),
+            ]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(heistId: "counter", newValue: "5").validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testValueChangedNotMetWhenHeistIdDoesNotMatch() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, heistId: "other", oldValue: "3", newValue: "5")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(heistId: "counter", newValue: "5").validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
+    func testValueChangedMetWhenOldAndNewValueMatch() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "5")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(oldValue: "3", newValue: "5").validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testValueChangedNoFieldsMetWhenAnyChangesExist() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, oldValue: "a", newValue: "b")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged().validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testValueChangedNotMetWhenNoDelta() {
+        let action = makeResult(success: true)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "no value changes")
+    }
+
+    func testValueChangedNotMetWhenEmptyValueChanges() {
+        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 5, valueChanges: [])
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "no value changes")
+    }
+
+    func testValueChangedDiagnosticOnMiss() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 5,
+            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "4")]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "counter: 3 → 4")
+    }
+
+    func testValueChangedMatchesAnyAmongMultipleChanges() {
+        let delta = InterfaceDelta(
+            kind: .valuesChanged, elementCount: 10,
+            valueChanges: [
+                ValueChange(order: 0, heistId: "label", oldValue: "A", newValue: "B"),
+                ValueChange(order: 1, heistId: "counter", oldValue: "3", newValue: "5"),
+            ]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
     // MARK: - Helpers
 
     private func makeResult(
