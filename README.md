@@ -113,12 +113,11 @@ graph TD
 
 ### Modules
 
-<<<<<<< HEAD
 | Module | Platform | What it does |
 |--------|----------|-------------|
-| **TheScore** | iOS + macOS | Wire protocol: 31 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, protocol v6.1 |
+| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, protocol v6.1 |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
-| **ButtonHeist** | macOS | Client framework: TheFence (31-command dispatch), TheMastermind (@Observable coordinator), TheHandoff (discovery + connection) |
+| **ButtonHeist** | macOS | Client framework: TheFence (33-command dispatch), TheMastermind (@Observable coordinator), TheHandoff (discovery + connection) |
 | **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
 | **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
@@ -150,7 +149,7 @@ Every heist needs a team.
 | Name | Role |
 |------|------|
 | **TheMastermind** | Runs the show. @Observable coordinator over TheHandoff: discovery, connection, callbacks |
-| **TheFence** | Moves the merchandise. 31 commands routed from CLI and MCP to the connected device |
+| **TheFence** | Moves the merchandise. 33 commands routed from CLI and MCP to the connected device |
 | **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS setup, injectable closures for testing |
 
 #### The Legitimate Front
@@ -159,23 +158,6 @@ Every heist needs a team.
 |------|------|
 | **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
 | **ButtonHeistMCP** | Agent interface. 18 tools that call through TheFence so AI agents can run the job natively |
-||||||| parent of 8d3cf9f (Fix text input with hardware keyboard, align touch injection with KIF, add pasteboard tools)
-| Module | Platform | Description | Details |
-|--------|----------|-------------|---------|
-| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
-| **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeistMCP** | macOS | MCP server — 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool for device discovery, sessions, actions, gestures, screenshots, recording, scrolling, and text/edit commands | [ButtonHeistCLI/](ButtonHeistCLI/) |
-=======
-| Module | Platform | Description | Details |
-|--------|----------|-------------|---------|
-| **TheScore** | iOS + macOS | Shared types, messages, and constants | [ButtonHeist/](ButtonHeist/) |
-| **TheInsideJob** | iOS | Server + synthetic touch injection, embedded in your app | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeist** | macOS | Client framework (TheMastermind, TheFence, TheHandoff); re-exports TheScore | [ButtonHeist/](ButtonHeist/) |
-| **ButtonHeistMCP** | macOS | MCP server — 19 tools dispatching through TheFence, including `run_batch` and `get_session_state` | [ButtonHeistMCP/](ButtonHeistMCP/) |
-| **buttonheist** | macOS | CLI tool for device discovery, sessions, actions, gestures, screenshots, recording, scrolling, and text/edit commands | [ButtonHeistCLI/](ButtonHeistCLI/) |
->>>>>>> 8d3cf9f (Fix text input with hardware keyboard, align touch injection with KIF, add pasteboard tools)
 
 ## Quick Start
 

@@ -881,7 +881,7 @@ Messages sent from client to server.
 - `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
 - `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
 - `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl injection (falls back to UIKeyInput for hardware keyboard)
+- `typeText(TypeTextTarget)` - Type text via UIKeyboardImpl.sharedInstance injection
 - `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard

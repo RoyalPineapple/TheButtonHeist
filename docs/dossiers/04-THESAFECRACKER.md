@@ -11,12 +11,12 @@ TheSafecracker is the hands of the operation:
 1. **Single-finger gestures** - tap, long press, swipe, drag
 2. **Multi-finger gestures** - pinch, rotate, two-finger tap
 3. **Path drawing** - polyline (drawPath) and Bezier curves (drawBezier)
-4. **Text input** - typing via UIKeyboardImpl injection (KIF pattern), with UIKeyInput first responder fallback for hardware keyboard mode
-5. **Text clearing** - select-all + delete via UITextInput, with character-counting fallback for UIKeyInput-only responders
-6. **Keyboard management** - detect visibility and hardware keyboard mode, dismiss keyboard
+4. **Text input** - typing via UIKeyboardImpl.sharedInstance injection (KIF pattern), works in both software and hardware keyboard modes
+5. **Text clearing** - select-all + delete via UITextInput
+6. **Keyboard management** - detect visibility, dismiss keyboard
 7. **Pasteboard operations** - read/write UIPasteboard.general (avoids iOS "Allow Paste" dialog)
-6. **Accessibility actions** - activate, increment, decrement, custom actions
-7. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
+8. **Accessibility actions** - activate, increment, decrement, custom actions
+9. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
 
 ## Architecture Diagram
 
@@ -103,7 +103,7 @@ graph LR
         DrawBezier["drawBezier via TheSafecracker.BezierSampler"]
     end
 
-    subgraph Text["Text Input"]
+    subgraph Text["Text & Pasteboard"]
         Type["typeText(interKeyDelay:)"]
         Delete["deleteText(count:)"]
         Clear["clearText()"]
@@ -194,10 +194,8 @@ struct InteractionResult: Error { ... }
 - `InteractionResult` is returned as a value, never thrown
 - The `Error` conformance adds no functionality and may mislead readers
 
-**Text injection uses `UIKeyboardImpl.sharedInstance` with hardware keyboard fallback**
+**Text injection uses `UIKeyboardImpl.sharedInstance`**
 - Uses `sharedInstance` (not `activeInstance`) to stay alive in hardware keyboard mode
-- `isInHardwareKeyboardMode()` checks UIKeyboardImpl via IMP-based dispatch (returns BOOL)
-- Falls back to `UIKeyInput.insertText`/`deleteBackward` on the first responder when UIKeyboardImpl is unavailable
 - `drainKeyboardTaskQueue()` after each keystroke matches KIF's pattern
 
 **Duplicate default durations** (`TheSafecracker+Actions.swift` vs `TheSafecracker.swift`)

@@ -334,7 +334,7 @@ Invoke a named custom action on an element. The action name must match one of th
 
 ### typeText
 
-Type text character-by-character by injecting into the keyboard input system, and/or delete characters. Returns the current text field value in the `actionResult`. Works with both the software keyboard (via UIKeyboardImpl) and hardware keyboard mode (via UIKeyInput first responder fallback).
+Type text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl.sharedInstance), and/or delete characters. Returns the current text field value in the `actionResult`. Works in both software and hardware keyboard modes.
 
 **Type text into a field (taps element to focus first):**
 ```json
