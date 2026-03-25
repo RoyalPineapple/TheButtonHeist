@@ -23,43 +23,50 @@ extension TheSafecracker {
             }
             fingerprints.showFingerprint(at: point)
 
-            var keyboardAppeared = false
+            var inputReady = false
             for _ in 0..<20 {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                if isKeyboardVisible() {
-                    keyboardAppeared = true
+                if hasActiveTextInput() {
+                    inputReady = true
                     break
                 }
             }
 
-            if !keyboardAppeared {
-                let msg = "Keyboard did not appear. Ensure the software keyboard is enabled " +
-                    "(Simulator > I/O > Keyboard > uncheck 'Connect Hardware Keyboard')."
+            if !inputReady {
+                let msg = "No active text input after tapping element. " +
+                    "The element may not be a text field."
                 return .failure(.typeText, message: msg)
             }
         } else {
-            if !isKeyboardVisible() {
-                let msg = "Keyboard not visible. Provide an elementTarget to focus " +
-                    "a text field, or ensure the keyboard is already showing."
+            if !hasActiveTextInput() {
+                let msg = "No active text input. Provide an elementTarget to focus " +
+                    "a text field, or ensure a text field is already focused."
                 return .failure(.typeText, message: msg)
             }
         }
 
-        // Step 2: Delete characters if requested
+        // Step 2: Clear existing text if requested
+        if target.clearFirst == true {
+            if !(await clearText()) {
+                return .failure(.typeText, message: "Failed to clear existing text.")
+            }
+        }
+
+        // Step 3: Delete characters if requested
         if let deleteCount = target.deleteCount, deleteCount > 0 {
             if !(await deleteText(count: deleteCount, interKeyDelay: interKeyDelay)) {
-                return .failure(.typeText, message: "Could not get UIKeyboardImpl instance for delete. Keyboard may not be active.")
+                return .failure(.typeText, message: "No keyboard or focused text input available for delete.")
             }
         }
 
-        // Step 3: Type text if provided
+        // Step 4: Type text if provided
         if let text = target.text, !text.isEmpty {
             if !(await typeText(text, interKeyDelay: interKeyDelay)) {
-                return .failure(.typeText, message: "Could not get UIKeyboardImpl instance for typing. Keyboard may not be active.")
+                return .failure(.typeText, message: "No keyboard or focused text input available for typing.")
             }
         }
 
-        // Step 4: Refresh accessibility data and read back value
+        // Step 5: Refresh accessibility data and read back value
         try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
         bagman?.refreshElements()
 

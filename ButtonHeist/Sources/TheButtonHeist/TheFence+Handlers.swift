@@ -287,11 +287,12 @@ extension TheFence {
     func handleTypeText(_ args: [String: Any]) async throws -> FenceResponse {
         let text = stringArg(args, "text")
         let deleteCount = intArg(args, "deleteCount")
-        guard text != nil || deleteCount != nil else {
-            return .error("Must specify text, deleteCount, or both")
+        let clearFirst = boolArg(args, "clearFirst")
+        guard text != nil || deleteCount != nil || clearFirst == true else {
+            return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
         let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
-            text: text, deleteCount: deleteCount, elementTarget: elementTarget(args)
+            text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: elementTarget(args)
         ))) { requestId in
             try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
         }
@@ -307,6 +308,19 @@ extension TheFence {
             return .error("Invalid action '\(actionString)'. Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
         }
         return try await sendAction(.editAction(EditActionTarget(action: action)))
+    }
+
+    // MARK: - Handler: Pasteboard
+
+    func handleSetPasteboard(_ args: [String: Any]) async throws -> FenceResponse {
+        guard let text = stringArg(args, "text") else {
+            return .error("text is required for set_pasteboard")
+        }
+        return try await sendAction(.setPasteboard(SetPasteboardTarget(text: text)))
+    }
+
+    func handleGetPasteboard() async throws -> FenceResponse {
+        return try await sendAction(.getPasteboard)
     }
 
     // MARK: - Handler: Recording

@@ -11,10 +11,12 @@ TheSafecracker is the hands of the operation:
 1. **Single-finger gestures** - tap, long press, swipe, drag
 2. **Multi-finger gestures** - pinch, rotate, two-finger tap
 3. **Path drawing** - polyline (drawPath) and Bezier curves (drawBezier)
-4. **Text input** - typing via UIKeyboardImpl injection (KIF pattern)
-5. **Keyboard management** - detect visibility, dismiss keyboard
-6. **Accessibility actions** - activate, increment, decrement, custom actions
-7. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
+4. **Text input** - typing via UIKeyboardImpl.sharedInstance injection (KIF pattern), works in both software and hardware keyboard modes
+5. **Text clearing** - select-all + delete via UITextInput
+6. **Keyboard management** - detect visibility, dismiss keyboard
+7. **Pasteboard operations** - read/write UIPasteboard.general (avoids iOS "Allow Paste" dialog)
+8. **Accessibility actions** - activate, increment, decrement, custom actions
+9. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
 
 ## Architecture Diagram
 
@@ -101,11 +103,14 @@ graph LR
         DrawBezier["drawBezier via TheSafecracker.BezierSampler"]
     end
 
-    subgraph Text["Text Input"]
+    subgraph Text["Text & Pasteboard"]
         Type["typeText(interKeyDelay:)"]
         Delete["deleteText(count:)"]
+        Clear["clearText()"]
         Edit["editAction (copy/paste/cut/select)"]
         Dismiss["resignFirstResponder()"]
+        SetPB["executeSetPasteboard()"]
+        GetPB["executeGetPasteboard()"]
     end
 
     subgraph AccessActions["Accessibility Actions"]
@@ -189,11 +194,9 @@ struct InteractionResult: Error { ... }
 - `InteractionResult` is returned as a value, never thrown
 - The `Error` conformance adds no functionality and may mislead readers
 
-**Text injection depends on `UIKeyboardImpl.activeInstance`** (`TheSafecracker.swift:207`)
-- Uses `NSClassFromString("UIKeyboardImpl")` and `perform(NSSelectorFromString("activeInstance"))`
-- If the keyboard isn't visible, `activeInstance` returns nil
-- `executeTypeText` has a multi-step flow: tap element, wait for keyboard, then type
-- The keyboard visibility check looks for `UIInputSetHostView` with height > 100pt
+**Text injection uses `UIKeyboardImpl.sharedInstance`**
+- Uses `sharedInstance` (not `activeInstance`) to stay alive in hardware keyboard mode
+- `drainKeyboardTaskQueue()` after each keystroke matches KIF's pattern
 
 **Duplicate default durations** (`TheSafecracker+Actions.swift` vs `TheSafecracker.swift`)
 - `executeTap` at Actions:111 defaults duration via `target.duration ?? 0.15`
