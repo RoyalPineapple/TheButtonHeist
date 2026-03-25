@@ -388,7 +388,7 @@ enum ToolDefinitions {
             Each step is a JSON request matching the CLI session format (must include 'command'). \
             Every action implicitly checks delivery (success==true). \
             Steps can include an 'expect' field to classify the expected outcome: \
-            "screen_changed", "layout_changed", or {"value": "expected text"}. \
+            "screen_changed", "layout_changed", or {"valueChanged": {"newValue": "5"}}. \
             Results report what actually happened — the caller decides what to do with it. \
             The policy controls whether the batch stops on first error or unmet expectation.
             """,
