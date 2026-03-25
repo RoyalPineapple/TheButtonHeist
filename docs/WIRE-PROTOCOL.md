@@ -819,13 +819,14 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `heistId` | `String` | Stable deterministic identifier (derived from developer identifier or synthesized from traits+label). Preferred for element targeting. |
 | `order` | `Int` | VoiceOver reading order (0-based) |
 | `description` | `String` | What VoiceOver reads |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
 | `hint` | `String?` | Accessibility hint |
-| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`) |
+| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`, `"backButton"`) |
 | `frameX` | `Double` | Frame origin X in points |
 | `frameY` | `Double` | Frame origin Y in points |
 | `frameWidth` | `Double` | Frame width in points |
@@ -867,10 +868,11 @@ Container types:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `identifier` | `String?` | Element's identifier |
-| `order` | `Int?` | Element's traversal index |
+| `heistId` | `String?` | Stable element identifier (preferred — survives layout changes) |
+| `identifier` | `String?` | Element's accessibility identifier |
+| `order` | `Int?` | Element's traversal index (positional, may shift between snapshots) |
 
-At least one field should be provided. When both are provided, identifier is tried first.
+At least one field should be provided. Resolution priority: `heistId` > `identifier` > `order`.
 
 ### TouchTapTarget
 
@@ -1094,6 +1096,7 @@ Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed
 | `elementCount` | `Int` | Total element count after the action |
 | `added` | `[HeistElement]?` | Elements that were added (for `elementsChanged`) |
 | `removedOrders` | `[Int]?` | Orders of removed elements (for `elementsChanged`) |
+| `removedHeistIds` | `[String]?` | HeistIds of removed elements (for `elementsChanged`) |
 | `valueChanges` | `[ValueChange]?` | Value changes on existing elements |
 | `newInterface` | `Interface?` | Full new interface (for `screenChanged` only) |
 
@@ -1102,6 +1105,7 @@ Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed
 | Field | Type | Description |
 |-------|------|-------------|
 | `order` | `Int` | Element order |
+| `heistId` | `String?` | Element heistId |
 | `identifier` | `String?` | Element identifier |
 | `oldValue` | `String?` | Previous value |
 | `newValue` | `String?` | New value |

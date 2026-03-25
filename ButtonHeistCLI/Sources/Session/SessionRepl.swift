@@ -378,6 +378,8 @@ final class ReplSession {
         switch format {
         case .human:
             writeOutput(response.humanFormatted())
+        case .compact:
+            writeOutput(response.compactFormatted())
         case .json:
             if var dictionary = response.jsonDict() {
                 if let id {

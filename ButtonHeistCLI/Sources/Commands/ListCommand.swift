@@ -28,7 +28,7 @@ struct ListCommand: AsyncParsableCommand {
         switch format ?? .auto {
         case .json:
             outputJSON(discovered)
-        case .human:
+        case .human, .compact:
             outputHuman(discovered)
         }
     }

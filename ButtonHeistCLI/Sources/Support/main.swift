@@ -50,6 +50,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
 enum OutputFormat: String, ExpressibleByArgument, CaseIterable {
     case human
     case json
+    case compact
 
     static var auto: OutputFormat {
         isatty(STDIN_FILENO) != 0 ? .human : .json
