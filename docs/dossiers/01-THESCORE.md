@@ -156,7 +156,6 @@ classDiagram
 
     class ActionExpectation {
         <<enum>>
-        value(String)
         screenChanged
         layoutChanged
         valueChanged(heistId?, oldValue?, newValue?)
