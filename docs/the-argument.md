@@ -34,7 +34,7 @@ The agent interacts by calling `activate` with an element's order index or ident
 
 Every action returns an interface delta — elements added, removed, and changed — so the agent sees what happened without re-fetching the entire tree. `wait_for_idle` watches `CALayer` animations and reports when the UI has settled after a transition.
 
-`run_batch` lets the agent combine multiple actions into a single MCP call. Adding a todo item (tap field, type text, tap Add) goes from 3 round trips to 1. Each step can carry an `expect` field — `"screen_changed"`, `"elements_changed"`, or `{"elementUpdated": {…}}` — and the response reports whether each expectation was met:
+`run_batch` lets the agent combine multiple actions into a single MCP call. Adding a todo item (tap field, type text, tap Add) goes from 3 round trips to 1. Each step can carry an `expect` field, and the response reports whether each expectation was met:
 
 ```json
 {
@@ -44,6 +44,17 @@ Every action returns an interface delta — elements added, removed, and changed
 ```
 
 If an expectation isn't met, the batch stops with diagnostics. The agent doesn't have to re-read the tree to verify outcomes — the tool reports them directly.
+
+Expectations follow a "say what you know" design. The agent expresses what it cares about and omits what it doesn't:
+
+- `"screen_changed"` — did the view controller change?
+- `"layout_changed"` — were elements added or removed?
+- `{"value": "5"}` — does the target element's value match exactly?
+- `{"valueChanged": {"newValue": "5"}}` — did any element's value change to "5"?
+- `{"valueChanged": {"heistId": "counter", "oldValue": "3", "newValue": "5"}}` — did this specific element transition from "3" to "5"?
+- `{"valueChanged": {}}` — did any value change at all?
+
+Every field in `valueChanged` is optional. Provide more to tighten the check, fewer to loosen it. The framework scans the interface delta for any match and reports what actually happened on miss, so the agent gets diagnostics without needing a follow-up call.
 
 The Button Heist also works on physical devices. Same framework, same tools, pointed at real hardware instead of a simulator — an iPad connected to a Square Stand, for example.
 
@@ -93,7 +104,7 @@ Batching is the big win. Expectations help on verification-heavy tasks but add o
 
 Reads the accessibility tree through Apple's `AXPTranslator`, which bridges iOS accessibility into macOS accessibility concepts. Properties without macOS equivalents — activation points, `respondsToUserInteraction`, hints, custom content, custom rotors, available actions — get dropped in translation. The Button Heist reads `UIAccessibility` objects directly inside the app process, so none of that is lost.
 
-idb is the stronger competitor on accuracy — it matches or beats BH's correctness on every task with three-way data. But it takes 2-3x more turns to get there. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, expectations, or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
+idb is the stronger competitor on accuracy — it matches or beats BH's correctness on every task with three-way data. But it takes 2-3x more turns to get there. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, inline outcome expectations (screen changes, layout mutations, value transitions), or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
 
 The detailed field-by-field comparison is in [ios-simulator-mcp-comparison.md](./ios-simulator-mcp-comparison.md).
 
