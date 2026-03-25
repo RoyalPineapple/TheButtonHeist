@@ -761,6 +761,27 @@ Specialized accessibility actions. For general element interaction, use `activat
 - `edit_action` — Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`
 - `dismiss_keyboard` — No additional params
 
+#### run_batch
+
+Execute an ordered sequence of commands in a single call. Each step is a full command request (same schema as a standalone tool call). Steps run sequentially — the response from one step is not piped into the next.
+
+**Parameters:**
+
+- `steps` (required) — Array of command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": "screen_changed"}, ...]`)
+- `policy` — `"stop_on_error"` (default) or `"continue_on_error"`
+
+With the default `stop_on_error` policy, the batch halts at the first mismet expectation or delivery failure. `failedIndex` points at the step that broke — not a downstream step that failed because the expected state change never happened.
+
+**Response fields:**
+
+- `results` — Array of per-step responses (only includes steps that ran)
+- `completedSteps` — Number of steps executed
+- `failedIndex` — Index of the first failed step (`null` if all passed)
+- `totalTimingMs` — Wall-clock duration of the entire batch
+- `expectations.checked` — Count of steps with explicit `expect` fields
+- `expectations.met` — Count of those that were satisfied
+- `expectations.allMet` — Boolean summary
+
 ### Environment Variables
 
 | Variable | Description |
@@ -1213,7 +1234,7 @@ public enum ActionMethod: String, Codable, Sendable
 public enum ActionExpectation: Codable, Sendable, Equatable
 ```
 
-Outcome signal classifiers for actions. Attached to a request (not to a target type) so any action can opt in. Every action implicitly checks delivery (`success == true`); these tiers classify what kind of change the caller expected. Results report what actually happened — the caller decides what to do with it.
+Outcome signal classifiers for actions. Attached to a request (not to a target type) so any action can opt in. Every action implicitly checks delivery (`success == true`); these tiers classify what kind of change the caller expected. Results report what actually happened — the caller decides what to do with it. In batches, a mismet expectation halts execution at the action that broke rather than letting later steps fail in a confusing state.
 
 #### Cases
 
