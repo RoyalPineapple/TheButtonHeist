@@ -143,7 +143,7 @@ buttonheist scroll_to_edge --edge bottom --identifier scrollView
 
 ## Touch Subcommands
 
-`buttonheist touch` is the lockpick set. Nine subcommands for when you need the crowbar instead of the key:
+`buttonheist touch` is the low-level gesture toolkit. Nine subcommands for coordinate-precise touch injection when `activate` isn't enough:
 
 | Subcommand | Key Flags | Description |
 |------------|-----------|-------------|
