@@ -70,6 +70,15 @@ enum ObjCRuntime {
         // use for +1 factory methods (e.g., create/copy/new) without switching
         // to takeRetainedValue().
 
+        private typealias IMPReturnBool = @convention(c) (AnyObject, Selector) -> Bool
+
+        /// Call a method that returns `BOOL`. Uses IMP-based dispatch because
+        /// `perform(_:)` interprets primitive return values as object pointers,
+        /// which crashes when the method returns `YES` (dereferences `0x1`).
+        func callReturningBool() -> Bool {
+            imp(as: IMPReturnBool.self)(target, selector)
+        }
+
         /// Return type `R` is inferred from assignment context.
         func call<R: AnyObject>() -> R? {
             target.perform(selector)?.takeUnretainedValue() as? R

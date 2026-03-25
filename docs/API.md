@@ -888,8 +888,6 @@ Messages sent from client to server.
 - `scroll(ScrollTarget)` - Scroll the nearest scroll view ancestor by one page
 - `scrollToVisible(ActionTarget)` - Scroll until the target element is visible in the viewport
 - `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
-- `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
-- `getPasteboard` - Read text from general pasteboard
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `requestScreen` - Request PNG screenshot

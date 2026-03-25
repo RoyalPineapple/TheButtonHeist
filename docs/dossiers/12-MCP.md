@@ -2,13 +2,13 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes ButtonHeist as 16 typed MCP tools for AI agents
+> **Role:** Exposes ButtonHeist as 18 typed MCP tools for AI agents
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **16 typed tools** backed by `TheFence`
+1. **18 typed tools** backed by `TheFence`
 2. **Tool-to-command routing** for both direct and grouped tools
 3. **Response adaptation** for MCP clients: screenshots inline, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
@@ -22,7 +22,7 @@ graph TD
         Main["main.swift - ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift - 16 tool schemas"]
+        Tools["ToolDefinitions.swift - 18 tool schemas"]
         Handler["handleToolCall -> decode -> route -> execute -> render"]
         Idle["IdleMonitor"]
     end
@@ -58,6 +58,8 @@ Direct tools:
 - `scroll`
 - `scroll_to_visible`
 - `scroll_to_edge`
+- `set_pasteboard`
+- `get_pasteboard`
 - `run_batch`
 - `get_session_state`
 
