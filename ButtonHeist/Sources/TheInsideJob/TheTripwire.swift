@@ -1,7 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import TheScore
 
 /// Detects UI state changes without touching the accessibility tree.
 ///
@@ -9,11 +8,12 @@ import TheScore
 /// layer movement, animation keys — to answer two questions:
 ///
 /// 1. **Is the UI still moving?** (presentation layer fingerprinting)
-/// 2. **Did the screen change?** (view controller identity)
+/// 2. **Did the view controller change?** (VC identity comparison)
 ///
-/// The accessibility tree is the wire currency; TheTripwire never reads it.
-/// It tells the crew *when* to look and *what kind of change* happened,
-/// so TheBagman knows whether to send a full snapshot or a diff.
+/// The accessibility tree is TheBagman's domain; TheTripwire never reads it.
+/// It tells the crew *when* to look and *whether the VC changed*,
+/// so TheBagman can layer on topology checks (back button, headers) using
+/// its own cached `AccessibilityElement` data.
 @MainActor
 final class TheTripwire {
 
@@ -67,62 +67,11 @@ final class TheTripwire {
         return vc
     }
 
-    /// Did the screen change? Three-tier detection:
-    ///
-    /// 1. **VC identity** — UIKit navigation (push/pop, modal present/dismiss).
-    /// 2. **Back button trait** — private trait 0x8000000 (bit 27) appeared/disappeared.
-    ///    Set by UIKit on navigation bar back buttons. Catches Workflow-style navigation
-    ///    where the VC is reused but content changes.
-    /// 3. **Header structure** — the set of header-trait element labels changed completely.
-    ///    Catches custom container navigation that doesn't use a back button
-    ///    (e.g. tab-hosted flows, wizard-style screens).
-    func isScreenChange(
-        before beforeVC: ObjectIdentifier?,
-        after afterVC: ObjectIdentifier?,
-        beforeElements: [HeistElement],
-        afterElements: [HeistElement]
-    ) -> Bool {
-        // Tier 1: VC identity changed
-        if isVCChange(before: beforeVC, after: afterVC) {
-            return true
-        }
-
-        // Tier 2: back button trait appeared or disappeared
-        if isBackButtonChanged(before: beforeElements, after: afterElements) {
-            return true
-        }
-
-        // Tier 3: header structure changed completely
-        return isHeaderStructureChanged(before: beforeElements, after: afterElements)
-    }
-
-    /// VC identity comparison (the original check).
-    func isVCChange(before: ObjectIdentifier?, after: ObjectIdentifier?) -> Bool {
+    /// Did the view controller change? Compares VC identity before and after an action.
+    /// Both nil means no VC either time (no change); one nil means appeared/disappeared (change).
+    func isScreenChange(before: ObjectIdentifier?, after: ObjectIdentifier?) -> Bool {
         guard let before, let after else { return before != nil || after != nil }
         return before != after
-    }
-
-    // MARK: - Topology-Based Screen Change
-
-    /// Private UIAccessibilityTrait for back buttons (bit 27).
-    /// Set by UIKit on navigation bar back button items.
-    private static let backButtonTraitBit: UInt64 = 0x8000000
-
-    /// Tier 2: back button trait appeared or disappeared.
-    private func isBackButtonChanged(before: [HeistElement], after: [HeistElement]) -> Bool {
-        let hadBackButton = before.contains { ($0.rawTraits ?? 0) & Self.backButtonTraitBit != 0 }
-        let hasBackButton = after.contains { ($0.rawTraits ?? 0) & Self.backButtonTraitBit != 0 }
-        return hadBackButton != hasBackButton
-    }
-
-    /// Tier 3: the set of header labels changed completely (no overlap).
-    /// A content update may change one header (e.g. a counter in a section title),
-    /// but a screen change replaces ALL headers. Zero overlap = new screen.
-    private func isHeaderStructureChanged(before: [HeistElement], after: [HeistElement]) -> Bool {
-        let beforeHeaders = Set(before.compactMap { $0.traits.contains("header") ? $0.label : nil })
-        let afterHeaders = Set(after.compactMap { $0.traits.contains("header") ? $0.label : nil })
-        guard !beforeHeaders.isEmpty, !afterHeaders.isEmpty else { return false }
-        return beforeHeaders.isDisjoint(with: afterHeaders)
     }
 
     // MARK: - Presentation Layer Fingerprinting

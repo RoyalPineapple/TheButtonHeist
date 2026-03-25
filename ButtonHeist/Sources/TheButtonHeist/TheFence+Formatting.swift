@@ -376,6 +376,7 @@ public enum FenceResponse {
 
     private func elementDictionary(_ element: HeistElement) -> [String: Any] {
         var payload: [String: Any] = [
+            "heistId": element.heistId,
             "order": element.order,
             "description": element.description,
             "traits": element.traits,

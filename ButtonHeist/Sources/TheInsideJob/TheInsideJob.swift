@@ -384,6 +384,7 @@ public final class TheInsideJob {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
         let beforeSnapshot = bagman.snapshotElements()
+        let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let result = await interaction()
@@ -396,6 +397,7 @@ public final class TheInsideJob {
                 message: result.message,
                 value: result.value,
                 beforeSnapshot: beforeSnapshot,
+                beforeCachedElements: beforeCachedElements,
                 beforeVC: beforeVC,
                 target: command.actionTarget
             )

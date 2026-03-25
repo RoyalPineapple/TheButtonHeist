@@ -17,7 +17,7 @@ final class TheTripwireTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - isScreenChange (pure logic)
+    // MARK: - isScreenChange (VC identity)
 
     func testIsScreenChangeBothNilReturnsFalse() {
         XCTAssertFalse(tripwire.isScreenChange(before: nil, after: nil))

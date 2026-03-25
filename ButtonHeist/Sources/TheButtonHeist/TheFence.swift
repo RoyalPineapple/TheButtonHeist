@@ -291,9 +291,10 @@ public final class TheFence {
 
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
         let identifier = stringArg(dictionary, "identifier")
+        let heistId = stringArg(dictionary, "heistId")
         let order = intArg(dictionary, "order")
-        guard identifier != nil || order != nil else { return nil }
-        return ActionTarget(identifier: identifier, order: order)
+        guard identifier != nil || heistId != nil || order != nil else { return nil }
+        return ActionTarget(identifier: identifier, heistId: heistId, order: order)
     }
 
     // MARK: - Expectation Parsing
