@@ -263,6 +263,38 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | **DeviceConnection** | Client-side handshake and auth handling. Verifies `protocolVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
 | **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. |
 
+## TLS Certificate Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant TLS as TLSIdentity
+    participant ST as ServerTransport
+    participant NS as NetService (Bonjour)
+    participant DD as DeviceDiscovery
+    participant DC as DeviceConnection
+
+    Note over TLS: getOrCreate() at startup
+    TLS->>TLS: generateCertificate()<br>ECDSA P-256 key pair + self-signed cert
+    TLS->>TLS: computeFingerprint(derBytes)<br>SHA-256 hash → "sha256:..."
+
+    TLS->>ST: init(tlsIdentity:)
+    ST->>ST: tlsIdentity.makeTLSParameters()<br>→ NWParameters with NWProtocolTLS
+
+    ST->>NS: advertise(serviceName:)
+    Note over NS: TXT record includes<br>certfp = "sha256:..."<br>transport = "tls"
+
+    DD->>NS: NWBrowser discovers service
+    NS-->>DD: TXT record with certfp
+    DD->>DD: Extract certFingerprint<br>→ DiscoveredDevice
+
+    DC->>DC: init(device:) stores<br>expectedFingerprint from device.certFingerprint
+    DC->>DC: makeTLSParameters(expectedFingerprint:)<br>→ sec_protocol_options_set_verify_block
+
+    DC->>ST: TLS handshake
+    Note over DC,ST: verify_block: SHA-256(leaf cert)<br>== expectedFingerprint?
+    ST-->>DC: Handshake complete (match)
+```
+
 ## Related Documentation
 
 - [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) — Full message specification

@@ -118,6 +118,32 @@ Test Phone 15 Pro     Test-Phone-15-Pro.coredevice.local    ...   connected   iP
 lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 ```
 
+## USB Discovery Flow
+
+```mermaid
+sequenceDiagram
+    participant USB as USBDeviceDiscovery
+    participant XC as xcrun devicectl
+    participant LS as lsof
+    participant EV as onEvent callback
+
+    loop Every 3 seconds (poll)
+        USB->>XC: discoverConnectedDevices()<br>xcrun devicectl list devices
+        XC-->>USB: Device names with "connected" status
+
+        USB->>LS: findIPv6Tunnel()<br>lsof -i -P -n
+        LS-->>USB: CoreDevice fd-prefix IPv6 address
+
+        alt New device found
+            USB->>USB: Construct NWEndpoint<br>hostPort(ipv6Address, port)
+            USB->>USB: Create DiscoveredDevice<br>id: "usb-{name}"
+            USB->>EV: .found(device)
+        else Device disappeared
+            USB->>EV: .lost(device)
+        end
+    end
+```
+
 ### Manual Connection (for debugging)
 
 **Note**: The protocol requires token authentication before any commands are accepted.
@@ -135,43 +161,13 @@ nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format js
 
 ## Message Protocol
 
-Messages are newline-delimited JSON using explicit `type` and optional `payload` fields. The protocol now requires `serverHello` / `clientHello` version negotiation before authentication or status probes.
-
-### Authenticate
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"authenticate","payload":{"token":"your-secret-token"}}
-```
-
-### Request Interface
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"requestInterface"}
-```
-
-### Activate Element (by order index)
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"activate","payload":{"order":6}}
-```
-
-### Activate Element (by identifier)
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"activate","payload":{"identifier":"loginButton"}}
-```
-
-### Tap at Coordinates
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"touchTap","payload":{"pointX":196.5,"pointY":659}}
-```
-
-### Ping
-```json
-{"protocolVersion":"6.1","requestId":null,"type":"ping"}
-```
+USB connections use the same wire protocol as WiFi. See the [Wire Protocol Specification](WIRE-PROTOCOL.md) for message format, authentication flow, and command reference.
 
 ## Implementation Details
 
 ### IPv6 Dual-Stack Server
 
-The `SimpleSocketServer` uses Network framework (`NWListener`) with IPv6 dual-stack to accept both IPv4 and IPv6 connections:
+The `ServerTransport` uses Network framework (`NWListener`) with IPv6 dual-stack to accept both IPv4 and IPv6 connections:
 
 ```swift
 // Network framework listener
