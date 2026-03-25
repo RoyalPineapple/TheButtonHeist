@@ -7,7 +7,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Command Enum
 
     func testCommandCaseCount() {
-        XCTAssertEqual(TheFence.Command.allCases.count, 31)
+        XCTAssertEqual(TheFence.Command.allCases.count, 33)
     }
 
     func testCommandRawValuesMatchWireFormat() {
@@ -38,6 +38,8 @@ final class TheFenceTests: XCTestCase {
             .performCustomAction: "perform_custom_action",
             .typeText: "type_text",
             .editAction: "edit_action",
+            .setPasteboard: "set_pasteboard",
+            .getPasteboard: "get_pasteboard",
             .dismissKeyboard: "dismiss_keyboard",
             .startRecording: "start_recording",
             .stopRecording: "stop_recording",

@@ -63,6 +63,7 @@ struct ButtonHeistMCPServer {
             // Direct 1:1 tools — tool name IS the command
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
                  "wait_for_idle", "start_recording", "stop_recording", "list_devices",
+                 "set_pasteboard", "get_pasteboard",
                  "scroll", "scroll_to_visible", "scroll_to_edge",
                  "run_batch", "get_session_state":
                 request["command"] = params.name

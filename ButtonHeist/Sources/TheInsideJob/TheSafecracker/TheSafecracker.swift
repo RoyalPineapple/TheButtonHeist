@@ -123,6 +123,8 @@ final class TheSafecracker {
     }
 
     /// Simulate a long press at the given screen coordinates.
+    /// Sends `.stationary` phase events every 10ms during the hold (matching KIF)
+    /// so gesture recognizers stay alive and processing.
     /// - Parameters:
     ///   - point: Point in screen coordinates
     ///   - duration: How long to hold the press (seconds, default 0.5)
@@ -130,30 +132,43 @@ final class TheSafecracker {
         guard touchDown(at: point) else { return false }
         fingerprints.beginTrackingFingerprints(at: [point])
         onGestureMove?([point])
-        try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+
+        let stepDelay: TimeInterval = 0.01
+        var elapsed: TimeInterval = 0
+        while elapsed < duration {
+            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            elapsed += stepDelay
+            sendStationary()
+        }
+
         fingerprints.endTrackingFingerprints()
         return touchUp()
     }
 
     /// Simulate a swipe gesture between two screen points.
+    /// Pre-computes all waypoints before the gesture loop (matches KIF's
+    /// `dragPointsAlongPaths:` pattern) so the path is stable even if
+    /// the view moves during the gesture.
     /// - Parameters:
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the swipe (seconds, default 0.15)
     func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
+        let stepDelay: TimeInterval = 0.01
+        let steps = max(Int(duration / stepDelay), 3)
+        let waypoints = (1...steps).map { i -> CGPoint in
+            let progress = Double(i) / Double(steps)
+            return CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+        }
+
         guard touchDown(at: start) else { return false }
         fingerprints.beginTrackingFingerprints(at: [start])
         onGestureMove?([start])
 
-        let stepDelay: TimeInterval = 0.01 // 10ms between phases (matches KIF)
-        let steps = max(Int(duration / stepDelay), 3)
-
-        for i in 1...steps {
-            let progress = Double(i) / Double(steps)
-            let point = CGPoint(
-                x: start.x + progress * (end.x - start.x),
-                y: start.y + progress * (end.y - start.y)
-            )
+        for point in waypoints {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
@@ -166,24 +181,27 @@ final class TheSafecracker {
 
     /// Simulate a drag gesture between two screen points.
     /// Slower than swipe — used for reordering, slider adjustment, etc.
+    /// Pre-computes all waypoints before the gesture loop.
     /// - Parameters:
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the drag (seconds, default 0.5)
     func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+        let stepDelay: TimeInterval = 0.01
+        let steps = max(Int(duration / stepDelay), 5)
+        let waypoints = (1...steps).map { i -> CGPoint in
+            let progress = Double(i) / Double(steps)
+            return CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+        }
+
         guard touchDown(at: start) else { return false }
         fingerprints.beginTrackingFingerprints(at: [start])
         onGestureMove?([start])
 
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-
-        for i in 1...steps {
-            let progress = Double(i) / Double(steps)
-            let point = CGPoint(
-                x: start.x + progress * (end.x - start.x),
-                y: start.y + progress * (end.y - start.y)
-            )
+        for point in waypoints {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
@@ -195,17 +213,15 @@ final class TheSafecracker {
     }
 
     /// Simulate drawing along a path of waypoints.
+    /// Pre-computes all interpolated waypoints at uniform speed before
+    /// the gesture loop begins.
     /// - Parameters:
     ///   - points: Ordered array of screen coordinates to trace through
     ///   - duration: Total duration of the gesture in seconds
     func drawPath(points: [CGPoint], duration: TimeInterval) async -> Bool {
         guard points.count >= 2 else { return false }
 
-        guard touchDown(at: points[0]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [points[0]])
-        onGestureMove?([points[0]])
-
-        // Calculate total path length for even speed distribution
+        // Pre-compute: calculate segment lengths and total path length
         var totalLength: CGFloat = 0
         var segmentLengths: [CGFloat] = []
         for i in 1..<points.count {
@@ -217,34 +233,40 @@ final class TheSafecracker {
         }
 
         guard totalLength > 0 else {
-            fingerprints.endTrackingFingerprints()
+            // Degenerate path — just tap the start point
+            guard touchDown(at: points[0]) else { return false }
             return touchUp()
         }
 
         let stepDelay: TimeInterval = 0.01
         let totalSteps = max(Int(duration / stepDelay), points.count)
 
-        // Walk the polyline at uniform speed
-        for step in 1...totalSteps {
+        // Pre-compute: build full waypoint array at uniform speed
+        let waypoints = (1...totalSteps).map { step -> CGPoint in
             let progress = CGFloat(step) / CGFloat(totalSteps)
             let targetDist = progress * totalLength
 
-            // Find which segment this distance falls on
             var accumulated: CGFloat = 0
-            var point = points[points.count - 1]
             for i in 0..<segmentLengths.count {
                 let segLen = segmentLengths[i]
                 if accumulated + segLen >= targetDist {
                     let segProgress = (targetDist - accumulated) / segLen
-                    point = CGPoint(
+                    return CGPoint(
                         x: points[i].x + segProgress * (points[i+1].x - points[i].x),
                         y: points[i].y + segProgress * (points[i+1].y - points[i].y)
                     )
-                    break
                 }
                 accumulated += segLen
             }
+            return points[points.count - 1]
+        }
 
+        // Execute gesture with pre-computed path
+        guard touchDown(at: points[0]) else { return false }
+        fingerprints.beginTrackingFingerprints(at: [points[0]])
+        onGestureMove?([points[0]])
+
+        for point in waypoints {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
@@ -267,36 +289,120 @@ final class TheSafecracker {
         return delegate is UIKeyInput
     }
 
+    /// Whether UIKeyboardImpl reports hardware keyboard mode.
+    /// Mirrors KIF's `hasHardwareKeyboard` — checks the `inHardwareKeyboardMode`
+    /// property on the shared UIKeyboardImpl.
+    func isInHardwareKeyboardMode() -> Bool {
+        guard let impl = getKeyboardImpl() else { return false }
+        guard let msg = ObjCRuntime.message("isInHardwareKeyboardMode", to: impl) else { return false }
+        let result: AnyObject? = msg.call()
+        return (result as? NSNumber)?.boolValue ?? false
+    }
+
+    /// Whether UIKeyboardImpl has a delegate (a responder accepting key input).
+    /// Mirrors KIF's `hasKeyInputResponder`.
+    func hasKeyInputResponder() -> Bool {
+        guard let impl = getKeyboardImpl() else { return false }
+        let delegate: AnyObject? = ObjCRuntime.message("delegate", to: impl)?.call()
+        return delegate != nil
+    }
+
     /// Type text by injecting characters into the active keyboard.
-    /// Uses UIKeyboardImpl.addInputString: — the same approach KIF uses.
-    /// The keyboard must already be visible (a text field must be focused).
+    /// Prefers UIKeyboardImpl.addInputString: (KIF's approach) when the software
+    /// keyboard is active. Falls back to UIKeyInput.insertText on the first
+    /// responder when a hardware keyboard is attached and UIKeyboardImpl is
+    /// unavailable.
     /// - Parameters:
     ///   - text: The text to type, character by character
     ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
     func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let impl = getKeyboardImpl(),
-              let msg = ObjCRuntime.message("addInputString:", to: impl) else { return false }
+        if let impl = getKeyboardImpl(),
+           let msg = ObjCRuntime.message("addInputString:", to: impl) {
+            for char in text {
+                msg.call(String(char) as AnyObject)
+                drainKeyboardTaskQueue(impl)
+                try? await Task.sleep(nanoseconds: interKeyDelay)
+            }
+            return true
+        }
+
+        guard let input = firstResponderKeyInput() else { return false }
         for char in text {
-            msg.call(String(char) as AnyObject)
+            input.insertText(String(char))
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
     }
 
     /// Delete characters by sending delete events to the active keyboard.
-    /// Uses UIKeyboardImpl.deleteFromInput — the same approach KIF uses.
+    /// Prefers UIKeyboardImpl.deleteFromInput (KIF's approach) when the software
+    /// keyboard is active. Falls back to UIKeyInput.deleteBackward on the first
+    /// responder when a hardware keyboard is attached.
     /// - Parameters:
     ///   - count: Number of characters to delete
     ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
     func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
-        guard let impl = getKeyboardImpl(),
-              let msg = ObjCRuntime.message("deleteFromInput", to: impl) else { return false }
+
+        if let impl = getKeyboardImpl(),
+           let msg = ObjCRuntime.message("deleteFromInput", to: impl) {
+            for _ in 0..<count {
+                msg.call()
+                drainKeyboardTaskQueue(impl)
+                try? await Task.sleep(nanoseconds: interKeyDelay)
+            }
+            return true
+        }
+
+        guard let input = firstResponderKeyInput() else { return false }
         for _ in 0..<count {
-            msg.call()
+            input.deleteBackward()
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
+    }
+
+    /// Clear all text in the focused text input using UITextInput select-all + delete.
+    /// Improves on KIF's `clearTextFromElement:` by using Swift's UITextInput protocol
+    /// directly — works with UITextField, UITextView, and any custom UITextInput
+    /// conformer without type-checking each one. Falls back to counting characters
+    /// and calling deleteBackward if the first responder only conforms to UIKeyInput.
+    func clearText() async -> Bool {
+        // Prefer UITextInput: select all text then delete in one shot
+        if let textInput = firstResponderTextInput() {
+            let start = textInput.beginningOfDocument
+            let end = textInput.endOfDocument
+            guard let fullRange = textInput.textRange(from: start, to: end) else { return true }
+            if fullRange.isEmpty { return true }
+            textInput.selectedTextRange = fullRange
+            // Brief yield so the selection registers before delete
+            try? await Task.sleep(nanoseconds: 50_000_000)
+
+            if let impl = getKeyboardImpl() {
+                ObjCRuntime.message("deleteFromInput", to: impl)?.call()
+                drainKeyboardTaskQueue(impl)
+            } else {
+                textInput.deleteBackward()
+            }
+            return true
+        }
+
+        // Fallback: UIKeyInput only — count characters and delete individually
+        guard let input = firstResponderKeyInput() else { return false }
+        guard input.hasText else { return true }
+
+        // Read text length from the view's text property if available
+        let textLength: Int
+        if let textField = input as? UITextField {
+            textLength = textField.text?.count ?? 0
+        } else if let textView = input as? UITextView {
+            textLength = textView.text?.count ?? 0
+        } else {
+            // No way to know the length — delete a generous amount
+            textLength = 10_000
+        }
+
+        return await deleteText(count: textLength)
     }
 
     // MARK: - Edit Actions (via Responder Chain)
@@ -334,15 +440,66 @@ final class TheSafecracker {
         return nil
     }
 
+    // MARK: - Public: Text Input Readiness
+
+    /// Whether a text input is ready to accept typed characters.
+    /// Mirrors KIF's pre-flight gate: proceeds when the software keyboard is
+    /// visible OR the simulator is in hardware keyboard mode, AND
+    /// UIKeyboardImpl has an active delegate. Falls back to checking for a
+    /// UIKeyInput first responder if UIKeyboardImpl is unavailable entirely.
+    func hasActiveTextInput() -> Bool {
+        let keyboardOrHardware = isKeyboardVisible() || isInHardwareKeyboardMode()
+        if keyboardOrHardware && hasKeyInputResponder() { return true }
+        return firstResponderKeyInput() != nil
+    }
+
     // MARK: - Private: Keyboard Helpers
 
-    /// Get the UIKeyboardImpl active instance via ObjC runtime.
-    /// UIKeyboardImpl is a private class that manages the keyboard input system.
-    /// addInputString: injects text directly, bypassing the need to find and tap
-    /// individual key views (which aren't accessible since iOS renders the keyboard
-    /// in a remote process).
+    /// Get the UIKeyboardImpl shared instance via ObjC runtime.
+    /// Uses `sharedInstance` (not `activeInstance`) to match KIF — the shared
+    /// instance stays alive even when a hardware keyboard is connected, while
+    /// `activeInstance` returns nil in hardware keyboard mode.
     private func getKeyboardImpl() -> AnyObject? {
-        ObjCRuntime.classMessage("activeInstance", on: "UIKeyboardImpl")?.call()
+        ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")?.call()
+    }
+
+    /// Drain UIKeyboardImpl's internal task queue after injecting a character.
+    /// Matches KIF's `[taskQueue waitUntilAllTasksAreFinished]` pattern —
+    /// ensures the keyboard has finished processing before the next keystroke.
+    private func drainKeyboardTaskQueue(_ impl: AnyObject) {
+        guard let taskQueue: AnyObject = ObjCRuntime.message("taskQueue", to: impl)?.call() else { return }
+        ObjCRuntime.message("waitUntilAllTasksAreFinished", to: taskQueue)?.call()
+    }
+
+    /// Find the current first responder if it conforms to UIKeyInput.
+    /// Used as a fallback when UIKeyboardImpl is unavailable (hardware keyboard).
+    private func firstResponderKeyInput() -> (any UIKeyInput)? {
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        for window in allWindows {
+            if let responder = findFirstResponder(in: window),
+               let input = responder as? (any UIKeyInput) {
+                return input
+            }
+        }
+        return nil
+    }
+
+    /// Find the current first responder if it conforms to UITextInput.
+    /// UITextInput provides select-all + delete for clearing fields —
+    /// a level above UIKeyInput that knows about text ranges and selection.
+    private func firstResponderTextInput() -> (any UITextInput)? {
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        for window in allWindows {
+            if let responder = findFirstResponder(in: window),
+               let input = responder as? (any UITextInput) {
+                return input
+            }
+        }
+        return nil
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
@@ -401,6 +558,21 @@ final class TheSafecracker {
         for i in activeTouches.indices {
             let windowPoint = window.convert(points[i], from: nil)
             activeTouches[i].update(phase: .moved, location: windowPoint)
+        }
+
+        guard let event = TouchEvent(touches: activeTouches) else { return false }
+        event.send()
+        return true
+    }
+
+    /// Send a stationary event for all active touches without moving them.
+    /// Used during long press to keep gesture recognizers processing (matches KIF).
+    @discardableResult
+    private func sendStationary() -> Bool {
+        guard !activeTouches.isEmpty else { return false }
+
+        for i in activeTouches.indices {
+            activeTouches[i].update(phase: .stationary)
         }
 
         guard let event = TouchEvent(touches: activeTouches) else { return false }

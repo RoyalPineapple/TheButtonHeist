@@ -134,4 +134,64 @@ final class ClientMessageTests: XCTestCase {
             XCTFail("Expected typeText, got \(decoded)")
         }
     }
+
+    // MARK: - SetPasteboard Tests
+
+    func testSetPasteboardRoundTrip() throws {
+        let message = ClientMessage.setPasteboard(SetPasteboardTarget(text: "clipboard content"))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .setPasteboard(let target) = decoded {
+            XCTAssertEqual(target.text, "clipboard content")
+        } else {
+            XCTFail("Expected setPasteboard, got \(decoded)")
+        }
+    }
+
+    func testSetPasteboardEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "pb-set",
+            message: .setPasteboard(SetPasteboardTarget(text: "hello"))
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "pb-set")
+        if case .setPasteboard(let target) = decoded.message {
+            XCTAssertEqual(target.text, "hello")
+        } else {
+            XCTFail("Expected setPasteboard, got \(decoded.message)")
+        }
+    }
+
+    // MARK: - GetPasteboard Tests
+
+    func testGetPasteboardRoundTrip() throws {
+        let message = ClientMessage.getPasteboard
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .getPasteboard = decoded {
+            // pass
+        } else {
+            XCTFail("Expected getPasteboard, got \(decoded)")
+        }
+    }
+
+    func testGetPasteboardEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "pb-get",
+            message: .getPasteboard
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "pb-get")
+        if case .getPasteboard = decoded.message {
+            // pass
+        } else {
+            XCTFail("Expected getPasteboard, got \(decoded.message)")
+        }
+    }
 }

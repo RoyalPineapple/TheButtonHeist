@@ -58,6 +58,8 @@ extension ClientMessage {
         case .touchDrawBezier: return .touchDrawBezier
         case .typeText: return .typeText
         case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .getPasteboard: return .getPasteboard
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
         case .scrollToEdge: return .scrollToEdge
@@ -73,7 +75,7 @@ extension ClientMessage {
     fileprivate var hasPayload: Bool {
         switch self {
         case .clientHello, .requestInterface, .subscribe, .unsubscribe, .ping, .status,
-             .resignFirstResponder, .requestScreen, .stopRecording:
+             .resignFirstResponder, .getPasteboard, .requestScreen, .stopRecording:
             return false
         default:
             return true
@@ -89,6 +91,7 @@ extension ClientMessage {
         case .ping: return .ping
         case .status: return .status
         case .resignFirstResponder: return .resignFirstResponder
+        case .getPasteboard: return .getPasteboard
         case .requestScreen: return .requestScreen
         case .stopRecording: return .stopRecording
         default: return nil
@@ -109,6 +112,8 @@ extension ClientMessage {
             return .performCustomAction(try CustomActionTarget(from: decoder))
         case .editAction:
             return .editAction(try EditActionTarget(from: decoder))
+        case .setPasteboard:
+            return .setPasteboard(try SetPasteboardTarget(from: decoder))
         case .watch:
             return .watch(try WatchPayload(from: decoder))
         default:
@@ -198,6 +203,8 @@ extension ClientMessage {
         case .performCustomAction(let payload):
             try payload.encode(to: encoder)
         case .editAction(let payload):
+            try payload.encode(to: encoder)
+        case .setPasteboard(let payload):
             try payload.encode(to: encoder)
         case .watch(let payload):
             try payload.encode(to: encoder)

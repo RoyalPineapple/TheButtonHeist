@@ -190,6 +190,10 @@ final class ReplSession {
           select / select_all         Selection actions
           dismiss_keyboard            Dismiss keyboard
 
+        Pasteboard:
+          set_pasteboard text="hello"  Write text to pasteboard
+          get_pasteboard               Read text from pasteboard
+
         Recording:
           record                      Start recording
           stop_recording              Stop and retrieve recording
