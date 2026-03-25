@@ -1,0 +1,52 @@
+You are operating an iOS test app called AccessibilityTestApp. Complete the following 5-screen workflow from the root screen. Finish each screen completely before navigating back to root and moving to the next.
+
+SCREEN 1: Todo List
+1. Navigate to "Todo List"
+2. Add a todo item titled "{{TODO_A}}"
+3. Add a todo item titled "{{TODO_B}}"
+4. Add a todo item titled "{{TODO_C}}"
+5. Mark "{{TODO_B}}" as completed by tapping its row
+6. Switch the filter to "Active"
+7. Read the item count label
+8. Navigate back to the root screen
+
+SCREEN 2: Settings
+9. Navigate to "Settings"
+10. Set Color Scheme to "Dark"
+11. Set Accent Color to "Purple"
+12. Set Text Size to "Large"
+13. Read all four Current Values labels (color scheme, accent color, text size, username)
+14. Navigate back to the root screen
+
+SCREEN 3: Long List
+15. Navigate to "Long List"
+16. Pull down or tap to reveal the search bar, then search for "Sprocket"
+17. Tap the first item in the filtered results
+18. Read the "Selected:" label that appears showing which item was tapped
+19. Clear the search field
+20. Search for "Gadget"
+21. Read the item count label at the bottom (shows how many items match)
+22. Navigate back to the root screen
+
+SCREEN 4: Calculator
+23. Navigate to "Calculator"
+24. Clear the display, then compute ({{RAND3_A}} × {{RAND3_B}}) ÷ {{RAND2_C}} by pressing: {{RAND3_A}}, multiply, {{RAND3_B}}, equals, divide, {{RAND2_C}}, equals
+25. Read the calculator display
+26. Navigate back to the root screen
+
+SCREEN 5: Adjustable Controls
+27. Navigate to "Controls Demo", then to "Adjustable Controls"
+28. Increment the slider 7 times (it starts at 0, each increment adds 10, target is 70)
+29. Increment the stepper to 5 (it starts at 0, each increment adds 1)
+30. Read the "Last Action" label
+
+Report your findings in exactly this format:
+active_count: <number from the todo item count label after filtering to Active>
+color_scheme: <current color scheme value>
+accent_color: <current accent color value>
+text_size: <current text size value>
+username: <current username value>
+selected_item: <text shown in the Selected label after tapping a Sprocket item>
+gadget_count: <number of items shown in the count label after searching for Gadget>
+display: <exact calculator display text>
+last_action: <exact text of the Last Action label in Adjustable Controls>

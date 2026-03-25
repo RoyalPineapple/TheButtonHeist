@@ -1,0 +1,4 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to the "Todo List" section. Add three items in order: first "{{TODO_A}}", then "{{TODO_B}}", then "{{TODO_C}}" — use the text field and add button for each. After all three items are added, mark "{{TODO_B}}" as completed by tapping its row to toggle its completion state. Then switch the list filter to "Active" using the segmented filter picker at the top of the screen (the picker has options like All, Active, Completed). Once the Active filter is selected, read the item count label that shows how many items are currently displayed. Report the number shown in that label.
+
+Report your findings in exactly this format:
+active_count: <number shown in the item count label>

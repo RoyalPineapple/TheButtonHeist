@@ -1,0 +1,5 @@
+You are operating an iOS test app called AccessibilityTestApp. This task verifies that a "Show Completed Todos" setting correctly hides and reveals completed items. Follow these steps precisely: (1) Navigate to "Todo List" and add an item called "Test item". (2) Navigate back to root, then to "Settings", and turn OFF the "Show Completed Todos" toggle. (3) Navigate back to root, then to "Todo List". Mark "Test item" as completed by tapping its row. Check whether "Test item" is still visible in the list — with the setting off, a completed item should disappear. Record what you observe. (4) Navigate back to root, then to "Settings", and turn "Show Completed Todos" back ON. (5) Navigate back to root, then to "Todo List". Check whether "Test item" is now visible again — with the setting on, the completed item should reappear. Record what you observe. Report whether each transition behaved correctly.
+
+Report your findings in exactly this format:
+disappeared_after_completing: <yes or no>
+reappeared_after_reenabling: <yes or no>

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "env": {
+        "BUTTONHEIST_TOKEN": "INJECTED-TOKEN-12345",
+        "BUTTONHEIST_DEVICE": "127.0.0.1:1455"
+      }
+    }
+  }
+}

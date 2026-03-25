@@ -1,0 +1,5 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to the "Notes" section. Create a note titled "Meeting Notes" by typing the title into the note title field and tapping the Add button. Then create a second note titled "Shopping List" the same way. Next, tap the "Shopping List" row to open its detail view. In the detail view, type "Eggs, Bread, Milk" into the note body editor. Then navigate back to the notes list. Once back on the list, delete "Meeting Notes" by using its Delete custom accessibility action (do not swipe to delete — use the accessibility action). After the deletion, count how many notes remain in the list and read the title of the remaining note.
+
+Report your findings in exactly this format:
+notes_remaining: <number of notes in the list after deletion>
+remaining_title: <title of the note still in the list>

@@ -1,0 +1,4 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Long List". The list contains many items — scroll down until you find and can activate item number 73, then tap it. After tapping item 73, navigate back to the root screen. From root, navigate to "Corner Scroll". On the Corner Scroll screen, scroll to the bottom-right corner of the content area. Once you have scrolled to the bottom-right corner, read the exact text of the element located at the bottom-right corner of the scrollable content. Report that text.
+
+Report your findings in exactly this format:
+bottom_right_text: <exact text of the bottom-right corner element>

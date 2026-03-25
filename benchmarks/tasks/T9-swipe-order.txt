@@ -1,0 +1,5 @@
+You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Long List". Add the first 3 items to the order by using the "Add to Order" action on each row. After adding all 3, read the order count label at the bottom of the screen and the Order section header text.
+
+Report your findings in exactly this format:
+order_count: <number from the order count label>
+order_header: <text of the Order section header>
