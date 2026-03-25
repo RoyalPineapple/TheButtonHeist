@@ -93,7 +93,7 @@ Each `InteractionEvent` contains:
 - `timestamp` (seconds since recording start, from `recordingElapsed`)
 - `command` (the original `ClientMessage`)
 - `result` (the `ActionResult`)
-- `interfaceBefore` / `interfaceAfter` (full `Interface` snapshots)
+- `interfaceDelta: InterfaceDelta?` (compact delta describing what changed in the hierarchy)
 
 On recording completion, the log is included in `RecordingPayload.interactionLog` (nil if empty).
 
@@ -155,8 +155,7 @@ let videoData = try? Data(contentsOf: url)
 - If reading the completed file fails, `deliverError(.finalizationFailed)` is called correctly
 - The error detail from the failed read is lost though
 
-**Interaction log payload size is unbounded**
-- Each `InteractionEvent` includes full `interfaceBefore` and `interfaceAfter` snapshots
-- A long recording with many interactions could produce a very large `interactionLog` array
-- The 7MB file size cap only applies to video data, not the JSON-encoded interaction log
-- If the interaction log is large, the total `RecordingPayload` could exceed the 10MB buffer limit
+**Interaction log payload size is bounded** (FIXED)
+- Each `InteractionEvent` uses a compact `InterfaceDelta?` instead of full before/after `Interface` snapshots
+- The interaction log is capped at 500 events
+- The 7MB file size cap applies to video data; the compact delta format keeps the JSON-encoded interaction log small

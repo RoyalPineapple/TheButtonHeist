@@ -30,7 +30,7 @@ graph TB
 
     subgraph ios["iOS Device"]
         IJ["TheInsideJob<br>Framework"] --> NS["NetService<br>(Bonjour)"]
-        IJ --> SS["SimpleSocketServer<br>(TCP)"]
+        IJ --> SS["ServerTransport<br>(TCP)"]
         IJ --> A11y["A11y Parser"]
         IJ --> TSC["TheSafecracker<br>(Gestures)"]
     end
@@ -45,8 +45,8 @@ graph TB
 **Key Types**:
 - `RequestEnvelope` - Wraps `ClientMessage` with an optional `requestId` for response correlation
 - `ResponseEnvelope` - Wraps `ServerMessage` echoing the `requestId` back; push broadcasts use `requestId: nil`
-- `ClientMessage` - Messages from client to server (29 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, and watch)
-- `ServerMessage` - Messages from server to client (15 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
+- `ClientMessage` - Messages from client to server (31 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, and watch)
+- `ServerMessage` - Messages from server to client (18 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
@@ -135,7 +135,7 @@ When the framework loads:
 - Network callbacks dispatch to main actor
 - Socket accept/read on dedicated GCD queues
 
-**TLS Server (SimpleSocketServer)**:
+**TLS Server (ServerTransport)**:
 - Network framework implementation using `NWListener` and `NWConnection` with `NWProtocolTLS`
 - IPv6 dual-stack (accepts both IPv4 and IPv6)
 - Binds to all interfaces (`::`) for Bonjour compatibility
@@ -143,7 +143,7 @@ When the framework loads:
 - Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.0)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.1)
 
 ### TheSafecracker (Touch Gesture & Text Input System)
 
@@ -214,7 +214,7 @@ TheSafecracker (stateful, @MainActor)
 - Session locking: single-driver exclusivity with release timer
   - **Release timer** (`INSIDEJOB_SESSION_TIMEOUT`, default 30s): starts when all TCP connections drop
 - Track active session driver identity and connections
-- **Observer support**: Track read-only observer connections (`observerClients`). Observers are auto-approved by default (no token required). Set `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (Info.plist) to require a valid token for watch connections.
+- **Observer support**: Track read-only observer connections (`observerClients`). Observers require a valid token by default (`restrictWatchers` defaults to `true`). Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (Info.plist) to allow unauthenticated watch connections.
 
 **Integration**: TheMuscle communicates back to TheInsideJob via closures for socket operations (send, disconnect, markAuthenticated) and post-auth handling (onClientAuthenticated).
 
@@ -390,7 +390,7 @@ Agent → MCP tool call: activate {identifier: "loginButton"}
 ```mermaid
 sequenceDiagram
     participant IJ as TheInsideJob
-    participant SS as SimpleSocketServer
+    participant SS as ServerTransport
     participant NS as NetService (Bonjour)
     participant HC as TheMastermind
     participant NB as NWBrowser
@@ -473,10 +473,7 @@ sequenceDiagram
     WC->>IJ: watch(token:"")
     Note over IJ: TheMuscle routes to handleWatchRequest
 
-    alt Default (INSIDEJOB_RESTRICT_WATCHERS not set)
-        TM-->>IJ: auto-approved
-        IJ-->>WC: info(ServerInfo)
-    else INSIDEJOB_RESTRICT_WATCHERS=1
+    alt Default (restrictWatchers=true)
         alt Valid token
             TM-->>IJ: approved
             IJ-->>WC: info(ServerInfo)
@@ -484,6 +481,9 @@ sequenceDiagram
             IJ-->>WC: authFailed
             IJ-xWC: disconnect
         end
+    else INSIDEJOB_RESTRICT_WATCHERS=0
+        TM-->>IJ: auto-approved
+        IJ-->>WC: info(ServerInfo)
     end
 
     Note over WC: Auto-subscribed to broadcasts
@@ -582,7 +582,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 **Summary**:
 - Protocol version: 6.1
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
-- Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections are auto-approved by default.
+- Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections require a token by default (`restrictWatchers` defaults to `true`).
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.
 - Discovery: Bonjour/mDNS (`_buttonheist._tcp`)
 - Encoding: Newline-delimited JSON (UTF-8)
@@ -638,7 +638,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 | `INSIDEJOB_TOKEN` | Auth token for client authentication | auto-generated UUID |
 | `INSIDEJOB_ID` | Human-readable instance identifier | first 8 chars of session UUID |
 | `INSIDEJOB_SESSION_TIMEOUT` | Session release timeout in seconds after all connections drop (min: 1) | 30 |
-| `INSIDEJOB_RESTRICT_WATCHERS` / `InsideJobRestrictWatchers` | Set to `"1"` (env) or `true` (plist) to require a valid token for watch (observer) connections | not set (observers auto-approved) |
+| `INSIDEJOB_RESTRICT_WATCHERS` / `InsideJobRestrictWatchers` | Controls whether watch (observer) connections require a valid token. Set to `"0"` (env) or `false` (plist) to allow unauthenticated observers. | `true` (observers require token) |
 | `INSIDEJOB_SCOPE` | Comma-separated list of allowed connection scopes: `simulator`, `usb`, `network`. Controls which connection sources the server accepts. | `simulator,usb` |
 
 ### Info.plist Keys (fallback)

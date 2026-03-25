@@ -81,7 +81,7 @@ graph TD
 
 ```mermaid
 flowchart TD
-    Receive["handleClientMessage - (22-case switch)"]
+    Receive["handleClientMessage - (31-message dispatch)"]
 
     Receive --> Auth["subscribe / ping"]
     Receive --> Query["requestInterface / requestScreen / waitForIdle"]
@@ -146,8 +146,8 @@ insideJobLogger.info("Auth token: \(self.muscle.authToken)")
 The full UUID token is emitted to the system log at `info` level. Any process with log access can read it.
 
 **`handleClientMessage` cyclomatic complexity** (`TheInsideJob.swift:268`)
-- 22-case switch statement with `swiftlint:disable:next cyclomatic_complexity` suppression
-- Each case delegates to a helper, so the individual cases are thin, but the method is a dense routing table
+- Top-level switch handles protocol and observation messages, then delegates interaction dispatch to `TheInsideJob+Dispatch.swift` which routes 31 message types across 3 sub-methods
+- Each case delegates to a helper, so the individual cases are thin, but the full dispatch flow spans multiple files
 
 ### MEDIUM PRIORITY
 

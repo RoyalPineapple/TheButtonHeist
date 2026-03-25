@@ -56,7 +56,7 @@ Both CLI and MCP are thin shells. All business logic lives in `TheFence` and bel
 
 ## Wire Protocol
 
-Protocol v6.0. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
+Protocol v6.1. Request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`. Messages are JSON over TLS-encrypted TCP. Push notifications (interface updates, interaction broadcasts) use `requestId: nil`. See `docs/WIRE-PROTOCOL.md` for the full spec.
 
 ## Testing
 

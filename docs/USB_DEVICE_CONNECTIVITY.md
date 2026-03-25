@@ -125,12 +125,12 @@ lsof -i -P -n | grep CoreDev | grep -oE '\[fd[0-9a-f:]+::[12]\]' | head -1
 ```bash
 # Using netcat (must authenticate first)
 nc -6 "fd9a:6190:eed7::1" <port>   # use port from `buttonheist list --format json`
-# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
-# Send: {"protocolVersion":"6.0","requestId":null,"type":"clientHello"}
-# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
-# Send: {"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
-# Server sends: {"protocolVersion":"6.0","requestId":null,"type":"info","payload":{...}}
-# Send: {"protocolVersion":"6.0","requestId":null,"type":"requestInterface"}
+# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"serverHello"}
+# Send: {"protocolVersion":"6.1","requestId":null,"type":"clientHello"}
+# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"authRequired"}
+# Send: {"protocolVersion":"6.1","requestId":null,"type":"authenticate","payload":{"token":"your-token"}}
+# Server sends: {"protocolVersion":"6.1","requestId":null,"type":"info","payload":{...}}
+# Send: {"protocolVersion":"6.1","requestId":null,"type":"requestInterface"}
 ```
 
 ## Message Protocol
@@ -139,32 +139,32 @@ Messages are newline-delimited JSON using explicit `type` and optional `payload`
 
 ### Authenticate
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"authenticate","payload":{"token":"your-secret-token"}}
+{"protocolVersion":"6.1","requestId":null,"type":"authenticate","payload":{"token":"your-secret-token"}}
 ```
 
 ### Request Interface
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"requestInterface"}
+{"protocolVersion":"6.1","requestId":null,"type":"requestInterface"}
 ```
 
 ### Activate Element (by order index)
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"activate","payload":{"order":6}}
+{"protocolVersion":"6.1","requestId":null,"type":"activate","payload":{"order":6}}
 ```
 
 ### Activate Element (by identifier)
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"activate","payload":{"identifier":"loginButton"}}
+{"protocolVersion":"6.1","requestId":null,"type":"activate","payload":{"identifier":"loginButton"}}
 ```
 
 ### Tap at Coordinates
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"touchTap","payload":{"pointX":196.5,"pointY":659}}
+{"protocolVersion":"6.1","requestId":null,"type":"touchTap","payload":{"pointX":196.5,"pointY":659}}
 ```
 
 ### Ping
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"ping"}
+{"protocolVersion":"6.1","requestId":null,"type":"ping"}
 ```
 
 ## Implementation Details
