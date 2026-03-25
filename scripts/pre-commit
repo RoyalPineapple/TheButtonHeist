@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Tuist project freshness check ---
+if command -v tuist >/dev/null 2>&1; then
+    tuist generate --no-open >/dev/null 2>&1
+    dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
+    if [[ -n "$dirty" ]]; then
+        echo "error: tuist generate produced uncommitted project changes:"
+        echo "$dirty"
+        echo "Stage them (git add -- '*.pbxproj' '*.xcworkspacedata') or investigate."
+        exit 1
+    fi
+fi
+
+# --- SwiftLint ---
 if ! command -v swiftlint >/dev/null 2>&1; then
     echo "warning: SwiftLint not installed, skipping pre-commit lint"
     exit 0
