@@ -169,13 +169,16 @@ public enum ClientMessage: Codable, Sendable {
 
 /// Target for element actions
 public struct ActionTarget: Codable, Sendable {
-    /// Element identifier
+    /// Developer-provided accessibility identifier (most stable)
     public let identifier: String?
-    /// Element order (alternative to identifier)
+    /// Synthesized stable ID from traits + label (stable across reorders)
+    public let heistId: String?
+    /// Element order in current snapshot (positional, fragile)
     public let order: Int?
 
-    public init(identifier: String? = nil, order: Int? = nil) {
+    public init(identifier: String? = nil, heistId: String? = nil, order: Int? = nil) {
         self.identifier = identifier
+        self.heistId = heistId
         self.order = order
     }
 }

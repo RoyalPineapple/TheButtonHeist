@@ -133,25 +133,25 @@ struct ButtonHeistMCPServer {
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
     private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
         var content: [Tool.Content] = []
-        var payload = response.jsonDict() ?? [:]
 
-        if let pngData = payload["pngData"] as? String {
+        // Screenshots: embed as image content
+        if case .screenshotData(let pngData, _, _) = response {
             content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
-            payload["pngData"] = "<omitted base64 png data>"
+        } else if case .screenshot = response {
+            // File-based screenshot — handled by compact text below
         }
 
-        if let videoData = payload["videoData"] as? String {
-            payload["videoData"] = "<omitted base64 video data (\(videoData.count) chars)>"
+        let isError: Bool
+        if case .error = response {
+            isError = true
+        } else if case .action(let result, _) = response, !result.success {
+            isError = true
+        } else {
+            isError = false
         }
 
-        let isError = (payload["status"] as? String) == "error"
-        content.append(.text(text: try compactJSON(payload), annotations: nil, _meta: nil))
+        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
-    }
-
-    private static func compactJSON(_ object: [String: Any]) throws -> String {
-        let data = try JSONSerialization.data(withJSONObject: object, options: [])
-        return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     private static func errorMessage(_ error: Error) -> String {

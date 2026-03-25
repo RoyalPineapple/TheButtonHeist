@@ -200,7 +200,8 @@ public final class TheFence {
         case .listDevices:
             return .devices(await client.discoverReachableDevices())
         case .getInterface:
-            return .interface(try await handleGetInterface())
+            let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
+            return .interface(try await handleGetInterface(), detail: detail)
         case .getScreen:
             return try await handleGetScreen(args)
         case .waitForIdle:
@@ -291,9 +292,10 @@ public final class TheFence {
 
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
         let identifier = stringArg(dictionary, "identifier")
+        let heistId = stringArg(dictionary, "heistId")
         let order = intArg(dictionary, "order")
-        guard identifier != nil || order != nil else { return nil }
-        return ActionTarget(identifier: identifier, order: order)
+        guard identifier != nil || heistId != nil || order != nil else { return nil }
+        return ActionTarget(identifier: identifier, heistId: heistId, order: order)
     }
 
     // MARK: - Expectation Parsing

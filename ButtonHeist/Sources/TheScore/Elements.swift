@@ -122,6 +122,10 @@ public indirect enum ElementNode: Codable, Equatable, Sendable {
 /// A UI element captured from the accessibility hierarchy.
 /// Wraps the parser's AccessibilityElement with all its rich data in a wire-friendly form.
 public struct HeistElement: Codable, Equatable, Hashable, Sendable {
+    /// Stable, deterministic identifier for targeting this element.
+    /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
+    /// from traits + label (or value as fallback). Unique within a snapshot.
+    public var heistId: String
     /// Element order in the snapshot (0-based)
     public var order: Int
     /// Human-readable description of the element
@@ -149,6 +153,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var actions: [ElementAction]
 
     public init(
+        heistId: String = "",
         order: Int,
         description: String,
         label: String?,
@@ -166,6 +171,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         customContent: [HeistCustomContent]? = nil,
         actions: [ElementAction]
     ) {
+        self.heistId = heistId
         self.order = order
         self.description = description
         self.label = label

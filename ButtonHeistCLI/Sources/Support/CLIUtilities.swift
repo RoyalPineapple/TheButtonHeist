@@ -54,6 +54,10 @@ func outputActionResult(_ result: ActionResult, format: OutputFormat?, quiet: Bo
     case .json:
         writeOutput(formatActionResultJSON(result))
         if !result.success { Darwin.exit(1) }
+    case .compact:
+        let response = FenceResponse.action(result: result)
+        writeOutput(response.compactFormatted())
+        if !result.success { Darwin.exit(1) }
     case .human:
         if result.success {
             if !quiet { logStatus("\(verb) succeeded (method: \(result.method.rawValue))") }

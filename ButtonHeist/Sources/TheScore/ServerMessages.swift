@@ -211,6 +211,9 @@ public struct InterfaceDelta: Codable, Sendable {
     /// Orders of elements that were removed (present for .elementsChanged)
     public let removedOrders: [Int]?
 
+    /// HeistIds of elements that were removed (present for .elementsChanged)
+    public let removedHeistIds: [String]?
+
     /// Value changes on existing elements (present for .valuesChanged or .elementsChanged)
     public let valueChanges: [ValueChange]?
 
@@ -222,6 +225,7 @@ public struct InterfaceDelta: Codable, Sendable {
         elementCount: Int,
         added: [HeistElement]? = nil,
         removedOrders: [Int]? = nil,
+        removedHeistIds: [String]? = nil,
         valueChanges: [ValueChange]? = nil,
         newInterface: Interface? = nil
     ) {
@@ -229,6 +233,7 @@ public struct InterfaceDelta: Codable, Sendable {
         self.elementCount = elementCount
         self.added = added
         self.removedOrders = removedOrders
+        self.removedHeistIds = removedHeistIds
         self.valueChanges = valueChanges
         self.newInterface = newInterface
     }
@@ -244,12 +249,14 @@ public struct InterfaceDelta: Codable, Sendable {
 /// A single value change on an element
 public struct ValueChange: Codable, Sendable {
     public let order: Int
+    public let heistId: String?
     public let identifier: String?
     public let oldValue: String?
     public let newValue: String?
 
-    public init(order: Int, identifier: String?, oldValue: String?, newValue: String?) {
+    public init(order: Int, heistId: String? = nil, identifier: String? = nil, oldValue: String?, newValue: String?) {
         self.order = order
+        self.heistId = heistId
         self.identifier = identifier
         self.oldValue = oldValue
         self.newValue = newValue

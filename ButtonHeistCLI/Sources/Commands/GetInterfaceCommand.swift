@@ -36,6 +36,8 @@ struct GetInterfaceCommand: AsyncParsableCommand {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(interface)
             writeOutput(String(data: data, encoding: .utf8) ?? "{}")
+        case .compact:
+            writeOutput(FenceResponse.compactInterface(interface))
         case .human:
             writeOutput("Elements (\(interface.elements.count)):")
             for element in interface.elements {

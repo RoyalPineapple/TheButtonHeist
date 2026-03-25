@@ -8,11 +8,12 @@ import UIKit
 /// layer movement, animation keys — to answer two questions:
 ///
 /// 1. **Is the UI still moving?** (presentation layer fingerprinting)
-/// 2. **Did the screen change?** (view controller identity)
+/// 2. **Did the view controller change?** (VC identity comparison)
 ///
-/// The accessibility tree is the wire currency; TheTripwire never reads it.
-/// It tells the crew *when* to look and *what kind of change* happened,
-/// so TheBagman knows whether to send a full snapshot or a diff.
+/// The accessibility tree is TheBagman's domain; TheTripwire never reads it.
+/// It tells the crew *when* to look and *whether the VC changed*,
+/// so TheBagman can layer on topology checks (back button, headers) using
+/// its own cached `AccessibilityElement` data.
 @MainActor
 final class TheTripwire {
 
@@ -66,7 +67,7 @@ final class TheTripwire {
         return vc
     }
 
-    /// Did the screen change? Compares VC identity before and after an action.
+    /// Did the view controller change? Compares VC identity before and after an action.
     /// Both nil means no VC either time (no change); one nil means appeared/disappeared (change).
     func isScreenChange(before: ObjectIdentifier?, after: ObjectIdentifier?) -> Bool {
         guard let before, let after else { return before != nil || after != nil }
