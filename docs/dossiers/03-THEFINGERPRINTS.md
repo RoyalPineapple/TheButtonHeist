@@ -72,10 +72,10 @@ flowchart LR
 
 ### LOW PRIORITY
 
-**No configuration to disable fingerprints**
-- Every interaction shows visual feedback
-- For automated testing at high speed, the overlay animations may add slight overhead
-- Not configurable via any env var or plist key
+**Fingerprints can be disabled via configuration**
+- Set `INSIDEJOB_DISABLE_FINGERPRINTS=1` (env var) or `InsideJobDisableFingerprints=true` (Info.plist) to suppress all visual feedback
+- When disabled, all `showFingerprint` / `beginTrackingFingerprints` / `updateTrackingFingerprints` / `endTrackingFingerprints` calls are no-ops
+- Useful for automated testing at high speed where overlay animations add overhead
 
 **Fingerprints captured via drawHierarchy**
 - captureScreenForRecording() draws all windows (including FingerprintWindow)

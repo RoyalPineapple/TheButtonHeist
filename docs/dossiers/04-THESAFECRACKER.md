@@ -214,4 +214,4 @@ private func clampDuration(_ value: TimeInterval) -> TimeInterval {
 **Fingerprint overlays shown for all gesture types**
 - Every successful interaction calls `showFingerprint()` or `beginTrackingFingerprints()`
 - This is intentional for recording visibility but adds visual noise during testing
-- No configuration to disable fingerprints
+- Fingerprints can be disabled via `INSIDEJOB_DISABLE_FINGERPRINTS=1` (env) or `InsideJobDisableFingerprints=true` (plist)

@@ -10,7 +10,7 @@ There are three connection modes:
 
 1. **Token auth** — The client sends a known token via `authenticate`. If it matches, the client is authenticated as a driver.
 2. **UI approval** — The client sends an empty token via `authenticate`. If the server is in UI approval mode, an on-device prompt asks the user to Allow or Deny the connection. On Allow, the server sends the token back so the client can reuse it.
-3. **Watch (observer)** — The client sends `watch` instead of `authenticate`. By default, observers are auto-approved without a token. Observers receive all broadcasts but cannot send commands or claim a session. See [Watch (Observer) Connections](#watch-observer-connections) below.
+3. **Watch (observer)** — The client sends `watch` instead of `authenticate`. By default, observers require a valid token (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to auto-approve observers without a token. Observers receive all broadcasts but cannot send commands or claim a session. See [Watch (Observer) Connections](#watch-observer-connections) below.
 
 ## Token Resolution
 
@@ -161,19 +161,19 @@ Auth messages use the standard newline-delimited JSON format wrapped in envelope
 ### Server → Client (ResponseEnvelope)
 
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"serverHello"}
-{"protocolVersion":"6.0","requestId":null,"type":"authRequired"}
-{"protocolVersion":"6.0","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
-{"protocolVersion":"6.0","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
+{"protocolVersion":"6.1","requestId":null,"type":"serverHello"}
+{"protocolVersion":"6.1","requestId":null,"type":"authRequired"}
+{"protocolVersion":"6.1","requestId":null,"type":"authApproved","payload":{"token":"A1B2C3D4-E5F6-..."}}
+{"protocolVersion":"6.1","requestId":null,"type":"authFailed","payload":"Invalid token. Retry without a token to request a fresh session."}
 ```
 
 ### Client → Server (RequestEnvelope)
 
 ```json
-{"protocolVersion":"6.0","requestId":null,"type":"clientHello"}
-{"protocolVersion":"6.0","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
-{"protocolVersion":"6.0","requestId":"req-2","type":"authenticate","payload":{"token":""}}
-{"protocolVersion":"6.0","requestId":null,"type":"watch","payload":{"token":""}}
+{"protocolVersion":"6.1","requestId":null,"type":"clientHello"}
+{"protocolVersion":"6.1","requestId":"req-1","type":"authenticate","payload":{"token":"my-secret-token"}}
+{"protocolVersion":"6.1","requestId":"req-2","type":"authenticate","payload":{"token":""}}
+{"protocolVersion":"6.1","requestId":null,"type":"watch","payload":{"token":""}}
 ```
 
 An empty token string in `authenticate` requests UI approval. A non-empty token attempts direct authentication. The `watch` message establishes a read-only observer connection.
@@ -182,29 +182,9 @@ An empty token string in `authenticate` requests UI approval. A non-empty token 
 
 Watch connections use a separate auth flow from driver connections. After `serverHello` / `clientHello` / `authRequired`, the client sends `watch` instead of `authenticate`.
 
-### Default (Open Access)
+### Default (Restricted)
 
-By default, watch connections are auto-approved without requiring a token:
-
-```mermaid
-sequenceDiagram
-    participant Observer
-    participant TheInsideJob as TheInsideJob (iOS)
-
-    Observer->>TheInsideJob: TCP Connect
-    TheInsideJob->>Observer: serverHello
-    Observer->>TheInsideJob: clientHello
-    TheInsideJob->>Observer: authRequired
-    Observer->>TheInsideJob: watch(token:"")
-    Note right of TheInsideJob: TheMuscle auto-approves observer
-    TheInsideJob->>Observer: info
-    Note over Observer: Auto-subscribed to broadcasts
-    TheInsideJob-->>Observer: interface, screen, interaction
-```
-
-### Restricted (Token Required)
-
-Set `INSIDEJOB_RESTRICT_WATCHERS=1` (env) or `InsideJobRestrictWatchers=true` (Info.plist) on the server to require a valid token for watch connections:
+By default, watch connections require a valid token (same as driver connections):
 
 ```mermaid
 sequenceDiagram
@@ -219,6 +199,26 @@ sequenceDiagram
     Note right of TheInsideJob: TheMuscle validates token
     TheInsideJob->>Observer: info
     Note over Observer: Auto-subscribed to broadcasts
+    TheInsideJob-->>Observer: interface, screen, interaction
+```
+
+### Open Access (Unrestricted)
+
+Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (Info.plist) on the server to allow unauthenticated watch connections:
+
+```mermaid
+sequenceDiagram
+    participant Observer
+    participant TheInsideJob as TheInsideJob (iOS)
+
+    Observer->>TheInsideJob: TCP Connect
+    TheInsideJob->>Observer: serverHello
+    Observer->>TheInsideJob: clientHello
+    TheInsideJob->>Observer: authRequired
+    Observer->>TheInsideJob: watch(token:"")
+    Note right of TheInsideJob: TheMuscle auto-approves observer
+    TheInsideJob->>Observer: info
+    Note over Observer: Auto-subscribed to broadcasts
 ```
 
 ### Key Differences from Driver Auth
@@ -227,8 +227,8 @@ sequenceDiagram
 |--------|------------------------|-------------------|
 | Session lock | Claims exclusive session | No session lock |
 | Commands | Full command set | Read-only (no commands) |
-| Default auth | Token required | Auto-approved |
-| Restricted auth | N/A | `INSIDEJOB_RESTRICT_WATCHERS=1` / `InsideJobRestrictWatchers` plist |
+| Default auth | Token required | Token required |
+| Unrestricted auth | N/A | `INSIDEJOB_RESTRICT_WATCHERS=0` / `InsideJobRestrictWatchers=false` plist |
 | UI approval | Supported (empty token) | Not supported |
 | Broadcasts | When subscribed | Always (auto-subscribed) |
 
