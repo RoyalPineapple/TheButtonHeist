@@ -27,6 +27,7 @@ extension TheBagman {
         (.allowsDirectInteraction, "allowsDirectInteraction"),
         (.causesPageTurn, "causesPageTurn"),
         (.tabBar, "tabBar"),
+        (UIAccessibilityTraits(rawValue: 0x8000000), "backButton"),
     ]
 
     func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
@@ -48,7 +49,6 @@ extension TheBagman {
             identifier: element.identifier,
             hint: element.hint,
             traits: traitNames(element.traits),
-            rawTraits: element.traits.rawValue,
             frameX: frame.origin.x,
             frameY: frame.origin.y,
             frameWidth: frame.size.width,
@@ -136,8 +136,72 @@ extension TheBagman {
     }
 
     func snapshotElements() -> ElementSnapshot {
-        let elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        var elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        assignHeistIds(&elements)
+        lastSnapshot = elements
         return ElementSnapshot(elements: elements)
+    }
+
+    // MARK: - Stable ID Synthesis
+
+    /// Trait priority for heistId prefix — most descriptive wins.
+    private static let traitPriority: [String] = [
+        "backButton", "searchField", "textField", "adjustable",
+        "button", "link", "image", "header", "tabBar",
+    ]
+
+    /// Assign deterministic `heistId` to each element.
+    /// Developer-provided identifiers take priority. Synthesized IDs use
+    /// `{trait}_{slug}` with label (or value as fallback) for the slug.
+    /// Duplicates get `_1`, `_2` suffixes — all instances, not just the second.
+    private func assignHeistIds(_ elements: inout [HeistElement]) {
+        // Phase 1: generate base IDs
+        for i in elements.indices {
+            if let identifier = elements[i].identifier, !identifier.isEmpty {
+                elements[i].heistId = identifier
+            } else {
+                elements[i].heistId = synthesizeBaseId(elements[i])
+            }
+        }
+
+        // Phase 2: disambiguate duplicates
+        var counts: [String: Int] = [:]
+        for element in elements {
+            counts[element.heistId, default: 0] += 1
+        }
+
+        var seen: [String: Int] = [:]
+        for i in elements.indices {
+            let base = elements[i].heistId
+            if let count = counts[base], count > 1 {
+                let index = seen[base, default: 0] + 1
+                seen[base] = index
+                elements[i].heistId = "\(base)_\(index)"
+            }
+        }
+    }
+
+    private func synthesizeBaseId(_ element: HeistElement) -> String {
+        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }
+            ?? (element.label != nil ? "staticText" : "element")
+
+        let slug = slugify(element.label)
+            ?? slugify(element.value)
+            ?? slugify(element.description)
+
+        if let slug {
+            return "\(traitPrefix)_\(slug)"
+        }
+        return traitPrefix
+    }
+
+    private func slugify(_ text: String?) -> String? {
+        guard let text, !text.isEmpty else { return nil }
+        let slug = text.lowercased()
+            .replacing(/[^a-z0-9]+/, with: "_")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        guard !slug.isEmpty else { return nil }
+        return String(slug.prefix(24))
     }
 
     /// Compare two element snapshots and return a compact delta.

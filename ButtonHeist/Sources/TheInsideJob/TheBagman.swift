@@ -31,6 +31,9 @@ final class TheBagman {
     /// keyed by the parsed element.
     private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
+    /// Last snapshot with assigned heistIds — used for heistId-based targeting.
+    var lastSnapshot: [HeistElement] = []
+
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
 
@@ -100,6 +103,14 @@ final class TheBagman {
         if let identifier = target.identifier {
             return cachedElements.first { $0.identifier == identifier }
         }
+        if let heistId = target.heistId {
+            guard let snapshotEl = lastSnapshot.first(where: { $0.heistId == heistId }) else {
+                return nil
+            }
+            let index = snapshotEl.order
+            guard index >= 0, index < cachedElements.count else { return nil }
+            return cachedElements[index]
+        }
         if let index = target.order, index >= 0, index < cachedElements.count {
             return cachedElements[index]
         }
@@ -128,13 +139,36 @@ final class TheBagman {
     }
 
     func resolveTraversalIndex(for target: ActionTarget) -> Int? {
-        if let index = target.order {
-            return index
-        }
         if let identifier = target.identifier {
             return cachedElements.firstIndex { $0.identifier == identifier }
         }
+        if let heistId = target.heistId {
+            return lastSnapshot.first { $0.heistId == heistId }?.order
+        }
+        if let index = target.order {
+            return index
+        }
         return nil
+    }
+
+    /// Build an error message for a failed element lookup, including substring hints.
+    func elementNotFoundMessage(for target: ActionTarget) -> String {
+        if let heistId = target.heistId {
+            let similar = lastSnapshot
+                .filter { $0.heistId.contains(heistId) || heistId.contains($0.heistId) }
+                .map(\.heistId)
+            if similar.isEmpty {
+                return "Element not found: \"\(heistId)\""
+            }
+            return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
+        }
+        if let identifier = target.identifier {
+            return "Element not found: identifier \"\(identifier)\""
+        }
+        if let order = target.order {
+            return "Element not found: order \(order) (snapshot has \(cachedElements.count) elements)"
+        }
+        return "No element target provided"
     }
 
     /// Resolve a screen point from an element target or explicit coordinates.
@@ -187,7 +221,7 @@ final class TheBagman {
 
         for (window, rootView) in windows {
             let baseIndex = allElements.count
-            let windowTree = parser.parseAccessibilityHierarchy(in: rootView) { element, _, object in
+            let windowTree = parser.parseAccessibilityHierarchy(in: rootView, rotorResultLimit: 0) { element, _, object in
                 newElementObjects[element] = WeakObject(object: object)
             }
             let windowElements = windowTree.flattenToElements()
@@ -220,21 +254,50 @@ final class TheBagman {
     /// TheTripwire handles window access and animation detection.
     let tripwire: TheTripwire
 
+    // MARK: - Topology-Based Screen Change
+
+    /// Private UIAccessibilityTrait for back buttons (bit 27).
+    /// Set by UIKit on navigation bar back button items.
+    private static let backButtonTrait = UIAccessibilityTraits(rawValue: 0x8000000)
+
+    /// Did the accessibility topology change between two element snapshots?
+    /// Checks two signals using the parser's native `AccessibilityElement`:
+    /// - Back button trait appeared or disappeared (navigation push/pop)
+    /// - Header structure changed completely (all header labels replaced)
+    func isTopologyChanged(
+        before: [AccessibilityElement],
+        after: [AccessibilityElement]
+    ) -> Bool {
+        let hadBackButton = before.contains { $0.traits.contains(Self.backButtonTrait) }
+        let hasBackButton = after.contains { $0.traits.contains(Self.backButtonTrait) }
+        if hadBackButton != hasBackButton { return true }
+
+        let beforeHeaders = Set(before.compactMap { $0.traits.contains(.header) ? $0.label : nil })
+        let afterHeaders = Set(after.compactMap { $0.traits.contains(.header) ? $0.label : nil })
+        if !beforeHeaders.isEmpty, !afterHeaders.isEmpty, beforeHeaders.isDisjoint(with: afterHeaders) {
+            return true
+        }
+
+        return false
+    }
+
     // MARK: - Action Result with Delta
 
     /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
     /// Waits for all animations (UIKit and SwiftUI) to settle via presentation layer diffing,
     /// then polls for accessibility tree stability as a safety net.
     ///
-    /// Screen change detection uses view controller identity: if the topmost VC changed,
-    /// it's a screen change (returns full new interface). Otherwise, element-level diffing
-    /// determines layout_changed vs values_changed.
+    /// Screen change detection is three-tier:
+    /// 1. VC identity — UIKit navigation (push/pop, modal present/dismiss)
+    /// 2. Back button trait — private trait bit 27 appeared/disappeared
+    /// 3. Header structure — the set of header labels changed completely
     func actionResultWithDelta(
         success: Bool,
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
         beforeSnapshot: ElementSnapshot,
+        beforeCachedElements: [AccessibilityElement],
         beforeVC: ObjectIdentifier? = nil,
         target: ActionTarget? = nil
     ) async -> ActionResult {
@@ -252,13 +315,10 @@ final class TheBagman {
         let afterTree = refreshAccessibilityData()
         let afterSnapshot = snapshotElements()
 
-        // Screen change gate: VC identity OR accessibility topology (back button + header)
+        // Screen change gate: VC identity OR accessibility topology
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-        let isScreenChange = tripwire.isScreenChange(
-            before: beforeVC, after: afterVC,
-            beforeElements: beforeSnapshot.elements,
-            afterElements: afterSnapshot.elements
-        )
+        let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
+            || isTopologyChanged(before: beforeCachedElements, after: cachedElements)
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
             afterTree: afterTree, isScreenChange: isScreenChange
