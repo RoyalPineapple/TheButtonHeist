@@ -107,7 +107,7 @@ jobs:
         run: tuist install
 
       - name: Boot simulator
-        timeout-minutes: 5
+        timeout-minutes: 3
         run: |
           set -eo pipefail
           # Find the newest available iOS 18.x iPhone 16 Pro and boot it
