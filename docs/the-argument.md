@@ -1,6 +1,6 @@
 # The Button Heist
 
-The accessibility tree is the right interface for AI agents on iOS. In the same 11-step workflow, an agent using The Button Heist consumed 75% less context than one using ios-simulator-mcp — because it gets richer data, interacts semantically, and verifies outcomes without re-reading the tree.
+The accessibility tree is the right interface for AI agents on iOS. It gives agents the autonomy to interact with apps confidently — understanding what each control is, how to interact with it, and whether the interaction worked — without needing to be taught per-app mechanics or second-guess every tap. In benchmarks, that confidence translates to fewer turns, less wasted context, and faster task completion.
 
 The Button Heist is an MCP server backed by an embedded framework that runs inside the app's debug build. It reads `UIAccessibility` objects in-process via the AccessibilitySnapshot parser and interacts with the app using KIF-style touch injection. It works on simulators and real devices.
 
@@ -58,21 +58,15 @@ I ran the same Claude Sonnet agent through the same 11-step workflow (todo list 
 | **Context consumed** | 1,550K | 1,137K | 409K | 381K |
 | **Output tokens** | 6,678 | 3,644 | 2,773 | 3,721 |
 
-Each column adds a capability:
+Each column gives the agent more autonomy:
 
-- **BH base** gives the agent richer data per element (activation points, available actions, interaction flags), so it needs fewer output tokens per action. 26% less context.
-- **Batching** combines multi-step sequences into single MCP calls. 74% less context.
-- **Expectations** let the agent verify outcomes without re-reading the tree. 75% less context, and the agent has structured confirmation that each step succeeded.
+- **BH base**: The agent gets richer data per element — activation points, available actions, interaction flags — so it understands the interface without extra reasoning. It doesn't need prompt instructions explaining how to compute tap coordinates. The accessibility data already tells it how to interact with each element.
+- **Batching**: The agent can express a multi-step intention in a single call and get back what happened at each step. It doesn't have to wait for a round trip between every tap.
+- **Expectations**: The agent can state what it expects to happen and get structured confirmation. It doesn't have to re-read the tree and reason about whether a tap worked — the tool tells it directly.
 
 Batching and expectations both depend on running in-process — batching needs inline deltas between steps, and expectations need the framework to detect screen changes, layout mutations, and value updates without a full tree re-read.
 
-The ios-simulator-mcp agent also needed extra prompt instructions explaining how to compute tap coordinates from element frames. The Button Heist agent didn't — the accessibility data already describes how to interact with each element.
-
-Haiku results (n=3, directional only) showed the same pattern: 63% context reduction with batching.
-
-### Where the tokens go
-
-With ios-simulator-mcp, 99.6% of the agent's token spend is input (accumulated context re-read every turn). With batching and expectations, output tokens make up a larger share of total spend — the agent spends proportionally less on re-reading and more on the task itself.
+The cost savings (26–75% less context depending on configuration) are a side effect of the agent being more confident. Fewer turns means the agent made fewer wrong moves, needed fewer verification checks, and spent less time on mechanics. Haiku results (n=3, directional only) showed the same pattern.
 
 ## How It Compares to ios-simulator-mcp
 
