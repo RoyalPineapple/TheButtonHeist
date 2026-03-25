@@ -1072,13 +1072,32 @@ Outcome signal classifiers attached to Fence requests via the `expect` field. No
 
 Every action implicitly checks delivery (`success == true`). If delivery fails, the response includes an `expectation` object with `met: false` and `status: "expectation_failed"` — no `expect` field needed.
 
-The `expect` field classifies what kind of outcome the caller was going for:
+The `expect` field classifies what kind of outcome the caller was going for. Expectations follow a **"say what you know"** design: provide only the fields you care about, omit what you don't. Omitted fields are wildcards. The framework scans the result for any match.
 
 | Value | Type | Description |
 |-------|------|-------------|
 | `"screen_changed"` | String | Expected `interfaceDelta.kind == "screenChanged"` |
 | `"layout_changed"` | String | Expected `interfaceDelta.kind == "elementsChanged"` |
 | `{"value": "expected"}` | Object | Expected post-action field value to match |
+| `{"valueChanged": {…}}` | Object | Expected a value change in `interfaceDelta.valueChanges` |
+
+#### valueChanged
+
+Checks whether any entry in `interfaceDelta.valueChanges` matches the provided fields. All fields are optional — provide more to tighten the check, fewer to loosen it.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `heistId` | `String?` | Match a specific element by heistId |
+| `oldValue` | `String?` | Expected previous value |
+| `newValue` | `String?` | Expected new value |
+
+Examples:
+```json
+{"expect": {"valueChanged": {"newValue": "5"}}}
+{"expect": {"valueChanged": {"heistId": "counter", "newValue": "5"}}}
+{"expect": {"valueChanged": {"oldValue": "3", "newValue": "5"}}}
+{"expect": {"valueChanged": {}}}
+```
 
 When an expectation is checked, the Fence response includes an `expectation` object:
 

@@ -272,6 +272,11 @@ public struct ValueChange: Codable, Sendable {
 /// classify *what kind of change* the caller expected. The result tells
 /// the caller what actually happened — the caller decides what to do with it.
 ///
+/// **"Say what you know" design**: agents express what they care about and omit
+/// what they don't. Optional fields act as filters — provide more to tighten the
+/// check, fewer to loosen it. The framework scans the result for any match.
+/// This minimizes cognitive load on the caller.
+///
 /// Superset rule: `screen_changed` is a superset of `layout_changed`.
 /// Expecting `layout_changed` is met by either `elementsChanged` or `screenChanged`.
 /// Expecting `screen_changed` is only met by `screenChanged`.
@@ -284,6 +289,10 @@ public enum ActionExpectation: Codable, Sendable, Equatable {
     case screenChanged
     /// Expected elements to be added, removed, or the screen to change.
     case layoutChanged
+    /// Expected a value change in the interface delta. All fields are optional
+    /// filters — provide what you know, omit what you don't. Met when any entry
+    /// in `interfaceDelta.valueChanges` matches all provided fields.
+    case valueChanged(heistId: String? = nil, oldValue: String? = nil, newValue: String? = nil)
 }
 
 /// The outcome of checking an ActionExpectation against an ActionResult.
@@ -341,6 +350,25 @@ extension ActionExpectation {
                 expectation: self,
                 actual: kind?.rawValue ?? "noChange"
             )
+        case .valueChanged(let heistId, let oldValue, let newValue):
+            guard let changes = result.interfaceDelta?.valueChanges, !changes.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no value changes")
+            }
+            let match = changes.contains { change in
+                if let heistId, change.heistId != heistId { return false }
+                if let oldValue, change.oldValue != oldValue { return false }
+                if let newValue, change.newValue != newValue { return false }
+                return true
+            }
+            if match {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            // Diagnostic: report what value changes actually occurred
+            let observed = changes.map { c in
+                let id = c.heistId ?? c.identifier ?? "order:\(c.order)"
+                return "\(id): \(c.oldValue ?? "nil") → \(c.newValue ?? "nil")"
+            }.joined(separator: ", ")
+            return ExpectationResult(met: false, expectation: self, actual: observed)
         }
     }
 
