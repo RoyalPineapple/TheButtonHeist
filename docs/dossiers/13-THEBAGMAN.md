@@ -108,10 +108,9 @@ flowchart TD
     ScreenCheck -->|yes| ScreenChanged[".screenChanged (full new interface)"]
     ScreenCheck -->|no| HashCheck{same hash?}
     HashCheck -->|yes| NoChange[".noChange"]
-    HashCheck -->|no| Diff["Compute adds/removes/valueChanges"]
-    Diff --> HasChanges{any structural changes?}
-    HasChanges -->|adds or removes| ElementsChanged[".elementsChanged"]
-    HasChanges -->|values only| ValuesChanged[".valuesChanged"]
+    HashCheck -->|no| Diff["Compute adds/removes/updates via heistId matching"]
+    Diff --> HasChanges{any changes?}
+    HasChanges -->|adds, removes, or updates| ElementsChanged[".elementsChanged"]
     HasChanges -->|neither| NoChange
 ```
 
