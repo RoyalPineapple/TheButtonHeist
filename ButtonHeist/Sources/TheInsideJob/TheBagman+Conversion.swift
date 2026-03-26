@@ -151,9 +151,9 @@ extension TheBagman {
     ]
 
     /// Assign deterministic `heistId` to each element.
-    /// Developer-provided identifiers take priority. Synthesized IDs use
-    /// `{trait}_{slug}` with label (or value as fallback) for the slug.
-    /// Duplicates get `_1`, `_2` suffixes — all instances, not just the second.
+    /// Developer-provided identifiers take priority — they become the heistId directly.
+    /// Synthesized IDs use `{trait}_{slug}` with label (or value as fallback) for the slug.
+    /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
     private func assignHeistIds(_ elements: inout [HeistElement]) {
         // Phase 1: generate base IDs
         for i in elements.indices {
@@ -211,7 +211,7 @@ extension TheBagman {
     /// the response payloads:
     /// - screen_changed → full new interface
     /// - layout_changed → elementsAdded/elementsRemoved diff
-    /// - values_changed → valueChanges diff
+    /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(
         before: ElementSnapshot,
@@ -242,89 +242,89 @@ extension TheBagman {
         return computeElementDelta(beforeEls: beforeEls, afterEls: afterEls)
     }
 
+    /// Semantic element diff — heistId is the sole matching key.
+    ///
+    /// heistId already encodes both developer identifiers and synthesized trait+label,
+    /// so one matching pass covers everything. Label changes produce different heistIds
+    /// and naturally appear as remove + add. No order-based fallback.
+    ///
+    /// Returns added/removed/updated categories. Updated elements carry per-property diffs
+    /// for every accessibility property except label and identifier (which are identity).
     private func computeElementDelta(
         beforeEls: [HeistElement],
         afterEls: [HeistElement]
     ) -> InterfaceDelta {
-        let allOldIDs = Set(beforeEls.compactMap(\.identifier))
-        let allNewIDs = Set(afterEls.compactMap(\.identifier))
-        let allCommonIDs = allOldIDs.intersection(allNewIDs)
+        let oldByHeistId = Dictionary(grouping: beforeEls, by: \.heistId)
+        let newByHeistId = Dictionary(grouping: afterEls, by: \.heistId)
+        let allHeistIds = Set(oldByHeistId.keys).union(newByHeistId.keys)
 
-        let oldByID = Dictionary(grouping: beforeEls, by: { $0.identifier ?? "" })
-            .filter { !$0.key.isEmpty }
-        let newByID = Dictionary(grouping: afterEls, by: { $0.identifier ?? "" })
-            .filter { !$0.key.isEmpty }
+        var updated: [ElementUpdate] = []
+        var added: [HeistElement] = []
+        var removed: [String] = []
 
-        let addedIDs = allNewIDs.subtracting(allOldIDs)
-        let added = addedIDs.flatMap { newByID[$0] ?? [] }
-
-        let removedIDs = allOldIDs.subtracting(allNewIDs)
-        let removedElements = removedIDs.flatMap { oldByID[$0] ?? [] }
-        let removedOrders = removedElements.map(\.order)
-        let removedHeistIds = removedElements.map(\.heistId)
-
-        var valueChanges: [ValueChange] = []
-        for id in allCommonIDs {
-            if let oldEl = oldByID[id]?.first, let newEl = newByID[id]?.first {
-                if oldEl.value != newEl.value {
-                    valueChanges.append(ValueChange(
-                        order: newEl.order, heistId: newEl.heistId, identifier: id,
-                        oldValue: oldEl.value, newValue: newEl.value
-                    ))
-                } else if oldEl.description != newEl.description || oldEl.label != newEl.label {
-                    valueChanges.append(ValueChange(
-                        order: newEl.order, heistId: newEl.heistId, identifier: id,
-                        oldValue: oldEl.description, newValue: newEl.description
-                    ))
+        for hid in allHeistIds {
+            let oldEls = oldByHeistId[hid] ?? []
+            let newEls = newByHeistId[hid] ?? []
+            let pairCount = min(oldEls.count, newEls.count)
+            for i in 0..<pairCount {
+                if let update = buildElementUpdate(old: oldEls[i], new: newEls[i]) {
+                    updated.append(update)
                 }
             }
-        }
-
-        let minCount = min(beforeEls.count, afterEls.count)
-        for i in 0..<minCount {
-            let oldEl = beforeEls[i]
-            let newEl = afterEls[i]
-            if oldEl.identifier != nil && newEl.identifier != nil { continue }
-            if oldEl.description != newEl.description
-                || oldEl.label != newEl.label
-                || oldEl.value != newEl.value {
-                valueChanges.append(ValueChange(
-                    order: newEl.order, heistId: newEl.heistId, identifier: newEl.identifier,
-                    oldValue: oldEl.description, newValue: newEl.description
-                ))
+            for i in pairCount..<oldEls.count {
+                removed.append(oldEls[i].heistId)
+            }
+            for i in pairCount..<newEls.count {
+                added.append(newEls[i])
             }
         }
 
-        if added.isEmpty && removedOrders.isEmpty && valueChanges.isEmpty {
-            if beforeEls.count != afterEls.count {
-                return InterfaceDelta(
-                    kind: .elementsChanged,
-                    elementCount: afterEls.count,
-                    added: afterEls.count > beforeEls.count
-                        ? Array(afterEls.suffix(afterEls.count - beforeEls.count)) : nil,
-                    removedOrders: afterEls.count < beforeEls.count
-                        ? Array(afterEls.count..<beforeEls.count) : nil
-                )
-            }
+        if added.isEmpty && removed.isEmpty && updated.isEmpty {
             return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
-        }
-
-        if added.isEmpty && removedOrders.isEmpty {
-            return InterfaceDelta(
-                kind: .valuesChanged,
-                elementCount: afterEls.count,
-                valueChanges: valueChanges.isEmpty ? nil : valueChanges
-            )
         }
 
         return InterfaceDelta(
             kind: .elementsChanged,
             elementCount: afterEls.count,
             added: added.isEmpty ? nil : added,
-            removedOrders: removedOrders.isEmpty ? nil : removedOrders,
-            removedHeistIds: removedHeistIds.isEmpty ? nil : removedHeistIds,
-            valueChanges: valueChanges.isEmpty ? nil : valueChanges
+            removed: removed.isEmpty ? nil : removed,
+            updated: updated.isEmpty ? nil : updated
         )
+    }
+
+    /// Build an ElementUpdate if any property besides label/identifier differs.
+    private func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
+        var changes: [PropertyChange] = []
+
+        if old.value != new.value {
+            changes.append(PropertyChange(property: .value, old: old.value, new: new.value))
+        }
+        if old.traits != new.traits {
+            let oldTraits = old.traits.joined(separator: ", ")
+            let newTraits = new.traits.joined(separator: ", ")
+            changes.append(PropertyChange(property: .traits, old: oldTraits, new: newTraits))
+        }
+        if old.hint != new.hint {
+            changes.append(PropertyChange(property: .hint, old: old.hint, new: new.hint))
+        }
+        if old.actions != new.actions {
+            let oldActions = old.actions.map(\.description).joined(separator: ", ")
+            let newActions = new.actions.map(\.description).joined(separator: ", ")
+            changes.append(PropertyChange(property: .actions, old: oldActions, new: newActions))
+        }
+        let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"
+        let newFrame = "\(Int(new.frameX)),\(Int(new.frameY)),\(Int(new.frameWidth)),\(Int(new.frameHeight))"
+        if oldFrame != newFrame {
+            changes.append(PropertyChange(property: .frame, old: oldFrame, new: newFrame))
+        }
+        let oldAP = "\(Int(old.activationPointX)),\(Int(old.activationPointY))"
+        let newAP = "\(Int(new.activationPointX)),\(Int(new.activationPointY))"
+        if oldAP != newAP {
+            changes.append(PropertyChange(property: .activationPoint, old: oldAP, new: newAP))
+        }
+
+        guard !changes.isEmpty else { return nil }
+        return ElementUpdate(heistId: new.heistId, changes: changes)
     }
 
 }
