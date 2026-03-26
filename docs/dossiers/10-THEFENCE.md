@@ -8,7 +8,7 @@
 
 TheFence is the brain of the outside operation:
 
-1. **Command dispatch** - routes 33 commands via TheMastermind/TheHandoff
+1. **Command dispatch** - routes 35 commands via TheMastermind/TheHandoff
 2. **Auto-discovery and connection** - finds and connects to devices automatically
 3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
 4. **Argument parsing** - extracts typed args from JSON dictionaries
@@ -25,10 +25,10 @@ graph TD
     subgraph TheFence["TheFence (@ButtonHeistActor)"]
         Config["Configuration - deviceFilter, connectionTimeout, - token, autoReconnect"]
         Execute["execute(request:) - Main entry point"]
-        Dispatch["dispatch(command:args:) - 33-command switch"]
+        Dispatch["dispatch(command:args:) - 35-command switch"]
         Reconnect["Auto-Reconnect - via TheHandoff.setupAutoReconnect"]
 
-        subgraph Commands["Command Catalog (33)"]
+        subgraph Commands["Command Catalog (35)"]
             Conn["help, status, quit, exit, list_devices"]
             IF["get_interface, get_screen, wait_for_idle"]
             Access["activate, increment, decrement, - perform_custom_action"]
@@ -38,6 +38,7 @@ graph TD
             Pasteboard["set_pasteboard, get_pasteboard"]
             Rec["start_recording, stop_recording"]
             Batch["run_batch, get_session_state"]
+            Target["connect, list_targets"]
         end
 
         subgraph Response["FenceResponse"]
@@ -50,6 +51,7 @@ graph TD
             Action["action(result: ActionResult, expectation: ExpectationResult?)"]
             Screenshot["screenshot(path) / screenshotData(png)"]
             Recording["recording(path) / recordingData(payload)"]
+            Targets["targets([String: TargetConfig], defaultTarget)"]
         end
     end
 
@@ -69,6 +71,7 @@ flowchart TD
 
     MetaCmd -->|help| ReturnHelp["Return help(commands)"]
     MetaCmd -->|quit/exit| ReturnOk["Return ok, set shouldExit"]
+    MetaCmd -->|connect/list_targets| TargetCmd["Target commands - bypass auto-start"]
     MetaCmd -->|other| CheckConn{connected?}
 
     CheckConn -->|no| Start["start() → discover + connect"]
@@ -91,6 +94,8 @@ flowchart TD
     Route -->|start_recording| StartRec["send .startRecording, - return ok"]
     Route -->|stop_recording| StopRec["send .stopRecording, - waitForRecording (30s)"]
     Route -->|list_devices| ListDev["scan 3s, return devices"]
+    Route -->|connect| Connect["stop + reconnect to target"]
+    Route -->|list_targets| ListTargets["return config file targets"]
     Route -->|status| ReturnStatus["return connection status"]
 ```
 
@@ -134,7 +139,7 @@ stateDiagram-v2
 ### HIGH PRIORITY
 
 **`dispatch` method cyclomatic complexity** (`TheFence.swift:497`)
-- Large switch statement over 33 command strings
+- Large switch statement over 35 command strings
 - Each case has its own argument extraction and TheMastermind interaction
 - The largest single method in the codebase
 - Consider: could the individual command handlers be extracted into separate methods?
@@ -145,7 +150,7 @@ stateDiagram-v2
 - 10 seconds hardcoded vs 15s for actions, 30s for screenshots/recordings
 
 **TheFence test coverage is improving but incomplete**
-- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 33 commands) and `FenceResponse` formatting
+- `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 35 commands) and `FenceResponse` formatting
 - `TheFenceHandlerTests` covers command routing (`testAllCatalogCommandsAreRouted`) and handler-level argument validation
 - Timeout behavior and auto-reconnect logic remain untested
 
@@ -157,7 +162,7 @@ stateDiagram-v2
 - Well-tested: `FenceResponseTests` covers both human formatting and JSON serialization
 
 **`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)
-- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 33 cases
+- `TheFence.Command` is a `String`-backed `CaseIterable` enum with 35 cases
 - Commands are matched by enum case in the dispatch switch (compile-time exhaustiveness)
 - `supportedCommands` is `Command.allCases.map(\.rawValue)` — no hand-maintained list
 
