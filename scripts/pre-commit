@@ -13,6 +13,16 @@ if command -v tuist >/dev/null 2>&1; then
     fi
 fi
 
+# --- Hardcoded absolute paths in pbxproj ---
+abs_paths=$(git diff --cached -- '*.pbxproj' | grep '^+' | grep -v '^+++' | grep 'SRCROOT = /Users' || true)
+if [[ -n "$abs_paths" ]]; then
+    echo "error: staged pbxproj files contain hardcoded absolute paths:"
+    echo "$abs_paths"
+    echo "Hardcoded SRCROOT breaks builds for other developers and CI."
+    echo "Investigate the Tuist configuration — do not commit these paths."
+    exit 1
+fi
+
 # --- SwiftLint ---
 if ! command -v swiftlint >/dev/null 2>&1; then
     echo "warning: SwiftLint not installed, skipping pre-commit lint"
