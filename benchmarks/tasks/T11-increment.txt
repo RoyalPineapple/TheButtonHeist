@@ -1,4 +1,0 @@
-You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Controls Demo", then to "Adjustable Controls". The stepper on this screen starts at 0 and each increment adds 1. Increment the stepper 5 times to reach 5. After incrementing, read the "Last Action" label on the screen.
-
-Report your findings in exactly this format:
-last_action: <exact text of the Last Action label>

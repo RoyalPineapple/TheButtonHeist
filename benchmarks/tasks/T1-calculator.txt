@@ -1,4 +1,0 @@
-You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to the "Calculator" section by activating the Calculator menu item. Once on the calculator screen, use the digit and operator buttons to compute ({{RAND3_A}} × {{RAND3_B}}) ÷ {{RAND2_C}}. Enter the calculation in this exact sequence: clear the display first, then enter {{RAND3_A}}, press multiply, enter {{RAND3_B}}, press equals, then press divide, enter {{RAND2_C}}, and press equals again. After pressing the final equals, read the exact value shown on the calculator display. Do not round or interpret the value — report it character-for-character as it appears on screen.
-
-Report your findings in exactly this format:
-display: <exact text shown on the calculator display>
