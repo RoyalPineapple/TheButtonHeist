@@ -346,6 +346,9 @@ final class TheBagman {
             }
         }
 
+        let screenName = afterSnapshot.elements
+            .first { $0.traits.contains("header") }?.label
+
         return ActionResult(
             success: true,
             method: method,
@@ -354,7 +357,8 @@ final class TheBagman {
             interfaceDelta: delta,
             elementLabel: elementLabel,
             elementValue: elementValue,
-            elementTraits: elementTraits
+            elementTraits: elementTraits,
+            screenName: screenName
         )
     }
 

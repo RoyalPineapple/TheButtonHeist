@@ -128,21 +128,46 @@ classDiagram
         +String? value
         +InterfaceDelta? interfaceDelta
         +Bool? animating
+        +String? screenName
     }
 
     class InterfaceDelta {
         +DeltaKind kind
         +Int elementCount
         +[HeistElement]? added
-        +[Int]? removedOrders
-        +[ValueChange]? valueChanges
+        +[String]? removed
+        +[ElementUpdate]? updated
         +Interface? newInterface
+    }
+
+    class ElementUpdate {
+        +String heistId
+        +[PropertyChange] changes
+    }
+
+    class PropertyChange {
+        +ElementProperty property
+        +String? old
+        +String? new
+    }
+
+    class ElementProperty {
+        <<enum>>
+        value
+        traits
+        hint
+        actions
+        frame
+        activationPoint
     }
 
     Interface --> HeistElement
     Interface --> ElementNode
     HeistElement --> ElementAction
     ActionResult --> InterfaceDelta
+    InterfaceDelta --> ElementUpdate
+    ElementUpdate --> PropertyChange
+    PropertyChange --> ElementProperty
 
     class InteractionEvent {
         +Double timestamp
@@ -157,8 +182,8 @@ classDiagram
     class ActionExpectation {
         <<enum>>
         screenChanged
-        layoutChanged
-        valueChanged(heistId?, oldValue?, newValue?)
+        elementsChanged
+        elementUpdated(heistId?, property?, oldValue?, newValue?)
         +validate(against: ActionResult) ExpectationResult
         +validateDelivery(ActionResult)$ ExpectationResult
     }
@@ -176,7 +201,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.1"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"6.2"` (explicit `type` / `payload` envelopes + exact hello/version matching)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
