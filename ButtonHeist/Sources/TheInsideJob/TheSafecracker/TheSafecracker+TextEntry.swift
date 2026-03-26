@@ -29,8 +29,8 @@ extension TheSafecracker {
             fingerprints.showFingerprint(at: point)
 
             var inputReady = false
-            for _ in 0..<20 {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
+                try? await Task.sleep(nanoseconds: TheSafecracker.keyboardPollInterval)
                 if hasActiveTextInput() {
                     inputReady = true
                     break
@@ -72,7 +72,7 @@ extension TheSafecracker {
         }
 
         // Step 5: Refresh accessibility data and read back value
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        try? await Task.sleep(nanoseconds: TheSafecracker.keyboardPollInterval)
         bagman?.refreshElements()
 
         var fieldValue: String?

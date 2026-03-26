@@ -68,6 +68,16 @@ final class TheSafecracker {
     /// pipeline has run-loop time to transition from "possible" to "recognized".
     nonisolated static let gestureYieldDelay: UInt64 = 50_000_000
 
+    /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
+    /// state treats the selection as current before the subsequent delete.
+    nonisolated static let selectionSettleDelay: UInt64 = 50_000_000
+
+    /// Poll interval for keyboard readiness after tapping a text field (100ms).
+    nonisolated static let keyboardPollInterval: UInt64 = 100_000_000
+
+    /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
+    nonisolated static let keyboardPollMaxAttempts: Int = 20
+
     // MARK: - Keyboard Visibility (Notification-Based)
 
     /// Tracks keyboard visibility via `UIKeyboardDidChangeFrameNotification`,
@@ -281,78 +291,61 @@ final class TheSafecracker {
         return touchUp()
     }
 
-    // MARK: - Public: Text Input (via UIKeyboardImpl)
+    // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
     /// Uses notification-based tracking (KIF's approach) with a fallback
     /// to checking UIKeyboardImpl for an active input delegate.
     func isKeyboardVisible() -> Bool {
         if keyboardVisible { return true }
-        guard let impl = getKeyboardImpl() else { return false }
-        let delegate: AnyObject? = ObjCRuntime.message("delegate", to: impl)?.call()
-        return delegate is UIKeyInput
+        return KeyboardBridge.shared()?.hasActiveInput ?? false
     }
 
     /// Type text by injecting characters into the active keyboard.
-    /// Uses UIKeyboardImpl.sharedInstance.addInputString: — the same approach KIF
-    /// uses. sharedInstance stays alive in both software and hardware keyboard modes.
-    /// - Parameters:
-    ///   - text: The text to type, character by character
-    ///   - interKeyDelay: Nanoseconds to wait between each character (default 30ms)
+    /// Routes through KeyboardBridge → UIKeyboardImpl.addInputString: per character.
     func typeText(_ text: String, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
-        guard let impl = getKeyboardImpl(),
-              let msg = ObjCRuntime.message("addInputString:", to: impl) else { return false }
+        guard let keyboard = KeyboardBridge.shared() else { return false }
         for char in text {
-            msg.call(String(char) as AnyObject)
-            drainKeyboardTaskQueue(impl)
+            keyboard.type(char)
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
     }
 
-    /// Delete characters by sending delete events to the active keyboard.
-    /// Uses UIKeyboardImpl.sharedInstance.deleteFromInput — the same approach KIF uses.
-    /// - Parameters:
-    ///   - count: Number of characters to delete
-    ///   - interKeyDelay: Nanoseconds to wait between each delete (default 30ms)
+    /// Delete characters by sending backspace events to the active keyboard.
+    /// Routes through KeyboardBridge → UIKeyboardImpl.deleteFromInput per character.
     func deleteText(count: Int, interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay) async -> Bool {
         guard count > 0 else { return true }
-        guard let impl = getKeyboardImpl(),
-              let msg = ObjCRuntime.message("deleteFromInput", to: impl) else { return false }
+        guard let keyboard = KeyboardBridge.shared() else { return false }
         for _ in 0..<count {
-            msg.call()
-            drainKeyboardTaskQueue(impl)
+            keyboard.deleteBackward()
             try? await Task.sleep(nanoseconds: interKeyDelay)
         }
         return true
     }
 
     /// Clear all text in the focused text input using UITextInput select-all + delete.
-    /// Improves on KIF's `clearTextFromElement:` by using Swift's UITextInput protocol
-    /// directly — works with UITextField, UITextView, and any custom UITextInput
-    /// conformer without type-checking each one. Falls back to counting characters
-    /// and calling deleteBackward if the first responder only conforms to UIKeyInput.
+    /// Uses UITextInput protocol directly — works with UITextField, UITextView,
+    /// and any custom UITextInput conformer.
     func clearText() async -> Bool {
-        // Prefer UITextInput: select all text then delete in one shot
-        if let textInput = firstResponderTextInput() {
-            let start = textInput.beginningOfDocument
-            let end = textInput.endOfDocument
-            guard let fullRange = textInput.textRange(from: start, to: end) else { return true }
-            if fullRange.isEmpty { return true }
-            textInput.selectedTextRange = fullRange
-            // Brief yield so the selection registers before delete
-            try? await Task.sleep(nanoseconds: 50_000_000)
-
-            if let impl = getKeyboardImpl() {
-                ObjCRuntime.message("deleteFromInput", to: impl)?.call()
-                drainKeyboardTaskQueue(impl)
-            } else {
-                textInput.deleteBackward()
-            }
-            return true
+        guard let textInput = firstResponderView() as? (any UITextInput) else {
+            return false
         }
 
-        return false
+        let start = textInput.beginningOfDocument
+        let end = textInput.endOfDocument
+        guard let fullRange = textInput.textRange(from: start, to: end) else { return true }
+        if fullRange.isEmpty { return true }
+        textInput.selectedTextRange = fullRange
+        // Brief yield so the selection registers before delete
+        try? await Task.sleep(nanoseconds: Self.selectionSettleDelay)
+
+        if let keyboard = KeyboardBridge.shared() {
+            keyboard.deleteBackward()
+        } else {
+            textInput.deleteBackward()
+        }
+        return true
     }
 
     // MARK: - Edit Actions (via Responder Chain)
@@ -360,27 +353,18 @@ final class TheSafecracker {
     /// Perform a standard edit action on the current first responder.
     /// Uses UIApplication.sendAction to route through the responder chain,
     /// following KIF's pattern of bypassing the edit menu UI entirely.
-    /// - Returns: true if the action was handled by some responder
     func performEditAction(_ action: EditAction) -> Bool {
         UIApplication.shared.sendAction(action.selector, to: nil, from: nil, for: nil)
     }
 
     /// Resign first responder, dismissing the keyboard if visible.
-    /// Walks the view hierarchy of all windows to find the current first responder
-    /// and calls resignFirstResponder() on it.
-    /// - Returns: true if a first responder was found and resigned
     func resignFirstResponder() -> Bool {
-        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        for window in allWindows {
-            if let responder = findFirstResponder(in: window) {
-                responder.resignFirstResponder()
-                return true
-            }
-        }
-        return false
+        guard let responder = firstResponderView() else { return false }
+        responder.resignFirstResponder()
+        return true
     }
+
+    // MARK: - First Responder
 
     /// Find the first responder view across all windows in the active scene.
     func firstResponderView() -> UIView? {
@@ -404,44 +388,10 @@ final class TheSafecracker {
     // MARK: - Public: Text Input Readiness
 
     /// Whether a text input is ready to accept typed characters.
-    /// The shared UIKeyboardImpl instance stays alive in both software and
-    /// hardware keyboard modes, so its presence is sufficient.
+    /// KeyboardBridge resolves UIKeyboardImpl.sharedInstance — if present,
+    /// the keyboard is ready in both software and hardware modes.
     func hasActiveTextInput() -> Bool {
-        getKeyboardImpl() != nil
-    }
-
-    // MARK: - Private: Keyboard Helpers
-
-    /// Get the UIKeyboardImpl shared instance via ObjC runtime.
-    /// Uses `sharedInstance` (not `activeInstance`) to match KIF — the shared
-    /// instance stays alive even when a hardware keyboard is connected, while
-    /// `activeInstance` returns nil in hardware keyboard mode.
-    private func getKeyboardImpl() -> AnyObject? {
-        ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")?.call()
-    }
-
-    /// Drain UIKeyboardImpl's internal task queue after injecting a character.
-    /// Matches KIF's `[taskQueue waitUntilAllTasksAreFinished]` pattern —
-    /// ensures the keyboard has finished processing before the next keystroke.
-    private func drainKeyboardTaskQueue(_ impl: AnyObject) {
-        guard let taskQueue: AnyObject = ObjCRuntime.message("taskQueue", to: impl)?.call() else { return }
-        ObjCRuntime.message("waitUntilAllTasksAreFinished", to: taskQueue)?.call()
-    }
-
-    /// Find the current first responder if it conforms to UITextInput.
-    /// UITextInput provides select-all + delete for clearing fields —
-    /// knows about text ranges and selection.
-    private func firstResponderTextInput() -> (any UITextInput)? {
-        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        for window in allWindows {
-            if let responder = findFirstResponder(in: window),
-               let input = responder as? (any UITextInput) {
-                return input
-            }
-        }
-        return nil
+        KeyboardBridge.shared() != nil
     }
 
     // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
