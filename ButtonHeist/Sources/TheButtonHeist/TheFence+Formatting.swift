@@ -589,7 +589,7 @@ public enum FenceResponse {
             text = "\(result.method.rawValue): ok"
         }
         if let screenName = result.screenName {
-            text += " | screen: \"\(screenName)\""
+            text = "\(screenName) | \(text)"
         }
         if let value = result.value {
             text += "\nvalue: \"\(value)\""
@@ -611,7 +611,7 @@ public enum FenceResponse {
         if let idx = failedIndex { text += " (failed at \(idx))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
         if let lastScreen = stepSummaries.last(where: { $0.screenName != nil })?.screenName {
-            text += " | screen: \"\(lastScreen)\""
+            text = "\(lastScreen) | \(text)"
         }
         for (index, step) in stepSummaries.enumerated() {
             var line = "  [\(index)] \(step.command)"
