@@ -384,7 +384,12 @@ extension TheFence {
         } catch {
             config = previousConfig
             client.token = previousToken
-            return .error("Connect failed: \(error.localizedDescription)")
+            do {
+                try await start()
+            } catch {
+                return .error("Connect failed and could not restore previous connection: \(error.localizedDescription)")
+            }
+            return .error("Connect failed, restored previous connection: \(error.localizedDescription)")
         }
 
         let deviceName = client.connectedDevice.map { client.displayName(for: $0) } ?? resolvedDevice

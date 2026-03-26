@@ -369,17 +369,29 @@ final class TargetConfigTests: XCTestCase {
             fileConfig: config
         ))
 
-        // Inject a mock that immediately emits an auth failure on connect
-        let failingConn = MockConnection()
-        failingConn.connectEventsOverride = [
-            .transportReady,
-            .disconnected(.authFailed("denied")),
-        ]
+        // First connect attempt (new target) fails; second (restore) succeeds
+        var connectAttempt = 0
 
         let mockDisc = MockDiscovery()
         mockDisc.discoveredDevices = [Self.testDevice]
         fence.client.handoff.makeDiscovery = { mockDisc }
-        fence.client.handoff.makeConnection = { _, _, _ in failingConn }
+        fence.client.handoff.makeConnection = { _, _, _ in
+            connectAttempt += 1
+            if connectAttempt == 1 {
+                let failing = MockConnection()
+                failing.connectEventsOverride = [
+                    .transportReady,
+                    .disconnected(.authFailed("denied")),
+                ]
+                return failing
+            }
+            let succeeding = MockConnection()
+            succeeding.serverInfo = Self.testServerInfo
+            succeeding.autoResponse = { _ in
+                .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return succeeding
+        }
 
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
@@ -406,13 +418,14 @@ final class TargetConfigTests: XCTestCase {
             "token": "bad-tok",
         ])
         if case .error(let message) = response {
-            XCTAssertTrue(message.contains("Connect failed") || message.contains("Auth failed"))
+            XCTAssertTrue(message.contains("restored previous connection"))
         } else {
             XCTFail("Expected error response, got \(response)")
         }
-        // Previous config should be restored
+        // Previous config should be restored and connection re-established
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1455")
         XCTAssertEqual(fence.config.token, "tok1")
+        XCTAssertEqual(connectAttempt, 2)
     }
 
     @ButtonHeistActor
