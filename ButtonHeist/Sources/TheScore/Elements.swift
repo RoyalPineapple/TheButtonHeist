@@ -204,6 +204,55 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+// MARK: - Element Matcher
+
+/// Composable predicate for scanning the accessibility tree.
+/// All non-nil fields must match (AND semantics). Wire type — the matching
+/// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
+/// where it operates on the canonical tree directly.
+///
+/// Trait names use the same string mapping as HeistElement (e.g. "button",
+/// "header", "selected"). The hierarchy-level matcher bridges these to
+/// UIAccessibilityTraits bitmasks via TheBagman's traitMapping.
+public struct ElementMatcher: Codable, Sendable, Equatable {
+    /// Exact match against element label
+    public let label: String?
+    /// Exact match against accessibility identifier
+    public let identifier: String?
+    /// Exact match against synthesized heistId (wire-level only)
+    public let heistId: String?
+    /// Exact match against element value
+    public let value: String?
+    /// All listed traits must be present on the element (AND)
+    public let traits: [String]?
+    /// None of the listed traits may be present on the element
+    public let excludeTraits: [String]?
+    /// When true, the caller asserts no matching element exists.
+    /// The matcher itself always checks property predicates; callers
+    /// interpret `absent` based on their context.
+    public let absent: Bool?
+
+    public init(
+        label: String? = nil,
+        identifier: String? = nil,
+        heistId: String? = nil,
+        value: String? = nil,
+        traits: [String]? = nil,
+        excludeTraits: [String]? = nil,
+        absent: Bool? = nil
+    ) {
+        self.label = label
+        self.identifier = identifier
+        self.heistId = heistId
+        self.value = value
+        self.traits = traits
+        self.excludeTraits = excludeTraits
+        self.absent = absent
+    }
+
+    public var isAbsent: Bool { absent ?? false }
+}
+
 // MARK: - Convenience Extensions
 
 extension HeistElement {

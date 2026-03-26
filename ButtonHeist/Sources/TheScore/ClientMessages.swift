@@ -98,8 +98,8 @@ public enum ClientMessage: Codable, Sendable {
     /// Scroll via accessibility scroll action (bubbles up to nearest scroll view)
     case scroll(ScrollTarget)
 
-    /// Scroll the nearest scroll view ancestor until the target element is visible
-    case scrollToVisible(ActionTarget)
+    /// Scroll the nearest scroll view ancestor until an element matching the predicate is visible
+    case scrollToVisible(ScrollToVisibleTarget)
 
     /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)
     case scrollToEdge(ScrollToEdgeTarget)
@@ -135,8 +135,10 @@ public enum ClientMessage: Codable, Sendable {
     /// Extract the element target from any action command, if present.
     public var actionTarget: ActionTarget? {
         switch self {
-        case .activate(let t), .increment(let t), .decrement(let t), .scrollToVisible(let t):
+        case .activate(let t), .increment(let t), .decrement(let t):
             return t
+        case .scrollToVisible:
+            return nil
         case .performCustomAction(let t):
             return t.elementTarget
         case .editAction:
@@ -598,6 +600,34 @@ public struct ScrollTarget: Codable, Sendable {
         self.elementTarget = elementTarget
         self.direction = direction
     }
+}
+
+/// Direction for scroll-to-visible search
+public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
+    case down, up, left, right
+}
+
+/// Target for scroll-to-visible search with element matching
+public struct ScrollToVisibleTarget: Codable, Sendable {
+    /// Predicate describing the element to find
+    public let match: ElementMatcher
+    /// Maximum scroll attempts before giving up (default: 20)
+    public let maxScrolls: Int?
+    /// Starting scroll direction (default: .down)
+    public let direction: ScrollSearchDirection?
+
+    public init(
+        match: ElementMatcher,
+        maxScrolls: Int? = nil,
+        direction: ScrollSearchDirection? = nil
+    ) {
+        self.match = match
+        self.maxScrolls = maxScrolls
+        self.direction = direction
+    }
+
+    public var resolvedMaxScrolls: Int { maxScrolls ?? 20 }
+    public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
 }
 
 /// Edge for scroll-to-edge commands

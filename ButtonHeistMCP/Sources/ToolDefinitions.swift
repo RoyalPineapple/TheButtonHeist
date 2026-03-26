@@ -245,15 +245,22 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Scroll the nearest scroll view ancestor until the target element is fully visible. \
-            Target by heistId (preferred), identifier, or order from get_interface.
+            Search for an element by scrolling through the nearest scroll view. Matches elements \
+            by any combination of heistId, identifier, label, value, and traits. All specified fields \
+            must match (AND). Returns the found element or diagnostic info about the search. \
+            For UITableView/UICollectionView, provides exhaustive search with item count tracking.
             """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "heistId": ["type": "string", "description": "Match element by stable heistId"],
+                "identifier": ["type": "string", "description": "Match element by accessibility identifier"],
+                "label": ["type": "string", "description": "Match element by accessibility label (exact)"],
+                "value": ["type": "string", "description": "Match element by accessibility value (exact)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
+                "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
+                "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,
             ],
             "additionalProperties": false,

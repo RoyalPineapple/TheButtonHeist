@@ -439,6 +439,88 @@ public final class TheInsideJob {
         }
     }
 
+    /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
+    /// because the scroll loop does its own repeated refresh/settle cycles internally.
+    /// Captures before/after snapshots for delta computation around the entire search.
+    func performScrollToVisibleSearch(
+        target: ScrollToVisibleTarget,
+        command: ClientMessage,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) async {
+        stakeout?.noteActivity()
+        bagman.refreshAccessibilityData()
+        let beforeSnapshot = bagman.snapshotElements()
+        let beforeCachedElements = bagman.cachedElements
+        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+
+        let result = await theSafecracker.executeScrollToVisible(target)
+
+        var actionResult: ActionResult
+        if result.success {
+            let baseResult = await bagman.actionResultWithDelta(
+                success: true,
+                method: result.method,
+                message: result.message,
+                value: result.value,
+                beforeSnapshot: beforeSnapshot,
+                beforeCachedElements: beforeCachedElements,
+                beforeVC: beforeVC,
+                target: nil
+            )
+            actionResult = ActionResult(
+                success: baseResult.success,
+                method: baseResult.method,
+                message: baseResult.message,
+                value: baseResult.value,
+                interfaceDelta: baseResult.interfaceDelta,
+                animating: baseResult.animating,
+                elementLabel: baseResult.elementLabel,
+                elementValue: baseResult.elementValue,
+                elementTraits: baseResult.elementTraits,
+                screenName: baseResult.screenName,
+                scrollSearchResult: result.scrollSearchResult
+            )
+        } else {
+            // Refresh to get screen name even on failure
+            bagman.refreshAccessibilityData()
+            let afterSnapshot = bagman.snapshotElements()
+            let screenName = afterSnapshot.elements.first(where: { $0.traits.contains("header") })?.label
+            actionResult = ActionResult(
+                success: false,
+                method: result.method,
+                message: result.message,
+                value: result.value,
+                screenName: screenName,
+                scrollSearchResult: result.scrollSearchResult
+            )
+        }
+
+        if let stakeout, stakeout.state == .recording {
+            let event = InteractionEvent(
+                timestamp: stakeout.recordingElapsed,
+                command: command,
+                result: actionResult,
+                interfaceDelta: actionResult.interfaceDelta
+            )
+            stakeout.recordInteraction(event: event)
+        }
+
+        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
+
+        if muscle.hasSubscribers {
+            let event = InteractionEvent(
+                timestamp: Date().timeIntervalSince1970,
+                command: command,
+                result: actionResult,
+                interfaceDelta: actionResult.interfaceDelta
+            )
+            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
+                broadcastToSubscribed(data)
+            }
+        }
+    }
+
     private func sendServerInfo(respond: @escaping (Data) -> Void) {
         let screenBounds = UIScreen.main.bounds
         let info = ServerInfo(

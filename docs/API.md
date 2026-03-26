@@ -769,7 +769,7 @@ cd ButtonHeistMCP && swift build -c release
 | `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
 | `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`; `expect` |
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
-| `scroll_to_visible` | Scroll until target element is fully visible | `identifier`, `order`, `expect` |
+| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `maxScrolls`, `direction`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
@@ -1555,15 +1555,23 @@ OPTIONS:
 
 ### buttonheist scroll_to_visible
 
-Scroll until a target element is fully visible in the viewport.
+Search for an element by scrolling through the nearest scroll view. Matches elements
+by any combination of label, identifier, heistId, value, and traits (AND semantics).
+For UITableView/UICollectionView, provides exhaustive search with item count tracking.
 
 ```
 USAGE: buttonheist scroll_to_visible [OPTIONS]
 
 OPTIONS:
-  --identifier <id>       Element identifier
-  --index <n>             Element index
-  -t, --timeout <seconds> Timeout in seconds (default: 10)
+  --label <text>          Match element by accessibility label (exact)
+  --identifier <id>       Match element by accessibility identifier (exact)
+  --heist-id <id>         Match element by heistId (exact)
+  --value <text>          Match element by accessibility value (exact)
+  --traits <trait>        Required traits (all must be present, repeatable)
+  --exclude-traits <trait> Excluded traits (none may be present, repeatable)
+  --max-scrolls <n>       Maximum scroll attempts (default: 20)
+  --direction <dir>       Starting scroll direction: down, up, left, right (default: down)
+  -t, --timeout <seconds> Timeout in seconds (default: 30)
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
@@ -1900,6 +1908,8 @@ buttonheist type --delete 5 --text "World!" --identifier nameField
 # Scroll commands
 buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
 buttonheist scroll --index 3 --direction down
-buttonheist scroll_to_visible --identifier "buttonheist.longList.last"
+buttonheist scroll_to_visible --label "Color Picker"
+buttonheist scroll_to_visible --label "Settings" --traits header
+buttonheist scroll_to_visible --identifier "buttonheist.longList.last" --direction up
 buttonheist scroll_to_edge --identifier "buttonheist.longList.item-0" --edge bottom
 ```
