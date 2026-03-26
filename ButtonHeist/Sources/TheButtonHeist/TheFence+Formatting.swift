@@ -148,6 +148,7 @@ public enum FenceResponse {
         stepSummaries: [BatchStepSummary] = [], netDelta: InterfaceDelta? = nil
     )
     case sessionState(payload: [String: Any])
+    case targets([String: TargetConfig], defaultTarget: String?)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {
@@ -204,7 +205,20 @@ public enum FenceResponse {
             let connected = payload["connected"] as? Bool ?? false
             let device = payload["deviceName"] as? String ?? "unknown"
             return connected ? "Session: connected to \(device)" : "Session: not connected"
+        case .targets(let targets, let defaultTarget):
+            return formatTargetList(targets, defaultTarget: defaultTarget)
         }
+    }
+
+    private func formatTargetList(_ targets: [String: TargetConfig], defaultTarget: String?) -> String {
+        if targets.isEmpty { return "No targets configured" }
+        var output = "\(targets.count) target(s):\n"
+        for name in targets.keys.sorted() {
+            guard let target = targets[name] else { continue }
+            let isDefault = name == defaultTarget ? " (default)" : ""
+            output += "  \(name): \(target.device)\(isDefault)\n"
+        }
+        return output.trimmingCharacters(in: .newlines)
     }
 
     private func formatDeviceList(_ devices: [DiscoveredDevice]) -> String {
@@ -282,6 +296,16 @@ public enum FenceResponse {
             )
         case .sessionState(let payload):
             return payload
+        case .targets(let targets, let defaultTarget):
+            var info: [String: [String: Any]] = [:]
+            for (name, target) in targets {
+                var entry: [String: Any] = ["device": target.device]
+                if target.token != nil { entry["hasToken"] = true }
+                info[name] = entry
+            }
+            var result: [String: Any] = ["status": "ok", "targets": info]
+            if let defaultTarget { result["default"] = defaultTarget }
+            return result
         }
     }
 
@@ -575,6 +599,12 @@ public enum FenceResponse {
         case .sessionState(let payload):
             let connected = payload["connected"] as? Bool ?? false
             return connected ? "session: connected" : "session: not connected"
+        case .targets(let targets, let defaultTarget):
+            if targets.isEmpty { return "no targets configured" }
+            return targets.keys.sorted().map { name in
+                let isDefault = name == defaultTarget ? " *" : ""
+                return "\(name): \(targets[name]!.device)\(isDefault)"
+            }.joined(separator: "\n")
         }
     }
 

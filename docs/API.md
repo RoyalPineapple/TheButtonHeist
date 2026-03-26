@@ -569,6 +569,7 @@ public struct Configuration {
     public var connectionTimeout: TimeInterval // Default: 30
     public var token: String?               // Auth token (falls back to BUTTONHEIST_TOKEN env)
     public var autoReconnect: Bool          // Auto-reconnect on disconnect (default: true)
+    public var fileConfig: ButtonHeistFileConfig? // Named targets from config file
 }
 ```
 
@@ -620,11 +621,13 @@ public enum Command: String, CaseIterable, Sendable {
     case getInterface = "get_interface"
     case runBatch = "run_batch"
     case getSessionState = "get_session_state"
-    // ... 31 total cases
+    case connect
+    case listTargets = "list_targets"
+    // ... 35 total cases
 }
 ```
 
-Single source of truth for the 31 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for the 35 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
@@ -653,6 +656,7 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `recordingData(payload:)` | Recording as base64 video |
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
+| `targets(_:defaultTarget:)` | Named targets from config file with optional default |
 
 ### FenceError
 
@@ -674,6 +678,44 @@ public enum FenceError: Error, LocalizedError
 | `notConnected` | Not connected to device |
 | `actionTimeout` | Action timed out, connection lost |
 | `actionFailed(_:)` | Action failed with server error message |
+
+### TargetConfig
+
+```swift
+public struct TargetConfig: Codable, Sendable, Equatable {
+    public let device: String   // host:port string
+    public let token: String?   // Optional auth token
+}
+```
+
+A named connection target with a device address and optional auth token. Defined in config files (`.buttonheist.json` or `~/.config/buttonheist/config.json`).
+
+### ButtonHeistFileConfig
+
+```swift
+public struct ButtonHeistFileConfig: Codable, Sendable, Equatable {
+    public let targets: [String: TargetConfig]
+    public let defaultTarget: String?  // JSON key: "default"
+}
+```
+
+Schema for the ButtonHeist config file. Contains named targets and an optional default.
+
+### TargetConfigResolver
+
+```swift
+public enum TargetConfigResolver
+```
+
+Stateless resolver for connection targets with environment variable override precedence.
+
+#### Methods
+
+| Method | Description |
+|--------|-------------|
+| `loadConfig(from:)` | Load config from explicit path, or search `.buttonheist.json` then `~/.config/buttonheist/config.json` |
+| `resolve(targetName:config:)` | Look up a named target in config |
+| `resolveEffective(targetName:config:env:)` | Full precedence resolution: env vars > named target > default target |
 
 ### DisconnectReason
 

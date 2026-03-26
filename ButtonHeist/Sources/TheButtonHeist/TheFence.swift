@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -80,17 +81,20 @@ public final class TheFence {
         public var connectionTimeout: TimeInterval
         public var token: String?
         public var autoReconnect: Bool
+        public var fileConfig: ButtonHeistFileConfig?
 
         public init(
             deviceFilter: String? = nil,
             connectionTimeout: TimeInterval = 30,
             token: String? = nil,
-            autoReconnect: Bool = true
+            autoReconnect: Bool = true,
+            fileConfig: ButtonHeistFileConfig? = nil
         ) {
             self.deviceFilter = deviceFilter
             self.connectionTimeout = connectionTimeout
             self.token = token
             self.autoReconnect = autoReconnect
+            self.fileConfig = fileConfig
         }
     }
 
@@ -101,7 +105,7 @@ public final class TheFence {
     }
     public var onAuthApproved: ((String?) -> Void)?
 
-    let config: Configuration
+    var config: Configuration
     let client = TheMastermind()
     private var isStarted = false
 
@@ -155,6 +159,7 @@ public final class TheFence {
         }
 
         if command != .getSessionState && command != .listDevices &&
+            command != .connect && command != .listTargets &&
             (!isStarted || client.connectionState != .connected) {
             try await start()
         }
@@ -198,7 +203,7 @@ public final class TheFence {
                 deviceName: client.connectedDevice.map { client.displayName(for: $0) }
             )
         case .listDevices:
-            return .devices(await client.discoverReachableDevices())
+            return try await handleListDevices()
         case .getInterface:
             return try await handleGetInterface(args)
         case .getScreen:
@@ -230,6 +235,10 @@ public final class TheFence {
             return try await handleRunBatch(args)
         case .getSessionState:
             return .sessionState(payload: currentSessionState())
+        case .connect:
+            return try await handleConnect(args)
+        case .listTargets:
+            return handleListTargets()
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
@@ -462,6 +471,44 @@ public final class TheFence {
             stepSummaries: stepSummaries,
             netDelta: netDelta
         )
+    }
+
+    // MARK: - Config Target Conversion
+
+    static func configTargetsAsDevices(_ config: ButtonHeistFileConfig) -> [DiscoveredDevice] {
+        config.targets.compactMap { name, target in
+            guard let (host, port) = parseHostPort(target.device) else { return nil }
+            return DiscoveredDevice(
+                id: "config-\(name)",
+                name: name,
+                endpoint: .hostPort(
+                    host: .init(host),
+                    port: .init(integerLiteral: port)
+                )
+            )
+        }
+    }
+
+    private static func parseHostPort(_ value: String) -> (String, UInt16)? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if trimmed.hasPrefix("["),
+           let closingBracket = trimmed.firstIndex(of: "]"),
+           let separator = trimmed.index(closingBracket, offsetBy: 1, limitedBy: trimmed.endIndex),
+           separator < trimmed.endIndex,
+           trimmed[separator] == ":" {
+            let host = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closingBracket])
+            let portString = String(trimmed[trimmed.index(after: separator)...])
+            guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
+            return (host, port)
+        }
+
+        guard let separator = trimmed.lastIndex(of: ":") else { return nil }
+        let host = String(trimmed[..<separator])
+        let portString = String(trimmed[trimmed.index(after: separator)...])
+        guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
+        return (host, port)
     }
 
     // MARK: - Batch Step Summary

@@ -37,12 +37,14 @@ struct ButtonHeistMCPServer {
 
     @ButtonHeistActor
     private static func setUp() -> (TheFence, IdleMonitor) {
+        let fileConfig = TargetConfigResolver.loadConfig()
         let fence = TheFence(
             configuration: .init(
                 deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
                 connectionTimeout: 30,
                 token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
-                autoReconnect: true
+                autoReconnect: true,
+                fileConfig: fileConfig
             )
         )
         let idleMonitor = IdleMonitor(fence: fence, timeout: sessionTimeout)
@@ -65,7 +67,8 @@ struct ButtonHeistMCPServer {
                  "wait_for_idle", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
                  "scroll", "scroll_to_visible", "scroll_to_edge",
-                 "run_batch", "get_session_state":
+                 "run_batch", "get_session_state",
+                 "connect", "list_targets":
                 request["command"] = params.name
 
             // Grouped tools — "type" field becomes the command
