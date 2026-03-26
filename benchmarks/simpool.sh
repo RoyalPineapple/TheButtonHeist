@@ -56,16 +56,16 @@ simpool_create() {
         local port=$((base_port + i))
 
         # Check if a sim with this name already exists (from a crashed previous run)
-        local existing_udid
+        local existing_udid=""
         existing_udid=$(xcrun simctl list devices -j 2>/dev/null \
             | jq -r --arg name "$name" \
-              '[.devices[][] | select(.name == $name and .isAvailable == true)] | .[0].udid // empty' 2>/dev/null)
+              '[.devices[][] | select(.name == $name and .isAvailable == true)] | .[0].udid // empty' 2>/dev/null) || true
 
         if [ -n "$existing_udid" ]; then
             _simpool_log "  Reusing existing sim: $name ($existing_udid) -> port $port"
             sims+=("{\"index\":$i,\"udid\":\"$existing_udid\",\"port\":$port,\"name\":\"$name\",\"state\":\"created\"}")
         else
-            local udid
+            local udid=""
             udid=$(xcrun simctl create "$name" "$device_type" "$runtime" 2>&1)
             if [ $? -ne 0 ]; then
                 _simpool_log "  ERROR creating $name: $udid"
@@ -170,18 +170,18 @@ simpool_claim() {
 
     _lock_acquire "$lock_dir"
 
-    local count
+    local count=""
     count=$(jq 'length' "$POOL_STATE_DIR/sims.json")
     local found=false
 
     for i in $(seq 0 $((count - 1))); do
-        local udid
+        local udid=""
         udid=$(jq -r ".[$i].udid" "$POOL_STATE_DIR/sims.json")
         local claim_file="$POOL_STATE_DIR/claims/$udid"
 
         if [ ! -f "$claim_file" ]; then
             echo "$worker_id" > "$claim_file"
-            local port
+            local port=""
             port=$(jq -r ".[$i].port" "$POOL_STATE_DIR/sims.json")
             _lock_release "$lock_dir"
             echo "$udid $port"
@@ -252,6 +252,84 @@ simpool_teardown() {
     rm -f "$POOL_STATE_DIR"/claims/*
 
     _simpool_log "Pool teardown complete"
+}
+
+# --- Build and start WebDriverAgent on all pool sims ---
+# Required for mobile-mcp benchmarks. WDA must be running for mobile-mcp to function.
+# Args: wda_project_path [base_wda_port]
+# base_wda_port defaults to 8100; each sim gets base+index.
+WDA_PIDS=()
+
+simpool_build_wda() {
+    local wda_project="$1"
+    local first_udid
+    first_udid=$(jq -r '.[0].udid' "$POOL_STATE_DIR/sims.json")
+
+    _simpool_log "Building WebDriverAgent..."
+    xcodebuild -project "$wda_project/WebDriverAgent.xcodeproj" \
+        -scheme WebDriverAgentRunner \
+        -destination "platform=iOS Simulator,id=$first_udid" \
+        build-for-testing 2>&1 | tail -3
+
+    if [ ${pipestatus[1]} -ne 0 ]; then
+        _simpool_log "ERROR: WDA build failed"
+        return 1
+    fi
+    _simpool_log "WDA build succeeded"
+}
+
+simpool_start_wda() {
+    local wda_project="$1"
+    local base_wda_port="${2:-8100}"
+
+    local udids=()
+    udids=($(jq -r '.[].udid' "$POOL_STATE_DIR/sims.json"))
+
+    _simpool_log "Starting WDA on ${#udids[@]} simulators (base port $base_wda_port)..."
+
+    local idx=0
+    for udid in "${udids[@]}"; do
+        local wda_port=$((base_wda_port + idx))
+
+        USE_PORT="$wda_port" xcodebuild \
+            -project "$wda_project/WebDriverAgent.xcodeproj" \
+            -scheme WebDriverAgentRunner \
+            -destination "platform=iOS Simulator,id=$udid" \
+            test-without-building \
+            >> "$POOL_STATE_DIR/wda_${udid}.log" 2>&1 &
+        WDA_PIDS+=($!)
+
+        _simpool_log "  WDA on $udid -> port $wda_port (pid $!)"
+        idx=$((idx + 1))
+    done
+
+    # Wait for all WDA instances to become ready
+    _simpool_log "Waiting for WDA instances to become ready..."
+    idx=0
+    for udid in "${udids[@]}"; do
+        local wda_port=$((base_wda_port + idx))
+        local retries=0
+        while [ $retries -lt 60 ]; do
+            if curl -sf "http://localhost:$wda_port/status" >/dev/null 2>&1; then
+                _simpool_log "  WDA ready on port $wda_port ($udid)"
+                break
+            fi
+            sleep 1
+            retries=$((retries + 1))
+        done
+        if [ $retries -ge 60 ]; then
+            _simpool_log "  WARNING: WDA on port $wda_port failed to start within 60s"
+        fi
+        idx=$((idx + 1))
+    done
+}
+
+simpool_stop_wda() {
+    for pid in "${WDA_PIDS[@]}"; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    WDA_PIDS=()
+    _simpool_log "WDA processes stopped"
 }
 
 # --- Find the freshest AccessibilityTestApp build ---

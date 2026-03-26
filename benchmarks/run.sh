@@ -133,7 +133,7 @@ preflight() {
     local ok=true
 
     local needs_bh=false
-    for c in "${CONFIGS[@]}"; do [[ "$c" != "idb" ]] && needs_bh=true; done
+    for c in "${CONFIGS[@]}"; do [[ "$c" != "idb" && "$c" != "mobile-mcp" ]] && needs_bh=true; done
     if $needs_bh && [ ! -x "$REPO_ROOT/ButtonHeistMCP/.build/release/buttonheist-mcp" ]; then
         log "ERROR: ButtonHeistMCP not built. Run: cd ButtonHeistMCP && swift build -c release"
         ok=false
@@ -144,8 +144,8 @@ preflight() {
         ok=false
     fi
 
-    if [[ " ${CONFIGS[*]} " == *" idb "* ]] && ! command -v npx >/dev/null 2>&1; then
-        log "ERROR: npx not found (needed for idb config)"
+    if [[ " ${CONFIGS[*]} " == *" idb "* || " ${CONFIGS[*]} " == *" mobile-mcp "* ]] && ! command -v npx >/dev/null 2>&1; then
+        log "ERROR: npx not found (needed for idb/mobile-mcp configs)"
         ok=false
     fi
 
@@ -187,6 +187,7 @@ reset_app() {
 
     # Launch with port override
     SIMCTL_CHILD_INSIDEJOB_PORT="$APP_PORT" \
+    SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" \
         xcrun simctl launch "$SIM_UDID" "$BUNDLE_ID" >/dev/null 2>&1
 
     if ! wait_for_app; then
@@ -221,6 +222,14 @@ When interacting with UI elements, you will receive frame data in the format {"x
 
 COACH
             ;;
+        mobile-mcp)
+            cat <<COACH
+IMPORTANT: Multiple simulators are booted. You MUST pass udid: "$SIM_UDID" in EVERY tool call. If you omit the udid parameter, the tool will target the wrong simulator.
+
+Use mobile_list_elements_on_screen to inspect UI element hierarchy. Elements include coordinates — use those directly for tap/swipe actions. Use mobile_take_screenshot to visually verify state when the element list is ambiguous.
+
+COACH
+            ;;
     esac
 }
 
@@ -236,12 +245,18 @@ generate_mcp_configs() {
     jq --arg udid "$SIM_UDID" \
        '.mcpServers["ios-simulator"].env = {"IDB_UDID": $udid}' \
        "$SCRIPT_DIR/configs/idb.json" > "$RUN_DIR/_mcp_idb.json"
+
+    # mobile-mcp config — inject UDID
+    jq --arg udid "$SIM_UDID" \
+       '.mcpServers["mobile-mcp"].env = {"UDID": $udid}' \
+       "$SCRIPT_DIR/configs/mobile-mcp.json" > "$RUN_DIR/_mcp_mobile-mcp.json"
 }
 
 mcp_config_for() {
     case "$1" in
-        idb) echo "$RUN_DIR/_mcp_idb.json" ;;
-        *)   echo "$RUN_DIR/_mcp_bh.json" ;;
+        idb)        echo "$RUN_DIR/_mcp_idb.json" ;;
+        mobile-mcp) echo "$RUN_DIR/_mcp_mobile-mcp.json" ;;
+        *)          echo "$RUN_DIR/_mcp_bh.json" ;;
     esac
 }
 
@@ -249,13 +264,15 @@ mcp_config_for() {
 BH_BASE_TOOLS="mcp__buttonheist__get_interface,mcp__buttonheist__get_screen,mcp__buttonheist__activate,mcp__buttonheist__type_text,mcp__buttonheist__swipe,mcp__buttonheist__gesture,mcp__buttonheist__accessibility_action,mcp__buttonheist__scroll,mcp__buttonheist__scroll_to_visible,mcp__buttonheist__scroll_to_edge,mcp__buttonheist__wait_for_idle,mcp__buttonheist__get_session_state,mcp__buttonheist__list_devices,mcp__buttonheist__tap,mcp__buttonheist__increment,mcp__buttonheist__decrement,mcp__buttonheist__perform_custom_action"
 BH_BATCH_TOOLS="${BH_BASE_TOOLS},mcp__buttonheist__run_batch"
 IDB_TOOLS="mcp__ios-simulator__ui_describe_all,mcp__ios-simulator__ui_tap,mcp__ios-simulator__ui_type,mcp__ios-simulator__ui_swipe,mcp__ios-simulator__screenshot,mcp__ios-simulator__get_booted_sim_id,mcp__ios-simulator__launch_app,mcp__ios-simulator__ui_describe_point,mcp__ios-simulator__ui_view"
+MOBILE_MCP_TOOLS="mcp__mobile-mcp__mobile_list_available_devices,mcp__mobile-mcp__mobile_list_apps,mcp__mobile-mcp__mobile_launch_app,mcp__mobile-mcp__mobile_terminate_app,mcp__mobile-mcp__mobile_get_screen_size,mcp__mobile-mcp__mobile_click_on_screen_at_coordinates,mcp__mobile-mcp__mobile_double_tap_on_screen,mcp__mobile-mcp__mobile_long_press_on_screen_at_coordinates,mcp__mobile-mcp__mobile_list_elements_on_screen,mcp__mobile-mcp__mobile_press_button,mcp__mobile-mcp__mobile_open_url,mcp__mobile-mcp__mobile_swipe_on_screen,mcp__mobile-mcp__mobile_type_keys,mcp__mobile-mcp__mobile_take_screenshot,mcp__mobile-mcp__mobile_set_orientation,mcp__mobile-mcp__mobile_get_orientation"
 
 allowed_tools_for() {
     case "$1" in
-        idb)            echo "$IDB_TOOLS" ;;
-        bh)             echo "$BH_BASE_TOOLS" ;;
+        idb)                echo "$IDB_TOOLS" ;;
+        mobile-mcp)         echo "$MOBILE_MCP_TOOLS" ;;
+        bh)                 echo "$BH_BASE_TOOLS" ;;
         bh-batch|bh-expect) echo "$BH_BATCH_TOOLS" ;;
-        *)              echo "$BH_BASE_TOOLS" ;;
+        *)                  echo "$BH_BASE_TOOLS" ;;
     esac
 }
 
@@ -340,8 +357,11 @@ VARS
     local allowed_tools=$(allowed_tools_for "$config")
     local exit_code=0
 
+    local stream_file="$RUN_DIR/${task}_${config}_${trial_num}.jsonl"
+
     timeout "${WALL_TIMEOUT}" claude -p "$full_prompt" \
-        --output-format json \
+        --verbose \
+        --output-format stream-json \
         --model "$MODEL" \
         --max-turns "$MAX_TURNS" \
         --no-session-persistence \
@@ -350,8 +370,11 @@ VARS
         --mcp-config "$mcp_config" \
         --allowedTools "$allowed_tools" \
         < /dev/null \
-        > "$result_file" 2>"$RUN_DIR/${task}_${config}_${trial_num}.stderr" \
+        > "$stream_file" 2>"$RUN_DIR/${task}_${config}_${trial_num}.stderr" \
         || exit_code=$?
+
+    # Extract final result message from stream into summary JSON
+    grep '^{"type":"result"' "$stream_file" | tail -1 > "$result_file" 2>/dev/null || true
 
     local end_ts=$(date +%s)
     local elapsed=$((end_ts - start_ts))

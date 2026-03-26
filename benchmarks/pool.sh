@@ -128,6 +128,9 @@ WORKER_PIDS=()
 cleanup() {
     log "Cleaning up..."
 
+    # Stop WDA if running
+    simpool_stop_wda 2>/dev/null || true
+
     # Signal all workers to stop
     for pid in "${WORKER_PIDS[@]}"; do
         kill -TERM "$pid" 2>/dev/null || true
@@ -254,6 +257,19 @@ if ! $SKIP_INSTALL; then
         log "ERROR: Failed to install app"
         exit 1
     }
+fi
+
+# --- Start WDA if mobile-mcp is in the config set ---
+if [[ " ${CONFIGS[*]} " == *" mobile-mcp "* ]]; then
+    WDA_PROJECT="$REPO_ROOT/WebDriverAgent"
+    WDA_BASE_PORT=8100
+    if [ ! -d "$WDA_PROJECT/WebDriverAgent.xcodeproj" ]; then
+        log "ERROR: WebDriverAgent not found at $WDA_PROJECT"
+        log "Clone it: git clone --depth 1 https://github.com/appium/WebDriverAgent.git"
+        exit 1
+    fi
+    simpool_build_wda "$WDA_PROJECT" || exit 1
+    simpool_start_wda "$WDA_PROJECT" "$WDA_BASE_PORT" || exit 1
 fi
 
 log ""
