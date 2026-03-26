@@ -220,9 +220,9 @@ final class RecordingPayloadTests: XCTestCase {
 
     func testInteractionEventTouchTapRoundTrip() throws {
         let delta = InterfaceDelta(
-            kind: .valuesChanged,
+            kind: .elementsChanged,
             elementCount: 1,
-            valueChanges: [ValueChange(order: 0, identifier: "okBtn", oldValue: nil, newValue: "tapped")]
+            updated: [ElementUpdate(heistId: "okBtn", changes: [PropertyChange(property: .value, old: nil, new: "tapped")])]
         )
         let event = InteractionEvent(
             timestamp: 3.2,
@@ -237,8 +237,8 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.timestamp, 3.2)
         XCTAssertEqual(decoded.result.method, .syntheticTap)
         XCTAssertNotNil(decoded.interfaceDelta)
-        XCTAssertEqual(decoded.interfaceDelta?.kind, .valuesChanged)
-        XCTAssertEqual(decoded.interfaceDelta?.valueChanges?.first?.identifier, "okBtn")
+        XCTAssertEqual(decoded.interfaceDelta?.kind, .elementsChanged)
+        XCTAssertEqual(decoded.interfaceDelta?.updated?.first?.heistId, "okBtn")
     }
 
     func testInteractionEventNilDelta() throws {

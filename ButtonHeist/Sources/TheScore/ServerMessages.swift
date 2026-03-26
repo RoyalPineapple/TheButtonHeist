@@ -171,6 +171,8 @@ public struct ActionResult: Codable, Sendable {
     public let elementValue: String?
     /// Post-action accessibility traits of the acted-on element (e.g. ["button", "selected"])
     public let elementTraits: [String]?
+    /// Label of the first header element in the post-action snapshot (screen name hint)
+    public let screenName: String?
 
     public init(
         success: Bool,
@@ -181,7 +183,8 @@ public struct ActionResult: Codable, Sendable {
         animating: Bool? = nil,
         elementLabel: String? = nil,
         elementValue: String? = nil,
-        elementTraits: [String]? = nil
+        elementTraits: [String]? = nil,
+        screenName: String? = nil
     ) {
         self.success = success
         self.method = method
@@ -192,6 +195,7 @@ public struct ActionResult: Codable, Sendable {
         self.elementLabel = elementLabel
         self.elementValue = elementValue
         self.elementTraits = elementTraits
+        self.screenName = screenName
     }
 }
 
@@ -208,14 +212,11 @@ public struct InterfaceDelta: Codable, Sendable {
     /// Elements that were added (present for .elementsChanged)
     public let added: [HeistElement]?
 
-    /// Orders of elements that were removed (present for .elementsChanged)
-    public let removedOrders: [Int]?
-
     /// HeistIds of elements that were removed (present for .elementsChanged)
-    public let removedHeistIds: [String]?
+    public let removed: [String]?
 
-    /// Value changes on existing elements (present for .valuesChanged or .elementsChanged)
-    public let valueChanges: [ValueChange]?
+    /// Elements whose properties changed (present for .elementsChanged)
+    public let updated: [ElementUpdate]?
 
     /// Full new interface (present only for .screenChanged)
     public let newInterface: Interface?
@@ -224,42 +225,56 @@ public struct InterfaceDelta: Codable, Sendable {
         kind: DeltaKind,
         elementCount: Int,
         added: [HeistElement]? = nil,
-        removedOrders: [Int]? = nil,
-        removedHeistIds: [String]? = nil,
-        valueChanges: [ValueChange]? = nil,
+        removed: [String]? = nil,
+        updated: [ElementUpdate]? = nil,
         newInterface: Interface? = nil
     ) {
         self.kind = kind
         self.elementCount = elementCount
         self.added = added
-        self.removedOrders = removedOrders
-        self.removedHeistIds = removedHeistIds
-        self.valueChanges = valueChanges
+        self.removed = removed
+        self.updated = updated
         self.newInterface = newInterface
     }
 
     public enum DeltaKind: String, Codable, Sendable {
         case noChange
-        case valuesChanged
         case elementsChanged
         case screenChanged
     }
 }
 
-/// A single value change on an element
-public struct ValueChange: Codable, Sendable {
-    public let order: Int
-    public let heistId: String?
-    public let identifier: String?
-    public let oldValue: String?
-    public let newValue: String?
+/// Which accessibility property changed on an element.
+public enum ElementProperty: String, Codable, Sendable, CaseIterable {
+    case value
+    case traits
+    case hint
+    case actions
+    case frame
+    case activationPoint
+}
 
-    public init(order: Int, heistId: String? = nil, identifier: String? = nil, oldValue: String?, newValue: String?) {
-        self.order = order
+/// A single property change: what property, old value, new value.
+public struct PropertyChange: Codable, Sendable, Equatable {
+    public let property: ElementProperty
+    public let old: String?
+    public let new: String?
+
+    public init(property: ElementProperty, old: String?, new: String?) {
+        self.property = property
+        self.old = old
+        self.new = new
+    }
+}
+
+/// An element whose state changed — carries the heistId and which properties differ.
+public struct ElementUpdate: Codable, Sendable, Equatable {
+    public let heistId: String
+    public let changes: [PropertyChange]
+
+    public init(heistId: String, changes: [PropertyChange]) {
         self.heistId = heistId
-        self.identifier = identifier
-        self.oldValue = oldValue
-        self.newValue = newValue
+        self.changes = changes
     }
 }
 
@@ -277,20 +292,23 @@ public struct ValueChange: Codable, Sendable {
 /// check, fewer to loosen it. The framework scans the result for any match.
 /// This minimizes cognitive load on the caller.
 ///
-/// Superset rule: `screen_changed` is a superset of `layout_changed`.
-/// Expecting `layout_changed` is met by either `elementsChanged` or `screenChanged`.
+/// Superset rule: `screen_changed` is a superset of `elements_changed`.
+/// Expecting `elements_changed` is met by either `elementsChanged` or `screenChanged`.
 /// Expecting `screen_changed` is only met by `screenChanged`.
 /// Screen change is detected by view controller identity — if the topmost VC changed,
 /// the screen changed.
 public enum ActionExpectation: Codable, Sendable, Equatable {
     /// Expected a screen-level change (VC identity changed).
     case screenChanged
-    /// Expected elements to be added, removed, or the screen to change.
-    case layoutChanged
-    /// Expected a value change in the interface delta. All fields are optional
-    /// filters — provide what you know, omit what you don't. Met when any entry
-    /// in `interfaceDelta.valueChanges` matches all provided fields.
-    case valueChanged(heistId: String? = nil, oldValue: String? = nil, newValue: String? = nil)
+    /// Expected elements to be added, removed, updated, or the screen to change.
+    case elementsChanged
+    /// Expected a property change on an element. All fields are optional filters —
+    /// provide what you know, omit what you don't. Met when any entry in
+    /// `interfaceDelta.updated` matches all provided fields.
+    case elementUpdated(
+        heistId: String? = nil, property: ElementProperty? = nil,
+        oldValue: String? = nil, newValue: String? = nil
+    )
 }
 
 /// The outcome of checking an ActionExpectation against an ActionResult.
@@ -320,9 +338,8 @@ extension ActionExpectation {
                 expectation: self,
                 actual: kind?.rawValue ?? "noChange"
             )
-        case .layoutChanged:
-            // Superset rule: screen_changed implies layout_changed.
-            // A navigation push changes layout AND screen — layout_changed should pass.
+        case .elementsChanged:
+            // Superset rule: screen_changed implies elements_changed.
             let kind = result.interfaceDelta?.kind
             let met = kind == .elementsChanged || kind == .screenChanged
             return ExpectationResult(
@@ -330,24 +347,34 @@ extension ActionExpectation {
                 expectation: self,
                 actual: kind?.rawValue ?? "noChange"
             )
-        case .valueChanged(let heistId, let oldValue, let newValue):
-            guard let changes = result.interfaceDelta?.valueChanges, !changes.isEmpty else {
-                return ExpectationResult(met: false, expectation: self, actual: "no value changes")
+        case .elementUpdated(let heistId, let property, let oldValue, let newValue):
+            guard let updates = result.interfaceDelta?.updated, !updates.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no element updates")
             }
-            let match = changes.contains { change in
-                if let heistId, change.heistId != heistId { return false }
-                if let oldValue, change.oldValue != oldValue { return false }
-                if let newValue, change.newValue != newValue { return false }
+            let match = updates.contains { update in
+                if let heistId, update.heistId != heistId { return false }
+                let targetChanges: [PropertyChange]
+                if let property {
+                    targetChanges = update.changes.filter { $0.property == property }
+                    if targetChanges.isEmpty { return false }
+                } else {
+                    targetChanges = update.changes
+                }
+                if let oldValue {
+                    guard targetChanges.contains(where: { $0.old == oldValue }) else { return false }
+                }
+                if let newValue {
+                    guard targetChanges.contains(where: { $0.new == newValue }) else { return false }
+                }
                 return true
             }
             if match {
                 return ExpectationResult(met: true, expectation: self, actual: nil)
             }
-            // Diagnostic: report what value changes actually occurred
-            let observed = changes.map { c in
-                let id = c.heistId ?? c.identifier ?? "order:\(c.order)"
-                return "\(id): \(c.oldValue ?? "nil") → \(c.newValue ?? "nil")"
-            }.joined(separator: ", ")
+            let observed = updates.map { u in
+                let props = u.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+                return "\(u.heistId): \(props.joined(separator: ", "))"
+            }.joined(separator: "; ")
             return ExpectationResult(met: false, expectation: self, actual: observed)
         }
     }

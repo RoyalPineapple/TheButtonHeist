@@ -6,19 +6,28 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
+public struct BatchStepSummary: Sendable {
+    public let command: String
+    public let deltaKind: String?
+    public let screenName: String?
+    public let expectationMet: Bool?
+    public let elementCount: Int?
+    public let error: String?
+}
+
 public enum FenceResponse {
     case ok(message: String)
     case error(String)
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface, detail: InterfaceDetail = .summary)
+    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
     case recording(path: String, payload: RecordingPayload)
     case recordingData(payload: RecordingPayload)
-    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0)
+    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0, stepSummaries: [BatchStepSummary] = [])
     case sessionState(payload: [String: Any])
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
@@ -44,7 +53,7 @@ public enum FenceResponse {
             return "Not connected"
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface, _):
+        case .interface(let interface, _, _):
             return formatInterface(interface)
         case .action(let result, let expectation):
             var text = formatActionResult(result)
@@ -67,7 +76,7 @@ public enum FenceResponse {
             return formatRecordingHuman(path: path, payload: payload)
         case .recordingData(let payload):
             return formatRecordingDataHuman(payload)
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, _):
             var text = "Batch: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at step \(idx))" }
             if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
@@ -134,8 +143,10 @@ public enum FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface, let detail):
-            return ["status": "ok", "detail": detail.rawValue, "interface": interfaceDictionary(interface, detail: detail)]
+        case .interface(let interface, let detail, let filteredFrom):
+            var dict: [String: Any] = ["status": "ok", "detail": detail.rawValue, "interface": interfaceDictionary(interface, detail: detail)]
+            if let filteredFrom { dict["filteredFrom"] = filteredFrom }
+            return dict
         case .action(let result, let expectation):
             var dict = actionJsonDict(result)
             if let expectation {
@@ -153,7 +164,7 @@ public enum FenceResponse {
             return recordingJsonDict(path: path, payload: payload)
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
-        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
+        case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
             var dict: [String: Any] = [
                 "status": failedIndex == nil ? "ok" : "partial",
                 "results": results,
@@ -167,6 +178,17 @@ public enum FenceResponse {
                     "met": met,
                     "allMet": checked == met,
                 ]
+            }
+            if !stepSummaries.isEmpty {
+                dict["stepSummaries"] = stepSummaries.enumerated().map { index, s in
+                    var entry: [String: Any] = ["index": index, "command": s.command]
+                    if let kind = s.deltaKind { entry["deltaKind"] = kind }
+                    if let screen = s.screenName { entry["screenName"] = screen }
+                    if let met = s.expectationMet { entry["expectationMet"] = met }
+                    if let count = s.elementCount { entry["elementCount"] = count }
+                    if let error = s.error { entry["error"] = error }
+                    return entry
+                }
             }
             return dict
         case .sessionState(let payload):
@@ -204,6 +226,7 @@ public enum FenceResponse {
         if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
         if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
         if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits }
+        if let screenName = result.screenName { payload["screenName"] = screenName }
 
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
@@ -339,15 +362,14 @@ public enum FenceResponse {
         switch delta.kind {
         case .noChange:
             return "[\(delta.elementCount) elements, no change]"
-        case .valuesChanged:
-            let count = delta.valueChanges?.count ?? 0
-            return "[\(delta.elementCount) elements, \(count) value\(count == 1 ? "" : "s") changed]"
         case .elementsChanged:
-            let added = delta.added?.count ?? 0
-            let removed = delta.removedOrders?.count ?? 0
+            let addedCount = delta.added?.count ?? 0
+            let removedCount = delta.removed?.count ?? 0
+            let updatedCount = delta.updated?.count ?? 0
             var parts: [String] = ["\(delta.elementCount) elements"]
-            if added > 0 { parts.append("+\(added) added") }
-            if removed > 0 { parts.append("-\(removed) removed") }
+            if addedCount > 0 { parts.append("+\(addedCount) added") }
+            if removedCount > 0 { parts.append("-\(removedCount) removed") }
+            if updatedCount > 0 { parts.append("~\(updatedCount) updated") }
             return "[" + parts.joined(separator: ", ") + "]"
         case .screenChanged:
             return "[\(delta.elementCount) elements, screen changed]"
@@ -372,8 +394,14 @@ public enum FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface, _):
-            return Self.compactInterface(interface)
+        case .interface(let interface, _, let filteredFrom):
+            var header = "\(interface.elements.count) elements"
+            if let filteredFrom { header += " (filtered from \(filteredFrom))" }
+            var lines: [String] = [header]
+            for element in interface.elements {
+                lines.append(Self.compactElementLine(element))
+            }
+            return lines.joined(separator: "\n")
         case .action(let result, let expectation):
             return compactActionResult(result, expectation: expectation)
         case .screenshot(let path, let width, let height):
@@ -384,10 +412,27 @@ public enum FenceResponse {
             return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
-        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met):
+        case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
             var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at \(idx))" }
             if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
+            if let lastScreen = stepSummaries.last(where: { $0.screenName != nil })?.screenName {
+                text += " | screen: \"\(lastScreen)\""
+            }
+            for (index, step) in stepSummaries.enumerated() {
+                var line = "  [\(index)] \(step.command)"
+                if let error = step.error {
+                    line += " → error: \(error)"
+                } else if let kind = step.deltaKind {
+                    line += " → \(kind)"
+                } else if let count = step.elementCount {
+                    line += " → \(count) elements"
+                }
+                if let met = step.expectationMet {
+                    line += met ? " ✓" : " ✗"
+                }
+                text += "\n\(line)"
+            }
             return text
         case .sessionState(let payload):
             let connected = payload["connected"] as? Bool ?? false
@@ -404,6 +449,9 @@ public enum FenceResponse {
             text = Self.compactDelta(delta, method: result.method.rawValue)
         } else {
             text = "\(result.method.rawValue): ok"
+        }
+        if let screenName = result.screenName {
+            text += " | screen: \"\(screenName)\""
         }
         if let value = result.value {
             text += "\nvalue: \"\(value)\""
@@ -457,36 +505,23 @@ public enum FenceResponse {
         case .noChange:
             return "\(method): no change"
 
-        case .valuesChanged:
-            var lines: [String] = ["\(method): values changed"]
-            for change in delta.valueChanges ?? [] {
-                let ref = change.heistId ?? change.identifier ?? "[\(change.order)]"
-                let old = change.oldValue ?? "nil"
-                let new = change.newValue ?? "nil"
-                lines.append("  \(ref): \"\(old)\" → \"\(new)\"")
-            }
-            return lines.joined(separator: "\n")
-
         case .elementsChanged:
-            var lines: [String] = ["\(method): layout changed (\(delta.elementCount) elements)"]
+            var lines: [String] = ["\(method): elements changed (\(delta.elementCount) elements)"]
             if let added = delta.added, !added.isEmpty {
                 for el in added {
                     lines.append("  + \(compactElementLine(el))")
                 }
             }
-            if let removed = delta.removedHeistIds, !removed.isEmpty {
+            if let removed = delta.removed, !removed.isEmpty {
                 for id in removed {
                     lines.append("  - \(id)")
                 }
-            } else if let removedOrders = delta.removedOrders, !removedOrders.isEmpty {
-                for order in removedOrders {
-                    lines.append("  - [\(order)]")
-                }
             }
-            if let changes = delta.valueChanges, !changes.isEmpty {
-                for change in changes {
-                    let ref = change.heistId ?? change.identifier ?? "[\(change.order)]"
-                    lines.append("  ~ \(ref): \"\(change.oldValue ?? "nil")\" → \"\(change.newValue ?? "nil")\"")
+            if let updates = delta.updated, !updates.isEmpty {
+                for update in updates {
+                    for change in update.changes {
+                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+                    }
                 }
             }
             return lines.joined(separator: "\n")
@@ -580,25 +615,25 @@ public enum FenceResponse {
     private func deltaDictionary(_ delta: InterfaceDelta) -> [String: Any] {
         var payload: [String: Any] = [
             "kind": delta.kind.rawValue,
-            "elementCount": delta.elementCount
+            "elementCount": delta.elementCount,
         ]
         if let added = delta.added {
             payload["added"] = added.map { elementDictionary($0) }
         }
-        if let removedOrders = delta.removedOrders {
-            payload["removedOrders"] = removedOrders
+        if let removed = delta.removed {
+            payload["removed"] = removed
         }
-        if let removedHeistIds = delta.removedHeistIds {
-            payload["removedHeistIds"] = removedHeistIds
-        }
-        if let valueChanges = delta.valueChanges {
-            payload["valueChanges"] = valueChanges.map { change in
-                var valuePayload: [String: Any] = ["order": change.order]
-                if let heistId = change.heistId { valuePayload["heistId"] = heistId }
-                if let identifier = change.identifier { valuePayload["identifier"] = identifier }
-                if let oldValue = change.oldValue { valuePayload["oldValue"] = oldValue }
-                if let newValue = change.newValue { valuePayload["newValue"] = newValue }
-                return valuePayload
+        if let updated = delta.updated {
+            payload["updated"] = updated.map { update -> [String: Any] in
+                [
+                    "heistId": update.heistId,
+                    "changes": update.changes.map { change -> [String: Any] in
+                        var entry: [String: Any] = ["property": change.property.rawValue]
+                        if let old = change.old { entry["old"] = old }
+                        if let new = change.new { entry["new"] = new }
+                        return entry
+                    },
+                ]
             }
         }
         if let newInterface = delta.newInterface {

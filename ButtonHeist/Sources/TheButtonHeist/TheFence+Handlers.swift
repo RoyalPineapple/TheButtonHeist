@@ -6,10 +6,23 @@ extension TheFence {
 
     // MARK: - Handler: Interface
 
-    func handleGetInterface() async throws -> Interface {
-        try await sendAndAwait(.requestInterface) { requestId in
+    func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
+        let interface: Interface = try await sendAndAwait(.requestInterface) { requestId in
             try await client.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
+        let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
+
+        if let filterIds = args["elements"] as? [String], !filterIds.isEmpty {
+            let filterSet = Set(filterIds)
+            let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
+            let filteredInterface = Interface(
+                timestamp: interface.timestamp,
+                elements: filtered,
+                tree: nil
+            )
+            return .interface(filteredInterface, detail: detail, filteredFrom: interface.elements.count)
+        }
+        return .interface(interface, detail: detail)
     }
 
     // MARK: - Handler: Screen
