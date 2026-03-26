@@ -27,7 +27,11 @@ public enum FenceResponse {
     case screenshotData(pngData: String, width: Double, height: Double)
     case recording(path: String, payload: RecordingPayload)
     case recordingData(payload: RecordingPayload)
-    case batch(results: [[String: Any]], completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0, stepSummaries: [BatchStepSummary] = [])
+    case batch(
+        results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
+        totalTimingMs: Int, expectationsChecked: Int = 0, expectationsMet: Int = 0,
+        stepSummaries: [BatchStepSummary] = []
+    )
     case sessionState(payload: [String: Any])
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
@@ -144,18 +148,9 @@ public enum FenceResponse {
         case .devices(let devices):
             return devicesJsonDict(devices)
         case .interface(let interface, let detail, let filteredFrom):
-            var dict: [String: Any] = ["status": "ok", "detail": detail.rawValue, "interface": interfaceDictionary(interface, detail: detail)]
-            if let filteredFrom { dict["filteredFrom"] = filteredFrom }
-            return dict
+            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom)
         case .action(let result, let expectation):
-            var dict = actionJsonDict(result)
-            if let expectation {
-                dict["expectation"] = Self.expectationResultDict(expectation)
-                if !expectation.met {
-                    dict["status"] = "expectation_failed"
-                }
-            }
-            return dict
+            return actionWithExpectationJsonDict(result, expectation: expectation)
         case .screenshot(let path, let width, let height):
             return ["status": "ok", "path": path, "width": width, "height": height]
         case .screenshotData(let pngData, let width, let height):
@@ -165,35 +160,74 @@ public enum FenceResponse {
         case .recordingData(let payload):
             return recordingDataJsonDict(payload)
         case .batch(let results, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
-            var dict: [String: Any] = [
-                "status": failedIndex == nil ? "ok" : "partial",
-                "results": results,
-                "completedSteps": completedSteps,
-                "totalTimingMs": totalTimingMs,
-            ]
-            if let idx = failedIndex { dict["failedIndex"] = idx }
-            if checked > 0 {
-                dict["expectations"] = [
-                    "checked": checked,
-                    "met": met,
-                    "allMet": checked == met,
-                ]
-            }
-            if !stepSummaries.isEmpty {
-                dict["stepSummaries"] = stepSummaries.enumerated().map { index, s in
-                    var entry: [String: Any] = ["index": index, "command": s.command]
-                    if let kind = s.deltaKind { entry["deltaKind"] = kind }
-                    if let screen = s.screenName { entry["screenName"] = screen }
-                    if let met = s.expectationMet { entry["expectationMet"] = met }
-                    if let count = s.elementCount { entry["elementCount"] = count }
-                    if let error = s.error { entry["error"] = error }
-                    return entry
-                }
-            }
-            return dict
+            return batchJsonDict(
+                results: results, completedSteps: completedSteps, failedIndex: failedIndex,
+                totalTimingMs: totalTimingMs, checked: checked, met: met, stepSummaries: stepSummaries
+            )
         case .sessionState(let payload):
             return payload
         }
+    }
+
+    private func interfaceJsonDict(
+        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?
+    ) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": "ok",
+            "detail": detail.rawValue,
+            "interface": interfaceDictionary(interface, detail: detail),
+        ]
+        if let filteredFrom { dict["filteredFrom"] = filteredFrom }
+        return dict
+    }
+
+    private func actionWithExpectationJsonDict(
+        _ result: ActionResult, expectation: ExpectationResult?
+    ) -> [String: Any] {
+        var dict = actionJsonDict(result)
+        if let expectation {
+            dict["expectation"] = Self.expectationResultDict(expectation)
+            if !expectation.met {
+                dict["status"] = "expectation_failed"
+            }
+        }
+        return dict
+    }
+
+    private func batchJsonDict(
+        results: [[String: Any]], completedSteps: Int, failedIndex: Int?,
+        totalTimingMs: Int, checked: Int, met: Int, stepSummaries: [BatchStepSummary]
+    ) -> [String: Any] {
+        var dict: [String: Any] = [
+            "status": failedIndex == nil ? "ok" : "partial",
+            "results": results,
+            "completedSteps": completedSteps,
+            "totalTimingMs": totalTimingMs,
+        ]
+        if let idx = failedIndex { dict["failedIndex"] = idx }
+        if checked > 0 {
+            dict["expectations"] = [
+                "checked": checked,
+                "met": met,
+                "allMet": checked == met,
+            ]
+        }
+        if !stepSummaries.isEmpty {
+            dict["stepSummaries"] = stepSummaries.enumerated().map { index, s in
+                Self.stepSummaryDict(index: index, summary: s)
+            }
+        }
+        return dict
+    }
+
+    private static func stepSummaryDict(index: Int, summary s: BatchStepSummary) -> [String: Any] {
+        var entry: [String: Any] = ["index": index, "command": s.command]
+        if let kind = s.deltaKind { entry["deltaKind"] = kind }
+        if let screen = s.screenName { entry["screenName"] = screen }
+        if let met = s.expectationMet { entry["expectationMet"] = met }
+        if let count = s.elementCount { entry["elementCount"] = count }
+        if let error = s.error { entry["error"] = error }
+        return entry
     }
 
     private func devicesJsonDict(_ devices: [DiscoveredDevice]) -> [String: Any] {
@@ -413,27 +447,11 @@ public enum FenceResponse {
         case .recordingData(let payload):
             return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
         case .batch(_, let completedSteps, let failedIndex, let totalTimingMs, let checked, let met, let stepSummaries):
-            var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
-            if let idx = failedIndex { text += " (failed at \(idx))" }
-            if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
-            if let lastScreen = stepSummaries.last(where: { $0.screenName != nil })?.screenName {
-                text += " | screen: \"\(lastScreen)\""
-            }
-            for (index, step) in stepSummaries.enumerated() {
-                var line = "  [\(index)] \(step.command)"
-                if let error = step.error {
-                    line += " → error: \(error)"
-                } else if let kind = step.deltaKind {
-                    line += " → \(kind)"
-                } else if let count = step.elementCount {
-                    line += " → \(count) elements"
-                }
-                if let met = step.expectationMet {
-                    line += met ? " ✓" : " ✗"
-                }
-                text += "\n\(line)"
-            }
-            return text
+            return compactBatchFormatted(
+                completedSteps: completedSteps, failedIndex: failedIndex,
+                totalTimingMs: totalTimingMs, checked: checked, met: met,
+                stepSummaries: stepSummaries
+            )
         case .sessionState(let payload):
             let connected = payload["connected"] as? Bool ?? false
             return connected ? "session: connected" : "session: not connected"
@@ -460,6 +478,33 @@ public enum FenceResponse {
             if !expectation.met {
                 text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
             }
+        }
+        return text
+    }
+
+    private func compactBatchFormatted(
+        completedSteps: Int, failedIndex: Int?, totalTimingMs: Int,
+        checked: Int, met: Int, stepSummaries: [BatchStepSummary]
+    ) -> String {
+        var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
+        if let idx = failedIndex { text += " (failed at \(idx))" }
+        if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
+        if let lastScreen = stepSummaries.last(where: { $0.screenName != nil })?.screenName {
+            text += " | screen: \"\(lastScreen)\""
+        }
+        for (index, step) in stepSummaries.enumerated() {
+            var line = "  [\(index)] \(step.command)"
+            if let error = step.error {
+                line += " → error: \(error)"
+            } else if let kind = step.deltaKind {
+                line += " → \(kind)"
+            } else if let count = step.elementCount {
+                line += " → \(count) elements"
+            }
+            if let met = step.expectationMet {
+                line += met ? " ✓" : " ✗"
+            }
+            text += "\n\(line)"
         }
         return text
     }
