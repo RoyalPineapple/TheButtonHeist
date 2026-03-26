@@ -55,6 +55,14 @@ graph TD
     Core --> FP
 ```
 
+## Deep Dives
+
+| Topic | File | Covers |
+|-------|------|--------|
+| [Scrolling](04a-SCROLLING.md) | `04a-SCROLLING.md` | Auto-scroll to visible, explicit scroll commands, ancestor walk, settle logic |
+| [Touch Injection](04b-TOUCH-INJECTION.md) | `04b-TOUCH-INJECTION.md` | 3-layer IOKit/UITouch/UIEvent pipeline, hit testing, gesture geometry, timing |
+| [Text Entry](04c-TEXT-ENTRY.md) | `04c-TEXT-ENTRY.md` | 5-step pipeline, UIKeyboardImpl injection, keyboard detection, edit actions |
+
 ## Touch Injection Stack
 
 ```mermaid
