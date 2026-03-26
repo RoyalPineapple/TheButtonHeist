@@ -243,10 +243,28 @@ extension TheFence {
                 .scroll(ScrollTarget(elementTarget: elementTarget(args), direction: direction))
             )
         case .scrollToVisible:
-            guard let target = elementTarget(args) else {
-                return .error("Must specify element (identifier or order) for scroll_to_visible")
+            let matcher = elementMatcher(args)
+            guard matcher.label != nil || matcher.identifier != nil || matcher.heistId != nil || matcher.value != nil else {
+                return .error("Must specify at least one match field (heistId, identifier, label, or value) for scroll_to_visible")
             }
-            return try await sendAction(.scrollToVisible(target))
+            let directionStr = stringArg(args, "direction")
+            var direction: ScrollSearchDirection?
+            if let directionStr {
+                direction = ScrollSearchDirection(rawValue: directionStr.lowercased())
+                if direction == nil {
+                    return .error("Invalid direction '\(directionStr)'. Valid: \(ScrollSearchDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+                }
+            }
+            let target = ScrollToVisibleTarget(
+                match: matcher,
+                maxScrolls: intArg(args, "maxScrolls"),
+                direction: direction
+            )
+            let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
+                try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
+            }
+            lastActionResult = result
+            return .action(result: result)
         case .scrollToEdge:
             guard let edgeValue = stringArg(args, "edge") else {
                 return .error("edge is required for scroll_to_edge. Valid: top, bottom, left, right")

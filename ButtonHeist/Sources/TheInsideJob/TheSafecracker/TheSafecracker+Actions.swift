@@ -110,21 +110,199 @@ extension TheSafecracker {
         )
     }
 
-    func executeScrollToVisible(_ target: ActionTarget) -> InteractionResult {
+    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> InteractionResult {
         guard let bagman else {
-            return .failure(.elementNotFound, message: "No element store available")
-        }
-        guard let index = bagman.resolveTraversalIndex(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found for scroll_to_visible target")
+            return .failure(.scrollToVisible, message: "No element store available")
         }
 
-        let success = scrollToVisible(elementAt: index)
-        return InteractionResult(
-            success: success,
-            method: .scrollToVisible,
-            message: success ? nil : "No scrollable ancestor found for element",
-            value: nil
+        let matcher = target.match
+        let maxScrolls = target.resolvedMaxScrolls
+        let primaryDirection = target.resolvedDirection
+
+        // Phase 0: Check current tree for match (no conversion to wire types)
+        bagman.refreshAccessibilityData()
+        if let found = bagman.findMatch(matcher) {
+            // Already visible — scroll into view if partially off-screen
+            _ = scrollToVisible(elementAt: found.index)
+            let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
+            return InteractionResult(
+                success: true, method: .scrollToVisible, message: nil, value: nil,
+                scrollSearchResult: ScrollSearchResult(
+                    scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
+                    totalItems: nil, exhaustive: false, foundElement: wireElement
+                )
+            )
+        }
+
+        // Find the nearest scroll view from any visible element
+        guard let scrollView = findFirstScrollView() else {
+            return .failure(.scrollToVisible, message: "No scroll view found on screen")
+        }
+
+        // Query collection/table metadata if available
+        let totalItems = queryCollectionTotalItems(scrollView)
+
+        // Track unique elements by identity (AccessibilityElement is Hashable)
+        var seenElements = Set(bagman.cachedElements)
+        var scrollCount = 0
+
+        // Phase 1: Scroll in primary direction
+        let result = await scrollSearchLoop(
+            scrollView: scrollView, matcher: matcher, direction: primaryDirection,
+            maxScrolls: maxScrolls, scrollCount: &scrollCount,
+            seenElements: &seenElements, totalItems: totalItems
         )
+        if let result { return result }
+
+        // Phase 2: Scroll in reverse direction from original position
+        scrollToOppositeEdge(scrollView, from: primaryDirection)
+        if let tripwire {
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
+        }
+        bagman.refreshAccessibilityData()
+
+        let reverseDirection = oppositeDirection(primaryDirection)
+        let result2 = await scrollSearchLoop(
+            scrollView: scrollView, matcher: matcher, direction: reverseDirection,
+            maxScrolls: maxScrolls - scrollCount, scrollCount: &scrollCount,
+            seenElements: &seenElements, totalItems: totalItems
+        )
+        if let result2 { return result2 }
+
+        // Phase 3: Not found
+        let exhaustive = totalItems != nil && seenElements.count >= totalItems!
+        return InteractionResult(
+            success: false, method: .scrollToVisible,
+            message: "Element not found after \(scrollCount) scrolls", value: nil,
+            scrollSearchResult: ScrollSearchResult(
+                scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                totalItems: totalItems, exhaustive: exhaustive
+            )
+        )
+    }
+
+    // MARK: - Scroll Search Helpers
+
+    /// Run a scroll-and-check loop in one direction. Matching happens on the
+    /// canonical AccessibilityElement tree — no wire conversion per step.
+    private func scrollSearchLoop(
+        scrollView: UIScrollView,
+        matcher: ElementMatcher,
+        direction: ScrollSearchDirection,
+        maxScrolls: Int,
+        scrollCount: inout Int,
+        seenElements: inout Set<AccessibilityElement>,
+        totalItems: Int?
+    ) async -> InteractionResult? {
+        let uiDirection = direction.uiScrollDirection
+
+        while scrollCount < maxScrolls {
+            let scrolled = scrollByPage(scrollView, direction: uiDirection)
+            if !scrolled { break }
+            scrollCount += 1
+
+            if let tripwire {
+                _ = await tripwire.waitForAllClear(timeout: 1.0)
+            }
+            bagman?.refreshAccessibilityData()
+
+            // Match against canonical elements — no HeistElement conversion
+            if let bagman, let found = bagman.findMatch(matcher) {
+                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
+                return InteractionResult(
+                    success: true, method: .scrollToVisible, message: nil, value: nil,
+                    scrollSearchResult: ScrollSearchResult(
+                        scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                        totalItems: totalItems, exhaustive: false, foundElement: wireElement
+                    )
+                )
+            }
+
+            // Track new elements for scroll-end detection
+            let currentElements = bagman?.cachedElements ?? []
+            let previousCount = seenElements.count
+            seenElements.formUnion(currentElements)
+
+            // No new elements → reached the end in this direction
+            if seenElements.count == previousCount { break }
+
+            // Exhaustive check for collection/table views
+            if let totalItems, seenElements.count >= totalItems {
+                return InteractionResult(
+                    success: false, method: .scrollToVisible,
+                    message: "Element not found (exhaustive search)", value: nil,
+                    scrollSearchResult: ScrollSearchResult(
+                        scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                        totalItems: totalItems, exhaustive: true
+                    )
+                )
+            }
+        }
+        return nil
+    }
+
+    /// Find the first UIScrollView on screen by walking ancestors of visible elements.
+    private func findFirstScrollView() -> UIScrollView? {
+        guard let bagman else { return nil }
+        let elements = bagman.cachedElements
+        for i in 0..<elements.count {
+            guard let object = bagman.object(at: i) else { continue }
+            var current: NSObject? = object
+            while let candidate = current {
+                if let scrollView = candidate as? UIScrollView,
+                   scrollView.isScrollEnabled {
+                    return scrollView
+                }
+                current = nextAncestor(of: candidate)
+            }
+        }
+        return nil
+    }
+
+    /// Query total item count from UITableView or UICollectionView data source.
+    private func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
+        if let collectionView = scrollView as? UICollectionView {
+            let sections = collectionView.numberOfSections
+            var total = 0
+            for section in 0..<sections {
+                total += collectionView.numberOfItems(inSection: section)
+            }
+            return total
+        }
+        if let tableView = scrollView as? UITableView {
+            let sections = tableView.numberOfSections
+            var total = 0
+            for section in 0..<sections {
+                total += tableView.numberOfRows(inSection: section)
+            }
+            return total
+        }
+        return nil
+    }
+
+    private func oppositeDirection(_ direction: ScrollSearchDirection) -> ScrollSearchDirection {
+        switch direction {
+        case .down: return .up
+        case .up: return .down
+        case .left: return .right
+        case .right: return .left
+        }
+    }
+
+    private func scrollToOppositeEdge(_ scrollView: UIScrollView, from direction: ScrollSearchDirection) {
+        let insets = scrollView.adjustedContentInset
+        switch direction {
+        case .down:
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: -insets.top), animated: false)
+        case .up:
+            let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: maxY), animated: false)
+        case .right:
+            scrollView.setContentOffset(CGPoint(x: -insets.left, y: scrollView.contentOffset.y), animated: false)
+        case .left:
+            let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+            scrollView.setContentOffset(CGPoint(x: maxX, y: scrollView.contentOffset.y), animated: false)
+        }
     }
 
     // MARK: - Scroll Implementation
@@ -628,6 +806,17 @@ extension TheSafecracker {
             result = Self.defaultGestureDuration
         }
         return clampDuration(result)
+    }
+}
+
+extension ScrollSearchDirection {
+    var uiScrollDirection: UIAccessibilityScrollDirection {
+        switch self {
+        case .down: return .down
+        case .up: return .up
+        case .left: return .left
+        case .right: return .right
+        }
     }
 }
 
