@@ -19,15 +19,15 @@ Most iOS automation tools operate outside the app process through XPC or screens
 
 ### Benchmarks
 
-Same Claude Sonnet agent, same 11-step workflow (n=6):
+Three MCP servers tested on the same 13-task suite (Claude Sonnet 4.6, n=3 per cell). All three achieve high accuracy — the differentiation is efficiency:
 
-| | Turns | Wall time | Tokens |
-|---|-------|-----------|--------|
-| Button Heist (base) | 31 | 123s | 1,137K |
-| ios-simulator-mcp | 41 | 175s | 1,550K |
-| Button Heist + batch + expect | **12** | **83s** | **381K** |
+| | Turns | Wall time | Cost |
+|---|-------|-----------|------|
+| mobile-mcp | 61 | 308s | $0.99 |
+| ios-simulator-mcp | 49 | 188s | $0.84 |
+| **Button Heist** | **25** | **103s** | **$0.43** |
 
-75% context reduction vs ios-simulator-mcp when using batch and expectations. Details in [docs/benchmark-data.md](docs/benchmark-data.md).
+Numbers shown for T0-full-workflow (11-step multi-screen task). BH consistently shows 2-3x fewer turns across the full 13-task suite. Details in [docs/the-argument.md](docs/the-argument.md).
 
 ## Features
 
@@ -342,7 +342,7 @@ git submodule update --remote ai-fuzzer   # Update later
 - [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) — Quick orientation for new reviewers
 - [Competitive Landscape](docs/competitive-landscape.md) — How Button Heist compares
 - [The Argument](docs/the-argument.md) — Why this approach, why now
-- [Benchmark Data](docs/benchmark-data.md) — Performance measurements
+- Benchmark Data — Raw results in `benchmarks/results/`
 - [Crew Dossiers](docs/dossiers/) — Per-crew-member technical deep dives
 
 **Project:**
