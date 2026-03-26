@@ -33,6 +33,14 @@ When interacting with UI elements, you will receive frame data in the format {"x
 
 COACH
             ;;
+        mobile-mcp)
+            cat <<COACH
+IMPORTANT: Multiple simulators are booted. You MUST pass udid: "$sim_udid" in EVERY tool call. If you omit the udid parameter, the tool will target the wrong simulator.
+
+Use mobile_list_elements_on_screen to inspect UI element hierarchy. Elements include coordinates — use those directly for tap/swipe actions. Use mobile_take_screenshot to visually verify state when the element list is ambiguous.
+
+COACH
+            ;;
     esac
 }
 
@@ -48,13 +56,18 @@ generate_mcp_configs() {
     jq --arg udid "$sim_udid" \
        '.mcpServers["ios-simulator"].env = {"IDB_UDID": $udid}' \
        "$SCRIPT_DIR/configs/idb.json" > "$run_dir/_mcp_idb_${sim_udid}.json"
+
+    jq --arg udid "$sim_udid" \
+       '.mcpServers["mobile-mcp"].env = {"UDID": $udid}' \
+       "$SCRIPT_DIR/configs/mobile-mcp.json" > "$run_dir/_mcp_mobile-mcp_${sim_udid}.json"
 }
 
 mcp_config_for() {
     local config="$1" run_dir="$2" app_port="$3" sim_udid="$4"
     case "$config" in
-        idb) echo "$run_dir/_mcp_idb_${sim_udid}.json" ;;
-        *)   echo "$run_dir/_mcp_bh_${app_port}.json" ;;
+        idb)        echo "$run_dir/_mcp_idb_${sim_udid}.json" ;;
+        mobile-mcp) echo "$run_dir/_mcp_mobile-mcp_${sim_udid}.json" ;;
+        *)          echo "$run_dir/_mcp_bh_${app_port}.json" ;;
     esac
 }
 
@@ -62,10 +75,12 @@ mcp_config_for() {
 BH_BASE_TOOLS="mcp__buttonheist__get_interface,mcp__buttonheist__get_screen,mcp__buttonheist__activate,mcp__buttonheist__type_text,mcp__buttonheist__swipe,mcp__buttonheist__gesture,mcp__buttonheist__accessibility_action,mcp__buttonheist__scroll,mcp__buttonheist__scroll_to_visible,mcp__buttonheist__scroll_to_edge,mcp__buttonheist__wait_for_idle,mcp__buttonheist__get_session_state,mcp__buttonheist__list_devices,mcp__buttonheist__tap,mcp__buttonheist__increment,mcp__buttonheist__decrement,mcp__buttonheist__perform_custom_action"
 BH_BATCH_TOOLS="${BH_BASE_TOOLS},mcp__buttonheist__run_batch"
 IDB_TOOLS="mcp__ios-simulator__ui_describe_all,mcp__ios-simulator__ui_tap,mcp__ios-simulator__ui_type,mcp__ios-simulator__ui_swipe,mcp__ios-simulator__screenshot,mcp__ios-simulator__get_booted_sim_id,mcp__ios-simulator__launch_app,mcp__ios-simulator__ui_describe_point,mcp__ios-simulator__ui_view"
+MOBILE_MCP_TOOLS="mcp__mobile-mcp__mobile_list_available_devices,mcp__mobile-mcp__mobile_list_apps,mcp__mobile-mcp__mobile_launch_app,mcp__mobile-mcp__mobile_terminate_app,mcp__mobile-mcp__mobile_get_screen_size,mcp__mobile-mcp__mobile_click_on_screen_at_coordinates,mcp__mobile-mcp__mobile_double_tap_on_screen,mcp__mobile-mcp__mobile_long_press_on_screen_at_coordinates,mcp__mobile-mcp__mobile_list_elements_on_screen,mcp__mobile-mcp__mobile_press_button,mcp__mobile-mcp__mobile_open_url,mcp__mobile-mcp__mobile_swipe_on_screen,mcp__mobile-mcp__mobile_type_keys,mcp__mobile-mcp__mobile_take_screenshot,mcp__mobile-mcp__mobile_set_orientation,mcp__mobile-mcp__mobile_get_orientation"
 
 allowed_tools_for() {
     case "$1" in
         idb)                echo "$IDB_TOOLS" ;;
+        mobile-mcp)         echo "$MOBILE_MCP_TOOLS" ;;
         bh)                 echo "$BH_BASE_TOOLS" ;;
         bh-batch|bh-expect) echo "$BH_BATCH_TOOLS" ;;
         *)                  echo "$BH_BASE_TOOLS" ;;
@@ -100,6 +115,7 @@ reset_app() {
     done
 
     SIMCTL_CHILD_INSIDEJOB_PORT="$app_port" \
+    SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" \
         xcrun simctl launch "$sim_udid" "$BUNDLE_ID" >/dev/null 2>&1
 
     if ! wait_for_app "$app_port"; then
@@ -144,13 +160,13 @@ substitute_template() {
 write_vars_file() {
     local vars_file="$1"
     cat > "$vars_file" <<VARS
-rand_a=$TRIAL_VARS_rand_a
-rand_b=$TRIAL_VARS_rand_b
-rand_c=$TRIAL_VARS_rand_c
-calc_expected='$TRIAL_VARS_calc_expected'
-todo_a='$TRIAL_VARS_todo_a'
-todo_b='$TRIAL_VARS_todo_b'
-todo_c='$TRIAL_VARS_todo_c'
+rand_a=${TRIAL_VARS_rand_a:-}
+rand_b=${TRIAL_VARS_rand_b:-}
+rand_c=${TRIAL_VARS_rand_c:-}
+calc_expected='${TRIAL_VARS_calc_expected:-}'
+todo_a='${TRIAL_VARS_todo_a:-}'
+todo_b='${TRIAL_VARS_todo_b:-}'
+todo_c='${TRIAL_VARS_todo_c:-}'
 VARS
 }
 
@@ -188,8 +204,11 @@ run_trial() {
     local allowed_tools=$(allowed_tools_for "$config")
     local exit_code=0
 
+    local stream_file="$run_dir/${task}_${config}_${trial_num}.jsonl"
+
     timeout "${wall_timeout}" claude -p "$full_prompt" \
-        --output-format json \
+        --verbose \
+        --output-format stream-json \
         --model "$model" \
         --max-turns "$max_turns" \
         --no-session-persistence \
@@ -198,8 +217,11 @@ run_trial() {
         --mcp-config "$mcp_config" \
         --allowedTools "$allowed_tools" \
         < /dev/null \
-        > "$result_file" 2>"$run_dir/${task}_${config}_${trial_num}.stderr" \
+        > "$stream_file" 2>"$run_dir/${task}_${config}_${trial_num}.stderr" \
         || exit_code=$?
+
+    # Extract final result message from stream into summary JSON
+    grep '^{"type":"result"' "$stream_file" | tail -1 > "$result_file" 2>/dev/null || true
 
     local end_ts=$(date +%s)
     local elapsed=$((end_ts - start_ts))
@@ -282,7 +304,7 @@ preflight_check() {
     local ok=true
 
     local needs_bh=false
-    for c in "${configs[@]}"; do [[ "$c" != "idb" ]] && needs_bh=true; done
+    for c in "${configs[@]}"; do [[ "$c" != "idb" && "$c" != "mobile-mcp" ]] && needs_bh=true; done
     if $needs_bh && [ ! -x "$REPO_ROOT/ButtonHeistMCP/.build/release/buttonheist-mcp" ]; then
         echo "ERROR: ButtonHeistMCP not built. Run: cd ButtonHeistMCP && swift build -c release" >&2
         ok=false
@@ -293,8 +315,8 @@ preflight_check() {
         ok=false
     fi
 
-    if [[ " ${configs[*]} " == *" idb "* ]] && ! command -v npx >/dev/null 2>&1; then
-        echo "ERROR: npx not found (needed for idb config)" >&2
+    if [[ " ${configs[*]} " == *" idb "* || " ${configs[*]} " == *" mobile-mcp "* ]] && ! command -v npx >/dev/null 2>&1; then
+        echo "ERROR: npx not found (needed for idb/mobile-mcp configs)" >&2
         ok=false
     fi
 
