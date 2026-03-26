@@ -57,6 +57,7 @@ enum ToolDefinitions {
         gesture, accessibilityAction, setPasteboard, getPasteboard,
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
+        connect, listTargets,
     ]
 
     // MARK: - Individual Tools
@@ -437,6 +438,48 @@ enum ToolDefinitions {
             Inspect the current Button Heist session state without performing any actions. \
             Returns connection status, active device/app identity, recording state, client timeouts, \
             and a lightweight summary of the last action (if any).
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": .object([:]),
+            "additionalProperties": false,
+        ],
+        annotations: .init(readOnlyHint: true, idempotentHint: true)
+    )
+
+    static let connect = Tool(
+        name: "connect",
+        description: """
+            Switch the active connection to a different target at runtime without restarting the server. \
+            Accepts either a named target from the config file (.buttonheist.json) or raw device/token \
+            parameters. Tears down any existing session before connecting to the new target.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "target": [
+                    "type": "string",
+                    "description": "Named target from .buttonheist.json config file",
+                ],
+                "device": [
+                    "type": "string",
+                    "description": "Direct host:port address (e.g. 127.0.0.1:1455)",
+                ],
+                "token": [
+                    "type": "string",
+                    "description": "Auth token (overrides config file token if both provided)",
+                ],
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let listTargets = Tool(
+        name: "list_targets",
+        description: """
+            List named connection targets from the config file (.buttonheist.json or \
+            ~/.config/buttonheist/config.json). Shows target names, device addresses, \
+            and which target is the default.
             """,
         inputSchema: [
             "type": "object",
