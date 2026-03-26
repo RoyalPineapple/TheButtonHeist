@@ -16,7 +16,7 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 | [Reviewer's Guide](REVIEWERS-GUIDE.md) | Quick orientation for new reviewers |
 | [Competitive Landscape](competitive-landscape.md) | How Button Heist compares to alternatives |
 | [The Argument](the-argument.md) | Why this approach, why now |
-| [Benchmark Data](../benchmarks/README.md) | Performance measurements |
+| Benchmark Data | Raw results in `benchmarks/results/` |
 | [ios-simulator-mcp Comparison](ios-simulator-mcp-comparison.md) | Detailed feature comparison with ios-simulator-mcp |
 | [Crew Dossiers](dossiers/) | Per-crew-member technical deep dives |
 

@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "ios-simulator": {
-      "command": "ios-simulator-mcp"
-    }
-  }
-}

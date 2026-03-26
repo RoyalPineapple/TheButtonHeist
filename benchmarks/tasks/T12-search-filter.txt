@@ -1,5 +1,0 @@
-You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Long List". Search for "Sprocket" using the search field. After the list filters, read the item count label at the bottom, then tap the first item in the filtered results and read the "Selected:" label.
-
-Report your findings in exactly this format:
-item_count: <number from the item count label>
-selected_item: <exact text of the Selected label>

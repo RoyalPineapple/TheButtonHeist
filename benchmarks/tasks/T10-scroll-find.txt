@@ -1,4 +1,0 @@
-You are operating an iOS test app called AccessibilityTestApp. Navigate from the root screen to "Long List". Scroll down to find item 73 in the list and tap it. After tapping, read the "Selected:" label that appears at the bottom of the screen.
-
-Report your findings in exactly this format:
-selected_item: <exact text of the Selected label>

@@ -28,7 +28,7 @@ Three MCP servers tested on the same 13-task suite (Claude Sonnet 4.6, n=3 per c
 | Button Heist (base) | 25 | 85s | $0.38 |
 | Button Heist + batch + expect | **10** | **54s** | **$0.24** |
 
-Numbers shown for T0-full-workflow (11-step multi-screen task). BH is 2-3x more efficient across the full suite. Details in [benchmarks/README.md](benchmarks/README.md).
+Numbers shown for T0-full-workflow (11-step multi-screen task). BH is 2-3x more efficient across the full suite. Details in benchmarks/results/.
 
 ## Features
 
@@ -343,7 +343,7 @@ git submodule update --remote ai-fuzzer   # Update later
 - [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) — Quick orientation for new reviewers
 - [Competitive Landscape](docs/competitive-landscape.md) — How Button Heist compares
 - [The Argument](docs/the-argument.md) — Why this approach, why now
-- [Benchmark Data](benchmarks/README.md) — Performance measurements
+- Benchmark Data — Raw results in `benchmarks/results/`
 - [Crew Dossiers](docs/dossiers/) — Per-crew-member technical deep dives
 
 **Project:**
