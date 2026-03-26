@@ -15,30 +15,37 @@ enum ToolDefinitions {
         "description": """
             Outcome signal for this action. Delivery is always checked implicitly. \
             String values: "screen_changed" (did the view controller change?), \
-            "layout_changed" (were elements added or removed? does not match value-only changes). \
-            Object value: {"valueChanged": {"newValue": "5"}} to check interface delta value changes. \
-            valueChanged follows "say what you know" — provide only the fields you care about \
-            (heistId, oldValue, newValue). Omitted fields are wildcards.
+            "elements_changed" (were elements added, removed, or updated?). \
+            Object value: {"elementUpdated": {"heistId": "slider", "property": "value", "newValue": "5"}} \
+            to check specific property changes on elements. \
+            elementUpdated follows "say what you know" — provide only the fields you care about \
+            (heistId, property, oldValue, newValue). Omitted fields are wildcards. \
+            Legacy "layout_changed" and "valueChanged" keys are still accepted.
             """,
         "oneOf": .array([
             [
                 "type": "string",
-                "enum": .array(["screen_changed", "layout_changed"].map { .string($0) }),
+                "enum": .array(["screen_changed", "elements_changed"].map { .string($0) }),
             ],
             [
                 "type": "object",
                 "properties": [
-                    "valueChanged": [
+                    "elementUpdated": [
                         "type": "object",
                         "properties": [
                             "heistId": ["type": "string", "description": "Match a specific element"],
+                            "property": [
+                                "type": "string",
+                                "description": "Match a specific property (value, traits, hint, actions, frame, activationPoint)",
+                                "enum": .array(["value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
+                            ],
                             "oldValue": ["type": "string", "description": "Expected previous value"],
                             "newValue": ["type": "string", "description": "Expected new value"],
                         ],
                         "additionalProperties": false,
                     ],
                 ],
-                "required": .array([.string("valueChanged")]),
+                "required": .array([.string("elementUpdated")]),
                 "additionalProperties": false,
             ],
         ]),
@@ -69,6 +76,11 @@ enum ToolDefinitions {
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
                     "description": "Level of detail: summary (default, no geometry) or full (includes frame, activation point, hints)",
+                ],
+                "elements": [
+                    "type": "array",
+                    "items": ["type": "string"],
+                    "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
             ],
             "additionalProperties": false,

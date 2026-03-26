@@ -156,23 +156,23 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("[10 elements, no change]"))
     }
 
-    func testDeltaValuesChangedFormatting() {
-        let changes = [ValueChange(order: 0, identifier: nil, oldValue: "50", newValue: "75")]
-        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 8, valueChanges: changes)
+    func testDeltaElementUpdatedFormatting() {
+        let updated = [ElementUpdate(heistId: "slider", changes: [PropertyChange(property: .value, old: "50", new: "75")])]
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 8, updated: updated)
         let result = ActionResult(success: true, method: .increment, interfaceDelta: delta)
         let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("[8 elements, 1 value changed]"))
+        XCTAssertTrue(output.contains("~1 updated"))
     }
 
-    func testDeltaMultipleValuesChangedFormatting() {
-        let changes = [
-            ValueChange(order: 0, identifier: nil, oldValue: "A", newValue: "B"),
-            ValueChange(order: 1, identifier: nil, oldValue: "C", newValue: "D"),
+    func testDeltaMultipleUpdatesFormatting() {
+        let updated = [
+            ElementUpdate(heistId: "a", changes: [PropertyChange(property: .value, old: "A", new: "B")]),
+            ElementUpdate(heistId: "b", changes: [PropertyChange(property: .value, old: "C", new: "D")]),
         ]
-        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 5, valueChanges: changes)
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, updated: updated)
         let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
         let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("[5 elements, 2 values changed]"))
+        XCTAssertTrue(output.contains("~2 updated"))
     }
 
     func testDeltaElementsChangedFormatting() {
@@ -181,7 +181,7 @@ final class FenceResponseTests: XCTestCase {
             value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )]
-        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 6, added: added, removedOrders: [1, 2])
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 6, added: added, removed: ["old_1", "old_2"])
         let result = ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
         let output = FenceResponse.action(result: result).humanFormatted()
         XCTAssertTrue(output.contains("+1 added"))

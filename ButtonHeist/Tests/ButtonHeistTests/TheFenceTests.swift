@@ -199,7 +199,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - FenceResponse.expectationResultDict
 
     func testExpectationResultDictMet() {
-        let result = ExpectationResult(met: true, expectation: .layoutChanged, actual: "elementsChanged")
+        let result = ExpectationResult(met: true, expectation: .elementsChanged, actual: "elementsChanged")
         let dict = FenceResponse.expectationResultDict(result)
         XCTAssertEqual(dict["met"] as? Bool, true)
         XCTAssertEqual(dict["actual"] as? String, "elementsChanged")
@@ -214,11 +214,11 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(dict["expected"])
     }
 
-    func testExpectationResultDictValueChangedExpectation() {
-        let result = ExpectationResult(met: false, expectation: .valueChanged(newValue: "hello"), actual: "counter: world → goodbye")
+    func testExpectationResultDictElementUpdatedExpectation() {
+        let result = ExpectationResult(met: false, expectation: .elementUpdated(newValue: "hello"), actual: "counter: value: world → goodbye")
         let dict = FenceResponse.expectationResultDict(result)
         XCTAssertEqual(dict["met"] as? Bool, false)
-        XCTAssertEqual(dict["actual"] as? String, "counter: world → goodbye")
+        XCTAssertEqual(dict["actual"] as? String, "counter: value: world → goodbye")
         // "expected" should be the JSON-encoded ActionExpectation
         let expected = dict["expected"]
         XCTAssertNotNil(expected)
