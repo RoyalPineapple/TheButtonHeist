@@ -291,6 +291,111 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(expectations?["allMet"] as? Bool, true)
     }
 
+    // MARK: - Compact Delta Geometry Filtering
+
+    func testCompactDeltaOmitsFrameChanges() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 3,
+            updated: [
+                ElementUpdate(heistId: "okBtn", changes: [
+                    PropertyChange(property: .value, old: "0", new: "1"),
+                    PropertyChange(property: .frame, old: "10,20,100,44", new: "10,25,100,44"),
+                ]),
+            ]
+        )
+        let output = FenceResponse.compactDelta(delta, method: "tap")
+        XCTAssertTrue(output.contains("value"), "Value change should appear")
+        XCTAssertFalse(output.contains("frame"), "Frame change should be filtered")
+    }
+
+    func testCompactDeltaOmitsActivationPointChanges() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 2,
+            updated: [
+                ElementUpdate(heistId: "slider", changes: [
+                    PropertyChange(property: .activationPoint, old: "50,22", new: "55,22"),
+                ]),
+            ]
+        )
+        let output = FenceResponse.compactDelta(delta, method: "drag")
+        XCTAssertFalse(output.contains("activationPoint"), "ActivationPoint should be filtered")
+        XCTAssertFalse(output.contains("~"), "No ~ lines when only geometry changed")
+    }
+
+    func testCompactDeltaKeepsNonGeometryChanges() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 4,
+            updated: [
+                ElementUpdate(heistId: "toggle", changes: [
+                    PropertyChange(property: .value, old: "off", new: "on"),
+                    PropertyChange(property: .traits, old: "button", new: "button, selected"),
+                    PropertyChange(property: .frame, old: "0,0,100,44", new: "0,5,100,44"),
+                ]),
+            ]
+        )
+        let output = FenceResponse.compactDelta(delta, method: "tap")
+        XCTAssertTrue(output.contains("value"))
+        XCTAssertTrue(output.contains("traits"))
+        XCTAssertFalse(output.contains("frame"))
+    }
+
+    // MARK: - ElementProperty.isGeometry
+
+    func testIsGeometryClassification() {
+        XCTAssertTrue(ElementProperty.frame.isGeometry)
+        XCTAssertTrue(ElementProperty.activationPoint.isGeometry)
+        XCTAssertFalse(ElementProperty.value.isGeometry)
+        XCTAssertFalse(ElementProperty.traits.isGeometry)
+        XCTAssertFalse(ElementProperty.hint.isGeometry)
+        XCTAssertFalse(ElementProperty.actions.isGeometry)
+    }
+
+    // MARK: - JSON Delta Geometry Filtering
+
+    func testActionJsonDeltaOmitsGeometryByDefault() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 2,
+            updated: [
+                ElementUpdate(heistId: "label1", changes: [
+                    PropertyChange(property: .frame, old: "0,0,100,44", new: "0,10,100,44"),
+                    PropertyChange(property: .value, old: "a", new: "b"),
+                ]),
+            ]
+        )
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+        let deltaDict = json["delta"] as! [String: Any]
+        let updated = deltaDict["updated"] as! [[String: Any]]
+        XCTAssertEqual(updated.count, 1)
+        let changes = updated[0]["changes"] as! [[String: Any]]
+        let properties = changes.map { $0["property"] as! String }
+        XCTAssertTrue(properties.contains("value"))
+        XCTAssertFalse(properties.contains("frame"))
+    }
+
+    func testActionJsonDeltaDropsGeometryOnlyUpdates() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged,
+            elementCount: 3,
+            updated: [
+                ElementUpdate(heistId: "img", changes: [
+                    PropertyChange(property: .frame, old: "0,0,50,50", new: "0,5,50,50"),
+                    PropertyChange(property: .activationPoint, old: "25,25", new: "25,30"),
+                ]),
+            ]
+        )
+        let result = ActionResult(success: true, method: .activate, interfaceDelta: delta)
+        let response = FenceResponse.action(result: result)
+        let json = response.jsonDict()!
+        let deltaDict = json["delta"] as! [String: Any]
+        XCTAssertNil(deltaDict["updated"], "Geometry-only updates should be dropped entirely")
+    }
+
     // MARK: - FenceError
 
     func testFenceErrorDescriptions() {
