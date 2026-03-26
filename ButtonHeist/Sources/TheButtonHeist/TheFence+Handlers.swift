@@ -6,10 +6,23 @@ extension TheFence {
 
     // MARK: - Handler: Interface
 
-    func handleGetInterface() async throws -> Interface {
-        try await sendAndAwait(.requestInterface) { requestId in
+    func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
+        let interface: Interface = try await sendAndAwait(.requestInterface) { requestId in
             try await client.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
+        let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
+
+        if let filterIds = args["elements"] as? [String], !filterIds.isEmpty {
+            let filterSet = Set(filterIds)
+            let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
+            let filteredInterface = Interface(
+                timestamp: interface.timestamp,
+                elements: filtered,
+                tree: nil
+            )
+            return .interface(filteredInterface, detail: detail, filteredFrom: interface.elements.count)
+        }
+        return .interface(interface, detail: detail)
     }
 
     // MARK: - Handler: Screen
@@ -335,6 +348,20 @@ extension TheFence {
         )
         client.send(.startRecording(config))
         return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
+    }
+
+    // MARK: - Handler: List Devices
+
+    func handleListDevices() async throws -> FenceResponse {
+        var devices = await client.discoverReachableDevices()
+        if let fileConfig = config.fileConfig {
+            let configDevices = Self.configTargetsAsDevices(fileConfig)
+            let existingIDs = Set(devices.map(\.id))
+            for device in configDevices where !existingIDs.contains(device.id) {
+                devices.append(device)
+            }
+        }
+        return .devices(devices)
     }
 
     // MARK: - Handler: Connect (runtime target switching)

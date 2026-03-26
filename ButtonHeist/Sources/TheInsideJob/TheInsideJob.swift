@@ -83,6 +83,7 @@ public final class TheInsideJob {
         self.installationId = Self.loadInstallationId()
         self.bagman = TheBagman(tripwire: self.tripwire)
         self.theSafecracker.bagman = self.bagman
+        self.theSafecracker.tripwire = self.tripwire
 
         if let scopes = allowedScopes {
             self.allowedScopes = scopes

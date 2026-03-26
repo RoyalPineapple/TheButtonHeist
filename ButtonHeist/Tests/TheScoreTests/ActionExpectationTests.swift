@@ -12,8 +12,8 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertEqual(decoded, expectation)
     }
 
-    func testLayoutChangedEncodeDecode() throws {
-        let expectation = ActionExpectation.layoutChanged
+    func testElementsChangedEncodeDecode() throws {
+        let expectation = ActionExpectation.elementsChanged
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)
@@ -22,7 +22,7 @@ final class ActionExpectationTests: XCTestCase {
     // MARK: - ExpectationResult Codable Round-Trip
 
     func testExpectationResultEncodeDecode() throws {
-        let result = ExpectationResult(met: false, expectation: .valueChanged(newValue: "hello"), actual: "counter: world → hell")
+        let result = ExpectationResult(met: false, expectation: .elementUpdated(newValue: "hello"), actual: "counter: value: world → hell")
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ExpectationResult.self, from: data)
         XCTAssertEqual(decoded, result)
@@ -62,12 +62,12 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertTrue(result.met)
     }
 
-    func testScreenChangedNotMetWhenDeltaIsValuesChanged() {
-        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 5)
+    func testScreenChangedNotMetWhenDeltaIsElementsChanged() {
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5)
         let action = makeResult(success: true, delta: delta)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "valuesChanged")
+        XCTAssertEqual(result.actual, "elementsChanged")
     }
 
     func testScreenChangedNotMetWhenNoDelta() {
@@ -77,156 +77,173 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertEqual(result.actual, "noChange")
     }
 
-    // MARK: - Validation: layoutChanged
+    // MARK: - Validation: elementsChanged
 
-    func testLayoutChangedMetWhenDeltaIsElementsChanged() {
+    func testElementsChangedMetWhenDeltaIsElementsChanged() {
         let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 10)
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.layoutChanged.validate(against: action)
+        let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
     }
 
-    func testLayoutChangedNotMetWhenDeltaIsNoChange() {
+    func testElementsChangedNotMetWhenDeltaIsNoChange() {
         let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.layoutChanged.validate(against: action)
+        let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertFalse(result.met)
         XCTAssertEqual(result.actual, "noChange")
     }
 
-    func testLayoutChangedMetWhenScreenChanged() {
+    func testElementsChangedMetWhenScreenChanged() {
         let delta = InterfaceDelta(kind: .screenChanged, elementCount: 5)
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.layoutChanged.validate(against: action)
+        let result = ActionExpectation.elementsChanged.validate(against: action)
         XCTAssertTrue(result.met)
         XCTAssertEqual(result.actual, "screenChanged")
     }
 
-    // MARK: - Codable: valueChanged
+    // MARK: - Codable: elementUpdated
 
-    func testValueChangedNewValueOnlyEncodeDecode() throws {
-        let expectation = ActionExpectation.valueChanged(newValue: "5")
+    func testElementUpdatedNewValueOnlyEncodeDecode() throws {
+        let expectation = ActionExpectation.elementUpdated(newValue: "5")
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)
     }
 
-    func testValueChangedAllFieldsEncodeDecode() throws {
-        let expectation = ActionExpectation.valueChanged(heistId: "counter", oldValue: "3", newValue: "5")
+    func testElementUpdatedAllFieldsEncodeDecode() throws {
+        let expectation = ActionExpectation.elementUpdated(heistId: "counter", property: .value, oldValue: "3", newValue: "5")
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)
     }
 
-    func testValueChangedNoFieldsEncodeDecode() throws {
-        let expectation = ActionExpectation.valueChanged()
+    func testElementUpdatedNoFieldsEncodeDecode() throws {
+        let expectation = ActionExpectation.elementUpdated()
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)
     }
 
-    // MARK: - Validation: valueChanged
+    // MARK: - Validation: elementUpdated
 
-    func testValueChangedMetWhenNewValueMatches() {
+    func testElementUpdatedMetWhenNewValueMatches() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "5")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
-    func testValueChangedNotMetWhenNoMatch() {
+    func testElementUpdatedNotMetWhenNoMatch() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "4")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
     }
 
-    func testValueChangedMetWhenHeistIdAndNewValueMatch() {
+    func testElementUpdatedMetWhenHeistIdAndNewValueMatch() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [
-                ValueChange(order: 0, heistId: "other", oldValue: "1", newValue: "5"),
-                ValueChange(order: 1, heistId: "counter", oldValue: "3", newValue: "5"),
+            kind: .elementsChanged, elementCount: 5,
+            updated: [
+                ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "1", new: "5")]),
+                ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
             ]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(heistId: "counter", newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(heistId: "counter", newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
-    func testValueChangedNotMetWhenHeistIdDoesNotMatch() {
+    func testElementUpdatedNotMetWhenHeistIdDoesNotMatch() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, heistId: "other", oldValue: "3", newValue: "5")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "other", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(heistId: "counter", newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(heistId: "counter", newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
     }
 
-    func testValueChangedMetWhenOldAndNewValueMatch() {
+    func testElementUpdatedMetWhenOldAndNewValueMatch() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "5")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(oldValue: "3", newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(oldValue: "3", newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
     }
 
-    func testValueChangedNoFieldsMetWhenAnyChangesExist() {
+    func testElementUpdatedNoFieldsMetWhenAnyUpdatesExist() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, oldValue: "a", newValue: "b")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "a", new: "b")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged().validate(against: action)
+        let result = ActionExpectation.elementUpdated().validate(against: action)
         XCTAssertTrue(result.met)
     }
 
-    func testValueChangedNotMetWhenNoDelta() {
+    func testElementUpdatedNotMetWhenNoDelta() {
         let action = makeResult(success: true)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no value changes")
+        XCTAssertEqual(result.actual, "no element updates")
     }
 
-    func testValueChangedNotMetWhenEmptyValueChanges() {
-        let delta = InterfaceDelta(kind: .valuesChanged, elementCount: 5, valueChanges: [])
+    func testElementUpdatedNotMetWhenEmptyUpdates() {
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, updated: [])
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no value changes")
+        XCTAssertEqual(result.actual, "no element updates")
     }
 
-    func testValueChangedDiagnosticOnMiss() {
+    func testElementUpdatedDiagnosticOnMiss() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 5,
-            valueChanges: [ValueChange(order: 0, heistId: "counter", oldValue: "3", newValue: "4")]
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "4")])]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "counter: 3 → 4")
+        XCTAssertEqual(result.actual, "counter: value: 3 → 4")
     }
 
-    func testValueChangedMatchesAnyAmongMultipleChanges() {
+    func testElementUpdatedMatchesAnyAmongMultipleUpdates() {
         let delta = InterfaceDelta(
-            kind: .valuesChanged, elementCount: 10,
-            valueChanges: [
-                ValueChange(order: 0, heistId: "label", oldValue: "A", newValue: "B"),
-                ValueChange(order: 1, heistId: "counter", oldValue: "3", newValue: "5"),
+            kind: .elementsChanged, elementCount: 10,
+            updated: [
+                ElementUpdate(heistId: "label", changes: [PropertyChange(property: .value, old: "A", new: "B")]),
+                ElementUpdate(heistId: "counter", changes: [PropertyChange(property: .value, old: "3", new: "5")]),
             ]
         )
         let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.valueChanged(newValue: "5").validate(against: action)
+        let result = ActionExpectation.elementUpdated(newValue: "5").validate(against: action)
         XCTAssertTrue(result.met)
+    }
+
+    func testElementUpdatedWithPropertyFilter() {
+        let delta = InterfaceDelta(
+            kind: .elementsChanged, elementCount: 5,
+            updated: [ElementUpdate(heistId: "btn", changes: [
+                PropertyChange(property: .traits, old: "", new: "selected"),
+                PropertyChange(property: .value, old: "3", new: "5"),
+            ])]
+        )
+        let action = makeResult(success: true, delta: delta)
+        let traitsResult = ActionExpectation.elementUpdated(heistId: "btn", property: .traits).validate(against: action)
+        XCTAssertTrue(traitsResult.met)
+        let valueResult = ActionExpectation.elementUpdated(heistId: "btn", property: .value, newValue: "5").validate(against: action)
+        XCTAssertTrue(valueResult.met)
+        let hintResult = ActionExpectation.elementUpdated(heistId: "btn", property: .hint).validate(against: action)
+        XCTAssertFalse(hintResult.met)
     }
 
     // MARK: - Helpers
