@@ -386,6 +386,7 @@ public final class TheFence {
 
         var results: [[String: Any]] = []
         var stepSummaries: [BatchStepSummary] = []
+        var stepDeltas: [InterfaceDelta] = []
         var failedIndex: Int?
         var expectationsMet = 0
         var expectationsChecked = 0
@@ -406,6 +407,12 @@ public final class TheFence {
                     expectationsChecked += 1
                     if result.met { expectationsMet += 1 }
                     stepExpectationMet = result.met
+                }
+
+                // Collect delta for net diff computation
+                if case .action(let actionResult, _) = response,
+                   let delta = actionResult.interfaceDelta {
+                    stepDeltas.append(delta)
                 }
 
                 // Build step summary from the typed response
@@ -444,6 +451,7 @@ public final class TheFence {
         }
 
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
+        let netDelta = NetDeltaAccumulator.merge(deltas: stepDeltas)
         return .batch(
             results: results,
             completedSteps: results.count,
@@ -451,7 +459,8 @@ public final class TheFence {
             totalTimingMs: totalMs,
             expectationsChecked: expectationsChecked,
             expectationsMet: expectationsMet,
-            stepSummaries: stepSummaries
+            stepSummaries: stepSummaries,
+            netDelta: netDelta
         )
     }
 

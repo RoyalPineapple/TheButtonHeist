@@ -840,7 +840,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -866,7 +866,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -892,7 +892,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(let results, _, let failedIndex, _, _, _, _) = response else {
+        guard case .batch(let results, _, let failedIndex, _, _, _, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
@@ -915,7 +915,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]],
         ])
 
-        guard case .batch(_, _, _, _, let checked, let met, _) = response else {
+        guard case .batch(_, _, _, _, let checked, let met, _, _) = response else {
             XCTFail("Expected batch response, got \(response)")
             return
         }
