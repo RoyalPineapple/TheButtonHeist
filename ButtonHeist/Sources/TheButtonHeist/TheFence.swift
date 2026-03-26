@@ -200,8 +200,7 @@ public final class TheFence {
         case .listDevices:
             return .devices(await client.discoverReachableDevices())
         case .getInterface:
-            let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
-            return .interface(try await handleGetInterface(), detail: detail)
+            return try await handleGetInterface(args)
         case .getScreen:
             return try await handleGetScreen(args)
         case .waitForIdle:
@@ -315,34 +314,50 @@ public final class TheFence {
         guard let expect = dictionary["expect"] else { return nil }
         if let str = expect as? String {
             switch str {
-            case "screenChanged", "screen_changed": return .screenChanged
-            case "layoutChanged", "layout_changed": return .layoutChanged
+            case "screenChanged", "screen_changed":
+                return .screenChanged
+            case "elementsChanged", "elements_changed",
+                 "layoutChanged", "layout_changed":
+                return .elementsChanged
             default:
                 throw FenceError.invalidRequest(
                     "Unknown expectation tier: \"\(str)\". " +
-                    "Valid: screen_changed, layout_changed, or {\"valueChanged\": {…}}"
+                    "Valid: screen_changed, elements_changed, or {\"elementUpdated\": {…}}"
                 )
             }
         }
         if let dict = expect as? [String: Any] {
-            if let vc = dict["valueChanged"] as? [String: Any] {
-                return .valueChanged(
-                    heistId: vc["heistId"] as? String,
-                    oldValue: vc["oldValue"] as? String,
-                    newValue: vc["newValue"] as? String
+            // Accept both new "elementUpdated" and legacy "valueChanged" key
+            if let eu = dict["elementUpdated"] as? [String: Any] ?? dict["valueChanged"] as? [String: Any] {
+                let property: ElementProperty?
+                if let propStr = eu["property"] as? String {
+                    guard let p = ElementProperty(rawValue: propStr) else {
+                        throw FenceError.invalidRequest(
+                            "Unknown element property: \"\(propStr)\". " +
+                            "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
+                        )
+                    }
+                    property = p
+                } else {
+                    property = nil
+                }
+                return .elementUpdated(
+                    heistId: eu["heistId"] as? String,
+                    property: property,
+                    oldValue: eu["oldValue"] as? String,
+                    newValue: eu["newValue"] as? String
                 )
             }
-            // Accept bare "valueChanged" key with no sub-object (matches any value change)
-            if dict.keys.contains("valueChanged") {
-                return .valueChanged()
+            if dict.keys.contains("elementUpdated") || dict.keys.contains("valueChanged") {
+                return .elementUpdated()
             }
             throw FenceError.invalidRequest(
-                "Invalid expectation object: expected {\"valueChanged\": {…}}, " +
+                "Invalid expectation object: expected {\"elementUpdated\": {…}}, " +
                 "got keys: \(dict.keys.sorted())"
             )
         }
         throw FenceError.invalidRequest(
-            "Invalid expectation type: expected string or {\"valueChanged\": {…}} object"
+            "Invalid expectation type: expected string or {\"elementUpdated\": {…}} object"
         )
     }
 
@@ -370,24 +385,33 @@ public final class TheFence {
         }
 
         var results: [[String: Any]] = []
+        var stepSummaries: [BatchStepSummary] = []
         var failedIndex: Int?
         var expectationsMet = 0
         var expectationsChecked = 0
         let batchStart = CFAbsoluteTimeGetCurrent()
 
         for (index, step) in steps.enumerated() {
+            let commandName = step["command"] as? String ?? "?"
             do {
                 let response = try await execute(request: step)
                 results.append(response.jsonDict() ?? ["status": "ok"])
 
                 // Count explicit tier expectations only — delivery failures have
                 // expectation.expectation == nil and should not inflate the count
+                var stepExpectationMet: Bool?
                 if case .action(_, let expectation) = response,
                    let result = expectation,
                    result.expectation != nil {
                     expectationsChecked += 1
                     if result.met { expectationsMet += 1 }
+                    stepExpectationMet = result.met
                 }
+
+                // Build step summary from the typed response
+                stepSummaries.append(buildStepSummary(
+                    command: commandName, response: response, expectationMet: stepExpectationMet
+                ))
 
                 // Check for failure using the typed response, not serialized strings
                 let isFailed: Bool
@@ -408,6 +432,10 @@ public final class TheFence {
                     "message": error.localizedDescription,
                 ]
                 results.append(errorDict)
+                stepSummaries.append(BatchStepSummary(
+                    command: commandName, deltaKind: nil, screenName: nil,
+                    expectationMet: nil, elementCount: nil, error: error.localizedDescription
+                ))
                 if policy == .stopOnError {
                     failedIndex = index
                     break
@@ -422,8 +450,42 @@ public final class TheFence {
             failedIndex: failedIndex,
             totalTimingMs: totalMs,
             expectationsChecked: expectationsChecked,
-            expectationsMet: expectationsMet
+            expectationsMet: expectationsMet,
+            stepSummaries: stepSummaries
         )
+    }
+
+    // MARK: - Batch Step Summary
+
+    private func buildStepSummary(
+        command: String, response: FenceResponse, expectationMet: Bool?
+    ) -> BatchStepSummary {
+        switch response {
+        case .action(let result, _):
+            return BatchStepSummary(
+                command: command,
+                deltaKind: result.interfaceDelta?.kind.rawValue,
+                screenName: result.screenName,
+                expectationMet: expectationMet,
+                elementCount: nil,
+                error: result.success ? nil : result.message
+            )
+        case .interface(let iface, _, _):
+            return BatchStepSummary(
+                command: command, deltaKind: nil, screenName: nil,
+                expectationMet: nil, elementCount: iface.elements.count, error: nil
+            )
+        case .error(let msg):
+            return BatchStepSummary(
+                command: command, deltaKind: nil, screenName: nil,
+                expectationMet: nil, elementCount: nil, error: msg
+            )
+        default:
+            return BatchStepSummary(
+                command: command, deltaKind: nil, screenName: nil,
+                expectationMet: nil, elementCount: nil, error: nil
+            )
+        }
     }
 
     // MARK: - Session State
