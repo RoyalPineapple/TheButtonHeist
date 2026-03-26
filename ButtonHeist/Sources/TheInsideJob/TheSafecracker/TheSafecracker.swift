@@ -18,11 +18,15 @@ import TheScore
 @MainActor
 final class TheSafecracker {
 
-    // MARK: - TheBagman Reference
+    // MARK: - Crew References
 
     /// Back-reference to the element cache and UI observation owner.
     /// Used by extension files to resolve interaction targets.
     weak var bagman: TheBagman?
+
+    /// Back-reference to the timing and window state observer.
+    /// Used by ensureOnScreen to wait for scroll animations to settle.
+    weak var tripwire: TheTripwire?
 
     // MARK: - Fingerprints
 
@@ -378,7 +382,18 @@ final class TheSafecracker {
         return false
     }
 
-    private func findFirstResponder(in view: UIView) -> UIView? {
+    /// Find the first responder view across all windows in the active scene.
+    func firstResponderView() -> UIView? {
+        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        for window in allWindows {
+            if let found = findFirstResponder(in: window) { return found }
+        }
+        return nil
+    }
+
+    func findFirstResponder(in view: UIView) -> UIView? {
         if view.isFirstResponder { return view }
         for sub in view.subviews {
             if let found = findFirstResponder(in: sub) { return found }

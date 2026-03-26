@@ -6,6 +6,56 @@ import TheScore
 
 extension TheSafecracker {
 
+    // MARK: - Auto-Scroll to Visible
+
+    /// Ensure the targeted element is within the screen bounds before interaction.
+    /// If the element's accessibility frame is outside the screen, scrolls the
+    /// nearest scrollable ancestor to bring it into view, waits for the scroll
+    /// animation to settle via presentation-layer diffing, and refreshes the
+    /// element cache so subsequent reads return updated positions.
+    ///
+    /// Best-effort: does nothing if the element is already visible, cannot be
+    /// resolved, or has no scrollable ancestor.
+    func ensureOnScreen(for target: ActionTarget) async {
+        guard let bagman else { return }
+        guard let index = bagman.resolveTraversalIndex(for: target) else { return }
+        guard let object = bagman.object(at: index) else { return }
+        await ensureOnScreen(object: object)
+    }
+
+    /// Ensure the current first responder is within the screen bounds.
+    /// Used by commands that operate on the responder chain (edit actions,
+    /// resign, pasteboard) so the human observer can see the target.
+    func ensureFirstResponderOnScreen() async {
+        guard let view = firstResponderView() else { return }
+        await ensureOnScreen(object: view)
+    }
+
+    /// Shared implementation: check if the object's accessibility frame is
+    /// within the screen bounds, and scroll the nearest ancestor if not.
+    private func ensureOnScreen(object: NSObject) async {
+        let frame = object.accessibilityFrame
+        guard !frame.isNull && !frame.isEmpty else { return }
+
+        let screenBounds = UIScreen.main.bounds
+        if screenBounds.contains(frame) { return }
+
+        var current: NSObject? = object
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView,
+               scrollView.isScrollEnabled {
+                if scrollToMakeVisible(frame, in: scrollView) {
+                    if let tripwire {
+                        _ = await tripwire.waitForAllClear(timeout: 1.0)
+                    }
+                    bagman?.refreshAccessibilityData()
+                }
+                return
+            }
+            current = nextAncestor(of: candidate)
+        }
+    }
+
     // MARK: - Scroll
 
     func executeScroll(_ target: ScrollTarget) -> InteractionResult {
@@ -237,6 +287,7 @@ extension TheSafecracker {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ActionTarget) async -> InteractionResult {
+        await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -271,7 +322,8 @@ extension TheSafecracker {
         return .failure(.activate, message: "Activation failed")
     }
 
-    func executeIncrement(_ target: ActionTarget) -> InteractionResult {
+    func executeIncrement(_ target: ActionTarget) async -> InteractionResult {
+        await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -289,7 +341,8 @@ extension TheSafecracker {
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
-    func executeDecrement(_ target: ActionTarget) -> InteractionResult {
+    func executeDecrement(_ target: ActionTarget) async -> InteractionResult {
+        await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -307,7 +360,8 @@ extension TheSafecracker {
         return InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
-    func executeCustomAction(_ target: CustomActionTarget) -> InteractionResult {
+    func executeCustomAction(_ target: CustomActionTarget) async -> InteractionResult {
+        await ensureOnScreen(for: target.elementTarget)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -328,14 +382,16 @@ extension TheSafecracker {
         )
     }
 
-    func executeEditAction(_ target: EditActionTarget) -> InteractionResult {
+    func executeEditAction(_ target: EditActionTarget) async -> InteractionResult {
+        await ensureFirstResponderOnScreen()
         let success = performEditAction(target.action)
         return InteractionResult(success: success, method: .editAction, message: nil, value: nil)
     }
 
     // MARK: - Pasteboard
 
-    func executeSetPasteboard(_ target: SetPasteboardTarget) -> InteractionResult {
+    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> InteractionResult {
+        await ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return InteractionResult(
             success: true,
@@ -345,7 +401,8 @@ extension TheSafecracker {
         )
     }
 
-    func executeGetPasteboard() -> InteractionResult {
+    func executeGetPasteboard() async -> InteractionResult {
+        await ensureFirstResponderOnScreen()
         let text = UIPasteboard.general.string
         return InteractionResult(
             success: true,
@@ -355,7 +412,8 @@ extension TheSafecracker {
         )
     }
 
-    func executeResignFirstResponder() -> InteractionResult {
+    func executeResignFirstResponder() async -> InteractionResult {
+        await ensureFirstResponderOnScreen()
         let success = resignFirstResponder()
         return InteractionResult(
             success: success, method: .resignFirstResponder,
@@ -367,6 +425,9 @@ extension TheSafecracker {
     // MARK: - Touch Gestures
 
     func executeTap(_ target: TouchTapTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -383,6 +444,9 @@ extension TheSafecracker {
     }
 
     func executeLongPress(_ target: LongPressTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -397,6 +461,9 @@ extension TheSafecracker {
     }
 
     func executeSwipe(_ target: SwipeTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -426,6 +493,9 @@ extension TheSafecracker {
     }
 
     func executeDrag(_ target: DragTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -440,6 +510,9 @@ extension TheSafecracker {
     }
 
     func executePinch(_ target: PinchTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -455,6 +528,9 @@ extension TheSafecracker {
     }
 
     func executeRotate(_ target: RotateTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
@@ -470,6 +546,9 @@ extension TheSafecracker {
     }
 
     func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> InteractionResult {
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
