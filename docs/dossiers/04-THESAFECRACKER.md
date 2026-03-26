@@ -17,16 +17,20 @@ TheSafecracker is the hands of the operation:
 7. **Pasteboard operations** - read/write UIPasteboard.general (avoids iOS "Allow Paste" dialog)
 8. **Accessibility actions** - activate, increment, decrement, custom actions
 9. **Point resolution** - resolve target coordinates from element identifier/order or explicit x/y
+10. **Scrolling** - page scroll, scroll-to-visible, scroll-to-edge via UIScrollView.setContentOffset
+11. **Auto-scroll to visible** - transparent pre-interaction scroll ensuring target elements and first responders are within screen bounds before any interaction
+12. **First responder lookup** - walks the view hierarchy to find the current first responder
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TheSafecracker["TheSafecracker (@MainActor)"]
-        Actions["TheSafecracker+Actions.swift - High-level executors"]
+        Actions["TheSafecracker+Actions.swift - High-level executors, scrolling, auto-scroll"]
         TextEntry["TheSafecracker+TextEntry.swift - Text typing & deletion"]
-        Core["TheSafecracker.swift - Touch primitives & text injection"]
+        Core["TheSafecracker.swift - Touch primitives, text injection, first responder"]
         Bagman["TheBagman - Element resolution & point lookup"]
+        Tripwire["TheTripwire - Animation settle after scroll"]
     end
 
     subgraph PrivateAPIs["Private API Layers"]
@@ -42,6 +46,7 @@ graph TD
 
     Actions --> Core
     Actions --> Bagman
+    Actions --> Tripwire
     Actions --> TextEntry
     Core --> IOHID
     Core --> TouchFactory
@@ -120,6 +125,16 @@ graph LR
         Custom["performCustomAction(name:)"]
     end
 ```
+
+## Scrolling & Auto-Scroll
+
+> **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
+
+TheSafecracker owns all scrolling: three explicit commands (`scroll`, `scroll_to_visible`, `scroll_to_edge`) and an automatic pre-interaction scroll that ensures every action is visible on screen.
+
+**Auto-scroll** runs transparently before every element-targeted interaction. It checks the element's `accessibilityFrame` against `UIScreen.main.bounds` — a bounds check, not a visibility check (keyboards and overlays don't matter, only whether the frame is within the screen rectangle). If off-screen, it walks the ancestor chain to find the nearest `UIScrollView`, scrolls with minimum offset adjustment, waits for the animation to settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+
+**Explicit scroll commands** give agents direct control: page-step with overlap, scroll-to-visible with minimum adjustment, and scroll-to-edge for jumping to extremes. All drive `UIScrollView.setContentOffset` directly — no synthetic touch.
 
 ## Element Resolution Flow
 

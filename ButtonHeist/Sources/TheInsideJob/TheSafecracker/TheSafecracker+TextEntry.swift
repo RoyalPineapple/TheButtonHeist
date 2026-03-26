@@ -11,6 +11,11 @@ extension TheSafecracker {
     func executeTypeText(_ target: TypeTextTarget) async -> InteractionResult {
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
 
+        // Step 0: If elementTarget provided, ensure it's on screen before tapping
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
+
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
             guard let element = bagman?.findElement(for: elementTarget) else {
