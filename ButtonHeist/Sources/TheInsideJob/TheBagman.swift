@@ -220,31 +220,36 @@ final class TheBagman {
         var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
+        // Accessibility property reads (label, traits, customActions, etc.) return
+        // autoreleased ObjC objects.  Draining per-window keeps the high-water mark
+        // proportional to a single window's tree rather than the entire UI.
         for (window, rootView) in windows {
-            let baseIndex = allElements.count
-            let windowTree = parser.parseAccessibilityHierarchy(in: rootView, rotorResultLimit: 0) { element, _, object in
-                newElementObjects[element] = WeakObject(object: object)
-            }
-            let windowElements = windowTree.flattenToElements()
+            autoreleasepool {
+                let baseIndex = allElements.count
+                let windowTree = parser.parseAccessibilityHierarchy(in: rootView, rotorResultLimit: 0) { element, _, object in
+                    newElementObjects[element] = WeakObject(object: object)
+                }
+                let windowElements = windowTree.flattenToElements()
 
-            // Wrap each window's tree in a container node when multiple windows are present
-            if windows.count > 1 {
-                let windowName = NSStringFromClass(type(of: window))
-                let container = AccessibilityContainer(
-                    type: .semanticGroup(
-                        label: windowName,
-                        value: "windowLevel: \(window.windowLevel.rawValue)",
-                        identifier: nil
-                    ),
-                    frame: window.frame
-                )
-                let reindexed = windowTree.reindexed(offset: baseIndex)
-                allHierarchy.append(.container(container, children: reindexed))
-            } else {
-                allHierarchy.append(contentsOf: windowTree)
-            }
+                // Wrap each window's tree in a container node when multiple windows are present
+                if windows.count > 1 {
+                    let windowName = NSStringFromClass(type(of: window))
+                    let container = AccessibilityContainer(
+                        type: .semanticGroup(
+                            label: windowName,
+                            value: "windowLevel: \(window.windowLevel.rawValue)",
+                            identifier: nil
+                        ),
+                        frame: window.frame
+                    )
+                    let reindexed = windowTree.reindexed(offset: baseIndex)
+                    allHierarchy.append(.container(container, children: reindexed))
+                } else {
+                    allHierarchy.append(contentsOf: windowTree)
+                }
 
-            allElements.append(contentsOf: windowElements)
+                allElements.append(contentsOf: windowElements)
+            }
         }
 
         elementObjects = newElementObjects
