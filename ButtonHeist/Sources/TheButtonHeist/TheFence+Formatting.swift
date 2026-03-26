@@ -813,26 +813,24 @@ public enum FenceResponse {
         return payload
     }
 
-    private func deltaDictionary(_ delta: InterfaceDelta, detail: InterfaceDetail = .summary) -> [String: Any] {
+    /// Delta dictionaries are always summary-level — geometry changes are filtered out.
+    /// Callers who need full geometry should use `get_interface --detail full`.
+    private func deltaDictionary(_ delta: InterfaceDelta) -> [String: Any] {
         var payload: [String: Any] = [
             "kind": delta.kind.rawValue,
             "elementCount": delta.elementCount,
         ]
         if let added = delta.added {
-            payload["added"] = added.map { elementDictionary($0, detail: detail) }
+            payload["added"] = added.map { elementDictionary($0, detail: .summary) }
         }
         if let removed = delta.removed {
             payload["removed"] = removed
         }
         if let updated = delta.updated {
-            // Filter geometry changes when detail is summary
-            let filtered: [ElementUpdate] = if detail == .full {
-                updated
-            } else {
-                updated.compactMap { update in
-                    let meaningful = update.changes.filter { !$0.property.isGeometry }
-                    return meaningful.isEmpty ? nil : ElementUpdate(heistId: update.heistId, changes: meaningful)
-                }
+            // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
+            let filtered: [ElementUpdate] = updated.compactMap { update in
+                let meaningful = update.changes.filter { !$0.property.isGeometry }
+                return meaningful.isEmpty ? nil : ElementUpdate(heistId: update.heistId, changes: meaningful)
             }
             if !filtered.isEmpty {
                 payload["updated"] = filtered.map { update -> [String: Any] in
@@ -849,7 +847,7 @@ public enum FenceResponse {
             }
         }
         if let newInterface = delta.newInterface {
-            payload["newInterface"] = interfaceDictionary(newInterface, detail: detail)
+            payload["newInterface"] = interfaceDictionary(newInterface, detail: .summary)
         }
         return payload
     }
