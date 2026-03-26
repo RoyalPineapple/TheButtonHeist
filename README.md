@@ -19,15 +19,16 @@ Most iOS automation tools operate outside the app process through XPC or screens
 
 ### Benchmarks
 
-Same Claude Sonnet agent, same 11-step workflow (n=6):
+Three MCP servers tested on the same 13-task suite (Claude Sonnet 4.6, n=3 per cell). All three achieve high accuracy — the differentiation is efficiency:
 
-| | Turns | Wall time | Tokens |
-|---|-------|-----------|--------|
-| Button Heist (base) | 31 | 123s | 1,137K |
-| ios-simulator-mcp | 41 | 175s | 1,550K |
-| Button Heist + batch + expect | **12** | **83s** | **381K** |
+| | Turns | Wall time | Cost |
+|---|-------|-----------|------|
+| mobile-mcp | 61 | 311s | $0.99 |
+| ios-simulator-mcp | 49 | 188s | $0.84 |
+| Button Heist (base) | 25 | 85s | $0.38 |
+| Button Heist + batch + expect | **10** | **54s** | **$0.24** |
 
-75% context reduction vs ios-simulator-mcp when using batch and expectations. Details in [benchmarks/README.md](benchmarks/README.md).
+Numbers shown for T0-full-workflow (11-step multi-screen task). BH is 2-3x more efficient across the full suite. Details in [benchmarks/README.md](benchmarks/README.md).
 
 ## Features
 
