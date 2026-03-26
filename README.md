@@ -27,7 +27,7 @@ Same Claude Sonnet agent, same 11-step workflow (n=6):
 | ios-simulator-mcp | 41 | 175s | 1,550K |
 | Button Heist + batch + expect | **12** | **83s** | **381K** |
 
-75% context reduction vs ios-simulator-mcp when using batch and expectations. Details in [docs/benchmark-data.md](docs/benchmark-data.md).
+75% context reduction vs ios-simulator-mcp when using batch and expectations. Details in [benchmarks/README.md](benchmarks/README.md).
 
 ## Features
 
@@ -342,7 +342,7 @@ git submodule update --remote ai-fuzzer   # Update later
 - [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) — Quick orientation for new reviewers
 - [Competitive Landscape](docs/competitive-landscape.md) — How Button Heist compares
 - [The Argument](docs/the-argument.md) — Why this approach, why now
-- [Benchmark Data](docs/benchmark-data.md) — Performance measurements
+- [Benchmark Data](benchmarks/README.md) — Performance measurements
 - [Crew Dossiers](docs/dossiers/) — Per-crew-member technical deep dives
 
 **Project:**
