@@ -53,12 +53,12 @@ struct KeyboardBridge {
 
     // MARK: - Private
 
-    /// Cached message for `addInputString:` — resolved once per bridge instance.
+    /// Message for `addInputString:` — resolved per access.
     private var addInputString: ObjCRuntime.Message? {
         ObjCRuntime.message("addInputString:", to: impl)
     }
 
-    /// Cached message for `deleteFromInput` — resolved once per bridge instance.
+    /// Message for `deleteFromInput` — resolved per access.
     private var deleteFromInput: ObjCRuntime.Message? {
         ObjCRuntime.message("deleteFromInput", to: impl)
     }
