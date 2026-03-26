@@ -33,19 +33,19 @@ extension TheInsideJob {
         case .activate(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeActivate(target) }
         case .increment(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeIncrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeIncrement(target) }
         case .decrement(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeDecrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDecrement(target) }
         case .performCustomAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeCustomAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeCustomAction(target) }
         case .editAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeEditAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeEditAction(target) }
         case .setPasteboard(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeSetPasteboard(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeSetPasteboard(target) }
         case .getPasteboard:
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeGetPasteboard() }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeGetPasteboard() }
         case .resignFirstResponder:
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeResignFirstResponder() }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeResignFirstResponder() }
         default:
             return false
         }
