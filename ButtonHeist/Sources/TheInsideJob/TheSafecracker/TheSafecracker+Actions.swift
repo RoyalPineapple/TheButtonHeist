@@ -40,7 +40,7 @@ extension TheSafecracker {
         let screenBounds = UIScreen.main.bounds
         if screenBounds.contains(frame) { return }
 
-        var current: NSObject? = object
+        var current: NSObject? = nextAncestor(of: object)
         while let candidate = current {
             if let scrollView = candidate as? UIScrollView,
                scrollView.isScrollEnabled {
@@ -402,7 +402,6 @@ extension TheSafecracker {
     }
 
     func executeGetPasteboard() async -> InteractionResult {
-        await ensureFirstResponderOnScreen()
         let text = UIPasteboard.general.string
         return InteractionResult(
             success: true,
