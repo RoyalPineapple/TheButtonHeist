@@ -53,26 +53,31 @@ Three MCP servers — Button Heist, mobile-mcp, and ios-simulator-mcp (idb) — 
 
 All three tools achieve high accuracy on most tasks. The differentiation is efficiency.
 
-**Turns (mean, n=3 per cell, rounded — 8 tasks with three-way data):**
+**Turns (mean per cell, rounded — 13 tasks, n=2–3 trials each):**
 
-| Task | idb | mobile-mcp | BH | BH + Batch | BH + Expect |
-|---|--:|--:|--:|--:|--:|
-| **Full workflow** (11 steps) | 49 | 61 | 25 | **10** | **10** |
-| **Calculator** | 24 | 20 | 15 | **5** | **5** |
-| **Todo CRUD** | 40 | 43 | 14 | **7** | **8** |
-| **Settings** | 31 | 17 | 11 | **10** | 13 |
-| **Swipe actions** | 24 | 80 | **7** | 9 | **8** |
-| **Scroll to find** | 19 | 47 | **15** | 29 | 20 |
-| **Stepper increment** | 27 | 13 | 15 | **10** | **11** |
-| **Search + tap** (control) | 23 | 19 | 15 | 19 | 18 |
+| Task | idb | mobile-mcp | BH |
+|---|--:|--:|--:|
+| **Full workflow** (11 steps) | 49 | 61 | **25** |
+| **Calculator** | 24 | 20 | **15** |
+| **Todo CRUD** | 40 | 43 | **14** |
+| **Settings roundtrip** | 31 | 17 | **11** |
+| **Notes workflow** | 55 | 42 | **13** |
+| **Controls gauntlet** | 67 | timeout | **26** |
+| **Scroll hunt** | 39 | 56 | **19** |
+| **Bug verification** | 68 | 56 | **23** |
+| **Marathon** (5 screens) | 124 | 172 | **75** |
+| **Swipe actions** | 34 | 80 | **7** |
+| **Scroll to find** | 28 | 47 | **15** |
+| **Stepper increment** | 27 | **13** | 15 |
+| **Search + tap** | 23 | **19** | 21 |
 
-BH is 2-3x more efficient than both competitors across the board, with the gap widening on gesture-heavy tasks (swipe actions: 7t vs 24t vs 80t). The advantage compounds with batching and expectations.
+BH consistently shows 2-3x fewer turns across the suite, with the gap widening on gesture-heavy tasks (swipe actions: 7t vs 34t vs 80t). mobile-mcp wins on two simple tasks (stepper, search) where coordinate-based interaction has no overhead disadvantage — a useful control.
 
 Specific capability differences:
 
-- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. Coordinate-based tools must swipe to reveal the button, re-read elements, then tap. **7 turns vs 24 (idb) vs 80 (mobile-mcp).**
-- **Controls gauntlet** (T5): BH completes mixed controls (toggles, steppers, sliders, pickers) in 26 turns. idb needs 71. mobile-mcp times out.
-- **Search + tap** (T12): Near parity across all configs. This is a control — BH shows no meaningful advantage on tasks where the tools are equivalent. **15–19 turns vs 23.**
+- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. Coordinate-based tools must swipe to reveal the button, re-read elements, then tap. **7 turns vs 34 (idb) vs 80 (mobile-mcp).**
+- **Controls gauntlet** (T5): BH completes mixed controls (toggles, steppers, sliders, pickers) in 26 turns. idb needs 67. mobile-mcp times out on all 3 trials.
+- **Search + tap** (T12): Near parity across all configs — BH shows no meaningful advantage on tasks where the tools are equivalent. **19–23 turns.**
 
 Each BH mode gives the agent more autonomy:
 

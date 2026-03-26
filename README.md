@@ -23,12 +23,11 @@ Three MCP servers tested on the same 13-task suite (Claude Sonnet 4.6, n=3 per c
 
 | | Turns | Wall time | Cost |
 |---|-------|-----------|------|
-| mobile-mcp | 61 | 311s | $0.99 |
+| mobile-mcp | 61 | 308s | $0.99 |
 | ios-simulator-mcp | 49 | 188s | $0.84 |
-| Button Heist (base) | 25 | 85s | $0.38 |
-| Button Heist + batch + expect | **10** | **54s** | **$0.24** |
+| **Button Heist** | **25** | **103s** | **$0.43** |
 
-Numbers shown for T0-full-workflow (11-step multi-screen task). BH is 2-3x more efficient across the full suite. Details in benchmarks/results/.
+Numbers shown for T0-full-workflow (11-step multi-screen task). BH consistently shows 2-3x fewer turns across the full 13-task suite. Details in [docs/the-argument.md](docs/the-argument.md).
 
 ## Features
 
