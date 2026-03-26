@@ -154,7 +154,7 @@ extension TheBagman {
     /// Developer-provided identifiers take priority — they become the heistId directly.
     /// Synthesized IDs use `{trait}_{slug}` with label (or value as fallback) for the slug.
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
-    private func assignHeistIds(_ elements: inout [HeistElement]) {
+    func assignHeistIds(_ elements: inout [HeistElement]) {
         // Phase 1: generate base IDs
         for i in elements.indices {
             if let identifier = elements[i].identifier, !identifier.isEmpty {
@@ -181,7 +181,7 @@ extension TheBagman {
         }
     }
 
-    private func synthesizeBaseId(_ element: HeistElement) -> String {
+    func synthesizeBaseId(_ element: HeistElement) -> String {
         let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }
             ?? (element.label != nil ? "staticText" : "element")
 
@@ -195,7 +195,7 @@ extension TheBagman {
         return traitPrefix
     }
 
-    private func slugify(_ text: String?) -> String? {
+    func slugify(_ text: String?) -> String? {
         guard let text, !text.isEmpty else { return nil }
         let slug = text.lowercased()
             .replacing(/[^a-z0-9]+/, with: "_")
