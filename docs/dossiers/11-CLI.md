@@ -95,6 +95,8 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | `gesture` | `touch` | Grouped gestures |
 | `accessibility_action` | `action --type` | Both group increment/decrement/custom/edit/dismiss_keyboard |
 | `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
+| `connect` | `session` (REPL only) | Switch connection target at runtime |
+| `list_targets` | `session` (REPL only) | List configured targets from config file |
 
 ## Session Notes
 

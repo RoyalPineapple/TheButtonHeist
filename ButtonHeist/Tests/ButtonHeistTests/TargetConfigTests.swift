@@ -1,4 +1,5 @@
 import XCTest
+import Network
 @testable import ButtonHeist
 import TheScore
 
@@ -254,7 +255,165 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertTrue(text.contains("*"))
     }
 
-    // MARK: - TheFence connect dispatch (without real connection)
+    // MARK: - TheFence connect dispatch (with mock injection)
+
+    private static let testDevice = DiscoveredDevice(
+        id: "mock-device",
+        name: "MockApp#test",
+        endpoint: NWEndpoint.hostPort(host: .ipv6(.loopback), port: 1),
+        certFingerprint: "sha256:mock"
+    )
+
+    private static let testServerInfo = ServerInfo(
+        protocolVersion: "5.0",
+        appName: "MockApp",
+        bundleIdentifier: "com.test.mock",
+        deviceName: "MockDevice",
+        systemVersion: "18.0",
+        screenWidth: 393,
+        screenHeight: 852
+    )
+
+    @ButtonHeistActor
+    private func makeMockFence(fileConfig: ButtonHeistFileConfig? = nil) -> TheFence {
+        let mockConn = MockConnection()
+        mockConn.serverInfo = Self.testServerInfo
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), elements: []))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let mockDisc = MockDiscovery()
+        mockDisc.discoveredDevices = [Self.testDevice]
+
+        let fence = TheFence(configuration: .init(fileConfig: fileConfig))
+        fence.client.handoff.makeDiscovery = { mockDisc }
+        fence.client.handoff.makeConnection = { _, _, _ in mockConn }
+
+        makeReachabilityConnection = { _ in
+            let probe = MockConnection()
+            probe.emitTransportReadyOnConnect = true
+            probe.autoResponse = { message in
+                if case .status = message {
+                    return .status(StatusPayload(
+                        identity: StatusIdentity(
+                            appName: "Mock", bundleIdentifier: "com.test",
+                            appBuild: "1", deviceName: "Mock",
+                            systemVersion: "18.0", buttonHeistVersion: "0.0.1"
+                        ),
+                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                    ))
+                }
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return probe
+        }
+
+        return fence
+    }
+
+    @ButtonHeistActor
+    func testConnectWithNamedTargetSwitchesConnection() async throws {
+        let config = ButtonHeistFileConfig(
+            targets: [
+                "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok1"),
+                "sim2": TargetConfig(device: "127.0.0.1:1456", token: "tok2"),
+            ],
+            defaultTarget: "sim1"
+        )
+        let fence = makeMockFence(fileConfig: config)
+
+        let response = try await fence.execute(request: ["command": "connect", "target": "sim2"])
+        if case .ok(let message) = response {
+            XCTAssertTrue(message.contains("Connected"))
+        } else {
+            XCTFail("Expected ok response, got \(response)")
+        }
+        XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
+        XCTAssertEqual(fence.config.token, "tok2")
+    }
+
+    @ButtonHeistActor
+    func testConnectWithDirectDeviceSwitchesConnection() async throws {
+        let fence = makeMockFence()
+
+        let response = try await fence.execute(request: [
+            "command": "connect",
+            "device": "127.0.0.1:9999",
+            "token": "direct-tok",
+        ])
+        if case .ok(let message) = response {
+            XCTAssertTrue(message.contains("Connected"))
+        } else {
+            XCTFail("Expected ok response, got \(response)")
+        }
+        XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
+        XCTAssertEqual(fence.config.token, "direct-tok")
+    }
+
+    @ButtonHeistActor
+    func testConnectFailureRestoresPreviousConfig() async throws {
+        let config = ButtonHeistFileConfig(
+            targets: [
+                "sim1": TargetConfig(device: "127.0.0.1:1455", token: "tok1"),
+            ],
+            defaultTarget: "sim1"
+        )
+        let fence = TheFence(configuration: .init(
+            deviceFilter: "127.0.0.1:1455",
+            token: "tok1",
+            fileConfig: config
+        ))
+
+        // Inject a mock that immediately emits an auth failure on connect
+        let failingConn = MockConnection()
+        failingConn.connectEventsOverride = [
+            .transportReady,
+            .disconnected(.authFailed("denied")),
+        ]
+
+        let mockDisc = MockDiscovery()
+        mockDisc.discoveredDevices = [Self.testDevice]
+        fence.client.handoff.makeDiscovery = { mockDisc }
+        fence.client.handoff.makeConnection = { _, _, _ in failingConn }
+
+        makeReachabilityConnection = { _ in
+            let probe = MockConnection()
+            probe.emitTransportReadyOnConnect = true
+            probe.autoResponse = { message in
+                if case .status = message {
+                    return .status(StatusPayload(
+                        identity: StatusIdentity(
+                            appName: "Mock", bundleIdentifier: "com.test",
+                            appBuild: "1", deviceName: "Mock",
+                            systemVersion: "18.0", buttonHeistVersion: "0.0.1"
+                        ),
+                        session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                    ))
+                }
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+            return probe
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "connect",
+            "device": "127.0.0.1:9999",
+            "token": "bad-tok",
+        ])
+        if case .error(let message) = response {
+            XCTAssertTrue(message.contains("Connect failed") || message.contains("Auth failed"))
+        } else {
+            XCTFail("Expected error response, got \(response)")
+        }
+        // Previous config should be restored
+        XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1455")
+        XCTAssertEqual(fence.config.token, "tok1")
+    }
 
     @ButtonHeistActor
     func testConnectWithoutTargetOrDeviceReturnsError() async throws {

@@ -364,6 +364,9 @@ extension TheFence {
             return .error("Must specify 'target' (named config target) or 'device' (host:port)")
         }
 
+        let previousConfig = config
+        let previousToken = client.token
+
         stop()
 
         client.token = resolvedToken
@@ -379,6 +382,8 @@ extension TheFence {
         do {
             try await start()
         } catch {
+            config = previousConfig
+            client.token = previousToken
             return .error("Connect failed: \(error.localizedDescription)")
         }
 
