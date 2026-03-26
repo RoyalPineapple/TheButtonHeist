@@ -70,8 +70,9 @@ enum NetDeltaAccumulator {
         for delta in deltas {
             for el in delta.added ?? [] {
                 if netRemoved.contains(el.heistId) {
-                    // Was removed earlier, now re-added → remove from removed, treat as update
+                    // Was removed earlier, now re-added → treat as net add
                     netRemoved.remove(el.heistId)
+                    netAdded[el.heistId] = el
                 } else {
                     netAdded[el.heistId] = el
                 }

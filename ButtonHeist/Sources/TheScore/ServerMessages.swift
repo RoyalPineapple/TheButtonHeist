@@ -360,11 +360,12 @@ extension ActionExpectation {
                 } else {
                     targetChanges = update.changes
                 }
-                if let oldValue {
-                    guard targetChanges.contains(where: { $0.old == oldValue }) else { return false }
-                }
-                if let newValue {
-                    guard targetChanges.contains(where: { $0.new == newValue }) else { return false }
+                if oldValue != nil || newValue != nil {
+                    guard targetChanges.contains(where: { change in
+                        if let oldValue, change.old != oldValue { return false }
+                        if let newValue, change.new != newValue { return false }
+                        return true
+                    }) else { return false }
                 }
                 return true
             }
