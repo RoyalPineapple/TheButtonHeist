@@ -350,6 +350,88 @@ extension TheFence {
         return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
     }
 
+    // MARK: - Handler: List Devices
+
+    func handleListDevices() async throws -> FenceResponse {
+        var devices = await client.discoverReachableDevices()
+        if let fileConfig = config.fileConfig {
+            let configDevices = Self.configTargetsAsDevices(fileConfig)
+            let existingIDs = Set(devices.map(\.id))
+            for device in configDevices where !existingIDs.contains(device.id) {
+                devices.append(device)
+            }
+        }
+        return .devices(devices)
+    }
+
+    // MARK: - Handler: Connect (runtime target switching)
+
+    func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {
+        let targetName = stringArg(args, "target")
+        let device = stringArg(args, "device")
+        let token = stringArg(args, "token")
+
+        let resolvedDevice: String
+        let resolvedToken: String?
+
+        if let device {
+            resolvedDevice = device
+            resolvedToken = token
+        } else if let targetName {
+            guard let fileConfig = config.fileConfig else {
+                return .error("No config file loaded. Create .buttonheist.json or ~/.config/buttonheist/config.json")
+            }
+            guard let target = fileConfig.targets[targetName] else {
+                let available = fileConfig.targets.keys.sorted()
+                return .error("Unknown target '\(targetName)'. Available: \(available.joined(separator: ", "))")
+            }
+            resolvedDevice = target.device
+            resolvedToken = token ?? target.token
+        } else {
+            return .error("Must specify 'target' (named config target) or 'device' (host:port)")
+        }
+
+        let previousConfig = config
+        let previousToken = client.token
+
+        stop()
+
+        client.token = resolvedToken
+        let newConfig = Configuration(
+            deviceFilter: resolvedDevice,
+            connectionTimeout: config.connectionTimeout,
+            token: resolvedToken,
+            autoReconnect: config.autoReconnect,
+            fileConfig: config.fileConfig
+        )
+        config = newConfig
+
+        do {
+            try await start()
+        } catch {
+            config = previousConfig
+            client.token = previousToken
+            do {
+                try await start()
+            } catch {
+                return .error("Connect failed and could not restore previous connection: \(error.localizedDescription)")
+            }
+            return .error("Connect failed, restored previous connection: \(error.localizedDescription)")
+        }
+
+        let deviceName = client.connectedDevice.map { client.displayName(for: $0) } ?? resolvedDevice
+        return .ok(message: "Connected to \(deviceName)")
+    }
+
+    func handleListTargets() -> FenceResponse {
+        guard let fileConfig = config.fileConfig else {
+            return .targets([:], defaultTarget: nil)
+        }
+        return .targets(fileConfig.targets, defaultTarget: fileConfig.defaultTarget)
+    }
+
+    // MARK: - Handler: Recording
+
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
