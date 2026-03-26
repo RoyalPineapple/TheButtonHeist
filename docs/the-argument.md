@@ -34,7 +34,7 @@ The agent interacts by calling `activate` with an element's order index or ident
 
 Every action returns an interface delta — elements added, removed, and changed — so the agent sees what happened without re-fetching the entire tree. `wait_for_idle` watches `CALayer` animations and reports when the UI has settled after a transition.
 
-`run_batch` lets the agent combine multiple actions into a single MCP call. Adding a todo item (tap field, type text, tap Add) goes from 3 round trips to 1. Each step can carry an `expect` field — `"screen_changed"`, `"layout_changed"`, or `{"valueChanged": {"newValue": "5"}}` — and the response reports whether each expectation was met:
+`run_batch` lets the agent combine multiple actions into a single MCP call. Adding a todo item (tap field, type text, tap Add) goes from 3 round trips to 1. Each step can carry an `expect` field — `"screen_changed"`, `"layout_changed"`, or `{"value": "expected text"}` — and the response reports whether each expectation was met:
 
 ```json
 {
@@ -49,45 +49,68 @@ The Button Heist also works on physical devices. Same framework, same tools, poi
 
 ## Benchmarks
 
-I ran the same Claude Sonnet agent through the same 11-step workflow (todo list management, filtering, calculator arithmetic, navigation) using each tool. Same model, same app, same task, n=6 per configuration. Full trial data in [benchmark-data.md](./benchmark-data.md).
+Three MCP servers — Button Heist, mobile-mcp, and ios-simulator-mcp (idb) — tested against the same 13-task suite. Same model (Claude Sonnet 4.6), same app, same simulator, 3 trials per task per config. Full data in `benchmarks/results/`.
 
-| | ios-simulator-mcp | BH | BH + Batch | BH + Batch + Expect |
-|---|--:|--:|--:|--:|
-| **Turns** | 41 ± 1 | 31 ± 4 | 12 ± 2 | 12 ± 2 |
-| **Wall time** | 175s ± 11 | 123s ± 12 | 83s ± 4 | 93s ± 4 |
-| **Context consumed** | 1,550K | 1,137K | 409K | 381K |
-| **Output tokens** | 6,678 | 3,644 | 2,773 | 3,721 |
+All three tools achieve high accuracy on most tasks. The differentiation is efficiency.
 
-Each column gives the agent more autonomy:
+**Turns (mean per cell, rounded — 13 tasks, n=2–3 trials each):**
 
-- **BH base**: The agent gets richer data per element — activation points, available actions, interaction flags — so it understands the interface without extra reasoning. It doesn't need prompt instructions explaining how to compute tap coordinates. The accessibility data already tells it how to interact with each element.
-- **Batching**: The agent can express a multi-step intention in a single call and get back what happened at each step. It doesn't have to wait for a round trip between every tap.
-- **Expectations**: The agent can state what it expects to happen and get structured confirmation. It doesn't have to re-read the tree and reason about whether a tap worked — the tool tells it directly.
+| Task | idb | mobile-mcp | BH |
+|---|--:|--:|--:|
+| **Full workflow** (11 steps) | 49 | 61 | **25** |
+| **Calculator** | 24 | 20 | **15** |
+| **Todo CRUD** | 40 | 43 | **14** |
+| **Settings roundtrip** | 31 | 17 | **11** |
+| **Notes workflow** | 55 | 42 | **13** |
+| **Controls gauntlet** | 67 | timeout | **26** |
+| **Scroll hunt** | 39 | 56 | **19** |
+| **Bug verification** | 68 | 56 | **23** |
+| **Marathon** (5 screens) | 124 | 172 | **75** |
+| **Swipe actions** | 34 | 80 | **7** |
+| **Scroll to find** | 28 | 47 | **15** |
+| **Stepper increment** | 27 | **13** | 15 |
+| **Search + tap** | 23 | **19** | 21 |
 
-Batching and expectations both depend on running in-process — batching needs inline deltas between steps, and expectations need the framework to detect screen changes, layout mutations, and value updates without a full tree re-read.
+BH consistently shows 2-3x fewer turns across the suite, with the gap widening on gesture-heavy tasks (swipe actions: 7t vs 34t vs 80t). mobile-mcp wins on two simple tasks (stepper, search) where coordinate-based interaction has no overhead disadvantage — a useful control.
 
-The cost savings (26–75% less context depending on configuration) are a side effect of the agent being more confident. Fewer turns means the agent made fewer wrong moves, needed fewer verification checks, and spent less time on mechanics. Haiku results (n=3, directional only) showed the same pattern.
+Specific capability differences:
 
-## How It Compares to ios-simulator-mcp
+- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. Coordinate-based tools must swipe to reveal the button, re-read elements, then tap. **7 turns vs 34 (idb) vs 80 (mobile-mcp).**
+- **Controls gauntlet** (T5): BH completes mixed controls (toggles, steppers, sliders, pickers) in 26 turns. idb needs 67. mobile-mcp times out on all 3 trials.
+- **Search + tap** (T12): Near parity across all configs — BH shows no meaningful advantage on tasks where the tools are equivalent. **19–23 turns.**
 
-ios-simulator-mcp reads the accessibility tree through Apple's `AXPTranslator`, which bridges iOS accessibility into macOS accessibility concepts. Properties without macOS equivalents — activation points, `respondsToUserInteraction`, hints, custom content, custom rotors, available actions — get dropped in translation.
+Each BH mode gives the agent more autonomy:
 
-The Button Heist reads `UIAccessibility` objects directly inside the app process, so none of that is lost.
+- **BH base**: Semantic addressing — the agent says *what* to interact with, not *where*. No coordinate math, no frame parsing.
+- **Batching**: Multi-step intentions in a single call. Calculator collapses from 15 turns to 5. Each step returns what changed. Coordinate-based tools can't batch because each tap depends on seeing the screen after the previous action.
+- **Expectations**: Inline outcome verification. The agent doesn't re-read the tree — the tool reports whether the action worked.
 
-Other differences: ios-simulator-mcp doesn't have deltas (every tap requires a full tree re-read), idle detection (the agent guesses when animations finish), accessibility actions (`increment`, `decrement`, custom actions), multi-touch, batching, expectations, or physical device support. Its dependency on Facebook's `idb` is also a consideration — idb has been archived and is community-maintained.
+Batching is the big win. Expectations help on verification-heavy tasks but add overhead where the agent doesn't need confirmation. Both depend on running in-process — batching needs inline deltas, expectations need the framework to detect state changes without a full tree re-read.
+
+## How It Compares
+
+### ios-simulator-mcp (idb)
+
+Reads the accessibility tree through Apple's `AXPTranslator`, which bridges iOS accessibility into macOS accessibility concepts. Properties without macOS equivalents — activation points, `respondsToUserInteraction`, hints, custom content, custom rotors, available actions — get dropped in translation. The Button Heist reads `UIAccessibility` objects directly inside the app process, so none of that is lost.
+
+idb is the stronger competitor on accuracy — it matches or beats BH's correctness on every task with three-way data. But it takes 2-3x more turns to get there. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, expectations, or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
 
 The detailed field-by-field comparison is in [ios-simulator-mcp-comparison.md](./ios-simulator-mcp-comparison.md).
 
+### mobile-mcp
+
+Coordinate-based via WebDriverAgent. Popular (~4k GitHub stars), easy to set up. Matches BH on accuracy for simple tasks but has the highest variance — four tasks had at least one timeout or spiral trial. Gesture-heavy tasks show the biggest gap (swipe actions: 80 turns vs BH's 7). Cannot batch actions because each tap depends on seeing the updated screen.
+
 ## Trade-offs
 
-ios-simulator-mcp has real advantages:
+The coordinate-based tools have real advantages:
 
-1. **Zero integration.** Works with any app, no project changes. The Button Heist requires linking a framework into the debug build — the same pattern as Reveal or FLEX, but still a step.
-2. **`npx` install.** The Button Heist currently requires building from source.
-3. **App install, launch, and simulator lifecycle.** Built into idb. The Button Heist doesn't manage any of this.
-4. **Maturity.** The Button Heist is 0.0.1. ios-simulator-mcp has a larger user base and was featured on Anthropic's blog.
+1. **Zero integration.** Work with any app, no project changes. The Button Heist requires linking a framework into the debug build — the same pattern as Reveal or FLEX, but still a step.
+2. **Easy install.** `npx` for mobile-mcp, `npx` for idb. The Button Heist currently requires building from source.
+3. **App install, launch, and simulator lifecycle.** Built into both competitors. The Button Heist doesn't manage any of this.
+4. **Maturity.** The Button Heist is 0.0.1. mobile-mcp has ~4k stars and was featured on Anthropic's blog.
 
-For apps you don't control, ios-simulator-mcp is the right tool. For apps you're building — where you can embed the framework and where richer accessibility data, deltas, batching, expectations, and real device support matter — The Button Heist is worth trying.
+For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-3x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
 
 ## Background
 
