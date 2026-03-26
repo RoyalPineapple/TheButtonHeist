@@ -252,6 +252,11 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     case actions
     case frame
     case activationPoint
+
+    /// Geometry properties: frame position/size and activation point coordinates.
+    public var isGeometry: Bool {
+        self == .frame || self == .activationPoint
+    }
 }
 
 /// A single property change: what property, old value, new value.

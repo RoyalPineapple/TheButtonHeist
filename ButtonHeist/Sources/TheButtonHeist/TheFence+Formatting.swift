@@ -717,8 +717,10 @@ public enum FenceResponse {
                 }
             }
             if let updates = delta.updated, !updates.isEmpty {
+                // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise
                 for update in updates {
-                    for change in update.changes {
+                    let meaningful = update.changes.filter { !$0.property.isGeometry }
+                    for change in meaningful {
                         lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
                     }
                 }
@@ -811,32 +813,43 @@ public enum FenceResponse {
         return payload
     }
 
-    private func deltaDictionary(_ delta: InterfaceDelta) -> [String: Any] {
+    private func deltaDictionary(_ delta: InterfaceDelta, detail: InterfaceDetail = .summary) -> [String: Any] {
         var payload: [String: Any] = [
             "kind": delta.kind.rawValue,
             "elementCount": delta.elementCount,
         ]
         if let added = delta.added {
-            payload["added"] = added.map { elementDictionary($0) }
+            payload["added"] = added.map { elementDictionary($0, detail: detail) }
         }
         if let removed = delta.removed {
             payload["removed"] = removed
         }
         if let updated = delta.updated {
-            payload["updated"] = updated.map { update -> [String: Any] in
-                [
-                    "heistId": update.heistId,
-                    "changes": update.changes.map { change -> [String: Any] in
-                        var entry: [String: Any] = ["property": change.property.rawValue]
-                        if let old = change.old { entry["old"] = old }
-                        if let new = change.new { entry["new"] = new }
-                        return entry
-                    },
-                ]
+            // Filter geometry changes when detail is summary
+            let filtered: [ElementUpdate] = if detail == .full {
+                updated
+            } else {
+                updated.compactMap { update in
+                    let meaningful = update.changes.filter { !$0.property.isGeometry }
+                    return meaningful.isEmpty ? nil : ElementUpdate(heistId: update.heistId, changes: meaningful)
+                }
+            }
+            if !filtered.isEmpty {
+                payload["updated"] = filtered.map { update -> [String: Any] in
+                    [
+                        "heistId": update.heistId,
+                        "changes": update.changes.map { change -> [String: Any] in
+                            var entry: [String: Any] = ["property": change.property.rawValue]
+                            if let old = change.old { entry["old"] = old }
+                            if let new = change.new { entry["new"] = new }
+                            return entry
+                        },
+                    ]
+                }
             }
         }
         if let newInterface = delta.newInterface {
-            payload["newInterface"] = interfaceDictionary(newInterface)
+            payload["newInterface"] = interfaceDictionary(newInterface, detail: detail)
         }
         return payload
     }
