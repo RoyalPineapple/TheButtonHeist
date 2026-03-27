@@ -74,18 +74,18 @@ struct ButtonHeistMCPServer {
             // Grouped tools — "type" field becomes the command
             case "gesture":
                 guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
+                    return .init(content: [.text("Missing required parameter: type")], isError: true)
                 }
                 request["command"] = type
 
             case "accessibility_action":
                 guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text(text: "Missing required parameter: type", annotations: nil, _meta: nil)], isError: true)
+                    return .init(content: [.text("Missing required parameter: type")], isError: true)
                 }
                 request["command"] = type
 
             default:
-                return .init(content: [.text(text: "Unknown tool: \(params.name)", annotations: nil, _meta: nil)], isError: true)
+                return .init(content: [.text("Unknown tool: \(params.name)")], isError: true)
             }
 
             let response = try await fence.execute(request: request)
@@ -93,7 +93,7 @@ struct ButtonHeistMCPServer {
             return try renderResponse(response)
         } catch {
             idleMonitor.resetTimer()
-            return .init(content: [.text(text: errorMessage(error), annotations: nil, _meta: nil)], isError: true)
+            return .init(content: [.text(errorMessage(error))], isError: true)
         }
     }
 
@@ -140,7 +140,7 @@ struct ButtonHeistMCPServer {
 
         // Screenshots: embed as image content
         if case .screenshotData(let pngData, _, _) = response {
-            content.append(.image(data: pngData, mimeType: "image/png", annotations: nil, _meta: nil))
+            content.append(.image(data: pngData, mimeType: "image/png", metadata: nil))
         } else if case .screenshot = response {
             // File-based screenshot — handled by compact text below
         }
@@ -154,7 +154,7 @@ struct ButtonHeistMCPServer {
             isError = false
         }
 
-        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
+        content.append(.text(response.compactFormatted()))
         return .init(content: content, isError: isError)
     }
 
