@@ -107,7 +107,7 @@ The coordinate-based tools have real advantages:
 
 1. **Zero integration.** Work with any app, no project changes. The Button Heist requires linking a framework into the debug build — the same pattern as Reveal or FLEX, but still a step.
 2. **Easy install.** `npx` for mobile-mcp, `npx` for idb. The Button Heist currently requires building from source.
-3. **App install, launch, and simulator lifecycle.** Built into both competitors. The Button Heist doesn't manage any of this.
+3. **App install, launch, and simulator lifecycle.** Built into both competitors. The Button Heist pairs with XcodeBuildMCP for this — XcodeBuildMCP builds and deploys, Button Heist drives the UI. Different layers of the stack, same agent loop.
 4. **Maturity.** The Button Heist is 0.0.1. mobile-mcp has ~4k stars and was featured on Anthropic's blog.
 
 For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-3x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
