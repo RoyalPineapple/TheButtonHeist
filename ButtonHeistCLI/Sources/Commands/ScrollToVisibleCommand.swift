@@ -36,6 +36,9 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Excluded traits (none may be present)")
     var excludeTraits: [String] = []
 
+    @Option(name: .long, help: "Match scope: elements (leaves only, default), containers, or both")
+    var scope: String?
+
     @Option(name: .long, help: "Maximum scroll attempts (default: 20)")
     var maxScrolls: Int?
 
@@ -50,8 +53,17 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard label != nil || identifier != nil || heistId != nil || value != nil else {
-            throw ValidationError("Must specify at least one match field (--label, --identifier, --heist-id, or --value)")
+        guard label != nil || identifier != nil || value != nil
+            || !traits.isEmpty || !excludeTraits.isEmpty else {
+            throw ValidationError("Must specify at least one match field (--label, --identifier, --value, --traits, or --exclude-traits)")
+        }
+
+        var matchScope: MatchScope?
+        if let scope {
+            guard let parsed = MatchScope(rawValue: scope.lowercased()) else {
+                throw ValidationError("Invalid scope '\(scope)'. Valid: \(MatchScope.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            matchScope = parsed
         }
 
         let matcher = ElementMatcher(
@@ -60,7 +72,8 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             heistId: heistId,
             value: value,
             traits: traits.isEmpty ? nil : traits,
-            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits
+            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits,
+            scope: matchScope
         )
 
         var searchDirection: ScrollSearchDirection?

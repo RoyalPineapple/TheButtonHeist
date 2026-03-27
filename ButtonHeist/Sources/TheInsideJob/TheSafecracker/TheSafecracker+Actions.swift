@@ -156,17 +156,17 @@ extension TheSafecracker {
         )
         if let result { return result }
 
-        // Phase 2: Scroll in reverse direction from original position
+        // Phase 2: Jump to opposite edge, scroll back in primary direction
+        // to cover content before the original starting position.
         scrollToOppositeEdge(scrollView, from: primaryDirection)
         if let tripwire {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
         }
         bagman.refreshAccessibilityData()
 
-        let reverseDirection = oppositeDirection(primaryDirection)
         let result2 = await scrollSearchLoop(
-            scrollView: scrollView, matcher: matcher, direction: reverseDirection,
-            maxScrolls: maxScrolls - scrollCount, scrollCount: &scrollCount,
+            scrollView: scrollView, matcher: matcher, direction: primaryDirection,
+            maxScrolls: maxScrolls, scrollCount: &scrollCount,
             seenKeys: &seenKeys, totalItems: totalItems
         )
         if let result2 { return result2 }

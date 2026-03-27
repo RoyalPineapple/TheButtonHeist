@@ -505,7 +505,7 @@ final class ElementMatcherTests: XCTestCase {
         let matcher = ElementMatcher(label: "Target")
         let result = leaf.matches(matcher, traitNames: traitNames)
         XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Target")
+        XCTAssertEqual(result?.label, "Target")
         XCTAssertEqual(result?.traversalIndex, 3)
     }
 
@@ -516,7 +516,7 @@ final class ElementMatcherTests: XCTestCase {
         let matcher = ElementMatcher(label: "Child")
         let result = container.matches(matcher, traitNames: traitNames)
         XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Child")
+        XCTAssertEqual(result?.label, "Child")
     }
 
     func testHierarchyMatchReturnsNilWhenNoMatch() {
@@ -533,7 +533,7 @@ final class ElementMatcherTests: XCTestCase {
         ]
         let matcher = ElementMatcher(traits: ["button"])
         let result = tree.firstMatch(matcher, traitNames: traitNames)
-        XCTAssertEqual(result?.element.label, "Second")
+        XCTAssertEqual(result?.label, "Second")
         XCTAssertEqual(result?.traversalIndex, 1)
     }
 
@@ -545,8 +545,8 @@ final class ElementMatcherTests: XCTestCase {
         ]
         let results = tree.allMatches(ElementMatcher(traits: ["button"]), traitNames: traitNames)
         XCTAssertEqual(results.count, 2)
-        XCTAssertEqual(results[0].element.label, "A")
-        XCTAssertEqual(results[1].element.label, "C")
+        XCTAssertEqual(results[0].label, "A")
+        XCTAssertEqual(results[1].label, "C")
     }
 
     func testHierarchyNestedContainerSearch() {
@@ -559,7 +559,7 @@ final class ElementMatcherTests: XCTestCase {
         ]
         let result = tree.firstMatch(ElementMatcher(identifier: "deep"), traitNames: traitNames)
         XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Deep Target")
+        XCTAssertEqual(result?.label, "Deep Target")
         XCTAssertEqual(result?.traversalIndex, 5)
     }
 
@@ -614,30 +614,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertNotEqual(a.stableKey, b.stableKey)
     }
 
-    func testStableKeyIgnoresFrame() {
-        let a = AccessibilityElement(
-            description: "Save", label: "Save", value: nil, traits: .button,
-            identifier: nil, hint: nil, userInputLabels: nil,
-            shape: .frame(CGRect(x: 0, y: 0, width: 100, height: 44)),
-            activationPoint: CGPoint(x: 50, y: 22),
-            usesDefaultActivationPoint: true,
-            customActions: [], customContent: [], customRotors: [],
-            accessibilityLanguage: nil, respondsToUserInteraction: true
-        )
-        let b = AccessibilityElement(
-            description: "Save", label: "Save", value: nil, traits: .button,
-            identifier: nil, hint: nil, userInputLabels: nil,
-            shape: .frame(CGRect(x: 0, y: 500, width: 100, height: 44)),
-            activationPoint: CGPoint(x: 50, y: 522),
-            usesDefaultActivationPoint: true,
-            customActions: [], customContent: [], customRotors: [],
-            accessibilityLanguage: nil, respondsToUserInteraction: true
-        )
-        XCTAssertEqual(a.stableKey, b.stableKey)
-        // But AccessibilityElement itself considers them different
-        XCTAssertNotEqual(a, b)
-    }
-
     func testStableKeySetDeduplicates() {
         let elements = [
             el(label: "Save", traits: .button),
@@ -646,6 +622,50 @@ final class ElementMatcherTests: XCTestCase {
         ]
         let keys = Set(elements.map(\.stableKey))
         XCTAssertEqual(keys.count, 2)
+    }
+
+    func testStableKeyFallsBackToFrameWhenNoSemanticIdentity() {
+        let a = AccessibilityElement(
+            description: "", label: nil, value: nil, traits: .none,
+            identifier: nil, hint: nil, userInputLabels: nil,
+            shape: .frame(CGRect(x: 0, y: 0, width: 44, height: 44)),
+            activationPoint: CGPoint(x: 22, y: 22),
+            usesDefaultActivationPoint: true,
+            customActions: [], customContent: [], customRotors: [],
+            accessibilityLanguage: nil, respondsToUserInteraction: true
+        )
+        let b = AccessibilityElement(
+            description: "", label: nil, value: nil, traits: .none,
+            identifier: nil, hint: nil, userInputLabels: nil,
+            shape: .frame(CGRect(x: 0, y: 200, width: 44, height: 44)),
+            activationPoint: CGPoint(x: 22, y: 222),
+            usesDefaultActivationPoint: true,
+            customActions: [], customContent: [], customRotors: [],
+            accessibilityLanguage: nil, respondsToUserInteraction: true
+        )
+        XCTAssertNotEqual(a.stableKey, b.stableKey, "Unlabeled elements at different positions must hash differently")
+    }
+
+    func testStableKeySameFrameSameKeyWhenNoSemanticIdentity() {
+        let a = AccessibilityElement(
+            description: "", label: nil, value: nil, traits: .none,
+            identifier: nil, hint: nil, userInputLabels: nil,
+            shape: .frame(CGRect(x: 10, y: 10, width: 44, height: 44)),
+            activationPoint: CGPoint(x: 32, y: 32),
+            usesDefaultActivationPoint: true,
+            customActions: [], customContent: [], customRotors: [],
+            accessibilityLanguage: nil, respondsToUserInteraction: true
+        )
+        let b = AccessibilityElement(
+            description: "", label: nil, value: nil, traits: .none,
+            identifier: nil, hint: nil, userInputLabels: nil,
+            shape: .frame(CGRect(x: 10, y: 10, width: 44, height: 44)),
+            activationPoint: CGPoint(x: 32, y: 32),
+            usesDefaultActivationPoint: true,
+            customActions: [], customContent: [], customRotors: [],
+            accessibilityLanguage: nil, respondsToUserInteraction: true
+        )
+        XCTAssertEqual(a.stableKey, b.stableKey, "Same frame + no semantics = same key")
     }
 
     // MARK: - Absent Flag (Semantic Only)
@@ -662,6 +682,223 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(ElementMatcher(absent: nil).isAbsent)
         XCTAssertFalse(ElementMatcher(absent: false).isAbsent)
         XCTAssertTrue(ElementMatcher(absent: true).isAbsent)
+    }
+
+    // MARK: - MatchScope: Hierarchy
+
+    private func labeledGroup(
+        label: String,
+        children: [AccessibilityHierarchy]
+    ) -> AccessibilityHierarchy {
+        .container(
+            AccessibilityContainer(
+                type: .semanticGroup(label: label, value: nil, identifier: nil),
+                frame: .zero
+            ),
+            children: children
+        )
+    }
+
+    func testScopeElementsSkipsContainers() {
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Nav", children: [
+                .element(el(label: "Item"), traversalIndex: 0)
+            ])
+        ]
+        // Default scope (.elements) should not match the container
+        let result = tree.firstMatch(ElementMatcher(label: "Nav"), traitNames: traitNames)
+        XCTAssertNil(result)
+    }
+
+    func testScopeContainersMatchesContainer() {
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Nav", children: [
+                .element(el(label: "Item"), traversalIndex: 0)
+            ])
+        ]
+        let matcher = ElementMatcher(label: "Nav", scope: .containers)
+        let result = tree.firstMatch(matcher, traitNames: traitNames)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.label, "Nav")
+        XCTAssertNil(result?.element)
+        XCTAssertNotNil(result?.container)
+    }
+
+    func testScopeContainersSkipsLeaves() {
+        let tree: [AccessibilityHierarchy] = [
+            .element(el(label: "Leaf"), traversalIndex: 0)
+        ]
+        let matcher = ElementMatcher(label: "Leaf", scope: .containers)
+        XCTAssertNil(tree.firstMatch(matcher, traitNames: traitNames))
+    }
+
+    func testScopeBothMatchesContainerAndLeaf() {
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Section", children: [
+                .element(el(label: "Item"), traversalIndex: 0)
+            ])
+        ]
+        let results = tree.allMatches(
+            ElementMatcher(scope: .both), traitNames: traitNames
+        )
+        // Should find both the container ("Section") and the leaf ("Item")
+        XCTAssertEqual(results.count, 2)
+    }
+
+    func testScopeBothMatchesLeafByLabel() {
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Section", children: [
+                .element(el(label: "Target"), traversalIndex: 0)
+            ])
+        ]
+        let matcher = ElementMatcher(label: "Target", scope: .both)
+        let result = tree.firstMatch(matcher, traitNames: traitNames)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.label, "Target")
+        XCTAssertNotNil(result?.element)
+    }
+
+    func testScopeContainersWithTraitsFails() {
+        // Containers have no traits — a matcher with scope=containers and traits should never match
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Nav", children: [
+                .element(el(label: "Item", traits: .button), traversalIndex: 0)
+            ])
+        ]
+        let matcher = ElementMatcher(label: "Nav", traits: ["button"], scope: .containers)
+        XCTAssertNil(tree.firstMatch(matcher, traitNames: traitNames))
+    }
+
+    func testScopeContainersMatchesByIdentifier() {
+        let tree: [AccessibilityHierarchy] = [
+            .container(
+                AccessibilityContainer(
+                    type: .semanticGroup(label: nil, value: nil, identifier: "nav.bar"),
+                    frame: .zero
+                ),
+                children: [
+                    .element(el(label: "Item"), traversalIndex: 0)
+                ]
+            )
+        ]
+        let matcher = ElementMatcher(identifier: "nav.bar", scope: .containers)
+        let result = tree.firstMatch(matcher, traitNames: traitNames)
+        XCTAssertNotNil(result)
+        XCTAssertNotNil(result?.container)
+    }
+
+    func testScopeContainersMatchesByValue() {
+        let tree: [AccessibilityHierarchy] = [
+            .container(
+                AccessibilityContainer(
+                    type: .semanticGroup(label: nil, value: "3 items", identifier: nil),
+                    frame: .zero
+                ),
+                children: []
+            )
+        ]
+        let matcher = ElementMatcher(value: "3 items", scope: .containers)
+        let result = tree.firstMatch(matcher, traitNames: traitNames)
+        XCTAssertNotNil(result)
+    }
+
+    func testScopeContainersNonSemanticGroupNeverMatches() {
+        // .list containers have no label/value/identifier — can only match empty matcher
+        let tree: [AccessibilityHierarchy] = [
+            .container(
+                AccessibilityContainer(type: .list, frame: .zero),
+                children: [
+                    .element(el(label: "Item"), traversalIndex: 0)
+                ]
+            )
+        ]
+        let matcher = ElementMatcher(label: "anything", scope: .containers)
+        XCTAssertNil(tree.firstMatch(matcher, traitNames: traitNames))
+    }
+
+    func testScopeContainersStillRecursesIntoChildren() {
+        // Even when scope is .containers, children should still be searched
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Outer", children: [
+                labeledGroup(label: "Inner", children: [
+                    .element(el(label: "Leaf"), traversalIndex: 0)
+                ])
+            ])
+        ]
+        let matcher = ElementMatcher(label: "Inner", scope: .containers)
+        let result = tree.firstMatch(matcher, traitNames: traitNames)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.label, "Inner")
+    }
+
+    func testScopeDefaultMatchesExistingBehavior() {
+        // Nil scope should behave exactly like .elements
+        let tree: [AccessibilityHierarchy] = [
+            labeledGroup(label: "Section", children: [
+                .element(el(label: "Target"), traversalIndex: 0)
+            ])
+        ]
+        let withNil = tree.firstMatch(ElementMatcher(label: "Target"), traitNames: traitNames)
+        let withExplicit = tree.firstMatch(
+            ElementMatcher(label: "Target", scope: .elements), traitNames: traitNames
+        )
+        XCTAssertNotNil(withNil)
+        XCTAssertNotNil(withExplicit)
+        XCTAssertEqual(withNil?.label, withExplicit?.label)
+
+        // Neither should match the container
+        XCTAssertNil(tree.firstMatch(ElementMatcher(label: "Section"), traitNames: traitNames))
+        XCTAssertNil(tree.firstMatch(
+            ElementMatcher(label: "Section", scope: .elements), traitNames: traitNames
+        ))
+    }
+
+    // MARK: - AccessibilityContainer Matching
+
+    func testContainerMatchesLabel() {
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Settings", value: nil, identifier: nil), frame: .zero
+        )
+        XCTAssertTrue(container.matches(ElementMatcher(label: "Settings")))
+        XCTAssertFalse(container.matches(ElementMatcher(label: "Other")))
+    }
+
+    func testContainerMatchesIdentifier() {
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: nil, identifier: "nav"), frame: .zero
+        )
+        XCTAssertTrue(container.matches(ElementMatcher(identifier: "nav")))
+        XCTAssertFalse(container.matches(ElementMatcher(identifier: "other")))
+    }
+
+    func testContainerMatchesValue() {
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: "5 items", identifier: nil), frame: .zero
+        )
+        XCTAssertTrue(container.matches(ElementMatcher(value: "5 items")))
+        XCTAssertFalse(container.matches(ElementMatcher(value: "3 items")))
+    }
+
+    func testContainerWithTraitsAlwaysFails() {
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Nav", value: nil, identifier: nil), frame: .zero
+        )
+        XCTAssertFalse(container.matches(ElementMatcher(label: "Nav", traits: ["button"])))
+    }
+
+    func testContainerEmptyMatcherMatchesAny() {
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Nav", value: nil, identifier: nil), frame: .zero
+        )
+        XCTAssertTrue(container.matches(ElementMatcher()))
+    }
+
+    func testContainerListTypeHasNoProperties() {
+        let container = AccessibilityContainer(type: .list, frame: .zero)
+        // Empty matcher matches anything
+        XCTAssertTrue(container.matches(ElementMatcher()))
+        // Any property requirement fails
+        XCTAssertFalse(container.matches(ElementMatcher(label: "anything")))
     }
 }
 
