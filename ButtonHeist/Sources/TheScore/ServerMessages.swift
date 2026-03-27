@@ -278,6 +278,7 @@ public struct InterfaceDelta: Codable, Sendable {
 
 /// Which accessibility property changed on an element.
 public enum ElementProperty: String, Codable, Sendable, CaseIterable {
+    case label
     case value
     case traits
     case hint

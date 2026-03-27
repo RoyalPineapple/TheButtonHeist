@@ -2,13 +2,13 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes ButtonHeist as 20 typed MCP tools for AI agents
+> **Role:** Exposes ButtonHeist as 21 typed MCP tools for AI agents
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **20 typed tools** backed by `TheFence`
+1. **21 typed tools** backed by `TheFence`
 2. **Tool-to-command routing** for both direct and grouped tools
 3. **Response adaptation** for MCP clients: screenshots inline, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
@@ -22,7 +22,7 @@ graph TD
         Main["main.swift - ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift - 20 tool schemas"]
+        Tools["ToolDefinitions.swift - 21 tool schemas"]
         Handler["handleToolCall -> decode -> route -> execute -> render"]
         Idle["IdleMonitor"]
     end
@@ -58,6 +58,8 @@ Direct tools:
 - `scroll`
 - `scroll_to_visible`
 - `scroll_to_edge`
+- `edit_action`
+- `dismiss_keyboard`
 - `set_pasteboard`
 - `get_pasteboard`
 - `run_batch`
@@ -69,14 +71,15 @@ Grouped tools:
 
 - `gesture`
   - `type`: `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
-- `accessibility_action`
-  - `type`: `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`
+
+Note: `activate` accepts an optional `action` parameter for named actions (increment, decrement, or custom actions from the element's actions array).
 
 ## Routing Rules
 
 1. Direct tools map 1:1 to `request["command"] = toolName`
 2. Grouped tools extract `type` and use that as the underlying Fence command
-3. All requests end at `fence.execute(request:)`
+3. `activate` with `action` dispatches to the appropriate action handler internally
+4. All requests end at `fence.execute(request:)`
 
 ## Response Behavior
 

@@ -620,23 +620,51 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPerformCustomActionMissingElement() async {
         await assertValidationError(
-            ["command": "perform_custom_action", "actionName": "doSomething"],
+            ["command": "perform_custom_action", "action": "doSomething"],
             contains: "Must specify element"
         )
     }
 
     @ButtonHeistActor
-    func testPerformCustomActionMissingActionName() async {
+    func testPerformCustomActionMissingAction() async {
         await assertValidationError(
             ["command": "perform_custom_action", "identifier": "myElement"],
-            contains: "actionName is required"
+            contains: "action is required"
         )
     }
 
     @ButtonHeistActor
     func testPerformCustomActionValidPassesValidation() async {
         await assertPassesValidation(
+            ["command": "perform_custom_action", "identifier": "myElement", "action": "doSomething"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testPerformCustomActionAcceptsLegacyActionName() async {
+        await assertPassesValidation(
             ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateWithCustomActionDispatches() async {
+        await assertPassesValidation(
+            ["command": "activate", "identifier": "myElement", "action": "Delete"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateWithIncrementDispatches() async {
+        await assertPassesValidation(
+            ["command": "activate", "identifier": "myElement", "action": "increment"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateWithDecrementDispatches() async {
+        await assertPassesValidation(
+            ["command": "activate", "identifier": "myElement", "action": "decrement"]
         )
     }
 
