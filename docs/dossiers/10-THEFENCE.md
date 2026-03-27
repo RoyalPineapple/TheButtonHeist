@@ -8,15 +8,17 @@
 
 TheFence is the brain of the outside operation:
 
-1. **Command dispatch** - routes 35 commands via TheMastermind/TheHandoff
+1. **Command dispatch** - routes 35 commands via TheHandoff
 2. **Auto-discovery and connection** - finds and connects to devices automatically
 3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
-4. **Argument parsing** - extracts typed args from JSON dictionaries
-5. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
-6. **Session management** - persistent connection for CLI session and MCP modes
-7. **Output path validation** - rejects `..` path components in `get_screen` and `stop_recording` output paths to prevent path traversal; resolves paths via `URL.standardized` before writing
-8. **Outcome signals** - parses `expect` field from requests, checks `ActionExpectation` against `ActionResult` after each action, reports what happened in responses and batch summaries
-9. **Batch early stop** - with `stop_on_error` (default), halts the batch at the first mismet expectation so `failedIndex` points at the action that broke, not a downstream symptom
+4. **Request-response correlation** - tracks pending requests via requestId-keyed continuation dictionaries, matches responses to waiting async callers
+5. **Async wait methods** - `waitForActionResult`, `waitForInterface`, `waitForScreen`, `waitForRecording` with timeout handling
+6. **Argument parsing** - extracts typed args from JSON dictionaries
+7. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
+8. **Session management** - persistent connection for CLI session and MCP modes
+9. **Output path validation** - rejects `..` path components in `get_screen` and `stop_recording` output paths to prevent path traversal; resolves paths via `URL.standardized` before writing
+10. **Outcome signals** - parses `expect` field from requests, checks `ActionExpectation` against `ActionResult` after each action, reports what happened in responses and batch summaries
+11. **Batch early stop** - with `stop_on_error` (default), halts the batch at the first mismet expectation so `failedIndex` points at the action that broke, not a downstream symptom
 
 ## Architecture Diagram
 
@@ -58,7 +60,7 @@ graph TD
     CLI["ButtonHeistCLI - ReplSession"] --> Execute
     MCP["ButtonHeistMCP - handleToolCall"] --> Execute
     Execute --> Dispatch
-    Dispatch --> Client["TheMastermind - send/wait"]
+    Dispatch --> Client["TheHandoff - send/receive"]
 ```
 
 ## Command Execution Flow
@@ -140,7 +142,7 @@ stateDiagram-v2
 
 **`dispatch` method cyclomatic complexity** (`TheFence.swift:497`)
 - Large switch statement over 35 command strings
-- Each case has its own argument extraction and TheMastermind interaction
+- Each case has its own argument extraction and TheHandoff interaction
 - The largest single method in the codebase
 - Consider: could the individual command handlers be extracted into separate methods?
 

@@ -16,9 +16,9 @@ struct ListCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let client = TheMastermind()
+        let handoff = TheHandoff()
         logStatus("Discovering devices...")
-        let discovered = await client.discoverReachableDevices(timeout: timeout)
+        let discovered = await handoff.discoverReachableDevices(timeout: timeout)
 
         if discovered.isEmpty {
             logStatus("No devices found.")

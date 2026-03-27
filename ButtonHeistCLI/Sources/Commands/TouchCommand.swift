@@ -365,14 +365,13 @@ private func sendTouchGesture(message: ClientMessage, connection: ConnectionOpti
     let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
     try await connector.connect()
     defer { connector.disconnect() }
-    let client = connector.client
 
     if !connection.quiet {
         logStatus("Sending gesture...")
     }
 
-    client.send(message)
+    connector.send(message)
 
-    let result = try await client.waitForActionResult(timeout: timeout)
+    let result = try await connector.waitForActionResult(timeout: timeout)
     outputActionResult(result, format: format, quiet: connection.quiet, verb: "Gesture")
 }

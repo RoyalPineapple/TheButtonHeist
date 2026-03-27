@@ -39,7 +39,6 @@ struct RecordCommand: AsyncParsableCommand {
         )
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet { logStatus("Starting recording...") }
 
@@ -49,9 +48,9 @@ struct RecordCommand: AsyncParsableCommand {
             inactivityTimeout: inactivityTimeout,
             maxDuration: maxDuration
         )
-        client.send(.startRecording(config))
+        connector.send(.startRecording(config))
 
-        let payload = try await client.waitForRecording(timeout: maxDuration + 30)
+        let payload = try await connector.waitForRecording(timeout: maxDuration + 30)
 
         guard let videoData = Data(base64Encoded: payload.videoData) else {
             throw ValidationError("Failed to decode video data")

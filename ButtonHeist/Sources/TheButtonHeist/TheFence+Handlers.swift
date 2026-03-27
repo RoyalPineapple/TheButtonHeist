@@ -8,7 +8,7 @@ extension TheFence {
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
         let interface: Interface = try await sendAndAwait(.requestInterface) { requestId in
-            try await client.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
+            try await self.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
         let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
 
@@ -29,7 +29,7 @@ extension TheFence {
 
     func handleGetScreen(_ args: [String: Any]) async throws -> FenceResponse {
         let screen: ScreenPayload = try await sendAndAwait(.requestScreen) { requestId in
-            try await client.waitForScreen(requestId: requestId, timeout: 30)
+            try await self.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
             guard !outputPath.split(separator: "/").contains("..") else {
@@ -307,7 +307,7 @@ extension TheFence {
         let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
             text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: elementTarget(args)
         ))) { requestId in
-            try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
+            try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
         }
         lastActionResult = result
         return .action(result: result)
@@ -339,21 +339,21 @@ extension TheFence {
     // MARK: - Handler: Recording
 
     func handleStartRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
+        guard handoff.connectionState == .connected else { throw FenceError.notConnected }
         let config = RecordingConfig(
             fps: intArg(args, "fps"),
             scale: doubleArg(args, "scale"),
             inactivityTimeout: doubleArg(args, "inactivity_timeout"),
             maxDuration: doubleArg(args, "max_duration")
         )
-        client.send(.startRecording(config))
+        handoff.send(.startRecording(config))
         return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
     }
 
     // MARK: - Handler: List Devices
 
     func handleListDevices() async throws -> FenceResponse {
-        var devices = await client.discoverReachableDevices()
+        var devices = await handoff.discoverReachableDevices()
         if let fileConfig = config.fileConfig {
             let configDevices = Self.configTargetsAsDevices(fileConfig)
             let existingIDs = Set(devices.map(\.id))
@@ -392,11 +392,11 @@ extension TheFence {
         }
 
         let previousConfig = config
-        let previousToken = client.token
+        let previousToken = handoff.token
 
         stop()
 
-        client.token = resolvedToken
+        handoff.token = resolvedToken
         let newConfig = Configuration(
             deviceFilter: resolvedDevice,
             connectionTimeout: config.connectionTimeout,
@@ -410,7 +410,7 @@ extension TheFence {
             try await start()
         } catch {
             config = previousConfig
-            client.token = previousToken
+            handoff.token = previousToken
             do {
                 try await start()
             } catch {
@@ -419,7 +419,7 @@ extension TheFence {
             return .error("Connect failed, restored previous connection: \(error.localizedDescription)")
         }
 
-        let deviceName = client.connectedDevice.map { client.displayName(for: $0) } ?? resolvedDevice
+        let deviceName = handoff.connectedDevice.map { handoff.displayName(for: $0) } ?? resolvedDevice
         return .ok(message: "Connected to \(deviceName)")
     }
 
@@ -434,7 +434,7 @@ extension TheFence {
 
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
-            try await client.waitForRecording(timeout: Timeouts.longActionSeconds)
+            try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
             guard !outputPath.split(separator: "/").contains("..") else {
