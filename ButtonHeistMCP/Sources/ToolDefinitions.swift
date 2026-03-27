@@ -133,8 +133,10 @@ enum ToolDefinitions {
     static let swipe = Tool(
         name: "swipe",
         description: """
-            Swipe on an element or between coordinates. For element-based: provide identifier/order \
-            and direction. For coordinate-based: provide startX/startY and endX/endY.
+            Swipe on an element. Use direction for cardinal swipes (up/down/left/right) or \
+            start/end unit points (0-1 relative to element frame) for precise control. \
+            Unit points are device-independent: (0,0) is top-left, (1,1) is bottom-right, \
+            values outside 0-1 extend beyond the element frame.
             """,
         inputSchema: [
             "type": "object",
@@ -142,12 +144,28 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
-                "direction": ["type": "string", "description": "Swipe direction: up, down, left, right"],
-                "startX": ["type": "number", "description": "Start X coordinate"],
-                "startY": ["type": "number", "description": "Start Y coordinate"],
-                "endX": ["type": "number", "description": "End X coordinate"],
-                "endY": ["type": "number", "description": "End Y coordinate"],
-                "distance": ["type": "number", "description": "Swipe distance in points (for direction-based)"],
+                "direction": [
+                    "type": "string",
+                    "description": "Swipe direction: up, down, left, right",
+                ],
+                "start": [
+                    "type": "object",
+                    "description": "Start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    "properties": [
+                        "x": ["type": "number", "description": "X position (0-1, values outside extend beyond frame)"],
+                        "y": ["type": "number", "description": "Y position (0-1, values outside extend beyond frame)"],
+                    ],
+                    "required": .array([.string("x"), .string("y")]),
+                ],
+                "end": [
+                    "type": "object",
+                    "description": "End unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
+                    "properties": [
+                        "x": ["type": "number", "description": "X position (0-1, values outside extend beyond frame)"],
+                        "y": ["type": "number", "description": "Y position (0-1, values outside extend beyond frame)"],
+                    ],
+                    "required": .array([.string("x"), .string("y")]),
+                ],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ],

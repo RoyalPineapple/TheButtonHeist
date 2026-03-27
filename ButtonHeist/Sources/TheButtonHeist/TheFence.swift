@@ -342,6 +342,13 @@ public final class TheFence {
         return nil
     }
 
+    func unitPointArg(_ dictionary: [String: Any], _ key: String) -> UnitPoint? {
+        guard let dict = dictionary[key] as? [String: Any],
+              let x = numberArg(dict["x"]),
+              let y = numberArg(dict["y"]) else { return nil }
+        return UnitPoint(x: x, y: y)
+    }
+
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
         let identifier = stringArg(dictionary, "identifier")
         let heistId = stringArg(dictionary, "heistId")

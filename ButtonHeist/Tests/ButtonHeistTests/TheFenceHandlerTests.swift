@@ -299,6 +299,40 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSwipeWithUnitPointsPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "swipe", "heistId": "row_5",
+             "start": ["x": 0.8, "y": 0.5],
+             "end": ["x": 0.2, "y": 0.5]]
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeUnitPointsMissingEndReturnsError() async {
+        await assertValidationError(
+            ["command": "swipe", "heistId": "row_5",
+             "start": ["x": 0.8, "y": 0.5]],
+            contains: "both start and end"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeUnitPointsMissingStartReturnsError() async {
+        await assertValidationError(
+            ["command": "swipe", "heistId": "row_5",
+             "end": ["x": 0.2, "y": 0.5]],
+            contains: "both start and end"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeDirectionWithElementPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "swipe", "heistId": "row_5", "direction": "left"]
+        )
+    }
+
+    @ButtonHeistActor
     func testDragMissingEndCoordinates() async {
         await assertValidationError(
             ["command": "drag", "startX": 10.0, "startY": 10.0],
