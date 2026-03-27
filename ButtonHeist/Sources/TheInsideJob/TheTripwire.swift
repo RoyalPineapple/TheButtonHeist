@@ -33,6 +33,7 @@ final class TheTripwire {
 
         // Moderate signals (every 3rd tick, carried forward between samples)
         let topmostVC: ObjectIdentifier?
+        let firstResponder: ObjectIdentifier?
 
         // Slow signals (every 5th tick, carried forward between samples)
         let keyboardVisible: Bool
@@ -54,6 +55,7 @@ final class TheTripwire {
         case settled
         case unsettled
         case screenChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
+        case focusChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
         case keyboardChanged(visible: Bool)
         case textInputChanged(active: Bool)
     }
@@ -148,6 +150,7 @@ final class TheTripwire {
 
     // Carried-forward state for Nth-tick signals
     private var lastKnownVC: ObjectIdentifier?
+    private var lastKnownFirstResponder: ObjectIdentifier?
     private var lastKnownKeyboardVisible = false
     private var lastKnownTextInputActive = false
     private var lastKnownWindowCount = 0
@@ -207,9 +210,12 @@ final class TheTripwire {
         previousFingerprint = nil
         wasSettled = false
         lastKnownVC = nil
+        lastKnownFirstResponder = nil
         lastKnownKeyboardVisible = false
         lastKnownTextInputActive = false
         lastKnownWindowCount = 0
+        keyboardVisibleFlag = false
+        textInputActiveFlag = false
     }
 
     // MARK: - Settle Waiting
@@ -267,13 +273,20 @@ final class TheTripwire {
         }
         previousFingerprint = fingerprint
 
-        // VC identity (every 3rd tick)
+        // VC identity + first responder (every 3rd tick)
         if tickCount % Self.vcSampleCadence == 0 {
             let vcId = topmostViewController().map(ObjectIdentifier.init)
             if vcId != lastKnownVC {
                 let oldVC = lastKnownVC
                 lastKnownVC = vcId
                 onTransition?(.screenChanged(from: oldVC, to: vcId))
+            }
+
+            let responderId = currentFirstResponder().map(ObjectIdentifier.init)
+            if responderId != lastKnownFirstResponder {
+                let oldResponder = lastKnownFirstResponder
+                lastKnownFirstResponder = responderId
+                onTransition?(.focusChanged(from: oldResponder, to: responderId))
             }
         }
 
@@ -300,6 +313,7 @@ final class TheTripwire {
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: lastKnownVC,
+            firstResponder: lastKnownFirstResponder,
             keyboardVisible: lastKnownKeyboardVisible,
             textInputActive: lastKnownTextInputActive,
             windowCount: lastKnownWindowCount,
@@ -347,7 +361,11 @@ final class TheTripwire {
     private func startNotificationObservation() {
         let nc = NotificationCenter.default
 
-        // Keyboard visibility
+        // Keyboard visibility — frame-based detection matches KIF's approach.
+        // The frame check handles edge cases where the keyboard window exists
+        // but is off-screen (undocked, floating, or dismissed mid-animation).
+        nc.addObserver(self, selector: #selector(keyboardFrameDidChange),
+                       name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
         nc.addObserver(self, selector: #selector(keyboardWillShow),
                        name: UIResponder.keyboardWillShowNotification, object: nil)
         nc.addObserver(self, selector: #selector(keyboardDidHide),
@@ -366,12 +384,23 @@ final class TheTripwire {
 
     private func stopNotificationObservation() {
         let nc = NotificationCenter.default
+        nc.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
         nc.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
         nc.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
         nc.removeObserver(self, name: UITextField.textDidBeginEditingNotification, object: nil)
         nc.removeObserver(self, name: UITextField.textDidEndEditingNotification, object: nil)
         nc.removeObserver(self, name: UITextView.textDidBeginEditingNotification, object: nil)
         nc.removeObserver(self, name: UITextView.textDidEndEditingNotification, object: nil)
+    }
+
+    @objc private func keyboardFrameDidChange(_ notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let screenBounds = UIScreen.main.bounds
+        keyboardVisibleFlag = endFrame.intersects(screenBounds)
+            && endFrame.height > 0
+            && endFrame.origin.y < screenBounds.height
     }
 
     @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
@@ -398,6 +427,27 @@ final class TheTripwire {
             }
             .sorted { $0.windowLevel > $1.windowLevel }
             .map { ($0, $0 as UIView) }
+    }
+
+    // MARK: - First Responder
+
+    /// The current first responder view, if any.
+    /// Walks the view hierarchy of all traversable windows.
+    func currentFirstResponder() -> UIView? {
+        for (window, _) in getTraversableWindows() {
+            if let responder = findFirstResponder(in: window) {
+                return responder
+            }
+        }
+        return nil
+    }
+
+    private func findFirstResponder(in view: UIView) -> UIView? {
+        if view.isFirstResponder { return view }
+        for sub in view.subviews {
+            if let found = findFirstResponder(in: sub) { return found }
+        }
+        return nil
     }
 
     // MARK: - View Controller Identity

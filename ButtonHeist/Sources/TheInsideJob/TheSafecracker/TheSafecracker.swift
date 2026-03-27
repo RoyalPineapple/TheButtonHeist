@@ -87,41 +87,6 @@ final class TheSafecracker {
     /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
     nonisolated static let keyboardPollMaxAttempts: Int = 20
 
-    // MARK: - Keyboard Visibility (Notification-Based)
-
-    /// Tracks keyboard visibility via `UIKeyboardDidChangeFrameNotification`,
-    /// matching KIF's approach. The view-hierarchy walk (`UIInputSetHostView`)
-    /// broke on iOS 26 because the keyboard window no longer appears in
-    /// `UIWindowScene.windows`.
-    private var keyboardVisible = false
-    private var keyboardObserver: NSObjectProtocol?
-
-    func startKeyboardTracking() {
-        keyboardObserver = NotificationCenter.default.addObserver(
-            forName: UIResponder.keyboardDidChangeFrameNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-                    return
-                }
-                let screenBounds = UIScreen.main.bounds
-                self.keyboardVisible = endFrame.intersects(screenBounds)
-                    && endFrame.height > 0
-                    && endFrame.origin.y < screenBounds.height
-            }
-        }
-    }
-
-    func stopKeyboardTracking() {
-        if let observer = keyboardObserver {
-            NotificationCenter.default.removeObserver(observer)
-            keyboardObserver = nil
-        }
-    }
-
     // MARK: - Internal Touch State
 
     private var activeTouches: [SyntheticTouch] = []
@@ -303,10 +268,11 @@ final class TheSafecracker {
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
-    /// Uses notification-based tracking (KIF's approach) with a fallback
-    /// to checking UIKeyboardImpl for an active input delegate.
+    /// Reads the notification-driven flag from TheTripwire (frame-based
+    /// detection, matching KIF's approach) with a fallback to
+    /// KeyboardBridge for hardware keyboard scenarios.
     func isKeyboardVisible() -> Bool {
-        if keyboardVisible { return true }
+        if let tripwire, tripwire.keyboardVisibleFlag { return true }
         return KeyboardBridge.shared()?.hasActiveInput ?? false
     }
 
