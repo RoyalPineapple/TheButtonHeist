@@ -262,7 +262,7 @@ extension TheFence {
                 direction: direction
             )
             let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
-                try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
+                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
             }
             lastActionResult = result
             return .action(result: result)
