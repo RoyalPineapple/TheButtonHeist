@@ -64,6 +64,7 @@ EOF
 # idea as Bundle.main in an iOS app. SPM puts it in a .bundle directory
 # next to the binary. We just find the binary and read the file.
 
+# --- BEGIN BAKE TARGET ---
 BUNDLE_NAME="ButtonHeistCLI_ButtonHeistCLIExe.bundle"
 PROMPT_FILENAME="integration-prompt.md"
 
@@ -82,6 +83,7 @@ load_prompt() {
     fi
     INTEGRATION_PROMPT="$(cat "$prompt_file")"
 }
+# --- END BAKE TARGET ---
 
 # ── Supported models ────────────────────────────────────────────────────────
 
@@ -96,12 +98,19 @@ model_binary() {
     esac
 }
 
+model_npm_package() {
+    case "$1" in
+        claude)  echo "@anthropic-ai/claude-code" ;;
+        gemini)  echo "@google/gemini-cli" ;;
+        codex)   echo "@openai/codex" ;;
+        copilot) echo "@github/copilot" ;;
+        *)       echo "" ;;
+    esac
+}
+
 model_install_hint() {
     case "$1" in
-        claude)  echo "npm install -g @anthropic-ai/claude-code" ;;
-        gemini)  echo "npm install -g @google/gemini-cli" ;;
-        codex)   echo "npm install -g @openai/codex" ;;
-        copilot) echo "npm install -g @github/copilot" ;;
+        claude|gemini|codex|copilot) echo "npm install -g $(model_npm_package "$1")" ;;
         aider)   echo "pip install aider-chat" ;;
         *)       echo "" ;;
     esac
@@ -138,13 +147,13 @@ model_exec() {
             gemini -y -p "$INTEGRATION_PROMPT"
             ;;
         codex)
-            codex --approval-mode auto-edit -q "$INTEGRATION_PROMPT"
+            codex --approval-mode suggest "$INTEGRATION_PROMPT"
             ;;
         copilot)
             copilot -p "$INTEGRATION_PROMPT"
             ;;
         aider)
-            aider --message "$INTEGRATION_PROMPT" --yes
+            aider --message "$INTEGRATION_PROMPT"
             ;;
         *)
             fail "Unknown model: $model"
@@ -216,14 +225,20 @@ if ! command -v "$BINARY" &>/dev/null; then
         claude|gemini|codex|copilot)
             read -rp "  Install now with npm? [y/N] " answer
             if [[ "$answer" =~ ^[Yy]$ ]]; then
+                NPM_PACKAGE="$(model_npm_package "$MODEL")"
                 if command -v npm &>/dev/null; then
-                    npm install -g "$(model_install_hint "$MODEL" | awk '{print $NF}')"
+                    npm install -g "$NPM_PACKAGE"
                     ok "Installed $DISPLAY_NAME"
                 elif command -v brew &>/dev/null; then
-                    printf "\n  npm not found. Installing Node.js via Homebrew first...\n"
-                    brew install node
-                    npm install -g "$(model_install_hint "$MODEL" | awk '{print $NF}')"
-                    ok "Installed node + $DISPLAY_NAME"
+                    printf "\n  npm not found. Node.js is required.\n"
+                    read -rp "  Install Node.js via Homebrew? [y/N] " node_answer
+                    if [[ "$node_answer" =~ ^[Yy]$ ]]; then
+                        brew install node
+                        npm install -g "$NPM_PACKAGE"
+                        ok "Installed node + $DISPLAY_NAME"
+                    else
+                        fail "Node.js is required. Install it first: https://nodejs.org"
+                    fi
                 else
                     fail "Neither npm nor Homebrew found. Install Node.js first: https://nodejs.org"
                 fi

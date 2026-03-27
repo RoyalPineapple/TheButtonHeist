@@ -63,25 +63,37 @@ jobs:
           tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
           rm dist/buttonheist-mcp
 
-          # Integrate script — bake prompt.md into the script for standalone distribution
-          python3 -c "
+          # Bake prompt.md into install.sh so the distributed script is self-contained.
+          # In the repo, install.sh has a load_prompt() function that reads prompt.md
+          # from disk at runtime. For the standalone release artifact we replace that
+          # function with a hardcoded INTEGRATION_PROMPT='...' assignment and strip
+          # the load_prompt call site.
+          python3 << 'BAKE_SCRIPT'
           import re, pathlib
-          script = pathlib.Path('scripts/installation/install.sh').read_text()
+
+          installer = pathlib.Path('scripts/installation/install.sh').read_text()
           prompt = pathlib.Path('scripts/installation/prompt.md').read_text()
-          escaped = prompt.replace(\"'\", \"'\\\\''\")
-          inline_var = \"INTEGRATION_PROMPT='\" + escaped + \"'\"
-          # Replace the function definition block (BUNDLE_NAME through closing brace)
-          script = re.sub(
-              r'^BUNDLE_NAME=.*?^}$',
-              inline_var,
-              script, count=1, flags=re.DOTALL | re.MULTILINE)
-          # Remove the deferred load_prompt call
-          script = re.sub(
-              r'^load_prompt\n',
-              '',
-              script, count=1, flags=re.MULTILINE)
-          pathlib.Path('dist/buttonheist-integrate').write_text(script)
-          "
+
+          # Shell-escape: close the single quote, add an escaped one, reopen
+          prompt = prompt.replace("'", "'\\''")
+          hardcoded_assignment = "INTEGRATION_PROMPT='" + prompt + "'"
+
+          # Swap the bake target region (between sentinel comments) with the
+          # hardcoded assignment. Lambda avoids Python interpreting backslashes
+          # in the prompt as regex escape sequences.
+          bake_target = r'^# --- BEGIN BAKE TARGET ---$.*?^# --- END BAKE TARGET ---$'
+          installer = re.sub(
+              bake_target,
+              lambda _: hardcoded_assignment,
+              installer, count=1, flags=re.DOTALL | re.MULTILINE)
+
+          # Strip the load_prompt call site — the variable is now set inline
+          installer = re.sub(
+              r'^load_prompt\n', '',
+              installer, count=1, flags=re.MULTILINE)
+
+          pathlib.Path('dist/buttonheist-integrate').write_text(installer)
+          BAKE_SCRIPT
           chmod +x dist/buttonheist-integrate
 
           # Checksums
@@ -126,6 +138,12 @@ jobs:
             }
             { print }
           ' Formula/buttonheist.rb > /tmp/buttonheist-final.rb
+
+          # Verify no PLACEHOLDER values remain
+          if grep -q 'PLACEHOLDER' /tmp/buttonheist-final.rb; then
+            echo "::error::Homebrew formula still contains PLACEHOLDER values after SHA substitution"
+            exit 1
+          fi
 
           # Push to tap repo
           TAP_REPO="RoyalPineapple/homebrew-tap"
