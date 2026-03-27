@@ -626,7 +626,7 @@ public struct ScrollToVisibleTarget: Codable, Sendable {
         self.direction = direction
     }
 
-    public var resolvedMaxScrolls: Int { maxScrolls ?? 20 }
+    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
 }
 
