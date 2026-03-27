@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           submodules: recursive
 
@@ -63,8 +63,19 @@ jobs:
           tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
           rm dist/buttonheist-mcp
 
-          # Integrate script (ships as a standalone executable script)
-          cp scripts/install.sh dist/buttonheist-integrate
+          # Integrate script — bake prompt.md into the script for standalone distribution
+          python3 -c "
+          import re, pathlib
+          script = pathlib.Path('scripts/installation/install.sh').read_text()
+          prompt = pathlib.Path('scripts/installation/prompt.md').read_text()
+          escaped = prompt.replace(\"'\", \"'\\\\''\")
+          # Replace the file-loading block with an inline variable
+          script = re.sub(
+              r'SCRIPT_DIR=.*?INTEGRATION_PROMPT=.*?\n',
+              \"INTEGRATION_PROMPT='\" + escaped + \"'\n\",
+              script, count=1, flags=re.DOTALL)
+          pathlib.Path('dist/buttonheist-integrate').write_text(script)
+          "
           chmod +x dist/buttonheist-integrate
 
           # Checksums
@@ -120,6 +131,6 @@ jobs:
           gh api "repos/${TAP_REPO}/contents/Formula/buttonheist.rb" \
             --method PUT \
             --field message="Update buttonheist to ${VERSION}" \
-            --field content="$(base64 < /tmp/buttonheist-final.rb)" \
+            --field content="$(base64 -b 0 < /tmp/buttonheist-final.rb)" \
             "${SHA_ARG[@]}" \
             || echo "::warning::Failed to update Homebrew tap — create RoyalPineapple/homebrew-tap and add HOMEBREW_TAP_TOKEN secret"

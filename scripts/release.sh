@@ -35,6 +35,7 @@ usage() {
     echo "  - docs/API.md"
     echo "  - TestApp/Sources/DisclosureGroupingDemo.swift"
     echo "  - docs/VERSIONING.md"
+    echo "  - Formula/buttonheist.rb"
     echo ""
     echo "After running, commit and tag: git tag v<VERSION>"
     exit 1
@@ -121,6 +122,14 @@ else
     sed -i '' "s/\*\*$CURRENT_ESC\*\*/**$NEW_ESC**/" docs/VERSIONING.md
 fi
 echo "  ✓ docs/VERSIONING.md"
+
+# 6. Formula/buttonheist.rb version
+if [[ "$DRY_RUN" == true ]]; then
+    echo "  Would update: version \"$NEW_VERSION\" in Formula/buttonheist.rb"
+else
+    sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
+fi
+echo "  ✓ Formula/buttonheist.rb"
 
 echo ""
 [[ "$DRY_RUN" == true ]] && exit 0

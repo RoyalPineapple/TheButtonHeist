@@ -60,321 +60,30 @@ EOF
 }
 
 # ── The prompt ──────────────────────────────────────────────────────────────
-# Shared across every model. This is the brains of the operation.
-
-INTEGRATION_PROMPT='You are integrating Button Heist into this iOS project. Your job is to add the
-TheInsideJob framework so it auto-starts in DEBUG builds. TheInsideJob runs an
-in-app server that lets AI agents (and humans) control the app via CLI or MCP.
-
-No initialization code is needed — the framework auto-starts via an ObjC +load
-hook when the binary is linked. You just need to: add the dependency, add the
-import, and add Info.plist entries.
-
-## Step 1: Identify the build system
-
-Look at the project root and determine which build system and dependency manager
-is in use. Check for these files in order:
-
-| File                | Build system       |
-|---------------------|--------------------|
-| Package.swift       | Swift Package Manager |
-| Podfile             | CocoaPods          |
-| Cartfile            | Carthage           |
-| Project.swift       | Tuist              |
-| project.yml         | XcodeGen           |
-| BUILD / BUILD.bazel | Bazel              |
-| *.xcodeproj only    | Bare Xcode project |
-| *.xcworkspace       | Xcode workspace (check what is inside) |
-
-A project may use multiple (e.g. CocoaPods + Xcode workspace, or Tuist + SPM).
-Identify the primary dependency management path.
-
-## Step 2: Identify the app target
-
-Find the main iOS application target — the one that produces a .app bundle.
-Skip test targets, app extensions (widgets, intents, share extensions), watch
-apps, and framework/library targets.
-
-If there are multiple app targets (e.g. a debug app and a production app),
-prefer the debug/development target. If unclear, ask the user which target.
-
-## Step 3: Add the dependency
-
-### Swift Package Manager (Package.swift)
-
-Add to the package dependencies array:
-
-```swift
-.package(url: "https://github.com/RoyalPineapple/ButtonHeist.git", branch: "main")
-```
-
-Add to the app target dependencies:
-
-```swift
-.product(name: "TheInsideJob", package: "ButtonHeist")
-```
-
-TheInsideJob is iOS-only. If the package has cross-platform targets, use a
-platform condition:
-
-```swift
-.product(name: "TheInsideJob", package: "ButtonHeist", condition: .when(platforms: [.iOS]))
-```
-
-### Xcode project with SPM (no Package.swift, just .xcodeproj)
-
-The dependency needs to be added through the Xcode project file. Use:
-
-```bash
-xcodebuild -project <Project>.xcodeproj \
-  -addPackageDependency https://github.com/RoyalPineapple/ButtonHeist.git \
-  -packageVersion branch:main
-```
-
-If that command is not available or fails, instruct the user:
-"Open your project in Xcode > File > Add Package Dependencies >
-paste https://github.com/RoyalPineapple/ButtonHeist.git > add TheInsideJob
-to your app target."
-
-### CocoaPods (Podfile)
-
-Add to the app target pod block:
-
-```ruby
-target '\''YourApp'\'' do
-  # Button Heist — auto-starts in DEBUG builds
-  pod '\''ButtonHeist/TheInsideJob'\'', :git => '\''https://github.com/RoyalPineapple/ButtonHeist.git'\'', :branch => '\''main'\''
-end
-```
-
-Then run `pod install`.
-
-If there is no .podspec in the Button Heist repo (there is not one yet), fall
-back to adding it as an SPM dependency alongside CocoaPods. Many projects use
-both. Add the SPM package to the .xcworkspace via Xcode package dependency UI.
-
-### Carthage (Cartfile)
-
-Add to Cartfile:
-
-```
-github "RoyalPineapple/ButtonHeist" "main"
-```
-
-Then: `carthage update --use-xcframeworks --platform iOS`
-
-Link TheInsideJob.xcframework to the app target. If Carthage cannot build it,
-fall back to SPM — tell the user Carthage is not supported yet and add as an
-SPM dependency instead.
-
-### Tuist (Project.swift)
-
-1. Add to `Tuist/Package.swift`:
-
-```swift
-.package(url: "https://github.com/RoyalPineapple/ButtonHeist.git", branch: "main")
-```
-
-2. Run `tuist install` to fetch it.
-
-3. In the app target definition, add the dependency:
-
-```swift
-.external(name: "TheInsideJob")
-```
-
-4. Run `tuist generate` to regenerate the Xcode project.
-
-### XcodeGen (project.yml)
-
-Add to the `packages` section:
-
-```yaml
-packages:
-  ButtonHeist:
-    url: https://github.com/RoyalPineapple/ButtonHeist.git
-    branch: main
-```
-
-Add to the app target dependencies:
-
-```yaml
-targets:
-  YourApp:
-    dependencies:
-      - package: ButtonHeist
-        product: TheInsideJob
-```
-
-Then run `xcodegen generate`.
-
-### Bazel (BUILD files)
-
-Add as a repository rule in WORKSPACE/MODULE.bazel:
-
-```starlark
-git_override(
-    module_name = "ButtonHeist",
-    remote = "https://github.com/RoyalPineapple/ButtonHeist.git",
-    branch = "main",
-)
-```
-
-Or with `rules_swift_package_manager`:
-
-```starlark
-swift_package(
-    name = "ButtonHeist",
-    url = "https://github.com/RoyalPineapple/ButtonHeist.git",
-    branch = "main",
-)
-```
-
-Add `@ButtonHeist//:TheInsideJob` to the app target deps.
-
-If the Bazel setup is complex or non-standard, describe what needs to happen
-and let the user wire it in. Do not guess at custom macros.
-
-### Bare Xcode project (no dependency manager)
-
-Add ButtonHeist as an SPM dependency directly in the .xcodeproj. This is the
-simplest path — Xcode has built-in SPM support since Xcode 11.
-
-If the project deliberately avoids SPM (rare), instruct the user to build
-TheInsideJob.xcframework from source and embed it manually.
-
-## Step 4: Add the import
-
-Find the app entry point. Look for these patterns:
-
-**SwiftUI app:**
-```swift
-@main
-struct SomeApp: App {
-```
-
-**UIKit AppDelegate:**
-```swift
-@main
-class AppDelegate: UIResponder, UIApplicationDelegate {
-```
-or
-```swift
-@UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
-```
-
-**UIKit SceneDelegate (iOS 13+):**
-The entry point is still AppDelegate. The import goes in AppDelegate.swift.
-
-**ObjC main.m / main.swift:**
-Add the import in AppDelegate.swift. If AppDelegate is also ObjC, add it in
-the bridging header or a Swift file compiled into the target.
-
-**No obvious entry point:**
-Search for `UIApplication.shared`, `UIWindow`, `@main`, `@UIApplicationMain`,
-or `INFOPLIST_KEY_UIMainStoryboardFile` build setting.
-
-Add the import wrapped in a DEBUG guard:
-
-```swift
-#if DEBUG
-import TheInsideJob
-#endif
-```
-
-Place it with the other imports at the top of the file.
-
-## Step 5: Info.plist entries
-
-TheInsideJob uses Bonjour for device discovery. iOS requires two Info.plist
-keys for local network access:
-
-```xml
-<key>NSLocalNetworkUsageDescription</key>
-<string>Button Heist uses the local network for UI automation.</string>
-<key>NSBonjourServices</key>
-<array>
-    <string>_buttonheist._tcp</string>
-</array>
-```
-
-How to add them depends on the project:
-
-**Traditional Info.plist file:**
-Find the app Info.plist (check the target build settings for `INFOPLIST_FILE`)
-and add the keys directly.
-
-**Xcode-generated Info.plist (Xcode 15+):**
-If there is no Info.plist file and the target uses `GENERATE_INFOPLIST_FILE = YES`,
-add the keys via build settings:
-
-```
-INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Button Heist uses the local network for UI automation."
-INFOPLIST_KEY_NSBonjourServices = _buttonheist._tcp
-```
-
-Or create an Info.plist file and set `INFOPLIST_FILE` to point at it.
-
-**Tuist:**
-Add to the target infoPlist parameter:
-
-```swift
-.extendingDefault(with: [
-    "NSLocalNetworkUsageDescription": "Button Heist uses the local network for UI automation.",
-    "NSBonjourServices": ["_buttonheist._tcp"],
-])
-```
-
-**XcodeGen (project.yml):**
-```yaml
-info:
-  properties:
-    NSLocalNetworkUsageDescription: "Button Heist uses the local network for UI automation."
-    NSBonjourServices:
-      - _buttonheist._tcp
-```
-
-**Bazel:**
-Add to the `ios_application` rule infoplists attribute.
-
-**Important:** If the app already has `NSBonjourServices`, append
-`_buttonheist._tcp` to the existing array — do not replace it.
-
-## Step 6: Verify the build
-
-Run a build to confirm everything compiles:
-
-```bash
-# For Xcode projects/workspaces
-xcodebuild -workspace <Workspace>.xcworkspace -scheme <AppScheme> \
-  -destination '\''generic/platform=iOS Simulator'\'' build
-
-# For SPM
-swift build
-
-# For Tuist
-tuist generate && tuist build <scheme>
-
-# For Bazel
-bazel build //path/to:<app_target>
-```
-
-If the build fails, read the error and fix it. Common issues:
-- Platform mismatch (TheInsideJob is iOS-only, do not link it to macOS targets)
-- Minimum deployment target too low (requires iOS 17.0+)
-- Swift tools version mismatch (requires swift-tools-version: 6.0+)
-
-## Step 7: Print summary
-
-After successful integration, print:
-- What files you changed
-- How to build and run the app
-- How to connect: `buttonheist list` then `buttonheist session`
-- Note that .mcp.json is configured (if it exists) for AI agent access
-
-Be concise. Make the minimal changes needed. Do not refactor, rename, or
-"improve" anything else in the project.'
+# The prompt text lives as a SPM resource inside the buttonheist CLI — same
+# idea as Bundle.main in an iOS app. SPM puts it in a .bundle directory
+# next to the binary. We just find the binary and read the file.
+
+BUNDLE_NAME="ButtonHeistCLI_ButtonHeistCLIExe.bundle"
+PROMPT_FILENAME="integration-prompt.md"
+
+load_prompt() {
+    local bh bh_dir prompt_file
+    bh="$(which buttonheist 2>/dev/null || true)"
+    if [ -z "$bh" ]; then
+        fail "buttonheist not found on PATH. Install it first: brew install RoyalPineapple/tap/buttonheist"
+    fi
+    # Follow symlinks to the real binary (Homebrew uses symlinks)
+    bh="$(readlink -f "$bh" 2>/dev/null || realpath "$bh" 2>/dev/null || echo "$bh")"
+    bh_dir="$(dirname "$bh")"
+    prompt_file="$bh_dir/$BUNDLE_NAME/$PROMPT_FILENAME"
+    if [ ! -f "$prompt_file" ]; then
+        fail "Integration prompt not found at $prompt_file"
+    fi
+    INTEGRATION_PROMPT="$(cat "$prompt_file")"
+}
+
+load_prompt
 
 # ── Supported models ────────────────────────────────────────────────────────
 
@@ -431,7 +140,7 @@ model_exec() {
             gemini -y -p "$INTEGRATION_PROMPT"
             ;;
         codex)
-            codex exec --full-auto "$INTEGRATION_PROMPT"
+            codex --approval-mode auto-edit -q "$INTEGRATION_PROMPT"
             ;;
         copilot)
             copilot -p "$INTEGRATION_PROMPT"
@@ -506,12 +215,12 @@ if ! command -v "$BINARY" &>/dev/null; then
             read -rp "  Install now with npm? [y/N] " answer
             if [[ "$answer" =~ ^[Yy]$ ]]; then
                 if command -v npm &>/dev/null; then
-                    eval "$INSTALL_HINT"
+                    npm install -g "$(model_install_hint "$MODEL" | awk '{print $NF}')"
                     ok "Installed $DISPLAY_NAME"
                 elif command -v brew &>/dev/null; then
                     printf "\n  npm not found. Installing Node.js via Homebrew first...\n"
                     brew install node
-                    eval "$INSTALL_HINT"
+                    npm install -g "$(model_install_hint "$MODEL" | awk '{print $NF}')"
                     ok "Installed node + $DISPLAY_NAME"
                 else
                     fail "Neither npm nor Homebrew found. Install Node.js first: https://nodejs.org"
@@ -562,9 +271,9 @@ fi
 
 MCP_BIN=""
 if command -v buttonheist-mcp &>/dev/null; then
-    MCP_BIN="$(command -v buttonheist-mcp)"
+    MCP_BIN="buttonheist-mcp"
 elif [ -x "$(brew --prefix 2>/dev/null)/bin/buttonheist-mcp" ]; then
-    MCP_BIN="$(brew --prefix)/bin/buttonheist-mcp"
+    MCP_BIN="buttonheist-mcp"
 fi
 
 # ── Write .mcp.json if missing ──────────────────────────────────────────────
@@ -593,6 +302,40 @@ EOF
     ok "Created .mcp.json → $MCP_BIN"
 else
     warn "Skipping .mcp.json — buttonheist-mcp not found"
+fi
+
+# ── Fair warning ───────────────────────────────────────────────────────────
+
+echo ""
+printf "${YELLOW}${BOLD}  ┌──────────────────────────────────────────────────────────────┐${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}                                                              ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  You are about to let an AI agent ${BOLD}modify your Xcode project${RESET}.   ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}                                                              ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  It will edit build files, add dependencies, and touch your   ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  source code. That is the whole point of this tool. If you    ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  don't trust an agent with your project, this isn't for you.  ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}                                                              ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  But if you're not on a clean git branch,                     ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}  ${RED}${BOLD}now would be a great time to commit${RESET}.                        ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  │${RESET}                                                              ${YELLOW}${BOLD}│${RESET}\n"
+printf "${YELLOW}${BOLD}  └──────────────────────────────────────────────────────────────┘${RESET}\n"
+echo ""
+
+# Check for dirty working tree and warn harder
+if command -v git &>/dev/null && git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree &>/dev/null; then
+    if ! git -C "$PROJECT_DIR" diff --quiet 2>/dev/null || ! git -C "$PROJECT_DIR" diff --cached --quiet 2>/dev/null; then
+        warn "You have uncommitted changes. Brave."
+    else
+        warn "Clean working tree. You've done this before."
+    fi
+else
+    warn "Not a git repo. Living dangerously."
+fi
+
+read -rp "  Let the agent loose? [y/N] " answer
+if ! [[ "$answer" =~ ^[Yy]$ ]]; then
+    dim "No judgment. Commit first, come back when you're ready."
+    exit 0
 fi
 
 # ── Hand off to the agent ──────────────────────────────────────────────────
