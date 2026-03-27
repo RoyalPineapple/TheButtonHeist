@@ -20,10 +20,9 @@ struct StopRecordingCommand: AsyncParsableCommand {
         )
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet { logStatus("Stopping recording...") }
-        client.send(.stopRecording)
+        connector.send(.stopRecording)
 
         // Brief yield so the WebSocket frame flushes before we disconnect.
         try? await Task.sleep(nanoseconds: 50_000_000)

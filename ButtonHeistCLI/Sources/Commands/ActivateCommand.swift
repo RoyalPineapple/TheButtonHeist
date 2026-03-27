@@ -34,15 +34,14 @@ struct ActivateCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet {
             logStatus("Activating element...")
         }
 
-        client.send(.activate(target))
+        connector.send(.activate(target))
 
-        let result = try await client.waitForActionResult(timeout: timeout)
+        let result = try await connector.waitForActionResult(timeout: timeout)
         outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Activate")
     }
 }

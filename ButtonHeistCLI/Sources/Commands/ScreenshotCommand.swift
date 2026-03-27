@@ -21,15 +21,14 @@ struct ScreenshotCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet {
             logStatus("Requesting screenshot...")
         }
 
-        client.send(.requestScreen)
+        connector.send(.requestScreen)
 
-        let payload = try await client.waitForScreen(timeout: timeout)
+        let payload = try await connector.waitForScreen(timeout: timeout)
 
         guard let pngData = Data(base64Encoded: payload.pngData) else {
             throw ValidationError("Failed to decode screenshot data")

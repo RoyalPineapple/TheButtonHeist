@@ -1,9 +1,10 @@
 import Foundation
+import os
 import ButtonHeist
 
 @ButtonHeistActor
 final class DeviceConnector {
-    let client = TheMastermind()
+    let handoff = TheHandoff()
     private let deviceFilter: String?
     private let quiet: Bool
     private let discoveryTimeout: UInt64
@@ -17,28 +18,96 @@ final class DeviceConnector {
         self.quiet = quiet
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
-        self.client.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
-        self.client.autoSubscribe = false
+        self.handoff.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.autoSubscribe = false
     }
 
     /// Connect to a device via Bonjour discovery.
     func connect() async throws {
         if !quiet { logStatus("Searching for iOS devices...") }
-        client.startDiscovery()
+        handoff.startDiscovery()
 
         let device = try await resolveReachableDevice()
 
         if !quiet {
-            logStatus("Found: \(client.displayName(for: device))")
+            logStatus("Found: \(handoff.displayName(for: device))")
         }
 
         try await connectToDevice(device)
     }
 
     func disconnect() {
-        client.disconnect()
-        client.stopDiscovery()
+        handoff.disconnect()
+        handoff.stopDiscovery()
+    }
+
+    // MARK: - Commands (delegated to handoff)
+
+    func send(_ message: ClientMessage) {
+        handoff.send(message)
+    }
+
+    func requestInterface() {
+        handoff.send(.requestInterface)
+    }
+
+    func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult {
+        try await waitForResponse(timeout: timeout) { complete in
+            handoff.onActionResult = { result, _ in complete(.success(result)) }
+        }
+    }
+
+    func waitForInterface(timeout: TimeInterval = 10.0) async throws -> Interface {
+        try await waitForResponse(timeout: timeout) { complete in
+            handoff.onInterface = { payload, _ in complete(.success(payload)) }
+        }
+    }
+
+    func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
+        try await waitForResponse(timeout: timeout) { complete in
+            handoff.onScreen = { payload, _ in complete(.success(payload)) }
+        }
+    }
+
+    func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await waitForResponse(timeout: timeout) { complete in
+            handoff.onRecording = { complete(.success($0)) }
+            handoff.onRecordingError = { complete(.failure(FenceError.actionFailed($0))) }
+        }
+    }
+
+    private func waitForResponse<T: Sendable>(
+        timeout: TimeInterval,
+        install: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            let didResume = OSAllocatedUnfairLock(initialState: false)
+
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
+                    continuation.resume(throwing: FenceError.actionTimeout)
+                }
+            }
+
+            install { result in
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
+                    timeoutTask.cancel()
+                    continuation.resume(with: result)
+                }
+            }
+        }
     }
 
     // MARK: - Private
@@ -47,7 +116,7 @@ final class DeviceConnector {
         let resolver = DeviceResolver(
             filter: deviceFilter,
             discoveryTimeout: discoveryTimeout,
-            getDiscoveredDevices: { [client] in client.discoveredDevices }
+            getDiscoveredDevices: { [handoff] in handoff.discoveredDevices }
         )
         do {
             return try await resolver.resolve()
@@ -66,22 +135,22 @@ final class DeviceConnector {
 
         var connected = false
         var connectionError: Error?
-        client.onConnected = { _ in connected = true }
-        client.onDisconnected = { reason in if connectionError == nil { connectionError = reason } }
+        handoff.onConnected = { _ in connected = true }
+        handoff.onDisconnected = { reason in if connectionError == nil { connectionError = reason } }
         // Intentional: print the token so anyone with debug console access can reconnect.
         // This is a dev tool — if you can see the console, you already have full access.
-        client.onAuthApproved = { token in
+        handoff.onAuthApproved = { token in
             if let token {
                 logStatus("BUTTONHEIST_TOKEN=\(token)")
             }
         }
-        client.onAuthFailed = { reason in
+        handoff.onAuthFailed = { reason in
             connectionError = FenceError.authFailed(reason)
         }
-        client.onSessionLocked = { payload in
+        handoff.onSessionLocked = { payload in
             connectionError = FenceError.sessionLocked(payload.message)
         }
-        client.connect(to: device)
+        handoff.connect(to: device)
 
         let connStart = DispatchTime.now()
         while !connected && connectionError == nil {
