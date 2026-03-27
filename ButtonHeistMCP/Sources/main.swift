@@ -67,18 +67,13 @@ struct ButtonHeistMCPServer {
                  "wait_for_idle", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
                  "scroll", "scroll_to_visible", "scroll_to_edge",
+                 "edit_action", "dismiss_keyboard",
                  "run_batch", "get_session_state",
                  "connect", "list_targets":
                 request["command"] = params.name
 
-            // Grouped tools — "type" field becomes the command
+            // Grouped tool — "type" field becomes the command
             case "gesture":
-                guard let type = request.removeValue(forKey: "type") as? String else {
-                    return .init(content: [.text("Missing required parameter: type")], isError: true)
-                }
-                request["command"] = type
-
-            case "accessibility_action":
                 guard let type = request.removeValue(forKey: "type") as? String else {
                     return .init(content: [.text("Missing required parameter: type")], isError: true)
                 }
