@@ -61,14 +61,13 @@ final class ActionCommandTests: XCTestCase {
     func testSwipeTargetWithDirectionEncoding() throws {
         let target = SwipeTarget(
             elementTarget: ActionTarget(identifier: "list"),
-            direction: .up, distance: 300
+            direction: .up
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
 
         XCTAssertEqual(decoded.elementTarget?.identifier, "list")
         XCTAssertEqual(decoded.direction, .up)
-        XCTAssertEqual(decoded.distance, 300)
         XCTAssertNil(decoded.endX)
     }
 

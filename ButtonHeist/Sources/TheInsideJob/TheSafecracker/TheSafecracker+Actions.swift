@@ -654,7 +654,7 @@ extension TheSafecracker {
         // Resolution priority:
         // 1. start/end unit points → resolve via element frame
         // 2. direction + element target → expand to unit-point defaults
-        // 3. Raw startX/startY/endX/endY or direction+distance → existing absolute behavior
+        // 3. Raw startX/startY/endX/endY or direction → existing absolute behavior
 
         let resolvedStart: UnitPoint? = target.start
         let resolvedEnd: UnitPoint? = target.end
@@ -675,9 +675,6 @@ extension TheSafecracker {
         }
 
         if let unitStart, let unitEnd {
-            if target.distance != nil {
-                return .failure(.syntheticSwipe, message: "distance is not supported with unit-point swipes")
-            }
             guard let elementTarget = target.elementTarget else {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
@@ -708,7 +705,7 @@ extension TheSafecracker {
             if let endX = target.endX, let endY = target.endY {
                 endPoint = CGPoint(x: endX, y: endY)
             } else if let direction = target.direction {
-                let dist = target.distance ?? 200.0
+                let dist = 200.0
                 switch direction {
                 case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
                 case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)

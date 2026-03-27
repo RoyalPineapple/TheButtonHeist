@@ -152,9 +152,6 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Option(name: .long, help: "Swipe direction: up, down, left, right")
     var direction: String?
 
-    @Option(name: .long, help: "Swipe distance in points (default 200)")
-    var distance: Double?
-
     @Option(name: .long, help: "Duration in seconds (default 0.15)")
     var duration: Double?
 
@@ -208,7 +205,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             elementTarget: element.actionTarget,
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
-            direction: swipeDirection, distance: distance,
+            direction: swipeDirection,
             duration: duration,
             start: unitStart, end: unitEnd
         ))
