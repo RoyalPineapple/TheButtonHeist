@@ -228,6 +228,27 @@ Agent: "Type credentials and submit"
 → 3 steps in one round trip, per-step results, short-circuits on failure
 ```
 
+### Pair with XcodeBuildMCP for Full Agent Workflows
+
+For the best agent experience, run Button Heist alongside [**XcodeBuildMCP**](https://github.com/getsentry/XcodeBuildMCP) — it handles build, install, launch, terminate, and simulator lifecycle for both simulators and physical devices. Together they cover the full loop: XcodeBuildMCP builds and deploys your app, Button Heist drives the UI.
+
+```json
+{
+  "mcpServers": {
+    "xcodebuild": {
+      "command": "npx",
+      "args": ["-y", "xcodebuildmcp@latest", "mcp"]
+    },
+    "buttonheist": {
+      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+With both servers, an agent can build from source, install to a simulator, launch the app, and immediately start interacting — no manual setup steps.
+
 ### 3. Connect with the CLI
 
 If you want to run the job yourself instead of handing it to an agent, the CLI is the straight shot.
