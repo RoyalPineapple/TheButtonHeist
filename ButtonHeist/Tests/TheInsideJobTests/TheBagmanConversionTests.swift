@@ -138,10 +138,17 @@ final class TheBagmanConversionTests: XCTestCase {
         XCTAssertEqual(elements[0].heistId, "element")
     }
 
-    func testElementFallbackWithValueSlug() {
+    func testValueExcludedFromSlug() {
         var elements = [makeElement(value: "50%")]
         bagman.assignHeistIds(&elements)
-        XCTAssertEqual(elements[0].heistId, "element_50")
+        // Value is excluded from heistId synthesis for stability
+        XCTAssertEqual(elements[0].heistId, "element")
+    }
+
+    func testValueExcludedButDescriptionUsed() {
+        var elements = [makeElement(value: "50%", description: "VolumeSlider")]
+        bagman.assignHeistIds(&elements)
+        XCTAssertEqual(elements[0].heistId, "element_volumeslider")
     }
 
     func testElementFallbackWithDescriptionSlug() {
@@ -150,18 +157,18 @@ final class TheBagmanConversionTests: XCTestCase {
         XCTAssertEqual(elements[0].heistId, "element_uiview")
     }
 
-    func testSlugFallbackChainLabelThenValueThenDescription() {
-        // label takes priority over value and description
+    func testSlugFallbackChainLabelThenDescription() {
+        // label takes priority over description (value excluded for stability)
         var withLabel = [makeElement(label: "A", value: "B", description: "C", traits: ["button"])]
         bagman.assignHeistIds(&withLabel)
         XCTAssertEqual(withLabel[0].heistId, "button_a")
 
-        // value used when label is nil
+        // value is skipped — description used when label is nil
         var withValue = [makeElement(value: "B", description: "C", traits: ["button"])]
         bagman.assignHeistIds(&withValue)
-        XCTAssertEqual(withValue[0].heistId, "button_b")
+        XCTAssertEqual(withValue[0].heistId, "button_c")
 
-        // description used when both label and value are nil
+        // description used when label is nil
         var withDesc = [makeElement(description: "CView", traits: ["button"])]
         bagman.assignHeistIds(&withDesc)
         XCTAssertEqual(withDesc[0].heistId, "button_cview")
@@ -293,6 +300,21 @@ final class TheBagmanConversionTests: XCTestCase {
         let traits = bagman.traitNames([.button, .selected])
         XCTAssertEqual(traits[0], "button")
         XCTAssertEqual(traits[1], "selected")
+    }
+
+    // MARK: - Snapshot Screen Name
+
+    func testSnapshotScreenNameFromHeaderElement() {
+        let elements = [
+            makeElement(heistId: "button_ok", label: "OK", traits: ["button"]),
+            makeElement(heistId: "header_settings", label: "Settings", traits: ["header"]),
+        ]
+        XCTAssertEqual(snapshot(elements).screenName, "Settings")
+    }
+
+    func testSnapshotScreenNameNilWhenNoHeader() {
+        let elements = [makeElement(heistId: "button_ok", label: "OK", traits: ["button"])]
+        XCTAssertNil(snapshot(elements).screenName)
     }
 
     // MARK: - Delta: Identical Snapshots
@@ -481,6 +503,45 @@ final class TheBagmanConversionTests: XCTestCase {
         let properties = delta.updated?.first?.changes.map(\.property)
         XCTAssertTrue(properties?.contains(.value) == true)
         XCTAssertTrue(properties?.contains(.hint) == true)
+    }
+
+    // MARK: - Delta: Label Change Tracking
+
+    func testLabelChangeOnIdentifierMatchedElementProducesUpdate() {
+        let before = [makeElement(heistId: "loginButton", label: "Show More", identifier: "loginButton")]
+        let after = [makeElement(heistId: "loginButton", label: "Show Less", identifier: "loginButton")]
+
+        let delta = bagman.computeDelta(
+            before: snapshot(before),
+            after: snapshot(after),
+            afterTree: nil,
+            isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.updated?.count, 1)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .label)
+        XCTAssertEqual(change?.old, "Show More")
+        XCTAssertEqual(change?.new, "Show Less")
+    }
+
+    // MARK: - heistId: Value Stability
+
+    func testValueChangeDoesNotAffectHeistId() {
+        // Checkbox toggling: value changes from "0" to "1"
+        var before = [makeElement(label: nil, value: "0", traits: ["button"])]
+        bagman.assignHeistIds(&before)
+        var after = [makeElement(label: nil, value: "1", traits: ["button"])]
+        bagman.assignHeistIds(&after)
+        XCTAssertEqual(before[0].heistId, after[0].heistId)
+    }
+
+    func testSliderValueChangeDoesNotAffectHeistId() {
+        var before = [makeElement(label: nil, value: "40", traits: ["adjustable"])]
+        bagman.assignHeistIds(&before)
+        var after = [makeElement(label: nil, value: "41", traits: ["adjustable"])]
+        bagman.assignHeistIds(&after)
+        XCTAssertEqual(before[0].heistId, after[0].heistId)
     }
 
     // MARK: - Delta: Label Change = Add + Remove
