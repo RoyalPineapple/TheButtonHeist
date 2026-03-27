@@ -4,6 +4,25 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
+// MARK: - Stable Identity
+
+extension AccessibilityElement {
+
+    /// Geometry-free key for tracking unique elements across scroll positions.
+    /// AccessibilityElement.Hashable includes frame and activationPoint which
+    /// change as the user scrolls, producing false "new element" signals.
+    struct StableKey: Hashable {
+        let label: String?
+        let identifier: String?
+        let value: String?
+        let traits: UIAccessibilityTraits
+    }
+
+    var stableKey: StableKey {
+        StableKey(label: label, identifier: identifier, value: value, traits: traits)
+    }
+}
+
 // MARK: - Hierarchy-Level Element Matching
 
 /// Matching operates on the canonical accessibility tree — AccessibilityElement
