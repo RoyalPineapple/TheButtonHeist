@@ -36,8 +36,8 @@ enum ToolDefinitions {
                             "heistId": ["type": "string", "description": "Match a specific element"],
                             "property": [
                                 "type": "string",
-                                "description": "Match a specific property (value, traits, hint, actions, frame, activationPoint)",
-                                "enum": .array(["value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
+                                "description": "Match a specific property (label, value, traits, hint, actions, frame, activationPoint)",
+                                "enum": .array(["label", "value", "traits", "hint", "actions", "frame", "activationPoint"].map { .string($0) }),
                             ],
                             "oldValue": ["type": "string", "description": "Expected previous value"],
                             "newValue": ["type": "string", "description": "Expected new value"],
@@ -54,7 +54,7 @@ enum ToolDefinitions {
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, startRecording, stopRecording, listDevices,
-        gesture, accessibilityAction, setPasteboard, getPasteboard,
+        gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
         connect, listTargets,
@@ -94,7 +94,8 @@ enum ToolDefinitions {
             Activate a UI element. This is the primary way to interact with buttons, links, and controls. \
             Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
             falls back to synthetic tap at the element's activation point. \
-            Target by heistId (preferred), identifier, or order from get_interface.
+            Target by heistId (preferred), identifier, or order from get_interface. \
+            Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
             """,
         inputSchema: [
             "type": "object",
@@ -102,6 +103,7 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
                 "expect": expectProperty,
             ],
             "additionalProperties": false,
@@ -341,33 +343,34 @@ enum ToolDefinitions {
         ]
     )
 
-    static let accessibilityAction = Tool(
-        name: "accessibility_action",
+    static let editAction = Tool(
+        name: "edit_action",
         description: """
-            Perform specialized accessibility actions on elements. For general element interaction, use 'activate' instead. \
-            Set 'type' to one of: increment, decrement, perform_custom_action, edit_action, dismiss_keyboard. \
-            Target by heistId (preferred), identifier, or order from get_interface. \
-            increment/decrement: for sliders, steppers. \
-            perform_custom_action: requires actionName. \
-            edit_action: requires action (copy, paste, cut, select, selectAll). \
-            dismiss_keyboard: no additional params.
+            Perform an edit menu action (copy, paste, cut, select, selectAll) on the current first responder.
             """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "type": [
+                "action": [
                     "type": "string",
-                    "enum": .array(["increment", "decrement", "perform_custom_action", "edit_action", "dismiss_keyboard"].map { .string($0) }),
-                    "description": "Action type",
+                    "enum": .array(["copy", "paste", "cut", "select", "selectAll"].map { .string($0) }),
+                    "description": "Edit action to perform",
                 ],
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
-                "actionName": ["type": "string", "description": "Custom action name (for perform_custom_action)"],
-                "action": ["type": "string", "description": "Edit action: copy, paste, cut, select, selectAll (for edit_action)"],
                 "expect": expectProperty,
             ],
-            "required": .array([.string("type")]),
+            "required": .array([.string("action")]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let dismissKeyboard = Tool(
+        name: "dismiss_keyboard",
+        description: "Dismiss the software keyboard by resigning first responder.",
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "expect": expectProperty,
+            ],
             "additionalProperties": false,
         ]
     )
@@ -413,9 +416,13 @@ enum ToolDefinitions {
             Each step is a JSON request matching the CLI session format (must include 'command'). \
             Every action implicitly checks delivery (success==true). \
             Steps can include an 'expect' field to classify the expected outcome: \
-            "screen_changed", "layout_changed", or {"valueChanged": {"newValue": "5"}}. \
+            "screen_changed", "elements_changed", or {"elementUpdated": {"heistId": "...", "newValue": "..."}}. \
             Results report what actually happened — the caller decides what to do with it. \
-            The policy controls whether the batch stops on first error or unmet expectation.
+            The policy controls whether the batch stops on first error or unmet expectation. \
+            Valid commands: activate (with optional 'action' for custom actions), increment, decrement, \
+            perform_custom_action, type_text, scroll, scroll_to_visible, scroll_to_edge, swipe, \
+            one_finger_tap, long_press, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier, \
+            edit_action, set_pasteboard, get_pasteboard, dismiss_keyboard, get_interface, get_screen.
             """,
         inputSchema: [
             "type": "object",
@@ -426,7 +433,7 @@ enum ToolDefinitions {
                     "items": [
                         "type": "object",
                         "properties": [
-                            "command": ["type": "string", "description": "Fence command (e.g., activate, type_text, scroll)"],
+                            "command": ["type": "string", "description": "Any fence command (activate, dismiss_keyboard, perform_custom_action, etc.)"],
                             "expect": expectProperty,
                         ],
                         "required": .array([.string("command")]),

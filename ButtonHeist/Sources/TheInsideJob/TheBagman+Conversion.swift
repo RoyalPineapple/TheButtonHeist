@@ -150,6 +150,11 @@ extension TheBagman {
     /// Convert current cachedElements to wire HeistElements for delta comparison.
     struct ElementSnapshot {
         let elements: [HeistElement]
+
+        /// Label of the first header-traited element (screen name hint).
+        var screenName: String? {
+            elements.first { $0.traits.contains("header") }?.label
+        }
     }
 
     func snapshotElements() -> ElementSnapshot {
@@ -169,7 +174,7 @@ extension TheBagman {
 
     /// Assign deterministic `heistId` to each element.
     /// Developer-provided identifiers take priority — they become the heistId directly.
-    /// Synthesized IDs use `{trait}_{slug}` with label (or value as fallback) for the slug.
+    /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
     func assignHeistIds(_ elements: inout [HeistElement]) {
         // Phase 1: generate base IDs
@@ -202,8 +207,9 @@ extension TheBagman {
         let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }
             ?? (element.label != nil ? "staticText" : "element")
 
+        // Value is intentionally excluded — it changes on interaction (toggles,
+        // sliders, checkboxes) and must not affect element identity.
         let slug = slugify(element.label)
-            ?? slugify(element.value)
             ?? slugify(element.description)
 
         if let slug {
@@ -261,12 +267,11 @@ extension TheBagman {
 
     /// Semantic element diff — heistId is the sole matching key.
     ///
-    /// heistId already encodes both developer identifiers and synthesized trait+label,
-    /// so one matching pass covers everything. Label changes produce different heistIds
-    /// and naturally appear as remove + add. No order-based fallback.
+    /// heistId encodes developer identifiers or synthesized trait+label (value excluded).
+    /// For identifier-matched elements, label changes surface as property updates.
+    /// For synthesized IDs, label changes produce different heistIds and appear as remove + add.
     ///
-    /// Returns added/removed/updated categories. Updated elements carry per-property diffs
-    /// for every accessibility property except label and identifier (which are identity).
+    /// Returns added/removed/updated categories. Updated elements carry per-property diffs.
     private func computeElementDelta(
         beforeEls: [HeistElement],
         afterEls: [HeistElement]
@@ -309,10 +314,13 @@ extension TheBagman {
         )
     }
 
-    /// Build an ElementUpdate if any property besides label/identifier differs.
+    /// Build an ElementUpdate if any mutable property differs.
     private func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
         var changes: [PropertyChange] = []
 
+        if old.label != new.label {
+            changes.append(PropertyChange(property: .label, old: old.label, new: new.label))
+        }
         if old.value != new.value {
             changes.append(PropertyChange(property: .value, old: old.value, new: new.value))
         }

@@ -347,6 +347,7 @@ final class TheFenceTests: XCTestCase {
     func testIsGeometryClassification() {
         XCTAssertTrue(ElementProperty.frame.isGeometry)
         XCTAssertTrue(ElementProperty.activationPoint.isGeometry)
+        XCTAssertFalse(ElementProperty.label.isGeometry)
         XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)

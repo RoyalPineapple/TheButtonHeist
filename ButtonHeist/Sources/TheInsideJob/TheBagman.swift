@@ -37,6 +37,11 @@ final class TheBagman {
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
 
+    /// Screen name from the last snapshot (first header element's label).
+    var lastScreenName: String? {
+        lastSnapshot.first { $0.traits.contains("header") }?.label
+    }
+
     let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
@@ -332,7 +337,8 @@ final class TheBagman {
         target: ActionTarget? = nil
     ) async -> ActionResult {
         guard success else {
-            return ActionResult(success: false, method: method, message: message, value: value)
+            return ActionResult(success: false, method: method, message: message, value: value,
+                                screenName: beforeSnapshot.screenName)
         }
 
         // Wait for all clear: presentation layers settled AND accessibility tree stable.
@@ -370,9 +376,6 @@ final class TheBagman {
             }
         }
 
-        let screenName = afterSnapshot.elements
-            .first { $0.traits.contains("header") }?.label
-
         return ActionResult(
             success: true,
             method: method,
@@ -382,7 +385,7 @@ final class TheBagman {
             elementLabel: elementLabel,
             elementValue: elementValue,
             elementTraits: elementTraits,
-            screenName: screenName
+            screenName: afterSnapshot.screenName
         )
     }
 
