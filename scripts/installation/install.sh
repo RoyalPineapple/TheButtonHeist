@@ -83,8 +83,6 @@ load_prompt() {
     INTEGRATION_PROMPT="$(cat "$prompt_file")"
 }
 
-load_prompt
-
 # ── Supported models ────────────────────────────────────────────────────────
 
 model_binary() {
@@ -170,6 +168,10 @@ for arg in "$@"; do
             PROJECT_DIR="$arg" ;;
     esac
 done
+
+# ── Load prompt (deferred until after --help parsing) ───────────────────────
+
+load_prompt
 
 # ── --print-prompt: dump and exit ───────────────────────────────────────────
 

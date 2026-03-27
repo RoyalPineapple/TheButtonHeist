@@ -319,7 +319,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
   ./scripts/release.sh 0.0.2
   ./scripts/release.sh --dry-run 0.0.2   # Preview only
   ```
-  The script updates all 5 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v0.0.2`.
+  The script updates all 6 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v0.0.2`.
 - **Protocol version** (`protocolVersion` in `Messages.swift`) is separate from product version — bump when wire format or handshake changes.
 
 ## CLI-First Development
