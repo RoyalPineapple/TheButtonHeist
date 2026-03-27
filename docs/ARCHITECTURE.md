@@ -44,14 +44,17 @@ graph TB
 **Key Types**:
 - `RequestEnvelope` - Wraps `ClientMessage` with an optional `requestId` for response correlation
 - `ResponseEnvelope` - Wraps `ServerMessage` echoing the `requestId` back; push broadcasts use `requestId: nil`
-- `ClientMessage` - Messages from client to server (31 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, and watch)
+- `ClientMessage` - Messages from client to server (33 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, status, and watch)
 - `ServerMessage` - Messages from server to client (18 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
 - `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
 - `Interface` - Container for UI element interface data (flat list + optional tree)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
-- `ActionResult` - Action outcome with method, optional message, interface delta, and animation state
+- `ActionResult` - Action outcome with method, optional message, interface delta, animation state, and optional `ScrollSearchResult`
+- `ElementMatcher` - Composable predicate for matching elements by label, identifier, value, traits, excludeTraits, and scope
+- `ScrollToVisibleTarget` - Search target wrapping an `ElementMatcher` with `maxScrolls` and `direction`
+- `ScrollSearchResult` - Scroll search diagnostics (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 - `RecordingConfig` - Recording configuration (fps, scale, inactivity timeout, max duration)
 - `RecordingPayload` - Completed recording with base64 H.264/MP4 video, metadata, and optional interaction log
@@ -61,7 +64,7 @@ graph TB
 **Design Decisions**:
 - All types are `Codable` and `Sendable` for JSON serialization and concurrency safety
 - No platform-specific imports (UIKit/AppKit)
-- Protocol version 6.1 with TLS transport metadata, envelope correlation, watch mode, session locking, and action outcome signals
+- Protocol version 6.3 with TLS transport metadata, envelope correlation, watch mode, session locking, action outcome signals, and composable element matching
 
 ### TheInsideJob
 
@@ -142,7 +145,7 @@ When the framework loads:
 - Connection scope filtering: rejects connections at `.ready` using typed host classification and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Controlled by `INSIDEJOB_SCOPE` env var; defaults to simulator + USB only.
 - Newline-delimited JSON protocol (0x0A separator)
 - Max 5 concurrent connections, 30 messages/second rate limit, 10 MB buffer limit
-- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.1)
+- Token-based authentication with session locking, envelope correlation, watch mode, and TLS transport metadata (v6.3)
 
 ### Connection Scope Filtering
 
@@ -618,7 +621,7 @@ sequenceDiagram
 See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 
 **Summary**:
-- Protocol version: 6.1
+- Protocol version: 6.3
 - Transport: TLS over TCP (Network framework NWListener/NWConnection with NWProtocolTLS)
 - Authentication: Token-based (required for driver connections), with optional on-device UI approval for auto-generated tokens. Watch (observer) connections require a token by default (`restrictWatchers` defaults to `true`).
 - Session locking: Single-driver exclusivity with release timer on disconnect. Observers do not claim sessions.
