@@ -204,7 +204,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let dict: [String: Any] = ["identifier": "myButton"]
         let target = fence.elementTarget(dict)
         XCTAssertNotNil(target)
-        XCTAssertEqual(target?.identifier, "myButton")
+        // identifier routes through the matcher path (composable with traits)
+        XCTAssertNil(target?.identifier)
+        XCTAssertEqual(target?.match?.identifier, "myButton")
         XCTAssertNil(target?.order)
     }
 
@@ -215,7 +217,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let target = fence.elementTarget(dict)
         XCTAssertNotNil(target)
         XCTAssertEqual(target?.order, 3)
-        XCTAssertNil(target?.identifier)
+        XCTAssertNil(target?.match)
     }
 
     @ButtonHeistActor
@@ -224,8 +226,43 @@ final class TheFenceHandlerTests: XCTestCase {
         let dict: [String: Any] = ["identifier": "btn", "order": 2]
         let target = fence.elementTarget(dict)
         XCTAssertNotNil(target)
-        XCTAssertEqual(target?.identifier, "btn")
+        // identifier goes into matcher, order stays on ActionTarget
+        XCTAssertNil(target?.identifier)
+        XCTAssertEqual(target?.match?.identifier, "btn")
         XCTAssertEqual(target?.order, 2)
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithHeistId() {
+        let (fence, _) = makeConnectedFence()
+        let dict: [String: Any] = ["heistId": "button_save"]
+        let target = fence.elementTarget(dict)
+        XCTAssertNotNil(target)
+        XCTAssertEqual(target?.heistId, "button_save")
+        XCTAssertNil(target?.match)
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithMatcherFields() {
+        let (fence, _) = makeConnectedFence()
+        let dict: [String: Any] = ["label": "Save", "traits": ["button"]]
+        let target = fence.elementTarget(dict)
+        XCTAssertNotNil(target)
+        XCTAssertEqual(target?.match?.label, "Save")
+        XCTAssertEqual(target?.match?.traits, ["button"])
+        XCTAssertNil(target?.heistId)
+        XCTAssertNil(target?.order)
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithHeistIdAndMatcher() {
+        let (fence, _) = makeConnectedFence()
+        // heistId takes priority in resolution, but matcher is also built
+        let dict: [String: Any] = ["heistId": "button_save", "label": "Save"]
+        let target = fence.elementTarget(dict)
+        XCTAssertNotNil(target)
+        XCTAssertEqual(target?.heistId, "button_save")
+        XCTAssertEqual(target?.match?.label, "Save")
     }
 
     @ButtonHeistActor

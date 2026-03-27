@@ -102,7 +102,44 @@ final class TheBagman {
         return false
     }
 
-    // MARK: - Element Resolution
+    // MARK: - Unified Element Resolution
+
+    /// Result of resolving an ActionTarget to a concrete element.
+    struct ResolvedTarget {
+        let element: AccessibilityElement
+        let traversalIndex: Int
+    }
+
+    /// Unified resolution: heistId → match → identifier → order.
+    /// Returns the canonical element and its traversal index, or nil on miss.
+    func resolveTarget(_ target: ActionTarget) -> ResolvedTarget? {
+        // Priority 1: heistId (wire-level fast path)
+        if let heistId = target.heistId {
+            guard let snap = lastSnapshot.first(where: { $0.heistId == heistId }) else { return nil }
+            let idx = snap.order
+            guard idx >= 0, idx < cachedElements.count else { return nil }
+            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
+        }
+        // Priority 2: matcher (canonical tree)
+        if let matcher = target.match {
+            guard let found = findMatch(matcher) else { return nil }
+            return ResolvedTarget(element: found.element, traversalIndex: found.index)
+        }
+        // Priority 3: identifier (backward compat for old wire clients)
+        if let identifier = target.identifier {
+            guard let idx = cachedElements.firstIndex(where: { $0.identifier == identifier }) else {
+                return nil
+            }
+            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
+        }
+        // Priority 4: order (escape hatch)
+        if let idx = target.order, idx >= 0, idx < cachedElements.count {
+            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
+        }
+        return nil
+    }
+
+    // MARK: - Legacy Element Resolution (used by actionResultWithDelta)
 
     func findElement(for target: ActionTarget) -> AccessibilityElement? {
         if let identifier = target.identifier {
@@ -166,6 +203,15 @@ final class TheBagman {
                 return "Element not found: \"\(heistId)\""
             }
             return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
+        }
+        if let matcher = target.match {
+            var fields: [String] = []
+            if let l = matcher.label { fields.append("label=\"\(l)\"") }
+            if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
+            if let v = matcher.value { fields.append("value=\"\(v)\"") }
+            if let t = matcher.traits { fields.append("traits=[\(t.joined(separator: ","))]") }
+            if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.joined(separator: ","))]") }
+            return "No match for: \(fields.joined(separator: " ")) (\(cachedElements.count) elements)"
         }
         if let identifier = target.identifier {
             return "Element not found: identifier \"\(identifier)\""
