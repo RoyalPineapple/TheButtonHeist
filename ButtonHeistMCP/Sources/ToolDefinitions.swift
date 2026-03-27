@@ -133,10 +133,10 @@ enum ToolDefinitions {
     static let swipe = Tool(
         name: "swipe",
         description: """
-            Swipe on an element or between coordinates. Preferred: use start/end unit points \
-            (0-1 relative to element frame) with an element target, or direction with an element \
-            target (expands to unit-point defaults). Fallback: startX/startY and endX/endY for \
-            absolute coordinates.
+            Swipe on an element. Use direction for cardinal swipes (up/down/left/right) or \
+            start/end unit points (0-1 relative to element frame) for precise control. \
+            Unit points are device-independent: (0,0) is top-left, (1,1) is bottom-right, \
+            values outside 0-1 extend beyond the element frame.
             """,
         inputSchema: [
             "type": "object",
@@ -144,6 +144,10 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
                 "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "direction": [
+                    "type": "string",
+                    "description": "Swipe direction: up, down, left, right",
+                ],
                 "start": [
                     "type": "object",
                     "description": "Start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
@@ -162,14 +166,6 @@ enum ToolDefinitions {
                     ],
                     "required": .array([.string("x"), .string("y")]),
                 ],
-                "direction": [
-                    "type": "string",
-                    "description": "Swipe direction: up, down, left, right. With element target, expands to unit-point defaults",
-                ],
-                "startX": ["type": "number", "description": "Absolute start X coordinate (fallback)"],
-                "startY": ["type": "number", "description": "Absolute start Y coordinate (fallback)"],
-                "endX": ["type": "number", "description": "Absolute end X coordinate (fallback)"],
-                "endY": ["type": "number", "description": "Absolute end Y coordinate (fallback)"],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ],
