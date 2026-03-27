@@ -1,9 +1,9 @@
 # TheSafecracker Deep Dive: Text Entry
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+TextEntry.swift`, `TheSafecracker.swift`
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+TextEntry.swift`, `KeyboardBridge.swift`, `TheSafecracker.swift`
 > **Parent dossier:** [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
 
-Text entry bypasses the UIKit touch system entirely and speaks directly to `UIKeyboardImpl` via Objective-C runtime messaging — the same technique used by the KIF testing framework. This works with both software and hardware keyboards.
+Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImpl` through `KeyboardBridge` — a dedicated `@MainActor struct` that wraps all private API access via `ObjCRuntime`. This is the same technique used by the KIF testing framework. It works with both software and hardware keyboards.
 
 ## The 5-Step Pipeline
 
@@ -32,11 +32,11 @@ flowchart TD
     CheckClear -->|no| CheckDelete
 
     Clear --> CheckDelete{deleteCount > 0?}
-    CheckDelete -->|yes| Delete["Step 3: deleteText()<br/>N × deleteFromInput"]
+    CheckDelete -->|yes| Delete["Step 3: deleteText()<br/>N × KeyboardBridge.deleteBackward()"]
     CheckDelete -->|no| CheckType
 
     Delete --> CheckType{text non-empty?}
-    CheckType -->|yes| Type["Step 4: typeText()<br/>per-character addInputString:"]
+    CheckType -->|yes| Type["Step 4: typeText()<br/>per-character KeyboardBridge.type()"]
     CheckType -->|no| Readback
 
     Type --> Readback["Step 5: wait 100ms<br/>refresh elements<br/>read back field value"]
@@ -57,11 +57,11 @@ If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into 
 
 Only runs if `clearFirst == true`. Uses the `UITextInput` protocol, not the keyboard:
 
-1. Gets the first responder as `(any UITextInput)` via `firstResponderTextInput()`
+1. Gets the first responder and casts it to `(any UITextInput)` inline via `firstResponderView() as? (any UITextInput)`
 2. Builds a range from `beginningOfDocument` to `endOfDocument`
 3. Sets `selectedTextRange = fullRange` (selects all)
 4. Waits 50ms for the selection to register
-5. Sends `deleteFromInput` via `UIKeyboardImpl`, or falls back to `deleteBackward()` directly on the UITextInput
+5. Calls `KeyboardBridge.shared()?.deleteBackward()`, or falls back to `textInput.deleteBackward()` directly on the UITextInput
 
 The 50ms yield after setting `selectedTextRange` exists because the keyboard's internal state needs a run-loop turn to treat the selection as the "current" range for the subsequent delete.
 
@@ -69,15 +69,14 @@ Returns true immediately if the range is empty (nothing to clear).
 
 ### Step 3: Delete characters
 
-Sends `deleteFromInput` to `UIKeyboardImpl.sharedInstance` once per character, with `drainKeyboardTaskQueue` + `interKeyDelay` between each. This is the backspace key equivalent.
+Calls `KeyboardBridge.shared()?.deleteBackward()` once per character. `KeyboardBridge` internally calls `deleteFromInput` on `UIKeyboardImpl.sharedInstance`, drains the keyboard task queue, then the caller sleeps `interKeyDelay` between each. This is the backspace key equivalent.
 
 ### Step 4: Type text
 
 Iterates each `Character` in the string (Swift character granularity, not UTF-16 code units). For each:
 
-1. Sends `addInputString:` with a single-character `String` to `UIKeyboardImpl.sharedInstance`
-2. Drains the keyboard task queue
-3. Sleeps `interKeyDelay` (30ms default)
+1. Calls `KeyboardBridge.shared()?.type(character)` — which sends `addInputString:` with a single-character `String` to `UIKeyboardImpl.sharedInstance` and drains the task queue
+2. Sleeps `interKeyDelay` (30ms default)
 
 `addInputString:` routes the character through the keyboard's internal input processing, which means it lands in the first responder via the normal `UIKeyInput.insertText(_:)` pathway with all associated responder-chain delegate callbacks.
 
@@ -85,58 +84,57 @@ Iterates each `Character` in the string (Swift character granularity, not UTF-16
 
 Waits 100ms, refreshes the accessibility element cache via `bagman.refreshElements()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
 
-## Keyboard Detection
+## KeyboardBridge
 
-### `getKeyboardImpl()` — sharedInstance vs activeInstance
+`KeyboardBridge` (`KeyboardBridge.swift`) is a `@MainActor struct` that encapsulates all `UIKeyboardImpl` private API access:
 
-```swift
-ObjCRuntime.classMessage("sharedInstance", on: "UIKeyboardImpl")?.call()
-```
+| Method/Property | What it does |
+|--------|-------------|
+| `static shared() -> KeyboardBridge?` | `UIKeyboardImpl.sharedInstance` via `ObjCRuntime.classMessage`; nil if class/selector absent |
+| `var delegate: AnyObject?` | Reads `UIKeyboardImpl.delegate` via ObjCRuntime |
+| `var hasActiveInput: Bool` | `delegate is UIKeyInput` — true if a text input conformer is the current input delegate |
+| `func type(_ character: Character)` | Calls `addInputString:` + `drainTaskQueue()` |
+| `func deleteBackward()` | Calls `deleteFromInput` + `drainTaskQueue()` |
+| `private func drainTaskQueue()` | Gets `taskQueue` from impl, calls `waitUntilAllTasksAreFinished` |
 
 Uses `sharedInstance`, not `activeInstance`. The difference matters:
 - `sharedInstance` persists across both software and hardware keyboard modes
-- `activeInstance` returns nil when a hardware (Bluetooth/USB) keyboard is connected because UIKit doesn't create a software keyboard view
+- `activeInstance` returns nil when a hardware keyboard is connected because UIKit doesn't create a software keyboard view
 
-Using `sharedInstance` means `typeText` and `deleteText` work transparently regardless of which keyboard type is active.
+## Keyboard Detection
 
 ### `hasActiveTextInput()`
 
-Simply checks whether `getKeyboardImpl()` returns non-nil. If `UIKeyboardImpl.sharedInstance` is resolvable, text input is possible.
+Checks whether `KeyboardBridge.shared()` returns non-nil. If the `UIKeyboardImpl.sharedInstance` singleton is resolvable, text input is possible.
 
-### Keyboard visibility tracking (notification-based)
+### Keyboard visibility tracking (TheTripwire)
 
-`TheSafecracker` tracks keyboard visibility via `UIResponder.keyboardDidChangeFrameNotification`. The handler extracts the `keyboardFrameEndUserInfoKey` rect and sets `keyboardVisible = true` if all three conditions hold:
+Keyboard visibility is tracked by **TheTripwire**, not TheSafecracker. TheTripwire registers for three notifications:
 
-- Frame intersects `UIScreen.main.bounds`
-- Frame height > 0
-- Frame origin.y < screen height (distinguishes on-screen from dismissed-below-edge)
+- `keyboardWillShowNotification` → `keyboardVisibleFlag = true`
+- `keyboardDidHideNotification` → `keyboardVisibleFlag = false`
+- `keyboardDidChangeFrameNotification` → frame-based check: end frame must intersect screen bounds with `height > 0` and `origin.y < screenBounds.height`
 
 This notification-based approach was adopted because on iOS 26, `UIKeyboardImpl`'s host window no longer appears in `UIWindowScene.windows`, making view-hierarchy-based keyboard detection unreliable.
 
-`isKeyboardVisible()` is a composite check: returns the tracked `keyboardVisible` flag, or falls back to checking whether `UIKeyboardImpl.sharedInstance.delegate` conforms to `UIKeyInput`.
+`TheSafecracker.isKeyboardVisible()` reads `tripwire.keyboardVisibleFlag` directly for an immediate answer, then falls back to `KeyboardBridge.shared()?.hasActiveInput` for hardware-keyboard scenarios where the software keyboard frame is off-screen.
 
-## drainKeyboardTaskQueue — Why It Exists
+## drainTaskQueue — Why It Exists
 
-```swift
-private func drainKeyboardTaskQueue(_ impl: AnyObject) {
-    guard let taskQueue: AnyObject = ObjCRuntime.message("taskQueue", to: impl)?.call() else { return }
-    ObjCRuntime.message("waitUntilAllTasksAreFinished", to: taskQueue)?.call()
-}
-```
+`UIKeyboardImpl` enqueues character processing work on an internal `taskQueue`. Without draining, a rapid succession of `addInputString:` or `deleteFromInput` calls outpaces the keyboard's processing, causing dropped or reordered characters. This is a direct port of KIF's `[taskQueue waitUntilAllTasksAreFinished]` pattern.
 
-`UIKeyboardImpl` enqueues character processing work on an internal `taskQueue`. Without draining, a rapid succession of `addInputString:` or `deleteFromInput` calls outpaces the keyboard's processing, causing dropped or reordered characters. This is a direct port of KIF's `[taskQueue waitUntilAllTasksAreFinished]` pattern. The drain runs synchronously on the main actor before the `interKeyDelay` sleep.
+The drain is encapsulated in `KeyboardBridge` and runs synchronously on the main actor after each `type()` or `deleteBackward()` call, before the `interKeyDelay` sleep.
 
 ## First Responder Resolution
 
-Three related methods, all doing multi-window walks via `UIApplication.shared.connectedScenes`:
+Two methods, both doing multi-window walks via `UIApplication.shared.connectedScenes`:
 
 | Method | Returns | Used by |
 |--------|---------|---------|
-| `firstResponderView()` | `UIView?` | `ensureFirstResponderOnScreen`, `resignFirstResponder` |
-| `firstResponderTextInput()` | `(any UITextInput)?` | `clearText` |
-| `findFirstResponder(in:)` | `UIView?` (recursive) | Both of the above |
+| `firstResponderView()` | `UIView?` | `ensureFirstResponderOnScreen`, `resignFirstResponder`, `clearText` (cast to `UITextInput` inline) |
+| `findFirstResponder(in:)` | `UIView?` (recursive DFS) | Called by `firstResponderView()` |
 
-`firstResponderTextInput()` finds the first responder and casts it to `UITextInput`. Returns nil if the first responder doesn't conform (e.g., a button that somehow became first responder).
+`clearText` casts the result inline: `firstResponderView() as? (any UITextInput)`. Returns nil if the first responder doesn't conform (e.g., a button that somehow became first responder).
 
 ## Edit Actions
 
@@ -185,7 +183,7 @@ The effective `interKeyDelay` is `min(defaultInterKeyDelay, maxInterKeyDelay)` =
 - **Single-character granularity.** Each character is a separate `addInputString:` call with a sleep between. Emoji sequences and complex Unicode clusters work (Swift `Character` handles them), but the per-character delay adds up for long strings.
 - **No IME / multi-stage input.** CJK input methods that require composition (pinyin, kana) are not supported — characters are injected as final text, bypassing the composition stage.
 - **clearText depends on UITextInput.** If the first responder only conforms to `UIKeyInput` (not `UITextInput`), clearing fails. This is rare in practice — UITextField and UITextView both conform to `UITextInput`.
-- **Hardware keyboard drain timing.** `drainKeyboardTaskQueue` may behave differently with hardware keyboards since the task queue processing path differs. In practice this hasn't been an issue because the drain is synchronous.
+- **Hardware keyboard drain timing.** `drainTaskQueue` may behave differently with hardware keyboards since the task queue processing path differs. In practice this hasn't been an issue because the drain is synchronous.
 
 ## Error Cases
 
