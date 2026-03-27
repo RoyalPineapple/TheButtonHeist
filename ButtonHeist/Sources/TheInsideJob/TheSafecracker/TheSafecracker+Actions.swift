@@ -675,6 +675,9 @@ extension TheSafecracker {
         }
 
         if let unitStart, let unitEnd {
+            if target.distance != nil {
+                return .failure(.syntheticSwipe, message: "distance is not supported with unit-point swipes")
+            }
             guard let elementTarget = target.elementTarget else {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
