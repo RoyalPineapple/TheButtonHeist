@@ -3,6 +3,8 @@ set -euo pipefail
 
 # --- Tuist project freshness check ---
 if command -v tuist >/dev/null 2>&1; then
+    # Ensure external dependencies are fetched before generating
+    tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open >/dev/null 2>&1; then
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
@@ -44,6 +46,7 @@ swiftlint lint --strict --quiet -- $staged
 tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift' 'Tuist/ProjectDescriptionHelpers/*.swift')
 if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
+    tuist install >/dev/null 2>&1 || true
     if tuist generate --no-open >/dev/null 2>&1; then
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then
