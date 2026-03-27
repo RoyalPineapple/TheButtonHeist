@@ -336,17 +336,13 @@ public final class TheFence {
     }
 
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
-        let identifier = stringArg(dictionary, "identifier")
         let heistId = stringArg(dictionary, "heistId")
-        let order = intArg(dictionary, "order")
 
-        // Check for matcher fields — identifier routes through the matcher when
-        // other matcher fields are present, making it composable with traits.
+        let identifier = stringArg(dictionary, "identifier")
         let label = stringArg(dictionary, "label")
         let value = stringArg(dictionary, "value")
         let traits = dictionary["traits"] as? [String]
         let excludeTraits = dictionary["excludeTraits"] as? [String]
-        let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
 
         let hasMatcher = label != nil || identifier != nil || value != nil
             || (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
@@ -356,28 +352,22 @@ public final class TheFence {
             identifier: identifier,
             value: value,
             traits: traits,
-            excludeTraits: excludeTraits,
-            scope: scope
+            excludeTraits: excludeTraits
         ) : nil
 
-        // When matcher is built, identifier lives in the matcher (not ActionTarget.identifier)
-        // so it routes through the canonical tree path.
-        guard heistId != nil || order != nil || match != nil else { return nil }
-        return ActionTarget(identifier: nil, heistId: heistId, order: order, match: match)
+        guard heistId != nil || match != nil else { return nil }
+        return ActionTarget(heistId: heistId, match: match)
     }
 
     func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
         let traits = (dictionary["traits"] as? [String])
         let excludeTraits = (dictionary["excludeTraits"] as? [String])
-        let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
         return ElementMatcher(
             label: stringArg(dictionary, "label"),
             identifier: stringArg(dictionary, "identifier"),
-            heistId: stringArg(dictionary, "heistId"),
             value: stringArg(dictionary, "value"),
             traits: traits,
             excludeTraits: excludeTraits,
-            scope: scope,
             absent: boolArg(dictionary, "absent")
         )
     }

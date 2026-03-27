@@ -217,19 +217,6 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 // MARK: - Element Matcher
 
 /// Composable predicate for scanning the accessibility tree.
-/// Controls which node types the matcher evaluates when walking the
-/// accessibility hierarchy. Leaf elements are always eligible; containers
-/// (nodes with children) are only evaluated when `containers` or `both`
-/// is specified.
-public enum MatchScope: String, Codable, Sendable, CaseIterable {
-    /// Match leaf elements only (default behavior).
-    case elements
-    /// Match container nodes only.
-    case containers
-    /// Match both leaf elements and container nodes.
-    case both
-}
-
 /// All non-nil fields must match (AND semantics). Wire type — the matching
 /// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
 /// where it operates on the canonical tree directly.
@@ -242,17 +229,12 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public let label: String?
     /// Exact match against accessibility identifier
     public let identifier: String?
-    /// Exact match against synthesized heistId (wire-level only)
-    public let heistId: String?
     /// Exact match against element value
     public let value: String?
     /// All listed traits must be present on the element (AND)
     public let traits: [String]?
     /// None of the listed traits may be present on the element
     public let excludeTraits: [String]?
-    /// Which node types to match: elements (leaves), containers, or both.
-    /// Nil defaults to `.elements`.
-    public let scope: MatchScope?
     /// When true, the caller asserts no matching element exists.
     /// The matcher itself always checks property predicates; callers
     /// interpret `absent` based on their context.
@@ -261,25 +243,19 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public init(
         label: String? = nil,
         identifier: String? = nil,
-        heistId: String? = nil,
         value: String? = nil,
         traits: [String]? = nil,
         excludeTraits: [String]? = nil,
-        scope: MatchScope? = nil,
         absent: Bool? = nil
     ) {
         self.label = label
         self.identifier = identifier
-        self.heistId = heistId
         self.value = value
         self.traits = traits
         self.excludeTraits = excludeTraits
-        self.scope = scope
         self.absent = absent
     }
 
-    /// Resolved scope — defaults to `.elements` when nil.
-    public var resolvedScope: MatchScope { scope ?? .elements }
     public var isAbsent: Bool { absent ?? false }
 }
 
@@ -301,7 +277,6 @@ extension HeistElement {
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label, label != matchLabel { return false }
         if let matchId = matcher.identifier, identifier != matchId { return false }
-        if let matchHid = matcher.heistId, heistId != matchHid { return false }
         if let matchVal = matcher.value, value != matchVal { return false }
         if let required = matcher.traits, !required.isEmpty {
             let traitSet = Set(traits)

@@ -27,6 +27,9 @@ final class TheBagman {
     /// Parsed accessibility elements from the last hierarchy refresh.
     private(set) var cachedElements: [AccessibilityElement] = []
 
+    /// Parsed accessibility hierarchy from the last refresh.
+    private(set) var cachedHierarchy: [AccessibilityHierarchy] = []
+
     /// Weak references to accessibility objects from the last parse,
     /// keyed by the parsed element.
     private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
@@ -110,51 +113,23 @@ final class TheBagman {
         let traversalIndex: Int
     }
 
-    /// Unified resolution: heistId → match → identifier → order.
+    /// Resolution: heistId → match.
     /// Returns the canonical element and its traversal index, or nil on miss.
     func resolveTarget(_ target: ActionTarget) -> ResolvedTarget? {
-        // Priority 1: heistId (wire-level fast path)
-        if let heistId = target.heistId {
-            guard let snap = lastSnapshot.first(where: { $0.heistId == heistId }) else { return nil }
-            let idx = snap.order
-            guard idx >= 0, idx < cachedElements.count else { return nil }
-            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
-        }
-        // Priority 2: matcher (canonical tree)
-        if let matcher = target.match {
-            guard let found = findMatch(matcher) else { return nil }
-            return ResolvedTarget(element: found.element, traversalIndex: found.index)
-        }
-        // Priority 3: identifier (backward compat for old wire clients)
-        if let identifier = target.identifier {
-            guard let idx = cachedElements.firstIndex(where: { $0.identifier == identifier }) else {
-                return nil
-            }
-            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
-        }
-        // Priority 4: order (escape hatch)
-        if let idx = target.order, idx >= 0, idx < cachedElements.count {
-            return ResolvedTarget(element: cachedElements[idx], traversalIndex: idx)
-        }
-        return nil
+        resolveTarget(target, in: currentSearchSnapshot())
     }
 
-    // MARK: - Legacy Element Resolution (used by actionResultWithDelta)
-
-    func findElement(for target: ActionTarget) -> AccessibilityElement? {
-        if let identifier = target.identifier {
-            return cachedElements.first { $0.identifier == identifier }
-        }
+    func resolveTarget(
+        _ target: ActionTarget,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> ResolvedTarget? {
         if let heistId = target.heistId {
-            guard let snapshotEl = lastSnapshot.first(where: { $0.heistId == heistId }) else {
-                return nil
-            }
-            let index = snapshotEl.order
-            guard index >= 0, index < cachedElements.count else { return nil }
-            return cachedElements[index]
+            guard let entry = snapshot.entry(forHeistId: heistId) else { return nil }
+            return ResolvedTarget(element: entry.element, traversalIndex: entry.traversalIndex)
         }
-        if let index = target.order, index >= 0, index < cachedElements.count {
-            return cachedElements[index]
+        if let matcher = target.match {
+            guard let found = findMatch(matcher, in: snapshot) else { return nil }
+            return ResolvedTarget(element: found.element, traversalIndex: found.index)
         }
         return nil
     }
@@ -180,46 +155,189 @@ final class TheBagman {
         return nil
     }
 
-    func resolveTraversalIndex(for target: ActionTarget) -> Int? {
-        if let identifier = target.identifier {
-            return cachedElements.firstIndex { $0.identifier == identifier }
-        }
+    /// Build a diagnostic message for a failed element lookup.
+    ///
+    /// Progressive disclosure tiers:
+    /// 1. Near-miss: matched all but one field → "found it, but value='7' not '6'"
+    /// 2. Substring: no exact label match → "did you mean 'Save Changes'?"
+    /// 3. Total miss: nothing close → compact element summary for self-correction
+    func elementNotFoundMessage(for target: ActionTarget) -> String {
+        elementNotFoundMessage(for: target, in: currentSearchSnapshot())
+    }
+
+    func elementNotFoundMessage(
+        for target: ActionTarget,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> String {
         if let heistId = target.heistId {
-            return lastSnapshot.first { $0.heistId == heistId }?.order
+            return heistIdNotFoundMessage(heistId, in: snapshot)
         }
-        if let index = target.order {
-            return index
+        if let matcher = target.match {
+            return matcherNotFoundMessage(matcher, in: snapshot)
+        }
+        return "No element target provided"
+    }
+
+    private func heistIdNotFoundMessage(
+        _ heistId: String,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> String {
+        let similar = snapshot.heistIdToTraversalIndex.keys.sorted()
+            .filter { $0.contains(heistId) || heistId.contains($0) }
+        if similar.isEmpty {
+            return "Element not found: \"\(heistId)\" (\(snapshot.entries.count) elements on screen)"
+        }
+        return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
+    }
+
+    private func matcherNotFoundMessage(
+        _ matcher: ElementMatcher,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> String {
+        let query = formatMatcher(matcher)
+
+        // Tier 1: Relax one predicate at a time — find what diverged.
+        if let nearMiss = findNearMiss(for: matcher, in: snapshot) {
+            return "No match for: \(query)\n\(nearMiss)"
+        }
+
+        // Tier 2: Substring match on label or identifier — "did you mean...?"
+        if let label = matcher.label {
+            let lowerMatch = label.lowercased()
+            let candidates = snapshot.entries
+                .compactMap { entry -> String? in
+                    guard let lowerEl = entry.lowercasedLabel,
+                          let label = entry.element.label,
+                          lowerEl.contains(lowerMatch) || lowerMatch.contains(lowerEl) else { return nil }
+                    return "\"\(label)\""
+                }
+                .prefix(5)
+            if !candidates.isEmpty {
+                return "No match for: \(query)\nsimilar labels: \(candidates.joined(separator: ", "))"
+            }
+        }
+        if let id = matcher.identifier {
+            let lowerMatch = id.lowercased()
+            let candidates = snapshot.entries
+                .compactMap { entry -> String? in
+                    guard let lowerEl = entry.lowercasedIdentifier,
+                          let identifier = entry.element.identifier,
+                          lowerEl.contains(lowerMatch) || lowerMatch.contains(lowerEl) else { return nil }
+                    return "\"\(identifier)\""
+                }
+                .prefix(5)
+            if !candidates.isEmpty {
+                return "No match for: \(query)\nsimilar identifiers: \(candidates.joined(separator: ", "))"
+            }
+        }
+
+        // Tier 3: Nothing close — dump a compact summary so the agent can self-correct.
+        return "No match for: \(query)\n\(compactElementSummary(in: snapshot))"
+    }
+
+    /// Format a matcher's predicates as a human-readable query string.
+    private func formatMatcher(_ matcher: ElementMatcher) -> String {
+        var fields: [String] = []
+        if let l = matcher.label { fields.append("label=\"\(l)\"") }
+        if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
+        if let v = matcher.value { fields.append("value=\"\(v)\"") }
+        if let t = matcher.traits { fields.append("traits=[\(t.joined(separator: ","))]") }
+        if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.joined(separator: ","))]") }
+        return fields.joined(separator: " ")
+    }
+
+    /// Try relaxing one predicate at a time. Value is relaxed first (most likely
+    /// to drift — e.g. slider moved), then traits, label, identifier.
+    /// Only considers relaxations that still have at least one remaining predicate —
+    /// dropping the only predicate matches everything, which isn't a useful near-miss.
+    /// Returns a diagnostic line or nil if no near-miss found.
+    private func findNearMiss(
+        for matcher: ElementMatcher,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> String? {
+        typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
+        var relaxations: [Relaxation] = []
+
+        if matcher.value != nil {
+            relaxations.append((
+                field: "value",
+                relaxed: ElementMatcher(
+                    label: matcher.label, identifier: matcher.identifier,
+                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
+                actual: { $0.value ?? "(nil)" }
+            ))
+        }
+        if matcher.traits != nil {
+            relaxations.append((
+                field: "traits",
+                relaxed: ElementMatcher(
+                    label: matcher.label, identifier: matcher.identifier,
+                    value: matcher.value, excludeTraits: matcher.excludeTraits                ),
+                actual: { el in
+                    UIAccessibilityTraits.knownTraits
+                        .filter { el.traits.contains($0.trait) }
+                        .map(\.name).joined(separator: ", ")
+                }
+            ))
+        }
+        if matcher.label != nil {
+            relaxations.append((
+                field: "label",
+                relaxed: ElementMatcher(
+                    identifier: matcher.identifier, value: matcher.value,
+                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
+                actual: { $0.label ?? "(nil)" }
+            ))
+        }
+        if matcher.identifier != nil {
+            relaxations.append((
+                field: "identifier",
+                relaxed: ElementMatcher(
+                    label: matcher.label, value: matcher.value,
+                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
+                actual: { $0.identifier ?? "(nil)" }
+            ))
+        }
+
+        for r in relaxations where hasPredicates(r.relaxed) {
+            if let found = findMatch(r.relaxed, in: snapshot) {
+                let actualValue = r.actual(found.element)
+                return "near miss: matched all fields except \(r.field) — actual \(r.field)=\(actualValue)"
+            }
         }
         return nil
     }
 
-    /// Build an error message for a failed element lookup, including substring hints.
-    func elementNotFoundMessage(for target: ActionTarget) -> String {
-        if let heistId = target.heistId {
-            let similar = lastSnapshot
-                .filter { $0.heistId.contains(heistId) || heistId.contains($0.heistId) }
-                .map(\.heistId)
-            if similar.isEmpty {
-                return "Element not found: \"\(heistId)\""
-            }
-            return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
+    /// Whether the matcher has at least one non-nil predicate field.
+    private func hasPredicates(_ matcher: ElementMatcher) -> Bool {
+        matcher.label != nil || matcher.identifier != nil || matcher.value != nil
+            || (matcher.traits?.isEmpty == false) || (matcher.excludeTraits?.isEmpty == false)
+    }
+
+    /// Compact summary of on-screen elements for total-miss fallback.
+    /// Capped at 20 elements to avoid flooding the response.
+    private func compactElementSummary(in snapshot: AccessibilitySearchSnapshot) -> String {
+        let cap = 20
+        let elements = snapshot.entries.prefix(cap).map(\.element)
+        if elements.isEmpty {
+            return "screen is empty (0 elements)"
         }
-        if let matcher = target.match {
-            var fields: [String] = []
-            if let l = matcher.label { fields.append("label=\"\(l)\"") }
-            if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
-            if let v = matcher.value { fields.append("value=\"\(v)\"") }
-            if let t = matcher.traits { fields.append("traits=[\(t.joined(separator: ","))]") }
-            if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.joined(separator: ","))]") }
-            return "No match for: \(fields.joined(separator: " ")) (\(cachedElements.count) elements)"
+        var lines = ["\(snapshot.entries.count) elements on screen:"]
+        for el in elements {
+            var parts: [String] = []
+            if let label = el.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
+            if let id = el.identifier, !id.isEmpty { parts.append("id=\"\(id)\"") }
+            if let val = el.value, !val.isEmpty { parts.append("value=\"\(val)\"") }
+            let traitNames = UIAccessibilityTraits.knownTraits
+                .filter { el.traits.contains($0.trait) }
+                .map(\.name)
+            if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
+            lines.append("  \(parts.joined(separator: " "))")
         }
-        if let identifier = target.identifier {
-            return "Element not found: identifier \"\(identifier)\""
+        if snapshot.entries.count > cap {
+            lines.append("  ... and \(snapshot.entries.count - cap) more")
         }
-        if let order = target.order {
-            return "Element not found: order \(order) (snapshot has \(cachedElements.count) elements)"
-        }
-        return "No element target provided"
+        return lines.joined(separator: "\n")
     }
 
     /// Resolve a screen point from an element target or explicit coordinates.
@@ -229,10 +347,10 @@ final class TheBagman {
         pointY: Double?
     ) -> TheSafecracker.PointResolution {
         if let elementTarget {
-            guard let element = findElement(for: elementTarget) else {
-                return .failure(.failure(.elementNotFound, message: "Element not found"))
+            guard let resolved = resolveTarget(elementTarget) else {
+                return .failure(.failure(.elementNotFound, message: elementNotFoundMessage(for: elementTarget)))
             }
-            return .success(element.activationPoint)
+            return .success(resolved.element.activationPoint)
         } else if let x = pointX, let y = pointY {
             return .success(CGPoint(x: x, y: y))
         } else {
@@ -242,8 +360,8 @@ final class TheBagman {
 
     /// Resolve the accessibility frame for an element target.
     func resolveFrame(for elementTarget: ActionTarget) -> CGRect? {
-        guard let element = findElement(for: elementTarget) else { return nil }
-        return element.shape.frame
+        guard let resolved = resolveTarget(elementTarget) else { return nil }
+        return resolved.element.shape.frame
     }
 
     // MARK: - Refresh
@@ -281,6 +399,7 @@ final class TheBagman {
 
     /// Clear all cached element data (used on suspend).
     func clearCache() {
+        cachedHierarchy.removeAll()
         cachedElements.removeAll()
         elementObjects.removeAll()
         lastSnapshot.removeAll()
@@ -334,6 +453,7 @@ final class TheBagman {
         }
 
         elementObjects = newElementObjects
+        cachedHierarchy = allHierarchy
         cachedElements = allElements
         return allHierarchy
     }
@@ -422,7 +542,7 @@ final class TheBagman {
         var elementValue: String?
         var elementTraits: [String]?
         if let target {
-            let postElement = findElement(for: target)
+            let postElement = resolveTarget(target)?.element
             elementLabel = postElement?.label
             elementValue = postElement?.value
             if let traits = postElement?.traits {

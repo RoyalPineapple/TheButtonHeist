@@ -206,12 +206,4 @@ final class TheFenceSecurityTests: XCTestCase {
         XCTAssertNil(fence.doubleArg(dict, "x"))
     }
 
-    @ButtonHeistActor
-    func testElementTargetWithOrderAsDouble() {
-        let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["order": 5.0]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.order, 5)
-    }
 }

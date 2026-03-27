@@ -18,8 +18,8 @@ extension TheSafecracker {
     /// resolved, or has no scrollable ancestor.
     func ensureOnScreen(for target: ActionTarget) async {
         guard let bagman else { return }
-        guard let index = bagman.resolveTraversalIndex(for: target) else { return }
-        guard let object = bagman.object(at: index) else { return }
+        guard let resolved = bagman.resolveTarget(target) else { return }
+        guard let object = bagman.object(at: resolved.traversalIndex) else { return }
         await ensureOnScreen(object: object)
     }
 
@@ -66,8 +66,8 @@ extension TheSafecracker {
             return .failure(.scroll, message: "Element target required for scroll")
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
-            return .failure(.elementNotFound, message: "Element not found for scroll target")
+        guard let resolved = bagman.resolveTarget(elementTarget) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: elementTarget))
         }
 
         let uiDirection: UIAccessibilityScrollDirection
@@ -80,7 +80,7 @@ extension TheSafecracker {
         case .previous: uiDirection = .previous
         }
 
-        let success = scroll(elementAt: index, direction: uiDirection)
+        let success = scroll(elementAt: resolved.traversalIndex, direction: uiDirection)
         return InteractionResult(
             success: success,
             method: .scroll,
@@ -97,11 +97,11 @@ extension TheSafecracker {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
-            return .failure(.elementNotFound, message: "Element not found for scroll_to_edge target")
+        guard let resolved = bagman.resolveTarget(elementTarget) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: elementTarget))
         }
 
-        let success = scrollToEdge(elementAt: index, edge: target.edge)
+        let success = scrollToEdge(elementAt: resolved.traversalIndex, edge: target.edge)
         return InteractionResult(
             success: success,
             method: .scrollToEdge,
@@ -115,27 +115,27 @@ extension TheSafecracker {
             return .failure(.scrollToVisible, message: "No element store available")
         }
 
-        let matcher = target.match
+        let searchTarget = ActionTarget(heistId: target.heistId, match: target.match)
+        guard searchTarget.heistId != nil || searchTarget.match != nil else {
+            return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
+        }
         let maxScrolls = target.resolvedMaxScrolls
         let primaryDirection = target.resolvedDirection
 
         // Phase 0: Check current tree for match (no conversion to wire types)
         bagman.refreshAccessibilityData()
-        do {
-            if let found = try bagman.findMatch(matcher) {
-                // Already visible — scroll into view if partially off-screen
-                _ = scrollToVisible(elementAt: found.index)
-                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
-                return InteractionResult(
-                    success: true, method: .scrollToVisible, message: nil, value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
-                        totalItems: nil, exhaustive: false, foundElement: wireElement
-                    )
+        let initialSnapshot = bagman.currentSearchSnapshot()
+        if let found = bagman.resolveTarget(searchTarget, in: initialSnapshot) {
+            // Already visible — scroll into view if partially off-screen
+            _ = scrollToVisible(elementAt: found.traversalIndex)
+            let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
+            return InteractionResult(
+                success: true, method: .scrollToVisible, message: nil, value: nil,
+                scrollSearchResult: ScrollSearchResult(
+                    scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
+                    totalItems: nil, exhaustive: false, foundElement: wireElement
                 )
-            }
-        } catch {
-            return .failure(.scrollToVisible, message: error.localizedDescription)
+            )
         }
 
         // Find the nearest scroll view from any visible element
@@ -152,35 +152,31 @@ extension TheSafecracker {
         var seenKeys = Set(bagman.cachedElements.map(\.stableKey))
         var scrollCount = 0
 
-        do {
-            // Phase 1: Scroll in primary direction
-            let result = try await scrollSearchLoop(
-                scrollView: scrollView, matcher: matcher, direction: primaryDirection,
+        // Phase 1: Scroll in primary direction
+        let result = await scrollSearchLoop(
+            scrollView: scrollView, target: searchTarget, direction: primaryDirection,
+            maxScrolls: maxScrolls, scrollCount: &scrollCount,
+            seenKeys: &seenKeys, totalItems: totalItems
+        )
+        if let result { return result }
+
+        // Phase 2: Jump to opposite edge, scroll back in primary direction
+        // to cover content before the original starting position.
+        // Skip if Phase 1 exhausted the scroll budget — no point paying for
+        // the edge jump + refresh with zero remaining scrolls.
+        if scrollCount < maxScrolls {
+            scrollToOppositeEdge(scrollView, from: primaryDirection)
+            if let tripwire {
+                _ = await tripwire.waitForAllClear(timeout: 1.0)
+            }
+            bagman.refreshAccessibilityData()
+
+            let result2 = await scrollSearchLoop(
+                scrollView: scrollView, target: searchTarget, direction: primaryDirection,
                 maxScrolls: maxScrolls, scrollCount: &scrollCount,
                 seenKeys: &seenKeys, totalItems: totalItems
             )
-            if let result { return result }
-
-            // Phase 2: Jump to opposite edge, scroll back in primary direction
-            // to cover content before the original starting position.
-            // Skip if Phase 1 exhausted the scroll budget — no point paying for
-            // the edge jump + refresh with zero remaining scrolls.
-            if scrollCount < maxScrolls {
-                scrollToOppositeEdge(scrollView, from: primaryDirection)
-                if let tripwire {
-                    _ = await tripwire.waitForAllClear(timeout: 1.0)
-                }
-                bagman.refreshAccessibilityData()
-
-                let result2 = try await scrollSearchLoop(
-                    scrollView: scrollView, matcher: matcher, direction: primaryDirection,
-                    maxScrolls: maxScrolls, scrollCount: &scrollCount,
-                    seenKeys: &seenKeys, totalItems: totalItems
-                )
-                if let result2 { return result2 }
-            }
-        } catch {
-            return .failure(.scrollToVisible, message: error.localizedDescription)
+            if let result2 { return result2 }
         }
 
         // Phase 3: Not found
@@ -197,11 +193,12 @@ extension TheSafecracker {
 
     // MARK: - Scroll Search Helpers
 
-    /// Run a scroll-and-check loop in one direction. Matching happens on the
-    /// canonical AccessibilityElement tree — no wire conversion per step.
+    /// Run a scroll-and-check loop in one direction. Target resolution happens
+    /// on the canonical accessibility snapshot each step — no wire conversion
+    /// until a match is found.
     private func scrollSearchLoop(
         scrollView: UIScrollView,
-        matcher: ElementMatcher,
+        target: ActionTarget,
         direction: ScrollSearchDirection,
         maxScrolls: Int,
         scrollCount: inout Int,
@@ -219,9 +216,12 @@ extension TheSafecracker {
                 _ = await tripwire.waitForAllClear(timeout: 1.0)
             }
             bagman?.refreshAccessibilityData()
+            guard let bagman else { return nil }
+            let snapshot = bagman.currentSearchSnapshot()
 
-            if let bagman, let found = try bagman.findMatch(matcher) {
-                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
+            // Match against canonical elements — no HeistElement conversion
+            if let found = bagman.resolveTarget(target, in: snapshot) {
+                let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
                 return InteractionResult(
                     success: true, method: .scrollToVisible, message: nil, value: nil,
                     scrollSearchResult: ScrollSearchResult(
@@ -232,7 +232,7 @@ extension TheSafecracker {
             }
 
             // Track new elements for scroll-end detection
-            let currentKeys = (bagman?.cachedElements ?? []).map(\.stableKey)
+            let currentKeys = bagman.cachedElements.map(\.stableKey)
             let previousCount = seenKeys.count
             seenKeys.formUnion(currentKeys)
 
@@ -473,23 +473,22 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found for target")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        if let interactivityError = bagman.checkElementInteractivity(element) {
+        if let interactivityError = bagman.checkElementInteractivity(resolved.element) {
             return .failure(.elementNotFound, message: interactivityError)
         }
 
-        let point = element.activationPoint
+        let point = resolved.element.activationPoint
 
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.activate, message: "Element does not support activation")
         }
 
         // Try accessibilityActivate via the live object reference
-        let activateResult = bagman.activate(elementAt: index)
+        let activateResult = bagman.activate(elementAt: resolved.traversalIndex)
         if activateResult {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
@@ -509,17 +508,16 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.increment, message: "Element does not support increment")
         }
 
-        bagman.increment(elementAt: index)
-        fingerprints.showFingerprint(at: element.activationPoint)
+        bagman.increment(elementAt: resolved.traversalIndex)
+        fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
@@ -528,17 +526,16 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.decrement, message: "Element does not support decrement")
         }
 
-        bagman.decrement(elementAt: index)
-        fingerprints.showFingerprint(at: element.activationPoint)
+        bagman.decrement(elementAt: resolved.traversalIndex)
+        fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
@@ -547,16 +544,15 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard bagman.findElement(for: target.elementTarget) != nil else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target.elementTarget) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target.elementTarget))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target.elementTarget),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.customAction, message: "Element does not support custom actions")
         }
 
-        let success = bagman.performCustomAction(named: target.actionName, elementAt: index)
+        let success = bagman.performCustomAction(named: target.actionName, elementAt: resolved.traversalIndex)
         return InteractionResult(
             success: success, method: .customAction,
             message: success ? nil : "Action '\(target.actionName)' not found",
