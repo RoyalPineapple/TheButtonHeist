@@ -175,7 +175,12 @@ public enum ClientMessage: Codable, Sendable {
 
 // MARK: - Action Targets
 
-/// Target for element actions
+/// Target for element actions.
+/// Supports two resolution strategies: positional (heistId/identifier/order) and
+/// predicate-based (match). When `match` is set, the server resolves via
+/// ElementMatcher on the canonical accessibility tree. Otherwise, positional
+/// fields are used. All existing target structs that embed ActionTarget gain
+/// matcher support automatically.
 public struct ActionTarget: Codable, Sendable {
     /// Developer-provided accessibility identifier (most stable)
     public let identifier: String?
@@ -183,11 +188,20 @@ public struct ActionTarget: Codable, Sendable {
     public let heistId: String?
     /// Element order in current snapshot (positional, fragile)
     public let order: Int?
+    /// Predicate matcher for canonical tree resolution. When set, takes priority
+    /// over identifier/order (heistId still wins if present).
+    public let match: ElementMatcher?
 
-    public init(identifier: String? = nil, heistId: String? = nil, order: Int? = nil) {
+    public init(
+        identifier: String? = nil,
+        heistId: String? = nil,
+        order: Int? = nil,
+        match: ElementMatcher? = nil
+    ) {
         self.identifier = identifier
         self.heistId = heistId
         self.order = order
+        self.match = match
     }
 }
 
