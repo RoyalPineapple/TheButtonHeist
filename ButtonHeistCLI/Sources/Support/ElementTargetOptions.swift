@@ -1,25 +1,30 @@
 import ArgumentParser
 import ButtonHeist
 
-/// Shared options for commands that target a UI element by identifier, heistId, or index.
+/// Shared options for commands that target a UI element by heistId or accessibility properties.
 struct ElementTargetOptions: ParsableArguments {
-    @Option(name: .long, help: "Element identifier")
-    var identifier: String?
-
-    @Option(name: .long, help: "Target element by heistId")
+    @Option(name: .long, help: "Element heistId (from get_interface)")
     var heistId: String?
 
-    @Option(name: .long, help: "Element index")
-    var index: Int?
+    @Option(name: .long, help: "Accessibility identifier")
+    var identifier: String?
+
+    @Option(name: .long, help: "Accessibility label")
+    var label: String?
 
     var actionTarget: ActionTarget? {
-        guard identifier != nil || heistId != nil || index != nil else { return nil }
-        return ActionTarget(identifier: identifier, heistId: heistId, order: index)
+        let hasMatcher = identifier != nil || label != nil
+        let match: ElementMatcher? = hasMatcher ? ElementMatcher(
+            label: label,
+            identifier: identifier
+        ) : nil
+        guard heistId != nil || match != nil else { return nil }
+        return ActionTarget(heistId: heistId, match: match)
     }
 
     func requireTarget() throws -> ActionTarget {
         guard let target = actionTarget else {
-            throw ValidationError("Must specify --identifier, --heist-id, or --index")
+            throw ValidationError("Must specify --heist-id, --identifier, or --label")
         }
         return target
     }

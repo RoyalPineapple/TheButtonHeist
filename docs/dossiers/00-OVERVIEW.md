@@ -23,6 +23,11 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, screen capture |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
+### Cross-Cutting
+| Dossier | Covers |
+|---------|--------|
+| [Unified Targeting](15-UNIFIED-TARGETING.md) | Element resolution pipeline: TheFence → ActionTarget → TheBagman.resolveTarget → TheSafecracker |
+
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|

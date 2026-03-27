@@ -311,15 +311,15 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Search for an element by scrolling through the nearest scroll view. Matches elements \
-            by heistId or by matcher fields (identifier, label, value, traits, excludeTraits). \
+            Search for an element by scrolling through the nearest scroll view. Target the element \
+            by heistId or describe it by accessibility properties: identifier, label, value, and/or traits. \
             All specified matcher fields must match (AND). Returns the found element or diagnostic info about the search. \
             For UITableView/UICollectionView, provides exhaustive search with item count tracking.
             """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "heistId": ["type": "string", "description": "Match element by stable heistId"],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred when already known)"],
                 "identifier": ["type": "string", "description": "Match element by accessibility identifier"],
                 "label": ["type": "string", "description": "Match element by accessibility label (exact)"],
                 "value": ["type": "string", "description": "Match element by accessibility value (exact)"],

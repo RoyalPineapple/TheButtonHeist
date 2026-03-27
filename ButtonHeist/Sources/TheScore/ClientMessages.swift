@@ -179,31 +179,22 @@ public enum ClientMessage: Codable, Sendable {
 // MARK: - Action Targets
 
 /// Target for element actions.
-/// Supports two resolution strategies: positional (heistId/identifier/order) and
-/// predicate-based (match). When `match` is set, the server resolves via
-/// ElementMatcher on the canonical accessibility tree. Otherwise, positional
-/// fields are used. All existing target structs that embed ActionTarget gain
-/// matcher support automatically.
+/// Two resolution strategies: heistId (assigned token from get_interface) or
+/// match (describe the element by accessibility properties). HeistId takes
+/// priority when both are present.
 public struct ActionTarget: Codable, Sendable {
-    /// Developer-provided accessibility identifier (most stable)
-    public let identifier: String?
-    /// Synthesized stable ID from traits + label (stable across reorders)
+    /// Synthesized stable ID from traits + label — assigned by get_interface,
+    /// presumed stable while the element is on screen.
     public let heistId: String?
-    /// Element order in current snapshot (positional, fragile)
-    public let order: Int?
-    /// Predicate matcher for canonical tree resolution. When set, takes priority
-    /// over identifier/order (heistId still wins if present).
+    /// Predicate matcher for accessibility-based resolution. Describe the element
+    /// by label, identifier, value, and/or traits.
     public let match: ElementMatcher?
 
     public init(
-        identifier: String? = nil,
         heistId: String? = nil,
-        order: Int? = nil,
         match: ElementMatcher? = nil
     ) {
-        self.identifier = identifier
         self.heistId = heistId
-        self.order = order
         self.match = match
     }
 }
@@ -681,20 +672,24 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
 }
 
-/// Target for scroll-to-visible search with element matching
+/// Target for scroll-to-visible search with either a heistId or element matcher.
 public struct ScrollToVisibleTarget: Codable, Sendable {
-    /// Predicate describing the element to find
-    public let match: ElementMatcher
+    /// Stable heistId to search for as it appears while scrolling.
+    public let heistId: String?
+    /// Predicate describing the element to find.
+    public let match: ElementMatcher?
     /// Maximum scroll attempts before giving up (default: 20)
     public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
 
     public init(
-        match: ElementMatcher,
+        heistId: String? = nil,
+        match: ElementMatcher? = nil,
         maxScrolls: Int? = nil,
         direction: ScrollSearchDirection? = nil
     ) {
+        self.heistId = heistId
         self.match = match
         self.maxScrolls = maxScrolls
         self.direction = direction
