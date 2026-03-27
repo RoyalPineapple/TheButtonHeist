@@ -194,6 +194,12 @@ final class TheBagman {
         }
     }
 
+    /// Resolve the accessibility frame for an element target.
+    func resolveFrame(for elementTarget: ActionTarget) -> CGRect? {
+        guard let element = findElement(for: elementTarget) else { return nil }
+        return element.shape.frame
+    }
+
     // MARK: - Refresh
 
     /// Trigger a refresh of the accessibility data.

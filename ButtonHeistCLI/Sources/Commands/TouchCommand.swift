@@ -125,16 +125,28 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .customLong("from-x"), help: "Start X coordinate")
+    @Option(name: .customLong("start-x"), help: "Unit-point start X (0-1 relative to element frame)")
+    var startUnitX: Double?
+
+    @Option(name: .customLong("start-y"), help: "Unit-point start Y (0-1 relative to element frame)")
+    var startUnitY: Double?
+
+    @Option(name: .customLong("end-x"), help: "Unit-point end X (0-1 relative to element frame)")
+    var endUnitX: Double?
+
+    @Option(name: .customLong("end-y"), help: "Unit-point end Y (0-1 relative to element frame)")
+    var endUnitY: Double?
+
+    @Option(name: .customLong("from-x"), help: "Absolute start X coordinate")
     var fromX: Double?
 
-    @Option(name: .customLong("from-y"), help: "Start Y coordinate")
+    @Option(name: .customLong("from-y"), help: "Absolute start Y coordinate")
     var fromY: Double?
 
-    @Option(name: .customLong("to-x"), help: "End X coordinate")
+    @Option(name: .customLong("to-x"), help: "Absolute end X coordinate")
     var toX: Double?
 
-    @Option(name: .customLong("to-y"), help: "End Y coordinate")
+    @Option(name: .customLong("to-y"), help: "Absolute end Y coordinate")
     var toY: Double?
 
     @Option(name: .long, help: "Swipe direction: up, down, left, right")
@@ -154,11 +166,32 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
+        let hasUnitStart = startUnitX != nil && startUnitY != nil
+        let hasUnitEnd = endUnitX != nil && endUnitY != nil
+
+        if hasUnitStart != hasUnitEnd {
+            throw ValidationError("Unit-point swipe requires both --start-x/--start-y and --end-x/--end-y")
         }
-        guard (toX != nil && toY != nil) || direction != nil else {
-            throw ValidationError("Must specify --to-x/--to-y or --direction")
+
+        let unitStart: UnitPoint?
+        let unitEnd: UnitPoint?
+
+        if let sx = startUnitX, let sy = startUnitY, let ex = endUnitX, let ey = endUnitY {
+            guard element.actionTarget != nil else {
+                throw ValidationError("Unit-point swipe requires an element target (--identifier, --heist-id, or --index)")
+            }
+            unitStart = UnitPoint(x: sx, y: sy)
+            unitEnd = UnitPoint(x: ex, y: ey)
+        } else {
+            unitStart = nil
+            unitEnd = nil
+
+            guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
+                throw ValidationError("Must specify element target, --from-x/--from-y, or --start-x/--start-y unit points")
+            }
+            guard (toX != nil && toY != nil) || direction != nil else {
+                throw ValidationError("Must specify --to-x/--to-y, --direction, or --end-x/--end-y unit points")
+            }
         }
 
         let swipeDirection: SwipeDirection?
@@ -176,7 +209,8 @@ struct SwipeSubcommand: AsyncParsableCommand {
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             direction: swipeDirection, distance: distance,
-            duration: duration
+            duration: duration,
+            start: unitStart, end: unitEnd
         ))
 
         try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)

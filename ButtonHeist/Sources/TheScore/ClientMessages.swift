@@ -245,6 +245,19 @@ public struct LongPressTarget: Codable, Sendable {
     }
 }
 
+/// A point in unit coordinates (0-1) relative to an element's accessibility frame.
+/// `(0, 0)` is top-left, `(1, 1)` is bottom-right, `(0.5, 0.5)` is center.
+/// Values outside 0-1 extend beyond the element's frame.
+public struct UnitPoint: Codable, Sendable, Equatable {
+    public let x: Double
+    public let y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+}
+
 /// Target for swipe gesture
 public struct SwipeTarget: Codable, Sendable {
     /// Start from element's interaction point
@@ -260,19 +273,25 @@ public struct SwipeTarget: Codable, Sendable {
     public let distance: Double?
     /// Duration in seconds (default 0.15)
     public let duration: Double?
+    /// Unit-point start relative to element frame (0-1)
+    public let start: UnitPoint?
+    /// Unit-point end relative to element frame (0-1)
+    public let end: UnitPoint?
 
     public init(
         elementTarget: ActionTarget? = nil,
         startX: Double? = nil, startY: Double? = nil,
         endX: Double? = nil, endY: Double? = nil,
         direction: SwipeDirection? = nil, distance: Double? = nil,
-        duration: Double? = nil
+        duration: Double? = nil,
+        start: UnitPoint? = nil, end: UnitPoint? = nil
     ) {
         self.elementTarget = elementTarget
         self.startX = startX; self.startY = startY
         self.endX = endX; self.endY = endY
         self.direction = direction; self.distance = distance
         self.duration = duration
+        self.start = start; self.end = end
     }
 
     public var startPoint: CGPoint? {
@@ -582,6 +601,26 @@ public struct RecordingConfig: Codable, Sendable {
 /// Direction for swipe gestures
 public enum SwipeDirection: String, Codable, Sendable {
     case up, down, left, right
+
+    /// Default unit-point start for this cardinal direction
+    public var defaultStart: UnitPoint {
+        switch self {
+        case .left:  UnitPoint(x: 0.8, y: 0.5)
+        case .right: UnitPoint(x: 0.2, y: 0.5)
+        case .up:    UnitPoint(x: 0.5, y: 0.8)
+        case .down:  UnitPoint(x: 0.5, y: 0.2)
+        }
+    }
+
+    /// Default unit-point end for this cardinal direction
+    public var defaultEnd: UnitPoint {
+        switch self {
+        case .left:  UnitPoint(x: 0.2, y: 0.5)
+        case .right: UnitPoint(x: 0.8, y: 0.5)
+        case .up:    UnitPoint(x: 0.5, y: 0.2)
+        case .down:  UnitPoint(x: 0.5, y: 0.8)
+        }
+    }
 }
 
 /// Direction for scroll actions
