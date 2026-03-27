@@ -1,22 +1,25 @@
 # Versioning
 
-Button Heist uses [Semantic Versioning](https://semver.org/) (SemVer): `MAJOR.MINOR.PATCH`.
+Button Heist uses two versioning schemes:
 
-## Current version
+- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` — the version users see.
+- **Protocol version**: [SemVer](https://semver.org/) — wire protocol compatibility only.
 
-**0.0.1** — Initial SemVer baseline.
+## Product version (CalVer)
 
-## Version format
+Format: `YYYY.MM.DD` with an optional `.PATCH` suffix for same-day releases (e.g. `2026.03.27.1`).
 
-| Component | When to increment |
-|-----------|-------------------|
-| **MAJOR** | Breaking changes (incompatible API, protocol, or behavior) |
-| **MINOR** | New features (backward compatible) |
-| **PATCH** | Bug fixes and small improvements (backward compatible) |
+### Current version
 
-During 0.x.y, the API is considered unstable; MINOR bumps may include breaking changes.
+**0.0.1** — Pre-CalVer baseline. The first CalVer release will be the date it ships.
 
-## Single source of truth
+### Why CalVer
+
+- Releases are date-stamped, so "which version am I on?" is instantly obvious.
+- No bikeshedding over major/minor/patch — the date is the version.
+- Same-day hotfixes use the `.PATCH` suffix: `2026.03.27`, `2026.03.27.1`, etc.
+
+### Single source of truth
 
 The canonical version lives in:
 
@@ -25,16 +28,16 @@ ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift
 ```
 
 ```swift
-public let buttonHeistVersion = "0.0.1"
+public let buttonHeistVersion = "2026.03.27"
 ```
 
 This constant is used by:
 - **ButtonHeistCLI** — `buttonheist --version`
 - **ButtonHeistMCP** — MCP server version reporting
 
-## Files updated by release script
+### Files updated by release script
 
-`./scripts/release.sh <version>` updates:
+`./scripts/release.sh [<version>]` updates:
 
 1. **`buttonHeistVersion`** in `TheFence+CommandCatalog.swift` (source of truth)
 2. **`VERSION`** at repo root (for tooling, CI, tags)
@@ -43,23 +46,32 @@ This constant is used by:
 5. **`docs/VERSIONING.md`** — current version line
 6. **`Formula/buttonheist.rb`** — Homebrew formula version
 
-## Release workflow
+If no version argument is given, the script defaults to today's date.
 
-Use the release script for consistency:
+### Release workflow
 
 ```bash
-./scripts/release.sh 0.0.2
+./scripts/release.sh              # Uses today's date
+./scripts/release.sh 2026.03.27   # Explicit date
+./scripts/release.sh --dry-run    # Preview only
 ```
 
 The script updates all version references. Then:
 
 1. Run full build and tests (see CLAUDE.md Pre-Commit Checklist)
-2. Commit: `git add -A && git commit -m 'Release 0.0.2'`
-3. Tag: `git tag v0.0.2`
+2. Commit: `git add -A && git commit -m 'Release 2026.03.27'`
+3. Tag: `git tag v2026.03.27`
 
 Use `--dry-run` to preview changes without modifying files.
 
-## Protocol version vs product version
+## Protocol version (SemVer)
 
-- **Product version** (`buttonHeistVersion`): What users see; follows SemVer.
-- **Protocol version** (`protocolVersion` in `Messages.swift`): Wire protocol compatibility; separate from product version. Bump when message formats or handshake change.
+The wire protocol version (`protocolVersion` in `Messages.swift`) follows SemVer and is **independent** of the product version. Bump it only when the wire format, handshake, or message schema changes.
+
+| Component | When to increment |
+|-----------|-------------------|
+| **MAJOR** | Breaking wire changes (removed fields, changed semantics) |
+| **MINOR** | New message types or optional fields (backward compatible) |
+| **PATCH** | Bug fixes to encoding/decoding (backward compatible) |
+
+The release script does **not** touch `protocolVersion` — it is bumped manually and deliberately when the protocol changes.
