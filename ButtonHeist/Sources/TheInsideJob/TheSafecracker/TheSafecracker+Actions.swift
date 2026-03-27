@@ -158,18 +158,22 @@ extension TheSafecracker {
 
         // Phase 2: Jump to opposite edge, scroll back in primary direction
         // to cover content before the original starting position.
-        scrollToOppositeEdge(scrollView, from: primaryDirection)
-        if let tripwire {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
-        }
-        bagman.refreshAccessibilityData()
+        // Skip if Phase 1 exhausted the scroll budget — no point paying for
+        // the edge jump + refresh with zero remaining scrolls.
+        if scrollCount < maxScrolls {
+            scrollToOppositeEdge(scrollView, from: primaryDirection)
+            if let tripwire {
+                _ = await tripwire.waitForAllClear(timeout: 1.0)
+            }
+            bagman.refreshAccessibilityData()
 
-        let result2 = await scrollSearchLoop(
-            scrollView: scrollView, matcher: matcher, direction: primaryDirection,
-            maxScrolls: maxScrolls, scrollCount: &scrollCount,
-            seenKeys: &seenKeys, totalItems: totalItems
-        )
-        if let result2 { return result2 }
+            let result2 = await scrollSearchLoop(
+                scrollView: scrollView, matcher: matcher, direction: primaryDirection,
+                maxScrolls: maxScrolls, scrollCount: &scrollCount,
+                seenKeys: &seenKeys, totalItems: totalItems
+            )
+            if let result2 { return result2 }
+        }
 
         // Phase 3: Not found
         let exhaustive = totalItems != nil && seenKeys.count >= totalItems!
