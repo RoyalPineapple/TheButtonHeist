@@ -37,6 +37,11 @@ final class TheBagman {
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
 
+    /// Screen name from the last snapshot (first header element's label).
+    var lastScreenName: String? {
+        lastSnapshot.first { $0.traits.contains("header") }?.label
+    }
+
     let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.

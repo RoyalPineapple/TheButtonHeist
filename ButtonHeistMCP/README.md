@@ -12,10 +12,10 @@ swift build -c release
 
 ## Tool Surface
 
-ButtonHeistMCP currently exposes 16 tools backed by `TheFence`:
+ButtonHeistMCP currently exposes 21 tools backed by `TheFence`:
 
 - `get_interface`
-- `activate`
+- `activate` (accepts optional `action` for increment/decrement/custom actions)
 - `type_text`
 - `swipe`
 - `get_screen`
@@ -24,17 +24,19 @@ ButtonHeistMCP currently exposes 16 tools backed by `TheFence`:
 - `stop_recording`
 - `list_devices`
 - `gesture`
-- `accessibility_action`
 - `scroll`
 - `scroll_to_visible`
 - `scroll_to_edge`
+- `edit_action`
+- `dismiss_keyboard`
+- `set_pasteboard`
+- `get_pasteboard`
 - `run_batch`
 - `get_session_state`
+- `connect`
+- `list_targets`
 
-`gesture` and `accessibility_action` are grouped tools - a couple of aliases for the crew members who do the rougher work:
-
-- `gesture.type` maps to canonical Fence commands such as `one_finger_tap`, `long_press`, `pinch`, `rotate`, `draw_path`, and `draw_bezier`
-- `accessibility_action.type` maps to `increment`, `decrement`, `perform_custom_action`, `edit_action`, and `dismiss_keyboard`
+`gesture` is a grouped tool — `gesture.type` maps to canonical Fence commands such as `one_finger_tap`, `long_press`, `pinch`, `rotate`, `draw_path`, and `draw_bezier`.
 
 All other tools map 1:1 to a Fence command name.
 
