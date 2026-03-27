@@ -6,22 +6,29 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// Client-side session manager that owns the full device lifecycle:
 /// discovery, connection, keepalive, and auto-reconnect.
 ///
-/// TheMastermind observes TheHandoff and exposes its state as @Observable
-/// properties for SwiftUI consumption. TheFence delegates its connect/reconnect
-/// logic here instead of reimplementing it.
+/// TheFence owns a TheHandoff and delegates connection management here.
+/// All discovery, connection, keepalive, and reconnect logic lives here.
 @ButtonHeistActor
 public final class TheHandoff {
 
-    // MARK: - Discovery State
+    // MARK: - State
 
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
     public private(set) var isDiscovering: Bool = false
-
-    // MARK: - Connection State
-
     public private(set) var connectedDevice: DiscoveredDevice?
     public private(set) var serverInfo: ServerInfo?
     public private(set) var isConnected: Bool = false
+    public private(set) var connectionState: ConnectionState = .disconnected
+    public private(set) var currentInterface: Interface?
+    public private(set) var currentScreen: ScreenPayload?
+    public private(set) var isRecording: Bool = false
+
+    public enum ConnectionState: Equatable {
+        case disconnected
+        case connecting
+        case connected
+        case failed(String)
+    }
 
     // MARK: - Discovery Callbacks
 
@@ -144,10 +151,77 @@ public final class TheHandoff {
         discoveredDevices = []
     }
 
+    // MARK: - Reachability Probing
+
+    /// Discover devices and validate each deduped advertisement as it appears.
+    public func discoverReachableDevices(
+        timeout: TimeInterval = 3.0,
+        probeTimeout: TimeInterval = 0.5,
+        retryInterval: TimeInterval = 0.2
+    ) async -> [DiscoveredDevice] {
+        let startedTemporaryDiscovery = !hasActiveDiscoverySession
+        if startedTemporaryDiscovery {
+            startDiscovery()
+        }
+        defer {
+            if startedTemporaryDiscovery {
+                stopDiscovery()
+            }
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        var reachableIDs: Set<String> = []
+        var nextProbeAt: [String: Date] = [:]
+
+        while Date() < deadline {
+            let snapshot = discoveredDevices
+            let currentIDs = Set(snapshot.map(\.id))
+            reachableIDs = reachableIDs.filter { currentIDs.contains($0) }
+            nextProbeAt = nextProbeAt.filter { currentIDs.contains($0.key) }
+
+            let now = Date()
+            let dueDevices = snapshot.filter { device in
+                !reachableIDs.contains(device.id) &&
+                    (nextProbeAt[device.id] ?? .distantPast) <= now
+            }
+
+            if !dueDevices.isEmpty {
+                let probed = await withTaskGroup(of: (String, Bool).self, returning: [(String, Bool)].self) { group in
+                    for device in dueDevices {
+                        group.addTask {
+                            (device.id, await device.isReachable(timeout: probeTimeout))
+                        }
+                    }
+
+                    var results: [(String, Bool)] = []
+                    for await result in group {
+                        results.append(result)
+                    }
+                    return results
+                }
+
+                let retryAt = Date().addingTimeInterval(retryInterval)
+                for (id, isReachable) in probed {
+                    if isReachable {
+                        reachableIDs.insert(id)
+                        nextProbeAt.removeValue(forKey: id)
+                    } else {
+                        nextProbeAt[id] = retryAt
+                    }
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        return discoveredDevices.filter { reachableIDs.contains($0.id) }
+    }
+
     // MARK: - Connection
 
     public func connect(to device: DiscoveredDevice) {
         disconnect()
+        connectionState = .connecting
 
         connection = makeConnection(device, token, effectiveDriverId)
         connection?.observeMode = observeMode
@@ -160,11 +234,21 @@ public final class TheHandoff {
             case .connected:
                 self.connectedDevice = device
                 self.isConnected = true
+                self.connectionState = .connected
                 self.startKeepalive()
             case .disconnected(let reason):
                 self.isConnected = false
                 self.connectedDevice = nil
                 self.serverInfo = nil
+                self.currentInterface = nil
+                self.currentScreen = nil
+                self.isRecording = false
+                // Preserve .failed state (e.g., from sessionLocked)
+                if case .failed = self.connectionState {
+                    // keep .failed
+                } else {
+                    self.connectionState = .disconnected
+                }
                 self.onDisconnected?(reason)
             case .message(let msg, let requestId):
                 self.handleServerMessage(msg, requestId: requestId)
@@ -185,16 +269,25 @@ public final class TheHandoff {
             }
             onConnected?(info)
         case .interface(let payload):
+            if requestId == nil {
+                currentInterface = payload
+            }
             onInterface?(payload, requestId)
         case .actionResult(let result):
             onActionResult?(result, requestId)
         case .screen(let payload):
+            if requestId == nil {
+                currentScreen = payload
+            }
             onScreen?(payload, requestId)
         case .recordingStarted:
+            isRecording = true
             onRecordingStarted?()
         case .recording(let payload):
+            isRecording = false
             onRecording?(payload)
         case .recordingError(let msg):
+            isRecording = false
             onRecordingError?(msg)
         case .error(let msg):
             onError?(msg)
@@ -202,13 +295,14 @@ public final class TheHandoff {
             token = payload.token
             onAuthApproved?(payload.token)
         case .sessionLocked(let payload):
+            connectionState = .failed(payload.message)
             onSessionLocked?(payload)
         case .authFailed(let reason):
+            connectionState = .failed(reason)
             onAuthFailed?(reason)
         case .interaction(let event):
             onInteraction?(event)
         case .status(let payload):
-            // Status messages do not currently have a dedicated callback; for now we just log them
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
             onError?("Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)")
@@ -225,6 +319,10 @@ public final class TheHandoff {
         isConnected = false
         connectedDevice = nil
         serverInfo = nil
+        connectionState = .disconnected
+        currentInterface = nil
+        currentScreen = nil
+        isRecording = false
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection

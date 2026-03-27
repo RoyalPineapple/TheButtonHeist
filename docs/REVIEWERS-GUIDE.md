@@ -26,14 +26,12 @@ The `TheFence.Command` enum has 31 cases, the CLI has 15 top-level subcommands, 
 
 Both interfaces use the same **grouping strategy**: 8 gesture types fold into one tool (`gesture` in MCP, `touch` in CLI), and 5 accessibility actions fold into one tool (`accessibility_action` in MCP, `action --type` in CLI). Common operations like `activate`, `swipe`, and `scroll` are top-level in both.
 
-## Why TheMastermind and TheHandoff Are Separate
+## TheFence and TheHandoff
 
-This is the question reviewers most often ask. The split is intentional:
+- **TheHandoff** owns transport: Bonjour discovery, TCP/TLS connection lifecycle, message send/receive, session state tracking. It exposes callback-based APIs and injectable closures for test mocking.
+- **TheFence** owns command dispatch and request-response correlation (matching responses to requests via `requestId` continuations). It talks to TheHandoff directly — no intermediate wrapper.
 
-- **TheHandoff** owns transport: Bonjour discovery, TCP/TLS connection lifecycle, message send/receive. It exposes callback-based APIs and has no awareness of async/await or SwiftUI.
-- **TheMastermind** adds request correlation (matching responses to requests via `requestId`), surfaces `@Observable` properties for future SwiftUI use, and bridges to async/await via continuations.
-
-This boundary exists so that **tests can inject mock connections** at the TheHandoff level without bringing in async/await complexity, and so a future macOS GUI can observe TheMastermind directly.
+This boundary exists so that **tests can inject mock connections** at the TheHandoff level via factory closures, while TheFence handles the command-level concerns independently.
 
 ## Why `activate` and `one_finger_tap` Both Exist
 
@@ -47,7 +45,7 @@ Rule of thumb: use `activate` for controls, `one_finger_tap` for coordinates.
 ```
 TheScore          Shared types (messages, elements) — cross-platform, no networking
 TheInsideJob      iOS framework — embedded in the target app, runs the server
-ButtonHeist       macOS framework — TheFence (dispatch), TheMastermind, TheHandoff
+ButtonHeist       macOS framework — TheFence (dispatch + correlation), TheHandoff (transport)
 ButtonHeistCLI    CLI client — thin wrapper over TheFence
 ButtonHeistMCP    MCP server — thin wrapper over TheFence
 ```
@@ -71,4 +69,4 @@ tuist test TheInsideJobTests --platform ios \          # iOS-hosted tests
 
 ## Heist-Themed Names
 
-The names (TheFence, TheMastermind, TheSafecracker, etc.) are the project's identity. Each maps to a clear architectural role — see the README's "Meet the Crew" section for the full cast. The metaphor is consistent: TheFence dispatches commands, TheMastermind coordinates, TheSafecracker cracks the UI, TheInsideJob runs inside the target app.
+The names (TheFence, TheSafecracker, TheHandoff, etc.) are the project's identity. Each maps to a clear architectural role — see the README's "Meet the Crew" section for the full cast. The metaphor is consistent: TheFence dispatches commands, TheHandoff manages the connection, TheSafecracker cracks the UI, TheInsideJob runs inside the target app.
