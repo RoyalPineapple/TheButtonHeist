@@ -422,12 +422,12 @@ Search for an element by scrolling through the nearest scroll view. Uses an `Ele
 
 **By label:**
 ```json
-{"protocolVersion":"6.3","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
+{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
 ```
 
 **Compound match with direction:**
 ```json
-{"protocolVersion":"6.3","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up","maxScrolls":30}}
+{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up","maxScrolls":30}}
 ```
 
 **Response** includes `scrollSearchResult` on the `actionResult`:
@@ -879,7 +879,7 @@ Error message.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String` | Stable deterministic identifier (derived from developer identifier or synthesized from traits+label). Preferred for element targeting. |
+| `heistId` | `String` | Stable deterministic identifier (derived from developer identifier or synthesized from traits+label; value excluded for stability). Preferred for element targeting. |
 | `order` | `Int` | VoiceOver reading order (0-based) |
 | `description` | `String` | What VoiceOver reads |
 | `label` | `String?` | Label |
@@ -1191,7 +1191,7 @@ Checks whether any entry in `interfaceDelta.updated` matches the provided fields
 | Field | Type | Description |
 |-------|------|-------------|
 | `heistId` | `String?` | Match a specific element by heistId |
-| `property` | `String?` | Filter to a specific property: `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"` |
+| `property` | `String?` | Filter to a specific property: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"` |
 | `oldValue` | `String?` | Expected previous value |
 | `newValue` | `String?` | Expected new value |
 
@@ -1249,7 +1249,7 @@ Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `property` | `String` | Which property changed: `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"` |
+| `property` | `String` | Which property changed: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"` |
 | `old` | `String?` | Previous value |
 | `new` | `String?` | New value |
 

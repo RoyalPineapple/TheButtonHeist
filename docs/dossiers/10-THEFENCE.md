@@ -33,7 +33,7 @@ graph TD
         subgraph Commands["Command Catalog (35)"]
             Conn["help, status, quit, exit, list_devices"]
             IF["get_interface, get_screen, wait_for_idle"]
-            Access["activate, increment, decrement, - perform_custom_action"]
+            Access["activate (with optional action param), - increment, decrement, - perform_custom_action"]
             Gesture["one_finger_tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
             Scroll["scroll, scroll_to_visible, scroll_to_edge"]
             Text["type_text, edit_action, dismiss_keyboard"]

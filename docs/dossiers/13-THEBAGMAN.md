@@ -14,7 +14,7 @@ TheBagman handles all the goods during TheInsideJob:
 4. **Element resolution** - finds elements by `heistId`, `identifier`, or `order` for TheSafecracker
 5. **Element matching** - `findMatch(_:)` and `hasMatch(_:)` search the cached element tree using `ElementMatcher` predicates with AND semantics. Matching runs on the canonical `AccessibilityElement` tree, not wire types. `AccessibilityContainer` nodes can also be matched when `scope` is `.containers` or `.both`. Used by TheSafecracker for scroll search.
 6. **StableKey identity** - `AccessibilityElement.StableKey` provides geometry-free identity for tracking unique elements across scroll positions. Uses semantic properties (label, identifier, value, traits) by default; falls back to frame geometry when all semantic properties are empty, so identical unlabeled elements at different positions still hash as distinct.
-7. **HeistId synthesis** - assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label), with disambiguation suffixes for duplicates
+7. **HeistId synthesis** - assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with disambiguation suffixes for duplicates
 8. **Topology-based screen change detection** - detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
 9. **Delta computation** - compares before/after element snapshots to produce `InterfaceDelta` (screen change is determined by VC identity from TheTripwire OR topology change from TheBagman)
 10. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
@@ -52,9 +52,10 @@ graph TD
 
         subgraph Conversion["Element Conversion"]
             Snapshot["snapshotElements() → ElementSnapshot"]
+            ScreenName["ElementSnapshot.screenName — header-trait label"]
             Convert["convertElement() → HeistElement"]
             ConvertTree["convertHierarchyNode() → ElementNode"]
-            AssignIds["assignHeistIds() — stable deterministic IDs"]
+            AssignIds["assignHeistIds() — stable deterministic IDs (value excluded)"]
         end
 
         subgraph Delta["Delta Computation"]
