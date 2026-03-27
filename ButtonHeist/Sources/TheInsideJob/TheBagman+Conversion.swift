@@ -8,30 +8,11 @@ import TheScore
 
 extension TheBagman {
 
-    /// All known trait-to-name mappings, evaluated in declaration order.
-    private static let traitMapping: [(UIAccessibilityTraits, String)] = [
-        (.button, "button"),
-        (.link, "link"),
-        (.image, "image"),
-        (.staticText, "staticText"),
-        (.header, "header"),
-        (.adjustable, "adjustable"),
-        (.searchField, "searchField"),
-        (.selected, "selected"),
-        (.notEnabled, "notEnabled"),
-        (.keyboardKey, "keyboardKey"),
-        (.summaryElement, "summaryElement"),
-        (.updatesFrequently, "updatesFrequently"),
-        (.playsSound, "playsSound"),
-        (.startsMediaSession, "startsMediaSession"),
-        (.allowsDirectInteraction, "allowsDirectInteraction"),
-        (.causesPageTurn, "causesPageTurn"),
-        (.tabBar, "tabBar"),
-        (UIAccessibilityTraits(rawValue: 0x8000000), "backButton"),
-    ]
-
+    /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
+    /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
+    /// for trait naming (22 traits including private traits like textEntry, switchButton).
     func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
-        Self.traitMapping.compactMap { traits.contains($0.0) ? $0.1 : nil }
+        traits.traitNames
     }
 }
 
@@ -167,8 +148,9 @@ extension TheBagman {
     // MARK: - Stable ID Synthesis
 
     /// Trait priority for heistId prefix — most descriptive wins.
+    /// Names come from AccessibilitySnapshotParser's knownTraits.
     private static let traitPriority: [String] = [
-        "backButton", "searchField", "textField", "adjustable",
+        "backButton", "searchField", "textEntry", "switchButton", "adjustable",
         "button", "link", "image", "header", "tabBar",
     ]
 
