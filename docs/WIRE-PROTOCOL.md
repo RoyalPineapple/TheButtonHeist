@@ -1,6 +1,6 @@
 # Button Heist Wire Protocol Specification
 
-**Version**: 6.2
+**Version**: 6.3
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
@@ -414,16 +414,25 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Scroll the nearest scroll view ancestor until the target element's accessibility frame is fully within the viewport.
+Search for an element by scrolling through the nearest scroll view. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
 
-**By identifier:**
+**Match fields:** `label`, `identifier`, `heistId`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present).
+
+**Search options:** `maxScrolls` (default: 20), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
+
+**By label:**
 ```json
-{"protocolVersion":"6.2","type":"scrollToVisible","payload":{"identifier":"buttonheist.longList.last"}}
+{"protocolVersion":"6.3","type":"scrollToVisible","payload":{"match":{"label":"Color Picker"}}}
 ```
 
-**By traversal index:**
+**Compound match with direction:**
 ```json
-{"protocolVersion":"6.2","type":"scrollToVisible","payload":{"order":99}}
+{"protocolVersion":"6.3","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up","maxScrolls":30}}
+```
+
+**Response** includes `scrollSearchResult` on the `actionResult`:
+```json
+{"type":"actionResult","payload":{"success":true,"method":"scrollToVisible","scrollSearchResult":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}
 ```
 
 ### scrollToEdge

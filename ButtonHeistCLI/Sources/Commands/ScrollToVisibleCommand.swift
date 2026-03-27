@@ -4,27 +4,91 @@ import ButtonHeist
 struct ScrollToVisibleCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "scroll_to_visible",
-        abstract: "Scroll until a target element is visible",
+        abstract: "Search for an element by scrolling through the nearest scroll view",
         discussion: """
-            Finds the nearest scroll view ancestor and adjusts its content offset
-            so the target element's accessibility frame is fully within the viewport.
+            Scrolls through the nearest scroll view searching for an element that matches \
+            the specified criteria. All match fields are AND'd together. For UITableView and \
+            UICollectionView, provides exhaustive search with item count tracking.
 
             Examples:
-              buttonheist scroll_to_visible --identifier "buttonheist.longList.last"
-              buttonheist scroll_to_visible --index 42
+              buttonheist scroll_to_visible --label "Color Picker"
+              buttonheist scroll_to_visible --identifier "market.row.colorPicker"
+              buttonheist scroll_to_visible --label "Settings" --traits button
+              buttonheist scroll_to_visible --label "Color Picker" --direction up --max-scrolls 30
             """
     )
 
-    @OptionGroup var element: ElementTargetOptions
+    @Option(name: .long, help: "Match element by accessibility label (exact)")
+    var label: String?
+
+    @Option(name: .long, help: "Match element by accessibility identifier (exact)")
+    var identifier: String?
+
+    @Option(name: .long, help: "Match element by heistId (exact)")
+    var heistId: String?
+
+    @Option(name: .long, help: "Match element by accessibility value (exact)")
+    var value: String?
+
+    @Option(name: .long, help: "Required traits (all must be present)")
+    var traits: [String] = []
+
+    @Option(name: .long, help: "Excluded traits (none may be present)")
+    var excludeTraits: [String] = []
+
+    @Option(name: .long, help: "Match scope: elements (leaves only, default), containers, or both")
+    var scope: String?
+
+    @Option(name: .long, help: "Maximum scroll attempts (default: 20)")
+    var maxScrolls: Int?
+
+    @Option(name: .long, help: "Starting scroll direction: down, up, left, right (default: down)")
+    var direction: String?
+
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
     @Option(name: .shortAndLong, help: "Timeout in seconds")
-    var timeout: Double = 10.0
+    var timeout: Double = 30.0
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let target = try element.requireTarget()
+        guard label != nil || identifier != nil || value != nil
+            || !traits.isEmpty || !excludeTraits.isEmpty else {
+            throw ValidationError("Must specify at least one match field (--label, --identifier, --value, --traits, or --exclude-traits)")
+        }
+
+        var matchScope: MatchScope?
+        if let scope {
+            guard let parsed = MatchScope(rawValue: scope.lowercased()) else {
+                throw ValidationError("Invalid scope '\(scope)'. Valid: \(MatchScope.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            matchScope = parsed
+        }
+
+        let matcher = ElementMatcher(
+            label: label,
+            identifier: identifier,
+            heistId: heistId,
+            value: value,
+            traits: traits.isEmpty ? nil : traits,
+            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits,
+            scope: matchScope
+        )
+
+        var searchDirection: ScrollSearchDirection?
+        if let direction {
+            guard let dir = ScrollSearchDirection(rawValue: direction.lowercased()) else {
+                throw ValidationError("Invalid direction '\(direction)'. Valid: down, up, left, right")
+            }
+            searchDirection = dir
+        }
+
+        let target = ScrollToVisibleTarget(
+            match: matcher,
+            maxScrolls: maxScrolls,
+            direction: searchDirection
+        )
 
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
@@ -33,7 +97,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
         let message = ClientMessage.scrollToVisible(target)
 
         if !connection.quiet {
-            logStatus("Sending scroll_to_visible...")
+            logStatus("Searching for element...")
         }
 
         connector.send(message)

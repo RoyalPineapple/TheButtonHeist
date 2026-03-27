@@ -42,6 +42,15 @@ final class TheSafecracker {
         let method: ActionMethod
         let message: String?
         let value: String?
+        let scrollSearchResult: ScrollSearchResult?
+
+        init(success: Bool, method: ActionMethod, message: String?, value: String?, scrollSearchResult: ScrollSearchResult? = nil) {
+            self.success = success
+            self.method = method
+            self.message = message
+            self.value = value
+            self.scrollSearchResult = scrollSearchResult
+        }
 
         static func failure(_ method: ActionMethod, message: String) -> InteractionResult {
             InteractionResult(success: false, method: method, message: message, value: nil)

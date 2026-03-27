@@ -610,10 +610,16 @@ public enum FenceResponse {
 
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
         guard result.success else {
+            if let search = result.scrollSearchResult {
+                return Self.compactScrollSearchNotFound(search, screenName: result.screenName)
+            }
             return "error: \(result.message ?? result.method.rawValue)"
         }
+
         var text: String
-        if let delta = result.interfaceDelta {
+        if let search = result.scrollSearchResult {
+            text = Self.compactScrollSearchFound(search)
+        } else if let delta = result.interfaceDelta {
             text = Self.compactDelta(delta, method: result.method.rawValue)
         } else {
             text = "\(result.method.rawValue): ok"
@@ -630,6 +636,47 @@ public enum FenceResponse {
             }
         }
         return text
+    }
+
+    private static func compactScrollSearchFound(_ search: ScrollSearchResult) -> String {
+        var header: String
+        if search.scrollCount == 0 {
+            header = "scroll_to_visible: already visible"
+        } else {
+            let itemInfo = scrollSearchItemInfo(search)
+            header = "scroll_to_visible: found after \(search.scrollCount) scrolls\(itemInfo)"
+        }
+        if let element = search.foundElement {
+            header += "\n  \(compactElementLine(element))"
+        }
+        return header
+    }
+
+    private static func compactScrollSearchNotFound(_ search: ScrollSearchResult, screenName: String?) -> String {
+        var text: String
+        if search.exhaustive {
+            let itemInfo = scrollSearchItemInfo(search)
+            text = "scroll_to_visible: not found\(itemInfo) (exhaustive)"
+        } else if search.scrollCount > 0 {
+            let itemInfo = scrollSearchItemInfo(search)
+            text = "scroll_to_visible: not found after \(search.scrollCount) scrolls\(itemInfo)"
+        } else {
+            text = "scroll_to_visible: not found"
+        }
+        if let screenName {
+            text = "\(screenName) | \(text)"
+        }
+        return text
+    }
+
+    private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {
+        if let total = search.totalItems {
+            let pct = total > 0 ? Int(Double(search.uniqueElementsSeen) / Double(total) * 100) : 0
+            return " (\(search.uniqueElementsSeen)/\(total) items seen, \(pct)%)"
+        } else if search.uniqueElementsSeen > 0 {
+            return " (\(search.uniqueElementsSeen) unique elements seen)"
+        }
+        return ""
     }
 
     private func compactBatchFormatted(

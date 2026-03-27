@@ -173,6 +173,8 @@ public struct ActionResult: Codable, Sendable {
     public let elementTraits: [String]?
     /// Label of the first header element in the post-action snapshot (screen name hint)
     public let screenName: String?
+    /// Diagnostics from a scroll_to_visible search operation
+    public let scrollSearchResult: ScrollSearchResult?
 
     public init(
         success: Bool,
@@ -184,7 +186,8 @@ public struct ActionResult: Codable, Sendable {
         elementLabel: String? = nil,
         elementValue: String? = nil,
         elementTraits: [String]? = nil,
-        screenName: String? = nil
+        screenName: String? = nil,
+        scrollSearchResult: ScrollSearchResult? = nil
     ) {
         self.success = success
         self.method = method
@@ -196,6 +199,35 @@ public struct ActionResult: Codable, Sendable {
         self.elementValue = elementValue
         self.elementTraits = elementTraits
         self.screenName = screenName
+        self.scrollSearchResult = scrollSearchResult
+    }
+}
+
+/// Diagnostics from a scroll_to_visible search operation.
+public struct ScrollSearchResult: Codable, Sendable {
+    /// Number of scroll operations performed
+    public let scrollCount: Int
+    /// Number of unique elements seen across all scroll positions
+    public let uniqueElementsSeen: Int
+    /// Total items in the data source (UITableView/UICollectionView only)
+    public let totalItems: Int?
+    /// Whether every item in the data source was checked
+    public let exhaustive: Bool
+    /// The matched element, if found
+    public let foundElement: HeistElement?
+
+    public init(
+        scrollCount: Int,
+        uniqueElementsSeen: Int,
+        totalItems: Int? = nil,
+        exhaustive: Bool,
+        foundElement: HeistElement? = nil
+    ) {
+        self.scrollCount = scrollCount
+        self.uniqueElementsSeen = uniqueElementsSeen
+        self.totalItems = totalItems
+        self.exhaustive = exhaustive
+        self.foundElement = foundElement
     }
 }
 
