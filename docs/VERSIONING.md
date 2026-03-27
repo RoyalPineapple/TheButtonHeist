@@ -41,6 +41,7 @@ This constant is used by:
 3. **`docs/API.md`** — CLI Reference section
 4. **`TestApp/Sources/DisclosureGroupingDemo.swift`** — demo UI version label
 5. **`docs/VERSIONING.md`** — current version line
+6. **`Formula/buttonheist.rb`** — Homebrew formula version
 
 ## Release workflow
 
