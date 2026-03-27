@@ -39,7 +39,6 @@ struct ScrollCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         let message = ClientMessage.scroll(ScrollTarget(elementTarget: target, direction: scrollDirection))
 
@@ -47,9 +46,9 @@ struct ScrollCommand: AsyncParsableCommand {
             logStatus("Sending scroll...")
         }
 
-        client.send(message)
+        connector.send(message)
 
-        let result = try await client.waitForActionResult(timeout: timeout)
+        let result = try await connector.waitForActionResult(timeout: timeout)
         outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Scroll")
     }
 }

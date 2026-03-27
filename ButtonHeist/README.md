@@ -8,7 +8,7 @@ The crew behind the crew. These are the libraries that do the real work once the
 |--------|----------|---------|
 | `TheScore` | iOS + macOS | Shared protocol types, messages, and constants |
 | `TheInsideJob` | iOS | Embedded server, gesture injection, screen capture, TLS transport |
-| `ButtonHeist` | macOS | Client framework exposing `TheMastermind`, `TheFence`, and the internal `TheHandoff` connection stack |
+| `ButtonHeist` | macOS | Client framework exposing `TheFence` (command dispatch + request correlation) and `TheHandoff` (connection stack + state) |
 
 `ThePlant` ships alongside `TheInsideJob` and handles the quiet entry: ObjC `+load` lights things up before your app code starts asking questions.
 
@@ -23,7 +23,7 @@ graph LR
     IJ <-->|"TLS over WiFi / USB"| BH
 
     subgraph mac["macOS"]
-        BH["ButtonHeist<br/>(TheMastermind / TheFence / TheHandoff)"]
+        BH["ButtonHeist<br/>(TheFence / TheHandoff)"]
         BH --> Consumers["CLI, MCP server, or your own tools"]
     end
 ```
@@ -118,15 +118,13 @@ Location: `Sources/TheButtonHeist/`
 
 `import ButtonHeist` gives the outside crew their line back into the target:
 
-- `TheMastermind` for discovery, connection state, callbacks, and observable UI integration
-- `TheFence` for command-oriented execution used by the CLI and MCP server
-- `TheHandoff` and its discovery/connection helpers for the lower-level client transport stack
+- `TheFence` for command dispatch, request-response correlation, and async wait methods — used by CLI and MCP server
+- `TheHandoff` for device discovery, connection lifecycle, session state, and message routing
 - `TheScore` types via `@_exported import TheScore`
 
 | Path | Purpose |
 |------|---------|
-| `TheMastermind.swift` | `@Observable @ButtonHeistActor` client. Discovery, connection, callbacks for SwiftUI and tools |
-| `TheFence.swift` | Command dispatch for CLI and MCP. 31 commands via `TheFence.Command` enum |
+| `TheFence.swift` | Command dispatch, request-response correlation, async waits. 35 commands via `TheFence.Command` enum |
 | `TheHandoff/TheHandoff.swift` | Client-side session manager. Injectable discovery/connection closures, persistent driver ID, keepalive pings, auto-reconnect (60 attempts at 1s) |
 | `TheHandoff/DeviceDiscovery.swift` | `NWBrowser`-based Bonjour browsing with deduplication registry and periodic reachability validation |
 | `TheHandoff/USBDeviceDiscovery.swift` | USB tunnel discovery via `xcrun devicectl` + `lsof` for CoreDevice IPv6 addresses |

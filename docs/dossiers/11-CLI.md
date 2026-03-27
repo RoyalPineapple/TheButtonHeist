@@ -59,7 +59,7 @@ graph TD
     Pasteboard --> Direct
     Session --> REPL
 
-    Direct --> TheMastermind["TheMastermind"]
+    Direct --> TheHandoff["TheHandoff"]
     REPL --> TheFence["TheFence"]
 ```
 

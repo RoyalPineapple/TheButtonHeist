@@ -8,7 +8,7 @@ Button Heist is a distributed system that lets AI agents (and humans) inspect an
 
 1. **TheScore** - Cross-platform shared types (messages, models)
 2. **TheInsideJob** - iOS framework embedded in the app being inspected
-3. **ButtonHeist** - macOS client framework containing `TheMastermind`, `TheFence`, and the internal `TheHandoff` connection stack
+3. **ButtonHeist** - macOS client framework containing `TheFence` (command dispatch + request correlation) and `TheHandoff` (connection stack)
 4. **buttonheist CLI** - Command-line tool for driving iOS apps
 5. **ButtonHeistMCP** - MCP server for AI agent tool use
 
@@ -20,8 +20,7 @@ graph TB
         Scripts["Python/Shell<br>Scripts"] -->|Bash tool calls| CLI
         MCP --> TF["TheFence<br>(Command Dispatch)"]
         CLI --> TF
-        TF --> TM["TheMastermind<br>(@Observable wrapper)"]
-        TM --> TH["TheHandoff<br>(Discovery + Connection)"]
+        TF --> TH["TheHandoff<br>(Discovery + Connection + State)"]
         TH --> DD["DeviceDiscovery / USBDeviceDiscovery"]
         TH --> DC["DeviceConnection"]
     end
@@ -283,11 +282,13 @@ The `Stakeout` class provides on-device screen recording as H.264/MP4:
 ```
 TheFence (@ButtonHeistActor)
 ├── Configuration (deviceFilter, connectionTimeout, token, autoReconnect)
-├── TheMastermind (private client instance)
+├── TheHandoff (device lifecycle, connection state)
+├── Pending request correlation (requestId → continuation dictionaries)
+├── Async wait methods (waitForActionResult, waitForInterface, waitForScreen, waitForRecording)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → FenceResponse
-└── Command.allCases (31 supported commands)
+└── Command.allCases (35 supported commands)
 ```
 
 **Key Types**:
@@ -299,7 +300,7 @@ TheFence (@ButtonHeistActor)
 
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
-2. TheFence auto-connects if not already connected (via its private TheMastermind instance)
+2. TheFence auto-connects if not already connected (via its TheHandoff instance)
 3. Dispatches to the appropriate command handler
 4. Returns a typed `FenceResponse`
 
@@ -354,35 +355,28 @@ ButtonHeistMCP (Swift executable, macOS 14+)
 
 ### ButtonHeist (macOS Client Framework)
 
-**Purpose**: Single-import macOS framework. Re-exports `TheScore` and provides `TheMastermind`, `TheFence`, and the internal `TheHandoff` transport stack.
+**Purpose**: Single-import macOS framework. Re-exports `TheScore` and provides `TheFence` (command dispatch + request correlation) and `TheHandoff` (transport stack).
 
-**Usage**: `import ButtonHeist` gives access to all types (TheMastermind, TheFence, HeistElement, Interface, DiscoveredDevice, etc.)
+**Usage**: `import ButtonHeist` gives access to all types (TheFence, TheHandoff, HeistElement, Interface, DiscoveredDevice, etc.)
 
 **Architecture**:
 ```
-TheMastermind (@Observable, @ButtonHeistActor)
-├── TheHandoff
+TheFence (@ButtonHeistActor) — command dispatch + request-response correlation
+├── TheHandoff — device lifecycle + session state
 │   ├── DeviceDiscovery (Bonjour)
 │   ├── USBDeviceDiscovery (CoreDevice tunnels)
 │   └── DeviceConnection (TLS transport + fingerprint verification)
-└── Observable Properties
-    ├── discoveredDevices: [DiscoveredDevice]
-    ├── connectedDevice: DiscoveredDevice?
-    ├── connectionState: ConnectionState
-    ├── currentInterface: Interface?
-    ├── currentScreen: ScreenPayload?
-    ├── serverInfo: ServerInfo?
-    ├── isRecording: Bool
-    └── isDiscovering: Bool
+├── Pending request correlation (requestId → continuation dictionaries)
+└── Async wait methods (waitForActionResult, waitForInterface, waitForScreen, waitForRecording)
 ```
 
-**Dual API Design**:
+**API Design**:
 
-1. **SwiftUI (Reactive)**: `@Observable` properties trigger view updates
-2. **Callbacks (Imperative)**: Closures for CLI and non-SwiftUI usage
-3. **Async/Await**: `waitForActionResult(timeout:)` and `waitForScreen(timeout:)` for scripting
+1. **Callbacks (Imperative)**: TheHandoff exposes typed closures for connection lifecycle events
+2. **Async/Await**: TheFence provides `waitForActionResult(timeout:)`, `waitForScreen(timeout:)`, etc. for command scripting
+3. **Command dispatch**: `TheFence.execute(request:)` is the single entry point for CLI and MCP
 
-**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, `TheHandoff` sends `subscribe`, `requestInterface`, and `requestScreen` after connecting. `TheFence` explicitly disables this for CLI and MCP command execution.
+**Auto-Subscribe on Connect**: When `autoSubscribe` is enabled, `TheHandoff` sends `subscribe`, `requestInterface`, and `requestScreen` after connecting.
 
 **Observe Mode**: When `observeMode` is enabled on `TheHandoff`, the underlying `DeviceConnection` completes the `serverHello` / `clientHello` handshake, waits for `authRequired`, then sends `watch(WatchPayload)` instead of `authenticate`. This establishes a read-only observer connection that receives broadcasts without claiming a session lock.
 
@@ -405,7 +399,7 @@ AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the M
 **Via MCP (preferred for AI agents)**:
 ```
 Agent → MCP tool call: get_interface {}
-  └── ButtonHeistMCP → TheFence → TheMastermind → TheHandoff → TheInsideJob
+  └── ButtonHeistMCP → TheFence → TheHandoff → TheInsideJob
   └── Response: JSON interface with elements
 
 Agent → MCP tool call: activate {identifier: "loginButton"}
@@ -436,7 +430,7 @@ sequenceDiagram
     participant IJ as TheInsideJob
     participant SS as ServerTransport
     participant NS as NetService (Bonjour)
-    participant HC as TheMastermind
+    participant HC as TheHandoff
     participant NB as NWBrowser
 
     IJ->>SS: start(port: 0)
@@ -464,7 +458,7 @@ Clients (CLI, GUI, scripts) can filter devices by any of these identifiers. The 
 
 ```mermaid
 sequenceDiagram
-    participant HC as TheMastermind
+    participant HC as TheHandoff
     participant IJ as TheInsideJob
     participant TM as TheMuscle
 
@@ -648,7 +642,7 @@ See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md) for complete protocol specification.
 - Message handling dispatched to main
 - Interface updates debounced by 300ms
 
-### TheMastermind / TheFence (macOS)
+### TheHandoff / TheFence (macOS)
 - `@ButtonHeistActor` for backend isolation (discovery, connection, command dispatch)
 - NWBrowser for discovery on a dedicated queue
 - NWConnection for data transport

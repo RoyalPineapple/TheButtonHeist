@@ -9,13 +9,15 @@
 TheHandoff owns the full lifecycle of communicating with a remote iOS device running TheInsideJob:
 
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
-2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `isConnected` / `connectedDevice` state
-3. **Keepalive** — sends `.ping` every 3 seconds over an active connection to keep the channel alive
-4. **Session management** — `connectWithDiscovery(filter:timeout:)` orchestrates discovery → device resolution → connection with timeout tracking
-5. **Auto-reconnect** — `setupAutoReconnect(filter:)` chains onto `onDisconnected` to attempt re-connection up to 60 times at 1-second intervals
-6. **Driver ID persistence** — generates and stores a UUID in `~/.buttonheist/driver-id` used to identify the client across sessions
+2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `isConnected` / `connectedDevice` / `connectionState` state
+3. **Session state tracking** — maintains `connectionState` (disconnected/connecting/connected/failed), `currentInterface`, `currentScreen`, `isRecording`
+4. **Keepalive** — sends `.ping` every 3 seconds over an active connection to keep the channel alive
+5. **Session management** — `connectWithDiscovery(filter:timeout:)` orchestrates discovery → device resolution → connection with timeout tracking
+6. **Reachability probing** — `discoverReachableDevices(timeout:)` discovers and validates each device advertisement via parallel TCP status probes
+7. **Auto-reconnect** — `setupAutoReconnect(filter:)` chains onto `onDisconnected` to attempt re-connection up to 60 times at 1-second intervals
+8. **Driver ID persistence** — generates and stores a UUID in `~/.buttonheist/driver-id` used to identify the client across sessions
 
-> **Note:** TheMastermind wraps TheHandoff. TheMastermind is the `@Observable` SwiftUI-facing layer; all actual network operations live here.
+> **Note:** TheFence owns TheHandoff directly. There is no intermediate wrapper — TheFence talks to TheHandoff for all connection lifecycle and message sending, and owns the request-response correlation (pending continuations and async wait methods) itself.
 
 ## Architecture Diagram
 
@@ -36,8 +38,7 @@ graph TD
         DriverId["effectiveDriverId\n~/.buttonheist/driver-id"]
     end
 
-    TM["TheMastermind"] --> TheHandoff
-    TF["TheFence"] -.->|via TheMastermind| TheHandoff
+    TF["TheFence"] --> TheHandoff
 
     TheHandoff --> DevDisc["DeviceDiscovery\n(NWBrowser, Bonjour)"]
     TheHandoff --> USBDisc["USBDeviceDiscovery\n(xcrun devicectl + lsof)"]
@@ -269,11 +270,8 @@ stateDiagram-v2
     AutoReconnect --> Idle: 60 attempts exhausted
 ```
 
-## How TheMastermind Wraps TheHandoff
+## How TheFence Uses TheHandoff
 
-TheMastermind holds a single `TheHandoff` instance and calls `wireUpHandoff()` from its `init`. That method installs closures on every `handoff.on*` callback to:
+TheFence owns a `TheHandoff` instance directly. On init, it wires up `handoff.onInterface`, `handoff.onActionResult`, and `handoff.onScreen` callbacks to route correlated responses (those with a `requestId`) to pending continuation dictionaries, resuming the async caller that sent the original request.
 
-1. Update TheMastermind's `@Observable` properties (e.g. `discoveredDevices`, `connectionState`, `currentInterface`)
-2. Forward to TheMastermind's own callbacks (e.g. `onDeviceDiscovered`, `onInterfaceUpdate`)
-
-TheMastermind exposes `connectWithDiscovery`, `setupAutoReconnect`, `startDiscovery`, `connect`, `disconnect`, `send`, and `displayName(for:)` as thin pass-throughs to the equivalent TheHandoff methods.
+TheFence calls TheHandoff methods directly for all lifecycle operations: `connectWithDiscovery`, `setupAutoReconnect`, `startDiscovery`, `connect`, `disconnect`, `send`, `forceDisconnect`, and `displayName(for:)`. There is no intermediate wrapper layer.

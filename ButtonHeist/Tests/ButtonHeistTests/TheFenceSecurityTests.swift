@@ -54,8 +54,8 @@ final class TheFenceSecurityTests: XCTestCase {
         mockDisc.discoveredDevices = [Self.testDevice]
 
         let fence = TheFence()
-        fence.client.handoff.makeDiscovery = { mockDisc }
-        fence.client.handoff.makeConnection = { _, _, _ in mockConn }
+        fence.handoff.makeDiscovery = { mockDisc }
+        fence.handoff.makeConnection = { _, _, _ in mockConn }
 
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
