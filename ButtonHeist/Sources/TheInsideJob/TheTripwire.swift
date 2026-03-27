@@ -397,7 +397,12 @@ final class TheTripwire {
         guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
             return
         }
-        let screenBounds = UIScreen.main.bounds
+        let screenBounds = notification.object
+            .flatMap { $0 as? UIScreen }?.bounds
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.screen.bounds
+            ?? .zero
         keyboardVisibleFlag = endFrame.intersects(screenBounds)
             && endFrame.height > 0
             && endFrame.origin.y < screenBounds.height
@@ -497,7 +502,10 @@ final class TheTripwire {
     }
 
     /// Is the interface all clear? When the pulse is running, returns the
-    /// latest reading's settle state. Otherwise falls back to a synchronous scan.
+    /// latest reading's settle state (requires 2 consecutive quiet frames).
+    /// Otherwise falls back to a synchronous scan checking both pending layout
+    /// and active animations — stricter than the pre-pulse check which only
+    /// looked at animations.
     func allClear() -> Bool {
         if let reading = latestReading { return reading.isSettled }
         let scan = scanLayers()
