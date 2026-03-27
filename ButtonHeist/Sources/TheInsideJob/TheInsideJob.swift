@@ -59,15 +59,12 @@ public final class TheInsideJob {
 
     // MARK: - Timing Constants
 
-    /// Debounce interval before broadcasting hierarchy updates (300ms).
-    private static let debounceInterval: UInt64 = 300_000_000
-
     /// Default polling interval for automatic hierarchy updates (1s).
     private static let defaultPollingInterval: UInt64 = 1_000_000_000
 
-    // Debounce for hierarchy updates
-    var updateDebounceTask: Task<Void, Never>?
-    let updateDebounceInterval: UInt64 = TheInsideJob.debounceInterval
+    // Hierarchy invalidation (pulse-driven, replaces debounce timer)
+    var hierarchyInvalidated = false
+    var updateCoalesceTask: Task<Void, Never>?
 
     // Polling for automatic updates (disabled by default)
     var pollingTask: Task<Void, Never>?
@@ -135,6 +132,11 @@ public final class TheInsideJob {
         startAccessibilityObservation()
         startLifecycleObservation()
 
+        tripwire.onTransition = { [weak self] transition in
+            self?.handlePulseTransition(transition)
+        }
+        tripwire.startPulse()
+
         insideJobLogger.info("Server started successfully")
     }
 
@@ -144,8 +146,14 @@ public final class TheInsideJob {
         isSuspended = false
         resumeTask?.cancel()
         resumeTask = nil
+        updateCoalesceTask?.cancel()
+        updateCoalesceTask = nil
+        hierarchyInvalidated = false
         stopPolling()
         theSafecracker.stopKeyboardTracking()
+
+        tripwire.stopPulse()
+        tripwire.onTransition = nil
 
         transport?.stopAdvertising()
         transport?.stop()
@@ -662,8 +670,11 @@ public final class TheInsideJob {
         pollingTask?.cancel()
         pollingTask = nil
 
-        updateDebounceTask?.cancel()
-        updateDebounceTask = nil
+        updateCoalesceTask?.cancel()
+        updateCoalesceTask = nil
+        hierarchyInvalidated = false
+
+        tripwire.stopPulse()
 
         transport?.stopAdvertising()
         transport?.stop()
@@ -715,6 +726,11 @@ public final class TheInsideJob {
                 self.advertiseService(port: actualPort)
 
                 self.startAccessibilityObservation()
+
+                self.tripwire.onTransition = { [weak self] transition in
+                    self?.handlePulseTransition(transition)
+                }
+                self.tripwire.startPulse()
 
                 if self.isPollingEnabled {
                     self.startPollingLoop()
