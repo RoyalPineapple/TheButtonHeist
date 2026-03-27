@@ -537,7 +537,7 @@ cd ButtonHeistMCP && swift build -c release
 | `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
 | `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`; `expect` |
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
-| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `maxScrolls`, `direction`, `expect` |
+| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `scope`, `maxScrolls`, `direction`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
@@ -696,7 +696,7 @@ Messages sent from client to server.
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard
 - `scroll(ScrollTarget)` - Scroll the nearest scroll view ancestor by one page
-- `scrollToVisible(ActionTarget)` - Scroll until the target element is visible in the viewport
+- `scrollToVisible(ScrollToVisibleTarget)` - Bidirectional scroll search for element matching an `ElementMatcher` predicate
 - `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
@@ -890,6 +890,78 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 - `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll
 - `edge: ScrollEdge` - Which edge to scroll to
 
+### ElementMatcher
+
+```swift
+public struct ElementMatcher: Codable, Sendable, Equatable
+```
+
+Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics.
+
+#### Properties
+
+- `label: String?` - Exact match on accessibility label
+- `identifier: String?` - Exact match on accessibility identifier
+- `heistId: String?` - Exact match on heistId (wire-level only — ignored by hierarchy-level matching)
+- `value: String?` - Exact match on accessibility value
+- `traits: [String]?` - All listed traits must be present
+- `excludeTraits: [String]?` - None of the listed traits may be present
+- `scope: MatchScope?` - Which node types to evaluate (default: `.elements`)
+- `absent: Bool?` - When `true`, inverts the match — succeeds when no element matches
+
+### MatchScope
+
+```swift
+public enum MatchScope: String, Codable, Sendable, CaseIterable
+```
+
+#### Cases
+
+- `elements` - Match leaf elements only (default)
+- `containers` - Match container nodes only
+- `both` - Match both leaf elements and containers
+
+### ScrollToVisibleTarget
+
+```swift
+public struct ScrollToVisibleTarget: Codable, Sendable
+```
+
+#### Properties
+
+- `match: ElementMatcher` - Predicate for the element to find
+- `maxScrolls: Int?` - Maximum scroll attempts (default: 20, clamped to >= 1)
+- `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`)
+
+### ScrollSearchDirection
+
+```swift
+public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable
+```
+
+#### Cases
+
+- `down` - Scroll down (default)
+- `up` - Scroll up
+- `left` - Scroll left
+- `right` - Scroll right
+
+### ScrollSearchResult
+
+```swift
+public struct ScrollSearchResult: Codable, Sendable
+```
+
+Diagnostic output from `scrollToVisible`.
+
+#### Properties
+
+- `scrollCount: Int` - Number of scroll steps performed
+- `uniqueElementsSeen: Int` - Distinct elements seen across all scroll positions
+- `totalItems: Int?` - Total item count from UITableView/UICollectionView data source (nil if not a collection)
+- `exhaustive: Bool` - `true` if all items in the collection were visited
+- `foundElement: HeistElement?` - The matched element (nil on failure)
+
 ### ServerInfo
 
 ```swift
@@ -900,7 +972,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "6.1")
+- `protocolVersion: String` - Protocol version (e.g., "6.3")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
@@ -1010,6 +1082,8 @@ public struct ActionResult: Codable, Sendable
 - `value: String?` - Current text field value (populated by `typeText`)
 - `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
+- `screenName: String?` - Label of the first header element in the post-action snapshot (screen name hint)
+- `scrollSearchResult: ScrollSearchResult?` - Diagnostics from `scrollToVisible` (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 
 ### ActionMethod
 
@@ -1038,7 +1112,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `resignFirstResponder` - Keyboard dismissed
 - `waitForIdle` - Wait-for-idle completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Scroll view adjusted to make element visible
+- `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
@@ -1337,7 +1411,8 @@ OPTIONS:
   --value <text>          Match element by accessibility value (exact)
   --traits <trait>        Required traits (all must be present, repeatable)
   --exclude-traits <trait> Excluded traits (none may be present, repeatable)
-  --max-scrolls <n>       Maximum scroll attempts (default: 20)
+  --scope <scope>         Match scope: elements (default), containers, both
+  --max-scrolls <n>       Maximum scroll attempts (default: 20, minimum: 1)
   --direction <dir>       Starting scroll direction: down, up, left, right (default: down)
   -t, --timeout <seconds> Timeout in seconds (default: 30)
   -f, --format <format>   Output format: human, json (default: human when interactive, json when piped)

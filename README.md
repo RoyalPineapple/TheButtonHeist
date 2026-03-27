@@ -36,7 +36,7 @@ Numbers shown for T0-full-workflow (11-step multi-screen task). BH consistently 
 - **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
 - **Full gesture suite** — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw arbitrary paths and bezier curves
 - **Text input** — type characters, delete, clear fields, read back values — works with software and hardware keyboard modes. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the iOS "Allow Paste" dialog
-- **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (minimal scroll until element is on screen), `scroll_to_edge` (jump to top/bottom/left/right)
+- **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (bidirectional search for element matching label/identifier/value/traits predicate), `scroll_to_edge` (jump to top/bottom/left/right)
 - **Accessibility actions** — increment/decrement on adjustable elements, trigger named custom actions, dismiss keyboard
 
 ### Inspection
@@ -115,7 +115,7 @@ graph TD
 
 | Module | Platform | What it does |
 |--------|----------|-------------|
-| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, protocol v6.1 |
+| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, `ElementMatcher`, protocol v6.3 |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
 | **ButtonHeist** | macOS | Client framework: TheFence (35-command dispatch + request correlation), TheHandoff (discovery + connection + state) |
 | **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
@@ -354,7 +354,7 @@ git submodule update --remote ai-fuzzer   # Update later
 **Technical docs:**
 - [Architecture](docs/ARCHITECTURE.md) — System design and data flow
 - [API Reference](docs/API.md) — Complete API for all modules
-- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v6.1 specification
+- [Wire Protocol](docs/WIRE-PROTOCOL.md) — Protocol v6.3 specification
 - [Authentication](docs/AUTH.md) — Token auth, session locking, UI approval
 - [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) — CoreDevice tunnel deep dive
 - [Versioning](docs/VERSIONING.md) — SemVer strategy and release workflow
