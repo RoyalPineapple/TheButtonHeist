@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          FILE_VERSION=$(cat VERSION)
+          CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
+            ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift | cut -d'"' -f2)
+
+          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) != VERSION file ($FILE_VERSION)"
+            exit 1
+          fi
+          if [[ "$TAG_VERSION" != "$CODE_VERSION" ]]; then
+            echo "::error::Tag version ($TAG_VERSION) != buttonHeistVersion ($CODE_VERSION)"
+            exit 1
+          fi
+          echo "Version $TAG_VERSION verified across tag, VERSION, and source."
+
+      - name: Build CLI (universal)
+        working-directory: ButtonHeistCLI
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Build MCP server (universal)
+        working-directory: ButtonHeistMCP
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Package binaries and scripts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+
+          # CLI
+          cp ButtonHeistCLI/.build/apple/Products/Release/buttonheist dist/
+          tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist
+          rm dist/buttonheist
+
+          # MCP
+          cp ButtonHeistMCP/.build/apple/Products/Release/buttonheist-mcp dist/
+          tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
+          rm dist/buttonheist-mcp
+
+          # Integrate script (ships as a standalone executable script)
+          cp scripts/install.sh dist/buttonheist-integrate
+          chmod +x dist/buttonheist-integrate
+
+          # Checksums
+          cd dist
+          shasum -a 256 *.tar.gz buttonheist-integrate > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "Button Heist ${VERSION}" \
+            --generate-notes \
+            dist/buttonheist-${VERSION}-macos.tar.gz \
+            dist/buttonheist-mcp-${VERSION}-macos.tar.gz \
+            dist/buttonheist-integrate \
+            dist/checksums.txt
+
+      - name: Update Homebrew tap
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Extract checksums
+          CLI_SHA=$(grep "buttonheist-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
+          MCP_SHA=$(grep "buttonheist-mcp-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
+          INT_SHA=$(grep "buttonheist-integrate" dist/checksums.txt | awk '{print $1}')
+
+          # Generate formula from template — replace PLACEHOLDERs in order:
+          # 1st = CLI tarball, 2nd = MCP resource, 3rd = integrate resource
+          awk -v cli="$CLI_SHA" -v mcp="$MCP_SHA" -v intg="$INT_SHA" -v ver="$VERSION" '
+            /version "0\.0\.1"/ { sub(/0\.0\.1/, ver) }
+            /sha256 "PLACEHOLDER"/ {
+              count++
+              if (count == 1) sub(/PLACEHOLDER/, cli)
+              else if (count == 2) sub(/PLACEHOLDER/, mcp)
+              else if (count == 3) sub(/PLACEHOLDER/, intg)
+            }
+            { print }
+          ' Formula/buttonheist.rb > /tmp/buttonheist-final.rb
+
+          # Push to tap repo
+          TAP_REPO="RoyalPineapple/homebrew-tap"
+          EXISTING_SHA=$(gh api "repos/${TAP_REPO}/contents/Formula/buttonheist.rb" --jq '.sha' 2>/dev/null || true)
+          SHA_ARG=()
+          if [[ -n "$EXISTING_SHA" ]]; then
+            SHA_ARG=(--field "sha=${EXISTING_SHA}")
+          fi
+          gh api "repos/${TAP_REPO}/contents/Formula/buttonheist.rb" \
+            --method PUT \
+            --field message="Update buttonheist to ${VERSION}" \
+            --field content="$(base64 < /tmp/buttonheist-final.rb)" \
+            "${SHA_ARG[@]}" \
+            || echo "::warning::Failed to update Homebrew tap — create RoyalPineapple/homebrew-tap and add HOMEBREW_TAP_TOKEN secret"
