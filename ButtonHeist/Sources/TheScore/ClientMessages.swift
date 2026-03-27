@@ -268,9 +268,8 @@ public struct SwipeTarget: Codable, Sendable {
     /// End coordinates (required if not using direction)
     public let endX: Double?
     public let endY: Double?
-    /// Or use direction + distance from start point
+    /// Or use direction from start point
     public let direction: SwipeDirection?
-    public let distance: Double?
     /// Duration in seconds (default 0.15)
     public let duration: Double?
     /// Unit-point start relative to element frame (0-1)
@@ -282,14 +281,14 @@ public struct SwipeTarget: Codable, Sendable {
         elementTarget: ActionTarget? = nil,
         startX: Double? = nil, startY: Double? = nil,
         endX: Double? = nil, endY: Double? = nil,
-        direction: SwipeDirection? = nil, distance: Double? = nil,
+        direction: SwipeDirection? = nil,
         duration: Double? = nil,
         start: UnitPoint? = nil, end: UnitPoint? = nil
     ) {
         self.elementTarget = elementTarget
         self.startX = startX; self.startY = startY
         self.endX = endX; self.endY = endY
-        self.direction = direction; self.distance = distance
+        self.direction = direction
         self.duration = duration
         self.start = start; self.end = end
     }

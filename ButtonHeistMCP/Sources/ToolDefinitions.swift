@@ -170,7 +170,6 @@ enum ToolDefinitions {
                 "startY": ["type": "number", "description": "Absolute start Y coordinate (fallback)"],
                 "endX": ["type": "number", "description": "Absolute end X coordinate (fallback)"],
                 "endY": ["type": "number", "description": "Absolute end Y coordinate (fallback)"],
-                "distance": ["type": "number", "description": "Swipe distance in points (for direction without element target)"],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ],

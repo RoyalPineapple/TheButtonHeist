@@ -119,7 +119,7 @@ extension TheFence {
                 elementTarget: elementTarget(args),
                 startX: doubleArg(args, "startX"), startY: doubleArg(args, "startY"),
                 endX: doubleArg(args, "endX"), endY: doubleArg(args, "endY"),
-                direction: direction, distance: doubleArg(args, "distance"),
+                direction: direction,
                 duration: doubleArg(args, "duration"),
                 start: start, end: end
             ))
