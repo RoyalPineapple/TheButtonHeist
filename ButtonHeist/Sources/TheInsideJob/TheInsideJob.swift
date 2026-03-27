@@ -326,7 +326,8 @@ public final class TheInsideJob {
                 sendMessage(.actionResult(ActionResult(
                     success: false,
                     method: .activate,
-                    message: "Watch mode is read-only"
+                    message: "Watch mode is read-only",
+                    screenName: bagman.lastSnapshot.first { $0.traits.contains("header") }?.label
                 )), requestId: requestId, respond: respond)
                 return
             }
@@ -407,7 +408,8 @@ public final class TheInsideJob {
                 success: false,
                 method: result.method,
                 message: result.message,
-                value: result.value
+                value: result.value,
+                screenName: beforeSnapshot.screenName
             )
         }
 
@@ -485,13 +487,12 @@ public final class TheInsideJob {
             // Refresh to get screen name even on failure
             bagman.refreshAccessibilityData()
             let afterSnapshot = bagman.snapshotElements()
-            let screenName = afterSnapshot.elements.first(where: { $0.traits.contains("header") })?.label
             actionResult = ActionResult(
                 success: false,
                 method: result.method,
                 message: result.message,
                 value: result.value,
-                screenName: screenName,
+                screenName: afterSnapshot.screenName,
                 scrollSearchResult: result.scrollSearchResult
             )
         }
