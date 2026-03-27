@@ -784,6 +784,44 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    // MARK: - Wait For Validation
+
+    @ButtonHeistActor
+    func testWaitForMissingMatchFields() async {
+        await assertValidationError(
+            ["command": "wait_for"],
+            contains: "Must specify at least one match field"
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithLabelPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "label": "Loading"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithIdentifierPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "identifier": "spinner"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithTraitsPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "traits": ["button"]]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithAbsentPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "label": "Loading", "absent": true, "timeout": 5.0]
+        )
+    }
+
     // MARK: - Expectation Parsing
 
     @ButtonHeistActor

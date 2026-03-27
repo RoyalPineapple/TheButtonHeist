@@ -34,6 +34,7 @@ graph TD
             Screenshot["screenshot"]
             GetInterface["get_interface"]
             WaitForIdle["wait_for_idle"]
+            WaitFor["wait_for"]
             Record["record / stop_recording"]
             Pasteboard["set_pasteboard / get_pasteboard"]
             Session["session - ReplSession"]
@@ -55,6 +56,7 @@ graph TD
     Screenshot --> Direct
     GetInterface --> Direct
     WaitForIdle --> Direct
+    WaitFor --> Direct
     Record --> Direct
     Pasteboard --> Direct
     Session --> REPL
@@ -94,13 +96,14 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | `swipe` | `swipe` | Top-level in both |
 | `gesture` | `touch` | Grouped gestures |
 | `accessibility_action` | `action --type` | Both group increment/decrement/custom/edit/dismiss_keyboard |
+| `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
 | `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
 | `connect` | `session` (REPL only) | Switch connection target at runtime |
 | `list_targets` | `session` (REPL only) | List configured targets from config file |
 
 ## Session Notes
 
-- Human mode supports aliases such as `tap`, `ui`, `screen`, `idle`, and `devices`
+- Human mode supports aliases such as `tap`, `ui`, `screen`, `idle`, `wait`, and `devices`
 - JSON mode accepts canonical Fence commands such as `one_finger_tap`, `run_batch`, and `get_session_state`
 - `session` is the bridge used under the hood by REPL-like workflows; the MCP server talks to `TheFence` directly rather than shelling out to the CLI
 

@@ -124,8 +124,7 @@ extension TheSafecracker {
 
         // Phase 0: Check current tree for match (no conversion to wire types)
         bagman.refreshAccessibilityData()
-        let initialSnapshot = bagman.currentSearchSnapshot()
-        if let found = bagman.resolveTarget(searchTarget, in: initialSnapshot) {
+        if let found = bagman.resolveTarget(searchTarget) {
             // Already visible — scroll into view if partially off-screen
             _ = scrollToVisible(elementAt: found.traversalIndex)
             let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
@@ -217,10 +216,8 @@ extension TheSafecracker {
             }
             bagman?.refreshAccessibilityData()
             guard let bagman else { return nil }
-            let snapshot = bagman.currentSearchSnapshot()
-
             // Match against canonical elements — no HeistElement conversion
-            if let found = bagman.resolveTarget(target, in: snapshot) {
+            if let found = bagman.resolveTarget(target) {
                 let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
                 return InteractionResult(
                     success: true, method: .scrollToVisible, message: nil, value: nil,

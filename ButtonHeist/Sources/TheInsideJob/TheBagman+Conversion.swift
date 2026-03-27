@@ -128,21 +128,12 @@ extension TheBagman {
 
 extension TheBagman {
 
-    /// Convert current cachedElements to wire HeistElements for delta comparison.
-    struct ElementSnapshot {
-        let elements: [HeistElement]
-
-        /// Label of the first header-traited element (screen name hint).
-        var screenName: String? {
-            elements.first { $0.traits.contains("header") }?.label
-        }
-    }
-
-    func snapshotElements() -> ElementSnapshot {
+    /// Convert current cachedElements to wire HeistElements with assigned heistIds.
+    func snapshotElements() -> [HeistElement] {
         var elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
         assignHeistIds(&elements)
         lastSnapshot = elements
-        return ElementSnapshot(elements: elements)
+        return elements
     }
 
     // MARK: - Stable ID Synthesis
@@ -218,32 +209,29 @@ extension TheBagman {
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(
-        before: ElementSnapshot,
-        after: ElementSnapshot,
+        before: [HeistElement],
+        after: [HeistElement],
         afterTree: [AccessibilityHierarchy]?,
         isScreenChange: Bool
     ) -> InterfaceDelta {
-        let beforeEls = before.elements
-        let afterEls = after.elements
-
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
             let tree = afterTree?.map { convertHierarchyNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: afterEls, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), elements: after, tree: tree)
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: afterEls.count,
+                elementCount: after.count,
                 newInterface: fullInterface
             )
         }
 
         // Same screen — quick check: if identical, nothing changed
-        if beforeEls.hashValue == afterEls.hashValue && beforeEls == afterEls {
-            return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
+        if before.hashValue == after.hashValue && before == after {
+            return InterfaceDelta(kind: .noChange, elementCount: after.count)
         }
 
         // Same screen, something changed — element-level diff
-        return computeElementDelta(beforeEls: beforeEls, afterEls: afterEls)
+        return computeElementDelta(beforeEls: before, afterEls: after)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -333,6 +321,15 @@ extension TheBagman {
         return ElementUpdate(heistId: new.heistId, changes: changes)
     }
 
+}
+
+// MARK: - HeistElement Array Helpers
+
+extension Array where Element == HeistElement {
+    /// Label of the first header-traited element (screen name hint).
+    var screenName: String? {
+        first { $0.traits.contains("header") }?.label
+    }
 }
 
 // MARK: - Shape Helper
