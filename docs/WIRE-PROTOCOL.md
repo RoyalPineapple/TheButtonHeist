@@ -733,7 +733,7 @@ Possible methods:
 - `resignFirstResponder` - First responder resigned (keyboard dismissed)
 - `waitForIdle` - Wait-for-idle completed
 - `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Scroll view adjusted to make element visible
+- `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
@@ -1095,6 +1095,60 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 | `elementTarget` | `ActionTarget?` | Element whose nearest scroll view ancestor to scroll |
 | `edge` | `ScrollEdge` | Which edge to scroll to |
 
+### ElementMatcher
+
+Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | `String?` | Exact match on accessibility label |
+| `identifier` | `String?` | Exact match on accessibility identifier |
+| `heistId` | `String?` | Exact match on heistId (wire-level only — ignored by hierarchy-level matching) |
+| `value` | `String?` | Exact match on accessibility value |
+| `traits` | `[String]?` | All listed traits must be present on the element |
+| `excludeTraits` | `[String]?` | None of the listed traits may be present |
+| `scope` | `MatchScope?` | Which node types to evaluate (default: `"elements"`) |
+| `absent` | `Bool?` | When `true`, inverts the match — succeeds when no element matches. Does not affect per-element predicate evaluation. |
+
+### MatchScope
+
+Controls which node types `ElementMatcher` evaluates when walking the accessibility tree.
+
+| Value | Description |
+|-------|-------------|
+| `"elements"` | Match leaf elements only (default) |
+| `"containers"` | Match container nodes only |
+| `"both"` | Match both leaf elements and containers |
+
+### ScrollToVisibleTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match` | `ElementMatcher` | Predicate for the element to find |
+| `maxScrolls` | `Int?` | Maximum scroll attempts (default: 20, clamped to >= 1) |
+| `direction` | `ScrollSearchDirection?` | Starting scroll direction (default: `"down"`) |
+
+### ScrollSearchDirection
+
+| Value | Description |
+|-------|-------------|
+| `"down"` | Scroll down (default) |
+| `"up"` | Scroll up |
+| `"left"` | Scroll left |
+| `"right"` | Scroll right |
+
+### ScrollSearchResult
+
+Diagnostic output from `scrollToVisible`, included on every `actionResult` for that command.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scrollCount` | `Int` | Number of scroll steps performed |
+| `uniqueElementsSeen` | `Int` | Number of distinct elements seen across all scroll positions (tracked via `StableKey`) |
+| `totalItems` | `Int?` | Total item count from UITableView/UICollectionView data source (nil if not a collection) |
+| `exhaustive` | `Bool` | `true` if `uniqueElementsSeen >= totalItems` — all items in the collection were visited |
+| `foundElement` | `HeistElement?` | The matched element (nil on failure) |
+
 ### WaitForIdleTarget
 
 | Field | Type | Description |
@@ -1112,6 +1166,7 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
+| `scrollSearchResult` | `ScrollSearchResult?` | Diagnostics from `scrollToVisible` — scroll count, unique elements seen, total items, exhaustive flag, matched element |
 
 ### ActionExpectation (Fence-level)
 
