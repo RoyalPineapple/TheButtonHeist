@@ -607,56 +607,47 @@ public final class TheFence {
 
     // MARK: - Async Wait Methods
 
-    func waitForActionResult(requestId: String? = nil, timeout: TimeInterval) async throws -> ActionResult {
-        if let requestId {
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingActionRequests[requestId] = continuation
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    guard let self else { return }
-                    self.timeoutRequest(requestId, from: &self.pendingActionRequests)
-                }
+    func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
+        try await withCheckedThrowingContinuation { continuation in
+            pendingActionRequests[requestId] = continuation
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                guard let self else { return }
+                self.timeoutRequest(requestId, from: &self.pendingActionRequests)
             }
-        }
-        return try await waitForResponse(timeout: timeout) { complete in
-            handoff.onActionResult = { result, _ in complete(.success(result)) }
         }
     }
 
-    func waitForInterface(requestId: String? = nil, timeout: TimeInterval = 10.0) async throws -> Interface {
-        if let requestId {
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingInterfaceRequests[requestId] = continuation
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    guard let self else { return }
-                    self.timeoutRequest(requestId, from: &self.pendingInterfaceRequests)
-                }
+    func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
+        try await withCheckedThrowingContinuation { continuation in
+            pendingInterfaceRequests[requestId] = continuation
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                guard let self else { return }
+                self.timeoutRequest(requestId, from: &self.pendingInterfaceRequests)
             }
-        }
-        return try await waitForResponse(timeout: timeout) { complete in
-            handoff.onInterface = { payload, _ in complete(.success(payload)) }
         }
     }
 
-    func waitForScreen(requestId: String? = nil, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        if let requestId {
-            return try await withCheckedThrowingContinuation { continuation in
-                pendingScreenRequests[requestId] = continuation
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    guard let self else { return }
-                    self.timeoutRequest(requestId, from: &self.pendingScreenRequests)
-                }
+    func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
+        try await withCheckedThrowingContinuation { continuation in
+            pendingScreenRequests[requestId] = continuation
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                guard let self else { return }
+                self.timeoutRequest(requestId, from: &self.pendingScreenRequests)
             }
-        }
-        return try await waitForResponse(timeout: timeout) { complete in
-            handoff.onScreen = { payload, _ in complete(.success(payload)) }
         }
     }
 
     func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
-        try await waitForResponse(timeout: timeout) { complete in
+        let previousOnRecording = handoff.onRecording
+        let previousOnRecordingError = handoff.onRecordingError
+        defer {
+            handoff.onRecording = previousOnRecording
+            handoff.onRecordingError = previousOnRecordingError
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
             handoff.onRecording = { complete(.success($0)) }
             handoff.onRecordingError = { complete(.failure(RecordingError.serverError($0))) }
         }

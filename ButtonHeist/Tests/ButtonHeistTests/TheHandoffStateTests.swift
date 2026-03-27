@@ -36,6 +36,17 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
     }
 
+    func testServerErrorSetsConnectionStateFailed() {
+        let handoff = TheHandoff()
+        var receivedError: String?
+        handoff.onError = { receivedError = $0 }
+
+        handoff.handleServerMessage(.error("something went wrong"), requestId: nil)
+
+        XCTAssertEqual(handoff.connectionState, .failed("something went wrong"))
+        XCTAssertEqual(receivedError, "something went wrong")
+    }
+
     func testMultipleDisconnectsSafe() {
         let handoff = TheHandoff()
 
