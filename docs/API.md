@@ -515,7 +515,7 @@ Structured reason for why a connection was closed. Passed via `ConnectionEvent.d
 
 ### Overview
 
-MCP server exposing 16 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server exposing 21 purpose-built tools backed by TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -526,7 +526,7 @@ cd ButtonHeistMCP && swift build -c release
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
 | `get_interface` | Get UI element hierarchy | — |
-| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern) | `identifier`, `order`, `expect` |
+| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `identifier`, `order`, `action`, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `identifier`, `order`, `expect` |
 | `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
@@ -535,7 +535,8 @@ cd ButtonHeistMCP && swift build -c release
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
 | `list_devices` | List discovered iOS devices | — |
 | `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
-| `accessibility_action` | Specialized accessibility actions | `type` (required): `increment`, `decrement`, `perform_custom_action`, `edit_action`, `dismiss_keyboard`; `expect` |
+| `edit_action` | Perform edit menu actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`; `expect` |
+| `dismiss_keyboard` | Dismiss the software keyboard | `expect` |
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
 | `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `scope`, `maxScrolls`, `direction`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
@@ -550,6 +551,11 @@ All tools use strict schemas (`additionalProperties: false`) — only documented
 
 The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: tries `accessibilityActivate()` (like VoiceOver double-tap) first, falls back to synthetic tap at the element's activation point. Provide `identifier` or `order` from `get_interface`.
 
+Pass `action` to perform a named action instead of default activation:
+- `"increment"` / `"decrement"` — For sliders, steppers
+- Any custom action name from the element's `actions` array
+- Prefix with `"action:"` to force custom action dispatch (e.g., `"action:increment"` dispatches as a custom action named "increment")
+
 #### gesture
 
 Low-level touch gesture escape hatch. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
@@ -563,14 +569,13 @@ Low-level touch gesture escape hatch. For element interactions, prefer `activate
 - `draw_path` — Requires `points` array of `{x, y}` objects
 - `draw_bezier` — Requires `curves` array of bezier curve objects
 
-#### accessibility_action
+#### edit_action
 
-Specialized accessibility actions. For general element interaction, use `activate` instead. The `type` field selects the action:
+Perform an edit menu action on the current first responder. Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`.
 
-- `increment` / `decrement` — For sliders, steppers. Requires `identifier` or `order`
-- `perform_custom_action` — Requires `identifier`/`order` and `actionName`
-- `edit_action` — Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`
-- `dismiss_keyboard` — No additional params
+#### dismiss_keyboard
+
+Dismiss the software keyboard by resigning first responder. No additional params.
 
 #### run_batch
 
@@ -620,7 +625,7 @@ With the default `stop_on_error` policy, the batch halts at the first mismet exp
 
 ```swift
 public let buttonHeistServiceType = "_buttonheist._tcp"
-public let protocolVersion = "6.1"  // Protocol v6.1 with explicit type/payload envelopes and strict hello/version matching
+public let protocolVersion = "6.4"  // Protocol v6.4: added ElementProperty.label for label change tracking
 ```
 
 ### ConnectionState
@@ -972,7 +977,7 @@ Device and app metadata received after connecting.
 
 #### Properties
 
-- `protocolVersion: String` - Protocol version (e.g., "6.3")
+- `protocolVersion: String` - Protocol version (e.g., "6.4")
 - `appName: String` - App display name
 - `bundleIdentifier: String` - App bundle identifier
 - `deviceName: String` - Device name
