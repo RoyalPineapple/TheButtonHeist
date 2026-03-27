@@ -142,15 +142,17 @@ extension TheSafecracker {
         // Query collection/table metadata if available
         let totalItems = queryCollectionTotalItems(scrollView)
 
-        // Track unique elements by identity (AccessibilityElement is Hashable)
-        var seenElements = Set(bagman.cachedElements)
+        // Track unique elements by stable identity (label + identifier).
+        // AccessibilityElement.Hashable includes frame/activationPoint which change
+        // between scroll positions, so we use a geometry-free key instead.
+        var seenKeys = Set(bagman.cachedElements.map(\.stableKey))
         var scrollCount = 0
 
         // Phase 1: Scroll in primary direction
         let result = await scrollSearchLoop(
             scrollView: scrollView, matcher: matcher, direction: primaryDirection,
             maxScrolls: maxScrolls, scrollCount: &scrollCount,
-            seenElements: &seenElements, totalItems: totalItems
+            seenKeys: &seenKeys, totalItems: totalItems
         )
         if let result { return result }
 
@@ -165,17 +167,17 @@ extension TheSafecracker {
         let result2 = await scrollSearchLoop(
             scrollView: scrollView, matcher: matcher, direction: reverseDirection,
             maxScrolls: maxScrolls - scrollCount, scrollCount: &scrollCount,
-            seenElements: &seenElements, totalItems: totalItems
+            seenKeys: &seenKeys, totalItems: totalItems
         )
         if let result2 { return result2 }
 
         // Phase 3: Not found
-        let exhaustive = totalItems != nil && seenElements.count >= totalItems!
+        let exhaustive = totalItems != nil && seenKeys.count >= totalItems!
         return InteractionResult(
             success: false, method: .scrollToVisible,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
                 totalItems: totalItems, exhaustive: exhaustive
             )
         )
@@ -191,7 +193,7 @@ extension TheSafecracker {
         direction: ScrollSearchDirection,
         maxScrolls: Int,
         scrollCount: inout Int,
-        seenElements: inout Set<AccessibilityElement>,
+        seenKeys: inout Set<AccessibilityElement.StableKey>,
         totalItems: Int?
     ) async -> InteractionResult? {
         let uiDirection = direction.uiScrollDirection
@@ -212,27 +214,27 @@ extension TheSafecracker {
                 return InteractionResult(
                     success: true, method: .scrollToVisible, message: nil, value: nil,
                     scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                        scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
                         totalItems: totalItems, exhaustive: false, foundElement: wireElement
                     )
                 )
             }
 
             // Track new elements for scroll-end detection
-            let currentElements = bagman?.cachedElements ?? []
-            let previousCount = seenElements.count
-            seenElements.formUnion(currentElements)
+            let currentKeys = (bagman?.cachedElements ?? []).map(\.stableKey)
+            let previousCount = seenKeys.count
+            seenKeys.formUnion(currentKeys)
 
             // No new elements → reached the end in this direction
-            if seenElements.count == previousCount { break }
+            if seenKeys.count == previousCount { break }
 
             // Exhaustive check for collection/table views
-            if let totalItems, seenElements.count >= totalItems {
+            if let totalItems, seenKeys.count >= totalItems {
                 return InteractionResult(
                     success: false, method: .scrollToVisible,
                     message: "Element not found (exhaustive search)", value: nil,
                     scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount, uniqueElementsSeen: seenElements.count,
+                        scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
                         totalItems: totalItems, exhaustive: true
                     )
                 )
