@@ -236,7 +236,7 @@ public enum MatchScope: String, Codable, Sendable, CaseIterable {
 ///
 /// Trait names use the same string mapping as HeistElement (e.g. "button",
 /// "header", "selected"). The hierarchy-level matcher bridges these to
-/// UIAccessibilityTraits bitmasks via TheBagman's traitMapping.
+/// UIAccessibilityTraits bitmasks via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Exact match against element label
     public let label: String?
