@@ -397,6 +397,26 @@ extension TheFence {
         return try await sendAction(.getPasteboard)
     }
 
+    // MARK: - Handler: Wait For
+
+    func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
+        let matcher = elementMatcher(args)
+        guard matcher.label != nil || matcher.identifier != nil || matcher.value != nil
+            || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false else {
+            return .error("Must specify at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
+        }
+        let target = WaitForTarget(
+            match: matcher,
+            absent: boolArg(args, "absent"),
+            timeout: doubleArg(args, "timeout")
+        )
+        let result: ActionResult = try await sendAndAwait(.waitFor(target)) { requestId in
+            try await self.waitForActionResult(requestId: requestId, timeout: target.resolvedTimeout + 5)
+        }
+        lastActionResult = result
+        return .action(result: result)
+    }
+
     // MARK: - Handler: Recording
 
     func handleStartRecording(_ args: [String: Any]) async throws -> FenceResponse {

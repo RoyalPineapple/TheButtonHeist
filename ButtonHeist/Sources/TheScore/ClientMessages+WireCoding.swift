@@ -65,6 +65,7 @@ extension ClientMessage {
         case .scrollToEdge: return .scrollToEdge
         case .resignFirstResponder: return .resignFirstResponder
         case .waitForIdle: return .waitForIdle
+        case .waitFor: return .waitFor
         case .requestScreen: return .requestScreen
         case .startRecording: return .startRecording
         case .stopRecording: return .stopRecording
@@ -158,6 +159,8 @@ extension ClientMessage {
             return .scrollToEdge(try ScrollToEdgeTarget(from: decoder))
         case .waitForIdle:
             return .waitForIdle(try WaitForIdleTarget(from: decoder))
+        case .waitFor:
+            return .waitFor(try WaitForTarget(from: decoder))
         case .startRecording:
             return .startRecording(try RecordingConfig(from: decoder))
         default:
@@ -251,6 +254,8 @@ extension ClientMessage {
         case .scrollToEdge(let payload):
             try payload.encode(to: encoder)
         case .waitForIdle(let payload):
+            try payload.encode(to: encoder)
+        case .waitFor(let payload):
             try payload.encode(to: encoder)
         case .startRecording(let payload):
             try payload.encode(to: encoder)

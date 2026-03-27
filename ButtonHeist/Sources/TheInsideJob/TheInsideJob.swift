@@ -427,6 +427,86 @@ public final class TheInsideJob {
     }
 
     /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
+    /// Wait for an element matching a predicate to appear or disappear.
+    /// Uses TheTripwire settle events to avoid busy-polling — refreshes the tree
+    /// only after the UI settles.
+    func performWaitFor(
+        target: WaitForTarget,
+        command: ClientMessage,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) async {
+        stakeout?.noteActivity()
+        bagman.refreshAccessibilityData()
+        let beforeSnapshot = bagman.snapshotElements()
+        let beforeCachedElements = bagman.cachedElements
+        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+
+        let result = await executeWaitFor(target)
+
+        let actionResult: ActionResult
+        if result.success {
+            actionResult = await bagman.actionResultWithDelta(
+                success: true,
+                method: .waitFor,
+                message: result.message,
+                beforeSnapshot: beforeSnapshot,
+                beforeCachedElements: beforeCachedElements,
+                beforeVC: beforeVC
+            )
+        } else {
+            bagman.refreshAccessibilityData()
+            let afterSnapshot = bagman.snapshotElements()
+            actionResult = ActionResult(
+                success: false,
+                method: .waitFor,
+                message: result.message,
+                screenName: afterSnapshot.screenName
+            )
+        }
+
+        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
+    }
+
+    /// Execute the wait_for polling loop.
+    private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
+        let matcher = target.match
+        let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
+        let start = CFAbsoluteTimeGetCurrent()
+
+        // Phase 0: immediate check
+        bagman.refreshAccessibilityData()
+        if target.resolvedAbsent {
+            if !bagman.hasMatch(matcher) {
+                return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
+            }
+        } else {
+            if bagman.findMatch(matcher) != nil {
+                return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
+            }
+        }
+
+        // Phase 1: settle loop
+        while ContinuousClock.now < deadline {
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            bagman.refreshAccessibilityData()
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+            if target.resolvedAbsent {
+                if !bagman.hasMatch(matcher) {
+                    return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
+                }
+            } else {
+                if bagman.findMatch(matcher) != nil {
+                    return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
+                }
+            }
+        }
+
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        let reason = target.resolvedAbsent ? "element still present" : "element not found"
+        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
+    }
+
     /// because the scroll loop does its own repeated refresh/settle cycles internally.
     /// Captures before/after snapshots for delta computation around the entire search.
     func performScrollToVisibleSearch(
