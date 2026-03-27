@@ -320,6 +320,7 @@ public final class TheFence {
     func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
         let traits = (dictionary["traits"] as? [String])
         let excludeTraits = (dictionary["excludeTraits"] as? [String])
+        let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
         return ElementMatcher(
             label: stringArg(dictionary, "label"),
             identifier: stringArg(dictionary, "identifier"),
@@ -327,6 +328,7 @@ public final class TheFence {
             value: stringArg(dictionary, "value"),
             traits: traits,
             excludeTraits: excludeTraits,
+            scope: scope,
             absent: boolArg(dictionary, "absent")
         )
     }

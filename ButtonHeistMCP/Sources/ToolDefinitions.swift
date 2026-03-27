@@ -259,6 +259,11 @@ enum ToolDefinitions {
                 "value": ["type": "string", "description": "Match element by accessibility value (exact)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
+                "scope": [
+                    "type": "string",
+                    "enum": ["elements", "containers", "both"],
+                    "description": "Match scope: elements (leaves only, default), containers, or both",
+                ],
                 "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,

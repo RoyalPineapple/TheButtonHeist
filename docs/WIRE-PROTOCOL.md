@@ -1,6 +1,6 @@
 # Button Heist Wire Protocol Specification
 
-**Version**: 6.2
+**Version**: 6.3
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
