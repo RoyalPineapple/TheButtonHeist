@@ -650,6 +650,53 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
+
+        // Resolution priority:
+        // 1. start/end unit points → resolve via element frame
+        // 2. direction + element target → expand to unit-point defaults
+        // 3. Raw startX/startY/endX/endY or direction → existing absolute behavior
+
+        let resolvedStart: UnitPoint? = target.start
+        let resolvedEnd: UnitPoint? = target.end
+
+        // If direction is provided with an element target but no explicit unit points,
+        // expand direction to default unit-point pair
+        let unitStart: UnitPoint?
+        let unitEnd: UnitPoint?
+        if let start = resolvedStart, let end = resolvedEnd {
+            unitStart = start
+            unitEnd = end
+        } else if let direction = target.direction, target.elementTarget != nil {
+            unitStart = direction.defaultStart
+            unitEnd = direction.defaultEnd
+        } else {
+            unitStart = nil
+            unitEnd = nil
+        }
+
+        if let unitStart, let unitEnd {
+            guard let elementTarget = target.elementTarget else {
+                return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
+            }
+            guard let frame = bagman.resolveFrame(for: elementTarget) else {
+                return .failure(.elementNotFound, message: "Element not found")
+            }
+
+            let startPoint = CGPoint(
+                x: frame.origin.x + unitStart.x * frame.width,
+                y: frame.origin.y + unitStart.y * frame.height
+            )
+            let endPoint = CGPoint(
+                x: frame.origin.x + unitEnd.x * frame.width,
+                y: frame.origin.y + unitEnd.y * frame.height
+            )
+
+            let duration = clampDuration(target.duration ?? 0.15)
+            let success = await swipe(from: startPoint, to: endPoint, duration: duration)
+            return InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
+        }
+
+        // Existing absolute-coordinate path
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result):
             return result
@@ -658,7 +705,7 @@ extension TheSafecracker {
             if let endX = target.endX, let endY = target.endY {
                 endPoint = CGPoint(x: endX, y: endY)
             } else if let direction = target.direction {
-                let dist = target.distance ?? 200.0
+                let dist = 200.0
                 switch direction {
                 case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
                 case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)

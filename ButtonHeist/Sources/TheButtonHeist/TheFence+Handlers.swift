@@ -106,13 +106,22 @@ extension TheFence {
                 return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right")
             }
         }
+
+        let start = unitPointArg(args, "start")
+        let end = unitPointArg(args, "end")
+
+        if (start != nil) != (end != nil) {
+            return .error("Unit-point swipe requires both start and end")
+        }
+
         return try await sendAction(
             .touchSwipe(SwipeTarget(
                 elementTarget: elementTarget(args),
                 startX: doubleArg(args, "startX"), startY: doubleArg(args, "startY"),
                 endX: doubleArg(args, "endX"), endY: doubleArg(args, "endY"),
-                direction: direction, distance: doubleArg(args, "distance"),
-                duration: doubleArg(args, "duration")
+                direction: direction,
+                duration: doubleArg(args, "duration"),
+                start: start, end: end
             ))
         )
     }
