@@ -56,8 +56,8 @@ final class TheBagmanConversionTests: XCTestCase {
         )
     }
 
-    private func snapshot(_ elements: [HeistElement]) -> TheBagman.ElementSnapshot {
-        TheBagman.ElementSnapshot(elements: elements)
+    private func snapshot(_ elements: [HeistElement]) -> [HeistElement] {
+        elements
     }
 
     // MARK: - heistId: Developer Identifier Passthrough

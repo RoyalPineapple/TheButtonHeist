@@ -12,12 +12,30 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .long, help: "Accessibility label")
     var label: String?
 
-    var actionTarget: ActionTarget? {
-        let hasMatcher = identifier != nil || label != nil
-        let match: ElementMatcher? = hasMatcher ? ElementMatcher(
+    @Option(name: .long, help: "Accessibility value")
+    var value: String?
+
+    @Option(name: .long, parsing: .upToNextOption, help: "Required traits (all must match)")
+    var traits: [String] = []
+
+    @Option(name: .customLong("exclude-traits"), parsing: .upToNextOption, help: "Excluded traits (none may be present)")
+    var excludeTraits: [String] = []
+
+    var elementMatcher: ElementMatcher? {
+        let hasFields = identifier != nil || label != nil || value != nil
+            || !traits.isEmpty || !excludeTraits.isEmpty
+        guard hasFields else { return nil }
+        return ElementMatcher(
             label: label,
-            identifier: identifier
-        ) : nil
+            identifier: identifier,
+            value: value,
+            traits: traits.isEmpty ? nil : traits,
+            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits
+        )
+    }
+
+    var actionTarget: ActionTarget? {
+        let match = elementMatcher
         guard heistId != nil || match != nil else { return nil }
         return ActionTarget(heistId: heistId, match: match)
     }

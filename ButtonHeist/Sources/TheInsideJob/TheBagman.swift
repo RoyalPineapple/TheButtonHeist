@@ -34,7 +34,7 @@ final class TheBagman {
     /// keyed by the parsed element.
     private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
-    /// Last snapshot with assigned heistIds — used for heistId-based targeting.
+    /// Last wire snapshot with assigned heistIds.
     var lastSnapshot: [HeistElement] = []
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
@@ -116,19 +116,14 @@ final class TheBagman {
     /// Resolution: heistId → match.
     /// Returns the canonical element and its traversal index, or nil on miss.
     func resolveTarget(_ target: ActionTarget) -> ResolvedTarget? {
-        resolveTarget(target, in: currentSearchSnapshot())
-    }
-
-    func resolveTarget(
-        _ target: ActionTarget,
-        in snapshot: AccessibilitySearchSnapshot
-    ) -> ResolvedTarget? {
         if let heistId = target.heistId {
-            guard let entry = snapshot.entry(forHeistId: heistId) else { return nil }
-            return ResolvedTarget(element: entry.element, traversalIndex: entry.traversalIndex)
+            guard let wire = lastSnapshot.first(where: { $0.heistId == heistId }) else { return nil }
+            let index = wire.order
+            guard index >= 0, index < cachedElements.count else { return nil }
+            return ResolvedTarget(element: cachedElements[index], traversalIndex: index)
         }
         if let matcher = target.match {
-            guard let found = findMatch(matcher, in: snapshot) else { return nil }
+            guard let found = findMatch(matcher) else { return nil }
             return ResolvedTarget(element: found.element, traversalIndex: found.index)
         }
         return nil
@@ -162,54 +157,40 @@ final class TheBagman {
     /// 2. Substring: no exact label match → "did you mean 'Save Changes'?"
     /// 3. Total miss: nothing close → compact element summary for self-correction
     func elementNotFoundMessage(for target: ActionTarget) -> String {
-        elementNotFoundMessage(for: target, in: currentSearchSnapshot())
-    }
-
-    func elementNotFoundMessage(
-        for target: ActionTarget,
-        in snapshot: AccessibilitySearchSnapshot
-    ) -> String {
         if let heistId = target.heistId {
-            return heistIdNotFoundMessage(heistId, in: snapshot)
+            return heistIdNotFoundMessage(heistId)
         }
         if let matcher = target.match {
-            return matcherNotFoundMessage(matcher, in: snapshot)
+            return matcherNotFoundMessage(matcher)
         }
         return "No element target provided"
     }
 
-    private func heistIdNotFoundMessage(
-        _ heistId: String,
-        in snapshot: AccessibilitySearchSnapshot
-    ) -> String {
-        let similar = snapshot.heistIdToTraversalIndex.keys.sorted()
+    private func heistIdNotFoundMessage(_ heistId: String) -> String {
+        let similar = lastSnapshot.map(\.heistId).sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
-            return "Element not found: \"\(heistId)\" (\(snapshot.entries.count) elements on screen)"
+            return "Element not found: \"\(heistId)\" (\(cachedElements.count) elements on screen)"
         }
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
 
-    private func matcherNotFoundMessage(
-        _ matcher: ElementMatcher,
-        in snapshot: AccessibilitySearchSnapshot
-    ) -> String {
+    private func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         let query = formatMatcher(matcher)
 
         // Tier 1: Relax one predicate at a time — find what diverged.
-        if let nearMiss = findNearMiss(for: matcher, in: snapshot) {
+        if let nearMiss = findNearMiss(for: matcher) {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
         // Tier 2: Substring match on label or identifier — "did you mean...?"
         if let label = matcher.label {
-            let lowerMatch = label.lowercased()
-            let candidates = snapshot.entries
-                .compactMap { entry -> String? in
-                    guard let lowerEl = entry.lowercasedLabel,
-                          let label = entry.element.label,
-                          lowerEl.contains(lowerMatch) || lowerMatch.contains(lowerEl) else { return nil }
-                    return "\"\(label)\""
+            let lower = label.lowercased()
+            let candidates = cachedElements
+                .compactMap { el -> String? in
+                    guard let elLabel = el.label,
+                          elLabel.lowercased().contains(lower) || lower.contains(elLabel.lowercased()) else { return nil }
+                    return "\"\(elLabel)\""
                 }
                 .prefix(5)
             if !candidates.isEmpty {
@@ -217,13 +198,12 @@ final class TheBagman {
             }
         }
         if let id = matcher.identifier {
-            let lowerMatch = id.lowercased()
-            let candidates = snapshot.entries
-                .compactMap { entry -> String? in
-                    guard let lowerEl = entry.lowercasedIdentifier,
-                          let identifier = entry.element.identifier,
-                          lowerEl.contains(lowerMatch) || lowerMatch.contains(lowerEl) else { return nil }
-                    return "\"\(identifier)\""
+            let lower = id.lowercased()
+            let candidates = cachedElements
+                .compactMap { el -> String? in
+                    guard let elId = el.identifier,
+                          elId.lowercased().contains(lower) || lower.contains(elId.lowercased()) else { return nil }
+                    return "\"\(elId)\""
                 }
                 .prefix(5)
             if !candidates.isEmpty {
@@ -232,7 +212,7 @@ final class TheBagman {
         }
 
         // Tier 3: Nothing close — dump a compact summary so the agent can self-correct.
-        return "No match for: \(query)\n\(compactElementSummary(in: snapshot))"
+        return "No match for: \(query)\n\(compactElementSummary())"
     }
 
     /// Format a matcher's predicates as a human-readable query string.
@@ -251,10 +231,7 @@ final class TheBagman {
     /// Only considers relaxations that still have at least one remaining predicate —
     /// dropping the only predicate matches everything, which isn't a useful near-miss.
     /// Returns a diagnostic line or nil if no near-miss found.
-    private func findNearMiss(
-        for matcher: ElementMatcher,
-        in snapshot: AccessibilitySearchSnapshot
-    ) -> String? {
+    private func findNearMiss(for matcher: ElementMatcher) -> String? {
         typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
         var relaxations: [Relaxation] = []
 
@@ -300,7 +277,7 @@ final class TheBagman {
         }
 
         for r in relaxations where hasPredicates(r.relaxed) {
-            if let found = findMatch(r.relaxed, in: snapshot) {
+            if let found = findMatch(r.relaxed) {
                 let actualValue = r.actual(found.element)
                 return "near miss: matched all fields except \(r.field) — actual \(r.field)=\(actualValue)"
             }
@@ -316,13 +293,13 @@ final class TheBagman {
 
     /// Compact summary of on-screen elements for total-miss fallback.
     /// Capped at 20 elements to avoid flooding the response.
-    private func compactElementSummary(in snapshot: AccessibilitySearchSnapshot) -> String {
+    private func compactElementSummary() -> String {
         let cap = 20
-        let elements = snapshot.entries.prefix(cap).map(\.element)
+        let elements = cachedElements.prefix(cap)
         if elements.isEmpty {
             return "screen is empty (0 elements)"
         }
-        var lines = ["\(snapshot.entries.count) elements on screen:"]
+        var lines = ["\(cachedElements.count) elements on screen:"]
         for el in elements {
             var parts: [String] = []
             if let label = el.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
@@ -334,8 +311,8 @@ final class TheBagman {
             if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
             lines.append("  \(parts.joined(separator: " "))")
         }
-        if snapshot.entries.count > cap {
-            lines.append("  ... and \(snapshot.entries.count - cap) more")
+        if cachedElements.count > cap {
+            lines.append("  ... and \(cachedElements.count - cap) more")
         }
         return lines.joined(separator: "\n")
     }
@@ -503,7 +480,7 @@ final class TheBagman {
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
-        beforeSnapshot: ElementSnapshot,
+        beforeSnapshot: [HeistElement],
         beforeCachedElements: [AccessibilityElement],
         beforeVC: ObjectIdentifier? = nil,
         target: ActionTarget? = nil
