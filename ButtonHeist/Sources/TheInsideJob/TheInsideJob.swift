@@ -327,7 +327,7 @@ public final class TheInsideJob {
                     success: false,
                     method: .activate,
                     message: "Watch mode is read-only",
-                    screenName: bagman.lastSnapshot.first { $0.traits.contains("header") }?.label
+                    screenName: bagman.lastScreenName
                 )), requestId: requestId, respond: respond)
                 return
             }

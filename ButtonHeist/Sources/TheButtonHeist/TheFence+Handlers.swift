@@ -310,6 +310,9 @@ extension TheFence {
         // "action:foo" prefix forces custom action dispatch (escapes built-in names)
         if actionName.hasPrefix("action:") {
             let customName = String(actionName.dropFirst("action:".count))
+            guard !customName.isEmpty else {
+                return .error("action: prefix requires a name (e.g. \"action:myAction\")")
+            }
             return try await sendAction(.performCustomAction(
                 CustomActionTarget(elementTarget: target, actionName: customName)))
         }
