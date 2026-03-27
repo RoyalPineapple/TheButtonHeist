@@ -99,7 +99,7 @@ enum ToolDefinitions {
             Activate a UI element. This is the primary way to interact with buttons, links, and controls. \
             Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
             falls back to synthetic tap at the element's activation point. \
-            Target by heistId (preferred), or by matcher fields (label, traits, identifier, etc.), or by order. \
+            Target by heistId (preferred), or by matcher fields (label, traits, identifier, etc.). \
             Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
             """,
         inputSchema: [
@@ -124,7 +124,7 @@ enum ToolDefinitions {
         description: """
             Type text and/or delete characters via keyboard injection. Optionally target an element \
             to focus it first and read back the resulting value. \
-            Target by heistId (preferred), matcher fields (label, traits), identifier, or order.
+            Target by heistId (preferred), matcher fields (label, traits), or identifier.
             """,
         inputSchema: [
             "type": "object",
@@ -312,8 +312,8 @@ enum ToolDefinitions {
         name: "scroll_to_visible",
         description: """
             Search for an element by scrolling through the nearest scroll view. Matches elements \
-            by any combination of heistId, identifier, label, value, and traits. All specified fields \
-            must match (AND). Returns the found element or diagnostic info about the search. \
+            by heistId or by matcher fields (identifier, label, value, traits, excludeTraits). \
+            All specified matcher fields must match (AND). Returns the found element or diagnostic info about the search. \
             For UITableView/UICollectionView, provides exhaustive search with item count tracking.
             """,
         inputSchema: [
@@ -325,11 +325,6 @@ enum ToolDefinitions {
                 "value": ["type": "string", "description": "Match element by accessibility value (exact)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
-                "scope": [
-                    "type": "string",
-                    "enum": ["elements", "containers", "both"],
-                    "description": "Match scope: elements (leaves only, default), containers, or both",
-                ],
                 "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,
