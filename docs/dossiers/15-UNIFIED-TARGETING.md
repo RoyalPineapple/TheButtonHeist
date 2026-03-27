@@ -92,7 +92,6 @@ struct ElementMatcher: Codable, Sendable, Equatable {
     let value: String?           // exact match on element value
     let traits: [String]?        // all must be present (AND)
     let excludeTraits: [String]? // none may be present
-    let scope: MatchScope?       // .elements (default), .containers, .both
     let absent: Bool?            // caller asserts no match exists
 }
 ```
@@ -109,7 +108,7 @@ Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via
 flowchart TD
     Target["ActionTarget"]
     Target --> HeistId{heistId?}
-    HeistId -->|yes| LookupSnap["lastSnapshot.first(heistId) → order → cachedElements[order]"]
+    HeistId -->|yes| LookupSnap["lastSnapshot scan by heistId → cachedElements[order]"]
     HeistId -->|no| Match{match?}
     Match -->|yes| FindMatch["findMatch(matcher) → first element matching all predicates"]
     Match -->|no| Nil["nil — no target provided"]
@@ -160,22 +159,14 @@ The goal: every error message answers the obvious next question. "Why didn't it 
 
 ## Matching Infrastructure (TheBagman+Matching.swift)
 
-Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. Two parallel search surfaces exist:
+Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. Two search surfaces exist:
 
 | Surface | Used by | Method |
 |---------|---------|--------|
-| **Flat array** (`cachedElements`) | `resolveTarget` via `findMatch` | `[AccessibilityElement].firstMatch(_:)` — linear scan |
-| **Hierarchy tree** (`[AccessibilityHierarchy]`) | `get_interface` filtering | `AccessibilityHierarchy.matches(_:)` — recursive tree walk |
+| **Hierarchy tree** (`[AccessibilityHierarchy]`) | `resolveTarget`, `get_interface` filtering, `wait_for` | `AccessibilityHierarchy.matches(_:)` — recursive tree walk |
+| **Flat array** (`cachedElements`) | Fallback when hierarchy is empty | `[AccessibilityElement].firstMatch(_:)` — linear scan |
 
-### Match scope
-
-`MatchScope` controls which node types are evaluated:
-
-- `.elements` (default) — leaf nodes only
-- `.containers` — container nodes only (groups with children)
-- `.both` — both leaf and container nodes
-
-Containers only carry label/value/identifier (via `semanticGroup`). They have no `UIAccessibilityTraits`, so any `traits` predicate auto-fails on containers.
+The hierarchy tree is the primary surface. `findMatch(_:)` searches `cachedHierarchy` directly, falling back to a flat `cachedElements` scan when the hierarchy is empty.
 
 ### Match evaluation (AccessibilityElement.matches)
 
@@ -225,3 +216,22 @@ These commands use `ElementMatcher` directly (not `ActionTarget`):
 5. **heistId always wins** — fastest path (snapshot lookup by stable ID), deterministic. When a caller has a heistId, they know exactly which element they want.
 6. **Matching on canonical types** — `ElementMatcher` predicates resolve against `AccessibilityElement` (parser types with real `UIAccessibilityTraits`), not wire types (`HeistElement` with string trait arrays). This avoids lossy string round-trips.
 7. **Progressive disclosure on failure** — errors go from "here's what changed" to "here's what's on screen" depending on how close the miss was. Every error answers the obvious next question.
+
+## CLI Targeting Surface
+
+`ElementTargetOptions` (`ButtonHeistCLI/Sources/Support/ElementTargetOptions.swift`) exposes the full matcher surface to all CLI subcommands:
+
+| Flag | Maps to |
+|------|---------|
+| `--heist-id` | `ActionTarget.heistId` |
+| `--label` | `ElementMatcher.label` |
+| `--identifier` | `ElementMatcher.identifier` |
+| `--value` | `ElementMatcher.value` |
+| `--traits` | `ElementMatcher.traits` |
+| `--exclude-traits` | `ElementMatcher.excludeTraits` |
+
+`WaitForCommand` is the exception: it builds an `ElementMatcher` directly (no `--heist-id`, since `wait_for` polls by predicate, not by assigned token).
+
+## Snapshot Storage
+
+`snapshotElements()` converts `cachedElements` to wire `HeistElement` values, assigns heistIds, and stores the result in `lastSnapshot: [HeistElement]`. This array is the sole wire-level cache — no separate index or generation counter. HeistId resolution in `resolveTarget()` scans `lastSnapshot` directly (element counts are small enough that linear scan is negligible). Matching always operates on the canonical `cachedHierarchy` / `cachedElements`, never on wire types.

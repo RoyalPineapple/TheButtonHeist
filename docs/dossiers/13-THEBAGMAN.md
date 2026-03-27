@@ -39,7 +39,7 @@ graph TD
 
         subgraph ElementAccess["Element Access"]
             ResolveTarget["resolveTarget(_: ActionTarget) → ResolvedTarget?"]
-            FindMatch["findMatch(_: ElementMatcher)"]
+            FindMatch["findMatch(_: ElementMatcher) — hierarchy tree walk"]
             HasMatch["hasMatch(_: ElementMatcher)"]
             ResolvePoint["resolvePoint(from:pointX:pointY:)"]
             ObjectAt["object(at: Int)"]
@@ -50,8 +50,8 @@ graph TD
         end
 
         subgraph Conversion["Element Conversion"]
-            Snapshot["snapshotElements() → ElementSnapshot"]
-            ScreenName["ElementSnapshot.screenName — header-trait label"]
+            Snapshot["snapshotElements() → [HeistElement]"]
+            ScreenName["[HeistElement].screenName — header-trait label"]
             Convert["convertElement() → HeistElement"]
             ConvertTree["convertHierarchyNode() → ElementNode"]
             AssignIds["assignHeistIds() — stable deterministic IDs (value excluded)"]
@@ -89,7 +89,7 @@ flowchart TD
     ResolveTarget --> ByHeistId{heistId?}
     ByHeistId -->|yes| SearchHeistId["lastSnapshot lookup → entry(traversalIndex, element)"]
     ByHeistId -->|no| ByMatch{match?}
-    ByMatch -->|yes| FindMatch["findMatch(matcher) - canonical accessibility snapshot"]
+    ByMatch -->|yes| FindMatch["findMatch(matcher) — hierarchy tree walk"]
     ByMatch -->|no| Nil["return nil"]
     SearchHeistId --> Result["ResolvedTarget(element, traversalIndex)"]
     FindMatch --> Result
@@ -124,7 +124,7 @@ flowchart TD
     Start["actionResultWithDelta(beforeSnapshot:beforeVC:beforeCachedElements:target:...)"]
     Start --> WaitAllClear["await tripwire.waitForAllClear(timeout: 1.0)"]
     WaitAllClear --> Refresh["refreshAccessibilityData()"]
-    Refresh --> Snapshot["snapshotElements() (after)"]
+    Refresh --> Snapshot["snapshotElements() → updates lastSnapshot"]
     Snapshot --> VCCheck["tripwire.isScreenChange(beforeVC, afterVC)"]
     VCCheck --> TopoCheck["isTopologyChanged(before: beforeCachedElements, after: cachedElements)"]
     TopoCheck --> Delta["computeDelta(before, after, isScreenChange: vcChanged || topoChanged)"]

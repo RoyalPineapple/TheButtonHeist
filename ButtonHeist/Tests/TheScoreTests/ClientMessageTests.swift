@@ -194,4 +194,81 @@ final class ClientMessageTests: XCTestCase {
             XCTFail("Expected getPasteboard, got \(decoded.message)")
         }
     }
+
+    // MARK: - WaitFor Tests
+
+    func testWaitForRoundTrip() throws {
+        let matcher = ElementMatcher(label: "Loading", traits: ["staticText"])
+        let message = ClientMessage.waitFor(WaitForTarget(match: matcher, absent: true, timeout: 5.0))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .waitFor(let target) = decoded {
+            XCTAssertEqual(target.match.label, "Loading")
+            XCTAssertEqual(target.match.traits, ["staticText"])
+            XCTAssertEqual(target.absent, true)
+            XCTAssertEqual(target.timeout, 5.0)
+        } else {
+            XCTFail("Expected waitFor, got \(decoded)")
+        }
+    }
+
+    func testWaitForDefaultsRoundTrip() throws {
+        let message = ClientMessage.waitFor(WaitForTarget(match: ElementMatcher(identifier: "spinner")))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .waitFor(let target) = decoded {
+            XCTAssertEqual(target.match.identifier, "spinner")
+            XCTAssertNil(target.absent)
+            XCTAssertNil(target.timeout)
+            XCTAssertEqual(target.resolvedAbsent, false)
+            XCTAssertEqual(target.resolvedTimeout, 10.0)
+        } else {
+            XCTFail("Expected waitFor, got \(decoded)")
+        }
+    }
+
+    func testWaitForTimeoutClamping() throws {
+        let target = WaitForTarget(match: ElementMatcher(label: "x"), timeout: 999)
+        XCTAssertEqual(target.resolvedTimeout, 30.0)
+    }
+
+    func testWaitForEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "wf-1",
+            message: .waitFor(WaitForTarget(match: ElementMatcher(label: "Done"), absent: false, timeout: 15.0))
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "wf-1")
+        if case .waitFor(let target) = decoded.message {
+            XCTAssertEqual(target.match.label, "Done")
+            XCTAssertEqual(target.absent, false)
+            XCTAssertEqual(target.timeout, 15.0)
+        } else {
+            XCTFail("Expected waitFor, got \(decoded.message)")
+        }
+    }
+
+    // MARK: - UnitPoint Tests
+
+    func testUnitPointRoundTrip() throws {
+        let swipe = SwipeTarget(
+            direction: .up,
+            start: UnitPoint(x: 0.8, y: 0.5),
+            end: UnitPoint(x: 0.2, y: 0.5)
+        )
+        let message = ClientMessage.touchSwipe(swipe)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .touchSwipe(let target) = decoded {
+            XCTAssertEqual(target.start, UnitPoint(x: 0.8, y: 0.5))
+            XCTAssertEqual(target.end, UnitPoint(x: 0.2, y: 0.5))
+        } else {
+            XCTFail("Expected touchSwipe, got \(decoded)")
+        }
+    }
 }

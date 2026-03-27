@@ -60,15 +60,13 @@ public final class TheInsideJob {
     // MARK: - Timing Constants
 
     /// Default polling interval for automatic hierarchy updates (1s).
-    private static let defaultPollingInterval: UInt64 = 1_000_000_000
+    private static let defaultPollingTimeout: TimeInterval = 2.0
 
     // Hierarchy invalidation (pulse-driven, replaces debounce timer)
     var hierarchyInvalidated = false
-    var updateCoalesceTask: Task<Void, Never>?
-
     // Polling for automatic updates (disabled by default)
     var pollingTask: Task<Void, Never>?
-    var pollingInterval: UInt64 = TheInsideJob.defaultPollingInterval
+    var pollingTimeoutSeconds: TimeInterval = TheInsideJob.defaultPollingTimeout
     var isPollingEnabled = false
 
     // MARK: - Initialization
@@ -145,8 +143,6 @@ public final class TheInsideJob {
         isSuspended = false
         resumeTask?.cancel()
         resumeTask = nil
-        updateCoalesceTask?.cancel()
-        updateCoalesceTask = nil
         hierarchyInvalidated = false
         stopPolling()
 
@@ -172,14 +168,13 @@ public final class TheInsideJob {
         scheduleHierarchyUpdate()
     }
 
-    /// Enable polling for automatic hierarchy updates.
-    /// - Parameter interval: Polling interval in seconds (default 1.0, minimum 0.5)
-    public func startPolling(interval: TimeInterval = 1.0) {
-        let clampedInterval = max(0.5, interval)
-        pollingInterval = UInt64(clampedInterval * 1_000_000_000)
+    /// Enable settle-driven polling for automatic hierarchy updates.
+    /// - Parameter timeout: Maximum seconds between settle checks (default 2.0, minimum 0.5)
+    public func startPolling(interval timeout: TimeInterval = 2.0) {
+        pollingTimeoutSeconds = max(0.5, timeout)
         isPollingEnabled = true
         startPollingLoop()
-        insideJobLogger.info("Polling enabled (interval: \(clampedInterval)s)")
+        insideJobLogger.info("Polling enabled (settle timeout: \(self.pollingTimeoutSeconds)s)")
     }
 
     /// Disable polling for automatic updates
@@ -475,13 +470,12 @@ public final class TheInsideJob {
 
         // Phase 0: immediate check
         bagman.refreshAccessibilityData()
-        let initialSnapshot = bagman.currentSearchSnapshot()
         if target.resolvedAbsent {
-            if !bagman.hasMatch(matcher, in: initialSnapshot) {
+            if !bagman.hasMatch(matcher) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
             }
         } else {
-            if bagman.findMatch(matcher, in: initialSnapshot) != nil {
+            if bagman.findMatch(matcher) != nil {
                 return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
             }
         }
@@ -490,14 +484,13 @@ public final class TheInsideJob {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             bagman.refreshAccessibilityData()
-            let snapshot = bagman.currentSearchSnapshot()
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
-                if !bagman.hasMatch(matcher, in: snapshot) {
+                if !bagman.hasMatch(matcher) {
                     return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
                 }
             } else {
-                if bagman.findMatch(matcher, in: snapshot) != nil {
+                if bagman.findMatch(matcher) != nil {
                     return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
                 }
             }
@@ -736,8 +729,6 @@ public final class TheInsideJob {
         pollingTask?.cancel()
         pollingTask = nil
 
-        updateCoalesceTask?.cancel()
-        updateCoalesceTask = nil
         hierarchyInvalidated = false
 
         tripwire.stopPulse()

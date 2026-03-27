@@ -24,7 +24,7 @@ When the TheInsideJob framework loads:
 
 **Environment variables (highest priority):**
 ```bash
-INSIDEJOB_POLLING_INTERVAL=1.0       # Polling interval in seconds (min: 0.5)
+INSIDEJOB_POLLING_INTERVAL=2.0       # Settle-driven polling timeout in seconds (min: 0.5)
 INSIDEJOB_DISABLE=true               # Disable auto-start
 INSIDEJOB_DISABLE_FINGERPRINTS=true  # Suppress visual tap/gesture indicators
 INSIDEJOB_TOKEN=my-secret-token      # Auth token (fresh UUID auto-generated each launch if not set)
@@ -122,10 +122,10 @@ public func startPolling(interval: TimeInterval = 1.0)
 
 Enable automatic polling for UI changes.
 
-**Note**: Called automatically on framework load with 1.0 second interval.
+**Note**: Called automatically on framework load with 2.0 second settle timeout. Polling is settle-driven — wakes on TheTripwire settle events rather than a fixed timer.
 
 **Parameters**:
-- `interval`: Polling interval in seconds. Minimum 0.5 seconds.
+- `interval`: Maximum seconds between settle checks (default 2.0, min 0.5). The polling loop awaits `tripwire.waitForAllClear(timeout:)` rather than sleeping for a fixed interval.
 
 ##### stopPolling()
 
@@ -525,21 +525,22 @@ cd ButtonHeistMCP && swift build -c release
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `get_interface` | Get UI element hierarchy | — |
-| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `identifier`, `order`, `action`, `expect` |
-| `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `identifier`, `order`, `expect` |
-| `swipe` | Swipe on element or between coordinates | `identifier`/`order` + `direction`, or `startX`/`startY`/`endX`/`endY`, `expect` |
+| `get_interface` | Get UI element hierarchy | `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
+| `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `expect` |
+| `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
+| `swipe` | Swipe on element or between coordinates | `heistId` + `direction`, `start`/`end` (unit points), or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
 | `wait_for_idle` | Wait for animations to settle | `timeout` |
+| `wait_for` | Wait for element to appear/disappear | `label`, `identifier`, `value`, `traits`, `excludeTraits`, `absent`, `timeout` |
 | `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
 | `list_devices` | List discovered iOS devices | — |
 | `gesture` | Low-level touch gestures (prefer `activate`) | `type` (required): `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`; `expect` |
 | `edit_action` | Perform edit menu actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`; `expect` |
 | `dismiss_keyboard` | Dismiss the software keyboard | `expect` |
-| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `identifier`, `order`, `expect` |
-| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `scope`, `maxScrolls`, `direction`, `expect` |
-| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `identifier`, `order`, `expect` |
+| `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
+| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `maxScrolls`, `direction`, `expect` |
+| `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
@@ -705,6 +706,7 @@ Messages sent from client to server.
 - `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
+- `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
 - `requestScreen` - Request PNG screenshot
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
 - `stopRecording` - Stop active screen recording
@@ -804,10 +806,12 @@ public struct SessionLockedPayload: Codable, Sendable
 public struct ActionTarget: Codable, Sendable
 ```
 
+Two resolution strategies: `heistId` (assigned token from `get_interface`) or `match` (describe the element by accessibility properties). `heistId` takes priority when both are present.
+
 #### Properties
 
-- `identifier: String?` - Element's identifier
-- `order: Int?` - Element's traversal index
+- `heistId: String?` - Stable element identifier assigned by `get_interface`
+- `match: ElementMatcher?` - Predicate matcher for accessibility-based resolution
 
 ### TouchTapTarget
 
@@ -901,30 +905,16 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 public struct ElementMatcher: Codable, Sendable, Equatable
 ```
 
-Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics.
+Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `scrollToVisible`, `wait_for`, `get_interface` filtering, and all action commands via `ActionTarget.match`.
 
 #### Properties
 
 - `label: String?` - Exact match on accessibility label
 - `identifier: String?` - Exact match on accessibility identifier
-- `heistId: String?` - Exact match on heistId (wire-level only — ignored by hierarchy-level matching)
 - `value: String?` - Exact match on accessibility value
 - `traits: [String]?` - All listed traits must be present
 - `excludeTraits: [String]?` - None of the listed traits may be present
-- `scope: MatchScope?` - Which node types to evaluate (default: `.elements`)
 - `absent: Bool?` - When `true`, inverts the match — succeeds when no element matches
-
-### MatchScope
-
-```swift
-public enum MatchScope: String, Codable, Sendable, CaseIterable
-```
-
-#### Cases
-
-- `elements` - Match leaf elements only (default)
-- `containers` - Match container nodes only
-- `both` - Match both leaf elements and containers
 
 ### ScrollToVisibleTarget
 
@@ -934,7 +924,8 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 #### Properties
 
-- `match: ElementMatcher` - Predicate for the element to find
+- `heistId: String?` - Stable heistId to search for while scrolling
+- `match: ElementMatcher?` - Predicate for the element to find
 - `maxScrolls: Int?` - Maximum scroll attempts (default: 20, clamped to >= 1)
 - `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`)
 
@@ -966,6 +957,35 @@ Diagnostic output from `scrollToVisible`.
 - `totalItems: Int?` - Total item count from UITableView/UICollectionView data source (nil if not a collection)
 - `exhaustive: Bool` - `true` if all items in the collection were visited
 - `foundElement: HeistElement?` - The matched element (nil on failure)
+
+### WaitForTarget
+
+```swift
+public struct WaitForTarget: Codable, Sendable
+```
+
+Target for `wait_for` command — waits for an element matching a predicate to appear or disappear.
+
+#### Properties
+
+- `match: ElementMatcher` - Predicate describing the element to wait for
+- `absent: Bool?` - When `true`, wait for element to NOT exist (default: `false`)
+- `timeout: Double?` - Maximum wait time in seconds (default: 10, max: 30)
+- `resolvedAbsent: Bool` - Computed: `absent ?? false`
+- `resolvedTimeout: Double` - Computed: `min(timeout ?? 10, 30)`
+
+### UnitPoint
+
+```swift
+public struct UnitPoint: Codable, Sendable, Equatable
+```
+
+A point in unit coordinates (0–1) relative to an element's accessibility frame. `(0, 0)` is top-left, `(1, 1)` is bottom-right, `(0.5, 0.5)` is center. Used by `SwipeTarget` for element-relative, device-independent swiping.
+
+#### Properties
+
+- `x: Double` - Horizontal position (0 = left edge, 1 = right edge)
+- `y: Double` - Vertical position (0 = top edge, 1 = bottom edge)
 
 ### ServerInfo
 
@@ -1116,6 +1136,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `getPasteboard` - Text read from general pasteboard
 - `resignFirstResponder` - Keyboard dismissed
 - `waitForIdle` - Wait-for-idle completed
+- `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
@@ -1470,6 +1491,7 @@ The `--session-timeout` flag exits the session if no commands are received withi
 | `press <id>` | `long_press` |
 | `devices` | `list_devices` |
 | `idle` | `wait_for_idle` |
+| `wait` | `wait_for` |
 | `record` | `start_recording` |
 
 Elements can be targeted by accessibility identifier (`tap myButton`), by order number (`tap #3`), or by coordinates (`tap 100 200`). Key=value pairs work for any parameter (`press identifier=btn duration=2`).
@@ -1541,6 +1563,36 @@ OPTIONS:
   --timeout <seconds>     Connection timeout (default: 10)
   -q, --quiet             Suppress status messages
   --device <filter>       Target a specific device
+```
+
+### buttonheist wait_for
+
+Wait for an element matching a predicate to appear or disappear. Uses settle-event polling, not busy-waiting. Timeout is capped at 30 seconds.
+
+```
+USAGE: buttonheist wait_for [OPTIONS]
+
+OPTIONS:
+  --heist-id <id>         Element heistId (from get_interface)
+  --identifier <id>       Accessibility identifier
+  --label <text>          Accessibility label
+  -t, --timeout <seconds> Maximum wait time (default: 10, max: 30)
+  --absent                Wait for element to disappear instead
+  -f, --format <format>   Output format: human, json (default: auto)
+  -q, --quiet             Suppress status messages
+  --device <filter>       Target a specific device
+```
+
+**Examples:**
+```bash
+# Wait for a loading spinner to disappear
+buttonheist wait_for --label "Loading" --absent --timeout 5
+
+# Wait for a welcome message to appear
+buttonheist wait_for --label "Welcome" --timeout 10
+
+# Wait for an element by heistId
+buttonheist wait_for --heist-id button_login
 ```
 
 ### buttonheist watch
