@@ -121,6 +121,54 @@ final class ActionCommandTests: XCTestCase {
         }
     }
 
+    func testUnitPointEncoding() throws {
+        let point = UnitPoint(x: 0.8, y: 0.5)
+        let data = try JSONEncoder().encode(point)
+        let decoded = try JSONDecoder().decode(UnitPoint.self, from: data)
+        XCTAssertEqual(decoded, point)
+    }
+
+    func testSwipeTargetWithUnitPointsEncoding() throws {
+        let target = SwipeTarget(
+            elementTarget: ActionTarget(heistId: "row_5"),
+            start: UnitPoint(x: 0.8, y: 0.5),
+            end: UnitPoint(x: 0.2, y: 0.5)
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
+
+        XCTAssertEqual(decoded.elementTarget?.heistId, "row_5")
+        XCTAssertEqual(decoded.start, UnitPoint(x: 0.8, y: 0.5))
+        XCTAssertEqual(decoded.end, UnitPoint(x: 0.2, y: 0.5))
+        XCTAssertNil(decoded.startX)
+        XCTAssertNil(decoded.endX)
+        XCTAssertNil(decoded.direction)
+    }
+
+    func testSwipeTargetWithUnitPointsOutsideRangeEncoding() throws {
+        let target = SwipeTarget(
+            elementTarget: ActionTarget(heistId: "row_5"),
+            start: UnitPoint(x: 0.9, y: 0.5),
+            end: UnitPoint(x: -0.3, y: 0.5)
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
+
+        XCTAssertEqual(decoded.start, UnitPoint(x: 0.9, y: 0.5))
+        XCTAssertEqual(decoded.end, UnitPoint(x: -0.3, y: 0.5))
+    }
+
+    func testSwipeDirectionDefaultUnitPoints() {
+        XCTAssertEqual(SwipeDirection.left.defaultStart, UnitPoint(x: 0.8, y: 0.5))
+        XCTAssertEqual(SwipeDirection.left.defaultEnd, UnitPoint(x: 0.2, y: 0.5))
+        XCTAssertEqual(SwipeDirection.right.defaultStart, UnitPoint(x: 0.2, y: 0.5))
+        XCTAssertEqual(SwipeDirection.right.defaultEnd, UnitPoint(x: 0.8, y: 0.5))
+        XCTAssertEqual(SwipeDirection.up.defaultStart, UnitPoint(x: 0.5, y: 0.8))
+        XCTAssertEqual(SwipeDirection.up.defaultEnd, UnitPoint(x: 0.5, y: 0.2))
+        XCTAssertEqual(SwipeDirection.down.defaultStart, UnitPoint(x: 0.5, y: 0.2))
+        XCTAssertEqual(SwipeDirection.down.defaultEnd, UnitPoint(x: 0.5, y: 0.8))
+    }
+
     func testCustomActionTargetEncoding() throws {
         let target = CustomActionTarget(
             elementTarget: ActionTarget(identifier: "item"),
