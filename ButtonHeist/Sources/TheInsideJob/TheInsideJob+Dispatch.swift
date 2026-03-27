@@ -111,7 +111,7 @@ extension TheInsideJob {
         case .scroll(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScroll(target) }
         case .scrollToVisible(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToVisible(target) }
+            await performScrollToVisibleSearch(target: target, command: message, requestId: requestId, respond: respond)
         case .scrollToEdge(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
         default:

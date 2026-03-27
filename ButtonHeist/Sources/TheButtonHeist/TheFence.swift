@@ -350,6 +350,22 @@ public final class TheFence {
         return ActionTarget(identifier: identifier, heistId: heistId, order: order)
     }
 
+    func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
+        let traits = (dictionary["traits"] as? [String])
+        let excludeTraits = (dictionary["excludeTraits"] as? [String])
+        let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
+        return ElementMatcher(
+            label: stringArg(dictionary, "label"),
+            identifier: stringArg(dictionary, "identifier"),
+            heistId: stringArg(dictionary, "heistId"),
+            value: stringArg(dictionary, "value"),
+            traits: traits,
+            excludeTraits: excludeTraits,
+            scope: scope,
+            absent: boolArg(dictionary, "absent")
+        )
+    }
+
     // MARK: - Expectation Parsing
 
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {

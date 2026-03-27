@@ -126,6 +126,23 @@ extension TheBagman {
     }
 }
 
+// MARK: - Single Element Conversion
+
+extension TheBagman {
+
+    /// Convert a single AccessibilityElement to a wire HeistElement with heistId assigned.
+    /// Used when we've matched at the hierarchy level and need to project one result for the wire.
+    func convertAndAssignId(_ element: AccessibilityElement, index: Int) -> HeistElement {
+        var wire = convertElement(element, index: index)
+        if let identifier = element.identifier, !identifier.isEmpty {
+            wire.heistId = identifier
+        } else {
+            wire.heistId = synthesizeBaseId(wire)
+        }
+        return wire
+    }
+}
+
 // MARK: - Interface Delta
 
 extension TheBagman {
