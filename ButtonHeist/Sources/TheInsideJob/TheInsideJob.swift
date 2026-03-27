@@ -128,7 +128,6 @@ public final class TheInsideJob {
         // Prevent the screen from locking while TheInsideJob is running
         UIApplication.shared.isIdleTimerDisabled = true
 
-        theSafecracker.startKeyboardTracking()
         startAccessibilityObservation()
         startLifecycleObservation()
 
@@ -150,7 +149,6 @@ public final class TheInsideJob {
         updateCoalesceTask = nil
         hierarchyInvalidated = false
         stopPolling()
-        theSafecracker.stopKeyboardTracking()
 
         tripwire.stopPulse()
         tripwire.onTransition = nil
