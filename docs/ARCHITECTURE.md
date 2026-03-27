@@ -75,7 +75,7 @@ graph TB
 TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   TheInsideJob.swift              — core server lifecycle, client dispatch
 │   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, screen capture
-│   TheTripwire.swift               — timing coordinator: allClear/waitForAllClear, VC identity, fingerprinting
+│   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
 │   Extensions/Polling.swift        — polling loop, interface broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
@@ -85,11 +85,15 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 ├── NetService (Bonjour advertisement)
 ├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
-├── TheTripwire (timing coordinator: gates all UI-ready decisions)
+├── TheTripwire (persistent ~10 Hz UI pulse and transition observer)
+│   ├── CADisplayLink pulse — one shared clock for settle checks and UI signal sampling
+│   ├── scanLayers() — single layer-tree walk for fingerprint, animations, pending layout, window count
 │   ├── getTraversableWindows() — shared window access for TheBagman
-│   ├── topmostViewController() / isScreenChange() — VC identity for screen change detection
-│   ├── allClear() — sync gate: no relevant CAAnimation keys (filters _UIParallaxMotionEffect)
-│   └── waitForAllClear(timeout:) — unified CADisplayLink settle (presentation layer fingerprinting)
+│   ├── topmostViewController() / currentFirstResponder() — sampled identity tracking
+│   ├── keyboardVisibleFlag / textInputActiveFlag — notification-driven input state
+│   ├── latestReading / onTransition — carried-forward pulse snapshot + settle/screen/focus callbacks
+│   ├── allClear() — sync gate backed by the latest pulse reading when running
+│   └── waitForSettle(timeout:) / waitForAllClear(timeout:) — per-waiter quiet-frame settle tracking
 ├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
 │   └── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
@@ -109,8 +113,8 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   └── File size guard (7MB cap for wire protocol)
 ├── TheMuscle (authentication, connection approval UI, session locking)
 ├── TheFingerprints (FingerprintWindow overlay + TheSafecracker gesture tracking)
-├── Polling Timer (interface change detection via hash comparison)
-└── Debounce Timer (300ms debounce for UI notifications)
+├── Polling Timer (optional interface change detection via hash comparison)
+└── Hierarchy Invalidation Flag + Coalesce Task (pulse-driven replacement for the old debounce timer)
 ```
 
 **Auto-Start Mechanism**:
@@ -186,7 +190,7 @@ TheSafecracker (stateful, @MainActor)
 ├── Text Input (via UIKeyboardImpl)
 │   ├── typeText(_:)             → addInputString: per character
 │   ├── deleteText(count:)       → deleteFromInput per character
-│   └── isKeyboardVisible()      → UIInputSetHostView detection
+│   └── isKeyboardVisible()      → TheTripwire keyboard flag + UIKeyboardImpl fallback
 │
 ├── N-Finger Primitives
 │   ├── touchesDown(at: [CGPoint])  → Create N touches + HID event + sendEvent
@@ -208,7 +212,7 @@ TheSafecracker (stateful, @MainActor)
 **Text Input Design**:
 - The iOS software keyboard is rendered by a separate remote process. Individual key views are not in the app's view hierarchy — only a `_UIRemoteKeyboardPlaceholderView` placeholder exists.
 - TheSafecracker uses `UIKeyboardImpl.activeInstance` (via ObjC runtime) to get the keyboard controller, then calls `addInputString:` to inject text and `deleteFromInput` to delete — the same approach used by KIF (Keep It Functional).
-- Keyboard visibility is detected by finding `UIInputSetHostView` (height > 100pt) in the window hierarchy.
+- Keyboard visibility lives in TheTripwire now, using keyboard frame notifications plus a screen-bounds intersection check. `TheSafecracker.isKeyboardVisible()` reads that flag first, then falls back to `UIKeyboardImpl` active-input detection for hardware-keyboard scenarios.
 
 **Key Design Decisions**:
 - **Direct IMP invocation**: `perform(_:with:)` boxes non-object types (Int, Bool, Double, UnsafeMutableRawPointer) as NSNumber objects, corrupting values passed to private ObjC methods. All private API calls use `method(for:)` + `unsafeBitCast` to `@convention(c)` typed function pointers.
