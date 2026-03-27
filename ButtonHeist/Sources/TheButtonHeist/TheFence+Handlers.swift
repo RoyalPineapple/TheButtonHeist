@@ -285,32 +285,44 @@ extension TheFence {
     // MARK: - Handler: Accessibility Actions
 
     func handleAccessibilityAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
-        switch command {
-        case .activate:
-            guard let target = elementTarget(args) else {
-                return .error("Must specify element identifier or order")
-            }
+        guard let target = elementTarget(args) else {
+            return .error("Must specify element identifier or order")
+        }
+
+        // Resolve the action name: activate uses "action" param, standalone commands use the command itself
+        let actionName: String? = switch command {
+        case .activate: stringArg(args, "action")
+        case .increment: "increment"
+        case .decrement: "decrement"
+        case .performCustomAction: stringArg(args, "action") ?? stringArg(args, "actionName")
+        default: nil
+        }
+
+        guard command != .performCustomAction || actionName != nil else {
+            return .error("action is required")
+        }
+
+        // No action → default activation
+        guard let actionName else {
             return try await sendAction(.activate(target))
-        case .increment:
-            guard let target = elementTarget(args) else {
-                return .error("Must specify element identifier or order")
-            }
+        }
+
+        // "action:foo" prefix forces custom action dispatch (escapes built-in names)
+        if actionName.hasPrefix("action:") {
+            let customName = String(actionName.dropFirst("action:".count))
+            return try await sendAction(.performCustomAction(
+                CustomActionTarget(elementTarget: target, actionName: customName)))
+        }
+
+        // Built-in actions map to their wire messages; everything else is a custom action
+        switch actionName {
+        case "increment":
             return try await sendAction(.increment(target))
-        case .decrement:
-            guard let target = elementTarget(args) else {
-                return .error("Must specify element identifier or order")
-            }
+        case "decrement":
             return try await sendAction(.decrement(target))
-        case .performCustomAction:
-            guard let target = elementTarget(args) else {
-                return .error("Must specify element identifier or order")
-            }
-            guard let actionName = stringArg(args, "actionName") else {
-                return .error("actionName is required")
-            }
-            return try await sendAction(.performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName)))
         default:
-            return .error("Unknown accessibility action: \(command.rawValue)")
+            return try await sendAction(.performCustomAction(
+                CustomActionTarget(elementTarget: target, actionName: actionName)))
         }
     }
 
