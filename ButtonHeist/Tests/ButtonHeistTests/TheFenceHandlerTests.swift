@@ -542,7 +542,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleMissingElement() async {
         await assertValidationError(
             ["command": "scroll_to_visible"],
-            contains: "Must specify element"
+            contains: "Must specify at least one match field"
         )
     }
 
