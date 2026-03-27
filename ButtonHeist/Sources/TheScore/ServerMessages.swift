@@ -560,6 +560,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case scroll
     case scrollToVisible
     case scrollToEdge
+    case waitFor
     case elementNotFound
     case elementDeallocated
 }

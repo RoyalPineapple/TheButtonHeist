@@ -116,6 +116,9 @@ public enum ClientMessage: Codable, Sendable {
     /// Wait for all animations to complete, then return the settled interface
     case waitForIdle(WaitForIdleTarget)
 
+    /// Wait for an element matching a predicate to appear (or disappear)
+    case waitFor(WaitForTarget)
+
     /// Request a capture of the current screen
     case requestScreen
 
@@ -549,6 +552,25 @@ public struct WaitForIdleTarget: Codable, Sendable {
     public init(timeout: Double? = nil) {
         self.timeout = timeout
     }
+}
+
+/// Target for wait_for command — wait for an element matching a predicate
+public struct WaitForTarget: Codable, Sendable {
+    /// Predicate describing the element to wait for
+    public let match: ElementMatcher
+    /// When true, wait for the element to NOT exist
+    public let absent: Bool?
+    /// Maximum time to wait in seconds (default: 10, max: 30)
+    public let timeout: Double?
+
+    public init(match: ElementMatcher, absent: Bool? = nil, timeout: Double? = nil) {
+        self.match = match
+        self.absent = absent
+        self.timeout = timeout
+    }
+
+    public var resolvedAbsent: Bool { absent ?? false }
+    public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
 }
 
 /// Payload for authenticate message

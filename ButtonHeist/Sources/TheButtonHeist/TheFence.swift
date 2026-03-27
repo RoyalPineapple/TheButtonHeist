@@ -233,16 +233,18 @@ public final class TheFence {
             return try await handleGesture(command: command, args: args)
         case .scroll, .scrollToVisible, .scrollToEdge:
             return try await handleScrollAction(command: command, args: args)
+        case .waitFor:
+            return try await handleWaitFor(args)
         case .activate, .increment, .decrement, .performCustomAction:
             return try await handleAccessibilityAction(command: command, args: args)
         case .typeText:
             return try await handleTypeText(args)
         case .editAction:
             return try await handleEditAction(args)
-        case .setPasteboard:
-            return try await handleSetPasteboard(args)
-        case .getPasteboard:
-            return try await handleGetPasteboard()
+        case .setPasteboard, .getPasteboard:
+            return command == .setPasteboard
+                ? try await handleSetPasteboard(args)
+                : try await handleGetPasteboard()
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
         case .startRecording:

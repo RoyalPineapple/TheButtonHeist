@@ -52,7 +52,7 @@ enum ToolDefinitions {
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
-        waitForIdle, startRecording, stopRecording, listDevices,
+        waitForIdle, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
@@ -185,6 +185,30 @@ enum ToolDefinitions {
                     "required": .array([.string("x"), .string("y")]),
                 ],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
+                "expect": expectProperty,
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let waitFor = Tool(
+        name: "wait_for",
+        description: """
+            Wait for an element matching a predicate to appear (or disappear). \
+            Polls the accessibility tree on UI settle events — no busy-waiting. \
+            Returns the matched element on success, or diagnostic info on timeout. \
+            Use 'absent: true' to wait for an element to disappear.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "label": ["type": "string", "description": "Match by accessibility label (exact)"],
+                "identifier": ["type": "string", "description": "Match by accessibility identifier (exact)"],
+                "value": ["type": "string", "description": "Match by accessibility value (exact)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of these traits may be present"],
+                "absent": ["type": "boolean", "description": "Wait for element to NOT exist (default: false)"],
+                "timeout": ["type": "number", "description": "Max seconds to wait (default: 10, max: 30)"],
                 "expect": expectProperty,
             ],
             "additionalProperties": false,
