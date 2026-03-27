@@ -64,7 +64,7 @@ The largest iOS-native MCP tool by stars. Created by Cameron Cooke, acquired by 
 
 **Differentiation**: XcodeBuildMCP is a *development workflow* tool. It builds your project, runs your tests, manages simulators. We are a *runtime inspection and interaction* tool. We see the live accessibility tree, detect animations, inject real touches. These are complementary, not competing — an agent could use XcodeBuildMCP to build and deploy, then Button Heist to interact with the running app.
 
-**Assessment**: Not a direct competitor. Different layer of the stack. Potential integration partner.
+**Assessment**: Not a direct competitor. Different layer of the stack. **Recommended companion** — XcodeBuildMCP handles build/deploy/lifecycle, Button Heist handles runtime UI interaction. See README "Pair with XcodeBuildMCP" for the combined `.mcp.json` setup.
 
 ---
 
@@ -411,7 +411,7 @@ Sentry acquiring XcodeBuildMCP (2025) and LambdaTest investing in appium-mcp sig
 
 2. **No Android.** mobile-mcp, appium-mcp, Maestro, Midscene all cover both platforms.
 
-3. **No app lifecycle management.** No install, launch, terminate. Must be done manually via simctl.
+3. **No app lifecycle management.** No install, launch, terminate. By design — pair with XcodeBuildMCP for the build-deploy-launch side. Together they cover the full agent loop. See README "Pair with XcodeBuildMCP".
 
 4. **No npx/pip install.** Build from source only.
 
