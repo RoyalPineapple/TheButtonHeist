@@ -91,10 +91,10 @@ Three commands expose scrolling directly to agents. These are not auto-scroll �
 | Command | Method | Behavior |
 |---------|--------|----------|
 | `scroll` | `scrollByPage(_:direction:)` | Moves contentOffset by `frame.height - 44pt` overlap in the given direction |
-| `scroll_to_visible` | `scrollToMakeVisible(_:in:)` | Minimum offset adjustment to bring element fully into viewport |
+| `scroll_to_visible` | `executeScrollToVisible(target:)` | Bidirectional scroll search for element matching an `ElementMatcher` predicate |
 | `scroll_to_edge` | `scrollToEdge(elementAt:edge:)` | Jumps to content extreme using `contentSize + adjustedContentInset` |
 
-All three use the same ancestor walk and drive `UIScrollView.setContentOffset(animated: true)` directly — no synthetic touch involved. The explicit `scroll_to_visible` command is the same underlying operation as auto-scroll, but exposed as a standalone command for agents that want explicit control.
+`scroll` and `scroll_to_edge` use `UIScrollView.setContentOffset(animated: true)` directly. `scroll_to_visible` uses `scrollByPage` in a multi-phase search loop.
 
 ### scroll (page step)
 
@@ -111,23 +111,54 @@ Offsets are clamped to `[-insets.top, contentSize.height + insets.bottom - frame
 
 Directions: `.up`, `.down`, `.left`, `.right`, `.next` (alias for down), `.previous` (alias for up).
 
-### scroll_to_visible (minimal adjustment)
+### scroll_to_visible (bidirectional search)
 
-Adjusts `contentOffset` by the minimum amount needed to bring the element's `accessibilityFrame` fully within the scroll view's visible rect.
+Searches for an element matching an `ElementMatcher` predicate by scrolling through the nearest scroll view. Unlike `scroll` (one page) or `scrollToMakeVisible` (minimal adjustment for a known element), this is a search operation — it finds elements that may not be on screen yet.
 
-The visible rect accounts for `adjustedContentInset`:
+**Input:** `ScrollToVisibleTarget` containing an `ElementMatcher` predicate, optional `maxScrolls` (default 20, clamped to >= 1), and optional `direction` (default `.down`).
+
+**Matching:** Uses `ElementMatcher` with AND semantics — all specified fields (label, identifier, value, traits, excludeTraits) must match. Matching runs on the canonical `AccessibilityHierarchy` tree via `TheBagman.findMatch()`, not on wire types. The `heistId` field is ignored at the matching level (it's a wire concept). The `scope` field controls whether leaf elements, container nodes, or both are evaluated.
+
+**Three-phase algorithm:**
+
+1. **Phase 0 — Check current tree.** Before scrolling, check if the element is already visible. If found, return immediately with `scrollCount: 0`.
+
+2. **Phase 1 — Scroll in primary direction.** Scroll one page at a time (via `scrollByPage`) up to `maxScrolls`. After each scroll, wait for animations to settle (`tripwire.waitForAllClear`), refresh the element cache, then check for a match. Track unique elements via `StableKey` to detect when new content stops appearing (scroll-end heuristic).
+
+3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains (`scrollCount < maxScrolls`), jump to the opposite edge of the scroll view and scroll back in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
+
+4. **Phase 3 — Not found.** Return failure with `ScrollSearchResult` diagnostics.
+
+**StableKey tracking:** Each element produces a `StableKey` for deduplication across scroll positions. StableKey uses semantic properties (label, identifier, value, traits) which are stable across scroll offsets. When all semantic properties are empty, the element's frame geometry is included as a fallback so identical unlabeled elements at different positions hash as distinct. When no new StableKeys appear after a scroll step, the loop exits early (all content has been seen).
+
+**Collection metadata:** For `UITableView` and `UICollectionView`, `queryCollectionTotalItems` reads the data source's total item count. This enables the `exhaustive` flag in `ScrollSearchResult` — when `uniqueElementsSeen >= totalItems`, the search provably visited every item.
+
+**Response:** Every `scrollToVisible` result includes a `scrollSearchResult` with `scrollCount`, `uniqueElementsSeen`, `totalItems`, `exhaustive`, and `foundElement`.
+
+```mermaid
+flowchart TD
+    Start["executeScrollToVisible(target)"]
+    Start --> P0["Phase 0: check current tree"]
+    P0 --> Found0{match?}
+    Found0 -->|yes| Return0["Return success (scrollCount: 0)"]
+    Found0 -->|no| FindSV["Find nearest UIScrollView"]
+    FindSV --> P1["Phase 1: scroll primary direction"]
+    P1 --> Loop1["scrollByPage → settle → refresh → match?"]
+    Loop1 --> Found1{match?}
+    Found1 -->|yes| Return1["Return success"]
+    Found1 -->|no| Budget{scrollCount < maxScrolls<br/>AND new elements seen?}
+    Budget -->|yes| Loop1
+    Budget -->|no| P2Check{budget remaining?}
+    P2Check -->|no| P3["Phase 3: not found"]
+    P2Check -->|yes| P2["Phase 2: jump to opposite edge,<br/>scroll back in primary direction"]
+    P2 --> Loop2["scrollByPage → settle → refresh → match?"]
+    Loop2 --> Found2{match?}
+    Found2 -->|yes| Return2["Return success"]
+    Found2 -->|no| Budget2{budget remaining?}
+    Budget2 -->|yes| Loop2
+    Budget2 -->|no| P3
+    P3 --> ReturnFail["Return failure + ScrollSearchResult"]
 ```
-visibleRect = CGRect(
-    x: contentOffset.x + insets.left,
-    y: contentOffset.y + insets.top,
-    width: frame.width - insets.left - insets.right,
-    height: frame.height - insets.top - insets.bottom
-)
-```
-
-If the element is already within `visibleRect`, returns `true` without scrolling. Otherwise adjusts the offset on whichever axis is out of bounds, clamped to the valid content range.
-
-This is the same `scrollToMakeVisible(_:in:)` method used by auto-scroll.
 
 ### scroll_to_edge (jump to extreme)
 
