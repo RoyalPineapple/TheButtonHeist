@@ -258,7 +258,7 @@ public final class TheHandoff {
         connection?.connect()
     }
 
-    private func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+    func handleServerMessage(_ message: ServerMessage, requestId: String?) {
         switch message {
         case .info(let info):
             serverInfo = info
@@ -290,6 +290,7 @@ public final class TheHandoff {
             isRecording = false
             onRecordingError?(msg)
         case .error(let msg):
+            connectionState = .failed(msg)
             onError?(msg)
         case .authApproved(let payload):
             token = payload.token

@@ -500,6 +500,77 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(mockConnection.connectCount, 0)
     }
 
+    // MARK: - Wait Method Tests
+
+    @ButtonHeistActor
+    func testWaitForRecordingSuccess() async throws {
+        let fence = TheFence()
+        let expectedPayload = RecordingPayload(
+            videoData: "dGVzdA==", width: 390, height: 844,
+            duration: 2.0, frameCount: 16, fps: 8,
+            startTime: Date(), endTime: Date(), stopReason: .manual
+        )
+
+        Task { @ButtonHeistActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            fence.handoff.onRecording?(expectedPayload)
+        }
+
+        let result = try await fence.waitForRecording(timeout: 1.0)
+        XCTAssertEqual(result.videoData, expectedPayload.videoData)
+        XCTAssertEqual(result.width, expectedPayload.width)
+        XCTAssertEqual(result.duration, expectedPayload.duration)
+    }
+
+    @ButtonHeistActor
+    func testWaitForRecordingServerError() async throws {
+        let fence = TheFence()
+
+        Task { @ButtonHeistActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            fence.handoff.onRecordingError?("disk full")
+        }
+
+        do {
+            _ = try await fence.waitForRecording(timeout: 1.0)
+            XCTFail("Expected RecordingError.serverError to be thrown")
+        } catch let error as TheFence.RecordingError {
+            if case .serverError(let msg) = error {
+                XCTAssertEqual(msg, "disk full")
+            } else {
+                XCTFail("Unexpected RecordingError case: \(error)")
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForRecordingTimeout() async throws {
+        let fence = TheFence()
+
+        do {
+            _ = try await fence.waitForRecording(timeout: 0.05)
+            XCTFail("Expected ActionError.timeout to be thrown")
+        } catch is TheFence.ActionError {
+            // Expected
+        }
+    }
+
+    @ButtonHeistActor
+    func testWaitForRecordingRestoresCallbacks() async throws {
+        let fence = TheFence()
+        XCTAssertNil(fence.handoff.onRecording)
+        XCTAssertNil(fence.handoff.onRecordingError)
+
+        do {
+            _ = try await fence.waitForRecording(timeout: 0.05)
+        } catch {
+            // Expected timeout
+        }
+
+        XCTAssertNil(fence.handoff.onRecording, "onRecording should be restored to nil after waitForRecording")
+        XCTAssertNil(fence.handoff.onRecordingError, "onRecordingError should be restored to nil after waitForRecording")
+    }
+
     @ButtonHeistActor
     func testListDevicesFiltersOutUnreachableDevicesWithoutConnecting() async throws {
         let reachableDevice = DiscoveredDevice(
