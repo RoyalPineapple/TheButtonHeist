@@ -198,6 +198,30 @@ final class TheBagman {
         refreshAccessibilityData() != nil
     }
 
+    // MARK: - Targeted Element Refresh
+
+    /// Re-parse a single element from its backing NSObject without a full tree refresh.
+    /// Returns the updated AccessibilityElement, or nil if the object has been deallocated.
+    func refreshElement(at index: Int) -> AccessibilityElement? {
+        guard let object = object(at: index) else { return nil }
+        let probe = ButtonHeistHostingView(target: object)
+        let hierarchy = parser.parseAccessibilityHierarchy(in: probe, rotorResultLimit: 0)
+        guard let updated = hierarchy.flattenToElements().first else { return nil }
+
+        // Update the cache in place
+        let stale = cachedElements[index]
+        cachedElements[index] = updated
+        elementObjects[stale] = nil
+        elementObjects[updated] = WeakObject(object: object)
+        return updated
+    }
+
+    /// Re-parse a single element identified by its AccessibilityElement key.
+    func refreshElement(_ element: AccessibilityElement) -> AccessibilityElement? {
+        guard let index = cachedElements.firstIndex(of: element) else { return nil }
+        return refreshElement(at: index)
+    }
+
     /// Clear all cached element data (used on suspend).
     func clearCache() {
         cachedElements.removeAll()
@@ -424,6 +448,26 @@ extension Array where Element == AccessibilityHierarchy {
             }
         }
     }
+}
+
+// MARK: - Hosting View for Single-Object Parsing
+
+/// Lightweight UIView that presents a single NSObject to the accessibility
+/// hierarchy parser. Follows the same pattern as SwiftUI's hosting view —
+/// the parser takes a UIView root, so this bridges arbitrary NSObjects
+/// (accessibility elements, SwiftUI nodes, etc.) into the parser's pipeline.
+final class ButtonHeistHostingView: UIView {
+    private let target: NSObject
+
+    init(target: NSObject) {
+        self.target = target
+        super.init(frame: .zero)
+        isAccessibilityElement = false
+        accessibilityElements = [target]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
 }
 
 #endif // DEBUG
