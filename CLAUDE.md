@@ -187,7 +187,7 @@ Before pushing any commit, verify the following:
   - `README.md` - Quick start, features, usage examples
   - `docs/API.md` - Public API documentation
   - `docs/ARCHITECTURE.md` - System design and component interaction
-  - `docs/VERSIONING.md` - SemVer strategy and release workflow
+  - `docs/VERSIONING.md` - CalVer strategy and release workflow
   - `docs/WIRE-PROTOCOL.md` - Message format and protocol details
   - `docs/USB_DEVICE_CONNECTIVITY.md` - USB connection guide
 - When changing behavior, ports, message formats, or configuration:
