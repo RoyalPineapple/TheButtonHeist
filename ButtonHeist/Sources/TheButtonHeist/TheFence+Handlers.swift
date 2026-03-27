@@ -96,7 +96,7 @@ extension TheFence {
         } else if let x, let y {
             return try await sendAction(.touchTap(TouchTapTarget(pointX: x, pointY: y)))
         }
-        return .error("Must specify element (identifier or order) or coordinates (x, y)")
+        return .error("Must specify element (heistId or matcher) or coordinates (x, y)")
     }
 
     private func handleLongPress(_ args: [String: Any]) async throws -> FenceResponse {
@@ -109,7 +109,7 @@ extension TheFence {
         } else if let x, let y {
             return try await sendAction(.touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration)))
         }
-        return .error("Must specify element (identifier or order) or coordinates (x, y)")
+        return .error("Must specify element (heistId or matcher) or coordinates (x, y)")
     }
 
     private func handleSwipe(_ args: [String: Any]) async throws -> FenceResponse {
@@ -261,19 +261,18 @@ extension TheFence {
                 return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right, next, previous")
             }
             guard elementTarget(args) != nil else {
-                return .error("Must specify element (identifier or order) for scroll")
+                return .error("Must specify element (heistId or matcher) for scroll")
             }
             return try await sendAction(
                 .scroll(ScrollTarget(elementTarget: elementTarget(args), direction: direction))
             )
         case .scrollToVisible:
             let matcher = elementMatcher(args)
-            if matcher.heistId != nil {
-                return .error("scroll_to_visible does not support heistId — use identifier or label instead")
-            }
-            guard matcher.label != nil || matcher.identifier != nil || matcher.value != nil
-                || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false else {
-                return .error("Must specify at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
+            let heistId = stringArg(args, "heistId")
+            let hasMatcher = matcher.label != nil || matcher.identifier != nil || matcher.value != nil
+                || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false
+            guard heistId != nil || hasMatcher else {
+                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
             }
             let directionStr = stringArg(args, "direction")
             var direction: ScrollSearchDirection?
@@ -284,7 +283,8 @@ extension TheFence {
                 }
             }
             let target = ScrollToVisibleTarget(
-                match: matcher,
+                heistId: heistId,
+                match: hasMatcher ? matcher : nil,
                 maxScrolls: intArg(args, "maxScrolls"),
                 direction: direction
             )
@@ -301,7 +301,7 @@ extension TheFence {
                 return .error("Invalid edge '\(edgeValue)'. Valid: top, bottom, left, right")
             }
             guard let target = elementTarget(args) else {
-                return .error("Must specify element (identifier or order) for scroll_to_edge")
+                return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         default:
@@ -313,7 +313,7 @@ extension TheFence {
 
     func handleAccessibilityAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         guard let target = elementTarget(args) else {
-            return .error("Must specify element identifier or order")
+            return .error("Must specify element (heistId or matcher)")
         }
 
         // Resolve the action name: activate uses "action" param, standalone commands use the command itself

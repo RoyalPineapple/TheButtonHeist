@@ -18,11 +18,11 @@ extension TheSafecracker {
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
-            guard let element = bagman?.findElement(for: elementTarget) else {
+            guard let resolved = bagman?.resolveTarget(elementTarget) else {
                 return .failure(.elementNotFound, message: "Target element not found")
             }
 
-            let point = element.activationPoint
+            let point = resolved.element.activationPoint
             if await !tap(at: point) {
                 return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
             }
@@ -77,8 +77,8 @@ extension TheSafecracker {
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let element = bagman?.findElement(for: elementTarget) {
-                fieldValue = element.value
+            if let resolved = bagman?.resolveTarget(elementTarget) {
+                fieldValue = resolved.element.value
             }
         }
 

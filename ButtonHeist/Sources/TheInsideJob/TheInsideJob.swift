@@ -426,7 +426,6 @@ public final class TheInsideJob {
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
-    /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
     /// Wait for an element matching a predicate to appear or disappear.
     /// Uses TheTripwire settle events to avoid busy-polling — refreshes the tree
     /// only after the UI settles.
@@ -476,12 +475,13 @@ public final class TheInsideJob {
 
         // Phase 0: immediate check
         bagman.refreshAccessibilityData()
+        let initialSnapshot = bagman.currentSearchSnapshot()
         if target.resolvedAbsent {
-            if !bagman.hasMatch(matcher) {
+            if !bagman.hasMatch(matcher, in: initialSnapshot) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
             }
         } else {
-            if bagman.findMatch(matcher) != nil {
+            if bagman.findMatch(matcher, in: initialSnapshot) != nil {
                 return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
             }
         }
@@ -490,13 +490,14 @@ public final class TheInsideJob {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             bagman.refreshAccessibilityData()
+            let snapshot = bagman.currentSearchSnapshot()
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
-                if !bagman.hasMatch(matcher) {
+                if !bagman.hasMatch(matcher, in: snapshot) {
                     return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
                 }
             } else {
-                if bagman.findMatch(matcher) != nil {
+                if bagman.findMatch(matcher, in: snapshot) != nil {
                     return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
                 }
             }
@@ -507,6 +508,7 @@ public final class TheInsideJob {
         return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
     }
 
+    /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
     /// because the scroll loop does its own repeated refresh/settle cycles internally.
     /// Captures before/after snapshots for delta computation around the entire search.
     func performScrollToVisibleSearch(

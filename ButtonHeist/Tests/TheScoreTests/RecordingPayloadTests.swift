@@ -198,7 +198,7 @@ final class RecordingPayloadTests: XCTestCase {
         let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
         let event = InteractionEvent(
             timestamp: 1.5,
-            command: .activate(ActionTarget(identifier: "loginButton")),
+            command: .activate(ActionTarget(match: ElementMatcher(identifier: "loginButton"))),
             result: ActionResult(success: true, method: .activate, interfaceDelta: delta)
         )
 
@@ -207,7 +207,7 @@ final class RecordingPayloadTests: XCTestCase {
 
         XCTAssertEqual(decoded.timestamp, 1.5)
         if case .activate(let target) = decoded.command {
-            XCTAssertEqual(target.identifier, "loginButton")
+            XCTAssertEqual(target.match?.identifier, "loginButton")
         } else {
             XCTFail("Expected activate command")
         }
@@ -225,7 +225,7 @@ final class RecordingPayloadTests: XCTestCase {
         )
         let event = InteractionEvent(
             timestamp: 3.2,
-            command: .touchTap(TouchTapTarget(elementTarget: ActionTarget(identifier: "okBtn"))),
+            command: .touchTap(TouchTapTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "okBtn")))),
             result: ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
         )
 
@@ -243,7 +243,7 @@ final class RecordingPayloadTests: XCTestCase {
         // Failed actions have no delta
         let event = InteractionEvent(
             timestamp: 2.0,
-            command: .activate(ActionTarget(identifier: "missing")),
+            command: .activate(ActionTarget(match: ElementMatcher(identifier: "missing"))),
             result: ActionResult(success: false, method: .elementNotFound, message: "Element not found")
         )
 
@@ -261,7 +261,7 @@ final class RecordingPayloadTests: XCTestCase {
         let end = start.addingTimeInterval(5.0)
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .activate(ActionTarget(order: 3)),
+            command: .activate(ActionTarget(match: ElementMatcher(label: "element_3"))),
             result: ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0))
         )
         let payload = RecordingPayload(

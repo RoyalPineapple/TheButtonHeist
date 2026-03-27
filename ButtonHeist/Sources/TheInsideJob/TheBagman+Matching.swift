@@ -4,6 +4,63 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
+struct AccessibilitySearchSnapshot {
+    struct Entry {
+        let element: AccessibilityElement
+        let traversalIndex: Int
+        let lowercasedLabel: String?
+        let lowercasedIdentifier: String?
+    }
+
+    let hierarchy: [AccessibilityHierarchy]
+    let entries: [Entry]
+    let entriesByTraversalIndex: [Int: Entry]
+    let heistIdToTraversalIndex: [String: Int]
+
+    // Note: if AccessibilityHierarchy becomes Sendable upstream, this
+    // snapshot can become Sendable too so failure diagnostics can fan out safely.
+    init(hierarchy: [AccessibilityHierarchy], heistIdToTraversalIndex: [String: Int]) {
+        self.hierarchy = hierarchy
+        self.heistIdToTraversalIndex = heistIdToTraversalIndex
+
+        var flattened: [Entry] = []
+        func collect(from node: AccessibilityHierarchy) {
+            switch node {
+            case .element(let element, let traversalIndex):
+                flattened.append(Entry(
+                    element: element,
+                    traversalIndex: traversalIndex,
+                    lowercasedLabel: element.label?.lowercased(),
+                    lowercasedIdentifier: element.identifier?.lowercased()
+                ))
+            case .container(_, let children):
+                for child in children {
+                    collect(from: child)
+                }
+            }
+        }
+        for node in hierarchy {
+            collect(from: node)
+        }
+
+        self.entries = flattened
+        self.entriesByTraversalIndex = Dictionary(uniqueKeysWithValues: flattened.map { ($0.traversalIndex, $0) })
+    }
+
+    func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
+        hierarchy.firstMatch(matcher)
+    }
+
+    func hasMatch(_ matcher: ElementMatcher) -> Bool {
+        hierarchy.hasMatch(matcher)
+    }
+
+    func entry(forHeistId heistId: String) -> Entry? {
+        guard let traversalIndex = heistIdToTraversalIndex[heistId] else { return nil }
+        return entriesByTraversalIndex[traversalIndex]
+    }
+}
+
 // MARK: - Stable Identity
 
 extension AccessibilityElement {
@@ -46,61 +103,26 @@ extension AccessibilityElement {
 /// ElementMatcher are resolved to UIAccessibilityTraits bitmasks so comparisons
 /// happen at the source data level.
 
-extension AccessibilityContainer {
-
-    /// Does this container satisfy the non-trait property predicates in the matcher?
-    /// Containers only carry label/value/identifier (via `semanticGroup`), so
-    /// trait predicates always fail — a container has no UIAccessibilityTraits.
-    func matches(_ matcher: ElementMatcher) -> Bool {
-        let (label, value, identifier): (String?, String?, String?) = {
-            if case .semanticGroup(let l, let v, let id) = type {
-                return (l, v, id)
-            }
-            return (nil, nil, nil)
-        }()
-        if let matchLabel = matcher.label, label != matchLabel { return false }
-        if let matchIdentifier = matcher.identifier, identifier != matchIdentifier { return false }
-        if let matchValue = matcher.value, value != matchValue { return false }
-        // Containers have no traits — any trait requirement is an automatic miss.
-        if matcher.traits != nil, matcher.traits?.isEmpty == false { return false }
-        return true
-    }
-}
-
 extension AccessibilityHierarchy {
 
-    /// Match result: the element or container that matched, plus its traversal index.
-    /// Container matches use `traversalIndex: -1` since containers don't have
-    /// a position in VoiceOver traversal order.
+    /// Match result: the leaf element that matched, plus its traversal index.
     struct MatchResult {
-        let element: AccessibilityElement?
-        let container: AccessibilityContainer?
+        let element: AccessibilityElement
         let traversalIndex: Int
 
-        /// The label of whatever matched (element or container).
-        var label: String? {
-            if let element { return element.label }
-            if let container, case .semanticGroup(let l, _, _) = container.type { return l }
-            return nil
-        }
+        var label: String? { element.label }
     }
 
-    /// Check if the node at this position satisfies the matcher's property predicates.
-    /// Which node types are evaluated depends on `matcher.resolvedScope`.
+    /// Check if a leaf element at this position satisfies the matcher.
+    /// Containers are walked recursively to find leaf elements inside them.
     func matches(_ matcher: ElementMatcher) -> MatchResult? {
-        let scope = matcher.resolvedScope
         switch self {
         case .element(let element, let traversalIndex):
-            guard scope == .elements || scope == .both else { return nil }
             if element.matches(matcher) {
-                return MatchResult(element: element, container: nil, traversalIndex: traversalIndex)
+                return MatchResult(element: element, traversalIndex: traversalIndex)
             }
             return nil
-        case .container(let container, let children):
-            if scope == .containers || scope == .both,
-               container.matches(matcher) {
-                return MatchResult(element: nil, container: container, traversalIndex: -1)
-            }
+        case .container(_, let children):
             for child in children {
                 if let result = child.matches(matcher) {
                     return result
@@ -113,7 +135,7 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
 
-    /// First element in the tree that satisfies all property predicates.
+    /// First leaf element in the tree that satisfies all property predicates.
     func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
         for node in self {
             if let result = node.matches(matcher) {
@@ -123,14 +145,14 @@ extension Array where Element == AccessibilityHierarchy {
         return nil
     }
 
-    /// All elements in the tree that satisfy the property predicates.
+    /// All leaf elements in the tree that satisfy the property predicates.
     func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
         var results: [AccessibilityHierarchy.MatchResult] = []
         collectMatches(matcher, into: &results)
         return results
     }
 
-    /// Whether any element in the tree satisfies the property predicates.
+    /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
         firstMatch(matcher) != nil
     }
@@ -139,19 +161,13 @@ extension Array where Element == AccessibilityHierarchy {
         _ matcher: ElementMatcher,
         into results: inout [AccessibilityHierarchy.MatchResult]
     ) {
-        let scope = matcher.resolvedScope
         for node in self {
             switch node {
             case .element(let element, let traversalIndex):
-                if scope == .elements || scope == .both,
-                   element.matches(matcher) {
-                    results.append(.init(element: element, container: nil, traversalIndex: traversalIndex))
+                if element.matches(matcher) {
+                    results.append(.init(element: element, traversalIndex: traversalIndex))
                 }
-            case .container(let container, let children):
-                if scope == .containers || scope == .both,
-                   container.matches(matcher) {
-                    results.append(.init(element: nil, container: container, traversalIndex: -1))
-                }
+            case .container(_, let children):
                 children.collectMatches(matcher, into: &results)
             }
         }
@@ -164,7 +180,6 @@ extension AccessibilityElement {
 
     /// Does this element satisfy all property predicates in the matcher?
     /// Trait name strings are resolved to bitmasks via the parser's `fromNames`.
-    /// The `heistId` field is ignored — it's a wire-level concept.
     func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label, label != matchLabel { return false }
         if let matchIdentifier = matcher.identifier, identifier != matchIdentifier { return false }
@@ -178,6 +193,8 @@ extension AccessibilityElement {
             if !traits.contains(mask) { return false }
         }
         if let excludedTraits = matcher.excludeTraits, !excludedTraits.isEmpty {
+            let knownNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+            for name in excludedTraits where !knownNames.contains(name) { return false }
             let mask = UIAccessibilityTraits.fromNames(excludedTraits)
             if !traits.isDisjoint(with: mask) { return false }
         }
@@ -217,16 +234,52 @@ enum MatchingError: Error, LocalizedError {
 }
 
 extension TheBagman {
+    func currentSearchSnapshot() -> AccessibilitySearchSnapshot {
+        let hierarchy: [AccessibilityHierarchy]
+        if cachedHierarchy.isEmpty {
+            hierarchy = cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
+        } else {
+            hierarchy = cachedHierarchy
+        }
+
+        let elementsForIds = cachedElements.isEmpty ? hierarchy.flattenToElements() : cachedElements
+        var wireElements = elementsForIds.enumerated().map { convertElement($0.element, index: $0.offset) }
+        assignHeistIds(&wireElements)
+        let heistIdToTraversalIndex = Dictionary(
+            wireElements.map { ($0.heistId, $0.order) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return AccessibilitySearchSnapshot(
+            hierarchy: hierarchy,
+            heistIdToTraversalIndex: heistIdToTraversalIndex
+        )
+    }
 
     /// Search cachedElements for the first match. Returns the element and its
     /// traversal index, or nil if no match.
     func findMatch(_ matcher: ElementMatcher) -> (element: AccessibilityElement, index: Int)? {
-        cachedElements.firstMatch(matcher)
+        findMatch(matcher, in: currentSearchSnapshot())
     }
 
     /// Whether any cached element matches the predicate.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        cachedElements.hasMatch(matcher)
+        hasMatch(matcher, in: currentSearchSnapshot())
+    }
+
+    func findMatch(
+        _ matcher: ElementMatcher,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> (element: AccessibilityElement, index: Int)? {
+        guard let found = snapshot.firstMatch(matcher) else { return nil }
+        return (found.element, found.traversalIndex)
+    }
+
+    func hasMatch(
+        _ matcher: ElementMatcher,
+        in snapshot: AccessibilitySearchSnapshot
+    ) -> Bool {
+        snapshot.hasMatch(matcher)
     }
 }
 

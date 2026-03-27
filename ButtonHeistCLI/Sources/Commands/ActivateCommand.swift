@@ -15,8 +15,9 @@ struct ActivateCommand: AsyncParsableCommand {
             use `buttonheist touch one_finger_tap` instead.
 
             Examples:
-              buttonheist activate --identifier loginButton
-              buttonheist activate --index 3
+              buttonheist activate --heist-id button_login
+              buttonheist activate --label "Sign In" --identifier loginButton
+              buttonheist activate --label "Submit" --traits button
             """
     )
 

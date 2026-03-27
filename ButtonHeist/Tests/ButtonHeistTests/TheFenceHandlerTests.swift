@@ -204,32 +204,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let dict: [String: Any] = ["identifier": "myButton"]
         let target = fence.elementTarget(dict)
         XCTAssertNotNil(target)
-        // identifier routes through the matcher path (composable with traits)
-        XCTAssertNil(target?.identifier)
         XCTAssertEqual(target?.match?.identifier, "myButton")
-        XCTAssertNil(target?.order)
-    }
-
-    @ButtonHeistActor
-    func testElementTargetWithOrder() {
-        let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["order": 3]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.order, 3)
-        XCTAssertNil(target?.match)
-    }
-
-    @ButtonHeistActor
-    func testElementTargetWithBoth() {
-        let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["identifier": "btn", "order": 2]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        // identifier goes into matcher, order stays on ActionTarget
-        XCTAssertNil(target?.identifier)
-        XCTAssertEqual(target?.match?.identifier, "btn")
-        XCTAssertEqual(target?.order, 2)
+        XCTAssertNil(target?.heistId)
     }
 
     @ButtonHeistActor
@@ -251,13 +227,11 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(target?.match?.label, "Save")
         XCTAssertEqual(target?.match?.traits, ["button"])
         XCTAssertNil(target?.heistId)
-        XCTAssertNil(target?.order)
     }
 
     @ButtonHeistActor
     func testElementTargetWithHeistIdAndMatcher() {
         let (fence, _) = makeConnectedFence()
-        // heistId takes priority in resolution, but matcher is also built
         let dict: [String: Any] = ["heistId": "button_save", "label": "Save"]
         let target = fence.elementTarget(dict)
         XCTAssertNotNil(target)
@@ -613,7 +587,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleMissingElement() async {
         await assertValidationError(
             ["command": "scroll_to_visible"],
-            contains: "Must specify at least one match field"
+            contains: "Must specify heistId or at least one match field"
         )
     }
 
@@ -621,6 +595,13 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleValidPassesValidation() async {
         await assertPassesValidation(
             ["command": "scroll_to_visible", "identifier": "targetElement"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToVisibleHeistIdPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "scroll_to_visible", "heistId": "targetElement"]
         )
     }
 
