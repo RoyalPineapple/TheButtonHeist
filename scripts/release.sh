@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Release script for Button Heist. Updates version across all files.
-# Usage: ./scripts/release.sh [--dry-run] <version>
-# Example: ./scripts/release.sh 0.0.2
+# Usage: ./scripts/release.sh [--dry-run] [<version>]
+# Example: ./scripts/release.sh              # Uses today's date: 2026.03.27
+#          ./scripts/release.sh 2026.03.27   # Explicit CalVer
 #
-# See docs/VERSIONING.md for SemVer rules and release workflow.
+# See docs/VERSIONING.md for versioning rules and release workflow.
 
 set -e
 
@@ -11,8 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-# SemVer regex: MAJOR.MINOR.PATCH (optional pre-release and build metadata)
-SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?$'
+# CalVer regex: YYYY.MM.DD with optional .PATCH suffix for same-day releases
+CALVER_REGEX='^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -21,10 +22,15 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 usage() {
-    echo "Usage: $0 [--dry-run] <version>"
+    echo "Usage: $0 [--dry-run] [<version>]"
     echo ""
-    echo "Bumps the product version to the given SemVer string."
-    echo "Example: $0 0.0.2"
+    echo "Bumps the product version using CalVer (YYYY.MM.DD)."
+    echo "If no version is given, uses today's date."
+    echo ""
+    echo "Examples:"
+    echo "  $0                  # today's date"
+    echo "  $0 2026.03.27      # explicit date"
+    echo "  $0 2026.03.27.1    # same-day patch release"
     echo ""
     echo "Options:"
     echo "  --dry-run    Show what would be changed without modifying files"
@@ -35,18 +41,21 @@ usage() {
     echo "  - docs/API.md"
     echo "  - TestApp/Sources/DisclosureGroupingDemo.swift"
     echo "  - docs/VERSIONING.md"
+    echo "  - Formula/buttonheist.rb"
     echo ""
     echo "After running, commit and tag: git tag v<VERSION>"
     exit 1
 }
 
+# Default to today's date if no version given
 if [[ $# -lt 1 ]]; then
-    usage
+    NEW_VERSION="$(date +%Y.%m.%d)"
+else
+    NEW_VERSION="$1"
 fi
 
-NEW_VERSION="$1"
-if ! [[ "$NEW_VERSION" =~ $SEMVER_REGEX ]]; then
-    echo "Error: '$NEW_VERSION' is not a valid SemVer (e.g. 0.0.2, 1.0.0)"
+if ! [[ "$NEW_VERSION" =~ $CALVER_REGEX ]]; then
+    echo "Error: '$NEW_VERSION' is not a valid CalVer (e.g. 2026.03.27, 2026.03.27.1)"
     exit 1
 fi
 
@@ -121,6 +130,14 @@ else
     sed -i '' "s/\*\*$CURRENT_ESC\*\*/**$NEW_ESC**/" docs/VERSIONING.md
 fi
 echo "  ✓ docs/VERSIONING.md"
+
+# 6. Formula/buttonheist.rb version
+if [[ "$DRY_RUN" == true ]]; then
+    echo "  Would update: version \"$NEW_VERSION\" in Formula/buttonheist.rb"
+else
+    sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
+fi
+echo "  ✓ Formula/buttonheist.rb"
 
 echo ""
 [[ "$DRY_RUN" == true ]] && exit 0
