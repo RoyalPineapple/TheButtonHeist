@@ -3,50 +3,47 @@ import XCTest
 import TheScore
 
 @ButtonHeistActor
-final class TheMastermindTests: XCTestCase {
+final class TheHandoffStateTests: XCTestCase {
 
     func testInitialState() {
-        let client = TheMastermind()
+        let handoff = TheHandoff()
 
-        XCTAssertTrue(client.discoveredDevices.isEmpty)
-        XCTAssertNil(client.connectedDevice)
-        XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentInterface)
-        XCTAssertFalse(client.isDiscovering)
-        XCTAssertEqual(client.connectionState, .disconnected)
+        XCTAssertTrue(handoff.discoveredDevices.isEmpty)
+        XCTAssertNil(handoff.connectedDevice)
+        XCTAssertNil(handoff.serverInfo)
+        XCTAssertNil(handoff.currentInterface)
+        XCTAssertFalse(handoff.isDiscovering)
+        XCTAssertEqual(handoff.connectionState, .disconnected)
     }
 
     func testDisconnectClearsState() {
-        let client = TheMastermind()
+        let handoff = TheHandoff()
 
-        // Call disconnect (even without connection should be safe)
-        client.disconnect()
+        handoff.disconnect()
 
-        XCTAssertNil(client.connectedDevice)
-        XCTAssertNil(client.serverInfo)
-        XCTAssertNil(client.currentInterface)
-        XCTAssertEqual(client.connectionState, .disconnected)
+        XCTAssertNil(handoff.connectedDevice)
+        XCTAssertNil(handoff.serverInfo)
+        XCTAssertNil(handoff.currentInterface)
+        XCTAssertEqual(handoff.connectionState, .disconnected)
     }
 
     func testStopDiscoveryClearsFlag() {
-        let client = TheMastermind()
+        let handoff = TheHandoff()
 
-        // Start and stop discovery
-        client.startDiscovery()
-        client.stopDiscovery()
+        handoff.startDiscovery()
+        handoff.stopDiscovery()
 
-        XCTAssertFalse(client.isDiscovering)
+        XCTAssertFalse(handoff.isDiscovering)
     }
 
     func testMultipleDisconnectsSafe() {
-        let client = TheMastermind()
+        let handoff = TheHandoff()
 
-        // Multiple disconnects should be safe
-        client.disconnect()
-        client.disconnect()
-        client.disconnect()
+        handoff.disconnect()
+        handoff.disconnect()
+        handoff.disconnect()
 
-        XCTAssertEqual(client.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionState, .disconnected)
     }
 
     func testDiscoverReachableDevicesPreservesExistingDiscoverySession() async {
@@ -56,10 +53,10 @@ final class TheMastermindTests: XCTestCase {
             endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
             certFingerprint: "sha256:reachable"
         )
-        let client = TheMastermind()
+        let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [reachableDevice]
-        client.handoff.makeDiscovery = { mockDiscovery }
+        handoff.makeDiscovery = { mockDiscovery }
 
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { device in
@@ -90,15 +87,15 @@ final class TheMastermindTests: XCTestCase {
         }
         defer { makeReachabilityConnection = previousFactory }
 
-        client.startDiscovery()
-        XCTAssertTrue(client.isDiscovering)
-        XCTAssertEqual(client.discoveredDevices, [reachableDevice])
+        handoff.startDiscovery()
+        XCTAssertTrue(handoff.isDiscovering)
+        XCTAssertEqual(handoff.discoveredDevices, [reachableDevice])
 
-        let devices = await client.discoverReachableDevices(timeout: 0.3)
+        let devices = await handoff.discoverReachableDevices(timeout: 0.3)
 
         XCTAssertEqual(devices, [reachableDevice])
-        XCTAssertTrue(client.isDiscovering)
-        XCTAssertEqual(client.discoveredDevices, [reachableDevice])
+        XCTAssertTrue(handoff.isDiscovering)
+        XCTAssertEqual(handoff.discoveredDevices, [reachableDevice])
         XCTAssertEqual(mockDiscovery.startCount, 1)
         XCTAssertEqual(mockDiscovery.stopCount, 0)
     }
@@ -117,13 +114,13 @@ final class TheMastermindTests: XCTestCase {
             certFingerprint: "sha256:reachable"
         )
 
-        let client = TheMastermind()
+        let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [staleDevice, reachableDevice]
-        client.handoff.makeDiscovery = { mockDiscovery }
+        handoff.makeDiscovery = { mockDiscovery }
 
         var connectedDeviceID: String?
-        client.handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device, _, _ in
             connectedDeviceID = device.id
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
@@ -167,11 +164,11 @@ final class TheMastermindTests: XCTestCase {
         }
         defer { makeReachabilityConnection = previousFactory }
 
-        try await client.handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+        try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
         XCTAssertEqual(connectedDeviceID, reachableDevice.id)
-        XCTAssertEqual(client.handoff.connectedDevice, reachableDevice)
-        XCTAssertTrue(client.handoff.isConnected)
+        XCTAssertEqual(handoff.connectedDevice, reachableDevice)
+        XCTAssertTrue(handoff.isConnected)
     }
 
     func testConnectWithDiscoveryReprobesDeviceThatBecomesReachableWithoutRediscovery() async throws {
@@ -182,12 +179,12 @@ final class TheMastermindTests: XCTestCase {
             certFingerprint: "sha256:delayed"
         )
 
-        let client = TheMastermind()
+        let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [delayedDevice]
-        client.handoff.makeDiscovery = { mockDiscovery }
+        handoff.makeDiscovery = { mockDiscovery }
 
-        client.handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _, _, _ in
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
                 protocolVersion: "5.0",
@@ -240,10 +237,10 @@ final class TheMastermindTests: XCTestCase {
         defer { makeReachabilityConnection = previousFactory }
 
         let start = Date()
-        try await client.handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+        try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
 
-        XCTAssertEqual(client.handoff.connectedDevice, delayedDevice)
-        XCTAssertTrue(client.handoff.isConnected)
+        XCTAssertEqual(handoff.connectedDevice, delayedDevice)
+        XCTAssertTrue(handoff.isConnected)
         XCTAssertGreaterThanOrEqual(probeAttempts, 2)
         XCTAssertLessThan(Date().timeIntervalSince(start), 4.5)
     }
@@ -262,10 +259,10 @@ final class TheMastermindTests: XCTestCase {
             certFingerprint: "sha256:second"
         )
 
-        let client = TheMastermind()
+        let handoff = TheHandoff()
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [firstDevice, secondDevice]
-        client.handoff.makeDiscovery = { mockDiscovery }
+        handoff.makeDiscovery = { mockDiscovery }
 
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { _ in
@@ -295,7 +292,7 @@ final class TheMastermindTests: XCTestCase {
         defer { makeReachabilityConnection = previousFactory }
 
         do {
-            try await client.handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
+            try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
             XCTFail("Expected noMatchingDevice to be thrown")
         } catch let error as TheHandoff.ConnectionError {
             guard case .noMatchingDevice(let filter, let available) = error else {
@@ -304,76 +301,5 @@ final class TheMastermindTests: XCTestCase {
             XCTAssertEqual(filter, "(none)")
             XCTAssertEqual(available, [firstDevice.name, secondDevice.name])
         }
-    }
-
-    // MARK: - waitForRecording
-
-    func testWaitForRecordingSuccess() async throws {
-        let client = TheMastermind()
-        let expectedPayload = makeRecordingPayload(stopReason: .manual)
-
-        let task = Task {
-            try await client.waitForRecording(timeout: 5.0)
-        }
-
-        // Allow the task to install its callbacks
-        await Task.yield()
-
-        client.onRecording?(expectedPayload)
-
-        let result = try await task.value
-        XCTAssertEqual(result.frameCount, expectedPayload.frameCount)
-        XCTAssertEqual(result.stopReason, .manual)
-    }
-
-    func testWaitForRecordingServerError() async throws {
-        let client = TheMastermind()
-
-        let task = Task {
-            try await client.waitForRecording(timeout: 5.0)
-        }
-
-        await Task.yield()
-
-        client.onRecordingError?("AVAssetWriter failed")
-
-        do {
-            _ = try await task.value
-            XCTFail("Expected RecordingError.serverError to be thrown")
-        } catch let error as TheMastermind.RecordingError {
-            if case .serverError(let message) = error {
-                XCTAssertEqual(message, "AVAssetWriter failed")
-            } else {
-                XCTFail("Expected serverError, got \(error)")
-            }
-        }
-    }
-
-    func testWaitForRecordingTimeout() async throws {
-        let client = TheMastermind()
-
-        do {
-            _ = try await client.waitForRecording(timeout: 0.05)
-            XCTFail("Expected ActionError.timeout to be thrown")
-        } catch is TheMastermind.ActionError {
-            // Expected
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func makeRecordingPayload(stopReason: RecordingPayload.StopReason) -> RecordingPayload {
-        let start = Date()
-        return RecordingPayload(
-            videoData: "AAAAIGZ0eXBpc29t",
-            width: 390,
-            height: 844,
-            duration: 5.0,
-            frameCount: 40,
-            fps: 8,
-            startTime: start,
-            endTime: start.addingTimeInterval(5.0),
-            stopReason: stopReason
-        )
     }
 }

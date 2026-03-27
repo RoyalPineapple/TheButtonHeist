@@ -485,8 +485,8 @@ final class TheFenceTests: XCTestCase {
         let mockConnection = MockConnection()
 
         let fence = TheFence()
-        fence.client.handoff.makeDiscovery = { mockDiscovery }
-        fence.client.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
         let response = try await fence.execute(request: ["command": "get_session_state"])
 
@@ -520,8 +520,8 @@ final class TheFenceTests: XCTestCase {
         let mockConnection = MockConnection()
 
         let fence = TheFence()
-        fence.client.handoff.makeDiscovery = { mockDiscovery }
-        fence.client.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { device in

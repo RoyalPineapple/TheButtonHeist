@@ -18,14 +18,13 @@ struct WaitForIdleCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet {
             logStatus("Waiting for idle...")
         }
 
-        client.send(.waitForIdle(WaitForIdleTarget(timeout: timeout)))
-        let result = try await client.waitForActionResult(timeout: timeout + 5)
+        connector.send(.waitForIdle(WaitForIdleTarget(timeout: timeout)))
+        let result = try await connector.waitForActionResult(timeout: timeout + 5)
         outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Wait for idle")
     }
 }

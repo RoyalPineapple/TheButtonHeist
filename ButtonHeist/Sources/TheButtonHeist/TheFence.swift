@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os
 
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -74,6 +75,8 @@ public enum Timeouts {
     static let interfaceRequest: UInt64 = 10_000_000_000
 }
 
+private let logger = Logger(subsystem: "com.buttonheist", category: "fence")
+
 @ButtonHeistActor
 public final class TheFence {
     public struct Configuration {
@@ -101,43 +104,74 @@ public final class TheFence {
     public static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
 
     public var onStatus: ((String) -> Void)? {
-        didSet { client.handoff.onStatus = onStatus }
+        didSet { handoff.onStatus = onStatus }
     }
     public var onAuthApproved: ((String?) -> Void)?
 
     var config: Configuration
-    let client = TheMastermind()
+    let handoff = TheHandoff()
     private var isStarted = false
+
+    // MARK: - Pending Request Tracking
+
+    private var pendingActionRequests: [String: CheckedContinuation<ActionResult, Error>] = [:]
+    private var pendingInterfaceRequests: [String: CheckedContinuation<Interface, Error>] = [:]
+    private var pendingScreenRequests: [String: CheckedContinuation<ScreenPayload, Error>] = [:]
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
-        self.client.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.client.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
-        self.client.autoSubscribe = true
-        self.client.onAuthApproved = { [weak self] token in
+        self.handoff.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
+        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.autoSubscribe = true
+        self.handoff.onAuthApproved = { [weak self] token in
             if let token {
                 self?.onStatus?("BUTTONHEIST_TOKEN=\(token)")
             }
             self?.onAuthApproved?(token)
         }
+        wireUpResponseCallbacks()
+    }
+
+    private func wireUpResponseCallbacks() {
+        handoff.onInterface = { [weak self] payload, requestId in
+            guard let self else { return }
+            if let requestId, let continuation = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: payload)
+            }
+        }
+
+        handoff.onActionResult = { [weak self] result, requestId in
+            guard let self else { return }
+            if let requestId, let continuation = self.pendingActionRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: result)
+            }
+        }
+
+        handoff.onScreen = { [weak self] payload, requestId in
+            guard let self else { return }
+            if let requestId, let continuation = self.pendingScreenRequests.removeValue(forKey: requestId) {
+                continuation.resume(returning: payload)
+            }
+        }
     }
 
     public func start() async throws {
-        if isStarted, client.connectionState == .connected {
+        if isStarted, handoff.connectionState == .connected {
             return
         }
 
         try await connect()
         if config.autoReconnect {
             let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
-            client.handoff.setupAutoReconnect(filter: filter)
+            handoff.setupAutoReconnect(filter: filter)
         }
         isStarted = true
     }
 
     public func stop() {
-        client.disconnect()
-        client.stopDiscovery()
+        cancelAllPendingRequests()
+        handoff.disconnect()
+        handoff.stopDiscovery()
         isStarted = false
     }
 
@@ -160,7 +194,7 @@ public final class TheFence {
 
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
-            (!isStarted || client.connectionState != .connected) {
+            (!isStarted || handoff.connectionState != .connected) {
             try await start()
         }
 
@@ -184,7 +218,7 @@ public final class TheFence {
     private func connect() async throws {
         let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         do {
-            try await client.handoff.connectWithDiscovery(
+            try await handoff.connectWithDiscovery(
                 filter: filter,
                 timeout: config.connectionTimeout
             )
@@ -199,8 +233,8 @@ public final class TheFence {
         switch command {
         case .status:
             return .status(
-                connected: client.connectionState == .connected,
-                deviceName: client.connectedDevice.map { client.displayName(for: $0) }
+                connected: handoff.connectionState == .connected,
+                deviceName: handoff.connectedDevice.map { handoff.displayName(for: $0) }
             )
         case .listDevices:
             return try await handleListDevices()
@@ -248,30 +282,29 @@ public final class TheFence {
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
         let result: ActionResult = try await sendAndAwait(message) { requestId in
-            try await client.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
+            try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
         lastActionResult = result
         return .action(result: result)
     }
 
     func sendAndAwait<T>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
-        guard client.connectionState == .connected else { throw FenceError.notConnected }
+        guard handoff.connectionState == .connected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        client.send(message, requestId: requestId)
+        handoff.send(message, requestId: requestId)
         do {
             return try await response(requestId)
         } catch {
-            client.forceDisconnect()
+            handoff.forceDisconnect()
             throw mapCaughtError(error)
         }
     }
 
-    /// Map a caught error to an appropriate FenceError, preserving detail.
     private func mapCaughtError(_ error: Error) -> FenceError {
-        if error is TheMastermind.ActionError {
+        if error is ActionError {
             return .actionTimeout
         }
-        if let recordingError = error as? TheMastermind.RecordingError {
+        if let recordingError = error as? RecordingError {
             switch recordingError {
             case .serverError(let message):
                 return .actionFailed(message)
@@ -547,18 +580,18 @@ public final class TheFence {
     // MARK: - Session State
 
     func currentSessionState() -> [String: Any] {
-        let connected = client.connectionState == .connected
+        let connected = handoff.connectionState == .connected
         var payload: [String: Any] = [
             "status": "ok",
             "connected": connected,
         ]
-        if let device = client.connectedDevice {
-            payload["deviceName"] = client.displayName(for: device)
+        if let device = handoff.connectedDevice {
+            payload["deviceName"] = handoff.displayName(for: device)
             payload["appName"] = device.appName
             payload["connectionType"] = device.connectionType.rawValue
             if let shortId = device.shortId { payload["shortId"] = shortId }
         }
-        payload["isRecording"] = client.isRecording
+        payload["isRecording"] = handoff.isRecording
         payload["actionTimeoutSeconds"] = Timeouts.actionSeconds
         payload["longActionTimeoutSeconds"] = Timeouts.longActionSeconds
 
@@ -570,6 +603,134 @@ public final class TheFence {
             ]
         }
         return payload
+    }
+
+    // MARK: - Async Wait Methods
+
+    func waitForActionResult(requestId: String? = nil, timeout: TimeInterval) async throws -> ActionResult {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingActionRequests[requestId] = continuation
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    self?.timeoutRequest(requestId, from: &self!.pendingActionRequests)
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onActionResult = { result, _ in complete(.success(result)) }
+        }
+    }
+
+    func waitForInterface(requestId: String? = nil, timeout: TimeInterval = 10.0) async throws -> Interface {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingInterfaceRequests[requestId] = continuation
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    self?.timeoutRequest(requestId, from: &self!.pendingInterfaceRequests)
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onInterface = { payload, _ in complete(.success(payload)) }
+        }
+    }
+
+    func waitForScreen(requestId: String? = nil, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
+        if let requestId {
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingScreenRequests[requestId] = continuation
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    self?.timeoutRequest(requestId, from: &self!.pendingScreenRequests)
+                }
+            }
+        }
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onScreen = { payload, _ in complete(.success(payload)) }
+        }
+    }
+
+    func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+        try await waitForResponse(timeout: timeout) { complete in
+            handoff.onRecording = { complete(.success($0)) }
+            handoff.onRecordingError = { complete(.failure(RecordingError.serverError($0))) }
+        }
+    }
+
+    private func waitForResponse<T: Sendable>(
+        timeout: TimeInterval,
+        install: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
+    ) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            let didResume = OSAllocatedUnfairLock(initialState: false)
+
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
+                    continuation.resume(throwing: ActionError.timeout)
+                }
+            }
+
+            install { result in
+                let shouldResume = didResume.withLock { flag -> Bool in
+                    guard !flag else { return false }
+                    flag = true
+                    return true
+                }
+                if shouldResume {
+                    timeoutTask.cancel()
+                    continuation.resume(with: result)
+                }
+            }
+        }
+    }
+
+    private func timeoutRequest<T>(_ requestId: String, from dict: inout [String: CheckedContinuation<T, Error>]) {
+        if let cont = dict.removeValue(forKey: requestId) {
+            cont.resume(throwing: ActionError.timeout)
+        }
+    }
+
+    private func cancelAllPendingRequests() {
+        for (_, continuation) in pendingActionRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingActionRequests.removeAll()
+        for (_, continuation) in pendingInterfaceRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingInterfaceRequests.removeAll()
+        for (_, continuation) in pendingScreenRequests {
+            continuation.resume(throwing: ActionError.timeout)
+        }
+        pendingScreenRequests.removeAll()
+    }
+
+    // MARK: - Error Types
+
+    public enum RecordingError: Error, LocalizedError {
+        case serverError(String)
+        public var errorDescription: String? {
+            switch self {
+            case .serverError(let msg): return "Recording failed: \(msg)"
+            }
+        }
+    }
+
+    public enum ActionError: Error, LocalizedError {
+        case timeout
+        public var errorDescription: String? {
+            switch self {
+            case .timeout: return "Action timed out"
+            }
+        }
     }
 }
 

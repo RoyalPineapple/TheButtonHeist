@@ -37,7 +37,6 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         let message = ClientMessage.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: scrollEdge))
 
@@ -45,9 +44,9 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
             logStatus("Sending scroll_to_edge...")
         }
 
-        client.send(message)
+        connector.send(message)
 
-        let result = try await client.waitForActionResult(timeout: timeout)
+        let result = try await connector.waitForActionResult(timeout: timeout)
         outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Scroll to edge")
     }
 }
