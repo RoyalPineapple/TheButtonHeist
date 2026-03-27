@@ -26,14 +26,13 @@ struct SetPasteboardCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet {
             logStatus("Writing to pasteboard...")
         }
 
-        client.send(.setPasteboard(SetPasteboardTarget(text: text)))
-        let result = try await client.waitForActionResult(timeout: 15)
+        connector.send(.setPasteboard(SetPasteboardTarget(text: text)))
+        let result = try await connector.waitForActionResult(timeout: 15)
         outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Set pasteboard")
     }
 }

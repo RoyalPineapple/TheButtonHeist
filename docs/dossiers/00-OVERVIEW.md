@@ -26,9 +26,8 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
 |-------------|-------|-------------|
-| [TheHandoff](02-THEHANDOFF.md) | The Logistics | Device discovery, TLS connection, keepalive, auto-reconnect |
-| [TheMastermind](09-THEMASTERMIND.md) | The Outside Coordinator | Observable macOS client API (wraps TheHandoff) |
-| [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch for CLI/MCP |
+| [TheHandoff](02-THEHANDOFF.md) | The Logistics | Device discovery, TLS connection, keepalive, auto-reconnect, session state |
+| [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch, request-response correlation, async waits |
 | [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
 | [ButtonHeistMCP](12-MCP.md) | The MCP Server | AI agent tool interface |
 
@@ -69,7 +68,6 @@ graph TD
 sequenceDiagram
     participant CLI as CLI / MCP
     participant TF as TheFence
-    participant TM as TheMastermind
     participant TH as TheHandoff
     participant DC as DeviceConnection
     participant SS as SimpleSocketServer
@@ -87,7 +85,7 @@ sequenceDiagram
     TM2-->>DC: authRequired
     DC->>SS: authenticate(token)
     TM2-->>DC: info(ServerInfo)
-    TM->>DC: send(.activate(target))
+    TH->>DC: send(.activate(target))
     DC->>SS: JSON + newline
     SS->>IJ: handleClientMessage
     IJ->>IJ: bagman.refreshAccessibilityData()
@@ -97,8 +95,8 @@ sequenceDiagram
     TS-->>IJ: InteractionResult
     IJ->>IJ: computeDelta(before, after)
     IJ-->>DC: actionResult(delta)
-    DC-->>TM: onActionResult
-    TM-->>TF: .action(result)
+    DC-->>TH: onActionResult
+    TH-->>TF: callback → continuation resume
     TF-->>CLI: response JSON
 ```
 
