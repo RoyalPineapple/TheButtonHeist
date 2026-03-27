@@ -312,15 +312,16 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 
 ## Versioning and Releases
 
-- **SemVer** (MAJOR.MINOR.PATCH). Current baseline: 0.0.1. See `docs/VERSIONING.md` for rules.
-- **Canonical version** lives in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift` (`buttonHeistVersion`). CLI and MCP read it.
+- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `docs/VERSIONING.md`.
+- **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
+- **Canonical product version** lives in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift` (`buttonHeistVersion`). CLI and MCP read it.
 - **Releasing**: Use the release script — never bump version manually in multiple files:
   ```bash
-  ./scripts/release.sh 0.0.2
-  ./scripts/release.sh --dry-run 0.0.2   # Preview only
+  ./scripts/release.sh              # Uses today's date
+  ./scripts/release.sh 2026.03.27   # Explicit date
+  ./scripts/release.sh --dry-run    # Preview only
   ```
-  The script updates all 6 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v0.0.2`.
-- **Protocol version** (`protocolVersion` in `Messages.swift`) is separate from product version — bump when wire format or handshake changes.
+  The script updates all 6 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v2026.03.27`.
 
 ## CLI-First Development
 

@@ -117,7 +117,7 @@ jobs:
           # Generate formula from template — replace PLACEHOLDERs in order:
           # 1st = CLI tarball, 2nd = MCP resource, 3rd = integrate resource
           awk -v cli="$CLI_SHA" -v mcp="$MCP_SHA" -v intg="$INT_SHA" -v ver="$VERSION" '
-            /version "[0-9]+\.[0-9]+\.[0-9]+"/ { sub(/"[0-9]+\.[0-9]+\.[0-9]+"/, "\"" ver "\"") }
+            /version "/ { sub(/"[^"]+"/, "\"" ver "\"") }
             /sha256 "PLACEHOLDER"/ {
               count++
               if (count == 1) sub(/PLACEHOLDER/, cli)
