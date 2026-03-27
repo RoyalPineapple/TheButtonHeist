@@ -295,4 +295,22 @@ extension HeistElement {
     public var activationPoint: CGPoint {
         CGPoint(x: activationPointX, y: activationPointY)
     }
+
+    /// Match this wire element against an ElementMatcher predicate.
+    /// Used for client-side filtering of serialized interface data (get_interface).
+    public func matches(_ matcher: ElementMatcher) -> Bool {
+        if let matchLabel = matcher.label, label != matchLabel { return false }
+        if let matchId = matcher.identifier, identifier != matchId { return false }
+        if let matchHid = matcher.heistId, heistId != matchHid { return false }
+        if let matchVal = matcher.value, value != matchVal { return false }
+        if let required = matcher.traits, !required.isEmpty {
+            let traitSet = Set(traits)
+            for t in required where !traitSet.contains(t) { return false }
+        }
+        if let excluded = matcher.excludeTraits, !excluded.isEmpty {
+            let traitSet = Set(traits)
+            for t in excluded where traitSet.contains(t) { return false }
+        }
+        return true
+    }
 }

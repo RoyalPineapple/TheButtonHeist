@@ -66,7 +66,8 @@ enum ToolDefinitions {
         description: """
             Get the current UI element hierarchy from the connected iOS device. Returns elements with \
             heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
-            Target elements in subsequent calls using heistId.
+            Target elements in subsequent calls using heistId. \
+            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list.
             """,
         inputSchema: [
             "type": "object",
@@ -81,6 +82,11 @@ enum ToolDefinitions {
                     "items": ["type": "string"],
                     "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
+                "label": ["type": "string", "description": "Filter by accessibility label (exact match)"],
+                "identifier": ["type": "string", "description": "Filter by accessibility identifier (exact match)"],
+                "value": ["type": "string", "description": "Filter by accessibility value (exact match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
             ],
             "additionalProperties": false,
         ],

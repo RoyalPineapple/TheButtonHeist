@@ -12,6 +12,21 @@ extension TheFence {
         }
         let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
 
+        // Matcher-based filtering takes precedence over heistId list
+        let matcher = elementMatcher(args)
+        let hasMatcher = matcher.label != nil || matcher.identifier != nil
+            || matcher.value != nil || matcher.traits != nil || matcher.excludeTraits != nil
+        if hasMatcher {
+            let total = interface.elements.count
+            let filtered = interface.elements.filter { $0.matches(matcher) }
+            let filteredInterface = Interface(
+                timestamp: interface.timestamp,
+                elements: filtered,
+                tree: nil
+            )
+            return .interface(filteredInterface, detail: detail, filteredFrom: total)
+        }
+
         if let filterIds = args["elements"] as? [String], !filterIds.isEmpty {
             let filterSet = Set(filterIds)
             let filtered = interface.elements.filter { filterSet.contains($0.heistId) }
