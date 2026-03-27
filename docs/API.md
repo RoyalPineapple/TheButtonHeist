@@ -1,6 +1,6 @@
 # Button Heist API Reference
 
-Complete API documentation for TheInsideJob (iOS), TheMastermind (macOS), TheFence (orchestration), and the CLI.
+Complete API documentation for TheInsideJob (iOS), TheFence (command dispatch), TheHandoff (connection lifecycle), and the CLI.
 
 ## TheInsideJob
 
@@ -214,331 +214,99 @@ Visual interaction feedback for taps and continuous gestures. All overlays are d
 
 ---
 
-## TheMastermind (macOS Client)
+## TheHandoff (macOS Connection Lifecycle)
 
 **Import**: `import ButtonHeist`
 **Platform**: macOS 14.0+
-**Location**: `ButtonHeist/Sources/TheButtonHeist/TheMastermind.swift`
+**Location**: `ButtonHeist/Sources/TheButtonHeist/TheHandoff/TheHandoff.swift`
 
-### TheMastermind
+### TheHandoff
 
-Main client class. Uses the `@Observable` macro for SwiftUI integration.
+Client-side session manager that owns the full device lifecycle: discovery, connection, keepalive, auto-reconnect, and session state tracking. TheFence owns a TheHandoff instance and talks to it directly.
 
 ```swift
-@Observable
 @ButtonHeistActor
-public final class TheMastermind
+public final class TheHandoff
 ```
 
-#### Observable Properties
+#### State Properties
 
-##### discoveredDevices
-
-```swift
-public private(set) var discoveredDevices: [DiscoveredDevice]
-```
-
-Devices found via Bonjour discovery. Updated automatically when discovery is active.
-
-##### connectedDevice
-
-```swift
-public private(set) var connectedDevice: DiscoveredDevice?
-```
-
-Currently connected device, or nil if disconnected.
-
-##### connectionState
-
-```swift
-public private(set) var connectionState: ConnectionState
-```
-
-Current connection state. See `ConnectionState` enum.
-
-##### currentInterface
-
-```swift
-public private(set) var currentInterface: Interface?
-```
-
-Most recent UI element snapshot received from the connected device.
-
-##### currentScreen
-
-```swift
-public private(set) var currentScreen: ScreenPayload?
-```
-
-Most recent screenshot received from the connected device.
-
-##### serverInfo
-
-```swift
-public private(set) var serverInfo: ServerInfo?
-```
-
-Server information received after connecting.
-
-##### isDiscovering
-
-```swift
-public private(set) var isDiscovering: Bool
-```
-
-Whether Bonjour discovery is currently active.
-
-##### isRecording
-
-```swift
-public private(set) var isRecording: Bool
-```
-
-Whether a screen recording is currently in progress.
+| Property | Type | Description |
+|----------|------|-------------|
+| `discoveredDevices` | `[DiscoveredDevice]` | Devices found via Bonjour discovery |
+| `connectedDevice` | `DiscoveredDevice?` | Currently connected device |
+| `connectionState` | `ConnectionState` | Current state (disconnected/connecting/connected/failed) |
+| `serverInfo` | `ServerInfo?` | Server info received after connecting |
+| `currentInterface` | `Interface?` | Most recent UI hierarchy from push broadcasts |
+| `currentScreen` | `ScreenPayload?` | Most recent screenshot from push broadcasts |
+| `isConnected` | `Bool` | Whether transport is connected |
+| `isDiscovering` | `Bool` | Whether Bonjour discovery is active |
+| `isRecording` | `Bool` | Whether screen recording is in progress |
 
 #### Callback Properties
 
-For non-SwiftUI usage, set these callbacks to receive events.
+| Callback | Type | Description |
+|----------|------|-------------|
+| `onDeviceFound` | `((DiscoveredDevice) -> Void)?` | New device discovered |
+| `onDeviceLost` | `((DiscoveredDevice) -> Void)?` | Device no longer available |
+| `onConnected` | `((ServerInfo) -> Void)?` | Connection established |
+| `onDisconnected` | `((DisconnectReason) -> Void)?` | Connection closed |
+| `onInterface` | `((Interface, String?) -> Void)?` | Hierarchy received (with optional requestId) |
+| `onActionResult` | `((ActionResult, String?) -> Void)?` | Action result received (with optional requestId) |
+| `onScreen` | `((ScreenPayload, String?) -> Void)?` | Screenshot received (with optional requestId) |
+| `onRecordingStarted` | `(() -> Void)?` | Recording has begun |
+| `onRecording` | `((RecordingPayload) -> Void)?` | Completed recording received |
+| `onRecordingError` | `((String) -> Void)?` | Recording failed |
+| `onError` | `((String) -> Void)?` | General error |
+| `onAuthApproved` | `((String?) -> Void)?` | Auth approved (token provided) |
+| `onSessionLocked` | `((SessionLockedPayload) -> Void)?` | Session locked by another driver |
+| `onAuthFailed` | `((String) -> Void)?` | Auth rejected |
+| `onInteraction` | `((InteractionEvent) -> Void)?` | Interaction broadcast from observer mode |
+| `onStatus` | `((String) -> Void)?` | Progress messages for session management |
 
-##### onDeviceDiscovered
+> **Note:** At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`). TheHandoff translates these into the named callbacks above.
 
-```swift
-public var onDeviceDiscovered: ((DiscoveredDevice) -> Void)?
-```
+#### Configuration
 
-Called when a new device is discovered.
+| Property | Type | Description |
+|----------|------|-------------|
+| `token` | `String?` | Auth token for connections |
+| `driverId` | `String?` | Driver identity for session locking |
+| `autoSubscribe` | `Bool` | Auto-send subscribe/requestInterface/requestScreen on connect (default: true) |
+| `observeMode` | `Bool` | Send `watch` instead of `authenticate` (default: false) |
 
-##### onDeviceLost
-
-```swift
-public var onDeviceLost: ((DiscoveredDevice) -> Void)?
-```
-
-Called when a device is no longer available.
-
-##### onConnected
-
-```swift
-public var onConnected: ((ServerInfo) -> Void)?
-```
-
-Called when connection is established and server info received.
-
-##### onInterfaceUpdate
-
-```swift
-public var onInterfaceUpdate: ((Interface) -> Void)?
-```
-
-Called when a new hierarchy is received.
-
-##### onActionResult
+#### Injectable Closures (Test Boundary)
 
 ```swift
-public var onActionResult: ((ActionResult) -> Void)?
+var makeDiscovery: () -> any DeviceDiscovering
+var makeConnection: (DiscoveredDevice, String?, String) -> any DeviceConnecting
 ```
 
-Called when an action result is received.
-
-##### onScreen
-
-```swift
-public var onScreen: ((ScreenPayload) -> Void)?
-```
-
-Called when a screenshot is received.
-
-##### onRecordingStarted
-
-```swift
-public var onRecordingStarted: (() -> Void)?
-```
-
-Called when recording has begun.
-
-##### onRecording
-
-```swift
-public var onRecording: ((RecordingPayload) -> Void)?
-```
-
-Called when a completed recording is received.
-
-##### onRecordingError
-
-```swift
-public var onRecordingError: ((String) -> Void)?
-```
-
-Called when recording fails.
-
-##### onDisconnected
-
-```swift
-public var onDisconnected: ((DisconnectReason) -> Void)?
-```
-
-Called when disconnected. The `DisconnectReason` indicates why the connection was closed (see [DisconnectReason](#disconnectreason)).
-
-##### onAuthApproved
-
-```swift
-public var onAuthApproved: ((String?) -> Void)?
-```
-
-Called when the connection is approved (via token match or on-device UI). For driver connections, the token is provided so the client can store it for future connections. For observer connections, the token is `nil`. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#ui-approval-flow) for details.
-
-> **Note:** These callbacks are on `TheMastermind`. At the network layer, `DeviceConnection` and `DeviceDiscovery` use a single `onEvent` callback with typed enums (`ConnectionEvent`, `DiscoveryEvent`) instead of individual properties. See [DeviceConnecting](#deviceconnecting) and [DeviceDiscovering](#devicediscovering).
-
-##### onSessionLocked
-
-```swift
-public var onSessionLocked: ((SessionLockedPayload) -> Void)?
-```
-
-Called when the server rejects the connection because another driver holds the active session. The `connectionState` will be set to `.failed` with the payload message. See [WIRE-PROTOCOL.md](WIRE-PROTOCOL.md#session-locking) for details.
-
-##### driverId
-
-```swift
-public var driverId: String?
-```
-
-Driver identity for session locking. When set, the server uses this to distinguish drivers that share the same auth token. Read from `BUTTONHEIST_DRIVER_ID` environment variable. When `nil`, the auth token is used as driver identity (backward-compatible).
+Tests replace these with mock implementations to avoid real Bonjour and NWConnection.
 
 #### Methods
 
-##### init()
+| Method | Description |
+|--------|-------------|
+| `startDiscovery()` | Begin Bonjour discovery |
+| `stopDiscovery()` | Stop discovery |
+| `connect(to:)` | Connect to a device (sets connectionState to .connecting) |
+| `disconnect()` | Disconnect and clear all state |
+| `forceDisconnect()` | Force-close a stale connection |
+| `send(_:requestId:)` | Send a ClientMessage with optional requestId |
+| `connectWithDiscovery(filter:timeout:)` | Discover + resolve + connect in one async call |
+| `setupAutoReconnect(filter:)` | Install auto-reconnect on disconnect (60 attempts at 1s) |
+| `discoverReachableDevices(timeout:probeTimeout:retryInterval:)` | Discover and probe-validate devices |
+| `displayName(for:)` | Disambiguated display name for a device |
+
+#### ConnectionState
 
 ```swift
-public init()
-```
-
-Create a new client instance.
-
-##### startDiscovery()
-
-```swift
-public func startDiscovery()
-```
-
-Begin discovering devices via Bonjour. Clears previous devices.
-
-##### stopDiscovery()
-
-```swift
-public func stopDiscovery()
-```
-
-Stop device discovery.
-
-##### discoverReachableDevices(timeout:probeTimeout:retryInterval:)
-
-```swift
-public func discoverReachableDevices(
-    timeout: TimeInterval = 3.0,
-    probeTimeout: TimeInterval = 0.5,
-    retryInterval: TimeInterval = 0.2
-) async -> [DiscoveredDevice]
-```
-
-Discover devices and return only those that respond to a lightweight `status` probe.
-If discovery is already active, this reuses the existing session; otherwise it starts a temporary discovery session and stops it before returning.
-
-**Parameters**:
-- `timeout`: Total time to wait for discovery and probe retries.
-- `probeTimeout`: Per-device timeout for each reachability probe.
-- `retryInterval`: Delay before retrying a device that did not answer the previous probe.
-
-**Returns**: Reachable deduplicated devices visible during the discovery window.
-
-##### connect(to:)
-
-```swift
-public func connect(to device: DiscoveredDevice)
-```
-
-Connect to a discovered device. Automatically sends `subscribe`, `requestInterface`, and `requestScreen` on connection.
-
-**Parameters**:
-- `device`: Device to connect to (from `discoveredDevices`).
-
-##### disconnect()
-
-```swift
-public func disconnect()
-```
-
-Disconnect from the current device and clear all state.
-
-##### requestInterface()
-
-```swift
-public func requestInterface()
-```
-
-Request a single hierarchy snapshot.
-
-##### send(_:)
-
-```swift
-public func send(_ message: ClientMessage)
-```
-
-Send any `ClientMessage` to the connected device.
-
-##### waitForActionResult(timeout:)
-
-```swift
-public func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult
-```
-
-Wait asynchronously for an action result with timeout.
-
-**Parameters**:
-- `timeout`: Maximum wait time in seconds.
-
-**Throws**: `ActionError.timeout` if no result received within timeout.
-
-##### waitForScreen(timeout:)
-
-```swift
-public func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload
-```
-
-Wait asynchronously for a screenshot with timeout.
-
-**Parameters**:
-- `timeout`: Maximum wait time in seconds (default: 30).
-
-**Throws**: `ActionError.timeout` if no screenshot received within timeout.
-
-##### waitForRecording(timeout:)
-
-```swift
-public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload
-```
-
-Wait asynchronously for a recording to complete with timeout.
-
-**Parameters**:
-- `timeout`: Maximum wait time in seconds (default: 120).
-
-**Throws**: `ActionError.timeout` if no recording received within timeout, or `RecordingError.serverError` if recording fails.
-
-##### displayName(for:)
-
-```swift
-public func displayName(for device: DiscoveredDevice) -> String
-```
-
-Compute a display name for a device. Returns just the app name if unique among discovered devices, or "AppName (DeviceName)" if disambiguation is needed.
-
-#### ActionError
-
-```swift
-public enum ActionError: Error, LocalizedError {
-    case timeout
+public enum ConnectionState: Equatable {
+    case disconnected
+    case connecting
+    case connected
+    case failed(String)
 }
 ```
 
@@ -723,7 +491,7 @@ Stateless resolver for connection targets with environment variable override pre
 public enum DisconnectReason: Error, LocalizedError
 ```
 
-Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection` and to `onDisconnected` callbacks on `TheMastermind`.
+Structured reason for why a connection was closed. Passed via `ConnectionEvent.disconnected` on `DeviceConnection` and to `onDisconnected` callbacks on `TheHandoff`.
 
 #### Cases
 
@@ -1757,87 +1525,48 @@ struct MyApp: App {
 </array>
 ```
 
-### SwiftUI Client Integration
-
-```swift
-import SwiftUI
-import ButtonHeist
-import TheScore
-
-struct InspectorView: View {
-    @State private var client = TheMastermind()
-
-    var body: some View {
-        NavigationSplitView {
-            List(client.discoveredDevices, selection: $selectedDevice) { device in
-                Text(client.displayName(for: device))
-            }
-        } detail: {
-            if let iface = client.currentInterface {
-                List(iface.elements, id: \.order) { element in
-                    VStack(alignment: .leading) {
-                        Text(element.description)
-                        Text(element.identifier ?? "")
-                            .font(.caption)
-                    }
-                }
-            }
-        }
-        .onAppear {
-            client.startDiscovery()
-        }
-        .onChange(of: selectedDevice) { device in
-            if let device {
-                client.connect(to: device)
-            }
-        }
-    }
-
-    @State private var selectedDevice: DiscoveredDevice?
-}
-```
-
 ### Callback-Based Usage
 
 ```swift
 import ButtonHeist
 import TheScore
 
+@ButtonHeistActor
 class Inspector {
-    let client = TheMastermind()
+    let handoff = TheHandoff()
 
     init() {
-        client.onDeviceDiscovered = { [weak self] device in
+        handoff.onDeviceFound = { [weak self] device in
             print("Found: \(device.name)")
-            self?.client.connect(to: device)
+            self?.handoff.connect(to: device)
         }
 
-        client.onConnected = { info in
+        handoff.onConnected = { info in
             print("Connected to \(info.appName) on \(info.deviceName)")
         }
 
-        client.onInterfaceUpdate = { iface in
+        handoff.onInterface = { iface, _ in
             print("Received \(iface.elements.count) elements")
             for element in iface.elements {
                 print("  \(element.order): \(element.description)")
             }
         }
 
-        client.onActionResult = { result in
+        handoff.onActionResult = { result, _ in
             print("Action: \(result.success ? "success" : "failed") via \(result.method)")
         }
 
-        client.onScreen = { screenshot in
+        handoff.onScreen = { screenshot, _ in
             print("Screenshot: \(screenshot.width)x\(screenshot.height)")
         }
 
-        client.onDisconnected = { reason in
+        handoff.onDisconnected = { reason in
             print("Disconnected: \(reason)")
         }
     }
 
     func start() {
-        client.startDiscovery()
+        handoff.startDiscovery()
     }
 }
 ```

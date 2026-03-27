@@ -221,7 +221,7 @@ All unit tests must be fully deterministic — no dependency on running apps, Bo
 
 **Never let real Bonjour discovery or `NWConnection` run in a unit test.** These find live apps on the network, making tests flaky and environment-dependent.
 
-The mock boundary is at the network layer: `DeviceConnecting` and `DeviceDiscovering` protocols. Real `TheFence`, `TheMastermind`, and `TheHandoff` are used in tests, but with mock closures injected (`makeDiscovery`, `makeConnection`) so no real network I/O occurs.
+The mock boundary is at the network layer: `DeviceConnecting` and `DeviceDiscovering` protocols. Real `TheFence` and `TheHandoff` are used in tests, but with mock closures injected (`makeDiscovery`, `makeConnection`) so no real network I/O occurs.
 
 TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so tests can inject mock implementations. Default closures create the real `DeviceDiscovery` and `DeviceConnection`.
 
@@ -230,7 +230,7 @@ TheHandoff receives injectable closures (`makeDiscovery`, `makeConnection`) so t
 | Test type | Can use | Must NOT use |
 |-----------|---------|-------------|
 | **Protocol tests** (TheScore) | Value types, Codable round-trips | Any networking or UIKit |
-| **Handler/dispatch tests** (TheFence) | Real TheFence/TheMastermind with mock DeviceConnecting injected via TheHandoff factory, pure arg parsing | Real Bonjour, NWConnection |
+| **Handler/dispatch tests** (TheFence) | Real TheFence/TheHandoff with mock DeviceConnecting injected via TheHandoff factory, pure arg parsing | Real Bonjour, NWConnection |
 | **Connection logic tests** (DeviceConnection) | Message injection, forced isConnected | Real NWListener, real TCP sockets |
 | **Auth/session tests** (TheMuscle) | Callback injection | Real networking, real UI alerts |
 | **Integration tests** (TLS, Keychain) | Real NWListener on loopback, real Keychain | Must be clearly labeled, must clean up after themselves |
@@ -250,7 +250,7 @@ New features follow a strict three-phase workflow — define the contract, prove
 Start by writing the public types, protocols, and method signatures. This is the contract — what the feature looks like from the outside. Stub out the bodies with `fatalError("not implemented")` or empty returns so it compiles but doesn't work yet.
 
 - Define new enums, structs, and protocol requirements.
-- Add method signatures to existing types (TheFence commands, TheMastermind callbacks, etc.).
+- Add method signatures to existing types (TheFence commands, TheHandoff callbacks, etc.).
 - Wire up CLI commands and MCP tool definitions as thin shells.
 
 ### Phase 2: Write the tests
@@ -335,7 +335,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 - Any command add/remove/rename must update the `Command` enum in the same change.
 - MCP tool definitions live in `ButtonHeistMCP/Sources/ToolDefinitions.swift`; keep them in sync with `Command.allCases`.
 - For rapid MCP driving: prefer action `delta` responses and only call `get_interface` when context is stale.
-- When mastermind/session behavior changes, validate both builds in the same branch:
+- When handoff/session behavior changes, validate both builds in the same branch:
   - `cd ButtonHeistCLI && swift build -c release`
   - `cd ButtonHeistMCP && swift build -c release`
 

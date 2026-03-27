@@ -83,7 +83,7 @@ graph TD
     HUMAN["A Human<br/>(You even)"]
     MCP["buttonheist-mcp<br/>18 tools"]
     CLI["buttonheist CLI<br/>15 subcommands"]
-    Client["TheFence / TheMastermind<br/>(ButtonHeist framework)"]
+    Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded in your app)"]
     App["Your iOS App"]
 
@@ -117,7 +117,7 @@ graph TD
 |--------|----------|-------------|
 | **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, protocol v6.1 |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
-| **ButtonHeist** | macOS | Client framework: TheFence (33-command dispatch), TheMastermind (@Observable coordinator), TheHandoff (discovery + connection) |
+| **ButtonHeist** | macOS | Client framework: TheFence (35-command dispatch + request correlation), TheHandoff (discovery + connection + state) |
 | **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
 | **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
@@ -148,9 +148,8 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheMastermind** | Runs the show. @Observable coordinator over TheHandoff: discovery, connection, callbacks |
-| **TheFence** | Moves the merchandise. 33 commands routed from CLI and MCP to the connected device |
-| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS setup, injectable closures for testing |
+| **TheFence** | Runs the show. 35 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
 
 #### The Legitimate Front
 

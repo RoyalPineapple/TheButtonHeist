@@ -261,7 +261,7 @@ These limits are enforced by `SimpleSocketServer` and apply to both authenticate
 | **SimpleSocketServer** | Tracks `authenticatedClients` set. Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
 | **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side handshake and auth handling. Verifies `protocolVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, fires `onConnected` only after receiving `info` (post-auth). |
-| **TheMastermind** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. |
+| **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionState` (including `.failed` on auth failure or session lock). |
 
 ## TLS Certificate Lifecycle
 

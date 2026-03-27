@@ -21,14 +21,13 @@ struct GetInterfaceCommand: AsyncParsableCommand {
         let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
-        let client = connector.client
 
         if !connection.quiet {
             logStatus("Requesting interface...")
         }
 
-        client.requestInterface()
-        let interface = try await client.waitForInterface(timeout: timeout)
+        connector.requestInterface()
+        let interface = try await connector.waitForInterface(timeout: timeout)
 
         switch format ?? .auto {
         case .json:
