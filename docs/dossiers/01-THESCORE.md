@@ -153,6 +153,7 @@ classDiagram
 
     class ElementProperty {
         <<enum>>
+        label
         value
         traits
         hint
@@ -201,7 +202,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.2"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"6.4"` (explicit `type` / `payload` envelopes + exact hello/version matching, `ElementProperty.label` added)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency (note: `ClientMessage` was made `Sendable` to support `InteractionEvent`)
