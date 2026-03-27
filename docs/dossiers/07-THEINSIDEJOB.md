@@ -1,4 +1,4 @@
-# TheInsideJob - The Inside Operative
+# TheInsideJob — The Inside Operative
 
 > **Module:** `ButtonHeist/Sources/TheInsideJob/`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
@@ -12,175 +12,228 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 2. **Manages TLS identity** (`TLSIdentity`) — runtime-generated self-signed ECDSA certificates with SHA-256 fingerprint pinning
 3. **Provides server transport** (`ServerTransport`) — protocol abstraction for server-side networking
 4. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
-5. **Polls for UI changes** at configurable intervals (default 1s, min 0.5s)
-6. **Dispatches all commands** to crew members (TheSafecracker, Stakeout, TheMuscle)
-7. **Manages client subscriptions** and broadcasts hierarchy/screen updates
-8. **Caches accessibility elements** with weak references for fast resolution
-9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection (loopback = simulator, `anpi` interface = USB, other = network). Defaults to simulator + USB; configurable via `INSIDEJOB_SCOPE` env var.
+5. **Drives hierarchy updates** via TheTripwire's pulse-based settle detection (no debounce timer)
+6. **Polls for UI changes** at configurable intervals (default 1s, min 0.5s) as a supplementary mechanism
+7. **Dispatches all commands** to crew members via a two-level dispatch structure
+8. **Manages client subscriptions** and broadcasts hierarchy/screen updates
+9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection
 
 ## Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
-        Core["TheInsideJob.swift - Server lifecycle, message dispatch"]
-        Bagman["TheBagman.swift - Hierarchy parsing, element cache, - delta computation, animation detection"]
-        Anim["Extensions/Animation.swift - waitForIdle handler"]
-        Poll["Extensions/Polling.swift - Periodic hash-change polling"]
-        Screen["Extensions/Screen.swift - Screenshot capture, recording mgmt"]
-        Auto["Extensions/AutoStart.swift - @_cdecl entry point for ThePlant"]
+        Core["TheInsideJob.swift — Server lifecycle, message dispatch, performInteraction"]
+        Dispatch["TheInsideJob+Dispatch.swift — 3-part interaction dispatch table"]
+        Poll["Extensions/Polling.swift — Pulse-driven broadcasts, hash-change polling"]
+        Anim["Extensions/Animation.swift — waitForIdle handler"]
+        Screen["Extensions/Screen.swift — Screenshot capture, recording mgmt"]
+        Auto["Extensions/AutoStart.swift — @_cdecl entry point for ThePlant"]
     end
 
     subgraph Crew["Crew Members (Owned)"]
-        Muscle["TheMuscle - Auth & Sessions"]
-        Safecracker["TheSafecracker - Touch & Text"]
-        StakeoutCrew["Stakeout - Recording"]
-        Fingerprints["Fingerprints - Visual Feedback"]
+        Tripwire["TheTripwire — UI pulse, settle detection"]
+        Bagman["TheBagman — Element cache, hierarchy, delta"]
+        Muscle["TheMuscle — Auth & sessions"]
+        Safecracker["TheSafecracker — Touch & text"]
+        Stakeout["TheStakeout — Recording"]
     end
 
-    subgraph Transport["Transport (formerly TheGetaway)"]
-        Server["SimpleSocketServer - TLS/TCP listener"]
-        STransport["ServerTransport - Protocol abstraction"]
-        TLS["TLSIdentity - ECDSA cert + SHA-256 fingerprint"]
-    end
-
-    subgraph Infra["Infrastructure"]
-        NetService["NetService - Bonjour advertisement"]
-        Parser["AccessibilitySnapshotParser - Hierarchy traversal"]
+    subgraph Transport["Transport"]
+        Server["SimpleSocketServer — TLS/TCP listener"]
+        STransport["ServerTransport — Protocol abstraction"]
+        TLS["TLSIdentity — ECDSA cert + SHA-256 fingerprint"]
     end
 
     TLS --> Server
     STransport --> Server
-
     Core --> Muscle
     Core --> Safecracker
-    Core --> StakeoutCrew
-    Core --> Fingerprints
-    Core --> Server
-    Core --> NetService
-    Bagman --> Parser
+    Core --> Stakeout
+    Core --> Tripwire
+    Core --> Bagman
+    Core --> STransport
+    Dispatch --> Safecracker
+    Poll --> Tripwire
     Poll --> Bagman
-    Screen --> StakeoutCrew
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch |
-| `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
-| `Extensions/Animation.swift` | `handleWaitForIdle` — waits for animation settle, refreshes hierarchy |
-| `Extensions/Polling.swift` | Periodic poll loop, debounced broadcast |
+| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performScrollToVisibleSearch` |
+| `TheInsideJob+Dispatch.swift` | Three-part interaction dispatch: accessibility, touch, text+scroll |
+| `Extensions/Polling.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `broadcastCurrentHierarchy`, polling loop, `sendInterface` |
+| `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
 | `Extensions/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
 | `SimpleSocketServer.swift` | NWListener TLS/TCP server, connection management |
 | `ServerTransport.swift` | Server-side networking protocol abstraction |
 | `TLSIdentity.swift` | ECDSA cert generation, SHA-256 fingerprint, Keychain persistence |
 
+## Singleton Pattern and `configure()`
+
+`TheInsideJob` uses a manually managed `private static var _shared`. The `public static var shared` property lazily creates a default instance if `_shared` is nil.
+
+`configure(token:instanceId:allowedScopes:port:)` is a **one-shot factory**:
+- If `_shared` is already set: logs a warning and returns immediately (no-op)
+- If `_shared` is nil: creates a new instance with the provided parameters
+
+Calling `shared` before `configure()` creates a default instance that ignores any subsequent `configure()` call.
+
 ## Message Dispatch Flow
 
 ```mermaid
 flowchart TD
-    Receive["handleClientMessage - (31-message dispatch)"]
+    Receive["handleClientMessage"]
+    Receive --> Decode["Decode RequestEnvelope"]
+    Decode --> ObsCheck["isObserver = muscle.observerClients.contains(clientId)"]
 
-    Receive --> Auth["subscribe / ping"]
-    Receive --> Query["requestInterface / requestScreen / waitForIdle"]
-    Receive --> Actions["activate / increment / decrement / customAction"]
-    Receive --> Touch["touchTap / touchLongPress / touchSwipe / touchDrag - touchPinch / touchRotate / twoFingerTap - touchDrawPath / touchDrawBezier"]
-    Receive --> Text["typeText / editAction / resignFirstResponder"]
-    Receive --> Recording["startRecording / stopRecording"]
+    ObsCheck --> Level1["Level 1: Protocol + Observation (all clients)"]
+    Level1 --> L1Cases["subscribe / unsubscribe / ping / status / requestInterface / requestScreen / waitForIdle"]
 
-    Actions --> Perform["performInteraction()"]
-    Touch --> Perform
-    Text --> Perform
+    ObsCheck --> ObsGate{"is observer?"}
+    ObsGate -->|yes| ReadOnly["Return: Watch mode is read-only"]
+    ObsGate -->|no| Level2["Level 2: Recording + Interactions"]
 
-    Perform --> Step1["1. stakeout.noteActivity()"]
-    Step1 --> Step2["2. refreshAccessibilityData()"]
-    Step2 --> Step3["3. snapshotElements() (before)"]
-    Step3 --> Step4["4. TheSafecracker.execute*()"]
-    Step4 --> Step5["5. actionResultWithDelta()"]
-    Step5 --> Step6{"6. recording active?"}
-    Step6 -->|yes| Step6a["6a. record InteractionEvent to Stakeout"]
-    Step6 -->|no| Step7["7. send(.actionResult)"]
-    Step6a --> Step7
+    Level2 --> RecCases["startRecording / stopRecording"]
+    Level2 --> DispatchInt["dispatchInteraction → 3 sub-dispatchers"]
+
+    DispatchInt --> AccDisp["dispatchAccessibilityInteraction"]
+    DispatchInt --> TouchDisp["dispatchTouchInteraction"]
+    DispatchInt --> TextDisp["dispatchTextAndScrollInteraction"]
+
+    AccDisp --> Perform["performInteraction()"]
+    TouchDisp --> Perform
+    TextDisp --> Perform
+    TextDisp --> ScrollVis["performScrollToVisibleSearch() (dedicated path)"]
 ```
 
-## Lifecycle State Machine
+### `dispatchAccessibilityInteraction`
+`activate`, `increment`, `decrement`, `performCustomAction`, `editAction`, `setPasteboard`, `getPasteboard`, `resignFirstResponder`
+
+### `dispatchTouchInteraction`
+`touchTap`, `touchLongPress`, `touchSwipe`, `touchDrag`, `touchPinch`, `touchRotate`, `touchTwoFingerTap`, `touchDrawPath` (≤10,000 points), `touchDrawBezier` (≤1,000 segments)
+
+### `dispatchTextAndScrollInteraction`
+`typeText`, `scroll`, `scrollToVisible` (→ dedicated path), `scrollToEdge`
+
+## `performInteraction` Pipeline
+
+Every interaction except `scrollToVisible` flows through this method:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Configured: configure(token, instanceId)
-    Configured --> Running: start()
-    Running --> Suspended: UIApplication.didEnterBackground
-    Suspended --> Running: UIApplication.willEnterForeground
-    Running --> Stopped: stop()
-    Stopped --> [*]
-
-    state Running {
-        [*] --> ServerUp: SimpleSocketServer.start()
-        ServerUp --> Advertising: NetService.publish()
-        Advertising --> Polling: startPollingLoop()
-    }
-
-    state Suspended {
-        [*] --> TearDown: stop server + Bonjour
-        TearDown --> Waiting: wait for foreground
-    }
+flowchart TD
+    Start["performInteraction(message, interaction)"]
+    Start --> S1["1. stakeout?.noteActivity()"]
+    S1 --> S2["2. bagman.refreshAccessibilityData()"]
+    S2 --> S3["3. bagman.snapshotElements() — before"]
+    S3 --> S3b["4. tripwire.topmostViewController() — beforeVC"]
+    S3b --> S4["5. await interaction() — TheSafecracker.*"]
+    S4 --> S5{"success?"}
+    S5 -->|yes| S5a["6. await bagman.actionResultWithDelta()"]
+    S5 -->|no| S5b["6. Build failure ActionResult"]
+    S5a --> S6{"recording active?"}
+    S5b --> S6
+    S6 -->|yes| S6a["7. Record InteractionEvent to Stakeout"]
+    S6 -->|no| S7["8. send(.actionResult)"]
+    S6a --> S7
+    S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
 ```
+
+`performScrollToVisibleSearch` is structurally identical but calls `theSafecracker.executeScrollToVisible` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response.
+
+## Status Message Handling
+
+`status` is handled specially:
+- Allowed **pre-auth**: any client that has completed `clientHello` → `serverHello` (is in `helloValidatedClients`) can send `status` before providing a token
+- Allowed **post-auth**: routed through the Level 1 dispatch for all authenticated clients including observers
+- Builds `StatusPayload` via `makeStatusPayload()` from `Bundle.main`, `UIDevice.current`, and `TheMuscle` state
 
 ## Update Mechanisms
 
 Two paths trigger hierarchy broadcasts:
 
-1. **Notification-driven** (`scheduleHierarchyUpdate`): Triggered by `UIAccessibility.elementFocusedNotification` and `voiceOverStatusDidChangeNotification`. Debounced 300ms.
-2. **Polling** (`startPollingLoop`): Periodic at configurable interval (default 1s). Compares `elements.hashValue` to `lastHierarchyHash`. Only broadcasts on change.
+### 1. Pulse-driven (primary)
+
+```mermaid
+flowchart LR
+    AX["Accessibility notification"] --> Schedule["scheduleHierarchyUpdate()"]
+    Schedule --> SetFlag["hierarchyInvalidated = true"]
+    SetFlag --> Check{"tripwire already settled?"}
+    Check -->|yes| Coalesce["~16ms coalesce task → broadcastCurrentHierarchy()"]
+    Check -->|no| Wait["Wait for next .settled transition"]
+    Wait --> Pulse["handlePulseTransition(.settled)"]
+    Pulse --> Broadcast["broadcastCurrentHierarchy()"]
+```
+
+There is **no debounce timer**. The mechanism is entirely pulse-driven:
+- `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
+- If already settled: spawns a ~16ms (1-frame) coalesce task that broadcasts
+- If not settled: the `.settled` transition fires `handlePulseTransition` which clears the flag and broadcasts
+
+### 2. Polling (supplementary)
+
+Periodic at configurable interval (default 1s). Compares `elements.hashValue` to `lastHierarchyHash`. Only broadcasts on change. Gates on `tripwire.allClear()` — skips if UI is not settled. **Disabled by default** (`isPollingEnabled = false`); auto-started instances enable it.
+
+## Lifecycle State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle: TheInsideJob.shared (lazy)
+    Idle --> Configured: configure(token, instanceId)
+    Configured --> Running: start() [async throws]
+    Idle --> Running: start() [with defaults]
+    Running --> Suspended: didEnterBackground
+    Suspended --> Running: willEnterForeground
+    Running --> Stopped: stop()
+    Stopped --> [*]
+
+    state Running {
+        [*] --> ServerUp: TLSIdentity + ServerTransport.start()
+        ServerUp --> Advertising: NetService.publish()
+        Advertising --> Observing: startAccessibilityObservation + startLifecycleObservation
+        Observing --> Pulsing: tripwire.startPulse()
+    }
+
+    state Suspended {
+        [*] --> TearDown: stopPulse + stop transport + tearDown muscle
+        TearDown --> Waiting: wait for foreground
+    }
+```
+
+`suspend()` tears down the entire TCP server, Bonjour, pulse, and observation. `resume()` recreates everything from scratch on a potentially new port — any connected clients are silently disconnected.
+
+## Transport Wiring
+
+Five closure assignments wire `TheMuscle` ↔ `ServerTransport`:
+- `muscle.sendToClient` → `transport.send(_:to:)`
+- `muscle.markClientAuthenticated` → `transport.markAuthenticated(_:)`
+- `muscle.disconnectClient` → `transport.disconnect(clientId:)`
+- `muscle.onClientAuthenticated` → `sendServerInfo`
+- `muscle.onSessionActiveChanged` → update Bonjour TXT record (`sessionactive` key)
+
+Inbound data paths:
+- **Authenticated path**: `transport.onDataReceived` → `handleClientMessage`
+- **Pre-auth path**: `transport.onUnauthenticatedData` → checks for `status` probe from hello-validated clients → otherwise routes to `muscle.handleUnauthenticatedMessage`
 
 ## Items Flagged for Review
 
-### HIGH PRIORITY
-
-**Auth token logged in plaintext** (`TheInsideJob.swift:114`)
-```swift
-insideJobLogger.info("Auth token: \(self.muscle.authToken)")
-```
-The full UUID token is emitted to the system log at `info` level. Any process with log access can read it.
-
-**`handleClientMessage` cyclomatic complexity** (`TheInsideJob.swift:268`)
-- Top-level switch handles protocol and observation messages, then delegates interaction dispatch to `TheInsideJob+Dispatch.swift` which routes 31 message types across 3 sub-methods
-- Each case delegates to a helper, so the individual cases are thin, but the full dispatch flow spans multiple files
-
 ### MEDIUM PRIORITY
 
-**`shouldBindToLoopback` always returns `false`** (`TheInsideJob.swift:98`)
-```swift
-private var shouldBindToLoopback: Bool { false }
-```
-Dead computed property. The server always binds to all interfaces. The documented `INSIDEJOB_BIND_ALL` env var is never read. Note: connection scope filtering (`INSIDEJOB_SCOPE`) now provides a proper mechanism to restrict which connection sources are accepted, partially superseding the need for bind-address filtering.
-
-**Magic nanosecond literals**
-- `300_000_000` debounce (line 66)
-- `1_000_000_000` polling interval (line 70)
-- These could be named constants for clarity.
-
-**`performInteraction` captures interaction events during recording**
-- When `stakeout.state == .recording`, each interaction captures an `InteractionEvent`
-- This includes an optional `interfaceDelta: InterfaceDelta?` (not full before/after snapshots)
-- The `command: ClientMessage` parameter was added to `performInteraction` — all call sites updated
+**`shouldBindToLoopback` always returns `false`** (`TheInsideJob.swift`)
+- Dead computed property. The server always binds to all interfaces.
+- Connection scope filtering (`INSIDEJOB_SCOPE`) provides the proper mechanism to restrict connection sources.
 
 **No unit tests for TheInsideJob itself**
-- The delta computation logic in `TheBagman.swift` is pure data transformation
-- It could be extracted and tested without UIKit dependency
-- Currently untested
+- Delta computation logic in TheBagman is pure data transformation and could be tested without UIKit
+- Server-side dispatch logic is untested
 
 ### LOW PRIORITY
 
 **Background/foreground lifecycle**
-- `suspend()` tears down the entire TCP server and Bonjour advertisement
-- `resume()` recreates on a new port
+- `suspend()` tears down the entire TCP server and Bonjour
+- `resume()` recreates on a potentially new port
 - Any connected clients are silently disconnected with no notification
-- This is expected iOS behavior but worth understanding
-
-**Singleton pattern**
-- `TheInsideJob.shared` is a replaceable singleton via `configure()`
-- Multiple calls to `configure()` create a new instance, but `start()` on the old one isn't called
-- Safe in practice (ThePlant only calls once), but the API allows misuse
+- Expected iOS behavior but worth understanding
