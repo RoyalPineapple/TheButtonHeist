@@ -613,7 +613,8 @@ public final class TheFence {
                 pendingActionRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    self?.timeoutRequest(requestId, from: &self!.pendingActionRequests)
+                    guard let self else { return }
+                    self.timeoutRequest(requestId, from: &self.pendingActionRequests)
                 }
             }
         }
@@ -628,7 +629,8 @@ public final class TheFence {
                 pendingInterfaceRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    self?.timeoutRequest(requestId, from: &self!.pendingInterfaceRequests)
+                    guard let self else { return }
+                    self.timeoutRequest(requestId, from: &self.pendingInterfaceRequests)
                 }
             }
         }
@@ -643,7 +645,8 @@ public final class TheFence {
                 pendingScreenRequests[requestId] = continuation
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    self?.timeoutRequest(requestId, from: &self!.pendingScreenRequests)
+                    guard let self else { return }
+                    self.timeoutRequest(requestId, from: &self.pendingScreenRequests)
                 }
             }
         }

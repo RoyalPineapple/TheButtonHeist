@@ -399,7 +399,7 @@ AI agents can drive iOS apps via either the CLI (`buttonheist session`) or the M
 **Via MCP (preferred for AI agents)**:
 ```
 Agent → MCP tool call: get_interface {}
-  └── ButtonHeistMCP → TheFence → TheHandoff → TheHandoff → TheInsideJob
+  └── ButtonHeistMCP → TheFence → TheHandoff → TheInsideJob
   └── Response: JSON interface with elements
 
 Agent → MCP tool call: activate {identifier: "loginButton"}
