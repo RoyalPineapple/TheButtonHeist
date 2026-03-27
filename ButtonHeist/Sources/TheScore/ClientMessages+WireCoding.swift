@@ -153,7 +153,7 @@ extension ClientMessage {
         case .scroll:
             return .scroll(try ScrollTarget(from: decoder))
         case .scrollToVisible:
-            return .scrollToVisible(try ActionTarget(from: decoder))
+            return .scrollToVisible(try ScrollToVisibleTarget(from: decoder))
         case .scrollToEdge:
             return .scrollToEdge(try ScrollToEdgeTarget(from: decoder))
         case .waitForIdle:
