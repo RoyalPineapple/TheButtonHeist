@@ -5,21 +5,31 @@ import TheScore
 
 extension TheInsideJob {
 
-    // MARK: - Hierarchy Updates
+    // MARK: - Hierarchy Updates (pulse-driven)
 
+    /// Mark the hierarchy as stale. If the pulse is settled, a coalesced
+    /// broadcast fires within one frame. Otherwise, the next `.settled`
+    /// transition triggers the broadcast.
     func scheduleHierarchyUpdate() {
-        updateDebounceTask?.cancel()
-        updateDebounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: updateDebounceInterval)
-            if !Task.isCancelled {
-                await broadcastHierarchyUpdate()
+        hierarchyInvalidated = true
+
+        // If already settled the transition won't re-fire —
+        // dispatch a coalesced broadcast within one frame.
+        if tripwire.latestReading?.isSettled == true {
+            updateCoalesceTask?.cancel()
+            updateCoalesceTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 16_000_000) // ~1 frame coalesce
+                guard !Task.isCancelled, let self, self.hierarchyInvalidated else { return }
+                self.hierarchyInvalidated = false
+                self.broadcastCurrentHierarchy()
             }
         }
     }
 
-    private func broadcastHierarchyUpdate() async {
+    /// Called by the pulse's `.settled` transition and the coalesce task.
+    /// Reads the accessibility tree and broadcasts to subscribers.
+    func broadcastCurrentHierarchy() {
         guard muscle.hasSubscribers else { return }
-        _ = await tripwire.waitForAllClear(timeout: 0.25)
         guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
         let snapshot = bagman.snapshotElements()
@@ -27,7 +37,6 @@ extension TheInsideJob {
 
         let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
 
-        // Update hash for polling comparison
         bagman.lastHierarchyHash = snapshot.elements.hashValue
 
         if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interface(payload))) {
@@ -35,6 +44,14 @@ extension TheInsideJob {
         }
 
         insideJobLogger.debug("Broadcast hierarchy update to \(self.muscle.subscribedClients.count) subscriber(s)")
+    }
+
+    /// Handle pulse transitions. Wired in `start()` / `resume()`.
+    func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
+        if case .settled = transition, hierarchyInvalidated {
+            hierarchyInvalidated = false
+            broadcastCurrentHierarchy()
+        }
     }
 
     // MARK: - Polling
@@ -59,23 +76,19 @@ extension TheInsideJob {
         let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
-        // Compute hash of current hierarchy
         let currentHash = snapshot.elements.hashValue
 
-        // Only broadcast if hierarchy changed
-        if currentHash != bagman.lastHierarchyHash {
+        if currentHash != bagman.lastHierarchyHash || hierarchyInvalidated {
+            hierarchyInvalidated = false
             bagman.lastHierarchyHash = currentHash
 
-            // Broadcast hierarchy with tree
             let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
             if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interface(payload))) {
                 broadcastToSubscribed(data)
             }
 
-            // Also broadcast screen when hierarchy changes
             broadcastScreen()
 
-            // Notify stakeout of screen change (for inactivity timeout)
             stakeout?.noteScreenChange()
 
             insideJobLogger.debug("Polling detected change, broadcast to \(self.muscle.subscribedClients.count) subscriber(s)")
