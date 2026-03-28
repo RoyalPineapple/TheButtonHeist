@@ -151,9 +151,8 @@ final class TripwireIntegrationTests: XCTestCase {
 
     func testPulseReadingHasValidWindowCount() async {
         tripwire.startPulse()
-        // Window count is sampled every 5th tick (~500ms at 10Hz).
-        // Wait long enough for at least one slow-cadence sample.
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        // All signals sampled every tick — a few ticks is enough.
+        try? await Task.sleep(nanoseconds: 300_000_000)
         guard let reading = tripwire.latestReading else {
             XCTFail("No reading produced")
             return
@@ -163,8 +162,8 @@ final class TripwireIntegrationTests: XCTestCase {
 
     func testPulseReadingTracksVCIdentity() async {
         tripwire.startPulse()
-        // Wait enough ticks for VC to be sampled (every 3rd tick at ~10Hz)
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        // All signals sampled every tick — a few ticks is enough.
+        try? await Task.sleep(nanoseconds: 300_000_000)
         guard let reading = tripwire.latestReading else {
             XCTFail("No reading produced")
             return
