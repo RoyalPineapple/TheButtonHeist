@@ -333,8 +333,8 @@ public final class TheFence {
         return UnitPoint(x: x, y: y)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
-        ActionTarget(
+    func elementTarget(_ dictionary: [String: Any]) -> ElementTarget? {
+        ElementTarget(
             heistId: stringArg(dictionary, "heistId"),
             matcher: elementMatcher(dictionary)
         )

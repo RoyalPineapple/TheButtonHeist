@@ -198,7 +198,7 @@ final class RecordingPayloadTests: XCTestCase {
         let delta = InterfaceDelta(kind: .noChange, elementCount: 5)
         let event = InteractionEvent(
             timestamp: 1.5,
-            command: .activate(ActionTarget(match: ElementMatcher(identifier: "loginButton"))),
+            command: .activate(.matcher(ElementMatcher(identifier: "loginButton"))),
             result: ActionResult(success: true, method: .activate, interfaceDelta: delta)
         )
 
@@ -206,11 +206,10 @@ final class RecordingPayloadTests: XCTestCase {
         let decoded = try JSONDecoder().decode(InteractionEvent.self, from: data)
 
         XCTAssertEqual(decoded.timestamp, 1.5)
-        if case .activate(let target) = decoded.command {
-            XCTAssertEqual(target.match?.identifier, "loginButton")
-        } else {
-            XCTFail("Expected activate command")
+        guard case .activate(.matcher(let matcher)) = decoded.command else {
+            return XCTFail("Expected activate with matcher")
         }
+        XCTAssertEqual(matcher.identifier, "loginButton")
         XCTAssertTrue(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .activate)
         XCTAssertEqual(decoded.result.interfaceDelta?.kind, .noChange)
@@ -225,7 +224,7 @@ final class RecordingPayloadTests: XCTestCase {
         )
         let event = InteractionEvent(
             timestamp: 3.2,
-            command: .touchTap(TouchTapTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "okBtn")))),
+            command: .touchTap(TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "okBtn")))),
             result: ActionResult(success: true, method: .syntheticTap, interfaceDelta: delta)
         )
 
@@ -243,7 +242,7 @@ final class RecordingPayloadTests: XCTestCase {
         // Failed actions have no delta
         let event = InteractionEvent(
             timestamp: 2.0,
-            command: .activate(ActionTarget(match: ElementMatcher(identifier: "missing"))),
+            command: .activate(.matcher(ElementMatcher(identifier: "missing"))),
             result: ActionResult(success: false, method: .elementNotFound, message: "Element not found")
         )
 
@@ -261,7 +260,7 @@ final class RecordingPayloadTests: XCTestCase {
         let end = start.addingTimeInterval(5.0)
         let event = InteractionEvent(
             timestamp: 1.0,
-            command: .activate(ActionTarget(match: ElementMatcher(label: "element_3"))),
+            command: .activate(.matcher(ElementMatcher(label: "element_3"))),
             result: ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0))
         )
         let payload = RecordingPayload(

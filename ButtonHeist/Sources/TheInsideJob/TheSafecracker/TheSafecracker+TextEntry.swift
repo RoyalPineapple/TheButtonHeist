@@ -18,7 +18,7 @@ extension TheSafecracker {
 
         // Step 1: If elementTarget provided, tap to focus and wait for keyboard
         if let elementTarget = target.elementTarget {
-            guard let resolved = bagman?.resolveTarget(elementTarget) else {
+            guard let bagman, let resolved = bagman.resolveTarget(elementTarget) else {
                 return .failure(.elementNotFound, message: "Target element not found")
             }
 
@@ -77,7 +77,7 @@ extension TheSafecracker {
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let resolved = bagman?.resolveTarget(elementTarget) {
+            if let bagman, let resolved = bagman.resolveTarget(elementTarget) {
                 fieldValue = resolved.element.value
             }
         }

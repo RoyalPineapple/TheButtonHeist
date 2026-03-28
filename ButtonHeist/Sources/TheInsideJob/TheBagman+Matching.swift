@@ -100,6 +100,28 @@ extension Array where Element == AccessibilityHierarchy {
         firstMatch(matcher) != nil
     }
 
+    /// Returns the match only if exactly one leaf element satisfies the predicate.
+    /// Returns nil on zero matches or ambiguity (2+). Early-exits at 2.
+    func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
+        var found: AccessibilityHierarchy.MatchResult?
+        func walk(_ nodes: [AccessibilityHierarchy]) -> Bool {
+            for node in nodes {
+                switch node {
+                case .element(let element, let traversalIndex):
+                    if element.matches(matcher) {
+                        if found != nil { return true }
+                        found = .init(element: element, traversalIndex: traversalIndex)
+                    }
+                case .container(_, let children):
+                    if walk(children) { return true }
+                }
+            }
+            return false
+        }
+        if walk(self) { return nil }
+        return found
+    }
+
     private func collectMatches(
         _ matcher: ElementMatcher,
         into results: inout [AccessibilityHierarchy.MatchResult]
@@ -125,11 +147,18 @@ extension AccessibilityElement {
     private static let knownTraitNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
 
     /// Does this element satisfy all property predicates in the matcher?
+    /// String fields (label, identifier, value) use case-insensitive substring matching.
     /// Trait name strings are resolved to bitmasks via the parser's `fromNames`.
     func matches(_ matcher: ElementMatcher) -> Bool {
-        if let matchLabel = matcher.label, label != matchLabel { return false }
-        if let matchIdentifier = matcher.identifier, identifier != matchIdentifier { return false }
-        if let matchValue = matcher.value, value != matchValue { return false }
+        if let matchLabel = matcher.label {
+            guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
+        }
+        if let matchIdentifier = matcher.identifier {
+            guard let identifier, identifier.localizedCaseInsensitiveContains(matchIdentifier) else { return false }
+        }
+        if let matchValue = matcher.value {
+            guard let value, value.localizedCaseInsensitiveContains(matchValue) else { return false }
+        }
         if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {
             // Unknown trait names must cause a miss — fromNames drops them silently
             // and .contains(.none) is always true, so validate every name resolved.

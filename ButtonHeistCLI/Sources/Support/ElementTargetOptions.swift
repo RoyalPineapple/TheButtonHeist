@@ -34,13 +34,11 @@ struct ElementTargetOptions: ParsableArguments {
         )
     }
 
-    var actionTarget: ActionTarget? {
-        let match = elementMatcher
-        guard heistId != nil || match != nil else { return nil }
-        return ActionTarget(heistId: heistId, match: match)
+    var actionTarget: ElementTarget? {
+        ElementTarget(heistId: heistId, matcher: elementMatcher ?? ElementMatcher())
     }
 
-    func requireTarget() throws -> ActionTarget {
+    func requireTarget() throws -> ElementTarget {
         guard let target = actionTarget else {
             throw ValidationError("Must specify --heist-id, --identifier, or --label")
         }

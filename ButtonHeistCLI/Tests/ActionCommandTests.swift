@@ -6,16 +6,16 @@ final class ActionCommandTests: XCTestCase {
 
     // MARK: - Message Encoding Tests
 
-    func testActionTargetEncoding() throws {
-        let target = ActionTarget(match: ElementMatcher(identifier: "testButton"))
+    func testElementTargetEncoding() throws {
+        let target = ElementTarget(match: ElementMatcher(identifier: "testButton"))
         let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ActionTarget.self, from: data)
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
 
         XCTAssertEqual(decoded.match?.identifier, "testButton")
     }
 
     func testTouchTapTargetWithElementEncoding() throws {
-        let target = TouchTapTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "button")))
+        let target = TouchTapTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "button")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TouchTapTarget.self, from: data)
 
@@ -36,7 +36,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testLongPressTargetEncoding() throws {
-        let target = LongPressTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "btn")), duration: 1.5)
+        let target = LongPressTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "btn")), duration: 1.5)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(LongPressTarget.self, from: data)
 
@@ -59,7 +59,7 @@ final class ActionCommandTests: XCTestCase {
 
     func testSwipeTargetWithDirectionEncoding() throws {
         let target = SwipeTarget(
-            elementTarget: ActionTarget(match: ElementMatcher(identifier: "list")),
+            elementTarget: ElementTarget(match: ElementMatcher(identifier: "list")),
             direction: .up
         )
         let data = try JSONEncoder().encode(target)
@@ -86,7 +86,7 @@ final class ActionCommandTests: XCTestCase {
 
     func testDragTargetEncoding() throws {
         let target = DragTarget(
-            elementTarget: ActionTarget(match: ElementMatcher(identifier: "slider")),
+            elementTarget: ElementTarget(match: ElementMatcher(identifier: "slider")),
             endX: 300, endY: 200, duration: 0.8
         )
         let data = try JSONEncoder().encode(target)
@@ -121,7 +121,7 @@ final class ActionCommandTests: XCTestCase {
 
     func testCustomActionTargetEncoding() throws {
         let target = CustomActionTarget(
-            elementTarget: ActionTarget(match: ElementMatcher(identifier: "item")),
+            elementTarget: ElementTarget(match: ElementMatcher(identifier: "item")),
             actionName: "Delete"
         )
         let data = try JSONEncoder().encode(target)
@@ -132,7 +132,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testClientMessageActionEncoding() throws {
-        let activateMessage = ClientMessage.activate(ActionTarget(match: ElementMatcher(identifier: "btn")))
+        let activateMessage = ClientMessage.activate(ElementTarget(match: ElementMatcher(identifier: "btn")))
         let data = try JSONEncoder().encode(activateMessage)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
@@ -245,7 +245,7 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - Multi-Touch Target Tests
 
     func testPinchTargetWithElementEncoding() throws {
-        let target = PinchTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "mapView")), scale: 2.0, spread: 80, duration: 0.3)
+        let target = PinchTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "mapView")), scale: 2.0, spread: 80, duration: 0.3)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(PinchTarget.self, from: data)
 
@@ -270,7 +270,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testRotateTargetWithElementEncoding() throws {
-        let target = RotateTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "imageView")), angle: 1.57, radius: 50, duration: 0.8)
+        let target = RotateTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "imageView")), angle: 1.57, radius: 50, duration: 0.8)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(RotateTarget.self, from: data)
 
@@ -295,7 +295,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testTwoFingerTapTargetWithElementEncoding() throws {
-        let target = TwoFingerTapTarget(elementTarget: ActionTarget(match: ElementMatcher(identifier: "zoomControl")), spread: 60)
+        let target = TwoFingerTapTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "zoomControl")), spread: 60)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TwoFingerTapTarget.self, from: data)
 
@@ -516,7 +516,7 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - TypeText Tests
 
     func testTypeTextTargetEncoding() throws {
-        let target = TypeTextTarget(text: "hello", elementTarget: ActionTarget(match: ElementMatcher(identifier: "textField")))
+        let target = TypeTextTarget(text: "hello", elementTarget: ElementTarget(match: ElementMatcher(identifier: "textField")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
@@ -526,7 +526,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testTypeTextTargetWithDeleteCountEncoding() throws {
-        let target = TypeTextTarget(text: "world", deleteCount: 5, elementTarget: ActionTarget(match: ElementMatcher(identifier: "input")))
+        let target = TypeTextTarget(text: "world", deleteCount: 5, elementTarget: ElementTarget(match: ElementMatcher(identifier: "input")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
@@ -536,7 +536,7 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testClientMessageTypeTextEncoding() throws {
-        let message = ClientMessage.typeText(TypeTextTarget(text: "abc", elementTarget: ActionTarget(match: ElementMatcher(identifier: "field"))))
+        let message = ClientMessage.typeText(TypeTextTarget(text: "abc", elementTarget: ElementTarget(match: ElementMatcher(identifier: "field"))))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 

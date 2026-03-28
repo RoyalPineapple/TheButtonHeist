@@ -121,17 +121,20 @@ final class ClientMessageTests: XCTestCase {
     func testTypeTextWithElementTarget() throws {
         let target = TypeTextTarget(
             text: "Hello",
-            elementTarget: ActionTarget(match: ElementMatcher(identifier: "nameField"))
+            elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
         )
         let message = ClientMessage.typeText(target)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .typeText(let decodedTarget) = decoded {
-            XCTAssertEqual(decodedTarget.text, "Hello")
-            XCTAssertEqual(decodedTarget.elementTarget?.match?.identifier, "nameField")
+        guard case .typeText(let decodedTarget) = decoded else {
+            return XCTFail("Expected typeText, got \(decoded)")
+        }
+        XCTAssertEqual(decodedTarget.text, "Hello")
+        if case .matcher(let matcher) = decodedTarget.elementTarget {
+            XCTAssertEqual(matcher.identifier, "nameField")
         } else {
-            XCTFail("Expected typeText, got \(decoded)")
+            XCTFail("Expected .matcher elementTarget")
         }
     }
 
