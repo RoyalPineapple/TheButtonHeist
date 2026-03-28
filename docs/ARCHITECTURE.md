@@ -91,7 +91,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── getTraversableWindows() — shared window access for TheBagman
 │   ├── topmostViewController() / currentFirstResponder() — sampled identity tracking
 │   ├── keyboardVisibleFlag / textInputActiveFlag — notification-driven input state
-│   ├── latestReading / onTransition — carried-forward pulse snapshot + settle/screen/focus callbacks
+│   ├── latestReading / onTransition — single-state pulse snapshot, transitions diffed against previous reading
 │   ├── allClear() — sync gate backed by the latest pulse reading when running
 │   └── waitForSettle(timeout:) / waitForAllClear(timeout:) — per-waiter quiet-frame settle tracking
 ├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
