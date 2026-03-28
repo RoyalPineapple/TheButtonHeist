@@ -1,27 +1,17 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import AccessibilitySnapshotParser
 import TheScore
 
 extension TheSafecracker {
 
     // MARK: - Auto-Scroll to Visible
 
-    /// Ensure the targeted element is within the screen bounds before interaction.
-    /// If the element's accessibility frame is outside the screen, scrolls the
-    /// nearest scrollable ancestor to bring it into view, waits for the scroll
-    /// animation to settle via presentation-layer diffing, and refreshes the
-    /// element cache so subsequent reads return updated positions.
-    ///
-    /// Best-effort: does nothing if the element is already visible, cannot be
-    /// resolved, or has no scrollable ancestor.
-    func ensureOnScreen(for target: ActionTarget) async {
+    func ensureOnScreen(for target: ElementTarget) async {
         await bagman?.ensureOnScreen(for: target)
     }
 
-    /// Ensure the current first responder is within the screen bounds.
-    /// Used by commands that operate on the responder chain (edit actions,
-    /// resign, pasteboard) so the human observer can see the target.
     func ensureFirstResponderOnScreen() async {
         await bagman?.ensureFirstResponderOnScreen()
     }
@@ -35,7 +25,6 @@ extension TheSafecracker {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
-
         guard let resolved = bagman.resolveTarget(elementTarget) else {
             return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: elementTarget))
         }
@@ -66,7 +55,6 @@ extension TheSafecracker {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
-
         guard let resolved = bagman.resolveTarget(elementTarget) else {
             return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: elementTarget))
         }
@@ -85,17 +73,15 @@ extension TheSafecracker {
             return .failure(.scrollToVisible, message: "No element store available")
         }
 
-        let searchTarget = ActionTarget(heistId: target.heistId, match: target.match)
-        guard searchTarget.heistId != nil || searchTarget.match != nil else {
+        guard let searchTarget = ElementTarget(heistId: target.heistId, matcher: target.match ?? ElementMatcher()) else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
         let maxScrolls = target.resolvedMaxScrolls
         let primaryDirection = target.resolvedDirection
 
-        // Phase 0: Check current tree for match (no conversion to wire types)
+        // Phase 0: Check current tree for match
         bagman.refreshAccessibilityData()
         if let found = bagman.resolveTarget(searchTarget) {
-            // Already visible — scroll into view if partially off-screen
             _ = bagman.scrollToVisible(elementAt: found.traversalIndex)
             let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
             return InteractionResult(
@@ -113,39 +99,24 @@ extension TheSafecracker {
         defer { bagman.endScrollSearch() }
 
         let totalItems = searchPreparation.totalItems
-
-        // Track unique elements by stable identity (label + identifier).
-        // AccessibilityElement.Hashable includes frame/activationPoint which change
-        // between scroll positions, so we use a geometry-free key instead.
         var seenKeys = Set(bagman.cachedElements.map(\.stableKey))
         var scrollCount = 0
 
-        // Phase 1: Scroll in primary direction
         let result = await scrollSearchLoop(
-            target: searchTarget,
-            direction: primaryDirection,
-            maxScrolls: maxScrolls,
-            scrollCount: &scrollCount,
+            target: searchTarget, direction: primaryDirection,
+            maxScrolls: maxScrolls, scrollCount: &scrollCount,
             seenKeys: &seenKeys, totalItems: totalItems
         )
         if let result { return result }
 
-        // Phase 2: Jump to opposite edge, scroll back in primary direction
-        // to cover content before the original starting position.
-        // Skip if Phase 1 exhausted the scroll budget — no point paying for
-        // the edge jump + refresh with zero remaining scrolls.
         if scrollCount < maxScrolls {
             bagman.moveActiveSearchContainerToOppositeEdge(from: primaryDirection)
-            if let tripwire {
-                _ = await tripwire.waitForAllClear(timeout: 1.0)
-            }
+            if let tripwire { _ = await tripwire.waitForAllClear(timeout: 1.0) }
             bagman.refreshAccessibilityData()
 
             let result2 = await scrollSearchLoop(
-                target: searchTarget,
-                direction: primaryDirection,
-                maxScrolls: maxScrolls,
-                scrollCount: &scrollCount,
+                target: searchTarget, direction: primaryDirection,
+                maxScrolls: maxScrolls, scrollCount: &scrollCount,
                 seenKeys: &seenKeys, totalItems: totalItems
             )
             if let result2 { return result2 }
@@ -165,11 +136,8 @@ extension TheSafecracker {
 
     // MARK: - Scroll Search Helpers
 
-    /// Run a scroll-and-check loop in one direction. Target resolution happens
-    /// on the canonical accessibility snapshot each step — no wire conversion
-    /// until a match is found.
     private func scrollSearchLoop(
-        target: ActionTarget,
+        target: ElementTarget,
         direction: ScrollSearchDirection,
         maxScrolls: Int,
         scrollCount: inout Int,
@@ -182,11 +150,9 @@ extension TheSafecracker {
             if !scrolled { break }
             scrollCount += 1
 
-            if let tripwire {
-                _ = await tripwire.waitForAllClear(timeout: 1.0)
-            }
+            if let tripwire { _ = await tripwire.waitForAllClear(timeout: 1.0) }
             bagman.refreshAccessibilityData()
-            // Match against canonical elements — no HeistElement conversion
+
             if let found = bagman.resolveTarget(target) {
                 let wireElement = bagman.convertAndAssignId(found.element, index: found.traversalIndex)
                 return InteractionResult(
@@ -198,15 +164,11 @@ extension TheSafecracker {
                 )
             }
 
-            // Track new elements for scroll-end detection
             let currentKeys = bagman.cachedElements.map(\.stableKey)
             let previousCount = seenKeys.count
             seenKeys.formUnion(currentKeys)
-
-            // No new elements → reached the end in this direction
             if seenKeys.count == previousCount { break }
 
-            // Exhaustive check for collection/table views
             if let totalItems, seenKeys.count >= totalItems {
                 return InteractionResult(
                     success: false, method: .scrollToVisible,
@@ -223,7 +185,7 @@ extension TheSafecracker {
 
     // MARK: - Accessibility Actions
 
-    func executeActivate(_ target: ActionTarget) async -> InteractionResult {
+    func executeActivate(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
@@ -237,19 +199,16 @@ extension TheSafecracker {
         }
 
         let point = resolved.element.activationPoint
-
         guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.activate, message: "Element does not support activation")
         }
 
-        // Try accessibilityActivate via the live object reference
         let activateResult = bagman.activate(elementAt: resolved.traversalIndex)
         if activateResult {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
-        // Fall back to synthetic touch injection
         if await tap(at: point) {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
@@ -258,7 +217,7 @@ extension TheSafecracker {
         return .failure(.activate, message: "Activation failed")
     }
 
-    func executeIncrement(_ target: ActionTarget) async -> InteractionResult {
+    func executeIncrement(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
@@ -276,7 +235,7 @@ extension TheSafecracker {
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
-    func executeDecrement(_ target: ActionTarget) async -> InteractionResult {
+    func executeDecrement(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
@@ -327,18 +286,14 @@ extension TheSafecracker {
         await ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return InteractionResult(
-            success: true,
-            method: .setPasteboard,
-            message: nil,
-            value: target.text
+            success: true, method: .setPasteboard, message: nil, value: target.text
         )
     }
 
     func executeGetPasteboard() async -> InteractionResult {
         let text = UIPasteboard.general.string
         return InteractionResult(
-            success: true,
-            method: .getPasteboard,
+            success: true, method: .getPasteboard,
             message: text == nil ? "Pasteboard is empty or contains non-text data" : nil,
             value: text
         )
@@ -364,8 +319,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let point):
             if await tap(at: point) {
                 fingerprints.showFingerprint(at: point)
@@ -383,8 +337,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let point):
             let success = await longPress(at: point, duration: clampDuration(target.duration))
             if success { fingerprints.showFingerprint(at: point) }
@@ -400,19 +353,9 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
 
-        // Resolution priority:
-        // 1. start/end unit points → resolve via element frame
-        // 2. direction + element target → expand to unit-point defaults
-        // 3. Raw startX/startY/endX/endY or direction → existing absolute behavior
-
-        let resolvedStart: UnitPoint? = target.start
-        let resolvedEnd: UnitPoint? = target.end
-
-        // If direction is provided with an element target but no explicit unit points,
-        // expand direction to default unit-point pair
         let unitStart: UnitPoint?
         let unitEnd: UnitPoint?
-        if let start = resolvedStart, let end = resolvedEnd {
+        if let start = target.start, let end = target.end {
             unitStart = start
             unitEnd = end
         } else if let direction = target.direction, target.elementTarget != nil {
@@ -445,10 +388,8 @@ extension TheSafecracker {
             return InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
         }
 
-        // Existing absolute-coordinate path
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let startPoint):
             let endPoint: CGPoint
             if let endX = target.endX, let endY = target.endY {
@@ -479,8 +420,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let startPoint):
             let duration = clampDuration(target.duration ?? 0.5)
             let success = await drag(from: startPoint, to: target.endPoint, duration: duration)
@@ -496,8 +436,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
@@ -514,8 +453,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let radius = target.radius ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
@@ -532,8 +470,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 40.0
             let success = await twoFingerTap(at: center, spread: CGFloat(spread))
@@ -544,11 +481,9 @@ extension TheSafecracker {
 
     func executeDrawPath(_ target: DrawPathTarget) async -> InteractionResult {
         let cgPoints = target.points.map { $0.cgPoint }
-
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
         }
-
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await drawPath(points: cgPoints, duration: duration)
         return InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
@@ -558,7 +493,6 @@ extension TheSafecracker {
         guard !target.segments.isEmpty else {
             return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
         }
-
         let samplesPerSegment = min(target.samplesPerSegment ?? 20, 1000)
         let pathPoints = BezierSampler.sampleBezierPath(
             startPoint: target.startPoint,
@@ -566,11 +500,9 @@ extension TheSafecracker {
             samplesPerSegment: samplesPerSegment
         )
         let cgPoints = pathPoints.map { $0.cgPoint }
-
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
         }
-
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await drawPath(points: cgPoints, duration: duration)
         return InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
@@ -578,14 +510,8 @@ extension TheSafecracker {
 
     // MARK: - Duration Helpers
 
-    /// Default gesture duration when none is specified (0.5s).
     private static let defaultGestureDuration: Double = 0.5
-
-    /// Minimum allowed gesture duration (10ms).
     private static let minGestureDuration: Double = 0.01
-
-    /// Maximum allowed gesture duration (60s). Prevents runaway gestures
-    /// from holding the main thread for unreasonable periods.
     private static let maxGestureDuration: Double = 60.0
 
     func clampDuration(_ value: Double?) -> Double {

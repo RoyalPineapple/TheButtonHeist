@@ -104,11 +104,11 @@ extension ClientMessage {
         case .authenticate:
             return .authenticate(try AuthenticatePayload(from: decoder))
         case .activate:
-            return .activate(try ActionTarget(from: decoder))
+            return .activate(try ElementTarget(from: decoder))
         case .increment:
-            return .increment(try ActionTarget(from: decoder))
+            return .increment(try ElementTarget(from: decoder))
         case .decrement:
-            return .decrement(try ActionTarget(from: decoder))
+            return .decrement(try ElementTarget(from: decoder))
         case .performCustomAction:
             return .performCustomAction(try CustomActionTarget(from: decoder))
         case .editAction:
