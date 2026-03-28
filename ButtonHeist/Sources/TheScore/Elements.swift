@@ -257,6 +257,17 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     }
 
     public var isAbsent: Bool { absent ?? false }
+
+    public var hasTraitPredicates: Bool {
+        (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
+    }
+
+    /// Whether any property predicate is set (label, identifier, value, traits, or excludeTraits).
+    public var hasPredicates: Bool {
+        label != nil || identifier != nil || value != nil || hasTraitPredicates
+    }
+
+    public var nonEmpty: Self? { hasPredicates ? self : nil }
 }
 
 // MARK: - Convenience Extensions
@@ -278,12 +289,11 @@ extension HeistElement {
         if let matchLabel = matcher.label, label != matchLabel { return false }
         if let matchId = matcher.identifier, identifier != matchId { return false }
         if let matchVal = matcher.value, value != matchVal { return false }
+        let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
         if let required = matcher.traits, !required.isEmpty {
-            let traitSet = Set(traits)
             for t in required where !traitSet.contains(t) { return false }
         }
         if let excluded = matcher.excludeTraits, !excluded.isEmpty {
-            let traitSet = Set(traits)
             for t in excluded where traitSet.contains(t) { return false }
         }
         return true

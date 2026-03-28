@@ -2,14 +2,14 @@
 
 > **Files:** `ButtonHeist/Sources/TheInsideJob/TheBagman.swift`, `TheBagman+Conversion.swift`, `TheBagman+Matching.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
-> **Role:** Owns element cache, hierarchy parsing, delta computation, and screen capture
+> **Role:** Owns element cache, hierarchy parsing, delta computation, screen capture, and weak custody of live UI objects
 
 ## Responsibilities
 
 TheBagman handles all the goods during TheInsideJob:
 
 1. **Element cache** - maintains `cachedElements: [AccessibilityElement]` from the last hierarchy refresh
-2. **Weak object references** - maps elements to live `NSObject` instances via `elementObjects` dictionary
+2. **Weak object custody** - maps parsed elements to live `NSObject` instances via `elementObjects`, always as weak references
 3. **Hierarchy parsing** - drives `AccessibilityHierarchyParser` to traverse the accessibility tree
 4. **Element resolution** - `resolveTarget(_:)` is the single entry point: heistId → match, returning `ResolvedTarget(element, traversalIndex)`. See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Element matching** - `findMatch(_:)` and `hasMatch(_:)` search the canonical accessibility snapshot using `ElementMatcher` predicates with AND semantics. Matching runs on `AccessibilityElement` values, not wire types. `AccessibilityContainer` nodes can also be matched when `scope` is `.containers` or `.both` via hierarchy-level matching in `TheBagman+Matching.swift`. Used by TheSafecracker for scroll search.
@@ -20,6 +20,16 @@ TheBagman handles all the goods during TheInsideJob:
 10. **Screen capture** - renders traversable windows via `UIGraphicsImageRenderer`
 11. **Action result assembly** - orchestrates post-action diffs and frame capture (delegates all timing to TheTripwire's `waitForAllClear`)
 
+## Custody Contract
+
+TheBagman is the custodian of the live accessibility/UI object world.
+
+- **Exclusive ownership of live object references** — if a subsystem needs to get from a parsed element back to a live `NSObject`, it goes through TheBagman
+- **Weak references only** — live objects are stored only in `elementObjects` and only as `weak` references; TheBagman never prolongs the lifetime of app UI objects
+- **No exported live handles** — other subsystems should work through Bagman APIs that return values, frames, points, traversal indices, or perform actions on their behalf
+- **Parser boundary** — `AccessibilityHierarchyParser` usage belongs to TheBagman; TheTripwire handles timing/window observation, and TheSafecracker handles actuation
+- **Fail closed on staleness** — if the weak object is gone, TheBagman treats it as stale state and re-resolves from a fresh parse instead of pretending the handle is still valid
+
 ## Architecture Diagram
 
 ```mermaid
@@ -27,7 +37,7 @@ graph TD
     subgraph TheBagman["TheBagman (@MainActor, internal)"]
         Cache["cachedElements: [AccessibilityElement]"]
         LastSnap["lastSnapshot: [HeistElement]"]
-        WeakRefs["elementObjects: [AccessibilityElement: WeakObject]"]
+        WeakRefs["elementObjects: [AccessibilityElement: WeakObject]<br/>weak custody only"]
         Parser["AccessibilityHierarchyParser"]
         Hash["lastHierarchyHash: Int"]
         Tripwire["tripwire: TheTripwire (injected)"]
@@ -93,11 +103,6 @@ flowchart TD
     ByMatch -->|no| Nil["return nil"]
     SearchHeistId --> Result["ResolvedTarget(element, traversalIndex)"]
     FindMatch --> Result
-
-    Result --> LiveObj["object(at: traversalIndex) → elementObjects lookup"]
-    LiveObj --> Alive{alive?}
-    Alive -->|yes| Use["Return live NSObject"]
-    Alive -->|no| Stale["nil (deallocated)"]
 ```
 
 ## Delta Computation
@@ -145,6 +150,10 @@ Both use `UIGraphicsImageRenderer` with `drawHierarchy(in:afterScreenUpdates:)`.
 - **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), and VC identity-based screen change detection (TheBagman supplements with topology-based detection)
 - **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheBagman calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree
+
+## Architectural Rule
+
+If code needs to parse the accessibility hierarchy or hold onto a live accessibility-backed `NSObject`, that responsibility belongs to TheBagman. Other subsystems may ask TheBagman to resolve, inspect, or act on behalf of a target, but they should not take ownership of those live references themselves.
 
 ## Items Flagged for Review
 

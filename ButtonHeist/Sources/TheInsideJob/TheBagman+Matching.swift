@@ -121,6 +121,9 @@ extension Array where Element == AccessibilityHierarchy {
 
 extension AccessibilityElement {
 
+    /// Cached set of known trait name strings — avoids rebuilding per-element during search.
+    private static let knownTraitNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+
     /// Does this element satisfy all property predicates in the matcher?
     /// Trait name strings are resolved to bitmasks via the parser's `fromNames`.
     func matches(_ matcher: ElementMatcher) -> Bool {
@@ -130,14 +133,12 @@ extension AccessibilityElement {
         if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {
             // Unknown trait names must cause a miss — fromNames drops them silently
             // and .contains(.none) is always true, so validate every name resolved.
-            let knownNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
-            for name in requiredTraits where !knownNames.contains(name) { return false }
+            for name in requiredTraits where !Self.knownTraitNames.contains(name) { return false }
             let mask = UIAccessibilityTraits.fromNames(requiredTraits)
             if !traits.contains(mask) { return false }
         }
         if let excludedTraits = matcher.excludeTraits, !excludedTraits.isEmpty {
-            let knownNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
-            for name in excludedTraits where !knownNames.contains(name) { return false }
+            for name in excludedTraits where !Self.knownTraitNames.contains(name) { return false }
             let mask = UIAccessibilityTraits.fromNames(excludedTraits)
             if !traits.isDisjoint(with: mask) { return false }
         }

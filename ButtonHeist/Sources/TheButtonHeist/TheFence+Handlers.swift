@@ -14,9 +14,7 @@ extension TheFence {
 
         // Matcher-based filtering takes precedence over heistId list
         let matcher = elementMatcher(args)
-        let hasMatcher = matcher.label != nil || matcher.identifier != nil
-            || matcher.value != nil || matcher.traits != nil || matcher.excludeTraits != nil
-        if hasMatcher {
+        if matcher.hasPredicates {
             let total = interface.elements.count
             let filtered = interface.elements.filter { $0.matches(matcher) }
             let filteredInterface = Interface(
@@ -260,18 +258,16 @@ extension TheFence {
             guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
                 return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right, next, previous")
             }
-            guard elementTarget(args) != nil else {
+            guard let target = elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
             }
             return try await sendAction(
-                .scroll(ScrollTarget(elementTarget: elementTarget(args), direction: direction))
+                .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
             let matcher = elementMatcher(args)
             let heistId = stringArg(args, "heistId")
-            let hasMatcher = matcher.label != nil || matcher.identifier != nil || matcher.value != nil
-                || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false
-            guard heistId != nil || hasMatcher else {
+            guard heistId != nil || matcher.hasPredicates else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
             }
             let directionStr = stringArg(args, "direction")
@@ -284,10 +280,13 @@ extension TheFence {
             }
             let target = ScrollToVisibleTarget(
                 heistId: heistId,
-                match: hasMatcher ? matcher : nil,
+                matcher: matcher,
                 maxScrolls: intArg(args, "maxScrolls"),
                 direction: direction
             )
+            guard let target else {
+                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
+            }
             let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
             }
@@ -386,6 +385,17 @@ extension TheFence {
 
     // MARK: - Handler: Pasteboard
 
+    func handlePasteboard(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        switch command {
+        case .setPasteboard:
+            return try await handleSetPasteboard(args)
+        case .getPasteboard:
+            return try await handleGetPasteboard()
+        default:
+            return .error("Unknown pasteboard action: \(command.rawValue)")
+        }
+    }
+
     func handleSetPasteboard(_ args: [String: Any]) async throws -> FenceResponse {
         guard let text = stringArg(args, "text") else {
             return .error("text is required for set_pasteboard")
@@ -401,8 +411,7 @@ extension TheFence {
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
         let matcher = elementMatcher(args)
-        guard matcher.label != nil || matcher.identifier != nil || matcher.value != nil
-            || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false else {
+        guard matcher.hasPredicates else {
             return .error("Must specify at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
         }
         let target = WaitForTarget(

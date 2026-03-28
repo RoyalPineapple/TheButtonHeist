@@ -4,11 +4,12 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
-/// The crew member who holds and manipulates the mcguffin (the UI elements).
+/// The crew member who holds and protects the mcguffin (the live UI/accessibility world).
 ///
 /// TheBagman owns the accessibility data lifecycle: reading the UI, storing
 /// element references, computing diffs, and capturing visual state. Live
-/// object pointers never leave TheBagman. Uses TheTripwire for timing
+/// object pointers are kept only as weak references and should never be owned
+/// outside TheBagman. Uses TheTripwire for timing
 /// signals (when to read) and screen change detection (what kind of read).
 @MainActor
 final class TheBagman {
@@ -50,10 +51,18 @@ final class TheBagman {
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
 
+    /// Active scroll container for a scroll_to_visible search.
+    /// Weak by rule: TheBagman never owns live UI lifetime.
+    private weak var activeScrollSearchView: UIScrollView?
+
+    struct ScrollSearchPreparation {
+        let totalItems: Int?
+    }
+
     // MARK: - Element Access
 
     /// Look up the live NSObject for an element at a given traversal index.
-    func object(at index: Int) -> NSObject? {
+    private func object(at index: Int) -> NSObject? {
         guard index >= 0, index < cachedElements.count else { return nil }
         return elementObjects[cachedElements[index]]?.object
     }
@@ -276,19 +285,13 @@ final class TheBagman {
             ))
         }
 
-        for r in relaxations where hasPredicates(r.relaxed) {
+        for r in relaxations where r.relaxed.hasPredicates {
             if let found = findMatch(r.relaxed) {
                 let actualValue = r.actual(found.element)
                 return "near miss: matched all fields except \(r.field) — actual \(r.field)=\(actualValue)"
             }
         }
         return nil
-    }
-
-    /// Whether the matcher has at least one non-nil predicate field.
-    private func hasPredicates(_ matcher: ElementMatcher) -> Bool {
-        matcher.label != nil || matcher.identifier != nil || matcher.value != nil
-            || (matcher.traits?.isEmpty == false) || (matcher.excludeTraits?.isEmpty == false)
     }
 
     /// Compact summary of on-screen elements for total-miss fallback.
@@ -339,6 +342,91 @@ final class TheBagman {
     func resolveFrame(for elementTarget: ActionTarget) -> CGRect? {
         guard let resolved = resolveTarget(elementTarget) else { return nil }
         return resolved.element.shape.frame
+    }
+
+    func ensureOnScreen(for target: ActionTarget) async {
+        guard let resolved = resolveTarget(target) else { return }
+        await ensureOnScreen(elementAt: resolved.traversalIndex)
+    }
+
+    func ensureFirstResponderOnScreen() async {
+        guard let responder = tripwire.currentFirstResponder() else { return }
+        await ensureOnScreen(object: responder)
+    }
+
+    func scroll(elementAt index: Int, direction: UIAccessibilityScrollDirection) -> Bool {
+        guard let object = object(at: index),
+              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
+        return scrollByPage(scrollView, direction: direction)
+    }
+
+    func scrollToVisible(elementAt index: Int) -> Bool {
+        guard let object = object(at: index) else { return false }
+        let elementFrame = object.accessibilityFrame
+        guard !elementFrame.isNull && !elementFrame.isEmpty,
+              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
+        return scrollToMakeVisible(elementFrame, in: scrollView)
+    }
+
+    func scrollToEdge(elementAt index: Int, edge: ScrollEdge) -> Bool {
+        guard let object = object(at: index),
+              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
+
+        let insets = scrollView.adjustedContentInset
+        var newOffset = scrollView.contentOffset
+
+        switch edge {
+        case .top:
+            newOffset.y = -insets.top
+        case .bottom:
+            newOffset.y = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+        case .left:
+            newOffset.x = -insets.left
+        case .right:
+            newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
+        }
+
+        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
+            return true
+        }
+        scrollView.setContentOffset(newOffset, animated: true)
+        return true
+    }
+
+    func beginScrollSearch() -> ScrollSearchPreparation? {
+        guard let scrollView = findFirstScrollView() else {
+            activeScrollSearchView = nil
+            return nil
+        }
+        activeScrollSearchView = scrollView
+        return ScrollSearchPreparation(totalItems: queryCollectionTotalItems(scrollView))
+    }
+
+    func scrollActiveSearchContainer(direction: ScrollSearchDirection) -> Bool {
+        guard let scrollView = activeScrollSearchView else { return false }
+        return scrollByPage(scrollView, direction: uiScrollDirection(for: direction))
+    }
+
+    func moveActiveSearchContainerToOppositeEdge(from direction: ScrollSearchDirection) {
+        guard let scrollView = activeScrollSearchView else { return }
+        let insets = scrollView.adjustedContentInset
+
+        switch direction {
+        case .down:
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: -insets.top), animated: false)
+        case .up:
+            let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: maxY), animated: false)
+        case .right:
+            scrollView.setContentOffset(CGPoint(x: -insets.left, y: scrollView.contentOffset.y), animated: false)
+        case .left:
+            let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+            scrollView.setContentOffset(CGPoint(x: maxX, y: scrollView.contentOffset.y), animated: false)
+        }
+    }
+
+    func endScrollSearch() {
+        activeScrollSearchView = nil
     }
 
     // MARK: - Refresh
@@ -585,6 +673,162 @@ final class TheBagman {
     /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
     func captureActionFrame() {
         stakeout?.captureActionFrame()
+    }
+
+    // MARK: - Scroll Helpers
+
+    private func ensureOnScreen(elementAt index: Int) async {
+        guard let object = object(at: index) else { return }
+        await ensureOnScreen(object: object)
+    }
+
+    private func ensureOnScreen(object: NSObject) async {
+        let frame = object.accessibilityFrame
+        guard !frame.isNull && !frame.isEmpty else { return }
+
+        let screenBounds = UIScreen.main.bounds
+        if screenBounds.contains(frame) { return }
+
+        guard let scrollView = scrollableAncestor(of: object, includeSelf: false) else { return }
+        if scrollToMakeVisible(frame, in: scrollView) {
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            refreshAccessibilityData()
+        }
+    }
+
+    private func findFirstScrollView() -> UIScrollView? {
+        for index in cachedElements.indices {
+            guard let object = object(at: index),
+                  let scrollView = scrollableAncestor(of: object, includeSelf: true) else { continue }
+            return scrollView
+        }
+        return nil
+    }
+
+    private func scrollableAncestor(of object: NSObject, includeSelf: Bool) -> UIScrollView? {
+        var current: NSObject? = includeSelf ? object : nextAncestor(of: object)
+        while let candidate = current {
+            if let scrollView = candidate as? UIScrollView,
+               scrollView.isScrollEnabled {
+                return scrollView
+            }
+            current = nextAncestor(of: candidate)
+        }
+        return nil
+    }
+
+    private func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
+        if let collectionView = scrollView as? UICollectionView {
+            let sections = collectionView.numberOfSections
+            var total = 0
+            for section in 0..<sections {
+                total += collectionView.numberOfItems(inSection: section)
+            }
+            return total
+        }
+        if let tableView = scrollView as? UITableView {
+            let sections = tableView.numberOfSections
+            var total = 0
+            for section in 0..<sections {
+                total += tableView.numberOfRows(inSection: section)
+            }
+            return total
+        }
+        return nil
+    }
+
+    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection) -> Bool {
+        let overlap: CGFloat = 44
+        let size = scrollView.frame.size
+        let offset = scrollView.contentOffset
+        let contentSize = scrollView.contentSize
+        let insets = scrollView.adjustedContentInset
+
+        var newOffset = offset
+
+        switch direction {
+        case .up:
+            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+        case .down:
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
+        case .left:
+            newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
+        case .right:
+            newOffset.x = min(offset.x + size.width - overlap,
+                             contentSize.width + insets.right - size.width)
+        case .next:
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
+        case .previous:
+            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
+        @unknown default:
+            return false
+        }
+
+        if newOffset.x == offset.x && newOffset.y == offset.y { return false }
+        scrollView.setContentOffset(newOffset, animated: true)
+        return true
+    }
+
+    private func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView) -> Bool {
+        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
+
+        let visibleRect = CGRect(
+            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
+            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
+            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
+        )
+
+        if visibleRect.contains(targetInScrollView) { return true }
+
+        var newOffset = scrollView.contentOffset
+
+        if targetInScrollView.minX < visibleRect.minX {
+            newOffset.x -= visibleRect.minX - targetInScrollView.minX
+        } else if targetInScrollView.maxX > visibleRect.maxX {
+            newOffset.x += targetInScrollView.maxX - visibleRect.maxX
+        }
+
+        if targetInScrollView.minY < visibleRect.minY {
+            newOffset.y -= visibleRect.minY - targetInScrollView.minY
+        } else if targetInScrollView.maxY > visibleRect.maxY {
+            newOffset.y += targetInScrollView.maxY - visibleRect.maxY
+        }
+
+        let insets = scrollView.adjustedContentInset
+        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
+        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
+
+        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
+            return true
+        }
+
+        scrollView.setContentOffset(newOffset, animated: true)
+        return true
+    }
+
+    private func nextAncestor(of candidate: NSObject) -> NSObject? {
+        if let view = candidate as? UIView {
+            return view.superview
+        } else if let element = candidate as? UIAccessibilityElement {
+            return element.accessibilityContainer as? NSObject
+        } else if candidate.responds(to: Selector(("accessibilityContainer"))) {
+            return candidate.value(forKey: "accessibilityContainer") as? NSObject
+        }
+        return nil
+    }
+
+    private func uiScrollDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
+        switch direction {
+        case .down: return .down
+        case .up: return .up
+        case .left: return .left
+        case .right: return .right
+        }
     }
 }
 
