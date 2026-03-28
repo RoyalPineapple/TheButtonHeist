@@ -18,7 +18,7 @@ extension TheInsideJob {
 
         let snapshot = bagman.snapshotElements()
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
-        let payload = Interface(timestamp: Date(), elements: snapshot.elements, tree: tree)
+        let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
 
         let result = ActionResult(
             success: true,
@@ -26,7 +26,7 @@ extension TheInsideJob {
             message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
             interfaceDelta: InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: snapshot.elements.count,
+                elementCount: snapshot.count,
                 newInterface: payload
             ),
             animating: settled ? nil : true

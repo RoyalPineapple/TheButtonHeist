@@ -415,7 +415,7 @@ final class FenceResponseTests: XCTestCase {
         let events = (0..<count).map { i in
             InteractionEvent(
                 timestamp: Double(i),
-                command: .activate(ActionTarget(order: i)),
+                command: .activate(.matcher(ElementMatcher(label: "element_\(i)"))),
                 result: ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0))
             )
         }

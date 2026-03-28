@@ -161,10 +161,10 @@ final class ReplSession {
           screen output=photo.png     Save screenshot to file
           idle                        Wait for animations to settle
           idle timeout=5              Wait with custom timeout
+          wait label="Loading" absent=true  Wait for element to disappear
 
         Gestures:
           tap <identifier>            Tap element by accessibility ID
-          tap #3                      Tap element by order number
           tap 100 200                 Tap at coordinates
           press <id>                  Long press (duration=N for seconds)
           swipe up <id>               Swipe direction on element
@@ -198,9 +198,9 @@ final class ReplSession {
           record                      Start recording
           stop_recording              Stop and retrieve recording
 
-        Target elements by accessibility identifier, or #N for order number.
+        Target elements by heistId or accessibility identifier.
         Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
-        JSON input still works: {"command":"one_finger_tap","identifier":"btn"}
+        JSON input still works: {"command":"activate","heistId":"button_save"}
         """
 
     private nonisolated static let commandAliases: [String: String] = [
@@ -210,6 +210,7 @@ final class ReplSession {
         "screen": TheFence.Command.getScreen.rawValue,
         "screenshot": TheFence.Command.getScreen.rawValue,
         "idle": TheFence.Command.waitForIdle.rawValue,
+        "wait": TheFence.Command.waitFor.rawValue,
         "devices": TheFence.Command.listDevices.rawValue,
         "list": TheFence.Command.listDevices.rawValue,
         "type": TheFence.Command.typeText.rawValue,
@@ -341,11 +342,7 @@ final class ReplSession {
 
     private nonisolated static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
         guard let first = tokens.first else { return }
-        if first.hasPrefix("#"), let order = Int(first.dropFirst()) {
-            result["order"] = order
-        } else {
-            result["identifier"] = first
-        }
+        result["identifier"] = first
     }
 
     private nonisolated static func tokenize(_ line: String) -> [String] {

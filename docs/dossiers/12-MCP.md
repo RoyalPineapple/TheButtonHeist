@@ -2,14 +2,14 @@
 
 > **Module:** `ButtonHeistMCP/Sources/`
 > **Platform:** macOS 14.0+
-> **Role:** Exposes Button Heist as 21 typed MCP tools for AI agents
+> **Role:** Exposes Button Heist as 22 typed MCP tools for AI agents
 
 ## Responsibilities
 
 This is the clean handshake between an AI agent and the rest of the crew:
 
-1. **21 typed tools** backed by `TheFence`
-2. **Tool-to-command routing** for both direct (20) and grouped (1) tools
+1. **22 typed tools** backed by `TheFence`
+2. **Tool-to-command routing** for both direct (21) and grouped (1) tools
 3. **Response adaptation** for MCP clients: screenshots inline as MCP image content, video summarized
 4. **Idle disconnects** with automatic reconnect on the next tool call
 5. **File-based target configuration** via `TargetConfigResolver` (`.buttonheist.json` or `~/.config/buttonheist/config.json`)
@@ -20,7 +20,7 @@ This is the clean handshake between an AI agent and the rest of the crew:
 | File | Contents |
 |------|----------|
 | `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse`, `IdleMonitor` |
-| `ToolDefinitions.swift` | 21 tool schemas with `expectProperty` shared across action tools |
+| `ToolDefinitions.swift` | 22 tool schemas with `expectProperty` shared across action tools |
 
 `TargetConfigResolver` lives in the ButtonHeist framework (`TargetConfig.swift`), not in the MCP package.
 
@@ -32,7 +32,7 @@ graph TD
         Main["main.swift — ButtonHeistMCPServer"]
         Server["swift-sdk Server"]
         Transport["StdioTransport"]
-        Tools["ToolDefinitions.swift — 21 tool schemas"]
+        Tools["ToolDefinitions.swift — 22 tool schemas"]
         Handler["handleToolCall — decode → route → execute → render"]
         Idle["IdleMonitor — fence.stop() after timeout"]
         Config["TargetConfigResolver — .buttonheist.json / ~/.config/..."]
@@ -54,7 +54,7 @@ graph TD
     Idle --> TheFence
 ```
 
-## Full Tool List (21 tools)
+## Full Tool List (22 tools)
 
 | # | Tool Name | Type | Key Parameters |
 |---|-----------|------|---------------|
@@ -79,6 +79,7 @@ graph TD
 | 19 | `get_session_state` | direct | (no params) |
 | 20 | `connect` | direct | `device`, `token` |
 | 21 | `list_targets` | direct | (no params) |
+| 22 | `wait_for` | direct | element match fields, `absent`, `timeout` |
 
 ### Gesture subtypes
 
@@ -116,7 +117,7 @@ flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
     Decode --> Switch{"tool name?"}
 
-    Switch -->|"20 direct tools"| Direct["request['command'] = toolName"]
+    Switch -->|"21 direct tools"| Direct["request['command'] = toolName"]
     Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
 
     Direct --> Execute["fence.execute(request:)"]

@@ -8,494 +8,40 @@ extension TheSafecracker {
 
     // MARK: - Auto-Scroll to Visible
 
-    /// Ensure the targeted element is within the screen bounds before interaction.
-    /// If the element's accessibility frame is outside the screen, scrolls the
-    /// nearest scrollable ancestor to bring it into view, waits for the scroll
-    /// animation to settle via presentation-layer diffing, and refreshes the
-    /// element cache so subsequent reads return updated positions.
-    ///
-    /// Best-effort: does nothing if the element is already visible, cannot be
-    /// resolved, or has no scrollable ancestor.
-    func ensureOnScreen(for target: ActionTarget) async {
-        guard let bagman else { return }
-        guard let index = bagman.resolveTraversalIndex(for: target) else { return }
-        guard let object = bagman.object(at: index) else { return }
-        await ensureOnScreen(object: object)
+    func ensureOnScreen(for target: ElementTarget) async {
+        await bagman?.ensureOnScreen(for: target)
     }
 
-    /// Ensure the current first responder is within the screen bounds.
-    /// Used by commands that operate on the responder chain (edit actions,
-    /// resign, pasteboard) so the human observer can see the target.
     func ensureFirstResponderOnScreen() async {
-        guard let view = firstResponderView() else { return }
-        await ensureOnScreen(object: view)
-    }
-
-    /// Shared implementation: check if the object's accessibility frame is
-    /// within the screen bounds, and scroll the nearest ancestor if not.
-    private func ensureOnScreen(object: NSObject) async {
-        let frame = object.accessibilityFrame
-        guard !frame.isNull && !frame.isEmpty else { return }
-
-        let screenBounds = UIScreen.main.bounds
-        if screenBounds.contains(frame) { return }
-
-        var current: NSObject? = nextAncestor(of: object)
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView,
-               scrollView.isScrollEnabled {
-                if scrollToMakeVisible(frame, in: scrollView) {
-                    if let tripwire {
-                        _ = await tripwire.waitForAllClear(timeout: 1.0)
-                    }
-                    bagman?.refreshAccessibilityData()
-                }
-                return
-            }
-            current = nextAncestor(of: candidate)
-        }
-    }
-
-    // MARK: - Scroll
-
-    func executeScroll(_ target: ScrollTarget) -> InteractionResult {
-        guard let bagman else {
-            return .failure(.elementNotFound, message: "No element store available")
-        }
-        guard let elementTarget = target.elementTarget else {
-            return .failure(.scroll, message: "Element target required for scroll")
-        }
-
-        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
-            return .failure(.elementNotFound, message: "Element not found for scroll target")
-        }
-
-        let uiDirection: UIAccessibilityScrollDirection
-        switch target.direction {
-        case .up:       uiDirection = .up
-        case .down:     uiDirection = .down
-        case .left:     uiDirection = .left
-        case .right:    uiDirection = .right
-        case .next:     uiDirection = .next
-        case .previous: uiDirection = .previous
-        }
-
-        let success = scroll(elementAt: index, direction: uiDirection)
-        return InteractionResult(
-            success: success,
-            method: .scroll,
-            message: success ? nil : "No scrollable ancestor found for element",
-            value: nil
-        )
-    }
-
-    func executeScrollToEdge(_ target: ScrollToEdgeTarget) -> InteractionResult {
-        guard let bagman else {
-            return .failure(.elementNotFound, message: "No element store available")
-        }
-        guard let elementTarget = target.elementTarget else {
-            return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
-        }
-
-        guard let index = bagman.resolveTraversalIndex(for: elementTarget) else {
-            return .failure(.elementNotFound, message: "Element not found for scroll_to_edge target")
-        }
-
-        let success = scrollToEdge(elementAt: index, edge: target.edge)
-        return InteractionResult(
-            success: success,
-            method: .scrollToEdge,
-            message: success ? nil : "No scrollable ancestor found for element",
-            value: nil
-        )
-    }
-
-    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> InteractionResult {
-        guard let bagman else {
-            return .failure(.scrollToVisible, message: "No element store available")
-        }
-
-        let matcher = target.match
-        let maxScrolls = target.resolvedMaxScrolls
-        let primaryDirection = target.resolvedDirection
-
-        // Phase 0: Check current tree for match (no conversion to wire types)
-        bagman.refreshAccessibilityData()
-        do {
-            if let found = try bagman.findMatch(matcher) {
-                // Already visible — scroll into view if partially off-screen
-                _ = scrollToVisible(elementAt: found.index)
-                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
-                return InteractionResult(
-                    success: true, method: .scrollToVisible, message: nil, value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
-                        totalItems: nil, exhaustive: false, foundElement: wireElement
-                    )
-                )
-            }
-        } catch {
-            return .failure(.scrollToVisible, message: error.localizedDescription)
-        }
-
-        // Find the nearest scroll view from any visible element
-        guard let scrollView = findFirstScrollView() else {
-            return .failure(.scrollToVisible, message: "No scroll view found on screen")
-        }
-
-        // Query collection/table metadata if available
-        let totalItems = queryCollectionTotalItems(scrollView)
-
-        // Track unique elements by stable identity (label + identifier).
-        // AccessibilityElement.Hashable includes frame/activationPoint which change
-        // between scroll positions, so we use a geometry-free key instead.
-        var seenKeys = Set(bagman.cachedElements.map(\.stableKey))
-        var scrollCount = 0
-
-        do {
-            // Phase 1: Scroll in primary direction
-            let result = try await scrollSearchLoop(
-                scrollView: scrollView, matcher: matcher, direction: primaryDirection,
-                maxScrolls: maxScrolls, scrollCount: &scrollCount,
-                seenKeys: &seenKeys, totalItems: totalItems
-            )
-            if let result { return result }
-
-            // Phase 2: Jump to opposite edge, scroll back in primary direction
-            // to cover content before the original starting position.
-            // Skip if Phase 1 exhausted the scroll budget — no point paying for
-            // the edge jump + refresh with zero remaining scrolls.
-            if scrollCount < maxScrolls {
-                scrollToOppositeEdge(scrollView, from: primaryDirection)
-                if let tripwire {
-                    _ = await tripwire.waitForAllClear(timeout: 1.0)
-                }
-                bagman.refreshAccessibilityData()
-
-                let result2 = try await scrollSearchLoop(
-                    scrollView: scrollView, matcher: matcher, direction: primaryDirection,
-                    maxScrolls: maxScrolls, scrollCount: &scrollCount,
-                    seenKeys: &seenKeys, totalItems: totalItems
-                )
-                if let result2 { return result2 }
-            }
-        } catch {
-            return .failure(.scrollToVisible, message: error.localizedDescription)
-        }
-
-        // Phase 3: Not found
-        let exhaustive = totalItems.map { seenKeys.count >= $0 } ?? false
-        return InteractionResult(
-            success: false, method: .scrollToVisible,
-            message: "Element not found after \(scrollCount) scrolls", value: nil,
-            scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
-                totalItems: totalItems, exhaustive: exhaustive
-            )
-        )
-    }
-
-    // MARK: - Scroll Search Helpers
-
-    /// Run a scroll-and-check loop in one direction. Matching happens on the
-    /// canonical AccessibilityElement tree — no wire conversion per step.
-    private func scrollSearchLoop(
-        scrollView: UIScrollView,
-        matcher: ElementMatcher,
-        direction: ScrollSearchDirection,
-        maxScrolls: Int,
-        scrollCount: inout Int,
-        seenKeys: inout Set<AccessibilityElement.StableKey>,
-        totalItems: Int?
-    ) async throws -> InteractionResult? {
-        let uiDirection = direction.uiScrollDirection
-
-        while scrollCount < maxScrolls {
-            let scrolled = scrollByPage(scrollView, direction: uiDirection)
-            if !scrolled { break }
-            scrollCount += 1
-
-            if let tripwire {
-                _ = await tripwire.waitForAllClear(timeout: 1.0)
-            }
-            bagman?.refreshAccessibilityData()
-
-            if let bagman, let found = try bagman.findMatch(matcher) {
-                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
-                return InteractionResult(
-                    success: true, method: .scrollToVisible, message: nil, value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
-                        totalItems: totalItems, exhaustive: false, foundElement: wireElement
-                    )
-                )
-            }
-
-            // Track new elements for scroll-end detection
-            let currentKeys = (bagman?.cachedElements ?? []).map(\.stableKey)
-            let previousCount = seenKeys.count
-            seenKeys.formUnion(currentKeys)
-
-            // No new elements → reached the end in this direction
-            if seenKeys.count == previousCount { break }
-
-            // Exhaustive check for collection/table views
-            if let totalItems, seenKeys.count >= totalItems {
-                return InteractionResult(
-                    success: false, method: .scrollToVisible,
-                    message: "Element not found (exhaustive search)", value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount, uniqueElementsSeen: seenKeys.count,
-                        totalItems: totalItems, exhaustive: true
-                    )
-                )
-            }
-        }
-        return nil
-    }
-
-    /// Find the first UIScrollView on screen by walking ancestors of visible elements.
-    private func findFirstScrollView() -> UIScrollView? {
-        guard let bagman else { return nil }
-        let elements = bagman.cachedElements
-        for i in 0..<elements.count {
-            guard let object = bagman.object(at: i) else { continue }
-            var current: NSObject? = object
-            while let candidate = current {
-                if let scrollView = candidate as? UIScrollView,
-                   scrollView.isScrollEnabled {
-                    return scrollView
-                }
-                current = nextAncestor(of: candidate)
-            }
-        }
-        return nil
-    }
-
-    /// Query total item count from UITableView or UICollectionView data source.
-    private func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
-        if let collectionView = scrollView as? UICollectionView {
-            let sections = collectionView.numberOfSections
-            var total = 0
-            for section in 0..<sections {
-                total += collectionView.numberOfItems(inSection: section)
-            }
-            return total
-        }
-        if let tableView = scrollView as? UITableView {
-            let sections = tableView.numberOfSections
-            var total = 0
-            for section in 0..<sections {
-                total += tableView.numberOfRows(inSection: section)
-            }
-            return total
-        }
-        return nil
-    }
-
-    private func scrollToOppositeEdge(_ scrollView: UIScrollView, from direction: ScrollSearchDirection) {
-        let insets = scrollView.adjustedContentInset
-        switch direction {
-        case .down:
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: -insets.top), animated: false)
-        case .up:
-            let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: maxY), animated: false)
-        case .right:
-            scrollView.setContentOffset(CGPoint(x: -insets.left, y: scrollView.contentOffset.y), animated: false)
-        case .left:
-            let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-            scrollView.setContentOffset(CGPoint(x: maxX, y: scrollView.contentOffset.y), animated: false)
-        }
-    }
-
-    // MARK: - Scroll Implementation
-
-    /// Walk the view/container hierarchy from an element to find the nearest
-    /// scrollable UIScrollView ancestor, then scroll it by one page via `setContentOffset`.
-    private func scroll(elementAt index: Int, direction: UIAccessibilityScrollDirection) -> Bool {
-        guard let object = bagman?.object(at: index) else { return false }
-
-        var current: NSObject? = object
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView,
-               scrollView.isScrollEnabled {
-                return scrollByPage(scrollView, direction: direction)
-            }
-            current = nextAncestor(of: candidate)
-        }
-        return false
-    }
-
-    /// Scroll a UIScrollView by approximately one page in the given direction.
-    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection) -> Bool {
-        let overlap: CGFloat = 44
-        let size = scrollView.frame.size
-        let offset = scrollView.contentOffset
-        let contentSize = scrollView.contentSize
-        let insets = scrollView.adjustedContentInset
-
-        var newOffset = offset
-
-        switch direction {
-        case .up:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
-        case .down:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
-        case .left:
-            newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
-        case .right:
-            newOffset.x = min(offset.x + size.width - overlap,
-                             contentSize.width + insets.right - size.width)
-        case .next:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
-        case .previous:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
-        @unknown default:
-            return false
-        }
-
-        if newOffset.x == offset.x && newOffset.y == offset.y { return false }
-        scrollView.setContentOffset(newOffset, animated: true)
-        return true
-    }
-
-    /// Scroll the nearest UIScrollView ancestor so the element's accessibility frame
-    /// is fully visible within the scroll view's viewport.
-    private func scrollToVisible(elementAt index: Int) -> Bool {
-        guard let object = bagman?.object(at: index) else { return false }
-
-        let elementFrame = object.accessibilityFrame
-        guard !elementFrame.isNull && !elementFrame.isEmpty else { return false }
-
-        var current: NSObject? = object
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView,
-               scrollView.isScrollEnabled {
-                return scrollToMakeVisible(elementFrame, in: scrollView)
-            }
-            current = nextAncestor(of: candidate)
-        }
-        return false
-    }
-
-    private func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView) -> Bool {
-        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
-
-        let visibleRect = CGRect(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
-            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
-        )
-
-        if visibleRect.contains(targetInScrollView) { return true }
-
-        var newOffset = scrollView.contentOffset
-
-        if targetInScrollView.minX < visibleRect.minX {
-            newOffset.x -= visibleRect.minX - targetInScrollView.minX
-        } else if targetInScrollView.maxX > visibleRect.maxX {
-            newOffset.x += targetInScrollView.maxX - visibleRect.maxX
-        }
-
-        if targetInScrollView.minY < visibleRect.minY {
-            newOffset.y -= visibleRect.minY - targetInScrollView.minY
-        } else if targetInScrollView.maxY > visibleRect.maxY {
-            newOffset.y += targetInScrollView.maxY - visibleRect.maxY
-        }
-
-        let insets = scrollView.adjustedContentInset
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
-        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
-
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return true
-        }
-
-        scrollView.setContentOffset(newOffset, animated: true)
-        return true
-    }
-
-    /// Scroll the nearest UIScrollView ancestor to an edge.
-    private func scrollToEdge(elementAt index: Int, edge: ScrollEdge) -> Bool {
-        guard let object = bagman?.object(at: index) else { return false }
-
-        var current: NSObject? = object
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView,
-               scrollView.isScrollEnabled {
-                let insets = scrollView.adjustedContentInset
-                var newOffset = scrollView.contentOffset
-
-                switch edge {
-                case .top:
-                    newOffset.y = -insets.top
-                case .bottom:
-                    newOffset.y = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-                case .left:
-                    newOffset.x = -insets.left
-                case .right:
-                    newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
-                }
-
-                if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-                    return true
-                }
-                scrollView.setContentOffset(newOffset, animated: true)
-                return true
-            }
-            current = nextAncestor(of: candidate)
-        }
-        return false
-    }
-
-    /// Walk up one level in the view/container hierarchy.
-    private func nextAncestor(of candidate: NSObject) -> NSObject? {
-        if let view = candidate as? UIView {
-            return view.superview
-        } else if let element = candidate as? UIAccessibilityElement {
-            return element.accessibilityContainer as? NSObject
-        } else if candidate.responds(to: Selector(("accessibilityContainer"))) {
-            return candidate.value(forKey: "accessibilityContainer") as? NSObject
-        }
-        return nil
+        await bagman?.ensureFirstResponderOnScreen()
     }
 
     // MARK: - Accessibility Actions
 
-    func executeActivate(_ target: ActionTarget) async -> InteractionResult {
+    func executeActivate(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found for target")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        if let interactivityError = bagman.checkElementInteractivity(element) {
+        if let interactivityError = bagman.checkElementInteractivity(resolved.element) {
             return .failure(.elementNotFound, message: interactivityError)
         }
 
-        let point = element.activationPoint
-
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        let point = resolved.element.activationPoint
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.activate, message: "Element does not support activation")
         }
 
-        // Try accessibilityActivate via the live object reference
-        let activateResult = bagman.activate(elementAt: index)
+        let activateResult = bagman.activate(elementAt: resolved.traversalIndex)
         if activateResult {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
-        // Fall back to synthetic touch injection
         if await tap(at: point) {
             fingerprints.showFingerprint(at: point)
             return InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
@@ -504,41 +50,39 @@ extension TheSafecracker {
         return .failure(.activate, message: "Activation failed")
     }
 
-    func executeIncrement(_ target: ActionTarget) async -> InteractionResult {
+    func executeIncrement(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.increment, message: "Element does not support increment")
         }
 
-        bagman.increment(elementAt: index)
-        fingerprints.showFingerprint(at: element.activationPoint)
+        bagman.increment(elementAt: resolved.traversalIndex)
+        fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
-    func executeDecrement(_ target: ActionTarget) async -> InteractionResult {
+    func executeDecrement(_ target: ElementTarget) async -> InteractionResult {
         await ensureOnScreen(for: target)
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard let element = bagman.findElement(for: target) else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.decrement, message: "Element does not support decrement")
         }
 
-        bagman.decrement(elementAt: index)
-        fingerprints.showFingerprint(at: element.activationPoint)
+        bagman.decrement(elementAt: resolved.traversalIndex)
+        fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
@@ -547,16 +91,15 @@ extension TheSafecracker {
         guard let bagman else {
             return .failure(.elementNotFound, message: "No element store available")
         }
-        guard bagman.findElement(for: target.elementTarget) != nil else {
-            return .failure(.elementNotFound, message: "Element not found")
+        guard let resolved = bagman.resolveTarget(target.elementTarget) else {
+            return .failure(.elementNotFound, message: bagman.elementNotFoundMessage(for: target.elementTarget))
         }
 
-        guard let index = bagman.resolveTraversalIndex(for: target.elementTarget),
-              bagman.hasInteractiveObject(at: index) else {
+        guard bagman.hasInteractiveObject(at: resolved.traversalIndex) else {
             return .failure(.customAction, message: "Element does not support custom actions")
         }
 
-        let success = bagman.performCustomAction(named: target.actionName, elementAt: index)
+        let success = bagman.performCustomAction(named: target.actionName, elementAt: resolved.traversalIndex)
         return InteractionResult(
             success: success, method: .customAction,
             message: success ? nil : "Action '\(target.actionName)' not found",
@@ -576,18 +119,14 @@ extension TheSafecracker {
         await ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return InteractionResult(
-            success: true,
-            method: .setPasteboard,
-            message: nil,
-            value: target.text
+            success: true, method: .setPasteboard, message: nil, value: target.text
         )
     }
 
     func executeGetPasteboard() async -> InteractionResult {
         let text = UIPasteboard.general.string
         return InteractionResult(
-            success: true,
-            method: .getPasteboard,
+            success: true, method: .getPasteboard,
             message: text == nil ? "Pasteboard is empty or contains non-text data" : nil,
             value: text
         )
@@ -613,8 +152,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let point):
             if await tap(at: point) {
                 fingerprints.showFingerprint(at: point)
@@ -632,8 +170,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let point):
             let success = await longPress(at: point, duration: clampDuration(target.duration))
             if success { fingerprints.showFingerprint(at: point) }
@@ -649,19 +186,9 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
 
-        // Resolution priority:
-        // 1. start/end unit points → resolve via element frame
-        // 2. direction + element target → expand to unit-point defaults
-        // 3. Raw startX/startY/endX/endY or direction → existing absolute behavior
-
-        let resolvedStart: UnitPoint? = target.start
-        let resolvedEnd: UnitPoint? = target.end
-
-        // If direction is provided with an element target but no explicit unit points,
-        // expand direction to default unit-point pair
         let unitStart: UnitPoint?
         let unitEnd: UnitPoint?
-        if let start = resolvedStart, let end = resolvedEnd {
+        if let start = target.start, let end = target.end {
             unitStart = start
             unitEnd = end
         } else if let direction = target.direction, target.elementTarget != nil {
@@ -694,10 +221,8 @@ extension TheSafecracker {
             return InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
         }
 
-        // Existing absolute-coordinate path
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let startPoint):
             let endPoint: CGPoint
             if let endX = target.endX, let endY = target.endY {
@@ -728,8 +253,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let startPoint):
             let duration = clampDuration(target.duration ?? 0.5)
             let success = await drag(from: startPoint, to: target.endPoint, duration: duration)
@@ -745,8 +269,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
@@ -763,8 +286,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let radius = target.radius ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
@@ -781,8 +303,7 @@ extension TheSafecracker {
             return .failure(.elementNotFound, message: "No element store available")
         }
         switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result):
-            return result
+        case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 40.0
             let success = await twoFingerTap(at: center, spread: CGFloat(spread))
@@ -793,11 +314,9 @@ extension TheSafecracker {
 
     func executeDrawPath(_ target: DrawPathTarget) async -> InteractionResult {
         let cgPoints = target.points.map { $0.cgPoint }
-
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
         }
-
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await drawPath(points: cgPoints, duration: duration)
         return InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
@@ -807,7 +326,6 @@ extension TheSafecracker {
         guard !target.segments.isEmpty else {
             return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
         }
-
         let samplesPerSegment = min(target.samplesPerSegment ?? 20, 1000)
         let pathPoints = BezierSampler.sampleBezierPath(
             startPoint: target.startPoint,
@@ -815,11 +333,9 @@ extension TheSafecracker {
             samplesPerSegment: samplesPerSegment
         )
         let cgPoints = pathPoints.map { $0.cgPoint }
-
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
         }
-
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await drawPath(points: cgPoints, duration: duration)
         return InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
@@ -827,14 +343,8 @@ extension TheSafecracker {
 
     // MARK: - Duration Helpers
 
-    /// Default gesture duration when none is specified (0.5s).
     private static let defaultGestureDuration: Double = 0.5
-
-    /// Minimum allowed gesture duration (10ms).
     private static let minGestureDuration: Double = 0.01
-
-    /// Maximum allowed gesture duration (60s). Prevents runaway gestures
-    /// from holding the main thread for unreasonable periods.
     private static let maxGestureDuration: Double = 60.0
 
     func clampDuration(_ value: Double?) -> Double {
@@ -857,17 +367,6 @@ extension TheSafecracker {
             result = Self.defaultGestureDuration
         }
         return clampDuration(result)
-    }
-}
-
-extension ScrollSearchDirection {
-    var uiScrollDirection: UIAccessibilityScrollDirection {
-        switch self {
-        case .down: return .down
-        case .up: return .up
-        case .left: return .left
-        case .right: return .right
-        }
     }
 }
 

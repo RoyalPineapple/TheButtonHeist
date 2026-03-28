@@ -32,6 +32,7 @@ extension TheFence {
         case editAction = "edit_action"
         case setPasteboard = "set_pasteboard"
         case getPasteboard = "get_pasteboard"
+        case waitFor = "wait_for"
         case dismissKeyboard = "dismiss_keyboard"
         case startRecording = "start_recording"
         case stopRecording = "stop_recording"

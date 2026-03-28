@@ -10,7 +10,7 @@ Most iOS automation tools operate outside the app process through XPC or screens
 
 - **Interface deltas, not re-fetches** — after every action, you get a structured diff (elements added/removed, values changed, or screen changed) instead of re-reading the full tree
 - **Stable element identifiers** — `heistId` gives every element a deterministic ID derived from its traits and label, so agents can target `button_login` across screen transitions without fragile index math
-- **Animation-aware idle detection** — `wait_for_idle` watches CALayer animations, not a fixed sleep timer
+- **Animation-aware idle detection** — `wait_for_idle` watches CALayer animations, not a fixed sleep timer. `wait_for` waits for a specific element to appear or disappear using settle-event polling
 - **Real multi-touch** — pinch, rotate, two-finger tap, bezier paths, and arbitrary polyline gestures via IOHIDEvent injection. Not coordinate-based XCUITest synthetics
 - **Full accessibility fidelity** — activation points, `respondsToUserInteraction`, custom content, named custom actions, custom rotors. Information that's lost at the process boundary external tools operate through
 - **Action outcome expectations** — declare what you expect (`screen_changed`, `elements_changed`, or `{"elementUpdated": {…}}`) and the framework reports whether it happened. The caller decides what to do
@@ -36,7 +36,7 @@ Numbers shown for T0-full-workflow (11-step multi-screen task). BH consistently 
 - **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
 - **Full gesture suite** — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw arbitrary paths and bezier curves
 - **Text input** — type characters, delete, clear fields, read back values — works with software and hardware keyboard modes. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the iOS "Allow Paste" dialog
-- **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (bidirectional search for element matching label/identifier/value/traits predicate), `scroll_to_edge` (jump to top/bottom/left/right)
+- **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (bidirectional search for element matching label/identifier/value/traits predicate), `scroll_to_edge` (jump to top/bottom/left/right). All action commands accept flat matcher fields (`label`, `value`, `traits`, `excludeTraits`) alongside `heistId` for unified targeting
 - **Accessibility actions** — increment/decrement on adjustable elements, trigger named custom actions, dismiss keyboard
 
 ### Inspection

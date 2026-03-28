@@ -52,8 +52,11 @@ graph TB
 - `Interface` - Container for UI element interface data (flat list + optional tree)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method, optional message, interface delta, animation state, and optional `ScrollSearchResult`
-- `ElementMatcher` - Composable predicate for matching elements by label, identifier, value, traits, excludeTraits, and scope
-- `ScrollToVisibleTarget` - Search target wrapping an `ElementMatcher` with `maxScrolls` and `direction`
+- `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)
+- `ElementMatcher` - Composable predicate for matching elements by label, identifier, value, traits, and excludeTraits
+- `UnitPoint` - Unit coordinates (0–1) relative to element frame for device-independent swiping
+- `ScrollToVisibleTarget` - Search target wrapping an optional `heistId` or `ElementMatcher` with `maxScrolls` and `direction`
+- `WaitForTarget` - Wait for element to appear/disappear with predicate matching and timeout (max 30s)
 - `ScrollSearchResult` - Scroll search diagnostics (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `ScreenPayload` - Base64-encoded PNG with dimensions
 - `RecordingConfig` - Recording configuration (fps, scale, inactivity timeout, max duration)
@@ -77,7 +80,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, screen capture
 │   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
-│   Extensions/Polling.swift        — polling loop, interface broadcasting
+│   Extensions/Pulse.swift          — settle-driven interface updates, broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
 │
 ├── ServerTransport (TLS listener + Bonjour advertisement)
@@ -113,8 +116,8 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   └── File size guard (7MB cap for wire protocol)
 ├── TheMuscle (authentication, connection approval UI, session locking)
 ├── TheFingerprints (FingerprintWindow overlay + TheSafecracker gesture tracking)
-├── Polling Timer (optional interface change detection via hash comparison)
-└── Hierarchy Invalidation Flag + Coalesce Task (pulse-driven replacement for the old debounce timer)
+├── Settle-driven Polling (interface change detection via hash comparison, wakes on tripwire settle events)
+└── Hierarchy Invalidation Flag (pulse-driven broadcast on settle transitions)
 ```
 
 **Auto-Start Mechanism**:
@@ -131,9 +134,9 @@ When the framework loads:
 1. `+load` is called automatically by the runtime
 2. Reads configuration from environment variables or Info.plist:
    - `INSIDEJOB_DISABLE` / `InsideJobDisableAutoStart` - skip startup
-   - `INSIDEJOB_POLLING_INTERVAL` / `InsideJobPollingInterval` - update interval (default: 1.0s, min: 0.5s)
+   - `INSIDEJOB_POLLING_INTERVAL` / `InsideJobPollingInterval` - settle timeout for polling (default: 2.0s, min: 0.5s)
 3. Creates a Task on MainActor to configure and start TheInsideJob singleton
-4. Begins polling for interface changes
+4. Begins settle-driven polling for interface changes (wakes on TheTripwire settle events, not fixed timer)
 
 **Threading Model**:
 - Entire class marked `@MainActor`
@@ -543,12 +546,14 @@ Observers never claim a session lock and cannot send commands. They receive the 
 
 ```mermaid
 flowchart TD
-    A["Polling timer fires<br>(configurable, default 1.0s)"] --> B["checkForChanges()"]
-    B --> B2["bagman.refreshAccessibilityData()"]
+    A["tripwire.waitForAllClear()<br>(settle-driven, not timer-based)"] --> B["broadcastIfChanged()"]
+    B --> B1{"hasSubscribers?"}
+    B1 -->|No| A
+    B1 -->|Yes| B2["bagman.refreshAccessibilityData()"]
     B2 --> C["parseAccessibilityHierarchy()<br>elementVisitor captures weak refs"]
     C --> D["flattenToElements() → AccessibilityMarker[]"]
     D --> E["Update element cache in TheBagman"]
-    E --> F["Convert markers to HeistElement[]"]
+    E --> F["snapshotElements() → [HeistElement]"]
     F --> G["Compute hash of elements array"]
     G --> H{"Hash changed?"}
     H -->|No| A

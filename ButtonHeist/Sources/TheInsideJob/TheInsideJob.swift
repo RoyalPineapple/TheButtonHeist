@@ -60,15 +60,13 @@ public final class TheInsideJob {
     // MARK: - Timing Constants
 
     /// Default polling interval for automatic hierarchy updates (1s).
-    private static let defaultPollingInterval: UInt64 = 1_000_000_000
+    private static let defaultPollingTimeout: TimeInterval = 2.0
 
     // Hierarchy invalidation (pulse-driven, replaces debounce timer)
     var hierarchyInvalidated = false
-    var updateCoalesceTask: Task<Void, Never>?
-
     // Polling for automatic updates (disabled by default)
     var pollingTask: Task<Void, Never>?
-    var pollingInterval: UInt64 = TheInsideJob.defaultPollingInterval
+    var pollingTimeoutSeconds: TimeInterval = TheInsideJob.defaultPollingTimeout
     var isPollingEnabled = false
 
     // MARK: - Initialization
@@ -145,8 +143,6 @@ public final class TheInsideJob {
         isSuspended = false
         resumeTask?.cancel()
         resumeTask = nil
-        updateCoalesceTask?.cancel()
-        updateCoalesceTask = nil
         hierarchyInvalidated = false
         stopPolling()
 
@@ -172,14 +168,13 @@ public final class TheInsideJob {
         scheduleHierarchyUpdate()
     }
 
-    /// Enable polling for automatic hierarchy updates.
-    /// - Parameter interval: Polling interval in seconds (default 1.0, minimum 0.5)
-    public func startPolling(interval: TimeInterval = 1.0) {
-        let clampedInterval = max(0.5, interval)
-        pollingInterval = UInt64(clampedInterval * 1_000_000_000)
+    /// Enable settle-driven polling for automatic hierarchy updates.
+    /// - Parameter timeout: Maximum seconds between settle checks (default 2.0, minimum 0.5)
+    public func startPolling(interval timeout: TimeInterval = 2.0) {
+        pollingTimeoutSeconds = max(0.5, timeout)
         isPollingEnabled = true
         startPollingLoop()
-        insideJobLogger.info("Polling enabled (interval: \(clampedInterval)s)")
+        insideJobLogger.info("Polling enabled (settle timeout: \(self.pollingTimeoutSeconds)s)")
     }
 
     /// Disable polling for automatic updates
@@ -426,6 +421,91 @@ public final class TheInsideJob {
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
+    /// Wait for an element matching a predicate to appear or disappear.
+    /// Uses TheTripwire settle events to avoid busy-polling — refreshes the tree
+    /// only after the UI settles.
+    func performWaitFor(
+        target: WaitForTarget,
+        command: ClientMessage,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) async {
+        stakeout?.noteActivity()
+        bagman.refreshAccessibilityData()
+        let beforeSnapshot = bagman.snapshotElements()
+        let beforeCachedElements = bagman.cachedElements
+        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+
+        let result = await executeWaitFor(target)
+
+        let actionResult: ActionResult
+        if result.success {
+            actionResult = await bagman.actionResultWithDelta(
+                success: true,
+                method: .waitFor,
+                message: result.message,
+                beforeSnapshot: beforeSnapshot,
+                beforeCachedElements: beforeCachedElements,
+                beforeVC: beforeVC
+            )
+        } else {
+            bagman.refreshAccessibilityData()
+            let afterSnapshot = bagman.snapshotElements()
+            actionResult = ActionResult(
+                success: false,
+                method: .waitFor,
+                message: result.message,
+                errorKind: .timeout,
+                screenName: afterSnapshot.screenName
+            )
+        }
+
+        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
+    }
+
+    /// Execute the wait_for polling loop.
+    /// Uses hasTarget (existence check) — doesn't require unique match.
+    /// Snapshots after each refresh so heistId lookup stays current.
+    private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
+        let elTarget = target.elementTarget
+        let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
+        let start = CFAbsoluteTimeGetCurrent()
+
+        // Phase 0: immediate check
+        bagman.refreshAccessibilityData()
+        _ = bagman.snapshotElements()
+        if target.resolvedAbsent {
+            if !bagman.hasTarget(elTarget) {
+                return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
+            }
+        } else {
+            if bagman.hasTarget(elTarget) {
+                return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
+            }
+        }
+
+        // Phase 1: settle loop
+        while ContinuousClock.now < deadline {
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            bagman.refreshAccessibilityData()
+            _ = bagman.snapshotElements()
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+            if target.resolvedAbsent {
+                if !bagman.hasTarget(elTarget) {
+                    return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
+                }
+            } else {
+                if bagman.hasTarget(elTarget) {
+                    return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
+                }
+            }
+        }
+
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        let reason = target.resolvedAbsent ? "element still present" : "element not found"
+        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
+    }
+
     /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
     /// because the scroll loop does its own repeated refresh/settle cycles internally.
     /// Captures before/after snapshots for delta computation around the entire search.
@@ -441,7 +521,7 @@ public final class TheInsideJob {
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
-        let result = await theSafecracker.executeScrollToVisible(target)
+        let result = bagman.executeScrollToVisible(target)
 
         var actionResult: ActionResult
         if result.success {
@@ -475,6 +555,7 @@ public final class TheInsideJob {
                 success: false,
                 method: result.method,
                 message: result.message,
+                errorKind: .elementNotFound,
                 value: result.value,
                 screenName: afterSnapshot.screenName,
                 scrollSearchResult: result.scrollSearchResult
@@ -654,8 +735,6 @@ public final class TheInsideJob {
         pollingTask?.cancel()
         pollingTask = nil
 
-        updateCoalesceTask?.cancel()
-        updateCoalesceTask = nil
         hierarchyInvalidated = false
 
         tripwire.stopPulse()

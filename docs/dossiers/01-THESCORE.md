@@ -8,11 +8,11 @@
 
 TheScore is the shared playbook. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` — 33 cases)
+1. **All client-to-server messages** (`ClientMessage` — 34 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`, `Group`, `HeistCustomContent`)
-5. **Element matching** (`ElementMatcher`, `MatchScope`) — structured multi-field AND matching with scope filtering
+5. **Element targeting** (`ElementTarget`, `ElementMatcher`) — enum-based element reference (`.heistId`/`.matcher`) with structured multi-field AND matching
 6. **Action result types** (`ActionResult`, `InterfaceDelta`, `ActionMethod`, `ScrollSearchResult`)
 7. **Action outcome signals** (`ActionExpectation`, `ExpectationResult`) — outcome classifiers for actions
 8. **Media payloads** (`ScreenPayload`, `RecordingPayload`)
@@ -29,10 +29,10 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.4"), `WireMessageType` (50 cases), `ButtonHeistActor` |
-| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (33 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
+| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.5"), `WireMessageType` (50 cases), `ButtonHeistActor` |
+| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (34 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
-| `Elements.swift` | `HeistElement`, `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementMatcher`, `MatchScope` |
+| `Elements.swift` | `HeistElement`, `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
 | `ServerMessages+WireCoding.swift` | Custom flat envelope encoding for server messages |
 | `ConnectionScope.swift` | `ConnectionScope` enum, `NetworkInterfaceNaming` protocol |
@@ -43,9 +43,9 @@ TheScore is the shared playbook. It defines:
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
         Messages["Messages.swift — serviceType, protocolVersion, WireMessageType (50 cases)"]
-        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (33 cases), UnitPoint"]
+        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (34 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
-        Elements["Elements.swift — HeistElement, Interface, ElementMatcher, MatchScope"]
+        Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
         ConnScope["ConnectionScope.swift — ConnectionScope, NetworkInterfaceNaming"]
     end
 
@@ -62,7 +62,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (33 cases)"]
+    subgraph ClientMessages["ClientMessage (34 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
@@ -75,6 +75,7 @@ graph TD
         Pasteboard["setPasteboard / getPasteboard"]
         Recording["startRecording / stopRecording"]
         Watch["watch(WatchPayload)"]
+        WaitFor["waitFor"]
     end
 
     subgraph ServerMessages["ServerMessage (18 cases)"]
@@ -163,30 +164,26 @@ classDiagram
 
 ```mermaid
 classDiagram
+    class ElementTarget {
+        <<enum>>
+        heistId(String)
+        matcher(ElementMatcher)
+    }
+
     class ElementMatcher {
         +String? label
         +String? identifier
-        +String? heistId
         +String? value
         +[String]? traits
         +[String]? excludeTraits
-        +MatchScope? scope
         +Bool? absent
-        +resolvedScope: MatchScope (computed)
         +isAbsent: Bool (computed)
     }
 
-    class MatchScope {
-        <<enum>>
-        elements — leaves only (default)
-        containers — container nodes only
-        both — leaves and containers
-    }
-
-    ElementMatcher --> MatchScope
+    ElementTarget --> ElementMatcher
 ```
 
-All specified fields must match (AND logic). `resolvedScope` defaults to `.elements` when nil. `isAbsent` defaults to `false` — when `true`, the match succeeds when no element is found.
+All specified fields must match (AND logic). `isAbsent` defaults to `false` — when `true`, the match succeeds when no element is found. `ElementTarget` is an enum with `.heistId(String)` for stable ID lookup and `.matcher(ElementMatcher)` for predicate-based search.
 
 ## Action Results and Deltas
 
@@ -319,7 +316,7 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.4"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"6.5"` (explicit `type` / `payload` envelopes + exact hello/version matching)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency

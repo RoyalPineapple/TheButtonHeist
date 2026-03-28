@@ -85,6 +85,7 @@ public enum GroupType: String, Codable, Equatable, Hashable, Sendable, CaseItera
     case landmark
     case dataTable
     case tabBar
+    case scrollable
 }
 
 /// A container group in the element tree
@@ -217,70 +218,49 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 // MARK: - Element Matcher
 
 /// Composable predicate for scanning the accessibility tree.
-/// Controls which node types the matcher evaluates when walking the
-/// accessibility hierarchy. Leaf elements are always eligible; containers
-/// (nodes with children) are only evaluated when `containers` or `both`
-/// is specified.
-public enum MatchScope: String, Codable, Sendable, CaseIterable {
-    /// Match leaf elements only (default behavior).
-    case elements
-    /// Match container nodes only.
-    case containers
-    /// Match both leaf elements and container nodes.
-    case both
-}
-
 /// All non-nil fields must match (AND semantics). Wire type — the matching
 /// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
 /// where it operates on the canonical tree directly.
 ///
 /// Trait names use the same string mapping as HeistElement (e.g. "button",
 /// "header", "selected"). The hierarchy-level matcher bridges these to
-/// UIAccessibilityTraits bitmasks via TheBagman's traitMapping.
+/// UIAccessibilityTraits bitmasks via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
-    /// Exact match against element label
+    /// Case-insensitive substring match against element label
     public let label: String?
-    /// Exact match against accessibility identifier
+    /// Case-insensitive substring match against accessibility identifier
     public let identifier: String?
-    /// Exact match against synthesized heistId (wire-level only)
-    public let heistId: String?
-    /// Exact match against element value
+    /// Case-insensitive substring match against element value
     public let value: String?
     /// All listed traits must be present on the element (AND)
     public let traits: [String]?
     /// None of the listed traits may be present on the element
     public let excludeTraits: [String]?
-    /// Which node types to match: elements (leaves), containers, or both.
-    /// Nil defaults to `.elements`.
-    public let scope: MatchScope?
-    /// When true, the caller asserts no matching element exists.
-    /// The matcher itself always checks property predicates; callers
-    /// interpret `absent` based on their context.
-    public let absent: Bool?
 
     public init(
         label: String? = nil,
         identifier: String? = nil,
-        heistId: String? = nil,
         value: String? = nil,
         traits: [String]? = nil,
-        excludeTraits: [String]? = nil,
-        scope: MatchScope? = nil,
-        absent: Bool? = nil
+        excludeTraits: [String]? = nil
     ) {
         self.label = label
         self.identifier = identifier
-        self.heistId = heistId
         self.value = value
         self.traits = traits
         self.excludeTraits = excludeTraits
-        self.scope = scope
-        self.absent = absent
     }
 
-    /// Resolved scope — defaults to `.elements` when nil.
-    public var resolvedScope: MatchScope { scope ?? .elements }
-    public var isAbsent: Bool { absent ?? false }
+    public var hasTraitPredicates: Bool {
+        (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
+    }
+
+    /// Whether any property predicate is set (label, identifier, value, traits, or excludeTraits).
+    public var hasPredicates: Bool {
+        label != nil || identifier != nil || value != nil || hasTraitPredicates
+    }
+
+    public var nonEmpty: Self? { hasPredicates ? self : nil }
 }
 
 // MARK: - Convenience Extensions
@@ -294,5 +274,42 @@ extension HeistElement {
     /// Computed activation point as CGPoint
     public var activationPoint: CGPoint {
         CGPoint(x: activationPointX, y: activationPointY)
+    }
+
+    /// Known accessibility trait name strings. Must stay in sync with the
+    /// parser's trait mapping. Used to reject unknown trait names (fail-safe).
+    private static let knownTraitNames: Set<String> = [
+        "button", "link", "image", "selected", "staticText", "header",
+        "searchField", "adjustable", "notEnabled", "updatesFrequently",
+        "keyboardKey", "summaryElement", "startsMediaSession", "allowsDirectInteraction",
+        "causesPageTurn", "tabBar", "backButton", "textEntry", "switchButton",
+        "scrollable", "toggle"
+    ]
+
+    /// Match this wire element against an ElementMatcher predicate.
+    /// Used for client-side filtering of serialized interface data (get_interface).
+    /// String fields use case-insensitive substring matching, consistent with
+    /// AccessibilityElement.matches in TheBagman+Matching.
+    /// Unknown trait names in required/excluded cause a miss (fail-safe).
+    public func matches(_ matcher: ElementMatcher) -> Bool {
+        if let matchLabel = matcher.label {
+            guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
+        }
+        if let matchId = matcher.identifier {
+            guard let identifier, identifier.localizedCaseInsensitiveContains(matchId) else { return false }
+        }
+        if let matchVal = matcher.value {
+            guard let value, value.localizedCaseInsensitiveContains(matchVal) else { return false }
+        }
+        let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
+        if let required = matcher.traits, !required.isEmpty {
+            for t in required where !Self.knownTraitNames.contains(t) { return false }
+            for t in required where !traitSet.contains(t) { return false }
+        }
+        if let excluded = matcher.excludeTraits, !excluded.isEmpty {
+            for t in excluded where !Self.knownTraitNames.contains(t) { return false }
+            for t in excluded where traitSet.contains(t) { return false }
+        }
+        return true
     }
 }
