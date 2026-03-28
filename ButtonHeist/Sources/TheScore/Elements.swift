@@ -59,6 +59,29 @@ extension ElementAction: Codable {
     }
 }
 
+// MARK: - Heist Trait
+
+/// Named accessibility traits — aligned 1:1 with the AccessibilitySnapshot parser's
+/// `knownTraits` in `AccessibilityHierarchy+Codable.swift`.
+/// Standard UIAccessibilityTraits plus private traits the parser exposes.
+public enum HeistTrait: String, CaseIterable, Codable, Sendable {
+    // Standard traits
+    case button, link, image, staticText, header, adjustable
+    case searchField, selected, notEnabled, keyboardKey
+    case summaryElement, updatesFrequently, playsSound
+    case startsMediaSession, allowsDirectInteraction
+    case causesPageTurn, tabBar
+    // Private traits (from UIAccessibility+SnapshotAdditions)
+    case textEntry, isEditing, backButton, tabBarItem, scrollable, switchButton
+}
+
+// MARK: - Group Type
+
+/// Container group classification in the element tree.
+public enum GroupType: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
+    case semanticGroup, list, landmark, dataTable, tabBar
+}
+
 // MARK: - Interface
 
 public struct Interface: Codable, Sendable {
@@ -78,8 +101,7 @@ public struct Interface: Codable, Sendable {
 
 /// A container group in the element tree
 public struct Group: Codable, Equatable, Hashable, Sendable {
-    /// Group type: "semanticGroup", "list", "landmark", "dataTable", "tabBar"
-    public let type: String
+    public let type: GroupType
     public let label: String?
     public let value: String?
     public let identifier: String?
@@ -89,7 +111,7 @@ public struct Group: Codable, Equatable, Hashable, Sendable {
     public let frameHeight: Double
 
     public init(
-        type: String,
+        type: GroupType,
         label: String?,
         value: String?,
         identifier: String?,
@@ -135,8 +157,8 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var identifier: String?
     /// Accessibility hint (read by VoiceOver after the description)
     public var hint: String?
-    /// Accessibility traits as human-readable strings (e.g. ["button", "adjustable"])
-    public var traits: [String]
+    /// Accessibility traits as typed enum values (e.g. [.button, .adjustable])
+    public var traits: [HeistTrait]
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
@@ -160,7 +182,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         value: String?,
         identifier: String?,
         hint: String? = nil,
-        traits: [String] = [],
+        traits: [HeistTrait] = [],
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
@@ -224,9 +246,9 @@ public enum MatchScope: String, Codable, Sendable, CaseIterable {
 /// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
 /// where it operates on the canonical tree directly.
 ///
-/// Trait names use the same string mapping as HeistElement (e.g. "button",
-/// "header", "selected"). The hierarchy-level matcher bridges these to
-/// UIAccessibilityTraits bitmasks via TheBagman's traitMapping.
+/// Trait values use the HeistTrait enum (e.g. .button, .header, .selected).
+/// The hierarchy-level matcher bridges these to UIAccessibilityTraits bitmasks
+/// via TheBagman's traitMapping.
 public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Exact match against element label
     public let label: String?
@@ -237,9 +259,9 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Exact match against element value
     public let value: String?
     /// All listed traits must be present on the element (AND)
-    public let traits: [String]?
+    public let traits: [HeistTrait]?
     /// None of the listed traits may be present on the element
-    public let excludeTraits: [String]?
+    public let excludeTraits: [HeistTrait]?
     /// Which node types to match: elements (leaves), containers, or both.
     /// Nil defaults to `.elements` for backward compatibility.
     public let scope: MatchScope?
@@ -253,8 +275,8 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
         identifier: String? = nil,
         heistId: String? = nil,
         value: String? = nil,
-        traits: [String]? = nil,
-        excludeTraits: [String]? = nil,
+        traits: [HeistTrait]? = nil,
+        excludeTraits: [HeistTrait]? = nil,
         scope: MatchScope? = nil,
         absent: Bool? = nil
     ) {

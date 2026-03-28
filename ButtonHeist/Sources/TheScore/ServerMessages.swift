@@ -169,8 +169,8 @@ public struct ActionResult: Codable, Sendable {
     public let elementLabel: String?
     /// Post-action accessibility value of the acted-on element
     public let elementValue: String?
-    /// Post-action accessibility traits of the acted-on element (e.g. ["button", "selected"])
-    public let elementTraits: [String]?
+    /// Post-action accessibility traits of the acted-on element (e.g. [.button, .selected])
+    public let elementTraits: [HeistTrait]?
     /// Label of the first header element in the post-action snapshot (screen name hint)
     public let screenName: String?
     /// Diagnostics from a scroll_to_visible search operation
@@ -185,7 +185,7 @@ public struct ActionResult: Codable, Sendable {
         animating: Bool? = nil,
         elementLabel: String? = nil,
         elementValue: String? = nil,
-        elementTraits: [String]? = nil,
+        elementTraits: [HeistTrait]? = nil,
         screenName: String? = nil,
         scrollSearchResult: ScrollSearchResult? = nil
     ) {

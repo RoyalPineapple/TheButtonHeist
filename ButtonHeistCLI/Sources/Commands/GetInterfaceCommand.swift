@@ -44,7 +44,7 @@ struct GetInterfaceCommand: AsyncParsableCommand {
                 if let label = element.label { parts.append(label) }
                 if let identifier = element.identifier { parts.append("id:\(identifier)") }
                 if let value = element.value { parts.append("value:\(value)") }
-                parts.append("(\(element.traits.joined(separator: ", ")))")
+                parts.append("(\(element.traits.map(\.rawValue).joined(separator: ", ")))")
                 writeOutput("  " + parts.joined(separator: "  "))
             }
         }

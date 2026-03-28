@@ -66,13 +66,25 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             matchScope = parsed
         }
 
+        let parsedTraits: [HeistTrait]? = traits.isEmpty ? nil : try traits.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw ValidationError("Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            return trait
+        }
+        let parsedExcludeTraits: [HeistTrait]? = excludeTraits.isEmpty ? nil : try excludeTraits.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw ValidationError("Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            return trait
+        }
         let matcher = ElementMatcher(
             label: label,
             identifier: identifier,
             heistId: heistId,
             value: value,
-            traits: traits.isEmpty ? nil : traits,
-            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits,
+            traits: parsedTraits,
+            excludeTraits: parsedExcludeTraits,
             scope: matchScope
         )
 

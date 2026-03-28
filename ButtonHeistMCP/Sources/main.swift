@@ -5,7 +5,7 @@ import ButtonHeist
 /// Idle timeout before disconnecting from the device (seconds).
 /// `BUTTONHEIST_SESSION_TIMEOUT` env var overrides the default.
 private let sessionTimeout: TimeInterval = {
-    if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
+    if let envValue = EnvironmentKey.buttonheistSessionTimeout.value,
        let parsed = Double(envValue), parsed > 0 {
         return parsed
     }
@@ -40,9 +40,9 @@ struct ButtonHeistMCPServer {
         let fileConfig = TargetConfigResolver.loadConfig()
         let fence = TheFence(
             configuration: .init(
-                deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
+                deviceFilter: EnvironmentKey.buttonheistDevice.value,
                 connectionTimeout: 30,
-                token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
+                token: EnvironmentKey.buttonheistToken.value,
                 autoReconnect: true,
                 fileConfig: fileConfig
             )

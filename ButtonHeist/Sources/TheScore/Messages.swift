@@ -59,3 +59,45 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case interaction
     case watch
 }
+
+// MARK: - TXT Record Keys
+
+/// Bonjour TXT record keys used for service advertisement and discovery.
+public enum TXTRecordKey: String, Sendable {
+    case simUDID = "simudid"
+    case installationId = "installationid"
+    case deviceName = "devicename"
+    case instanceId = "instanceid"
+    case certFingerprint = "certfp"
+    case transport = "transport"
+    case sessionActive = "sessionactive"
+}
+
+// MARK: - Environment Keys
+
+/// Centralized environment variable names used across client and server.
+public enum EnvironmentKey: String, Sendable {
+    // Client
+    case buttonheistDevice = "BUTTONHEIST_DEVICE"
+    case buttonheistToken = "BUTTONHEIST_TOKEN"
+    case buttonheistDriverId = "BUTTONHEIST_DRIVER_ID"
+    case buttonheistSessionTimeout = "BUTTONHEIST_SESSION_TIMEOUT"
+    // Server
+    case insideJobToken = "INSIDEJOB_TOKEN"
+    case insideJobPort = "INSIDEJOB_PORT"
+    case insideJobDisable = "INSIDEJOB_DISABLE"
+    case insideJobDisableFingerprints = "INSIDEJOB_DISABLE_FINGERPRINTS"
+    case insideJobPollingInterval = "INSIDEJOB_POLLING_INTERVAL"
+    case insideJobId = "INSIDEJOB_ID"
+    case insideJobScope = "INSIDEJOB_SCOPE"
+    case insideJobRestrictWatchers = "INSIDEJOB_RESTRICT_WATCHERS"
+    case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"
+}
+
+extension EnvironmentKey {
+    public var value: String? { ProcessInfo.processInfo.environment[rawValue] }
+    public var boolValue: Bool {
+        guard let v = value?.lowercased() else { return false }
+        return v == "true" || v == "1" || v == "yes"
+    }
+}

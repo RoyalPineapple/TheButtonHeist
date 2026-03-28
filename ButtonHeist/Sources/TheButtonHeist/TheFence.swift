@@ -120,8 +120,8 @@ public final class TheFence {
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
-        self.handoff.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.token = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.autoSubscribe = true
         self.handoff.onAuthApproved = { [weak self] token in
             if let token {
@@ -162,7 +162,7 @@ public final class TheFence {
 
         try await connect()
         if config.autoReconnect {
-            let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+            let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
         }
         isStarted = true
@@ -216,7 +216,7 @@ public final class TheFence {
     }
 
     private func connect() async throws {
-        let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+        let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
         do {
             try await handoff.connectWithDiscovery(
                 filter: filter,
@@ -357,9 +357,23 @@ public final class TheFence {
         return ActionTarget(identifier: identifier, heistId: heistId, order: order)
     }
 
-    func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
-        let traits = (dictionary["traits"] as? [String])
-        let excludeTraits = (dictionary["excludeTraits"] as? [String])
+    func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
+        let traits: [HeistTrait]? = try (dictionary["traits"] as? [String])?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw FenceError.invalidRequest(
+                    "Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                )
+            }
+            return trait
+        }
+        let excludeTraits: [HeistTrait]? = try (dictionary["excludeTraits"] as? [String])?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw FenceError.invalidRequest(
+                    "Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                )
+            }
+            return trait
+        }
         let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
         return ElementMatcher(
             label: stringArg(dictionary, "label"),

@@ -25,7 +25,7 @@ final class ElementMatcherTests: XCTestCase {
     func testEncodeDecodeAllFields() throws {
         let matcher = ElementMatcher(
             label: "Save", identifier: "saveBtn", heistId: "button_save",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"],
+            value: "active", traits: [.button], excludeTraits: [.notEnabled],
             scope: .both, absent: true
         )
         let data = try JSONEncoder().encode(matcher)
@@ -49,13 +49,13 @@ final class ElementMatcherTests: XCTestCase {
 
     func testDecodeFromJSON() throws {
         let json = """
-        {"label":"Settings","traits":["header","button"],"excludeTraits":["disabled"]}
+        {"label":"Settings","traits":["header","button"],"excludeTraits":["notEnabled"]}
         """
         let data = Data(json.utf8)
         let matcher = try JSONDecoder().decode(ElementMatcher.self, from: data)
         XCTAssertEqual(matcher.label, "Settings")
-        XCTAssertEqual(matcher.traits, ["header", "button"])
-        XCTAssertEqual(matcher.excludeTraits, ["disabled"])
+        XCTAssertEqual(matcher.traits, [.header, .button])
+        XCTAssertEqual(matcher.excludeTraits, [.notEnabled])
         XCTAssertNil(matcher.identifier)
         XCTAssertNil(matcher.heistId)
         XCTAssertNil(matcher.value)
@@ -65,8 +65,8 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Equatable
 
     func testEqualMatchers() {
-        let a = ElementMatcher(label: "Save", traits: ["button"])
-        let b = ElementMatcher(label: "Save", traits: ["button"])
+        let a = ElementMatcher(label: "Save", traits: [.button])
+        let b = ElementMatcher(label: "Save", traits: [.button])
         XCTAssertEqual(a, b)
     }
 
@@ -130,7 +130,7 @@ final class ElementMatcherTests: XCTestCase {
     func testEncodeDecodeAllFieldsWithScope() throws {
         let matcher = ElementMatcher(
             label: "Save", identifier: "saveBtn", heistId: "button_save",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"],
+            value: "active", traits: [.button], excludeTraits: [.notEnabled],
             scope: .both, absent: true
         )
         let data = try JSONEncoder().encode(matcher)

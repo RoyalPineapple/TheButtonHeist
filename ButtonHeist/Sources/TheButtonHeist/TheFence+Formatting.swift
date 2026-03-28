@@ -403,11 +403,11 @@ public enum FenceResponse {
 
         if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
         if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
-        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits }
+        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits.map(\.rawValue) }
         if let screenName = result.screenName { payload["screenName"] = screenName }
 
         if !result.success {
-            payload["errorClass"] = Self.actionErrorClass(result)
+            payload["errorClass"] = Self.actionErrorClass(result).rawValue
         }
 
         return payload
@@ -424,13 +424,17 @@ public enum FenceResponse {
         return dict
     }
 
-    private static func actionErrorClass(_ result: ActionResult) -> String {
+    private enum ActionErrorClass: String {
+        case elementNotFound, timeout, unsupported, inputError, actionFailed
+    }
+
+    private static func actionErrorClass(_ result: ActionResult) -> ActionErrorClass {
         let msg = (result.message ?? "").lowercased()
-        if msg.contains("not found") || msg.contains("no element") { return "elementNotFound" }
-        if msg.contains("timeout") || msg.contains("timed out") { return "timeout" }
-        if msg.contains("not supported") || msg.contains("unsupported") { return "unsupported" }
-        if msg.contains("keyboard") || msg.contains("first responder") { return "inputError" }
-        return "actionFailed"
+        if msg.contains("not found") || msg.contains("no element") { return .elementNotFound }
+        if msg.contains("timeout") || msg.contains("timed out") { return .timeout }
+        if msg.contains("not supported") || msg.contains("unsupported") { return .unsupported }
+        if msg.contains("keyboard") || msg.contains("first responder") { return .inputError }
+        return .actionFailed
     }
 
     private func recordingJsonDict(path: String, payload: RecordingPayload) -> [String: Any] {
@@ -724,13 +728,13 @@ public enum FenceResponse {
             parts.append("= \"\(value)\"")
         }
 
-        let meaningful = element.traits.filter { $0 != "staticText" }
+        let meaningful = element.traits.filter { $0 != .staticText }
         if !meaningful.isEmpty {
-            parts.append("[\(meaningful.joined(separator: ", "))]")
+            parts.append("[\(meaningful.map(\.rawValue).joined(separator: ", "))]")
         }
 
         let actions = element.actions.map(\.description)
-            .filter { $0 != "activate" || element.traits.contains("button") == false }
+            .filter { $0 != "activate" || !element.traits.contains(.button) }
         if !actions.isEmpty {
             parts.append("{\(actions.joined(separator: ", "))}")
         }
@@ -802,7 +806,7 @@ public enum FenceResponse {
             "heistId": element.heistId,
             "order": element.order,
             "description": element.description,
-            "traits": element.traits,
+            "traits": element.traits.map(\.rawValue),
             "actions": element.actions.map(\.description),
         ]
         if let label = element.label { payload["label"] = label }
@@ -848,7 +852,7 @@ public enum FenceResponse {
 
     private func groupDictionary(_ group: Group) -> [String: Any] {
         var payload: [String: Any] = [
-            "type": group.type,
+            "type": group.type.rawValue,
             "frameX": group.frameX,
             "frameY": group.frameY,
             "frameWidth": group.frameWidth,

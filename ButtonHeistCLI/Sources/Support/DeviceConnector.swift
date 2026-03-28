@@ -14,12 +14,12 @@ final class DeviceConnector {
          token: String? = nil, quiet: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
         self.deviceFilter = deviceFilter
-            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+            ?? EnvironmentKey.buttonheistDevice.value
         self.quiet = quiet
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
-        self.handoff.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.token = token ?? EnvironmentKey.buttonheistToken.value
+        self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.autoSubscribe = false
     }
 
