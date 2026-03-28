@@ -416,7 +416,7 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 Search for an element by scrolling through the nearest scroll view. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
 
-**Match fields:** `label`, `identifier`, `heistId`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present).
+**Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
 
 **Search options:** `maxScrolls` (default: 20), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
 
@@ -805,8 +805,7 @@ Completed screen recording. Contains the H.264/MP4 video as base64-encoded data.
     {
       "timestamp":1.2,
       "command":{"type":"activate","payload":{"identifier":"loginButton"}},
-      "result":{"success":true,"method":"syntheticTap"},
-      "interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}
+      "result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}
     }
   ]
 }}
@@ -829,15 +828,14 @@ Recording failed with an error.
 Broadcast to all subscribed clients (including observers) after a driver performs an action. Contains the command, result, and interface delta.
 
 ```json
-{"protocolVersion":"6.2","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap"},"interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}
+{"protocolVersion":"6.5","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","interfaceDelta":{"kind":"elementsChanged","elementCount":12,"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `Double` | Unix timestamp of the interaction |
 | `command` | `ClientMessage` | The command that triggered the interaction |
-| `result` | `ActionResult` | The result of the action |
-| `interfaceDelta` | `InterfaceDelta?` | What changed in the UI hierarchy |
+| `result` | `ActionResult` | The result of the action (includes `interfaceDelta` when the UI hierarchy changed) |
 
 ### error
 
@@ -1162,6 +1160,7 @@ Diagnostic output from `scrollToVisible`, included on every `actionResult` for t
 | `success` | `Bool` | Whether action succeeded |
 | `method` | `String` | How action was performed (see method values above) |
 | `message` | `String?` | Additional context or error description |
+| `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`. Nil on success. |
 | `value` | `String?` | Current text field value (populated by `typeText`) |
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
@@ -1182,7 +1181,6 @@ The `expect` field classifies what kind of outcome the caller was going for. Exp
 | `"elements_changed"` | String | Expected `interfaceDelta.kind == "elementsChanged"` or `"screenChanged"` (superset rule) |
 | `{"elementUpdated": {…}}` | Object | Expected an element update in `interfaceDelta.updated` |
 
-Legacy keys `"layout_changed"` and `{"valueChanged": {…}}` are still accepted for backward compatibility.
 
 #### elementUpdated
 
@@ -1302,8 +1300,7 @@ A single recorded interaction event captured during a Stakeout recording.
 |-------|------|-------------|
 | `timestamp` | `Double` | Time offset from recording start in seconds |
 | `command` | `ClientMessage` | The command that triggered this interaction |
-| `result` | `ActionResult` | The result returned to the client |
-| `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed in the hierarchy |
+| `result` | `ActionResult` | The result returned to the client (includes `interfaceDelta` when the UI hierarchy changed) |
 
 ## Example Session
 

@@ -4,7 +4,7 @@ import Foundation
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "6.4"
+public let protocolVersion = "6.5"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
 /// Update this constant when cutting a new release. See docs/VERSIONING.md.

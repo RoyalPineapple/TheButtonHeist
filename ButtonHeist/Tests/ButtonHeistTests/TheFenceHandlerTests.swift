@@ -675,9 +675,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPerformCustomActionAcceptsLegacyActionName() async {
-        await assertPassesValidation(
-            ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"]
+    func testPerformCustomActionRejectsActionNameKey() async {
+        await assertValidationError(
+            ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"],
+            contains: "action is required"
         )
     }
 
@@ -782,10 +783,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationScreenChangedCamelCase() throws {
+    func testParseExpectationScreenChangedCamelCaseThrows() {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": "screenChanged"])
-        XCTAssertEqual(result, .screenChanged)
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "screenChanged"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+        }
     }
 
     @ButtonHeistActor

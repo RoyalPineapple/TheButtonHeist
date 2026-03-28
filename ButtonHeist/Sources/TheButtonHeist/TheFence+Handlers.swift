@@ -306,7 +306,7 @@ extension TheFence {
         case .activate: stringArg(args, "action")
         case .increment: "increment"
         case .decrement: "decrement"
-        case .performCustomAction: stringArg(args, "action") ?? stringArg(args, "actionName")
+        case .performCustomAction: stringArg(args, "action")
         default: nil
         }
 
