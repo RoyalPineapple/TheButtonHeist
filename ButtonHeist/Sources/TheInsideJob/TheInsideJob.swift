@@ -333,6 +333,7 @@ public final class TheInsideJob {
                     success: false,
                     method: .activate,
                     message: "Watch mode is read-only",
+                    errorKind: .unsupported,
                     screenName: bagman.lastScreenName
                 )), requestId: requestId, respond: respond)
                 return
@@ -362,7 +363,7 @@ public final class TheInsideJob {
             appBuild: appBuild,
             deviceName: deviceName,
             systemVersion: systemVersion,
-            buttonHeistVersion: protocolVersion
+            buttonHeistVersion: buttonHeistVersion
         )
 
         let active = muscle.isSessionActive
@@ -410,41 +411,19 @@ public final class TheInsideJob {
                 target: command.actionTarget
             )
         } else {
+            let kind: ErrorKind = (result.method == .elementNotFound || result.method == .elementDeallocated)
+                ? .elementNotFound : .actionFailed
             actionResult = ActionResult(
                 success: false,
                 method: result.method,
                 message: result.message,
+                errorKind: kind,
                 value: result.value,
                 screenName: beforeSnapshot.screenName
             )
         }
 
-        // Record interaction to TheStakeout if recording is active.
-        // Uses the delta already computed in actionResult to avoid duplicating full interface snapshots.
-        if let stakeout, stakeout.state == .recording {
-            let event = InteractionEvent(
-                timestamp: stakeout.recordingElapsed,
-                command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
-            )
-            stakeout.recordInteraction(event: event)
-        }
-
-        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-
-        // Broadcast interaction event to observers/subscribers
-        if muscle.hasSubscribers {
-            let event = InteractionEvent(
-                timestamp: Date().timeIntervalSince1970,
-                command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
-            )
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
-                broadcastToSubscribed(data)
-            }
-        }
+        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
     /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
@@ -490,7 +469,6 @@ public final class TheInsideJob {
                 scrollSearchResult: result.scrollSearchResult
             )
         } else {
-            // Refresh to get screen name even on failure
             bagman.refreshAccessibilityData()
             let afterSnapshot = bagman.snapshotElements()
             actionResult = ActionResult(
@@ -503,12 +481,21 @@ public final class TheInsideJob {
             )
         }
 
+        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
+    }
+
+    /// Record to stakeout, send response, and broadcast to subscribers.
+    private func recordAndBroadcast(
+        command: ClientMessage,
+        actionResult: ActionResult,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) {
         if let stakeout, stakeout.state == .recording {
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             stakeout.recordInteraction(event: event)
         }
@@ -519,8 +506,7 @@ public final class TheInsideJob {
             let event = InteractionEvent(
                 timestamp: Date().timeIntervalSince1970,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
                 broadcastToSubscribed(data)

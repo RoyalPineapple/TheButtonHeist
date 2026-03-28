@@ -4,7 +4,11 @@ import Foundation
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "6.4"
+public let protocolVersion = "6.5"
+
+/// Canonical product version shared by CLI, MCP, and the iOS server.
+/// Update this constant when cutting a new release. See docs/VERSIONING.md.
+public let buttonHeistVersion = "0.0.1"
 
 /// Explicit wire message discriminator used at JSON boundaries.
 public enum WireMessageType: String, Codable, CaseIterable, Sendable {

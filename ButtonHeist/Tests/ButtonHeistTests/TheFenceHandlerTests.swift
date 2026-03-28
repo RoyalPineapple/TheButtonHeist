@@ -675,9 +675,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPerformCustomActionAcceptsLegacyActionName() async {
-        await assertPassesValidation(
-            ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"]
+    func testPerformCustomActionRejectsActionNameKey() async {
+        await assertValidationError(
+            ["command": "perform_custom_action", "identifier": "myElement", "actionName": "doSomething"],
+            contains: "action is required"
         )
     }
 
@@ -782,24 +783,39 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationScreenChangedCamelCase() throws {
+    func testParseExpectationScreenChangedCamelCaseThrows() {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": "screenChanged"])
-        XCTAssertEqual(result, .screenChanged)
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "screenChanged"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+        }
     }
 
     @ButtonHeistActor
-    func testParseExpectationLayoutChangedSnakeCase() throws {
+    func testParseExpectationLayoutChangedSnakeCaseThrows() {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": "layout_changed"])
-        XCTAssertEqual(result, .elementsChanged)
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "layout_changed"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+        }
     }
 
     @ButtonHeistActor
-    func testParseExpectationLayoutChangedCamelCase() throws {
+    func testParseExpectationLayoutChangedCamelCaseThrows() {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation(["expect": "layoutChanged"])
-        XCTAssertEqual(result, .elementsChanged)
+        XCTAssertThrowsError(try fence.parseExpectation(["expect": "layoutChanged"])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("Unknown expectation tier"))
+        }
     }
 
     @ButtonHeistActor
@@ -850,12 +866,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationLegacyValueChangedStillWorks() throws {
+    func testParseExpectationLegacyValueChangedThrows() {
         let (fence, _) = makeConnectedFence()
-        let result = try fence.parseExpectation([
+        XCTAssertThrowsError(try fence.parseExpectation([
             "expect": ["valueChanged": ["heistId": "counter", "newValue": "5"]]
-        ])
-        XCTAssertEqual(result, .elementUpdated(heistId: "counter", newValue: "5"))
+        ])) { error in
+            guard case FenceError.invalidRequest(let msg) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(msg.contains("elementUpdated"))
+        }
     }
 
     @ButtonHeistActor
@@ -897,7 +918,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let response = try await fence.execute(request: [
             "command": "run_batch",
             "steps": [
-                ["command": "activate", "identifier": "btn1", "expect": "layout_changed"],
+                ["command": "activate", "identifier": "btn1", "expect": "elements_changed"],
                 ["command": "activate", "identifier": "btn2"],
             ] as [[String: Any]],
         ])
@@ -908,7 +929,6 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         // Only step 1 had "expect", so checked should be 1
         XCTAssertEqual(checked, 1, "Only steps with explicit 'expect' should be counted")
-        // layout_changed maps to elementsChanged expectation, and delta is elementsChanged → met
         XCTAssertEqual(met, 1)
     }
 
@@ -924,7 +944,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "run_batch",
             "steps": [
                 ["command": "activate", "identifier": "btn1", "expect": "screen_changed"],
-                ["command": "activate", "identifier": "btn2", "expect": "layout_changed"],
+                ["command": "activate", "identifier": "btn2", "expect": "elements_changed"],
             ] as [[String: Any]],
         ])
 

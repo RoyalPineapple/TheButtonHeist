@@ -253,6 +253,9 @@ extension TheFence {
             )
         case .scrollToVisible:
             let matcher = elementMatcher(args)
+            if matcher.heistId != nil {
+                return .error("scroll_to_visible does not support heistId — use identifier or label instead")
+            }
             guard matcher.label != nil || matcher.identifier != nil || matcher.value != nil
                 || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false else {
                 return .error("Must specify at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
@@ -303,7 +306,7 @@ extension TheFence {
         case .activate: stringArg(args, "action")
         case .increment: "increment"
         case .decrement: "decrement"
-        case .performCustomAction: stringArg(args, "action") ?? stringArg(args, "actionName")
+        case .performCustomAction: stringArg(args, "action")
         default: nil
         }
 

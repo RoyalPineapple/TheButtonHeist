@@ -19,6 +19,7 @@ extension TheInsideJob {
             success: false,
             method: .activate,
             message: "Unhandled command",
+            errorKind: .unsupported,
             screenName: bagman.lastScreenName
         )), requestId: requestId, respond: respond)
     }
@@ -78,7 +79,7 @@ extension TheInsideJob {
         case .touchDrawPath(let target):
             guard target.points.count <= 10_000 else {
                 let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)",
-                                       screenName: bagman.lastScreenName)
+                                       errorKind: .validationError, screenName: bagman.lastScreenName)
                 sendMessage(.actionResult(err), requestId: requestId, respond: respond)
                 return true
             }
@@ -88,7 +89,7 @@ extension TheInsideJob {
         case .touchDrawBezier(let target):
             guard target.segments.count <= 1_000 else {
                 let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many segments (max 1,000)",
-                                       screenName: bagman.lastScreenName)
+                                       errorKind: .validationError, screenName: bagman.lastScreenName)
                 sendMessage(.actionResult(err), requestId: requestId, respond: respond)
                 return true
             }

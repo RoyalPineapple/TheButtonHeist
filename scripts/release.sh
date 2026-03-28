@@ -60,7 +60,7 @@ if ! [[ "$NEW_VERSION" =~ $CALVER_REGEX ]]; then
 fi
 
 # Read current version from source of truth
-CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift | cut -d'"' -f2)
+CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
 
 if [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
     echo "Version is already $NEW_VERSION. Nothing to do."
@@ -89,14 +89,14 @@ escape_sed_replacement() {
 CURRENT_ESC=$(escape_sed_pattern "$CURRENT_VERSION")
 NEW_ESC=$(escape_sed_replacement "$NEW_VERSION")
 
-# 1. TheFence+CommandCatalog.swift
+# 1. TheScore/Messages.swift (canonical source of truth)
 if [[ "$DRY_RUN" == true ]]; then
-    echo "  Would update: buttonHeistVersion = \"$NEW_VERSION\" in TheFence+CommandCatalog.swift"
+    echo "  Would update: buttonHeistVersion = \"$NEW_VERSION\" in Messages.swift"
 else
     sed -i '' "s/buttonHeistVersion = \"$CURRENT_ESC\"/buttonHeistVersion = \"$NEW_ESC\"/" \
-        ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift
+        ButtonHeist/Sources/TheScore/Messages.swift
 fi
-echo "  ✓ TheFence+CommandCatalog.swift"
+echo "  ✓ Messages.swift"
 
 # 2. VERSION file
 if [[ "$DRY_RUN" == true ]]; then

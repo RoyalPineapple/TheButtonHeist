@@ -159,6 +159,49 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    func testActionResultWithErrorKind() throws {
+        let result = ActionResult(
+            success: false,
+            method: .syntheticTap,
+            message: "Element not found",
+            errorKind: .elementNotFound
+        )
+        let message = ServerMessage.actionResult(result)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        if case .actionResult(let decodedResult) = decoded {
+            XCTAssertFalse(decodedResult.success)
+            XCTAssertEqual(decodedResult.errorKind, .elementNotFound)
+            XCTAssertEqual(decodedResult.message, "Element not found")
+        } else {
+            XCTFail("Expected actionResult, got \(decoded)")
+        }
+    }
+
+    func testErrorKindAllCasesRoundTrip() throws {
+        for kind in ErrorKind.allCases {
+            let result = ActionResult(success: false, method: .syntheticTap, errorKind: kind)
+            let data = try JSONEncoder().encode(result)
+            let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+            XCTAssertEqual(decoded.errorKind, kind, "Round-trip failed for \(kind)")
+        }
+    }
+
+    func testActionResultWithoutErrorKindDecodesAsNil() throws {
+        let json = """
+        {"type":"actionResult","payload":{"success":false,"method":"syntheticTap","message":"fail"}}
+        """
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))
+
+        if case .actionResult(let result) = decoded {
+            XCTAssertFalse(result.success)
+            XCTAssertNil(result.errorKind)
+        } else {
+            XCTFail("Expected actionResult, got \(decoded)")
+        }
+    }
+
     func testScreenEncodeDecode() throws {
         let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
