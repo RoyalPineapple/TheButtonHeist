@@ -136,8 +136,8 @@ extension TheBagman {
     /// this method is a cheap read that extracts the visible subset.
     func snapshotElements() -> [HeistElement] {
         var result: [HeistElement] = []
-        for (heistId, var entry) in screenElements where entry.lastTraversalIndex >= 0
-            && entry.lastTraversalIndex < cachedElements.count {
+        for heistId in onScreen {
+            guard var entry = screenElements[heistId] else { continue }
             if !entry.presented {
                 entry.presented = true
                 screenElements[heistId] = entry
