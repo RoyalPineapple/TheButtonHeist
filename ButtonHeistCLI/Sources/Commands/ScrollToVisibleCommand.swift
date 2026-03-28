@@ -86,7 +86,8 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             direction: searchDirection
         )
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
+        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
+        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
         try await connector.connect()
         defer { connector.disconnect() }
 

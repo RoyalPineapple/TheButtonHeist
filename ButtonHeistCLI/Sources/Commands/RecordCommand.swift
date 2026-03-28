@@ -33,8 +33,9 @@ struct RecordCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
+        let envConfig = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
         let connector = DeviceConnector(
-            deviceFilter: connection.device, token: connection.token,
+            deviceFilter: envConfig.deviceFilter, token: envConfig.token, driverId: envConfig.driverId,
             quiet: connection.quiet
         )
         try await connector.connect()
