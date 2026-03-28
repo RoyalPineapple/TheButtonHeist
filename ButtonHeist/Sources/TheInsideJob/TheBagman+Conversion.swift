@@ -94,7 +94,7 @@ extension TheBagman {
             typeName = .tabBar
             label = nil; value = nil; identifier = nil
         case .scrollable(let contentSize):
-            typeName = "scrollable"
+            typeName = .scrollable
             label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
         }
         return Group(
