@@ -140,8 +140,8 @@ public enum ClientMessage: Codable, Sendable {
         switch self {
         case .activate(let t), .increment(let t), .decrement(let t):
             return t
-        case .scrollToVisible:
-            return nil
+        case .scrollToVisible(let t):
+            return t.elementTarget
         case .performCustomAction(let t):
             return t.elementTarget
         case .editAction:
@@ -169,6 +169,8 @@ public enum ClientMessage: Codable, Sendable {
         case .scroll(let t):
             return t.elementTarget
         case .scrollToEdge(let t):
+            return t.elementTarget
+        case .waitFor(let t):
             return t.elementTarget
         default:
             return nil
@@ -595,23 +597,45 @@ public struct WaitForIdleTarget: Codable, Sendable {
     }
 }
 
-/// Target for wait_for command — wait for an element matching a predicate
-public struct WaitForTarget: Codable, Sendable {
-    /// Predicate describing the element to wait for
-    public let match: ElementMatcher
+/// Target for wait_for command — wait for an element to appear or disappear.
+/// Uses ElementTarget so both heistId and matcher predicates work.
+public struct WaitForTarget: Sendable {
+    /// Element to wait for — by heistId or matcher predicate.
+    public let elementTarget: ElementTarget
     /// When true, wait for the element to NOT exist
     public let absent: Bool?
     /// Maximum time to wait in seconds (default: 10, max: 30)
     public let timeout: Double?
 
-    public init(match: ElementMatcher, absent: Bool? = nil, timeout: Double? = nil) {
-        self.match = match
+    public init(elementTarget: ElementTarget, absent: Bool? = nil, timeout: Double? = nil) {
+        self.elementTarget = elementTarget
         self.absent = absent
         self.timeout = timeout
     }
 
     public var resolvedAbsent: Bool { absent ?? false }
     public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
+}
+
+extension WaitForTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId, label, identifier, value, traits, excludeTraits
+        case absent, timeout
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.elementTarget = try ElementTarget(from: decoder)
+        self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
+        self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try elementTarget.encode(to: encoder)
+        try container.encodeIfPresent(absent, forKey: .absent)
+        try container.encodeIfPresent(timeout, forKey: .timeout)
+    }
 }
 
 /// Payload for authenticate message
@@ -722,42 +746,56 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
 }
 
-/// Target for scroll-to-visible search with either a heistId or element matcher.
-public struct ScrollToVisibleTarget: Codable, Sendable {
-    /// Stable heistId to search for as it appears while scrolling.
-    public let heistId: String?
-    /// Predicate describing the element to find.
-    public let match: ElementMatcher?
+/// Target for scroll-to-visible search.
+public struct ScrollToVisibleTarget: Sendable {
+    /// Element to search for while scrolling.
+    public let elementTarget: ElementTarget?
     /// Maximum scroll attempts before giving up (default: 20)
     public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
 
     public init(
-        heistId: String? = nil,
-        match: ElementMatcher? = nil,
+        elementTarget: ElementTarget? = nil,
         maxScrolls: Int? = nil,
         direction: ScrollSearchDirection? = nil
     ) {
-        self.heistId = heistId
-        self.match = match
+        self.elementTarget = elementTarget
         self.maxScrolls = maxScrolls
         self.direction = direction
     }
 
-    public init?(
-        heistId: String? = nil,
-        matcher: ElementMatcher,
-        maxScrolls: Int? = nil,
-        direction: ScrollSearchDirection? = nil
-    ) {
-        let match = matcher.nonEmpty
-        guard heistId != nil || match != nil else { return nil }
-        self.init(heistId: heistId, match: match, maxScrolls: maxScrolls, direction: direction)
-    }
-
     public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
+}
+
+extension ScrollToVisibleTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId, label, identifier, value, traits, excludeTraits
+        case maxScrolls, direction
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Decode element target from flat fields — nil if no targeting fields present
+        let decoded = try ElementTarget(from: decoder)
+        if case .matcher(let m) = decoded, m.nonEmpty == nil {
+            self.elementTarget = nil
+        } else {
+            self.elementTarget = decoded
+        }
+        self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
+        self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let elementTarget {
+            try elementTarget.encode(to: encoder)
+        }
+        try container.encodeIfPresent(maxScrolls, forKey: .maxScrolls)
+        try container.encodeIfPresent(direction, forKey: .direction)
+    }
 }
 
 /// Edge for scroll-to-edge commands

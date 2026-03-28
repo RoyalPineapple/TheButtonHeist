@@ -73,7 +73,7 @@ extension TheSafecracker {
             return .failure(.scrollToVisible, message: "No element store available")
         }
 
-        guard let searchTarget = ElementTarget(heistId: target.heistId, matcher: target.match ?? ElementMatcher()) else {
+        guard let searchTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
         let maxScrolls = target.resolvedMaxScrolls
