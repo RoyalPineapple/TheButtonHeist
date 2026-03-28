@@ -54,10 +54,6 @@ public enum FenceError: Error, LocalizedError {
 }
 
 /// Named timeout constants for TheFence operations.
-/// Action timeout (15s) covers most single-gesture/tap operations.
-/// Standard action timeout (15s) covers taps, swipes, gestures, accessibility actions, and
-/// interface requests. Long action timeout (30s) covers text entry, screenshots, and recordings
-/// which may involve larger payloads or slower responses.
 public enum Timeouts {
     /// Standard action timeout (15 seconds)
     static let actionSeconds: TimeInterval = 15
