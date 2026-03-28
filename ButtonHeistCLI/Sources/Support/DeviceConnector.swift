@@ -11,15 +11,15 @@ final class DeviceConnector {
     private let connectionTimeout: UInt64
 
     init(deviceFilter: String?,
-         token: String? = nil, quiet: Bool = false,
+         token: String? = nil, driverId: String? = nil,
+         quiet: Bool = false,
          discoveryTimeout: TimeInterval = 5, connectionTimeout: TimeInterval = 5) {
         self.deviceFilter = deviceFilter
-            ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
         self.quiet = quiet
         self.discoveryTimeout = UInt64(discoveryTimeout * 1_000_000_000)
         self.connectionTimeout = UInt64(connectionTimeout * 1_000_000_000)
-        self.handoff.token = token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.token = token
+        self.handoff.driverId = driverId
         self.handoff.autoSubscribe = false
     }
 

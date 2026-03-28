@@ -9,33 +9,12 @@ final class ReplSession {
     private let sessionTimeout: TimeInterval
     private var isRunning = true
     private var shouldExit = false
-    private var lastCommandTime = ContinuousClock.now
-    private var timeoutTask: Task<Void, Never>?
+    private var idleMonitor: IdleMonitor?
 
-    init(
-        deviceFilter: String?,
-        connectionTimeout: Double,
-        format: OutputFormat,
-        token: String? = nil,
-        sessionTimeout: Double = 0
-    ) {
+    init(config: EnvironmentConfig, format: OutputFormat) {
         self.format = format
-        if sessionTimeout > 0 {
-            self.sessionTimeout = sessionTimeout
-        } else if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
-                  let parsed = Double(envValue), parsed > 0 {
-            self.sessionTimeout = parsed
-        } else {
-            self.sessionTimeout = 0
-        }
-        self.fence = TheFence(
-            configuration: .init(
-                deviceFilter: deviceFilter,
-                connectionTimeout: connectionTimeout,
-                token: token,
-                autoReconnect: true
-            )
-        )
+        self.sessionTimeout = config.sessionTimeout
+        self.fence = TheFence(configuration: config.fenceConfiguration)
         self.fence.onStatus = { message in
             logStatus(message)
         }
@@ -54,7 +33,6 @@ final class ReplSession {
 
         signal(SIGINT) { _ in Darwin.exit(0) }
 
-        lastCommandTime = .now
         if sessionTimeout > 0 {
             startTimeoutMonitor()
         }
@@ -69,7 +47,7 @@ final class ReplSession {
                 break
             }
 
-            lastCommandTime = .now
+            idleMonitor?.resetTimer()
 
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
@@ -80,24 +58,18 @@ final class ReplSession {
             if shouldExit { break }
         }
 
-        timeoutTask?.cancel()
+        idleMonitor?.cancel()
         fence.stop()
     }
 
     private func startTimeoutMonitor() {
-        timeoutTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(SessionDefaults.timeoutCheckInterval))
-                guard !Task.isCancelled, let self else { return }
-                let elapsed = ContinuousClock.now - self.lastCommandTime
-                if elapsed > .seconds(self.sessionTimeout) {
-                    logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
-                    self.isRunning = false
-                    close(STDIN_FILENO)
-                    return
-                }
-            }
+        idleMonitor = IdleMonitor(timeout: sessionTimeout) { [weak self] in
+            guard let self else { return }
+            logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
+            self.isRunning = false
+            close(STDIN_FILENO)
         }
+        idleMonitor?.resetTimer()
     }
 
     private func processLine(_ line: String) async -> (FenceResponse, Any?) {
@@ -137,10 +109,7 @@ final class ReplSession {
             }
             return (response, requestId)
         } catch {
-            if let fenceError = error as? FenceError, let message = fenceError.errorDescription {
-                return (.error(message), requestId)
-            }
-            return (.error("Internal error: \(error.localizedDescription)"), requestId)
+            return (.error(error.displayMessage), requestId)
         }
     }
 
