@@ -362,6 +362,24 @@ final class TheMuscle {
     /// to allow unauthenticated observers. Observers never claim a session.
     private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
         if restrictWatchers {
+            guard let address = clientAddresses[clientId] else {
+                sendMessage(.authFailed("Connection rejected."), respond: respond)
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    self?.disconnectClient?(clientId)
+                }
+                return
+            }
+            if let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
+                sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
+                logger.warning("Observer \(clientId) locked out (address: \(address)), rejecting")
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    self?.disconnectClient?(clientId)
+                }
+                return
+            }
+            lockedOutAddresses.removeValue(forKey: address)
             guard !payload.token.isEmpty else {
                 sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
                 logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
@@ -372,14 +390,21 @@ final class TheMuscle {
                 return
             }
             guard payload.token == authToken else {
+                let attempts = (failedAuthAttempts[address] ?? 0) + 1
+                failedAuthAttempts[address] = attempts
+                if attempts >= TheMuscle.maxFailedAttempts {
+                    lockedOutAddresses[address] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
+                    logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")
+                }
                 sendMessage(.authFailed("Invalid token."), respond: respond)
-                logger.warning("Observer \(clientId) sent invalid token, rejected")
+                logger.warning("Observer \(clientId) sent invalid token, rejected (attempt \(attempts))")
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return
             }
+            failedAuthAttempts.removeValue(forKey: address)
         }
         approveObserver(clientId, respond: respond)
     }
