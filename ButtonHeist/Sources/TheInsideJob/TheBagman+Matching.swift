@@ -89,7 +89,7 @@ extension AccessibilityHierarchy {
     /// Which node types are evaluated depends on `matcher.resolvedScope`.
     func matches(
         _ matcher: ElementMatcher,
-        traitNames: (UIAccessibilityTraits) -> [String]
+        traitNames: (UIAccessibilityTraits) -> [HeistTrait]
     ) -> MatchResult? {
         let scope = matcher.resolvedScope
         switch self {
@@ -119,7 +119,7 @@ extension Array where Element == AccessibilityHierarchy {
     /// First element in the tree that satisfies all property predicates.
     func firstMatch(
         _ matcher: ElementMatcher,
-        traitNames: @escaping (UIAccessibilityTraits) -> [String]
+        traitNames: @escaping (UIAccessibilityTraits) -> [HeistTrait]
     ) -> AccessibilityHierarchy.MatchResult? {
         for node in self {
             if let result = node.matches(matcher, traitNames: traitNames) {
@@ -132,7 +132,7 @@ extension Array where Element == AccessibilityHierarchy {
     /// All elements in the tree that satisfy the property predicates.
     func allMatches(
         _ matcher: ElementMatcher,
-        traitNames: @escaping (UIAccessibilityTraits) -> [String]
+        traitNames: @escaping (UIAccessibilityTraits) -> [HeistTrait]
     ) -> [AccessibilityHierarchy.MatchResult] {
         var results: [AccessibilityHierarchy.MatchResult] = []
         collectMatches(matcher, traitNames: traitNames, into: &results)
@@ -142,14 +142,14 @@ extension Array where Element == AccessibilityHierarchy {
     /// Whether any element in the tree satisfies the property predicates.
     func hasMatch(
         _ matcher: ElementMatcher,
-        traitNames: @escaping (UIAccessibilityTraits) -> [String]
+        traitNames: @escaping (UIAccessibilityTraits) -> [HeistTrait]
     ) -> Bool {
         firstMatch(matcher, traitNames: traitNames) != nil
     }
 
     private func collectMatches(
         _ matcher: ElementMatcher,
-        traitNames: (UIAccessibilityTraits) -> [String],
+        traitNames: (UIAccessibilityTraits) -> [HeistTrait],
         into results: inout [AccessibilityHierarchy.MatchResult]
     ) {
         let scope = matcher.resolvedScope
@@ -180,7 +180,7 @@ extension AccessibilityElement {
     /// The `heistId` field is ignored — it's a wire-level concept.
     func matches(
         _ matcher: ElementMatcher,
-        traitNames: (UIAccessibilityTraits) -> [String]
+        traitNames: (UIAccessibilityTraits) -> [HeistTrait]
     ) -> Bool {
         if let matchLabel = matcher.label, label != matchLabel { return false }
         if let matchIdentifier = matcher.identifier, identifier != matchIdentifier { return false }
@@ -204,7 +204,7 @@ extension Array where Element == AccessibilityElement {
     /// First element in the flat array that satisfies the matcher.
     func firstMatch(
         _ matcher: ElementMatcher,
-        traitNames: @escaping (UIAccessibilityTraits) -> [String]
+        traitNames: @escaping (UIAccessibilityTraits) -> [HeistTrait]
     ) -> (element: AccessibilityElement, index: Int)? {
         for (index, element) in enumerated() where element.matches(matcher, traitNames: traitNames) {
             return (element, index)
@@ -215,7 +215,7 @@ extension Array where Element == AccessibilityElement {
     /// Whether any element in the flat array satisfies the matcher.
     func hasMatch(
         _ matcher: ElementMatcher,
-        traitNames: @escaping (UIAccessibilityTraits) -> [String]
+        traitNames: @escaping (UIAccessibilityTraits) -> [HeistTrait]
     ) -> Bool {
         contains { $0.matches(matcher, traitNames: traitNames) }
     }

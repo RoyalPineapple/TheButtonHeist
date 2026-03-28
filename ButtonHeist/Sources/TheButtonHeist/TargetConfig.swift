@@ -84,8 +84,8 @@ public enum TargetConfigResolver {
         config: ButtonHeistFileConfig? = nil,
         env: [String: String] = ProcessInfo.processInfo.environment
     ) -> TargetConfig? {
-        let envDevice = env["BUTTONHEIST_DEVICE"]
-        let envToken = env["BUTTONHEIST_TOKEN"]
+        let envDevice = env[EnvironmentKey.buttonheistDevice.rawValue]
+        let envToken = env[EnvironmentKey.buttonheistToken.rawValue]
 
         if let envDevice {
             return TargetConfig(device: envDevice, token: envToken)

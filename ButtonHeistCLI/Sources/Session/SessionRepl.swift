@@ -22,7 +22,7 @@ final class ReplSession {
         self.format = format
         if sessionTimeout > 0 {
             self.sessionTimeout = sessionTimeout
-        } else if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
+        } else if let envValue = EnvironmentKey.buttonheistSessionTimeout.value,
                   let parsed = Double(envValue), parsed > 0 {
             self.sessionTimeout = parsed
         } else {

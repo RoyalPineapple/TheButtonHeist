@@ -252,7 +252,7 @@ extension TheFence {
                 .scroll(ScrollTarget(elementTarget: elementTarget(args), direction: direction))
             )
         case .scrollToVisible:
-            let matcher = elementMatcher(args)
+            let matcher = try elementMatcher(args)
             guard matcher.label != nil || matcher.identifier != nil || matcher.value != nil
                 || matcher.traits?.isEmpty == false || matcher.excludeTraits?.isEmpty == false else {
                 return .error("Must specify at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")

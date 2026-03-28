@@ -84,7 +84,7 @@ public final class TheInsideJob {
 
         if let scopes = allowedScopes {
             self.allowedScopes = scopes
-        } else if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_SCOPE"],
+        } else if let envValue = EnvironmentKey.insideJobScope.value,
                   let parsed = ConnectionScope.parse(envValue) {
             self.allowedScopes = parsed
         } else {
@@ -199,7 +199,7 @@ public final class TheInsideJob {
             self?.handleClientConnected(clientId, respond: respond)
         }
         muscle.onSessionActiveChanged = { [weak t] isActive in
-            t?.updateTXTRecord(["sessionactive": isActive ? "1" : "0"])
+            t?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
 
         t.onClientConnected = { [weak self] clientId, remoteAddress in

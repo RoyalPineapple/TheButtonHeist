@@ -7,14 +7,14 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            match: ElementMatcher(label: "Color Picker", traits: ["button"]),
+            match: ElementMatcher(label: "Color Picker", traits: [.button]),
             maxScrolls: 30,
             direction: .up
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
         XCTAssertEqual(decoded.match.label, "Color Picker")
-        XCTAssertEqual(decoded.match.traits, ["button"])
+        XCTAssertEqual(decoded.match.traits, [.button])
         XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .up)
     }
@@ -58,7 +58,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let element = HeistElement(
             heistId: "button_color_picker", order: 5, description: "Color Picker",
             label: "Color Picker", value: nil, identifier: nil,
-            traits: ["button"],
+            traits: [.button],
             frameX: 0, frameY: 200, frameWidth: 375, frameHeight: 44,
             actions: [.activate]
         )
@@ -90,7 +90,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            match: ElementMatcher(label: "Settings", traits: ["header"]),
+            match: ElementMatcher(label: "Settings", traits: [.header]),
             maxScrolls: 10,
             direction: .down
         )
@@ -99,7 +99,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
         if case .scrollToVisible(let decodedTarget) = decoded {
             XCTAssertEqual(decodedTarget.match.label, "Settings")
-            XCTAssertEqual(decodedTarget.match.traits, ["header"])
+            XCTAssertEqual(decodedTarget.match.traits, [.header])
             XCTAssertEqual(decodedTarget.maxScrolls, 10)
             XCTAssertEqual(decodedTarget.direction, .down)
         } else {
