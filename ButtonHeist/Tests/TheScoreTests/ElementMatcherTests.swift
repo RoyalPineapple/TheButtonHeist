@@ -33,12 +33,14 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(ElementMatcher(label: "Save").nonEmpty, ElementMatcher(label: "Save"))
     }
 
-    func testActionTargetMatcherInitializerDropsEmptyMatcher() {
-        XCTAssertNil(ActionTarget(matcher: ElementMatcher()))
+    func testElementTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ElementTarget(matcher: ElementMatcher()))
 
-        let target = ActionTarget(heistId: "save_button", matcher: ElementMatcher())
-        XCTAssertEqual(target?.heistId, "save_button")
-        XCTAssertNil(target?.match)
+        let target = ElementTarget(heistId: "save_button", matcher: ElementMatcher())
+        guard case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
     }
 
     func testScrollToVisibleTargetMatcherInitializerDropsEmptyMatcher() {

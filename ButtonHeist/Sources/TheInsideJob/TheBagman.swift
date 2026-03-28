@@ -116,26 +116,27 @@ final class TheBagman {
 
     // MARK: - Unified Element Resolution
 
-    /// Result of resolving an ActionTarget to a concrete element.
+    /// Result of resolving an ElementTarget to a concrete element.
     struct ResolvedTarget {
         let element: AccessibilityElement
         let traversalIndex: Int
     }
 
-    /// Resolution: heistId → match.
-    /// Returns the canonical element and its traversal index, or nil on miss.
-    func resolveTarget(_ target: ActionTarget) -> ResolvedTarget? {
-        if let heistId = target.heistId {
-            guard let wire = lastSnapshot.first(where: { $0.heistId == heistId }) else { return nil }
-            let index = wire.order
-            guard index >= 0, index < cachedElements.count else { return nil }
-            return ResolvedTarget(element: cachedElements[index], traversalIndex: index)
+    /// Resolve a target to a unique element. Returns nil on miss or ambiguity.
+    /// Use `elementNotFoundMessage(for:)` for diagnostics on nil.
+    func resolveTarget(_ target: ElementTarget) -> ResolvedTarget? {
+        switch target {
+        case .heistId(let heistId):
+            guard let wire = lastSnapshot.first(where: { $0.heistId == heistId }),
+                  wire.order >= 0, wire.order < cachedElements.count else { return nil }
+            return ResolvedTarget(element: cachedElements[wire.order], traversalIndex: wire.order)
+        case .matcher(let matcher):
+            let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
+                ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
+                : cachedHierarchy
+            guard let unique = source.uniqueMatch(matcher) else { return nil }
+            return ResolvedTarget(element: unique.element, traversalIndex: unique.traversalIndex)
         }
-        if let matcher = target.match {
-            guard let found = findMatch(matcher) else { return nil }
-            return ResolvedTarget(element: found.element, traversalIndex: found.index)
-        }
-        return nil
     }
 
     /// Check if an element is interactive based on traits.
@@ -161,18 +162,17 @@ final class TheBagman {
 
     /// Build a diagnostic message for a failed element lookup.
     ///
-    /// Progressive disclosure tiers:
-    /// 1. Near-miss: matched all but one field → "found it, but value='7' not '6'"
-    /// 2. Substring: no exact label match → "did you mean 'Save Changes'?"
+    /// Tiers:
+    /// 1. Ambiguous: substring matched multiple elements → list them
+    /// 2. Near-miss: matched all but one field → "found it, but value='7' not '6'"
     /// 3. Total miss: nothing close → compact element summary for self-correction
-    func elementNotFoundMessage(for target: ActionTarget) -> String {
-        if let heistId = target.heistId {
+    func elementNotFoundMessage(for target: ElementTarget) -> String {
+        switch target {
+        case .heistId(let heistId):
             return heistIdNotFoundMessage(heistId)
-        }
-        if let matcher = target.match {
+        case .matcher(let matcher):
             return matcherNotFoundMessage(matcher)
         }
-        return "No element target provided"
     }
 
     private func heistIdNotFoundMessage(_ heistId: String) -> String {
@@ -187,40 +187,32 @@ final class TheBagman {
     private func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         let query = formatMatcher(matcher)
 
-        // Tier 1: Relax one predicate at a time — find what diverged.
+        // Tier 1: Ambiguous — substring matched multiple elements.
+        let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
+            ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
+            : cachedHierarchy
+        let matches = source.allMatches(matcher)
+        if matches.count > 1 {
+            var lines = ["\(matches.count) elements match: \(query)"]
+            for match in matches.prefix(10) {
+                var parts: [String] = []
+                if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
+                if let id = match.element.identifier, !id.isEmpty { parts.append("id=\(id)") }
+                if let val = match.element.value, !val.isEmpty { parts.append("value=\(val)") }
+                lines.append("  \(parts.joined(separator: " "))")
+            }
+            if matches.count > 10 {
+                lines.append("  ... and \(matches.count - 10) more")
+            }
+            return lines.joined(separator: "\n")
+        }
+
+        // Tier 2: Near-miss — relax one predicate at a time to find what diverged.
         if let nearMiss = findNearMiss(for: matcher) {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
-        // Tier 2: Substring match on label or identifier — "did you mean...?"
-        if let label = matcher.label {
-            let lower = label.lowercased()
-            let candidates = cachedElements
-                .compactMap { el -> String? in
-                    guard let elLabel = el.label,
-                          elLabel.lowercased().contains(lower) || lower.contains(elLabel.lowercased()) else { return nil }
-                    return "\"\(elLabel)\""
-                }
-                .prefix(5)
-            if !candidates.isEmpty {
-                return "No match for: \(query)\nsimilar labels: \(candidates.joined(separator: ", "))"
-            }
-        }
-        if let id = matcher.identifier {
-            let lower = id.lowercased()
-            let candidates = cachedElements
-                .compactMap { el -> String? in
-                    guard let elId = el.identifier,
-                          elId.lowercased().contains(lower) || lower.contains(elId.lowercased()) else { return nil }
-                    return "\"\(elId)\""
-                }
-                .prefix(5)
-            if !candidates.isEmpty {
-                return "No match for: \(query)\nsimilar identifiers: \(candidates.joined(separator: ", "))"
-            }
-        }
-
-        // Tier 3: Nothing close — dump a compact summary so the agent can self-correct.
+        // Tier 3: Nothing close — dump a compact summary.
         return "No match for: \(query)\n\(compactElementSummary())"
     }
 
@@ -322,7 +314,7 @@ final class TheBagman {
 
     /// Resolve a screen point from an element target or explicit coordinates.
     func resolvePoint(
-        from elementTarget: ActionTarget?,
+        from elementTarget: ElementTarget?,
         pointX: Double?,
         pointY: Double?
     ) -> TheSafecracker.PointResolution {
@@ -339,12 +331,12 @@ final class TheBagman {
     }
 
     /// Resolve the accessibility frame for an element target.
-    func resolveFrame(for elementTarget: ActionTarget) -> CGRect? {
+    func resolveFrame(for elementTarget: ElementTarget) -> CGRect? {
         guard let resolved = resolveTarget(elementTarget) else { return nil }
         return resolved.element.shape.frame
     }
 
-    func ensureOnScreen(for target: ActionTarget) async {
+    func ensureOnScreen(for target: ElementTarget) async {
         guard let resolved = resolveTarget(target) else { return }
         await ensureOnScreen(elementAt: resolved.traversalIndex)
     }
@@ -571,7 +563,7 @@ final class TheBagman {
         beforeSnapshot: [HeistElement],
         beforeCachedElements: [AccessibilityElement],
         beforeVC: ObjectIdentifier? = nil,
-        target: ActionTarget? = nil
+        target: ElementTarget? = nil
     ) async -> ActionResult {
         guard success else {
             let kind: ErrorKind = (method == .elementNotFound || method == .elementDeallocated)

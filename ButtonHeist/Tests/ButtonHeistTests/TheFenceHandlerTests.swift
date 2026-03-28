@@ -202,41 +202,46 @@ final class TheFenceHandlerTests: XCTestCase {
     func testElementTargetWithIdentifier() {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["identifier": "myButton"]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.match?.identifier, "myButton")
-        XCTAssertNil(target?.heistId)
+        guard let target = fence.elementTarget(dict),
+              case .matcher(let matcher) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "myButton")
     }
 
     @ButtonHeistActor
     func testElementTargetWithHeistId() {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["heistId": "button_save"]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.heistId, "button_save")
-        XCTAssertNil(target?.match)
+        guard let target = fence.elementTarget(dict),
+              case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "button_save")
     }
 
     @ButtonHeistActor
     func testElementTargetWithMatcherFields() {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save", "traits": ["button"]]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.match?.label, "Save")
-        XCTAssertEqual(target?.match?.traits, ["button"])
-        XCTAssertNil(target?.heistId)
+        guard let target = fence.elementTarget(dict),
+              case .matcher(let matcher) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.traits, ["button"])
     }
 
     @ButtonHeistActor
     func testElementTargetWithHeistIdAndMatcher() {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["heistId": "button_save", "label": "Save"]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.heistId, "button_save")
-        XCTAssertEqual(target?.match?.label, "Save")
+        // heistId wins when both are present
+        guard let target = fence.elementTarget(dict),
+              case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "button_save")
     }
 
     @ButtonHeistActor
