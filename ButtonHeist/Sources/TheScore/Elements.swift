@@ -30,20 +30,22 @@ extension ElementAction: Codable {
     }
 
     public init(from decoder: Decoder) throws {
-        // Try tagged object first: {"custom":"name"}
         if let keyed = try? decoder.container(keyedBy: CodingKeys.self),
            let name = try? keyed.decode(String.self, forKey: .custom) {
             self = .custom(name)
             return
         }
-        // Fall back to plain string for built-in actions and legacy custom actions
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         switch value {
         case "activate": self = .activate
         case "increment": self = .increment
         case "decrement": self = .decrement
-        default: self = .custom(value)
+        default:
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown ElementAction: \"\(value)\". Use {\"custom\":\"\(value)\"} for custom actions."
+            )
         }
     }
 
@@ -249,7 +251,7 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     /// None of the listed traits may be present on the element
     public let excludeTraits: [String]?
     /// Which node types to match: elements (leaves), containers, or both.
-    /// Nil defaults to `.elements` for backward compatibility.
+    /// Nil defaults to `.elements`.
     public let scope: MatchScope?
     /// When true, the caller asserts no matching element exists.
     /// The matcher itself always checks property predicates; callers

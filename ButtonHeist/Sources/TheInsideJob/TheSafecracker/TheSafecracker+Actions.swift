@@ -293,15 +293,6 @@ extension TheSafecracker {
         return nil
     }
 
-    private func oppositeDirection(_ direction: ScrollSearchDirection) -> ScrollSearchDirection {
-        switch direction {
-        case .down: return .up
-        case .up: return .down
-        case .left: return .right
-        case .right: return .left
-        }
-    }
-
     private func scrollToOppositeEdge(_ scrollView: UIScrollView, from direction: ScrollSearchDirection) {
         let insets = scrollView.adjustedContentInset
         switch direction {
