@@ -725,10 +725,6 @@ final class TheBagman {
 
     // MARK: - Topology-Based Screen Change
 
-    /// Private UIAccessibilityTrait for back buttons (bit 27).
-    /// Set by UIKit on navigation bar back button items.
-    private static let backButtonTrait = UIAccessibilityTraits(rawValue: 0x8000000)
-
     /// Did the accessibility topology change between two element snapshots?
     /// Checks two signals using the parser's native `AccessibilityElement`:
     /// - Back button trait appeared or disappeared (navigation push/pop)
@@ -737,8 +733,8 @@ final class TheBagman {
         before: [AccessibilityElement],
         after: [AccessibilityElement]
     ) -> Bool {
-        let hadBackButton = before.contains { $0.traits.contains(Self.backButtonTrait) }
-        let hasBackButton = after.contains { $0.traits.contains(Self.backButtonTrait) }
+        let hadBackButton = before.contains { $0.traits.contains(.backButton) }
+        let hasBackButton = after.contains { $0.traits.contains(.backButton) }
         if hadBackButton != hasBackButton { return true }
 
         let beforeHeaders = Set(before.compactMap { $0.traits.contains(.header) ? $0.label : nil })

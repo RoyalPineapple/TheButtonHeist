@@ -286,7 +286,7 @@ final class TheBagmanConversionTests: XCTestCase {
     }
 
     func testBackButtonPrivateTraitMapped() {
-        let traits = bagman.traitNames(UIAccessibilityTraits(rawValue: 0x8000000))
+        let traits = bagman.traitNames(UIAccessibilityTraits.backButton)
         XCTAssertEqual(traits, [.backButton])
     }
 

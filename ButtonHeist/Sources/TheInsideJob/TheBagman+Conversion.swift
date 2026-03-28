@@ -188,9 +188,8 @@ extension TheBagman {
     }
 
     func synthesizeBaseId(_ element: HeistElement) -> String {
-        let rawTraits = element.traits.map(\.rawValue)
-        let traitPrefix = Self.traitPriority.first { rawTraits.contains($0) }
-            ?? (element.label != nil ? "staticText" : "element")
+        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }?.rawValue
+            ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
         // sliders, checkboxes) and must not affect element identity.

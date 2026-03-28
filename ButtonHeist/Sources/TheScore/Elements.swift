@@ -63,14 +63,18 @@ extension ElementAction: Codable {
 
 // MARK: - Heist Trait
 
-/// Named accessibility traits as a typed enum.
-/// Maps 1:1 to UIAccessibilityTraits bitmask values via TheBagman's traitMapping.
+/// Named accessibility traits — aligned 1:1 with the AccessibilitySnapshot parser's
+/// `knownTraits` in `AccessibilityHierarchy+Codable.swift`.
+/// Standard UIAccessibilityTraits plus private traits the parser exposes.
 public enum HeistTrait: String, CaseIterable, Codable, Sendable {
+    // Standard traits
     case button, link, image, staticText, header, adjustable
     case searchField, selected, notEnabled, keyboardKey
     case summaryElement, updatesFrequently, playsSound
     case startsMediaSession, allowsDirectInteraction
-    case causesPageTurn, tabBar, backButton
+    case causesPageTurn, tabBar
+    // Private traits (from UIAccessibility+SnapshotAdditions)
+    case textEntry, isEditing, backButton, tabBarItem, scrollable, switchButton
 }
 
 // MARK: - Group Type
