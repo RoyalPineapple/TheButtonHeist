@@ -43,12 +43,17 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
-    func testScrollToVisibleTargetMatcherInitializerDropsEmptyMatcher() {
-        XCTAssertNil(ScrollToVisibleTarget(matcher: ElementMatcher()))
+    func testScrollToVisibleTargetWithElementTarget() {
+        // No element target
+        let empty = ScrollToVisibleTarget()
+        XCTAssertNil(empty.elementTarget)
 
-        let target = ScrollToVisibleTarget(heistId: "save_button", matcher: ElementMatcher())
-        XCTAssertEqual(target?.heistId, "save_button")
-        XCTAssertNil(target?.match)
+        // With heistId
+        let withId = ScrollToVisibleTarget(elementTarget: .heistId("save_button"))
+        guard case .heistId(let id) = withId.elementTarget else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
     }
 
     // MARK: - Codable Round-Trip

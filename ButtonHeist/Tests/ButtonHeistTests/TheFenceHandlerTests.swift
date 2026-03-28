@@ -795,7 +795,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForMissingMatchFields() async {
         await assertValidationError(
             ["command": "wait_for"],
-            contains: "Must specify at least one match field"
+            contains: "Must specify heistId or at least one match field"
         )
     }
 

@@ -19,23 +19,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Match element by accessibility label (exact)")
-    var label: String?
-
-    @Option(name: .long, help: "Element heistId (from get_interface)")
-    var heistId: String?
-
-    @Option(name: .long, help: "Match element by accessibility identifier (exact)")
-    var identifier: String?
-
-    @Option(name: .long, help: "Match element by accessibility value (exact)")
-    var value: String?
-
-    @Option(name: .long, help: "Required traits (all must be present)")
-    var traits: [String] = []
-
-    @Option(name: .long, help: "Excluded traits (none may be present)")
-    var excludeTraits: [String] = []
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Maximum scroll attempts (default: 20)")
     var maxScrolls: Int?
@@ -51,20 +35,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard heistId != nil || label != nil || identifier != nil || value != nil
-            || !traits.isEmpty || !excludeTraits.isEmpty else {
-            throw ValidationError("Must specify --heist-id or at least one match field (--label, --identifier, --value, --traits, or --exclude-traits)")
-        }
-
-        let hasMatcher = label != nil || identifier != nil || value != nil
-            || !traits.isEmpty || !excludeTraits.isEmpty
-        let matcher = hasMatcher ? ElementMatcher(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits.isEmpty ? nil : traits,
-            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits
-        ) : nil
+        let elTarget = try element.requireTarget()
 
         var searchDirection: ScrollSearchDirection?
         if let direction {
@@ -75,8 +46,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
         }
 
         let target = ScrollToVisibleTarget(
-            heistId: heistId,
-            match: matcher,
+            elementTarget: elTarget,
             maxScrolls: maxScrolls,
             direction: searchDirection
         )

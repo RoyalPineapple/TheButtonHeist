@@ -463,19 +463,22 @@ public final class TheInsideJob {
     }
 
     /// Execute the wait_for polling loop.
+    /// Uses hasTarget (existence check) — doesn't require unique match.
+    /// Snapshots after each refresh so heistId lookup stays current.
     private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
-        let matcher = target.match
+        let elTarget = target.elementTarget
         let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
         let start = CFAbsoluteTimeGetCurrent()
 
         // Phase 0: immediate check
         bagman.refreshAccessibilityData()
+        _ = bagman.snapshotElements()
         if target.resolvedAbsent {
-            if !bagman.hasMatch(matcher) {
+            if !bagman.hasTarget(elTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
             }
         } else {
-            if bagman.findMatch(matcher) != nil {
+            if bagman.hasTarget(elTarget) {
                 return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
             }
         }
@@ -484,13 +487,14 @@ public final class TheInsideJob {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             bagman.refreshAccessibilityData()
+            _ = bagman.snapshotElements()
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
-                if !bagman.hasMatch(matcher) {
+                if !bagman.hasTarget(elTarget) {
                     return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
                 }
             } else {
-                if bagman.findMatch(matcher) != nil {
+                if bagman.hasTarget(elTarget) {
                     return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
                 }
             }

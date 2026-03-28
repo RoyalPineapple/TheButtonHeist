@@ -49,17 +49,19 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(element.matches(matcher))
     }
 
-    func testLabelIsCaseSensitive() {
+    func testLabelIsCaseInsensitive() {
         let element = el(label: "Save")
-        XCTAssertFalse(element.matches(ElementMatcher(label: "save")))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "SAVE")))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "sAvE")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "save")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "SAVE")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "sAvE")))
     }
 
-    func testLabelNoSubstringMatch() {
+    func testLabelSubstringMatch() {
         let element = el(label: "Save Changes")
-        XCTAssertFalse(element.matches(ElementMatcher(label: "Save")))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "Changes")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Save")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "Changes")))
+        XCTAssertTrue(element.matches(ElementMatcher(label: "save changes")))
+        XCTAssertFalse(element.matches(ElementMatcher(label: "Delete")))
     }
 
     func testLabelNilOnElementDoesNotMatchEmptyString() {
@@ -386,12 +388,15 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
-    func testScrollToVisibleTargetMatcherInitializerDropsEmptyMatcher() {
-        XCTAssertNil(ScrollToVisibleTarget(matcher: ElementMatcher()))
+    func testScrollToVisibleTargetWithElementTarget() {
+        let empty = ScrollToVisibleTarget()
+        XCTAssertNil(empty.elementTarget)
 
-        let target = ScrollToVisibleTarget(heistId: "save_button", matcher: ElementMatcher())
-        XCTAssertEqual(target?.heistId, "save_button")
-        XCTAssertNil(target?.match)
+        let withId = ScrollToVisibleTarget(elementTarget: .heistId("save_button"))
+        guard case .heistId(let id) = withId.elementTarget else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
     }
 
     // MARK: - Unknown Trait Names

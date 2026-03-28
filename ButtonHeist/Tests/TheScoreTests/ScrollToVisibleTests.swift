@@ -7,44 +7,51 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            match: ElementMatcher(label: "Color Picker", traits: ["button"]),
+            elementTarget: .matcher(ElementMatcher(label: "Color Picker", traits: ["button"])),
             maxScrolls: 30,
             direction: .up
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        XCTAssertNil(decoded.heistId)
-        XCTAssertEqual(decoded.match?.label, "Color Picker")
-        XCTAssertEqual(decoded.match?.traits, ["button"])
+        guard case .matcher(let matcher) = decoded.elementTarget else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.label, "Color Picker")
+        XCTAssertEqual(matcher.traits, ["button"])
         XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .up)
     }
 
     func testScrollToVisibleTargetHeistIdEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            heistId: "buttonheist.longList.last",
+            elementTarget: .heistId("buttonheist.longList.last"),
             maxScrolls: 30,
             direction: .down
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        XCTAssertEqual(decoded.heistId, "buttonheist.longList.last")
-        XCTAssertNil(decoded.match)
+        guard case .heistId(let id) = decoded.elementTarget else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "buttonheist.longList.last")
         XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .down)
     }
 
     func testScrollToVisibleTargetDefaults() {
-        let target = ScrollToVisibleTarget(match: ElementMatcher(label: "Test"))
+        let target = ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Test")))
         XCTAssertEqual(target.resolvedMaxScrolls, 20)
         XCTAssertEqual(target.resolvedDirection, .down)
     }
 
     func testScrollToVisibleTargetMinimal() throws {
-        let target = ScrollToVisibleTarget(match: ElementMatcher(label: "Save"))
+        let target = ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Save")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        XCTAssertEqual(decoded.match?.label, "Save")
+        guard case .matcher(let matcher) = decoded.elementTarget else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.label, "Save")
         XCTAssertNil(decoded.maxScrolls)
         XCTAssertNil(decoded.direction)
     }
@@ -105,38 +112,38 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            match: ElementMatcher(label: "Settings", traits: ["header"]),
+            elementTarget: .matcher(ElementMatcher(label: "Settings", traits: ["header"])),
             maxScrolls: 10,
             direction: .down
         )
         let message = ClientMessage.scrollToVisible(target)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        if case .scrollToVisible(let decodedTarget) = decoded {
-            XCTAssertEqual(decodedTarget.match?.label, "Settings")
-            XCTAssertEqual(decodedTarget.match?.traits, ["header"])
-            XCTAssertEqual(decodedTarget.maxScrolls, 10)
-            XCTAssertEqual(decodedTarget.direction, .down)
-        } else {
-            XCTFail("Expected scrollToVisible, got \(decoded)")
+        guard case .scrollToVisible(let decodedTarget) = decoded,
+              case .matcher(let matcher) = decodedTarget.elementTarget else {
+            return XCTFail("Expected scrollToVisible with matcher")
         }
+        XCTAssertEqual(matcher.label, "Settings")
+        XCTAssertEqual(matcher.traits, ["header"])
+        XCTAssertEqual(decodedTarget.maxScrolls, 10)
+        XCTAssertEqual(decodedTarget.direction, .down)
     }
 
     func testScrollToVisibleRequestEnvelopeRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            match: ElementMatcher(identifier: "market.row.colorPicker"),
+            elementTarget: .matcher(ElementMatcher(identifier: "market.row.colorPicker")),
             direction: .left
         )
         let envelope = RequestEnvelope(requestId: "test-123", message: .scrollToVisible(target))
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
         XCTAssertEqual(decoded.requestId, "test-123")
-        if case .scrollToVisible(let decodedTarget) = decoded.message {
-            XCTAssertEqual(decodedTarget.match?.identifier, "market.row.colorPicker")
-            XCTAssertEqual(decodedTarget.direction, .left)
-        } else {
-            XCTFail("Expected scrollToVisible")
+        guard case .scrollToVisible(let decodedTarget) = decoded.message,
+              case .matcher(let matcher) = decodedTarget.elementTarget else {
+            return XCTFail("Expected scrollToVisible with matcher")
         }
+        XCTAssertEqual(matcher.identifier, "market.row.colorPicker")
+        XCTAssertEqual(decodedTarget.direction, .left)
     }
 
     // MARK: - ActionResult with ScrollSearchResult
