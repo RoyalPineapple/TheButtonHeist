@@ -5,10 +5,9 @@ import UIKit
 /// Detects UI state changes without touching the accessibility tree.
 ///
 /// TheTripwire monitors UIKit signals via a persistent ~10 Hz pulse — a single
-/// CADisplayLink that samples all UI state on one clock. Cheap signals
-/// (layer positions, animations, pending layout) run every tick; moderate
-/// signals (VC identity) every 3rd tick; slow signals (keyboard, window count)
-/// every 5th tick.
+/// CADisplayLink that samples all UI state on one clock. Every tick runs the
+/// full set of checks: layer scan (fingerprint, animations, layout), VC
+/// identity, first responder, keyboard/text-input flags, and window count.
 ///
 /// The pulse answers three questions:
 /// 1. **Is the UI settled?** (no animations, no pending layout, stable fingerprint)
@@ -26,16 +25,11 @@ final class TheTripwire {
         let tick: UInt64
         let timestamp: CFAbsoluteTime
 
-        // Core signals (every tick)
         let layoutPending: Bool
         let fingerprint: PresentationFingerprint
         let hasRelevantAnimations: Bool
-
-        // Moderate signals (every 3rd tick, carried forward between samples)
         let topmostVC: ObjectIdentifier?
         let firstResponder: ObjectIdentifier?
-
-        // Slow signals (every 5th tick, carried forward between samples)
         let keyboardVisible: Bool
         let textInputActive: Bool
         let windowCount: Int
@@ -145,22 +139,10 @@ final class TheTripwire {
     private var displayLink: CADisplayLink?
     private var pulseTarget: PulseTick?
     private var tickCount: UInt64 = 0
-    private var quietFrameCount: Int = 0
-    private var previousFingerprint: PresentationFingerprint?
 
-    // Carried-forward state for Nth-tick signals
-    private var lastKnownVC: ObjectIdentifier?
-    private var lastKnownFirstResponder: ObjectIdentifier?
-    private var lastKnownKeyboardVisible = false
-    private var lastKnownTextInputActive = false
-    private var lastKnownWindowCount = 0
-
-    // Notification-driven flags (set by observers, read by tick)
+    // Notification-driven flags (set by observers, read by tick and TheSafecracker)
     private(set) var keyboardVisibleFlag = false
     private(set) var textInputActiveFlag = false
-
-    // Transition tracking
-    private var wasSettled = false
 
     // Settle waiters
     private var settleWaiters: [SettleWaiter] = []
@@ -171,11 +153,6 @@ final class TheTripwire {
         let deadline: CFAbsoluteTime
         let continuation: CheckedContinuation<Bool, Never>
     }
-
-    // MARK: - Tick Cadence
-
-    static let vcSampleCadence: UInt64 = 3
-    static let slowSampleCadence: UInt64 = 5
 
     // MARK: - Pulse Lifecycle
 
@@ -206,14 +183,6 @@ final class TheTripwire {
 
         latestReading = nil
         tickCount = 0
-        quietFrameCount = 0
-        previousFingerprint = nil
-        wasSettled = false
-        lastKnownVC = nil
-        lastKnownFirstResponder = nil
-        lastKnownKeyboardVisible = false
-        lastKnownTextInputActive = false
-        lastKnownWindowCount = 0
         keyboardVisibleFlag = false
         textInputActiveFlag = false
     }
@@ -253,82 +222,55 @@ final class TheTripwire {
     fileprivate func onTick() {
         tickCount += 1
         let now = CFAbsoluteTimeGetCurrent()
+        let prev = latestReading
 
         // Flush pending implicit transactions so SwiftUI's deferred
         // layout commits before we scan.
         CATransaction.flush()
 
-        // Single layer walk for all core signals
         let scan = scanLayers()
         let fingerprint = scan.fingerprint
 
         let isQuiet = !scan.hasPendingLayout
             && !scan.hasRelevantAnimations
-            && (previousFingerprint?.matches(fingerprint) ?? true)
+            && (prev?.fingerprint.matches(fingerprint) ?? true)
 
-        if isQuiet {
-            quietFrameCount += 1
-        } else {
-            quietFrameCount = 0
-        }
-        previousFingerprint = fingerprint
+        let vcId = topmostViewController().map(ObjectIdentifier.init)
+        let responderId = currentFirstResponder().map(ObjectIdentifier.init)
 
-        // VC identity + first responder (every 3rd tick)
-        if tickCount % Self.vcSampleCadence == 0 {
-            let vcId = topmostViewController().map(ObjectIdentifier.init)
-            if vcId != lastKnownVC {
-                let oldVC = lastKnownVC
-                lastKnownVC = vcId
-                onTransition?(.screenChanged(from: oldVC, to: vcId))
-            }
-
-            let responderId = currentFirstResponder().map(ObjectIdentifier.init)
-            if responderId != lastKnownFirstResponder {
-                let oldResponder = lastKnownFirstResponder
-                lastKnownFirstResponder = responderId
-                onTransition?(.focusChanged(from: oldResponder, to: responderId))
-            }
-        }
-
-        // Slow signals (every 5th tick)
-        if tickCount % Self.slowSampleCadence == 0 {
-            lastKnownWindowCount = scan.windowCount
-
-            if keyboardVisibleFlag != lastKnownKeyboardVisible {
-                lastKnownKeyboardVisible = keyboardVisibleFlag
-                onTransition?(.keyboardChanged(visible: keyboardVisibleFlag))
-            }
-
-            if textInputActiveFlag != lastKnownTextInputActive {
-                lastKnownTextInputActive = textInputActiveFlag
-                onTransition?(.textInputChanged(active: textInputActiveFlag))
-            }
-        }
-
-        // Build reading
         let reading = PulseReading(
             tick: tickCount,
             timestamp: now,
             layoutPending: scan.hasPendingLayout,
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
-            topmostVC: lastKnownVC,
-            firstResponder: lastKnownFirstResponder,
-            keyboardVisible: lastKnownKeyboardVisible,
-            textInputActive: lastKnownTextInputActive,
-            windowCount: lastKnownWindowCount,
-            quietFrames: quietFrameCount
+            topmostVC: vcId,
+            firstResponder: responderId,
+            keyboardVisible: keyboardVisibleFlag,
+            textInputActive: textInputActiveFlag,
+            windowCount: scan.windowCount,
+            quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
         )
         latestReading = reading
 
-        // Settle transitions
-        let settled = reading.isSettled
-        if settled && !wasSettled {
+        // Diff against previous reading and fire transitions
+        if vcId != prev?.topmostVC {
+            onTransition?(.screenChanged(from: prev?.topmostVC, to: vcId))
+        }
+        if responderId != prev?.firstResponder {
+            onTransition?(.focusChanged(from: prev?.firstResponder, to: responderId))
+        }
+        if keyboardVisibleFlag != (prev?.keyboardVisible ?? false) {
+            onTransition?(.keyboardChanged(visible: keyboardVisibleFlag))
+        }
+        if textInputActiveFlag != (prev?.textInputActive ?? false) {
+            onTransition?(.textInputChanged(active: textInputActiveFlag))
+        }
+        if reading.isSettled && !(prev?.isSettled ?? false) {
             onTransition?(.settled)
-        } else if !settled && wasSettled {
+        } else if !reading.isSettled && (prev?.isSettled ?? false) {
             onTransition?(.unsettled)
         }
-        wasSettled = settled
 
         resolveSettleWaiters(now: now, isQuiet: isQuiet)
     }
