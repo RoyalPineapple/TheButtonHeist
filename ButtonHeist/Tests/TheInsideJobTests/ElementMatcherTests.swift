@@ -28,7 +28,12 @@ final class ElementMatcherTests: XCTestCase {
             (.allowsDirectInteraction, .allowsDirectInteraction),
             (.causesPageTurn, .causesPageTurn),
             (.tabBar, .tabBar),
-            (UIAccessibilityTraits(rawValue: 0x8000000), .backButton),
+            (.textEntry, .textEntry),
+            (.isEditing, .isEditing),
+            (.backButton, .backButton),
+            (.tabBarItem, .tabBarItem),
+            (.scrollable, .scrollable),
+            (.switchButton, .switchButton),
         ]
         return mapping.compactMap { traits.contains($0.0) ? $0.1 : nil }
     }
@@ -226,7 +231,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testBackButtonTrait() {
-        let element = el(traits: UIAccessibilityTraits(rawValue: 0x8000000))
+        let element = el(traits: UIAccessibilityTraits.backButton)
         let matcher = ElementMatcher(traits: [.backButton])
         XCTAssertTrue(element.matches(matcher, traitNames: traitNames))
     }

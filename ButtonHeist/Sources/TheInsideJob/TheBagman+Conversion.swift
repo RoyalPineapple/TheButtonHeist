@@ -8,8 +8,10 @@ import TheScore
 
 extension TheBagman {
 
-    /// All known trait-to-name mappings, evaluated in declaration order.
+    /// All known trait-to-name mappings — mirrors the parser's `knownTraits` in
+    /// `AccessibilityHierarchy+Codable.swift`. Standard traits first, then private.
     private static let traitMapping: [(UIAccessibilityTraits, HeistTrait)] = [
+        // Standard traits
         (.button, .button),
         (.link, .link),
         (.image, .image),
@@ -27,7 +29,13 @@ extension TheBagman {
         (.allowsDirectInteraction, .allowsDirectInteraction),
         (.causesPageTurn, .causesPageTurn),
         (.tabBar, .tabBar),
-        (UIAccessibilityTraits(rawValue: 0x8000000), .backButton),
+        // Private traits (defined in UIAccessibility+SnapshotAdditions.swift)
+        (.textEntry, .textEntry),
+        (.isEditing, .isEditing),
+        (.backButton, .backButton),
+        (.tabBarItem, .tabBarItem),
+        (.scrollable, .scrollable),
+        (.switchButton, .switchButton),
     ]
 
     func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
@@ -167,9 +175,9 @@ extension TheBagman {
     // MARK: - Stable ID Synthesis
 
     /// Trait priority for heistId prefix — most descriptive wins.
-    private static let traitPriority: [String] = [
-        "backButton", "searchField", "textField", "adjustable",
-        "button", "link", "image", "header", "tabBar",
+    private static let traitPriority: [HeistTrait] = [
+        .backButton, .searchField, .textEntry, .adjustable,
+        .button, .link, .image, .header, .tabBar,
     ]
 
     /// Assign deterministic `heistId` to each element.
@@ -204,9 +212,8 @@ extension TheBagman {
     }
 
     func synthesizeBaseId(_ element: HeistElement) -> String {
-        let rawTraits = element.traits.map(\.rawValue)
-        let traitPrefix = Self.traitPriority.first { rawTraits.contains($0) }
-            ?? (element.label != nil ? "staticText" : "element")
+        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }?.rawValue
+            ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
         // sliders, checkboxes) and must not affect element identity.
