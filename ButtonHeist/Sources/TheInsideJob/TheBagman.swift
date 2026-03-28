@@ -65,6 +65,10 @@ final class TheBagman {
     /// Populated during refreshAccessibilityData(), cleared on screen change.
     var screenElements: [String: ScreenElement] = [:]
 
+    /// HeistIds currently on screen — rebuilt each refresh cycle.
+    /// Elements in screenElements but not in this set have scrolled off screen.
+    private(set) var onScreen: Set<String> = []
+
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
 
@@ -510,6 +514,7 @@ final class TheBagman {
         cachedHierarchy.removeAll()
         cachedElements.removeAll()
         screenElements.removeAll()
+        onScreen.removeAll()
         lastHierarchyHash = 0
     }
 
@@ -613,6 +618,9 @@ final class TheBagman {
         scrollViewLookup: [AccessibilityContainer: UIScrollView],
         elementObjects: [AccessibilityElement: NSObject]
     ) {
+        // Track which heistIds are in this refresh's visible set
+        var visibleThisRefresh: Set<String> = []
+
         var wireElements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
 
         // Phase 1: assign base heistIds
@@ -655,6 +663,7 @@ final class TheBagman {
         // Phase 4: upsert into screenElements with live object refs
         for (index, wire) in wireElements.enumerated() {
             let ctx = contexts[index]
+            visibleThisRefresh.insert(wire.heistId)
 
             if var existing = screenElements[wire.heistId] {
                 existing.lastTraversalIndex = index
@@ -675,6 +684,8 @@ final class TheBagman {
                 )
             }
         }
+
+        onScreen = visibleThisRefresh
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
