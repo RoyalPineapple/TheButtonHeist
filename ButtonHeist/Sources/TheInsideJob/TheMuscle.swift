@@ -89,7 +89,7 @@ final class TheMuscle {
     // MARK: - Init
 
     init(explicitToken: String?) {
-        self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
+        self.authToken = explicitToken ?? UUID().uuidString
         if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_RESTRICT_WATCHERS"] {
             self.restrictWatchers = ["1", "true", "yes"].contains(envValue.lowercased())
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
@@ -103,15 +103,6 @@ final class TheMuscle {
         } else {
             self.sessionReleaseTimeout = 30.0
         }
-    }
-
-    // MARK: - Token Resolution
-
-    private static func resolveToken(explicit: String?) -> String {
-        if let explicit {
-            return explicit
-        }
-        return UUID().uuidString
     }
 
     // MARK: - Public API

@@ -1,6 +1,5 @@
 import ArgumentParser
 import ButtonHeist
-import TheScore
 
 struct ActionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
