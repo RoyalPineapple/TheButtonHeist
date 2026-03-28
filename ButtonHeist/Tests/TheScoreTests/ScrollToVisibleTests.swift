@@ -80,7 +80,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let element = HeistElement(
             heistId: "button_color_picker", order: 5, description: "Color Picker",
             label: "Color Picker", value: nil, identifier: nil,
-            traits: ["button"],
+            traits: [.button],
             frameX: 0, frameY: 200, frameWidth: 375, frameHeight: 44,
             actions: [.activate]
         )

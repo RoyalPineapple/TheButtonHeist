@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import TheScore
 
 /// Visual interaction indicators for tap and gesture tracking.
 ///
@@ -27,8 +28,7 @@ final class TheFingerprints {
 
     init() {
         // Environment variable takes priority
-        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_DISABLE_FINGERPRINTS"],
-           ["1", "true", "yes"].contains(envValue.lowercased()) {
+        if EnvironmentKey.insideJobDisableFingerprints.boolValue {
             self.isDisabled = true
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobDisableFingerprints") as? Bool,
                   plistValue {

@@ -331,7 +331,7 @@ final class ElementMatcherTests: XCTestCase {
         let element = el(label: "Dark Mode", value: "ON", identifier: "darkModeToggle", traits: [.button, .selected])
         let matcher = ElementMatcher(
             label: "Dark Mode", identifier: "darkModeToggle",
-            value: "ON", traits: ["button", "selected"]
+            value: "ON", traits: [.button, .selected]
         )
         XCTAssertTrue(element.matches(matcher))
     }

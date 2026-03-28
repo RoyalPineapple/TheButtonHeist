@@ -61,6 +61,25 @@ extension ElementAction: Codable {
     }
 }
 
+// MARK: - Heist Trait
+
+/// Named accessibility traits as a typed enum.
+/// Maps 1:1 to UIAccessibilityTraits bitmask values via TheBagman's traitMapping.
+public enum HeistTrait: String, CaseIterable, Codable, Sendable {
+    case button, link, image, staticText, header, adjustable
+    case searchField, selected, notEnabled, keyboardKey
+    case summaryElement, updatesFrequently, playsSound
+    case startsMediaSession, allowsDirectInteraction
+    case causesPageTurn, tabBar, backButton
+}
+
+// MARK: - Group Type
+
+/// Container group classification in the element tree.
+public enum GroupType: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
+    case semanticGroup, list, landmark, dataTable, tabBar
+}
+
 // MARK: - Interface
 
 public struct Interface: Codable, Sendable {
@@ -146,8 +165,8 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public var identifier: String?
     /// Accessibility hint (read by VoiceOver after the description)
     public var hint: String?
-    /// Accessibility traits as human-readable strings (e.g. ["button", "adjustable"])
-    public var traits: [String]
+    /// Accessibility traits as typed enum values (e.g. [.button, .adjustable])
+    public var traits: [HeistTrait]
     public var frameX: Double
     public var frameY: Double
     public var frameWidth: Double
@@ -171,7 +190,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         value: String?,
         identifier: String?,
         hint: String? = nil,
-        traits: [String] = [],
+        traits: [HeistTrait] = [],
         frameX: Double,
         frameY: Double,
         frameWidth: Double,
@@ -234,7 +253,7 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Case-insensitive substring match against element value
     public let value: String?
     /// All listed traits must be present on the element (AND)
-    public let traits: [String]?
+    public let traits: [HeistTrait]?
     /// None of the listed traits may be present on the element
     public let excludeTraits: [String]?
 
