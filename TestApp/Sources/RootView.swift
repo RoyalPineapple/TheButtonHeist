@@ -30,6 +30,10 @@ struct RootView: View {
                         LongListView()
                     }
                     .accessibilityIdentifier("buttonheist.root.longList")
+                    NavigationLink("Grid Gallery") {
+                        GridGalleryView()
+                    }
+                    .accessibilityIdentifier("buttonheist.root.gridGallery")
                     NavigationLink("Corner Scroll") {
                         CornerScrollView()
                     }
