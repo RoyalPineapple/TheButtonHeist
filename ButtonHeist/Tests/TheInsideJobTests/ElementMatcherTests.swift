@@ -363,6 +363,35 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertTrue(element.matches(ElementMatcher(traits: ["button"])))
     }
 
+    func testHasPredicatesIgnoresEmptyTraitArrays() {
+        XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(traits: [], excludeTraits: []).hasPredicates)
+        XCTAssertTrue(ElementMatcher(label: "Save", traits: []).hasPredicates)
+    }
+
+    func testNonEmptyReturnsNilForEmptyMatcher() {
+        XCTAssertNil(ElementMatcher().nonEmpty)
+        XCTAssertNil(ElementMatcher(traits: []).nonEmpty)
+        XCTAssertEqual(ElementMatcher(label: "Save").nonEmpty, ElementMatcher(label: "Save"))
+    }
+
+    func testActionTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ActionTarget(matcher: ElementMatcher()))
+
+        let target = ActionTarget(heistId: "save_button", matcher: ElementMatcher())
+        XCTAssertEqual(target?.heistId, "save_button")
+        XCTAssertNil(target?.match)
+    }
+
+    func testScrollToVisibleTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ScrollToVisibleTarget(matcher: ElementMatcher()))
+
+        let target = ScrollToVisibleTarget(heistId: "save_button", matcher: ElementMatcher())
+        XCTAssertEqual(target?.heistId, "save_button")
+        XCTAssertNil(target?.match)
+    }
+
     // MARK: - Unknown Trait Names
 
     func testUnknownTraitNameNeverMatches() {
@@ -513,42 +542,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(results[0].label, "A")
         XCTAssertEqual(results[1].label, "C")
-    }
-
-    // MARK: - Search Snapshot
-
-    func testSearchSnapshotMatchesHierarchy() {
-        let tree: [AccessibilityHierarchy] = [
-            .element(el(label: "A", traits: .header), traversalIndex: 0),
-            .element(el(label: "B", traits: .button), traversalIndex: 1),
-            group(children: [
-                .element(el(label: "C", traits: .button), traversalIndex: 2)
-            ]),
-        ]
-        let snapshot = AccessibilitySearchSnapshot(
-            hierarchy: tree,
-            heistIdToTraversalIndex: ["button_b": 1, "button_c": 2]
-        )
-
-        let found = snapshot.firstMatch(ElementMatcher(traits: ["button"]))
-        XCTAssertEqual(found?.label, "B")
-        XCTAssertEqual(found?.traversalIndex, 1)
-        XCTAssertTrue(snapshot.hasMatch(ElementMatcher(label: "C")))
-    }
-
-    func testSearchSnapshotResolvesHeistIdToEntry() {
-        let tree: [AccessibilityHierarchy] = [
-            .element(el(label: "Save", identifier: "saveBtn"), traversalIndex: 0),
-            .element(el(label: "Cancel", identifier: "cancelBtn"), traversalIndex: 1),
-        ]
-        let snapshot = AccessibilitySearchSnapshot(
-            hierarchy: tree,
-            heistIdToTraversalIndex: ["button_cancel": 1]
-        )
-
-        let entry = snapshot.entry(forHeistId: "button_cancel")
-        XCTAssertEqual(entry?.element.label, "Cancel")
-        XCTAssertEqual(entry?.traversalIndex, 1)
     }
 
     func testHierarchyNestedContainerSearch() {

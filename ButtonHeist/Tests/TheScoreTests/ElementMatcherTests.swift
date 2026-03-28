@@ -20,6 +20,35 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(matcher.isAbsent)
     }
 
+    func testHasPredicatesIgnoresEmptyTraitArrays() {
+        XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(traits: [], excludeTraits: []).hasPredicates)
+        XCTAssertTrue(ElementMatcher(label: "Save", traits: []).hasPredicates)
+    }
+
+    func testNonEmptyReturnsNilForEmptyMatcher() {
+        XCTAssertNil(ElementMatcher().nonEmpty)
+        XCTAssertNil(ElementMatcher(traits: []).nonEmpty)
+        XCTAssertEqual(ElementMatcher(label: "Save").nonEmpty, ElementMatcher(label: "Save"))
+    }
+
+    func testActionTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ActionTarget(matcher: ElementMatcher()))
+
+        let target = ActionTarget(heistId: "save_button", matcher: ElementMatcher())
+        XCTAssertEqual(target?.heistId, "save_button")
+        XCTAssertNil(target?.match)
+    }
+
+    func testScrollToVisibleTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ScrollToVisibleTarget(matcher: ElementMatcher()))
+
+        let target = ScrollToVisibleTarget(heistId: "save_button", matcher: ElementMatcher())
+        XCTAssertEqual(target?.heistId, "save_button")
+        XCTAssertNil(target?.match)
+    }
+
     // MARK: - Codable Round-Trip
 
     func testEncodeDecodeAllFields() throws {

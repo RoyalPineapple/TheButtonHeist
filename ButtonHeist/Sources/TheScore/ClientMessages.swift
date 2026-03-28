@@ -197,6 +197,15 @@ public struct ActionTarget: Codable, Sendable {
         self.heistId = heistId
         self.match = match
     }
+
+    public init?(
+        heistId: String? = nil,
+        matcher: ElementMatcher
+    ) {
+        let match = matcher.nonEmpty
+        guard heistId != nil || match != nil else { return nil }
+        self.init(heistId: heistId, match: match)
+    }
 }
 
 /// Target for custom actions
@@ -693,6 +702,17 @@ public struct ScrollToVisibleTarget: Codable, Sendable {
         self.match = match
         self.maxScrolls = maxScrolls
         self.direction = direction
+    }
+
+    public init?(
+        heistId: String? = nil,
+        matcher: ElementMatcher,
+        maxScrolls: Int? = nil,
+        direction: ScrollSearchDirection? = nil
+    ) {
+        let match = matcher.nonEmpty
+        guard heistId != nil || match != nil else { return nil }
+        self.init(heistId: heistId, match: match, maxScrolls: maxScrolls, direction: direction)
     }
 
     public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
