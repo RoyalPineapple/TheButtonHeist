@@ -63,9 +63,9 @@ extension TheBagman {
         let maxScrolls = target.resolvedMaxScrolls
         let primaryDirection = target.resolvedDirection
 
-        // Phase 0: check current tree
+        // Phase 0: check current tree (first-match — any hit is success)
         refreshAccessibilityData()
-        if let found = resolveTarget(searchTarget) {
+        if let found = resolveFirstMatch(searchTarget) {
             _ = scrollToVisible(elementAt: found.traversalIndex)
             let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
             return TheSafecracker.InteractionResult(
@@ -140,7 +140,7 @@ extension TheBagman {
 
         while scrollCount < maxScrolls {
             // Non-animated scroll — content offset changes instantly.
-            // layoutIfNeeded() forces cell dequeue at the new position.
+            // layoutIfNeeded() forces cell dequeue at the new position for UIKit views.
             let scrolled = scrollActiveSearchContainer(direction: direction, animated: false)
             if !scrolled { break }
             scrollCount += 1
@@ -150,8 +150,8 @@ extension TheBagman {
             // Parse + update screenElements inline
             refreshAccessibilityData()
 
-            // Check for target
-            if let found = resolveTarget(target) {
+            // Check for target (first-match — any hit is success)
+            if let found = resolveFirstMatch(target) {
                 _ = scrollToVisible(elementAt: found.traversalIndex)
                 let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
                 return TheSafecracker.InteractionResult(

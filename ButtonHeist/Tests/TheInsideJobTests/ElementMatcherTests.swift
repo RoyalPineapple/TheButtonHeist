@@ -114,9 +114,11 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(element.matches(matcher))
     }
 
-    func testIdentifierIsCaseSensitive() {
+    func testIdentifierIsCaseInsensitive() {
         let element = el(identifier: "SaveBtn")
-        XCTAssertFalse(element.matches(ElementMatcher(identifier: "savebtn")))
+        XCTAssertTrue(element.matches(ElementMatcher(identifier: "savebtn")))
+        XCTAssertTrue(element.matches(ElementMatcher(identifier: "SAVEBTN")))
+        XCTAssertFalse(element.matches(ElementMatcher(identifier: "OtherBtn")))
     }
 
     // MARK: - Value Matching

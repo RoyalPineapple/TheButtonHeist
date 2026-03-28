@@ -392,10 +392,12 @@ Recordings are saved to `demos/` with timestamped filenames. Default settings: `
 
 ## AccessibilitySnapshot Submodule
 
-The `AccessibilitySnapshot` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshot`) on the `buttonheist` branch. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). The `buttonheist` branch is rebased on upstream `main` and carries only two targeted commits:
+The `AccessibilitySnapshot` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshot`) on the `buttonheist` branch. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). The `buttonheist` branch is rebased on upstream `main` and carries four targeted commits:
 
 1. `elementVisitor` closure on the hierarchy parser + xcodegen project support
 2. `Hashable` conformance on `AccessibilityElement`
+3. `traitNames` computed property and `fromNames` static method on UIAccessibilityTraits
+4. `containerVisitor` closure on the hierarchy parser + `.scrollable(contentSize:)` container type
 
 **Rules for this submodule:**
 - Only touch files in the hierarchy parser (`Sources/AccessibilitySnapshot/Parser/`).

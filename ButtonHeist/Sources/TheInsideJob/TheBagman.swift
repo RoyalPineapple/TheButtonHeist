@@ -181,6 +181,21 @@ final class TheBagman {
         }
     }
 
+    /// Resolve a target using first-match semantics (no ambiguity check).
+    /// Used by scroll_to_visible where finding ANY match is success.
+    func resolveFirstMatch(_ target: ElementTarget) -> ResolvedTarget? {
+        switch target {
+        case .heistId(let heistId):
+            guard let entry = screenElements[heistId], entry.presented else { return nil }
+            let i = entry.lastTraversalIndex
+            guard i >= 0, i < cachedElements.count else { return nil }
+            return ResolvedTarget(element: cachedElements[i], traversalIndex: i)
+        case .matcher(let matcher):
+            guard let found = findMatch(matcher) else { return nil }
+            return ResolvedTarget(element: found.element, traversalIndex: found.index)
+        }
+    }
+
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
     /// For heistId: checks screenElements registry (presented elements only).
