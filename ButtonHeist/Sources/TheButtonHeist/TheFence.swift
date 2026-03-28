@@ -104,8 +104,8 @@ public final class TheFence {
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
-        self.handoff.token = configuration.token ?? ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"]
-        self.handoff.driverId = ProcessInfo.processInfo.environment["BUTTONHEIST_DRIVER_ID"]
+        self.handoff.token = configuration.token ?? EnvironmentKey.buttonheistToken.value
+        self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
         self.handoff.autoSubscribe = true
         self.handoff.onAuthApproved = { [weak self] token in
             if let token {
@@ -146,7 +146,7 @@ public final class TheFence {
 
         try await connect()
         if config.autoReconnect {
-            let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+            let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
             handoff.setupAutoReconnect(filter: filter)
         }
         isStarted = true
@@ -200,7 +200,7 @@ public final class TheFence {
     }
 
     private func connect() async throws {
-        let filter = config.deviceFilter ?? ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"]
+        let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
         do {
             try await handoff.connectWithDiscovery(
                 filter: filter,

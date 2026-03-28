@@ -809,7 +809,7 @@ final class TheBagman {
         // Look up the acted-on element in the post-action parsed hierarchy
         var elementLabel: String?
         var elementValue: String?
-        var elementTraits: [String]?
+        var elementTraits: [HeistTrait]?
         if let target {
             let postElement = resolveTarget(target)?.element
             elementLabel = postElement?.label
