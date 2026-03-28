@@ -35,14 +35,11 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 
 ```mermaid
 graph TD
-    TheScore["TheScore - (Shared Protocol)"]
-    TheInsideJob["TheInsideJob - (iOS Server + Transport)"]
-    TheBagman["TheBagman - (Element Cache & Delta)"]
-    TheTripwire["TheTripwire - (Animation & VC Identity)"]
-    ThePlant["ThePlant - (Auto-Start)"]
-    ButtonHeist["ButtonHeist - (macOS Client Framework)"]
-    CLI["ButtonHeistCLI - (CLI)"]
-    MCP["ButtonHeistMCP - (MCP Server)"]
+    TheScore["TheScore — Shared Protocol"]
+    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheBagman, TheTripwire,<br/>TheSafecracker, TheMuscle, ThePlant</i>"]
+    ButtonHeist["ButtonHeist — macOS Client Framework"]
+    CLI["ButtonHeistCLI — CLI"]
+    MCP["ButtonHeistMCP — MCP Server"]
     TestApp["AccessibilityTestApp"]
 
     Crypto["swift-crypto"]
@@ -54,13 +51,10 @@ graph TD
     TheScore --> ButtonHeist
     ButtonHeist --> CLI
     ButtonHeist --> MCP
-    TheInsideJob --> TheBagman
-    TheInsideJob --> TheTripwire
-    TheTripwire --> TheBagman
-    TheInsideJob --> ThePlant
     TheInsideJob --> TestApp
-    ThePlant --> TestApp
 ```
+
+> **Note:** TheBagman, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
 
 ## End-to-End Data Flow
 
@@ -108,7 +102,7 @@ These issues span multiple crew members and warrant holistic review:
 2. ~~**Duplicate error types**~~ - Fixed: `CLIError` removed, `FenceError` is the single error type
 3. **Inconsistent timeouts** - 15s for actions, 30s for type_text/screenshots, 10s for interface requests
 4. ~~**`vendorid` TXT key**~~ - Fixed: removed from DiscoveredDevice and DeviceDiscovery
-5. **Token logged in plaintext** - TheInsideJob.swift logs full auth token at info level
+5. ~~**Token logged in plaintext**~~ - Fixed: auth token now logged with `privacy: .sensitive` annotation; only visible when private data is enabled in Console
 6. **No TheInsideJob unit tests** - TheMuscleTests added; TheBagman and TheInsideJob server-side logic still untested
 7. **USBDeviceDiscovery blocks actor thread** - Subprocess calls in @ButtonHeistActor context
 8. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses InterfaceDelta instead of full snapshots

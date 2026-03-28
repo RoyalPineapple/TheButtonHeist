@@ -1,6 +1,6 @@
 # TheBagman - The Score Handler
 
-> **File:** `ButtonHeist/Sources/TheInsideJob/TheBagman.swift`
+> **Files:** `ButtonHeist/Sources/TheInsideJob/TheBagman.swift`, `TheBagman+Conversion.swift`, `TheBagman+Matching.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Owns element cache, hierarchy parsing, delta computation, and screen capture
 
@@ -12,7 +12,7 @@ TheBagman handles all the goods during TheInsideJob:
 2. **Weak object references** - maps elements to live `NSObject` instances via `elementObjects` dictionary
 3. **Hierarchy parsing** - drives `AccessibilityHierarchyParser` to traverse the accessibility tree
 4. **Element resolution** - finds elements by `heistId`, `identifier`, or `order` for TheSafecracker
-5. **Element matching** - `findMatch(_:)` and `hasMatch(_:)` search the cached element tree using `ElementMatcher` predicates with AND semantics. Matching runs on the canonical `AccessibilityElement` tree, not wire types. `AccessibilityContainer` nodes can also be matched when `scope` is `.containers` or `.both`. Used by TheSafecracker for scroll search.
+5. **Element matching** - `findMatch(_:)` and `hasMatch(_:)` search the flat `cachedElements` array using `ElementMatcher` predicates with AND semantics. Matching runs on canonical `AccessibilityElement` values, not wire types. `AccessibilityContainer` nodes can also be matched when `scope` is `.containers` or `.both` (via hierarchy-level matching in `TheBagman+Matching.swift`). Used by TheSafecracker for scroll search.
 6. **StableKey identity** - `AccessibilityElement.StableKey` provides geometry-free identity for tracking unique elements across scroll positions. Uses semantic properties (label, identifier, value, traits) by default; falls back to frame geometry when all semantic properties are empty, so identical unlabeled elements at different positions still hash as distinct.
 7. **HeistId synthesis** - assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with disambiguation suffixes for duplicates
 8. **Topology-based screen change detection** - detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
@@ -76,7 +76,7 @@ graph TD
     TheInsideJob["TheInsideJob"] --> TheBagman
     TheTripwire["TheTripwire"] -.->|injected via init| TheBagman
     TheSafecracker["TheSafecracker"] -.->|weak var bagman| TheBagman
-    TheStakeout["TheStakeout"] -.->|captureActionFrame()| TheBagman
+    TheBagman -.->|"weak var stakeout → captureActionFrame()"| TheStakeout["TheStakeout"]
 ```
 
 ## Element Resolution Flow
@@ -108,7 +108,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Input["computeDelta(before, after, isScreenChange)"]
+    Input["computeDelta(before, after, afterTree, isScreenChange)"]
     Input --> ScreenCheck{isScreenChange?}
     ScreenCheck -->|yes| ScreenChanged[".screenChanged (full new interface)"]
     ScreenCheck -->|no| HashCheck{same hash?}
@@ -126,7 +126,7 @@ Screen change detection uses a two-gate check: TheTripwire's VC identity compari
 ```mermaid
 flowchart TD
     Start["actionResultWithDelta(beforeSnapshot:beforeVC:beforeCachedElements:target:...)"]
-    Start --> WaitAllClear["tripwire.waitForAllClear(1.0s, treeHash: hierarchySignature)"]
+    Start --> WaitAllClear["await tripwire.waitForAllClear(timeout: 1.0)"]
     WaitAllClear --> Refresh["refreshAccessibilityData()"]
     Refresh --> Snapshot["snapshotElements() (after)"]
     Snapshot --> VCCheck["tripwire.isScreenChange(beforeVC, afterVC)"]
@@ -147,6 +147,7 @@ Both use `UIGraphicsImageRenderer` with `drawHierarchy(in:afterScreenUpdates:)`.
 ## Dependencies
 
 - **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), and VC identity-based screen change detection (TheBagman supplements with topology-based detection)
+- **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheBagman calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree
 
 ## Items Flagged for Review

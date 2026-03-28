@@ -89,7 +89,7 @@ dlsym → IOHIDEventSetFloatValue
    - `tipPressure = 1.0` while touching, `0` when ended
    - `majorRadius = minorRadius = 5.0` (matching KIF)
    - `quality = density = irregularity = 1.0`
-   - `eventMask`: `Range|Touch` for began/ended, `Position` for moved/stationary
+   - `eventMask`: `Range|Touch` for began/ended/cancelled, `Position` for moved/stationary
    - `kIOHIDEventFieldDigitizerIsDisplayIntegrated = 1.0`
 
 3. Each finger is appended to the hand: `IOHIDEventAppendEvent(hand, finger, 0)`
@@ -119,7 +119,7 @@ All gestures share four building blocks in `TheSafecracker.swift`:
 |--------|-------------|
 | `touchesDown(at: [CGPoint])` | Finds the target window, creates `TouchTarget` + `SyntheticTouch` per finger, sends `.began` event |
 | `moveTouches(to: [CGPoint])` | Updates each finger's location + phase to `.moved`, sends event |
-| `sendStationary()` | Updates all fingers to `.stationary` (no location change), sends event |
+| `sendStationary()` | Updates all fingers to `.stationary` (no location change), sends event (**private**) |
 | `touchesUp()` | Updates all fingers to `.ended`, sends event, clears state |
 
 Single-finger convenience wrappers (`touchDown`, `moveTo`, `touchUp`) call the array versions with a one-element array.
@@ -175,7 +175,7 @@ Waypoints use linear interpolation: `start + progress * (end - start)` for each 
 
 Arc-length parameterized interpolation across multi-segment polylines. Pre-computes per-segment Euclidean lengths and total length, then for each step computes `targetDist = progress * totalLength`, walks the segment list accumulating distance until the target segment is found, and lerps within that segment. Result: uniform speed across the path regardless of segment length variations.
 
-Degeneracy: if `totalLength == 0` (all points identical), dispatches a plain tap instead.
+Degeneracy: returns `false` early if `points.count < 2`. If `totalLength == 0` (all points identical), dispatches `touchDown` + `touchUp` (no yield between phases, unlike a full tap which includes `gestureYieldDelay`).
 
 Steps: `max(Int(duration / 0.01), points.count)`.
 
