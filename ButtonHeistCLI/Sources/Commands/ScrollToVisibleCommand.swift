@@ -24,9 +24,6 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Match element by accessibility identifier (exact)")
     var identifier: String?
 
-    @Option(name: .long, help: "Match element by heistId (exact)")
-    var heistId: String?
-
     @Option(name: .long, help: "Match element by accessibility value (exact)")
     var value: String?
 
@@ -69,7 +66,6 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
         let matcher = ElementMatcher(
             label: label,
             identifier: identifier,
-            heistId: heistId,
             value: value,
             traits: traits.isEmpty ? nil : traits,
             excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits,

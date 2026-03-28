@@ -34,12 +34,13 @@ public let buttonHeistVersion = "2026.03.27"
 This constant is used by:
 - **ButtonHeistCLI** — `buttonheist --version`
 - **ButtonHeistMCP** — MCP server version reporting
+- **TheInsideJob** — iOS server status identity
 
 ### Files updated by release script
 
 `./scripts/release.sh [<version>]` updates:
 
-1. **`buttonHeistVersion`** in `TheFence+CommandCatalog.swift` (source of truth)
+1. **`buttonHeistVersion`** in `TheScore/Messages.swift` (source of truth)
 2. **`VERSION`** at repo root (for tooling, CI, tags)
 3. **`docs/API.md`** — CLI Reference section
 4. **`TestApp/Sources/DisclosureGroupingDemo.swift`** — demo UI version label

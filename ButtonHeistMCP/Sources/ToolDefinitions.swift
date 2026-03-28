@@ -207,8 +207,8 @@ enum ToolDefinitions {
             "properties": [
                 "fps": ["type": "integer", "description": "Frames per second (default: 8, range: 1-15)"],
                 "scale": ["type": "number", "description": "Resolution scale factor (default: 1.0, range: 0.25-1.0)"],
-                "maxDuration": ["type": "number", "description": "Maximum recording duration in seconds (default: 60)"],
-                "inactivityTimeout": ["type": "number", "description": "Auto-stop after N seconds of no interactions (default: 5)"],
+                "max_duration": ["type": "number", "description": "Maximum recording duration in seconds (default: 60)"],
+                "inactivity_timeout": ["type": "number", "description": "Auto-stop after N seconds of no interactions (default: 5)"],
             ],
             "additionalProperties": false,
         ]

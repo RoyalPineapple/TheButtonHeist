@@ -314,7 +314,7 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 
 - **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `docs/VERSIONING.md`.
 - **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
-- **Canonical product version** lives in `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift` (`buttonHeistVersion`). CLI and MCP read it.
+- **Canonical product version** lives in `ButtonHeist/Sources/TheScore/Messages.swift` (`buttonHeistVersion`). CLI, MCP, and iOS server all read it via TheScore.
 - **Releasing**: Use the release script — never bump version manually in multiple files:
   ```bash
   ./scripts/release.sh              # Uses today's date

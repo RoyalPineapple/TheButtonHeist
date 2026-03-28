@@ -425,6 +425,8 @@ public enum FenceResponse {
     }
 
     private static func actionErrorClass(_ result: ActionResult) -> String {
+        if let kind = result.errorKind { return kind.rawValue }
+        // Legacy fallback for servers that don't set errorKind
         let msg = (result.message ?? "").lowercased()
         if msg.contains("not found") || msg.contains("no element") { return "elementNotFound" }
         if msg.contains("timeout") || msg.contains("timed out") { return "timeout" }
@@ -848,7 +850,7 @@ public enum FenceResponse {
 
     private func groupDictionary(_ group: Group) -> [String: Any] {
         var payload: [String: Any] = [
-            "type": group.type,
+            "type": group.type.rawValue,
             "frameX": group.frameX,
             "frameY": group.frameY,
             "frameWidth": group.frameWidth,
