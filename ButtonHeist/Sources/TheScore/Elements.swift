@@ -85,6 +85,7 @@ public enum GroupType: String, Codable, Equatable, Hashable, Sendable, CaseItera
     case landmark
     case dataTable
     case tabBar
+    case scrollable
 }
 
 /// A container group in the element tree
