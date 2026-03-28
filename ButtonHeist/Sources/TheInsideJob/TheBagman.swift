@@ -14,11 +14,6 @@ import TheScore
 @MainActor
 final class TheBagman {
 
-    /// Weak reference wrapper for accessibility objects (element cache).
-    struct WeakObject {
-        weak var object: NSObject?
-    }
-
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
     }
@@ -31,27 +26,39 @@ final class TheBagman {
     /// Parsed accessibility hierarchy from the last refresh.
     private(set) var cachedHierarchy: [AccessibilityHierarchy] = []
 
-    /// Weak references to accessibility objects from the last parse,
-    /// keyed by the parsed element.
-    private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
+    /// Weak reference wrapper for accessibility objects.
+    struct WeakObject {
+        weak var object: NSObject?
+    }
 
-    /// Weak references to container UIViews from the last parse,
-    /// keyed by object identity. Used for coordinate conversion.
-    private(set) var containerObjects: [ObjectIdentifier: WeakObject] = [:]
+    /// Weak references to accessibility objects from the last parse.
+    /// Used by refreshElement() for single-element re-parsing.
+    private var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
     // MARK: - Screen-Lifetime Element Registry
 
     /// An element tracked for the current screen's lifetime.
+    /// Holds weak references to the live UIKit objects — the element for action dispatch,
+    /// the scroll view for coordinate conversion. UIKit guarantees the scroll view outlives
+    /// its children, so if `object != nil` then `scrollView != nil` (when originally set).
+    /// If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse)
+    /// but the scroll view is still alive — you can still scroll to its content-space position.
     struct ScreenElement {
         let heistId: String
         /// Content-space position within nearest scrollable container (nil if not scrollable).
         let contentSpaceOrigin: CGPoint?
+        /// Parent container from the accessibility hierarchy (nil if top-level).
+        var container: AccessibilityContainer?
         /// Most recent traversal index (updated each refresh if element is visible).
         var lastTraversalIndex: Int
         /// Wire representation (updated each refresh if element is visible).
         var wire: HeistElement
         /// True after sent to clients via get_interface or delta.
         var presented: Bool
+        /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
+        weak var object: NSObject?
+        /// Parent scroll view for coordinate conversion. Weak — outlives children.
+        weak var scrollView: UIScrollView?
     }
 
     /// Persistent element registry keyed by heistId. Lives for the screen's duration.
@@ -82,12 +89,18 @@ final class TheBagman {
         let totalItems: Int?
     }
 
-    // MARK: - Element Access
+    // MARK: - Element Access (heistId-based)
+
+    /// Look up the live NSObject for an element by heistId.
+    private func object(forHeistId heistId: String) -> NSObject? {
+        screenElements[heistId]?.object
+    }
 
     /// Look up the live NSObject for an element at a given traversal index.
+    /// Scans screenElements for matching index — used by legacy callers.
     private func object(at index: Int) -> NSObject? {
         guard index >= 0, index < cachedElements.count else { return nil }
-        return elementObjects[cachedElements[index]]?.object
+        return screenElements.values.first { $0.lastTraversalIndex == index }?.object
     }
 
     /// Check if an interactive object exists at the given traversal index.
@@ -496,8 +509,6 @@ final class TheBagman {
     func clearCache() {
         cachedHierarchy.removeAll()
         cachedElements.removeAll()
-        elementObjects.removeAll()
-        containerObjects.removeAll()
         screenElements.removeAll()
         lastHierarchyHash = 0
     }
@@ -514,12 +525,15 @@ final class TheBagman {
 
         var allHierarchy: [AccessibilityHierarchy] = []
         var newElementObjects: [AccessibilityElement: WeakObject] = [:]
-        var newContainerObjects: [ObjectIdentifier: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
-        // Accessibility property reads (label, traits, customActions, etc.) return
-        // autoreleased ObjC objects.  Draining per-window keeps the high-water mark
-        // proportional to a single window's tree rather than the entire UI.
+        // Temporary scroll view lookup — built by containerVisitor, used during
+        // updateScreenElements, then released. No persistent container storage.
+        // Keyed by AccessibilityContainer (Equatable) so the hierarchy walk can match.
+        var scrollViewLookup: [AccessibilityContainer: UIScrollView] = [:]
+
+        // Accessibility property reads return autoreleased ObjC objects.
+        // Draining per-window keeps high-water mark proportional to one window's tree.
         for (window, rootView) in windows {
             autoreleasepool {
                 let baseIndex = allElements.count
@@ -529,13 +543,15 @@ final class TheBagman {
                     elementVisitor: { element, _, object in
                         newElementObjects[element] = WeakObject(object: object)
                     },
-                    containerVisitor: { _, object in
-                        newContainerObjects[ObjectIdentifier(object)] = WeakObject(object: object)
+                    containerVisitor: { container, object in
+                        if case .scrollable = container.type,
+                           let scrollView = object as? UIScrollView {
+                            scrollViewLookup[container] = scrollView
+                        }
                     }
                 )
                 let windowElements = windowTree.flattenToElements()
 
-                // Wrap each window's tree in a container node when multiple windows are present
                 if windows.count > 1 {
                     let windowName = NSStringFromClass(type(of: window))
                     let container = AccessibilityContainer(
@@ -557,30 +573,46 @@ final class TheBagman {
         }
 
         elementObjects = newElementObjects
-        containerObjects = newContainerObjects
         cachedHierarchy = allHierarchy
         cachedElements = allElements
 
-        // Update the screen element registry with newly visible elements
-        updateScreenElements()
+        // Build raw object lookup for updateScreenElements (unwrap WeakObject)
+        var rawObjects: [AccessibilityElement: NSObject] = [:]
+        for (element, weakObj) in newElementObjects {
+            if let obj = weakObj.object { rawObjects[element] = obj }
+        }
+
+        // Update the screen element registry — flows live object refs into ScreenElement
+        updateScreenElements(scrollViewLookup: scrollViewLookup, elementObjects: rawObjects)
 
         return allHierarchy
     }
 
-    /// Compute content-space position for an element by finding its nearest
-    /// scrollable ancestor and using UIKit coordinate conversion.
-    /// Returns nil if the element is not inside a scroll view.
-    private func contentSpaceOrigin(for object: NSObject) -> CGPoint? {
-        guard let scrollView = scrollableAncestor(of: object, includeSelf: false) else { return nil }
-        let frame = object.accessibilityFrame
-        guard !frame.isNull, !frame.isEmpty else { return nil }
-        return scrollView.convert(frame.origin, from: nil)
+    /// Rebuild screenElements from current cached data without scroll view context.
+    /// Used after screen change wipe — the next full refresh will add scroll context.
+    private func rebuildScreenElements() {
+        var rawObjects: [AccessibilityElement: NSObject] = [:]
+        for (element, weakObj) in elementObjects {
+            if let obj = weakObj.object { rawObjects[element] = obj }
+        }
+        updateScreenElements(scrollViewLookup: [:], elementObjects: rawObjects)
+    }
+
+    /// Per-element context gathered during the hierarchy walk.
+    private struct ElementContext {
+        let contentSpaceOrigin: CGPoint?
+        let container: AccessibilityContainer?
+        weak var scrollView: UIScrollView?
+        weak var object: NSObject?
     }
 
     /// Update the screenElements dictionary after a refresh.
-    /// Generates heistIds, computes content-space origins, and upserts into the registry.
-    private func updateScreenElements() {
-        // Convert current elements to wire format and generate base IDs
+    /// Walks the hierarchy tree to derive per-element context (content-space origins,
+    /// scroll view refs, containers, live objects) — all from the accessibility tree.
+    private func updateScreenElements(
+        scrollViewLookup: [AccessibilityContainer: UIScrollView],
+        elementObjects: [AccessibilityElement: NSObject]
+    ) {
         var wireElements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
 
         // Phase 1: assign base heistIds
@@ -592,26 +624,24 @@ final class TheBagman {
             }
         }
 
-        // Phase 2: compute content-space origins for elements in scrollable containers
-        var contentOrigins: [Int: CGPoint] = [:]
-        for (index, element) in cachedElements.enumerated() {
-            if let object = elementObjects[element]?.object,
-               let origin = contentSpaceOrigin(for: object) {
-                contentOrigins[index] = origin
-            }
-        }
+        // Phase 2: walk hierarchy to gather per-element context
+        var contexts: [Int: ElementContext] = [:]
+        walkHierarchy(
+            cachedHierarchy, scrollView: nil, container: nil,
+            scrollViewLookup: scrollViewLookup, elementObjects: elementObjects,
+            contexts: &contexts
+        )
 
         // Phase 3: disambiguate duplicates
-        // Group by base heistId
         var groups: [String: [Int]] = [:]
         for i in wireElements.indices {
             groups[wireElements[i].heistId, default: []].append(i)
         }
 
         for (_, indices) in groups where indices.count > 1 {
-            // Sort by content-space Y (then X) if available, otherwise traversal order
             let sorted = indices.sorted { a, b in
-                if let originA = contentOrigins[a], let originB = contentOrigins[b] {
+                if let originA = contexts[a]?.contentSpaceOrigin,
+                   let originB = contexts[b]?.contentSpaceOrigin {
                     if originA.y != originB.y { return originA.y < originB.y }
                     return originA.x < originB.x
                 }
@@ -622,23 +652,67 @@ final class TheBagman {
             }
         }
 
-        // Phase 4: upsert into screenElements
+        // Phase 4: upsert into screenElements with live object refs
         for (index, wire) in wireElements.enumerated() {
-            let origin = contentOrigins[index]
+            let ctx = contexts[index]
 
             if var existing = screenElements[wire.heistId] {
-                // Known element — update mutable fields
                 existing.lastTraversalIndex = index
                 existing.wire = wire
+                existing.object = ctx?.object
+                existing.scrollView = ctx?.scrollView
                 screenElements[wire.heistId] = existing
             } else {
-                // New element — add to registry
                 screenElements[wire.heistId] = ScreenElement(
                     heistId: wire.heistId,
-                    contentSpaceOrigin: origin,
+                    contentSpaceOrigin: ctx?.contentSpaceOrigin,
+                    container: ctx?.container,
                     lastTraversalIndex: index,
                     wire: wire,
-                    presented: false
+                    presented: false,
+                    object: ctx?.object,
+                    scrollView: ctx?.scrollView
+                )
+            }
+        }
+    }
+
+    /// Walk the hierarchy tree to gather per-element context: content-space origins,
+    /// parent containers, scroll view refs, and live element objects. All derived from
+    /// the accessibility hierarchy — no view hierarchy walking.
+    private func walkHierarchy(
+        _ nodes: [AccessibilityHierarchy],
+        scrollView: UIScrollView?,
+        container: AccessibilityContainer?,
+        scrollViewLookup: [AccessibilityContainer: UIScrollView],
+        elementObjects: [AccessibilityElement: NSObject],
+        contexts: inout [Int: ElementContext]
+    ) {
+        for node in nodes {
+            switch node {
+            case .element(let element, let traversalIndex):
+                let origin: CGPoint?
+                if let scrollView {
+                    let frame = element.shape.frame
+                    origin = (!frame.isNull && !frame.isEmpty)
+                        ? scrollView.convert(frame.origin, from: nil)
+                        : nil
+                } else {
+                    origin = nil
+                }
+                contexts[traversalIndex] = ElementContext(
+                    contentSpaceOrigin: origin,
+                    container: container,
+                    scrollView: scrollView,
+                    object: elementObjects[element]
+                )
+
+            case .container(let ctr, let children):
+                let childScrollView = scrollViewLookup[ctr] ?? scrollView
+                walkHierarchy(
+                    children, scrollView: childScrollView, container: ctr,
+                    scrollViewLookup: scrollViewLookup, elementObjects: elementObjects,
+                    contexts: &contexts
                 )
             }
         }
@@ -709,16 +783,20 @@ final class TheBagman {
 
         // Single read of the post-settle state
         let afterTree = refreshAccessibilityData()
-        let afterSnapshot = snapshotElements()
 
         // Screen change gate: VC identity OR accessibility topology
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
             || isTopologyChanged(before: beforeCachedElements, after: cachedElements)
         if isScreenChange {
+            // Screen change = full wipe. screenElements is scoped per screen.
+            // refreshAccessibilityData() above already upserted new-screen entries into
+            // the old-screen dictionary. Wipe everything and re-run updateScreenElements
+            // so the dictionary contains only the new screen's elements.
             screenElements.removeAll()
-            updateScreenElements()
+            rebuildScreenElements()
         }
+        let afterSnapshot = snapshotElements()
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
             afterTree: afterTree, isScreenChange: isScreenChange
