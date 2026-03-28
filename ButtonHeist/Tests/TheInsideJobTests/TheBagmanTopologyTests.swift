@@ -24,20 +24,20 @@ final class TheBagmanTopologyTests: XCTestCase {
         let before = [makeElement(label: "Title", traits: .header)]
         let after = [
             makeElement(label: "Title", traits: .header),
-            makeElement(label: "Back", traits: UIAccessibilityTraits(rawValue: 0x8000000)),
+            makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
         ]
         XCTAssertTrue(bagman.isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonDisappearedIsTopologyChange() {
-        let before = [makeElement(label: "Back", traits: UIAccessibilityTraits(rawValue: 0x8000000))]
+        let before = [makeElement(label: "Back", traits: UIAccessibilityTraits.backButton)]
         let after = [makeElement(label: "Title", traits: .header)]
         XCTAssertTrue(bagman.isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonUnchangedIsNotTopologyChange() {
         let elements = [
-            makeElement(label: "Back", traits: UIAccessibilityTraits(rawValue: 0x8000000)),
+            makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
             makeElement(label: "Title", traits: .header),
         ]
         XCTAssertFalse(bagman.isTopologyChanged(before: elements, after: elements))
