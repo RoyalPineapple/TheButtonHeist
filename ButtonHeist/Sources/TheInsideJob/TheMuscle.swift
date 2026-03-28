@@ -89,7 +89,7 @@ final class TheMuscle {
     // MARK: - Init
 
     init(explicitToken: String?) {
-        self.authToken = TheMuscle.resolveToken(explicit: explicitToken)
+        self.authToken = explicitToken ?? UUID().uuidString
         if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_RESTRICT_WATCHERS"] {
             self.restrictWatchers = ["1", "true", "yes"].contains(envValue.lowercased())
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
@@ -103,15 +103,6 @@ final class TheMuscle {
         } else {
             self.sessionReleaseTimeout = 30.0
         }
-    }
-
-    // MARK: - Token Resolution
-
-    private static func resolveToken(explicit: String?) -> String {
-        if let explicit {
-            return explicit
-        }
-        return UUID().uuidString
     }
 
     // MARK: - Public API
@@ -190,23 +181,23 @@ final class TheMuscle {
             }
             handleWatchRequest(clientId, payload: payload, respond: respond)
             return
-        case .authenticate:
+        case .authenticate(let payload):
             guard helloValidatedClients.contains(clientId) else {
                 logger.warning("Client \(clientId) attempted auth before hello")
                 disconnectClient?(clientId)
                 return
             }
-            // Fall through to existing auth logic below
+            processAuthentication(clientId, payload: payload, address: clientAddresses[clientId], respond: respond)
+            return
         default:
             logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
             disconnectClient?(clientId)
             return
         }
+    }
 
-        guard case .authenticate(let payload) = envelope.message else { return }
-
-        // Check lockout before processing auth (keyed on remote address to persist across reconnections)
-        guard let address = clientAddresses[clientId] else {
+    private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, address: String?, respond: @escaping @Sendable (Data) -> Void) {
+        guard let address else {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
             sendMessage(.authFailed("Connection rejected."), respond: respond)
             Task { [weak self] in

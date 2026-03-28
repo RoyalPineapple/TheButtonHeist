@@ -1,6 +1,5 @@
 import ArgumentParser
 import ButtonHeist
-import TheScore
 
 struct ActionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -10,7 +9,7 @@ struct ActionCommand: AsyncParsableCommand {
             Specialized accessibility actions. For tapping buttons and controls, \
             use `buttonheist activate` instead.
 
-            Mirrors the MCP `accessibility_action` tool. Action types:
+            Action types:
               increment / decrement  — Adjust sliders, steppers, pickers
               custom                 — Trigger a named custom action
               edit                   — Clipboard operations (copy, paste, cut, select, select_all)

@@ -223,12 +223,25 @@ extension Array where Element == AccessibilityElement {
 
 // MARK: - TheBagman Convenience
 
+enum MatchingError: Error, LocalizedError {
+    case heistIdNotSupported
+
+    var errorDescription: String? {
+        switch self {
+        case .heistIdNotSupported:
+            return "findMatch does not resolve heistId — use ActionTarget for heistId-based targeting"
+        }
+    }
+}
+
 extension TheBagman {
 
     /// Search cachedElements for the first match. Returns the element and its
-    /// traversal index, or nil if no match.
-    func findMatch(_ matcher: ElementMatcher) -> (element: AccessibilityElement, index: Int)? {
-        cachedElements.firstMatch(matcher, traitNames: traitNames)
+    /// traversal index, or nil if no match. Throws if the matcher contains a heistId
+    /// (heistId resolution requires ActionTarget, not ElementMatcher).
+    func findMatch(_ matcher: ElementMatcher) throws -> (element: AccessibilityElement, index: Int)? {
+        guard matcher.heistId == nil else { throw MatchingError.heistIdNotSupported }
+        return cachedElements.firstMatch(matcher, traitNames: traitNames)
     }
 
     /// Whether any cached element matches the predicate.

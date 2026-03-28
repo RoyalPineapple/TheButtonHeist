@@ -1,9 +1,5 @@
 import Foundation
 
-/// Canonical version string shared by CLI, MCP, and any other clients.
-/// Update this constant when cutting a new release. See docs/VERSIONING.md.
-public let buttonHeistVersion = "0.0.1"
-
 extension TheFence {
 
     /// Canonical set of all commands supported by TheFence (CLI and MCP).

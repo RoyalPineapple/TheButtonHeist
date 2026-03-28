@@ -28,7 +28,7 @@ jobs:
           TAG_VERSION="${{ steps.version.outputs.version }}"
           FILE_VERSION=$(cat VERSION)
           CODE_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' \
-            ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift | cut -d'"' -f2)
+            ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
 
           if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
             echo "::error::Tag version ($TAG_VERSION) != VERSION file ($FILE_VERSION)"

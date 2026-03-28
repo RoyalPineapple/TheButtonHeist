@@ -416,8 +416,7 @@ final class FenceResponseTests: XCTestCase {
             InteractionEvent(
                 timestamp: Double(i),
                 command: .activate(ActionTarget(order: i)),
-                result: ActionResult(success: true, method: .activate),
-                interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0)
+                result: ActionResult(success: true, method: .activate, interfaceDelta: InterfaceDelta(kind: .noChange, elementCount: 0))
             )
         }
         return RecordingPayload(

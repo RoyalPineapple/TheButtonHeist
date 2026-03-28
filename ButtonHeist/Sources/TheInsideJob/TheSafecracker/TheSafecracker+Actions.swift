@@ -121,17 +121,21 @@ extension TheSafecracker {
 
         // Phase 0: Check current tree for match (no conversion to wire types)
         bagman.refreshAccessibilityData()
-        if let found = bagman.findMatch(matcher) {
-            // Already visible — scroll into view if partially off-screen
-            _ = scrollToVisible(elementAt: found.index)
-            let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
-            return InteractionResult(
-                success: true, method: .scrollToVisible, message: nil, value: nil,
-                scrollSearchResult: ScrollSearchResult(
-                    scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
-                    totalItems: nil, exhaustive: false, foundElement: wireElement
+        do {
+            if let found = try bagman.findMatch(matcher) {
+                // Already visible — scroll into view if partially off-screen
+                _ = scrollToVisible(elementAt: found.index)
+                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
+                return InteractionResult(
+                    success: true, method: .scrollToVisible, message: nil, value: nil,
+                    scrollSearchResult: ScrollSearchResult(
+                        scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
+                        totalItems: nil, exhaustive: false, foundElement: wireElement
+                    )
                 )
-            )
+            }
+        } catch {
+            return .failure(.scrollToVisible, message: error.localizedDescription)
         }
 
         // Find the nearest scroll view from any visible element
@@ -148,35 +152,39 @@ extension TheSafecracker {
         var seenKeys = Set(bagman.cachedElements.map(\.stableKey))
         var scrollCount = 0
 
-        // Phase 1: Scroll in primary direction
-        let result = await scrollSearchLoop(
-            scrollView: scrollView, matcher: matcher, direction: primaryDirection,
-            maxScrolls: maxScrolls, scrollCount: &scrollCount,
-            seenKeys: &seenKeys, totalItems: totalItems
-        )
-        if let result { return result }
-
-        // Phase 2: Jump to opposite edge, scroll back in primary direction
-        // to cover content before the original starting position.
-        // Skip if Phase 1 exhausted the scroll budget — no point paying for
-        // the edge jump + refresh with zero remaining scrolls.
-        if scrollCount < maxScrolls {
-            scrollToOppositeEdge(scrollView, from: primaryDirection)
-            if let tripwire {
-                _ = await tripwire.waitForAllClear(timeout: 1.0)
-            }
-            bagman.refreshAccessibilityData()
-
-            let result2 = await scrollSearchLoop(
+        do {
+            // Phase 1: Scroll in primary direction
+            let result = try await scrollSearchLoop(
                 scrollView: scrollView, matcher: matcher, direction: primaryDirection,
                 maxScrolls: maxScrolls, scrollCount: &scrollCount,
                 seenKeys: &seenKeys, totalItems: totalItems
             )
-            if let result2 { return result2 }
+            if let result { return result }
+
+            // Phase 2: Jump to opposite edge, scroll back in primary direction
+            // to cover content before the original starting position.
+            // Skip if Phase 1 exhausted the scroll budget — no point paying for
+            // the edge jump + refresh with zero remaining scrolls.
+            if scrollCount < maxScrolls {
+                scrollToOppositeEdge(scrollView, from: primaryDirection)
+                if let tripwire {
+                    _ = await tripwire.waitForAllClear(timeout: 1.0)
+                }
+                bagman.refreshAccessibilityData()
+
+                let result2 = try await scrollSearchLoop(
+                    scrollView: scrollView, matcher: matcher, direction: primaryDirection,
+                    maxScrolls: maxScrolls, scrollCount: &scrollCount,
+                    seenKeys: &seenKeys, totalItems: totalItems
+                )
+                if let result2 { return result2 }
+            }
+        } catch {
+            return .failure(.scrollToVisible, message: error.localizedDescription)
         }
 
         // Phase 3: Not found
-        let exhaustive = totalItems != nil && seenKeys.count >= totalItems!
+        let exhaustive = totalItems.map { seenKeys.count >= $0 } ?? false
         return InteractionResult(
             success: false, method: .scrollToVisible,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
@@ -199,7 +207,7 @@ extension TheSafecracker {
         scrollCount: inout Int,
         seenKeys: inout Set<AccessibilityElement.StableKey>,
         totalItems: Int?
-    ) async -> InteractionResult? {
+    ) async throws -> InteractionResult? {
         let uiDirection = direction.uiScrollDirection
 
         while scrollCount < maxScrolls {
@@ -212,8 +220,7 @@ extension TheSafecracker {
             }
             bagman?.refreshAccessibilityData()
 
-            // Match against canonical elements — no HeistElement conversion
-            if let bagman, let found = bagman.findMatch(matcher) {
+            if let bagman, let found = try bagman.findMatch(matcher) {
                 let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
                 return InteractionResult(
                     success: true, method: .scrollToVisible, message: nil, value: nil,
@@ -284,15 +291,6 @@ extension TheSafecracker {
             return total
         }
         return nil
-    }
-
-    private func oppositeDirection(_ direction: ScrollSearchDirection) -> ScrollSearchDirection {
-        switch direction {
-        case .down: return .up
-        case .up: return .down
-        case .left: return .right
-        case .right: return .left
-        }
     }
 
     private func scrollToOppositeEdge(_ scrollView: UIScrollView, from direction: ScrollSearchDirection) {
