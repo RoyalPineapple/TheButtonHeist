@@ -367,9 +367,9 @@ public final class TheFence {
         guard let expect = dictionary["expect"] else { return nil }
         if let str = expect as? String {
             switch str {
-            case "screenChanged", "screen_changed":
+            case "screen_changed":
                 return .screenChanged
-            case "elementsChanged", "elements_changed":
+            case "elements_changed":
                 return .elementsChanged
             default:
                 throw FenceError.invalidRequest(
@@ -519,38 +519,9 @@ public final class TheFence {
 
     static func configTargetsAsDevices(_ config: ButtonHeistFileConfig) -> [DiscoveredDevice] {
         config.targets.compactMap { name, target in
-            guard let (host, port) = parseHostPort(target.device) else { return nil }
-            return DiscoveredDevice(
-                id: "config-\(name)",
-                name: name,
-                endpoint: .hostPort(
-                    host: .init(host),
-                    port: .init(integerLiteral: port)
-                )
-            )
+            guard let device = DiscoveredDevice.fromHostPort(target.device, id: "config-\(name)", name: name) else { return nil }
+            return device
         }
-    }
-
-    private static func parseHostPort(_ value: String) -> (String, UInt16)? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        if trimmed.hasPrefix("["),
-           let closingBracket = trimmed.firstIndex(of: "]"),
-           let separator = trimmed.index(closingBracket, offsetBy: 1, limitedBy: trimmed.endIndex),
-           separator < trimmed.endIndex,
-           trimmed[separator] == ":" {
-            let host = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closingBracket])
-            let portString = String(trimmed[trimmed.index(after: separator)...])
-            guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
-            return (host, port)
-        }
-
-        guard let separator = trimmed.lastIndex(of: ":") else { return nil }
-        let host = String(trimmed[..<separator])
-        let portString = String(trimmed[trimmed.index(after: separator)...])
-        guard !host.isEmpty, let port = UInt16(portString), port > 0 else { return nil }
-        return (host, port)
     }
 
     // MARK: - Batch Step Summary

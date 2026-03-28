@@ -41,6 +41,18 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.certFingerprint = certFingerprint
     }
 
+    /// Parse a "host:port" string and create a device. Returns nil on invalid input.
+    public static func fromHostPort(_ value: String, id: String? = nil, name: String? = nil) -> DiscoveredDevice? {
+        guard let (host, port) = parseHostPort(from: value) else { return nil }
+        let resolvedId = id ?? "\(host):\(port)"
+        let resolvedName = name ?? "\(host):\(port)"
+        return DiscoveredDevice(
+            id: resolvedId,
+            name: resolvedName,
+            endpoint: .hostPort(host: .init(host), port: .init(integerLiteral: port))
+        )
+    }
+
     /// Convenience init for direct host:port connections (no Bonjour).
     public init(host: String, port: UInt16) {
         let endpoint = NWEndpoint.hostPort(
