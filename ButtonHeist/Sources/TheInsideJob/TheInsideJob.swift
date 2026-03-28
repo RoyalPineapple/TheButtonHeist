@@ -520,7 +520,7 @@ public final class TheInsideJob {
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
-        let result = await theSafecracker.executeScrollToVisible(target)
+        let result = bagman.executeScrollToVisible(target)
 
         var actionResult: ActionResult
         if result.success {
