@@ -348,8 +348,7 @@ public final class TheFence {
             identifier: stringArg(dictionary, "identifier"),
             value: stringArg(dictionary, "value"),
             traits: traits,
-            excludeTraits: excludeTraits,
-            absent: boolArg(dictionary, "absent")
+            excludeTraits: excludeTraits
         )
     }
 

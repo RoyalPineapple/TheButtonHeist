@@ -226,38 +226,30 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 /// "header", "selected"). The hierarchy-level matcher bridges these to
 /// UIAccessibilityTraits bitmasks via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
-    /// Exact match against element label
+    /// Case-insensitive substring match against element label
     public let label: String?
-    /// Exact match against accessibility identifier
+    /// Case-insensitive substring match against accessibility identifier
     public let identifier: String?
-    /// Exact match against element value
+    /// Case-insensitive substring match against element value
     public let value: String?
     /// All listed traits must be present on the element (AND)
     public let traits: [String]?
     /// None of the listed traits may be present on the element
     public let excludeTraits: [String]?
-    /// When true, the caller asserts no matching element exists.
-    /// The matcher itself always checks property predicates; callers
-    /// interpret `absent` based on their context.
-    public let absent: Bool?
 
     public init(
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
         traits: [String]? = nil,
-        excludeTraits: [String]? = nil,
-        absent: Bool? = nil
+        excludeTraits: [String]? = nil
     ) {
         self.label = label
         self.identifier = identifier
         self.value = value
         self.traits = traits
         self.excludeTraits = excludeTraits
-        self.absent = absent
     }
-
-    public var isAbsent: Bool { absent ?? false }
 
     public var hasTraitPredicates: Bool {
         (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
