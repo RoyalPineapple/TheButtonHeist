@@ -49,11 +49,13 @@ graph TD
             Help["help([String])"]
             Status["status(connected, deviceName)"]
             DevList["devices([DiscoveredDevice])"]
-            IFResp["interface(Interface)"]
+            IFResp["interface(Interface, detail, filteredFrom?)"]
             Action["action(result: ActionResult, expectation: ExpectationResult?)"]
-            Screenshot["screenshot(path) / screenshotData(png)"]
-            Recording["recording(path) / recordingData(payload)"]
+            Screenshot["screenshot(path, width, height) / screenshotData(pngData, width, height)"]
+            Recording["recording(path, payload) / recordingData(payload)"]
             Targets["targets([String: TargetConfig], defaultTarget)"]
+            Batch["batch(results, failedIndex?)"]
+            SessionState["sessionState(connected, deviceName, ...)"]
         end
     end
 

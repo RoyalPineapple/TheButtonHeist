@@ -11,7 +11,7 @@ This is the public face of the outfit. The CLI is what you hand to a human opera
 1. **Subcommand routing** via `swift-argument-parser`
 2. **Direct commands** through `DeviceConnector` for one-shot operations
 3. **Persistent sessions** through `ReplSession` and `TheFence`
-4. **Output auto-detection**: human for TTY, JSON for piped input/output
+4. **Output auto-detection**: human for TTY, JSON for piped input/output. Also supports `compact` format for terse machine-readable output.
 5. **Access to both high-level commands and raw JSON session requests**
 
 ## Architecture Diagram
@@ -21,7 +21,7 @@ graph TD
     subgraph CLI["ButtonHeistCLI"]
         Main["main.swift - AsyncParsableCommand"]
         Options["ConnectionOptions - --device, --token, --quiet"]
-        Format["OutputFormat - auto / human / json"]
+        Format["OutputFormat - auto / human / json / compact"]
 
         subgraph Commands["Subcommands"]
             List["list"]

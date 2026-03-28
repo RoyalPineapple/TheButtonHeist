@@ -116,11 +116,20 @@ stateDiagram-v2
 | Source | Key | Default | Notes |
 |--------|-----|---------|-------|
 | Environment | `INSIDEJOB_TOKEN` | auto-UUID | Explicit auth token |
-| Info.plist | `InsideJobToken` | auto-UUID | Fallback to env var |
-| Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Release timer (fires when all connections drop) |
-| Info.plist | `InsideJobSessionTimeout` | 30s | Fallback |
-| Environment | `INSIDEJOB_RESTRICT_WATCHERS` | not set | Set to `"1"` to require valid token for watch connections |
-| Info.plist | `InsideJobRestrictWatchers` | not set | Set to `true` to require valid token for watch connections |
+| Info.plist | `InsideJobToken` | auto-UUID | Fallback when env var not set |
+| Environment | `INSIDEJOB_SESSION_TIMEOUT` | 30s | Release timer (fires when all connections drop). No plist fallback. |
+| Environment | `INSIDEJOB_RESTRICT_WATCHERS` | `true` (restricted) | Set to `"0"`, `"false"`, or `"no"` to allow unauthenticated observers. Accepts `"1"`, `"true"`, `"yes"` (case-insensitive) to restrict. |
+| Info.plist | `InsideJobRestrictWatchers` | `true` (restricted) | Fallback when env var not set. Boolean plist value. |
+
+### Callbacks
+
+| Callback | Set by | Fires when |
+|----------|--------|-----------|
+| `sendToClient` | TheInsideJob | Sending messages to a client |
+| `markClientAuthenticated` | TheInsideJob | Client passes auth |
+| `disconnectClient` | TheInsideJob | Force-disconnecting a client |
+| `onClientAuthenticated` | TheInsideJob | A client completes auth → triggers `sendServerInfo` |
+| `onSessionActiveChanged` | TheInsideJob | Session acquired or released → updates Bonjour TXT `sessionactive` key |
 
 ## Items Flagged for Review
 
