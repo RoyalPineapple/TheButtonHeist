@@ -93,6 +93,9 @@ final class TheBagman {
         let totalItems: Int?
     }
 
+    /// Reverse index: traversal index → heistId. Rebuilt each refresh in updateScreenElements.
+    private var indexToHeistId: [Int: String] = [:]
+
     // MARK: - Element Access (heistId-based)
 
     /// Look up the live NSObject for an element by heistId.
@@ -100,11 +103,10 @@ final class TheBagman {
         screenElements[heistId]?.object
     }
 
-    /// Look up the live NSObject for an element at a given traversal index.
-    /// Scans screenElements for matching index — used by legacy callers.
+    /// Look up the live NSObject for an element at a given traversal index. O(1) via reverse index.
     private func object(at index: Int) -> NSObject? {
-        guard index >= 0, index < cachedElements.count else { return nil }
-        return screenElements.values.first { $0.lastTraversalIndex == index }?.object
+        guard let heistId = indexToHeistId[index] else { return nil }
+        return screenElements[heistId]?.object
     }
 
     /// Check if an interactive object exists at the given traversal index.
@@ -530,6 +532,7 @@ final class TheBagman {
         cachedElements.removeAll()
         screenElements.removeAll()
         onScreen.removeAll()
+        indexToHeistId.removeAll()
         lastHierarchyHash = 0
     }
 
@@ -750,6 +753,14 @@ final class TheBagman {
         }
 
         onScreen = visibleThisRefresh
+
+        // Rebuild reverse index for O(1) traversal-index → heistId lookup
+        indexToHeistId.removeAll(keepingCapacity: true)
+        for id in visibleThisRefresh {
+            if let entry = screenElements[id] {
+                indexToHeistId[entry.lastTraversalIndex] = id
+            }
+        }
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,

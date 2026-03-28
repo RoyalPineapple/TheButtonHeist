@@ -211,7 +211,7 @@ public enum ElementTarget: Sendable, Equatable {
 extension ElementTarget: Codable {
     private enum CodingKeys: String, CodingKey {
         case heistId
-        case label, identifier, value, traits, excludeTraits, absent
+        case label, identifier, value, traits, excludeTraits
     }
 
     public init(from decoder: Decoder) throws {
@@ -225,13 +225,15 @@ extension ElementTarget: Codable {
             identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
             value: try container.decodeIfPresent(String.self, forKey: .value),
             traits: try container.decodeIfPresent([String].self, forKey: .traits),
-            excludeTraits: try container.decodeIfPresent([String].self, forKey: .excludeTraits),
-            absent: try container.decodeIfPresent(Bool.self, forKey: .absent)
+            excludeTraits: try container.decodeIfPresent([String].self, forKey: .excludeTraits)
         )
         if let match = matcher.nonEmpty {
             self = .matcher(match)
         } else {
-            self = .matcher(ElementMatcher())
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "ElementTarget requires heistId or at least one matcher field (label, identifier, value, traits, excludeTraits)"
+            ))
         }
     }
 
@@ -246,7 +248,6 @@ extension ElementTarget: Codable {
             try container.encodeIfPresent(m.value, forKey: .value)
             try container.encodeIfPresent(m.traits, forKey: .traits)
             try container.encodeIfPresent(m.excludeTraits, forKey: .excludeTraits)
-            try container.encodeIfPresent(m.absent, forKey: .absent)
         }
     }
 }
@@ -778,12 +779,7 @@ extension ScrollToVisibleTarget: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         // Decode element target from flat fields — nil if no targeting fields present
-        let decoded = try ElementTarget(from: decoder)
-        if case .matcher(let m) = decoded, m.nonEmpty == nil {
-            self.elementTarget = nil
-        } else {
-            self.elementTarget = decoded
-        }
+        self.elementTarget = try? ElementTarget(from: decoder)
         self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
     }
