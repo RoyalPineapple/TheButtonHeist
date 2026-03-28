@@ -35,15 +35,38 @@ final class TheBagman {
     /// keyed by the parsed element.
     private(set) var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
-    /// Last wire snapshot with assigned heistIds.
-    var lastSnapshot: [HeistElement] = []
+    /// Weak references to container UIViews from the last parse,
+    /// keyed by object identity. Used for coordinate conversion.
+    private(set) var containerObjects: [ObjectIdentifier: WeakObject] = [:]
+
+    // MARK: - Screen-Lifetime Element Registry
+
+    /// An element tracked for the current screen's lifetime.
+    struct ScreenElement {
+        let heistId: String
+        /// Content-space position within nearest scrollable container (nil if not scrollable).
+        let contentSpaceOrigin: CGPoint?
+        /// Most recent traversal index (updated each refresh if element is visible).
+        var lastTraversalIndex: Int
+        /// Wire representation (updated each refresh if element is visible).
+        var wire: HeistElement
+        /// True after sent to clients via get_interface or delta.
+        var presented: Bool
+    }
+
+    /// Persistent element registry keyed by heistId. Lives for the screen's duration.
+    /// Populated during refreshAccessibilityData(), cleared on screen change.
+    var screenElements: [String: ScreenElement] = [:]
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
 
-    /// Screen name from the last snapshot (first header element's label).
+    /// Screen name from the registry (first header element by traversal order).
     var lastScreenName: String? {
-        lastSnapshot.first { $0.traits.contains("header") }?.label
+        screenElements.values
+            .filter { $0.wire.traits.contains("header") }
+            .min(by: { $0.lastTraversalIndex < $1.lastTraversalIndex })?
+            .wire.label
     }
 
     let parser = AccessibilityHierarchyParser()
@@ -127,9 +150,11 @@ final class TheBagman {
     func resolveTarget(_ target: ElementTarget) -> ResolvedTarget? {
         switch target {
         case .heistId(let heistId):
-            guard let wire = lastSnapshot.first(where: { $0.heistId == heistId }),
-                  wire.order >= 0, wire.order < cachedElements.count else { return nil }
-            return ResolvedTarget(element: cachedElements[wire.order], traversalIndex: wire.order)
+            // O(1) dictionary lookup — only presented elements are targetable
+            guard let entry = screenElements[heistId], entry.presented else { return nil }
+            let i = entry.lastTraversalIndex
+            guard i >= 0, i < cachedElements.count else { return nil }
+            return ResolvedTarget(element: cachedElements[i], traversalIndex: i)
         case .matcher(let matcher):
             let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
                 ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
@@ -141,12 +166,12 @@ final class TheBagman {
 
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks lastSnapshot (call snapshotElements() first).
+    /// For heistId: checks screenElements registry (presented elements only).
     /// For matcher: checks cachedHierarchy/cachedElements.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return lastSnapshot.contains { $0.heistId == heistId }
+            return screenElements[heistId]?.presented == true
         case .matcher(let matcher):
             return hasMatch(matcher)
         }
@@ -189,7 +214,7 @@ final class TheBagman {
     }
 
     private func heistIdNotFoundMessage(_ heistId: String) -> String {
-        let similar = lastSnapshot.map(\.heistId).sorted()
+        let similar = screenElements.keys.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
             return "Element not found: \"\(heistId)\" (\(cachedElements.count) elements on screen)"
@@ -472,7 +497,8 @@ final class TheBagman {
         cachedHierarchy.removeAll()
         cachedElements.removeAll()
         elementObjects.removeAll()
-        lastSnapshot.removeAll()
+        containerObjects.removeAll()
+        screenElements.removeAll()
         lastHierarchyHash = 0
     }
 
@@ -488,6 +514,7 @@ final class TheBagman {
 
         var allHierarchy: [AccessibilityHierarchy] = []
         var newElementObjects: [AccessibilityElement: WeakObject] = [:]
+        var newContainerObjects: [ObjectIdentifier: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
         // Accessibility property reads (label, traits, customActions, etc.) return
@@ -496,9 +523,16 @@ final class TheBagman {
         for (window, rootView) in windows {
             autoreleasepool {
                 let baseIndex = allElements.count
-                let windowTree = parser.parseAccessibilityHierarchy(in: rootView, rotorResultLimit: 0) { element, _, object in
-                    newElementObjects[element] = WeakObject(object: object)
-                }
+                let windowTree = parser.parseAccessibilityHierarchy(
+                    in: rootView,
+                    rotorResultLimit: 0,
+                    elementVisitor: { element, _, object in
+                        newElementObjects[element] = WeakObject(object: object)
+                    },
+                    containerVisitor: { _, object in
+                        newContainerObjects[ObjectIdentifier(object)] = WeakObject(object: object)
+                    }
+                )
                 let windowElements = windowTree.flattenToElements()
 
                 // Wrap each window's tree in a container node when multiple windows are present
@@ -523,9 +557,91 @@ final class TheBagman {
         }
 
         elementObjects = newElementObjects
+        containerObjects = newContainerObjects
         cachedHierarchy = allHierarchy
         cachedElements = allElements
+
+        // Update the screen element registry with newly visible elements
+        updateScreenElements()
+
         return allHierarchy
+    }
+
+    /// Compute content-space position for an element by finding its nearest
+    /// scrollable ancestor and using UIKit coordinate conversion.
+    /// Returns nil if the element is not inside a scroll view.
+    private func contentSpaceOrigin(for object: NSObject) -> CGPoint? {
+        guard let scrollView = scrollableAncestor(of: object, includeSelf: false) else { return nil }
+        let frame = object.accessibilityFrame
+        guard !frame.isNull, !frame.isEmpty else { return nil }
+        return scrollView.convert(frame.origin, from: nil)
+    }
+
+    /// Update the screenElements dictionary after a refresh.
+    /// Generates heistIds, computes content-space origins, and upserts into the registry.
+    private func updateScreenElements() {
+        // Convert current elements to wire format and generate base IDs
+        var wireElements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+
+        // Phase 1: assign base heistIds
+        for i in wireElements.indices {
+            if let identifier = wireElements[i].identifier, !identifier.isEmpty {
+                wireElements[i].heistId = identifier
+            } else {
+                wireElements[i].heistId = synthesizeBaseId(wireElements[i])
+            }
+        }
+
+        // Phase 2: compute content-space origins for elements in scrollable containers
+        var contentOrigins: [Int: CGPoint] = [:]
+        for (index, element) in cachedElements.enumerated() {
+            if let object = elementObjects[element]?.object,
+               let origin = contentSpaceOrigin(for: object) {
+                contentOrigins[index] = origin
+            }
+        }
+
+        // Phase 3: disambiguate duplicates
+        // Group by base heistId
+        var groups: [String: [Int]] = [:]
+        for i in wireElements.indices {
+            groups[wireElements[i].heistId, default: []].append(i)
+        }
+
+        for (_, indices) in groups where indices.count > 1 {
+            // Sort by content-space Y (then X) if available, otherwise traversal order
+            let sorted = indices.sorted { a, b in
+                if let originA = contentOrigins[a], let originB = contentOrigins[b] {
+                    if originA.y != originB.y { return originA.y < originB.y }
+                    return originA.x < originB.x
+                }
+                return a < b
+            }
+            for (suffix, index) in sorted.enumerated() {
+                wireElements[index].heistId = "\(wireElements[index].heistId)_\(suffix + 1)"
+            }
+        }
+
+        // Phase 4: upsert into screenElements
+        for (index, wire) in wireElements.enumerated() {
+            let origin = contentOrigins[index]
+
+            if var existing = screenElements[wire.heistId] {
+                // Known element — update mutable fields
+                existing.lastTraversalIndex = index
+                existing.wire = wire
+                screenElements[wire.heistId] = existing
+            } else {
+                // New element — add to registry
+                screenElements[wire.heistId] = ScreenElement(
+                    heistId: wire.heistId,
+                    contentSpaceOrigin: origin,
+                    lastTraversalIndex: index,
+                    wire: wire,
+                    presented: false
+                )
+            }
+        }
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -599,6 +715,10 @@ final class TheBagman {
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
             || isTopologyChanged(before: beforeCachedElements, after: cachedElements)
+        if isScreenChange {
+            screenElements.removeAll()
+            updateScreenElements()
+        }
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
             afterTree: afterTree, isScreenChange: isScreenChange

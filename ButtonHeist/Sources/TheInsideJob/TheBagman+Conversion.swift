@@ -93,6 +93,9 @@ extension TheBagman {
         case .tabBar:
             typeName = .tabBar
             label = nil; value = nil; identifier = nil
+        case .scrollable(let contentSize):
+            typeName = "scrollable"
+            label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
         }
         return Group(
             type: typeName,
@@ -128,12 +131,20 @@ extension TheBagman {
 
 extension TheBagman {
 
-    /// Convert current cachedElements to wire HeistElements with assigned heistIds.
+    /// Return wire elements for the currently visible set and mark them as presented.
+    /// The screen element registry is updated during refreshAccessibilityData() —
+    /// this method is a cheap read that extracts the visible subset.
     func snapshotElements() -> [HeistElement] {
-        var elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
-        assignHeistIds(&elements)
-        lastSnapshot = elements
-        return elements
+        var result: [HeistElement] = []
+        for (heistId, var entry) in screenElements where entry.lastTraversalIndex >= 0
+            && entry.lastTraversalIndex < cachedElements.count {
+            if !entry.presented {
+                entry.presented = true
+                screenElements[heistId] = entry
+            }
+            result.append(entry.wire)
+        }
+        return result.sorted { $0.order < $1.order }
     }
 
     // MARK: - Stable ID Synthesis
