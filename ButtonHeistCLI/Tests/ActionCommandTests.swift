@@ -7,19 +7,21 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - Message Encoding Tests
 
     func testElementTargetEncoding() throws {
-        let target = ElementTarget(match: ElementMatcher(identifier: "testButton"))
+        let target = ElementTarget.matcher(ElementMatcher(identifier: "testButton"))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
 
-        XCTAssertEqual(decoded.match?.identifier, "testButton")
+        guard case .matcher(let m) = decoded else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "testButton")
     }
 
     func testTouchTapTargetWithElementEncoding() throws {
-        let target = TouchTapTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "button")))
+        let target = TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "button")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TouchTapTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "button")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "button")
         XCTAssertNil(decoded.pointX)
         XCTAssertNil(decoded.pointY)
     }
@@ -36,11 +38,12 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testLongPressTargetEncoding() throws {
-        let target = LongPressTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "btn")), duration: 1.5)
+        let target = LongPressTarget(elementTarget: .matcher(ElementMatcher(identifier: "btn")), duration: 1.5)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(LongPressTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "btn")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "btn")
         XCTAssertEqual(decoded.duration, 1.5)
         XCTAssertNil(decoded.pointX)
     }
@@ -59,13 +62,14 @@ final class ActionCommandTests: XCTestCase {
 
     func testSwipeTargetWithDirectionEncoding() throws {
         let target = SwipeTarget(
-            elementTarget: ElementTarget(match: ElementMatcher(identifier: "list")),
+            elementTarget: .matcher(ElementMatcher(identifier: "list")),
             direction: .up
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "list")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "list")
         XCTAssertEqual(decoded.direction, .up)
         XCTAssertNil(decoded.endX)
     }
@@ -86,13 +90,14 @@ final class ActionCommandTests: XCTestCase {
 
     func testDragTargetEncoding() throws {
         let target = DragTarget(
-            elementTarget: ElementTarget(match: ElementMatcher(identifier: "slider")),
+            elementTarget: .matcher(ElementMatcher(identifier: "slider")),
             endX: 300, endY: 200, duration: 0.8
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(DragTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "slider")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "slider")
         XCTAssertEqual(decoded.endX, 300)
         XCTAssertEqual(decoded.endY, 200)
         XCTAssertEqual(decoded.duration, 0.8)
@@ -121,23 +126,25 @@ final class ActionCommandTests: XCTestCase {
 
     func testCustomActionTargetEncoding() throws {
         let target = CustomActionTarget(
-            elementTarget: ElementTarget(match: ElementMatcher(identifier: "item")),
+            elementTarget: .matcher(ElementMatcher(identifier: "item")),
             actionName: "Delete"
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(CustomActionTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget.match?.identifier, "item")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "item")
         XCTAssertEqual(decoded.actionName, "Delete")
     }
 
     func testClientMessageActionEncoding() throws {
-        let activateMessage = ClientMessage.activate(ElementTarget(match: ElementMatcher(identifier: "btn")))
+        let activateMessage = ClientMessage.activate(.matcher(ElementMatcher(identifier: "btn")))
         let data = try JSONEncoder().encode(activateMessage)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .activate(let target) = decoded {
-            XCTAssertEqual(target.match?.identifier, "btn")
+            guard case .matcher(let m) = target else { return XCTFail("Expected .matcher") }
+            XCTAssertEqual(m.identifier, "btn")
         } else {
             XCTFail("Expected activate message")
         }
@@ -245,11 +252,12 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - Multi-Touch Target Tests
 
     func testPinchTargetWithElementEncoding() throws {
-        let target = PinchTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "mapView")), scale: 2.0, spread: 80, duration: 0.3)
+        let target = PinchTarget(elementTarget: .matcher(ElementMatcher(identifier: "mapView")), scale: 2.0, spread: 80, duration: 0.3)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(PinchTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "mapView")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "mapView")
         XCTAssertEqual(decoded.scale, 2.0)
         XCTAssertEqual(decoded.spread, 80)
         XCTAssertEqual(decoded.duration, 0.3)
@@ -270,11 +278,12 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testRotateTargetWithElementEncoding() throws {
-        let target = RotateTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "imageView")), angle: 1.57, radius: 50, duration: 0.8)
+        let target = RotateTarget(elementTarget: .matcher(ElementMatcher(identifier: "imageView")), angle: 1.57, radius: 50, duration: 0.8)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(RotateTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "imageView")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "imageView")
         XCTAssertEqual(decoded.angle, 1.57)
         XCTAssertEqual(decoded.radius, 50)
         XCTAssertEqual(decoded.duration, 0.8)
@@ -295,11 +304,12 @@ final class ActionCommandTests: XCTestCase {
     }
 
     func testTwoFingerTapTargetWithElementEncoding() throws {
-        let target = TwoFingerTapTarget(elementTarget: ElementTarget(match: ElementMatcher(identifier: "zoomControl")), spread: 60)
+        let target = TwoFingerTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "zoomControl")), spread: 60)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TwoFingerTapTarget.self, from: data)
 
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "zoomControl")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "zoomControl")
         XCTAssertEqual(decoded.spread, 60)
         XCTAssertNil(decoded.centerX)
     }
@@ -516,33 +526,36 @@ final class ActionCommandTests: XCTestCase {
     // MARK: - TypeText Tests
 
     func testTypeTextTargetEncoding() throws {
-        let target = TypeTextTarget(text: "hello", elementTarget: ElementTarget(match: ElementMatcher(identifier: "textField")))
+        let target = TypeTextTarget(text: "hello", elementTarget: .matcher(ElementMatcher(identifier: "textField")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
         XCTAssertEqual(decoded.text, "hello")
         XCTAssertNil(decoded.deleteCount)
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "textField")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "textField")
     }
 
     func testTypeTextTargetWithDeleteCountEncoding() throws {
-        let target = TypeTextTarget(text: "world", deleteCount: 5, elementTarget: ElementTarget(match: ElementMatcher(identifier: "input")))
+        let target = TypeTextTarget(text: "world", deleteCount: 5, elementTarget: .matcher(ElementMatcher(identifier: "input")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TypeTextTarget.self, from: data)
 
         XCTAssertEqual(decoded.text, "world")
         XCTAssertEqual(decoded.deleteCount, 5)
-        XCTAssertEqual(decoded.elementTarget?.match?.identifier, "input")
+        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.identifier, "input")
     }
 
     func testClientMessageTypeTextEncoding() throws {
-        let message = ClientMessage.typeText(TypeTextTarget(text: "abc", elementTarget: ElementTarget(match: ElementMatcher(identifier: "field"))))
+        let message = ClientMessage.typeText(TypeTextTarget(text: "abc", elementTarget: .matcher(ElementMatcher(identifier: "field"))))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .typeText(let target) = decoded {
             XCTAssertEqual(target.text, "abc")
-            XCTAssertEqual(target.elementTarget?.match?.identifier, "field")
+            guard case .matcher(let m) = target.elementTarget else { return XCTFail("Expected .matcher") }
+            XCTAssertEqual(m.identifier, "field")
         } else {
             XCTFail("Expected typeText message")
         }

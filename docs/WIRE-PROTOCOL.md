@@ -505,7 +505,7 @@ Returns an `actionResult` with `method: "waitForIdle"`, an `interfaceDelta` cont
 Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
 
 ```json
-{"protocolVersion":"6.4","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
+{"protocolVersion":"6.5","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
 ```
 
 | Field | Type | Description |

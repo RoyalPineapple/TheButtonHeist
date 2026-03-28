@@ -284,10 +284,21 @@ extension HeistElement {
         CGPoint(x: activationPointX, y: activationPointY)
     }
 
+    /// Known accessibility trait name strings. Must stay in sync with the
+    /// parser's trait mapping. Used to reject unknown trait names (fail-safe).
+    private static let knownTraitNames: Set<String> = [
+        "button", "link", "image", "selected", "staticText", "header",
+        "searchField", "adjustable", "notEnabled", "updatesFrequently",
+        "keyboardKey", "summaryElement", "startsMediaSession", "allowsDirectInteraction",
+        "causesPageTurn", "tabBar", "backButton", "textEntry", "switchButton",
+        "scrollable", "toggle"
+    ]
+
     /// Match this wire element against an ElementMatcher predicate.
     /// Used for client-side filtering of serialized interface data (get_interface).
     /// String fields use case-insensitive substring matching, consistent with
     /// AccessibilityElement.matches in TheBagman+Matching.
+    /// Unknown trait names in required/excluded cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {
             guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
@@ -300,9 +311,11 @@ extension HeistElement {
         }
         let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
         if let required = matcher.traits, !required.isEmpty {
+            for t in required where !Self.knownTraitNames.contains(t) { return false }
             for t in required where !traitSet.contains(t) { return false }
         }
         if let excluded = matcher.excludeTraits, !excluded.isEmpty {
+            for t in excluded where !Self.knownTraitNames.contains(t) { return false }
             for t in excluded where traitSet.contains(t) { return false }
         }
         return true
