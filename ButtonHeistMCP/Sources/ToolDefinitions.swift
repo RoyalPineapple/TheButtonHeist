@@ -19,8 +19,7 @@ enum ToolDefinitions {
             Object value: {"elementUpdated": {"heistId": "slider", "property": "value", "newValue": "5"}} \
             to check specific property changes on elements. \
             elementUpdated follows "say what you know" — provide only the fields you care about \
-            (heistId, property, oldValue, newValue). Omitted fields are wildcards. \
-            Legacy "layout_changed" and "valueChanged" keys are still accepted.
+            (heistId, property, oldValue, newValue). Omitted fields are wildcards.
             """,
         "oneOf": .array([
             [

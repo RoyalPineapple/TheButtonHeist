@@ -425,14 +425,7 @@ public enum FenceResponse {
     }
 
     private static func actionErrorClass(_ result: ActionResult) -> String {
-        if let kind = result.errorKind { return kind.rawValue }
-        // Legacy fallback for servers that don't set errorKind
-        let msg = (result.message ?? "").lowercased()
-        if msg.contains("not found") || msg.contains("no element") { return "elementNotFound" }
-        if msg.contains("timeout") || msg.contains("timed out") { return "timeout" }
-        if msg.contains("not supported") || msg.contains("unsupported") { return "unsupported" }
-        if msg.contains("keyboard") || msg.contains("first responder") { return "inputError" }
-        return "actionFailed"
+        (result.errorKind ?? .actionFailed).rawValue
     }
 
     private func recordingJsonDict(path: String, payload: RecordingPayload) -> [String: Any] {

@@ -233,7 +233,6 @@ extension TheBagman {
     /// `isScreenChange` is true when the screen changed (VC identity or topology). This function handles
     /// the response payloads:
     /// - screen_changed → full new interface
-    /// - layout_changed → elementsAdded/elementsRemoved diff
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(

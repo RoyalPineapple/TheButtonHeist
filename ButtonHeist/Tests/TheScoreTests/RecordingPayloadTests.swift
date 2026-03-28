@@ -308,8 +308,8 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertNil(decoded.interactionLog)
     }
 
-    func testRecordingPayloadBackwardCompatDecoding() throws {
-        // Simulate JSON from an older server that doesn't include interactionLog
+    func testRecordingPayloadDecodingWithoutInteractionLog() throws {
+        // interactionLog is optional — absent field decodes as nil
         let json = """
         {
             "videoData": "AAAAIGZ0eXBpc29t",
