@@ -95,22 +95,22 @@ extension TheBagman {
     }
 
     private func convertContainer(_ container: AccessibilityContainer) -> Group {
-        let (typeName, label, value, identifier): (String, String?, String?, String?)
+        let (typeName, label, value, identifier): (GroupType, String?, String?, String?)
         switch container.type {
         case let .semanticGroup(l, v, id):
-            typeName = "semanticGroup"
+            typeName = .semanticGroup
             label = l; value = v; identifier = id
         case .list:
-            typeName = "list"
+            typeName = .list
             label = nil; value = nil; identifier = nil
         case .landmark:
-            typeName = "landmark"
+            typeName = .landmark
             label = nil; value = nil; identifier = nil
         case .dataTable:
-            typeName = "dataTable"
+            typeName = .dataTable
             label = nil; value = nil; identifier = nil
         case .tabBar:
-            typeName = "tabBar"
+            typeName = .tabBar
             label = nil; value = nil; identifier = nil
         }
         return Group(
@@ -233,7 +233,6 @@ extension TheBagman {
     /// `isScreenChange` is true when the screen changed (VC identity or topology). This function handles
     /// the response payloads:
     /// - screen_changed → full new interface
-    /// - layout_changed → elementsAdded/elementsRemoved diff
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(

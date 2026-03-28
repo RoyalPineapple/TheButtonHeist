@@ -63,7 +63,7 @@ final class ServerInfoTests: XCTestCase {
     }
 
     func testDecodingWithoutInstanceId() throws {
-        // Simulate old server that doesn't include instanceId/listeningPort
+        // Optional fields absent — instanceId and listeningPort decode as nil
         let json = """
         {
             "protocolVersion": "2.0",

@@ -154,10 +154,22 @@ public struct StatusSession: Codable, Sendable {
 
 // MARK: - Action Results
 
+/// Typed error classification for failed actions.
+public enum ErrorKind: String, Codable, Sendable, CaseIterable {
+    case elementNotFound
+    case timeout
+    case unsupported
+    case inputError
+    case validationError
+    case actionFailed
+}
+
 public struct ActionResult: Codable, Sendable {
     public let success: Bool
     public let method: ActionMethod
     public let message: String?
+    /// Typed error classification (nil on success)
+    public let errorKind: ErrorKind?
     /// Current text field value after a typeText operation
     public let value: String?
     /// Compact delta describing what changed in the hierarchy after the action
@@ -180,6 +192,7 @@ public struct ActionResult: Codable, Sendable {
         success: Bool,
         method: ActionMethod,
         message: String? = nil,
+        errorKind: ErrorKind? = nil,
         value: String? = nil,
         interfaceDelta: InterfaceDelta? = nil,
         animating: Bool? = nil,
@@ -192,6 +205,7 @@ public struct ActionResult: Codable, Sendable {
         self.success = success
         self.method = method
         self.message = message
+        self.errorKind = errorKind
         self.value = value
         self.interfaceDelta = interfaceDelta
         self.animating = animating
@@ -510,21 +524,17 @@ public struct InteractionEvent: Codable, Sendable {
     public let timestamp: Double
     /// The command that triggered this interaction
     public let command: ClientMessage
-    /// The result returned to the client
+    /// The result returned to the client (includes interfaceDelta)
     public let result: ActionResult
-    /// Compact delta describing what changed in the hierarchy (from result.interfaceDelta)
-    public let interfaceDelta: InterfaceDelta?
 
     public init(
         timestamp: Double,
         command: ClientMessage,
-        result: ActionResult,
-        interfaceDelta: InterfaceDelta? = nil
+        result: ActionResult
     ) {
         self.timestamp = timestamp
         self.command = command
         self.result = result
-        self.interfaceDelta = interfaceDelta
     }
 }
 
@@ -568,17 +578,17 @@ public struct ServerInfo: Codable, Sendable {
     public let systemVersion: String
     public let screenWidth: Double
     public let screenHeight: Double
-    /// Per-launch session identifier (nil for servers < v2.1)
+    /// Per-launch session identifier
     public let instanceId: String?
     /// Human-readable instance identifier (from INSIDEJOB_ID env var, or shortId fallback)
     public let instanceIdentifier: String?
-    /// Port the server is listening on (nil for servers < v2.1)
+    /// Port the server is listening on
     public let listeningPort: UInt16?
     /// Simulator UDID when running on iOS Simulator (nil on physical devices)
     public let simulatorUDID: String?
     /// Vendor identifier from UIDevice.identifierForVendor (stable per app install per device)
     public let vendorIdentifier: String?
-    /// Whether TLS transport encryption is active (nil for servers < v5.0)
+    /// Whether TLS transport encryption is active
     public let tlsActive: Bool?
 
     public init(

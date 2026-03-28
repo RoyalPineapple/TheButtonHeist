@@ -13,7 +13,7 @@ Most iOS automation tools operate outside the app process through XPC or screens
 - **Animation-aware idle detection** — `wait_for_idle` watches CALayer animations, not a fixed sleep timer
 - **Real multi-touch** — pinch, rotate, two-finger tap, bezier paths, and arbitrary polyline gestures via IOHIDEvent injection. Not coordinate-based XCUITest synthetics
 - **Full accessibility fidelity** — activation points, `respondsToUserInteraction`, custom content, named custom actions, custom rotors. Information that's lost at the process boundary external tools operate through
-- **Action outcome expectations** — declare what you expect (`screen_changed`, `layout_changed`, or `{"value": "expected text"}`) and the framework reports whether it happened. The caller decides what to do
+- **Action outcome expectations** — declare what you expect (`screen_changed`, `elements_changed`, or `{"elementUpdated": {…}}`) and the framework reports whether it happened. The caller decides what to do
 - **Batch execution** — `run_batch` sends multiple commands in one round trip with per-step expectations and short-circuit-on-failure semantics
 - **Physical device support** — USB devices discovered automatically via CoreDevice tunnels alongside WiFi/Bonjour. Same TLS/auth handshake, same API
 
@@ -59,7 +59,7 @@ Numbers shown for T0-full-workflow (11-step multi-screen task). BH consistently 
 - **18 MCP tools** — purpose-built for AI agents. Video data stripped from context window (metadata only unless output path given)
 - **Batch execution** — `run_batch` sends ordered steps in one call. Per-step expectations, `stop_on_error` or `continue_on_error` policy, aggregated timing
 - **Session state** — `get_session_state` returns connection status, device identity, recording state, last-action summary
-- **Outcome expectations** — `expect` on any action: `"screen_changed"`, `"layout_changed"`, or `{"value": "text"}`. Framework reports; caller decides
+- **Outcome expectations** — `expect` on any action: `"screen_changed"`, `"elements_changed"`, or `{"elementUpdated": {…}}`. Framework reports; caller decides
 
 ### Security
 
