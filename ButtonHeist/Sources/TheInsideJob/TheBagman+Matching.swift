@@ -52,8 +52,6 @@ extension AccessibilityHierarchy {
     struct MatchResult {
         let element: AccessibilityElement
         let traversalIndex: Int
-
-        var label: String? { element.label }
     }
 
     /// Check if a leaf element at this position satisfies the matcher.

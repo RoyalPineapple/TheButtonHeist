@@ -265,9 +265,7 @@ extension TheFence {
                 .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
-            let matcher = elementMatcher(args)
-            let heistId = stringArg(args, "heistId")
-            guard heistId != nil || matcher.hasPredicates else {
+            guard let elTarget = elementTarget(args) else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
             }
             let directionStr = stringArg(args, "direction")
@@ -279,14 +277,10 @@ extension TheFence {
                 }
             }
             let target = ScrollToVisibleTarget(
-                heistId: heistId,
-                matcher: matcher,
+                elementTarget: elTarget,
                 maxScrolls: intArg(args, "maxScrolls"),
                 direction: direction
             )
-            guard let target else {
-                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
-            }
             let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
             }
@@ -410,12 +404,11 @@ extension TheFence {
     // MARK: - Handler: Wait For
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
-        let matcher = elementMatcher(args)
-        guard matcher.hasPredicates else {
-            return .error("Must specify at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
+        guard let elTarget = elementTarget(args) else {
+            return .error("Must specify heistId or at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
         }
         let target = WaitForTarget(
-            match: matcher,
+            elementTarget: elTarget,
             absent: boolArg(args, "absent"),
             timeout: doubleArg(args, "timeout")
         )

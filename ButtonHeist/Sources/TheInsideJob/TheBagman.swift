@@ -139,6 +139,19 @@ final class TheBagman {
         }
     }
 
+    /// Existence check — does any element match this target?
+    /// Unlike resolveTarget, does NOT require uniqueness for matchers.
+    /// For heistId: checks lastSnapshot (call snapshotElements() first).
+    /// For matcher: checks cachedHierarchy/cachedElements.
+    func hasTarget(_ target: ElementTarget) -> Bool {
+        switch target {
+        case .heistId(let heistId):
+            return lastSnapshot.contains { $0.heistId == heistId }
+        case .matcher(let matcher):
+            return hasMatch(matcher)
+        }
+    }
+
     /// Check if an element is interactive based on traits.
     /// Returns nil if interactive, or an error string if not.
     func checkElementInteractivity(_ element: AccessibilityElement) -> String? {

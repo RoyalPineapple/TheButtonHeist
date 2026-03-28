@@ -200,56 +200,68 @@ final class ClientMessageTests: XCTestCase {
 
     // MARK: - WaitFor Tests
 
-    func testWaitForRoundTrip() throws {
-        let matcher = ElementMatcher(label: "Loading", traits: ["staticText"])
-        let message = ClientMessage.waitFor(WaitForTarget(match: matcher, absent: true, timeout: 5.0))
+    func testWaitForMatcherRoundTrip() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Loading", traits: ["staticText"]))
+        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: target, absent: true, timeout: 5.0))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .waitFor(let target) = decoded {
-            XCTAssertEqual(target.match.label, "Loading")
-            XCTAssertEqual(target.match.traits, ["staticText"])
-            XCTAssertEqual(target.absent, true)
-            XCTAssertEqual(target.timeout, 5.0)
+        if case .waitFor(let wf) = decoded, case .matcher(let m) = wf.elementTarget {
+            XCTAssertEqual(m.label, "Loading")
+            XCTAssertEqual(m.traits, ["staticText"])
+            XCTAssertEqual(wf.absent, true)
+            XCTAssertEqual(wf.timeout, 5.0)
         } else {
-            XCTFail("Expected waitFor, got \(decoded)")
+            XCTFail("Expected waitFor with matcher, got \(decoded)")
+        }
+    }
+
+    func testWaitForHeistIdRoundTrip() throws {
+        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: .heistId("button_login"), timeout: 3.0))
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .waitFor(let wf) = decoded, case .heistId(let id) = wf.elementTarget {
+            XCTAssertEqual(id, "button_login")
+            XCTAssertEqual(wf.timeout, 3.0)
+        } else {
+            XCTFail("Expected waitFor with heistId, got \(decoded)")
         }
     }
 
     func testWaitForDefaultsRoundTrip() throws {
-        let message = ClientMessage.waitFor(WaitForTarget(match: ElementMatcher(identifier: "spinner")))
+        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: .matcher(ElementMatcher(identifier: "spinner"))))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .waitFor(let target) = decoded {
-            XCTAssertEqual(target.match.identifier, "spinner")
-            XCTAssertNil(target.absent)
-            XCTAssertNil(target.timeout)
-            XCTAssertEqual(target.resolvedAbsent, false)
-            XCTAssertEqual(target.resolvedTimeout, 10.0)
+        if case .waitFor(let wf) = decoded {
+            XCTAssertNil(wf.absent)
+            XCTAssertNil(wf.timeout)
+            XCTAssertEqual(wf.resolvedAbsent, false)
+            XCTAssertEqual(wf.resolvedTimeout, 10.0)
         } else {
             XCTFail("Expected waitFor, got \(decoded)")
         }
     }
 
-    func testWaitForTimeoutClamping() throws {
-        let target = WaitForTarget(match: ElementMatcher(label: "x"), timeout: 999)
+    func testWaitForTimeoutClamping() {
+        let target = WaitForTarget(elementTarget: .matcher(ElementMatcher(label: "x")), timeout: 999)
         XCTAssertEqual(target.resolvedTimeout, 30.0)
     }
 
     func testWaitForEnvelopeRoundTrip() throws {
         let envelope = RequestEnvelope(
             requestId: "wf-1",
-            message: .waitFor(WaitForTarget(match: ElementMatcher(label: "Done"), absent: false, timeout: 15.0))
+            message: .waitFor(WaitForTarget(elementTarget: .matcher(ElementMatcher(label: "Done")), absent: false, timeout: 15.0))
         )
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "wf-1")
-        if case .waitFor(let target) = decoded.message {
-            XCTAssertEqual(target.match.label, "Done")
-            XCTAssertEqual(target.absent, false)
-            XCTAssertEqual(target.timeout, 15.0)
+        if case .waitFor(let wf) = decoded.message, case .matcher(let m) = wf.elementTarget {
+            XCTAssertEqual(m.label, "Done")
+            XCTAssertEqual(wf.absent, false)
+            XCTAssertEqual(wf.timeout, 15.0)
         } else {
             XCTFail("Expected waitFor, got \(decoded.message)")
         }

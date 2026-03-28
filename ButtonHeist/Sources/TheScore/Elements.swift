@@ -285,10 +285,18 @@ extension HeistElement {
 
     /// Match this wire element against an ElementMatcher predicate.
     /// Used for client-side filtering of serialized interface data (get_interface).
+    /// String fields use case-insensitive substring matching, consistent with
+    /// AccessibilityElement.matches in TheBagman+Matching.
     public func matches(_ matcher: ElementMatcher) -> Bool {
-        if let matchLabel = matcher.label, label != matchLabel { return false }
-        if let matchId = matcher.identifier, identifier != matchId { return false }
-        if let matchVal = matcher.value, value != matchVal { return false }
+        if let matchLabel = matcher.label {
+            guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
+        }
+        if let matchId = matcher.identifier {
+            guard let identifier, identifier.localizedCaseInsensitiveContains(matchId) else { return false }
+        }
+        if let matchVal = matcher.value {
+            guard let value, value.localizedCaseInsensitiveContains(matchVal) else { return false }
+        }
         let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
         if let required = matcher.traits, !required.isEmpty {
             for t in required where !traitSet.contains(t) { return false }
