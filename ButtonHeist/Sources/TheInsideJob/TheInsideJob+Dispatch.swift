@@ -113,11 +113,11 @@ extension TheInsideJob {
         case .typeText(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
         case .scroll(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScroll(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeScroll(target) }
         case .scrollToVisible(let target):
             await performScrollToVisibleSearch(target: target, command: message, requestId: requestId, respond: respond)
         case .scrollToEdge(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.theSafecracker.executeScrollToEdge(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeScrollToEdge(target) }
         case .waitFor(let target):
             await performWaitFor(target: target, command: message, requestId: requestId, respond: respond)
         default:
