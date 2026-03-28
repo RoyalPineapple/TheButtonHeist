@@ -44,10 +44,13 @@ struct SessionCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         let effectiveFormat = format ?? .auto
-        let repl = ReplSession(deviceFilter: device,
-                               connectionTimeout: timeout, format: effectiveFormat,
-                               token: token,
-                               sessionTimeout: sessionTimeout)
+        let config = EnvironmentConfig.resolve(
+            deviceFilter: device,
+            token: token,
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: timeout
+        )
+        let repl = ReplSession(config: config, format: effectiveFormat)
         try await repl.run()
     }
 }

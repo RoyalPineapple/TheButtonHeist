@@ -393,7 +393,8 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 @ButtonHeistActor
 private func sendTouchGesture(message: ClientMessage, connection: ConnectionOptions,
                               timeout: Double, format: OutputFormat?) async throws {
-    let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
+    let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
+    let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
     try await connector.connect()
     defer { connector.disconnect() }
 

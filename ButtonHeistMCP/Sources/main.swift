@@ -2,16 +2,6 @@ import Foundation
 import MCP
 import ButtonHeist
 
-/// Idle timeout before disconnecting from the device (seconds).
-/// `BUTTONHEIST_SESSION_TIMEOUT` env var overrides the default.
-private let sessionTimeout: TimeInterval = {
-    if let envValue = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSION_TIMEOUT"],
-       let parsed = Double(envValue), parsed > 0 {
-        return parsed
-    }
-    return 60.0
-}()
-
 @main
 struct ButtonHeistMCPServer {
     static func main() async throws {
@@ -37,17 +27,11 @@ struct ButtonHeistMCPServer {
 
     @ButtonHeistActor
     private static func setUp() -> (TheFence, IdleMonitor) {
-        let fileConfig = TargetConfigResolver.loadConfig()
-        let fence = TheFence(
-            configuration: .init(
-                deviceFilter: ProcessInfo.processInfo.environment["BUTTONHEIST_DEVICE"],
-                connectionTimeout: 30,
-                token: ProcessInfo.processInfo.environment["BUTTONHEIST_TOKEN"],
-                autoReconnect: true,
-                fileConfig: fileConfig
-            )
-        )
-        let idleMonitor = IdleMonitor(fence: fence, timeout: sessionTimeout)
+        let config = EnvironmentConfig.resolve()
+        let fence = TheFence(configuration: config.fenceConfiguration)
+        let idleMonitor = IdleMonitor(timeout: config.sessionTimeout) { [fence] in
+            fence.stop()
+        }
         return (fence, idleMonitor)
     }
 
@@ -88,7 +72,7 @@ struct ButtonHeistMCPServer {
             return try renderResponse(response)
         } catch {
             idleMonitor.resetTimer()
-            return .init(content: [.text(text: errorMessage(error), annotations: nil, _meta: nil)], isError: true)
+            return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
         }
     }
 
@@ -151,38 +135,5 @@ struct ButtonHeistMCPServer {
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
-    }
-
-    private static func errorMessage(_ error: Error) -> String {
-        if let localized = error as? LocalizedError, let description = localized.errorDescription {
-            return description
-        }
-        return error.localizedDescription
-    }
-}
-
-// MARK: - Idle Timeout
-
-/// Disconnects the fence after a period of inactivity.
-/// The next tool call will auto-reconnect via `TheFence.execute()`.
-@ButtonHeistActor
-private final class IdleMonitor {
-    private let fence: TheFence
-    private let timeout: TimeInterval
-    private var timeoutTask: Task<Void, Never>?
-
-    init(fence: TheFence, timeout: TimeInterval) {
-        self.fence = fence
-        self.timeout = timeout
-    }
-
-    func resetTimer() {
-        timeoutTask?.cancel()
-        guard timeout > 0 else { return }
-        timeoutTask = Task { [weak self, timeout] in
-            try? await Task.sleep(for: .seconds(timeout))
-            guard !Task.isCancelled, let self else { return }
-            self.fence.stop()
-        }
     }
 }
