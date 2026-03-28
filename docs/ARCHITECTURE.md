@@ -80,7 +80,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, screen capture
 │   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
-│   Extensions/Polling.swift        — settle-driven polling, interface broadcasting
+│   Extensions/Pulse.swift          — settle-driven interface updates, broadcasting
 │   Extensions/Screen.swift         — screen capture, broadcasting, recording management
 │
 ├── ServerTransport (TLS listener + Bonjour advertisement)

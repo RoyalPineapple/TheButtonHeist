@@ -242,9 +242,7 @@ public final class TheFence {
         case .editAction:
             return try await handleEditAction(args)
         case .setPasteboard, .getPasteboard:
-            return command == .setPasteboard
-                ? try await handleSetPasteboard(args)
-                : try await handleGetPasteboard()
+            return try await handlePasteboard(command: command, args: args)
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
         case .startRecording:
@@ -336,27 +334,10 @@ public final class TheFence {
     }
 
     func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
-        let heistId = stringArg(dictionary, "heistId")
-
-        let identifier = stringArg(dictionary, "identifier")
-        let label = stringArg(dictionary, "label")
-        let value = stringArg(dictionary, "value")
-        let traits = dictionary["traits"] as? [String]
-        let excludeTraits = dictionary["excludeTraits"] as? [String]
-
-        let hasMatcher = label != nil || identifier != nil || value != nil
-            || (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
-
-        let match: ElementMatcher? = hasMatcher ? ElementMatcher(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
-        ) : nil
-
-        guard heistId != nil || match != nil else { return nil }
-        return ActionTarget(heistId: heistId, match: match)
+        ActionTarget(
+            heistId: stringArg(dictionary, "heistId"),
+            matcher: elementMatcher(dictionary)
+        )
     }
 
     func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {

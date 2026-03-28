@@ -7,7 +7,7 @@ extension TheInsideJob {
 
     // MARK: - Hierarchy Invalidation
 
-    /// Mark the hierarchy as stale. The polling loop will pick this up
+    /// Mark the hierarchy as stale. The pulse loop will pick this up
     /// on the next settle event and broadcast if the tree actually changed.
     func scheduleHierarchyUpdate() {
         hierarchyInvalidated = true
@@ -20,7 +20,7 @@ extension TheInsideJob {
         }
     }
 
-    // MARK: - Polling (settle-driven)
+    // MARK: - Pulse (settle-driven)
 
     func startPollingLoop() {
         pollingTask?.cancel()
