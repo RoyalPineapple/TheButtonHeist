@@ -333,6 +333,7 @@ public final class TheInsideJob {
                     success: false,
                     method: .activate,
                     message: "Watch mode is read-only",
+                    errorKind: .unsupported,
                     screenName: bagman.lastScreenName
                 )), requestId: requestId, respond: respond)
                 return
@@ -362,7 +363,7 @@ public final class TheInsideJob {
             appBuild: appBuild,
             deviceName: deviceName,
             systemVersion: systemVersion,
-            buttonHeistVersion: protocolVersion
+            buttonHeistVersion: buttonHeistVersion
         )
 
         let active = muscle.isSessionActive
@@ -410,10 +411,13 @@ public final class TheInsideJob {
                 target: command.actionTarget
             )
         } else {
+            let kind: ErrorKind = (result.method == .elementNotFound || result.method == .elementDeallocated)
+                ? .elementNotFound : .actionFailed
             actionResult = ActionResult(
                 success: false,
                 method: result.method,
                 message: result.message,
+                errorKind: kind,
                 value: result.value,
                 screenName: beforeSnapshot.screenName
             )
@@ -425,8 +429,7 @@ public final class TheInsideJob {
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             stakeout.recordInteraction(event: event)
         }
@@ -438,8 +441,7 @@ public final class TheInsideJob {
             let event = InteractionEvent(
                 timestamp: Date().timeIntervalSince1970,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
                 broadcastToSubscribed(data)
@@ -507,8 +509,7 @@ public final class TheInsideJob {
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             stakeout.recordInteraction(event: event)
         }
@@ -519,8 +520,7 @@ public final class TheInsideJob {
             let event = InteractionEvent(
                 timestamp: Date().timeIntervalSince1970,
                 command: command,
-                result: actionResult,
-                interfaceDelta: actionResult.interfaceDelta
+                result: actionResult
             )
             if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
                 broadcastToSubscribed(data)

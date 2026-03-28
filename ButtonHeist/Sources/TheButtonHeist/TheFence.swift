@@ -1,5 +1,4 @@
 import Foundation
-import Network
 import os
 
 public enum FenceError: Error, LocalizedError {
@@ -56,26 +55,15 @@ public enum FenceError: Error, LocalizedError {
 
 /// Named timeout constants for TheFence operations.
 /// Action timeout (15s) covers most single-gesture/tap operations.
-/// Long action timeout (30s) covers text entry, screenshots, and recordings which may involve
-/// larger payloads or slower responses.
-/// Interface request timeout (10s) is shorter because it only needs to retrieve the current
-/// element tree, which should already be cached on the server side.
+/// Standard action timeout (15s) covers taps, swipes, gestures, accessibility actions, and
+/// interface requests. Long action timeout (30s) covers text entry, screenshots, and recordings
+/// which may involve larger payloads or slower responses.
 public enum Timeouts {
-    /// Standard action timeout (15 seconds) - for tap, swipe, gesture, accessibility actions
-    static let action: UInt64 = 15_000_000_000
-    /// Same as `action` but expressed in seconds for APIs that take TimeInterval
+    /// Standard action timeout (15 seconds)
     static let actionSeconds: TimeInterval = 15
-
-    /// Long action timeout (30 seconds) - for type_text, screenshots, recordings
-    static let longAction: UInt64 = 30_000_000_000
-    /// Same as `longAction` but expressed in seconds for APIs that take TimeInterval
+    /// Long action timeout (30 seconds)
     static let longActionSeconds: TimeInterval = 30
-
-    /// Interface request timeout (10 seconds) - for get_interface
-    static let interfaceRequest: UInt64 = 10_000_000_000
 }
-
-private let logger = Logger(subsystem: "com.buttonheist", category: "fence")
 
 @ButtonHeistActor
 public final class TheFence {
@@ -114,9 +102,9 @@ public final class TheFence {
 
     // MARK: - Pending Request Tracking
 
-    private var pendingActionRequests: [String: CheckedContinuation<ActionResult, Error>] = [:]
-    private var pendingInterfaceRequests: [String: CheckedContinuation<Interface, Error>] = [:]
-    private var pendingScreenRequests: [String: CheckedContinuation<ScreenPayload, Error>] = [:]
+    private var pendingActionRequests: [String: @Sendable (Result<ActionResult, Error>) -> Void] = [:]
+    private var pendingInterfaceRequests: [String: @Sendable (Result<Interface, Error>) -> Void] = [:]
+    private var pendingScreenRequests: [String: @Sendable (Result<ScreenPayload, Error>) -> Void] = [:]
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
@@ -135,22 +123,22 @@ public final class TheFence {
     private func wireUpResponseCallbacks() {
         handoff.onInterface = { [weak self] payload, requestId in
             guard let self else { return }
-            if let requestId, let continuation = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
-                continuation.resume(returning: payload)
+            if let requestId, let callback = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
+                callback(.success(payload))
             }
         }
 
         handoff.onActionResult = { [weak self] result, requestId in
             guard let self else { return }
-            if let requestId, let continuation = self.pendingActionRequests.removeValue(forKey: requestId) {
-                continuation.resume(returning: result)
+            if let requestId, let callback = self.pendingActionRequests.removeValue(forKey: requestId) {
+                callback(.success(result))
             }
         }
 
         handoff.onScreen = { [weak self] payload, requestId in
             guard let self else { return }
-            if let requestId, let continuation = self.pendingScreenRequests.removeValue(forKey: requestId) {
-                continuation.resume(returning: payload)
+            if let requestId, let callback = self.pendingScreenRequests.removeValue(forKey: requestId) {
+                callback(.success(payload))
             }
         }
     }
@@ -381,8 +369,7 @@ public final class TheFence {
             switch str {
             case "screenChanged", "screen_changed":
                 return .screenChanged
-            case "elementsChanged", "elements_changed",
-                 "layoutChanged", "layout_changed":
+            case "elementsChanged", "elements_changed":
                 return .elementsChanged
             default:
                 throw FenceError.invalidRequest(
@@ -392,8 +379,7 @@ public final class TheFence {
             }
         }
         if let dict = expect as? [String: Any] {
-            // Accept both new "elementUpdated" and legacy "valueChanged" key
-            if let eu = dict["elementUpdated"] as? [String: Any] ?? dict["valueChanged"] as? [String: Any] {
+            if let eu = dict["elementUpdated"] as? [String: Any] {
                 let property: ElementProperty?
                 if let propStr = eu["property"] as? String {
                     guard let p = ElementProperty(rawValue: propStr) else {
@@ -413,7 +399,7 @@ public final class TheFence {
                     newValue: eu["newValue"] as? String
                 )
             }
-            if dict.keys.contains("elementUpdated") || dict.keys.contains("valueChanged") {
+            if dict.keys.contains("elementUpdated") {
                 return .elementUpdated()
             }
             throw FenceError.invalidRequest(
@@ -631,35 +617,20 @@ public final class TheFence {
     // MARK: - Async Wait Methods
 
     func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await withCheckedThrowingContinuation { continuation in
-            pendingActionRequests[requestId] = continuation
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard let self else { return }
-                self.timeoutRequest(requestId, from: &self.pendingActionRequests)
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            pendingActionRequests[requestId] = complete
         }
     }
 
     func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await withCheckedThrowingContinuation { continuation in
-            pendingInterfaceRequests[requestId] = continuation
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard let self else { return }
-                self.timeoutRequest(requestId, from: &self.pendingInterfaceRequests)
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            pendingInterfaceRequests[requestId] = complete
         }
     }
 
     func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await withCheckedThrowingContinuation { continuation in
-            pendingScreenRequests[requestId] = continuation
-            Task { [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard let self else { return }
-                self.timeoutRequest(requestId, from: &self.pendingScreenRequests)
-            }
+        try await waitForResponse(timeout: timeout) { complete in
+            pendingScreenRequests[requestId] = complete
         }
     }
 
@@ -709,23 +680,17 @@ public final class TheFence {
         }
     }
 
-    private func timeoutRequest<T>(_ requestId: String, from dict: inout [String: CheckedContinuation<T, Error>]) {
-        if let cont = dict.removeValue(forKey: requestId) {
-            cont.resume(throwing: ActionError.timeout)
-        }
-    }
-
     private func cancelAllPendingRequests() {
-        for (_, continuation) in pendingActionRequests {
-            continuation.resume(throwing: ActionError.timeout)
+        for (_, callback) in pendingActionRequests {
+            callback(.failure(ActionError.timeout))
         }
         pendingActionRequests.removeAll()
-        for (_, continuation) in pendingInterfaceRequests {
-            continuation.resume(throwing: ActionError.timeout)
+        for (_, callback) in pendingInterfaceRequests {
+            callback(.failure(ActionError.timeout))
         }
         pendingInterfaceRequests.removeAll()
-        for (_, continuation) in pendingScreenRequests {
-            continuation.resume(throwing: ActionError.timeout)
+        for (_, callback) in pendingScreenRequests {
+            callback(.failure(ActionError.timeout))
         }
         pendingScreenRequests.removeAll()
     }

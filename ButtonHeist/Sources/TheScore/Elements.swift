@@ -76,10 +76,18 @@ public struct Interface: Codable, Sendable {
 
 // MARK: - Tree Types
 
+/// Known container group types in the element tree
+public enum GroupType: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
+    case semanticGroup
+    case list
+    case landmark
+    case dataTable
+    case tabBar
+}
+
 /// A container group in the element tree
 public struct Group: Codable, Equatable, Hashable, Sendable {
-    /// Group type: "semanticGroup", "list", "landmark", "dataTable", "tabBar"
-    public let type: String
+    public let type: GroupType
     public let label: String?
     public let value: String?
     public let identifier: String?
@@ -89,7 +97,7 @@ public struct Group: Codable, Equatable, Hashable, Sendable {
     public let frameHeight: Double
 
     public init(
-        type: String,
+        type: GroupType,
         label: String?,
         value: String?,
         identifier: String?,

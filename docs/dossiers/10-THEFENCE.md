@@ -138,18 +138,7 @@ stateDiagram-v2
 
 ## Items Flagged for Review
 
-### HIGH PRIORITY
-
-**`dispatch` method cyclomatic complexity** (`TheFence.swift:497`)
-- Large switch statement over 35 command strings
-- Each case has its own argument extraction and TheHandoff interaction
-- The largest single method in the codebase
-- Consider: could the individual command handlers be extracted into separate methods?
-
 ### MEDIUM PRIORITY
-
-**Interface request timeout differs from other operations** (`TheFence.swift`)
-- 10 seconds hardcoded vs 15s for actions, 30s for screenshots/recordings
 
 **TheFence test coverage is improving but incomplete**
 - `TheFenceTests` covers command enum exhaustiveness (case count guard + wire-format verification for all 35 commands) and `FenceResponse` formatting

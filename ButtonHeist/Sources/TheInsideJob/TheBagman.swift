@@ -343,8 +343,10 @@ final class TheBagman {
         target: ActionTarget? = nil
     ) async -> ActionResult {
         guard success else {
-            return ActionResult(success: false, method: method, message: message, value: value,
-                                screenName: beforeSnapshot.screenName)
+            let kind: ErrorKind = (method == .elementNotFound || method == .elementDeallocated)
+                ? .elementNotFound : .actionFailed
+            return ActionResult(success: false, method: method, message: message, errorKind: kind,
+                                value: value, screenName: beforeSnapshot.screenName)
         }
 
         // Wait for all clear: presentation layers settled AND accessibility tree stable.

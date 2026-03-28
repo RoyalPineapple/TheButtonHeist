@@ -424,11 +424,8 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Timeouts
 
     func testTimeoutConstants() {
-        XCTAssertEqual(Timeouts.action, 15_000_000_000)
         XCTAssertEqual(Timeouts.actionSeconds, 15)
-        XCTAssertEqual(Timeouts.longAction, 30_000_000_000)
         XCTAssertEqual(Timeouts.longActionSeconds, 30)
-        XCTAssertEqual(Timeouts.interfaceRequest, 10_000_000_000)
     }
 
     // MARK: - TheFence execute (error cases)

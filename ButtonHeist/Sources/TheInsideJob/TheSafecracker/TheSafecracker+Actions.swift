@@ -121,17 +121,21 @@ extension TheSafecracker {
 
         // Phase 0: Check current tree for match (no conversion to wire types)
         bagman.refreshAccessibilityData()
-        if let found = bagman.findMatch(matcher) {
-            // Already visible — scroll into view if partially off-screen
-            _ = scrollToVisible(elementAt: found.index)
-            let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
-            return InteractionResult(
-                success: true, method: .scrollToVisible, message: nil, value: nil,
-                scrollSearchResult: ScrollSearchResult(
-                    scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
-                    totalItems: nil, exhaustive: false, foundElement: wireElement
+        do {
+            if let found = try bagman.findMatch(matcher) {
+                // Already visible — scroll into view if partially off-screen
+                _ = scrollToVisible(elementAt: found.index)
+                let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
+                return InteractionResult(
+                    success: true, method: .scrollToVisible, message: nil, value: nil,
+                    scrollSearchResult: ScrollSearchResult(
+                        scrollCount: 0, uniqueElementsSeen: bagman.cachedElements.count,
+                        totalItems: nil, exhaustive: false, foundElement: wireElement
+                    )
                 )
-            )
+            }
+        } catch {
+            return .failure(.scrollToVisible, message: error.localizedDescription)
         }
 
         // Find the nearest scroll view from any visible element
@@ -213,7 +217,7 @@ extension TheSafecracker {
             bagman?.refreshAccessibilityData()
 
             // Match against canonical elements — no HeistElement conversion
-            if let bagman, let found = bagman.findMatch(matcher) {
+            if let bagman, let found = try? bagman.findMatch(matcher) {
                 let wireElement = bagman.convertAndAssignId(found.element, index: found.index)
                 return InteractionResult(
                     success: true, method: .scrollToVisible, message: nil, value: nil,
