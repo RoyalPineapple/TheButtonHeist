@@ -87,7 +87,7 @@ final class TheBagman {
 
     /// Active scroll container for a scroll_to_visible search.
     /// Weak by rule: TheBagman never owns live UI lifetime.
-    private weak var activeScrollSearchView: UIScrollView?
+    weak var activeScrollSearchView: UIScrollView?
 
     struct ScrollSearchPreparation {
         let totalItems: Int?
@@ -449,9 +449,9 @@ final class TheBagman {
         return ScrollSearchPreparation(totalItems: queryCollectionTotalItems(scrollView))
     }
 
-    func scrollActiveSearchContainer(direction: ScrollSearchDirection) -> Bool {
+    func scrollActiveSearchContainer(direction: ScrollSearchDirection, animated: Bool = true) -> Bool {
         guard let scrollView = activeScrollSearchView else { return false }
-        return scrollByPage(scrollView, direction: uiScrollDirection(for: direction))
+        return scrollByPage(scrollView, direction: uiScrollDirection(for: direction), animated: animated)
     }
 
     func moveActiveSearchContainerToOppositeEdge(from direction: ScrollSearchDirection) {
@@ -640,13 +640,53 @@ final class TheBagman {
             contexts: &contexts
         )
 
-        // Phase 3: disambiguate duplicates
+        // Phase 3: disambiguate duplicates with suffix stability.
+        // For each base ID with duplicates, check if any match previously-seen
+        // content-space positions in screenElements. Reuse existing suffixes for
+        // matching positions, assign new suffixes only for genuinely new positions.
         var groups: [String: [Int]] = [:]
         for i in wireElements.indices {
             groups[wireElements[i].heistId, default: []].append(i)
         }
 
-        for (_, indices) in groups where indices.count > 1 {
+        for (baseId, indices) in groups {
+            // Check if this base ID has existing suffixed entries in screenElements
+            let hasExistingSuffixes = screenElements.keys.contains { $0.hasPrefix(baseId + "_") }
+
+            // Skip disambiguation if only one visible AND no prior suffixed entries
+            guard indices.count > 1 || hasExistingSuffixes else { continue }
+            // Collect existing suffixed entries for this base ID from screenElements.
+            // These are entries whose heistId starts with baseId + "_" (e.g. "button_ok_1").
+            let existingEntries: [(suffix: Int, origin: CGPoint)] = screenElements
+                .compactMap { (key, entry) -> (Int, CGPoint)? in
+                    guard key.hasPrefix(baseId + "_"),
+                          let suffixStr = key.dropFirst(baseId.count + 1).description as String?,
+                          let suffix = Int(suffixStr),
+                          let origin = entry.contentSpaceOrigin else { return nil }
+                    return (suffix, origin)
+                }
+
+            // For each current element, try to match an existing suffix by content-space origin
+            var assignedSuffixes: [Int: Int] = [:] // wireElement index → suffix
+            var usedSuffixes: Set<Int> = []
+
+            // First pass: match existing suffixes by content-space proximity
+            for index in indices {
+                guard let origin = contexts[index]?.contentSpaceOrigin else { continue }
+                for existing in existingEntries where !usedSuffixes.contains(existing.suffix) {
+                    let dy = abs(origin.y - existing.origin.y)
+                    let dx = abs(origin.x - existing.origin.x)
+                    // Match within a cell height — content-space positions are stable
+                    // but may shift slightly due to dynamic cell sizing
+                    if dy < 2 && dx < 2 {
+                        assignedSuffixes[index] = existing.suffix
+                        usedSuffixes.insert(existing.suffix)
+                        break
+                    }
+                }
+            }
+
+            // Second pass: assign new suffixes for unmatched elements
             let sorted = indices.sorted { a, b in
                 if let originA = contexts[a]?.contentSpaceOrigin,
                    let originB = contexts[b]?.contentSpaceOrigin {
@@ -655,8 +695,17 @@ final class TheBagman {
                 }
                 return a < b
             }
-            for (suffix, index) in sorted.enumerated() {
-                wireElements[index].heistId = "\(wireElements[index].heistId)_\(suffix + 1)"
+            var nextSuffix = (usedSuffixes.max() ?? 0) + 1
+            for index in sorted where assignedSuffixes[index] == nil {
+                while usedSuffixes.contains(nextSuffix) { nextSuffix += 1 }
+                assignedSuffixes[index] = nextSuffix
+                usedSuffixes.insert(nextSuffix)
+                nextSuffix += 1
+            }
+
+            // Apply suffixes
+            for (index, suffix) in assignedSuffixes {
+                wireElements[index].heistId = "\(baseId)_\(suffix)"
             }
         }
 
@@ -950,7 +999,7 @@ final class TheBagman {
         return nil
     }
 
-    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection) -> Bool {
+    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection, animated: Bool = true) -> Bool {
         let overlap: CGFloat = 44
         let size = scrollView.frame.size
         let offset = scrollView.contentOffset
@@ -980,7 +1029,7 @@ final class TheBagman {
         }
 
         if newOffset.x == offset.x && newOffset.y == offset.y { return false }
-        scrollView.setContentOffset(newOffset, animated: true)
+        scrollView.setContentOffset(newOffset, animated: animated)
         return true
     }
 
