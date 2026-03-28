@@ -789,10 +789,9 @@ final class TheBagman {
         let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
             || isTopologyChanged(before: beforeCachedElements, after: cachedElements)
         if isScreenChange {
-            // Screen change = full wipe. screenElements is scoped per screen.
-            // refreshAccessibilityData() above already upserted new-screen entries into
-            // the old-screen dictionary. Wipe everything and re-run updateScreenElements
-            // so the dictionary contains only the new screen's elements.
+            // Scorched earth — blow away everything from the old screen.
+            // refreshAccessibilityData() above upserted new-screen entries into
+            // the old-screen dictionary. Wipe and rebuild clean.
             screenElements.removeAll()
             rebuildScreenElements()
         }
