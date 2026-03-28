@@ -3,23 +3,6 @@ import XCTest
 
 final class ElementMatcherTests: XCTestCase {
 
-    // MARK: - Absent Flag
-
-    func testAbsentDefaultsFalse() {
-        let matcher = ElementMatcher(label: "Save")
-        XCTAssertFalse(matcher.isAbsent)
-    }
-
-    func testAbsentTrue() {
-        let matcher = ElementMatcher(label: "Save", absent: true)
-        XCTAssertTrue(matcher.isAbsent)
-    }
-
-    func testAbsentNilIsFalse() {
-        let matcher = ElementMatcher(label: "Save", absent: nil)
-        XCTAssertFalse(matcher.isAbsent)
-    }
-
     func testHasPredicatesIgnoresEmptyTraitArrays() {
         XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
         XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)
@@ -61,8 +44,7 @@ final class ElementMatcherTests: XCTestCase {
     func testEncodeDecodeAllFields() throws {
         let matcher = ElementMatcher(
             label: "Save", identifier: "saveBtn",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"],
-            absent: true
+            value: "active", traits: ["button"], excludeTraits: ["disabled"]
         )
         let data = try JSONEncoder().encode(matcher)
         let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
@@ -94,7 +76,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.excludeTraits, ["disabled"])
         XCTAssertNil(matcher.identifier)
         XCTAssertNil(matcher.value)
-        XCTAssertNil(matcher.absent)
     }
 
     // MARK: - Equatable

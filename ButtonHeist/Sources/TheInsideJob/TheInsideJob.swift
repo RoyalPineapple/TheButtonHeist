@@ -455,6 +455,7 @@ public final class TheInsideJob {
                 success: false,
                 method: .waitFor,
                 message: result.message,
+                errorKind: .timeout,
                 screenName: afterSnapshot.screenName
             )
         }
@@ -554,6 +555,7 @@ public final class TheInsideJob {
                 success: false,
                 method: result.method,
                 message: result.message,
+                errorKind: .elementNotFound,
                 value: result.value,
                 screenName: afterSnapshot.screenName,
                 scrollSearchResult: result.scrollSearchResult
