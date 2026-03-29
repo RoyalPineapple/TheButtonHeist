@@ -218,6 +218,7 @@ struct CalcButtonView: View {
         }
         .accessibilityIdentifier(button.accessibilityId)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private var accessibilityLabel: String {
