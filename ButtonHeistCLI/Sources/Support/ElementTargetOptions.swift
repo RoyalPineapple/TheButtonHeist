@@ -21,25 +21,37 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .customLong("exclude-traits"), parsing: .upToNextOption, help: "Excluded traits (none may be present)")
     var excludeTraits: [String] = []
 
-    var elementMatcher: ElementMatcher? {
+    func parsedMatcher() throws -> ElementMatcher? {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludeTraits.isEmpty
         guard hasFields else { return nil }
+        let parsedTraits: [HeistTrait]? = traits.isEmpty ? nil : try traits.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw ValidationError("Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            return trait
+        }
+        let parsedExcludeTraits: [HeistTrait]? = excludeTraits.isEmpty ? nil : try excludeTraits.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw ValidationError("Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")
+            }
+            return trait
+        }
         return ElementMatcher(
             label: label,
             identifier: identifier,
             value: value,
-            traits: traits.isEmpty ? nil : traits,
-            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits
+            traits: parsedTraits,
+            excludeTraits: parsedExcludeTraits
         )
     }
 
-    var actionTarget: ElementTarget? {
-        ElementTarget(heistId: heistId, matcher: elementMatcher ?? ElementMatcher())
+    func actionTarget() throws -> ElementTarget? {
+        ElementTarget(heistId: heistId, matcher: try parsedMatcher() ?? ElementMatcher())
     }
 
     func requireTarget() throws -> ElementTarget {
-        guard let target = actionTarget else {
+        guard let target = try actionTarget() else {
             throw ValidationError("Must specify --heist-id, --identifier, or --label")
         }
         return target

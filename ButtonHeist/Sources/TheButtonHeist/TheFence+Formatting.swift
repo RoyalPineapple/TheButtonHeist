@@ -403,7 +403,7 @@ public enum FenceResponse {
 
         if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
         if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
-        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits }
+        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits.map(\.rawValue) }
         if let screenName = result.screenName { payload["screenName"] = screenName }
 
         if !result.success {
@@ -719,13 +719,13 @@ public enum FenceResponse {
             parts.append("= \"\(value)\"")
         }
 
-        let meaningful = element.traits.filter { $0 != "staticText" }
+        let meaningful = element.traits.filter { $0 != .staticText }
         if !meaningful.isEmpty {
-            parts.append("[\(meaningful.joined(separator: ", "))]")
+            parts.append("[\(meaningful.map(\.rawValue).joined(separator: ", "))]")
         }
 
         let actions = element.actions.map(\.description)
-            .filter { $0 != "activate" || element.traits.contains("button") == false }
+            .filter { $0 != "activate" || !element.traits.contains(.button) }
         if !actions.isEmpty {
             parts.append("{\(actions.joined(separator: ", "))}")
         }
@@ -797,7 +797,7 @@ public enum FenceResponse {
             "heistId": element.heistId,
             "order": element.order,
             "description": element.description,
-            "traits": element.traits,
+            "traits": element.traits.map(\.rawValue),
             "actions": element.actions.map(\.description),
         ]
         if let label = element.label { payload["label"] = label }

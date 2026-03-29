@@ -117,13 +117,13 @@ public final class ServerTransport: NSObject {
         // Build TXT record
         var txtDict: [String: Data] = [:]
         if let simUDID = simulatorUDID, let data = simUDID.data(using: .utf8) {
-            txtDict["simudid"] = data
+            txtDict[TXTRecordKey.simUDID.rawValue] = data
         }
         if let installationId, let data = installationId.data(using: .utf8) {
-            txtDict["installationid"] = data
+            txtDict[TXTRecordKey.installationId.rawValue] = data
         }
         if let id = instanceId, let data = id.data(using: .utf8) {
-            txtDict["instanceid"] = data
+            txtDict[TXTRecordKey.instanceId.rawValue] = data
         }
         for (key, value) in additionalTXT {
             if let data = value.data(using: .utf8) {
@@ -131,10 +131,10 @@ public final class ServerTransport: NSObject {
             }
         }
         if let fp = tlsIdentity?.fingerprint, let data = fp.data(using: .utf8) {
-            txtDict["certfp"] = data
+            txtDict[TXTRecordKey.certFingerprint.rawValue] = data
         }
         if tlsIdentity != nil {
-            txtDict["transport"] = Data("tls".utf8)
+            txtDict[TXTRecordKey.transport.rawValue] = Data("tls".utf8)
         }
 
         currentTXT = txtDict

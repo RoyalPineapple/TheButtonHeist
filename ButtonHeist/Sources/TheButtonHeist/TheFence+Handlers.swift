@@ -13,7 +13,7 @@ extension TheFence {
         let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
 
         // Matcher-based filtering takes precedence over heistId list
-        let matcher = elementMatcher(args)
+        let matcher = try elementMatcher(args)
         if matcher.hasPredicates {
             let total = interface.elements.count
             let filtered = interface.elements.filter { $0.matches(matcher) }
@@ -86,7 +86,7 @@ extension TheFence {
     }
 
     private func handleOneFingerTap(_ args: [String: Any]) async throws -> FenceResponse {
-        let target = elementTarget(args)
+        let target = try elementTarget(args)
         let x = doubleArg(args, "x")
         let y = doubleArg(args, "y")
         if let target {
@@ -98,7 +98,7 @@ extension TheFence {
     }
 
     private func handleLongPress(_ args: [String: Any]) async throws -> FenceResponse {
-        let target = elementTarget(args)
+        let target = try elementTarget(args)
         let x = doubleArg(args, "x")
         let y = doubleArg(args, "y")
         let duration = doubleArg(args, "duration") ?? 0.5
@@ -129,7 +129,7 @@ extension TheFence {
 
         return try await sendAction(
             .touchSwipe(SwipeTarget(
-                elementTarget: elementTarget(args),
+                elementTarget: try elementTarget(args),
                 startX: doubleArg(args, "startX"), startY: doubleArg(args, "startY"),
                 endX: doubleArg(args, "endX"), endY: doubleArg(args, "endY"),
                 direction: direction,
@@ -145,7 +145,7 @@ extension TheFence {
         }
         return try await sendAction(
             .touchDrag(DragTarget(
-                elementTarget: elementTarget(args),
+                elementTarget: try elementTarget(args),
                 startX: doubleArg(args, "startX") ?? doubleArg(args, "x"),
                 startY: doubleArg(args, "startY") ?? doubleArg(args, "y"),
                 endX: endX, endY: endY, duration: doubleArg(args, "duration")
@@ -159,7 +159,7 @@ extension TheFence {
         }
         return try await sendAction(
             .touchPinch(PinchTarget(
-                elementTarget: elementTarget(args),
+                elementTarget: try elementTarget(args),
                 centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
                 centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 scale: scale, spread: doubleArg(args, "spread"),
@@ -174,7 +174,7 @@ extension TheFence {
         }
         return try await sendAction(
             .touchRotate(RotateTarget(
-                elementTarget: elementTarget(args),
+                elementTarget: try elementTarget(args),
                 centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
                 centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 angle: angle, radius: doubleArg(args, "radius"),
@@ -186,7 +186,7 @@ extension TheFence {
     private func handleTwoFingerTap(_ args: [String: Any]) async throws -> FenceResponse {
         return try await sendAction(
             .touchTwoFingerTap(TwoFingerTapTarget(
-                elementTarget: elementTarget(args),
+                elementTarget: try elementTarget(args),
                 centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
                 centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
                 spread: doubleArg(args, "spread")
@@ -258,14 +258,14 @@ extension TheFence {
             guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
                 return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right, next, previous")
             }
-            guard let target = elementTarget(args) else {
+            guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
             }
             return try await sendAction(
                 .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
-            guard let elTarget = elementTarget(args) else {
+            guard let elTarget = try elementTarget(args) else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
             }
             let directionStr = stringArg(args, "direction")
@@ -293,7 +293,7 @@ extension TheFence {
             guard let edge = ScrollEdge(rawValue: edgeValue.lowercased()) else {
                 return .error("Invalid edge '\(edgeValue)'. Valid: top, bottom, left, right")
             }
-            guard let target = elementTarget(args) else {
+            guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
@@ -305,7 +305,7 @@ extension TheFence {
     // MARK: - Handler: Accessibility Actions
 
     func handleAccessibilityAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
-        guard let target = elementTarget(args) else {
+        guard let target = try elementTarget(args) else {
             return .error("Must specify element (heistId or matcher)")
         }
 
@@ -359,7 +359,7 @@ extension TheFence {
             return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
         let result: ActionResult = try await sendAndAwait(.typeText(TypeTextTarget(
-            text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: elementTarget(args)
+            text: text, deleteCount: deleteCount, clearFirst: clearFirst, elementTarget: try elementTarget(args)
         ))) { requestId in
             try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
         }
@@ -404,7 +404,7 @@ extension TheFence {
     // MARK: - Handler: Wait For
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let elTarget = elementTarget(args) else {
+        guard let elTarget = try elementTarget(args) else {
             return .error("Must specify heistId or at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
         }
         let target = WaitForTarget(

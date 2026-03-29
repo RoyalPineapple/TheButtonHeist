@@ -11,8 +11,9 @@ extension TheBagman {
     /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
     /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
     /// for trait naming (22 traits including private traits like textEntry, switchButton).
-    func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
-        traits.traitNames
+    /// Strings are mapped to HeistTrait; unknown names are preserved via .unknown().
+    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+        traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
 }
 
@@ -76,29 +77,29 @@ extension TheBagman {
     }
 
     private func convertContainer(_ container: AccessibilityContainer) -> Group {
-        let (typeName, label, value, identifier): (GroupType, String?, String?, String?)
+        let (groupType, label, value, identifier): (GroupType, String?, String?, String?)
         switch container.type {
         case let .semanticGroup(l, v, id):
-            typeName = .semanticGroup
+            groupType = .semanticGroup
             label = l; value = v; identifier = id
         case .list:
-            typeName = .list
+            groupType = .list
             label = nil; value = nil; identifier = nil
         case .landmark:
-            typeName = .landmark
+            groupType = .landmark
             label = nil; value = nil; identifier = nil
         case .dataTable:
-            typeName = .dataTable
+            groupType = .dataTable
             label = nil; value = nil; identifier = nil
         case .tabBar:
-            typeName = .tabBar
+            groupType = .tabBar
             label = nil; value = nil; identifier = nil
         case .scrollable(let contentSize):
-            typeName = .scrollable
+            groupType = .scrollable
             label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
         }
         return Group(
-            type: typeName,
+            type: groupType,
             label: label,
             value: value,
             identifier: identifier,
@@ -151,9 +152,9 @@ extension TheBagman {
 
     /// Trait priority for heistId prefix — most descriptive wins.
     /// Names come from AccessibilitySnapshotParser's knownTraits.
-    private static let traitPriority: [String] = [
-        "backButton", "searchField", "textEntry", "switchButton", "adjustable",
-        "button", "link", "image", "header", "tabBar",
+    private static let traitPriority: [HeistTrait] = [
+        .backButton, .searchField, .textEntry, .switchButton, .adjustable,
+        .button, .link, .image, .header, .tabBar,
     ]
 
     /// Assign deterministic `heistId` to each element.
@@ -188,8 +189,8 @@ extension TheBagman {
     }
 
     func synthesizeBaseId(_ element: HeistElement) -> String {
-        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }
-            ?? (element.label != nil ? "staticText" : "element")
+        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }?.rawValue
+            ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
         // sliders, checkboxes) and must not affect element identity.
@@ -305,8 +306,8 @@ extension TheBagman {
             changes.append(PropertyChange(property: .value, old: old.value, new: new.value))
         }
         if old.traits != new.traits {
-            let oldTraits = old.traits.joined(separator: ", ")
-            let newTraits = new.traits.joined(separator: ", ")
+            let oldTraits = old.traits.map(\.rawValue).joined(separator: ", ")
+            let newTraits = new.traits.map(\.rawValue).joined(separator: ", ")
             changes.append(PropertyChange(property: .traits, old: oldTraits, new: newTraits))
         }
         if old.hint != new.hint {
@@ -339,7 +340,7 @@ extension TheBagman {
 extension Array where Element == HeistElement {
     /// Label of the first header-traited element (screen name hint).
     var screenName: String? {
-        first { $0.traits.contains("header") }?.label
+        first { $0.traits.contains(.header) }?.label
     }
 }
 
