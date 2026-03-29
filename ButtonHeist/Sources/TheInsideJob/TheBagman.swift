@@ -35,6 +35,10 @@ final class TheBagman {
     /// Rebuilt on each accessibility refresh alongside `cachedHierarchy`.
     private(set) var scrollViewLookup: [AccessibilityContainer: UIScrollView] = [:]
 
+    /// Maps ALL scrollable containers to their backing UIView (even non-UIScrollViews).
+    /// Used for `accessibilityScroll:` which works on any view with scrollable trait.
+    private(set) var scrollableViewLookup: [AccessibilityContainer: UIView] = [:]
+
     /// Weak reference wrapper for accessibility objects.
     struct WeakObject {
         weak var object: NSObject?
@@ -500,10 +504,8 @@ final class TheBagman {
         var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
-        // Temporary scroll view lookup — built by containerVisitor, used during
-        // updateScreenElements, then released. No persistent container storage.
-        // Keyed by AccessibilityContainer (Equatable) so the hierarchy walk can match.
         var scrollViewLookup: [AccessibilityContainer: UIScrollView] = [:]
+        var scrollableViewLookup: [AccessibilityContainer: UIView] = [:]
 
         // Accessibility property reads return autoreleased ObjC objects.
         // Draining per-window keeps high-water mark proportional to one window's tree.
@@ -517,9 +519,11 @@ final class TheBagman {
                         newElementObjects[element] = WeakObject(object: object)
                     },
                     containerVisitor: { container, object in
-                        if case .scrollable = container.type,
-                           let scrollView = object as? UIScrollView {
-                            scrollViewLookup[container] = scrollView
+                        if case .scrollable = container.type {
+                            if let scrollView = object as? UIScrollView {
+                                scrollViewLookup[container] = scrollView
+                            }
+                            scrollableViewLookup[container] = object as? UIView
                         }
                     }
                 )
@@ -556,7 +560,7 @@ final class TheBagman {
         }
 
         // Update the screen element registry — flows live object refs into ScreenElement
-        updateScreenElements(scrollViewLookup: scrollViewLookup, elementObjects: rawObjects)
+        updateScreenElements(scrollViewLookup: scrollViewLookup, scrollableViewLookup: scrollableViewLookup, elementObjects: rawObjects)
 
         return allHierarchy
     }
@@ -568,7 +572,7 @@ final class TheBagman {
         for (element, weakObj) in elementObjects {
             if let obj = weakObj.object { rawObjects[element] = obj }
         }
-        updateScreenElements(scrollViewLookup: [:], elementObjects: rawObjects)
+        updateScreenElements(scrollViewLookup: [:], scrollableViewLookup: [:], elementObjects: rawObjects)
     }
 
     /// Per-element context gathered during the hierarchy walk.
@@ -584,9 +588,11 @@ final class TheBagman {
     /// scroll view refs, containers, live objects) — all from the accessibility tree.
     private func updateScreenElements(
         scrollViewLookup newLookup: [AccessibilityContainer: UIScrollView],
+        scrollableViewLookup newViewLookup: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
     ) {
         scrollViewLookup = newLookup
+        scrollableViewLookup = newViewLookup
         // Track which heistIds are in this refresh's visible set
         var visibleThisRefresh: Set<String> = []
 

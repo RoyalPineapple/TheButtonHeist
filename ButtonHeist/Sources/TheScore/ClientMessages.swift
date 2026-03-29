@@ -773,7 +773,7 @@ public struct ScrollToVisibleTarget: Sendable {
         self.scrollViewHeistId = scrollViewHeistId
     }
 
-    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
+    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 50, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
 }
 
