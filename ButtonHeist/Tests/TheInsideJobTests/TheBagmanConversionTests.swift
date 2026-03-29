@@ -320,10 +320,10 @@ final class TheBagmanConversionTests: XCTestCase {
     // MARK: - Trait Name Sync
 
     func testHeistElementKnownTraitsMatchParser() {
-        let parserNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+        let parserNames = UIAccessibilityTraits.knownTraitNames
         let wireNames = HeistElement.knownTraitNames
         XCTAssertEqual(wireNames, parserNames,
-                       "HeistElement.knownTraitNames must match parser's knownTraits")
+                       "HeistElement.knownTraitNames must match parser's knownTraitNames")
     }
 
     // MARK: - Delta: Identical Snapshots
