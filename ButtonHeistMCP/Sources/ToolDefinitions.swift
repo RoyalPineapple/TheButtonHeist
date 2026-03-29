@@ -10,6 +10,25 @@ enum ToolDefinitions {
     // Agents that need the actual video file should pass the "output" parameter
     // in stop_recording to write to disk and receive only the file path.
 
+    // Shared element targeting properties — 6-property block used by action/scroll/gesture tools
+    static let elementTargetProperties: [String: Value] = [
+        "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
+        "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
+        "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+        "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+        "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+    ]
+
+    // Shared element filter properties — 5-property block used by get_interface (no heistId, uses "Filter" descriptions)
+    static let elementFilterProperties: [String: Value] = [
+        "label": ["type": "string", "description": "Filter by accessibility label (first match)"],
+        "identifier": ["type": "string", "description": "Filter by accessibility identifier (first match)"],
+        "value": ["type": "string", "description": "Filter by accessibility value (first match)"],
+        "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
+        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
+    ]
+
     // Shared expect property for action tools — matches the batch step schema
     static let expectProperty: Value = [
         "description": """
@@ -69,9 +88,9 @@ enum ToolDefinitions {
             Target elements in subsequent calls using heistId. \
             Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
+            "properties": .object(([
                 "detail": [
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
@@ -82,14 +101,9 @@ enum ToolDefinitions {
                     "items": ["type": "string"],
                     "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
-                "label": ["type": "string", "description": "Filter by accessibility label (first match)"],
-                "identifier": ["type": "string", "description": "Filter by accessibility identifier (first match)"],
-                "value": ["type": "string", "description": "Filter by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
-            ],
+            ] as [String: Value]).merging(elementFilterProperties) { _, new in new }),
             "additionalProperties": false,
-        ],
+        ]),
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
@@ -103,21 +117,14 @@ enum ToolDefinitions {
             Matcher fields return the first match — add more fields to narrow if needed. \
             Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let typeText = Tool(
@@ -127,23 +134,16 @@ enum ToolDefinitions {
             to focus it first and read back the resulting value. \
             Target by heistId (preferred), matcher fields (label, traits), or identifier.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
+            "properties": .object(elementTargetProperties.merging([
                 "text": ["type": "string", "description": "Text to type character-by-character"],
                 "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
                 "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let swipe = Tool(
@@ -154,15 +154,9 @@ enum ToolDefinitions {
             Unit points are device-independent: (0,0) is top-left, (1,1) is bottom-right, \
             values outside 0-1 extend beyond the element frame.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "direction": [
                     "type": "string",
                     "description": "Swipe direction: up, down, left, right",
@@ -187,9 +181,9 @@ enum ToolDefinitions {
                 ],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let waitFor = Tool(
@@ -200,21 +194,15 @@ enum ToolDefinitions {
             Returns the matched element on success, or diagnostic info on timeout. \
             Use 'absent: true' to wait for an element to disappear.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "label": ["type": "string", "description": "Match by accessibility label (first match)"],
-                "identifier": ["type": "string", "description": "Match by accessibility identifier (first match)"],
-                "value": ["type": "string", "description": "Match by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of these traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "absent": ["type": "boolean", "description": "Wait for element to NOT exist (default: false)"],
                 "timeout": ["type": "number", "description": "Max seconds to wait (default: 10, max: 30)"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let getScreen = Tool(
@@ -288,26 +276,19 @@ enum ToolDefinitions {
             Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor \
             of the specified element, or the main scroll view if no element is specified.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "direction": [
                     "type": "string",
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
                     "description": "Scroll direction",
                 ],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "required": .array([.string("direction")]),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let scrollToVisible = Tool(
@@ -318,46 +299,33 @@ enum ToolDefinitions {
             All specified matcher fields must match (AND). Returns the found element or diagnostic info about the search. \
             For UITableView/UICollectionView, provides exhaustive search with item count tracking.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred when already known)"],
-                "identifier": ["type": "string", "description": "Match element by accessibility identifier"],
-                "label": ["type": "string", "description": "Match element by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Match element by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let scrollToEdge = Tool(
         name: "scroll_to_edge",
         description: "Scroll the nearest scroll view ancestor to an edge. Useful for scrolling to the top or bottom of a list.",
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+            "properties": .object(elementTargetProperties.merging([
                 "edge": [
                     "type": "string",
                     "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
                     "description": "Edge to scroll to",
                 ],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "required": .array([.string("edge")]),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     // MARK: - Grouped Tools
@@ -376,9 +344,9 @@ enum ToolDefinitions {
             draw_path: points array of {x, y} objects. \
             draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}.
             """,
-        inputSchema: [
+        inputSchema: .object([
             "type": "object",
-            "properties": [
+            "properties": .object(elementTargetProperties.merging([
                 "type": [
                     "type": "string",
                     "enum": .array([
@@ -387,13 +355,6 @@ enum ToolDefinitions {
                     ].map { .string($0) }),
                     "description": "Gesture type",
                 ],
-                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-
-                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "x": ["type": "number", "description": "X coordinate"],
                 "y": ["type": "number", "description": "Y coordinate"],
                 "startX": ["type": "number", "description": "Start X coordinate (draw_bezier)"],
@@ -406,10 +367,10 @@ enum ToolDefinitions {
                 "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
                 "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
                 "expect": expectProperty,
-            ],
+            ] as [String: Value]) { _, new in new }),
             "required": .array([.string("type")]),
             "additionalProperties": false,
-        ]
+        ])
     )
 
     static let editAction = Tool(

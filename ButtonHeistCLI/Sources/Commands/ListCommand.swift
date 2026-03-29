@@ -16,65 +16,17 @@ struct ListCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let handoff = TheHandoff()
+        // list_devices doesn't require a connection — TheFence skips auto-connect
+        // for this command, so we call execute() without start().
+        let config = EnvironmentConfig.resolve()
+        let fence = TheFence(configuration: config.fenceConfiguration)
+        defer { fence.stop() }
+
         logStatus("Discovering devices...")
-        let discovered = await handoff.discoverReachableDevices(timeout: timeout)
-
-        if discovered.isEmpty {
-            logStatus("No devices found.")
-            return
-        }
-
-        switch format ?? .auto {
-        case .json:
-            outputJSON(discovered)
-        case .human, .compact:
-            outputHuman(discovered)
-        }
-    }
-
-    private func outputJSON(_ devices: [DiscoveredDevice]) {
-        struct DeviceInfo: Encodable {
-            let name: String
-            let appName: String
-            let deviceName: String
-            let connectionType: String
-            let shortId: String?
-            let simulatorUDID: String?
-        }
-        let infos = devices.map {
-            DeviceInfo(name: $0.name, appName: $0.appName,
-                       deviceName: $0.deviceName,
-                       connectionType: $0.connectionType.rawValue,
-                       shortId: $0.shortId,
-                       simulatorUDID: $0.simulatorUDID)
-        }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let data = try? encoder.encode(infos),
-           let json = String(data: data, encoding: .utf8) {
-            writeOutput(json)
-        }
-    }
-
-    private func outputHuman(_ devices: [DiscoveredDevice]) {
-        writeOutput("Found \(devices.count) device(s):\n")
-        for (index, device) in devices.enumerated() {
-            let id = device.shortId ?? "----"
-            let app = device.appName
-            let dev = device.deviceName
-            let typeLabel: String
-            switch device.connectionType {
-            case .simulator: typeLabel = "sim"
-            case .usb: typeLabel = "usb"
-            case .network: typeLabel = "network"
-            }
-            writeOutput("  [\(index)] \(id)  \(app)  (\(dev))  [\(typeLabel)]")
-            if let udid = device.simulatorUDID {
-                writeOutput("       Simulator: \(udid)")
-            }
-        }
-        writeOutput("")
-        writeOutput("Use --device <id|name|udid> to target a specific instance.")
+        let request: [String: Any] = [
+            "command": TheFence.Command.listDevices.rawValue,
+        ]
+        let response = try await fence.execute(request: request)
+        CLIRunner.outputResponse(response, format: format ?? .auto)
     }
 }

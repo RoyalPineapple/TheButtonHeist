@@ -14,20 +14,18 @@ struct StopRecordingCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(
-            deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId,
-            quiet: connection.quiet
+        let request: [String: Any] = [
+            "command": TheFence.Command.stopRecording.rawValue,
+        ]
+
+        // stop_recording via TheFence sends the stop signal and waits for the
+        // recording payload. Since we have no output path, it returns .recordingData.
+        // For the standalone stop command, we just need to confirm the stop was sent.
+        try await CLIRunner.run(
+            connection: connection,
+            format: .human,
+            request: request,
+            statusMessage: "Stopping recording..."
         )
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet { logStatus("Stopping recording...") }
-        connector.send(.stopRecording)
-
-        // Brief yield so the WebSocket frame flushes before we disconnect.
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        if !connection.quiet { logStatus("Stop signal sent") }
     }
 }

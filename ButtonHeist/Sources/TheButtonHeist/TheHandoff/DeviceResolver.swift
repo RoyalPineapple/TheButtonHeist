@@ -48,7 +48,7 @@ public struct DeviceResolver {
                     return device
                 }
                 if filter == nil, reachable.count > 1 {
-                    throw ResolutionError.noMatchingDevice(
+                    throw FenceError.noMatchingDevice(
                         filter: "(none)",
                         available: reachable.map(\.name)
                     )
@@ -70,20 +70,20 @@ public struct DeviceResolver {
         }
 
         if filter == nil, reachable.count > 1 {
-            throw ResolutionError.noMatchingDevice(
+            throw FenceError.noMatchingDevice(
                 filter: "(none)",
                 available: reachable.map(\.name)
             )
         }
 
         if let filter {
-            throw ResolutionError.noMatchingDevice(
+            throw FenceError.noMatchingDevice(
                 filter: filter,
                 available: reachable.map(\.name)
             )
         }
 
-        throw ResolutionError.noDeviceFound
+        throw FenceError.noDeviceFound
     }
 
     static func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {
@@ -96,22 +96,5 @@ public struct DeviceResolver {
 
     static func discoverySignature(for devices: [DiscoveredDevice]) -> String {
         devices.map(\.id).sorted().joined(separator: "|")
-    }
-}
-
-extension DeviceResolver {
-    public enum ResolutionError: Error, LocalizedError, Sendable {
-        case noDeviceFound
-        case noMatchingDevice(filter: String, available: [String])
-
-        public var errorDescription: String? {
-            switch self {
-            case .noDeviceFound:
-                return "No devices found within timeout. Is the app running?"
-            case .noMatchingDevice(let filter, let available):
-                let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
-                return "No device matching '\(filter)'. Available: \(list)"
-            }
-        }
     }
 }

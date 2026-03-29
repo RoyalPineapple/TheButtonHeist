@@ -35,36 +35,27 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let elTarget = try element.requireTarget()
+        _ = try element.requireTarget()
 
-        var searchDirection: ScrollSearchDirection?
         if let direction {
-            guard let dir = ScrollSearchDirection(rawValue: direction.lowercased()) else {
+            guard ScrollSearchDirection(rawValue: direction.lowercased()) != nil else {
                 throw ValidationError("Invalid direction '\(direction)'. Valid: down, up, left, right")
             }
-            searchDirection = dir
         }
 
-        let target = ScrollToVisibleTarget(
-            elementTarget: elTarget,
-            maxScrolls: maxScrolls,
-            direction: searchDirection
+        var request: [String: Any] = [
+            "command": TheFence.Command.scrollToVisible.rawValue,
+            "timeout": timeout,
+        ]
+        element.applyTo(&request)
+        if let maxScrolls { request["maxScrolls"] = maxScrolls }
+        if let direction { request["direction"] = direction.lowercased() }
+
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Searching for element..."
         )
-
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        let message = ClientMessage.scrollToVisible(target)
-
-        if !connection.quiet {
-            logStatus("Searching for element...")
-        }
-
-        connector.send(message)
-
-        let result = try await connector.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Scroll to visible")
     }
 }
