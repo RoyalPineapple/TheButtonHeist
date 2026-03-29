@@ -25,7 +25,7 @@ graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
         Core["TheInsideJob.swift — Server lifecycle, message dispatch, performInteraction"]
         Dispatch["TheInsideJob+Dispatch.swift — 3-part interaction dispatch table"]
-        Poll["Extensions/Polling.swift — Pulse-driven broadcasts, hash-change polling"]
+        Pulse["Extensions/Pulse.swift — Invalidation, pulse transitions, settle-driven polling"]
         Anim["Extensions/Animation.swift — waitForIdle handler"]
         Screen["Extensions/Screen.swift — Screenshot capture, recording mgmt"]
         Auto["Extensions/AutoStart.swift — @_cdecl entry point for ThePlant"]
@@ -54,8 +54,9 @@ graph TD
     Core --> Bagman
     Core --> STransport
     Dispatch --> Safecracker
-    Poll --> Tripwire
-    Poll --> Bagman
+    Pulse --> Bagman
+    Pulse --> Tripwire
+    Screen --> Stakeout
 ```
 
 ## Key Files
@@ -64,7 +65,8 @@ graph TD
 |------|---------|
 | `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performScrollToVisibleSearch` |
 | `TheInsideJob+Dispatch.swift` | Three-part interaction dispatch: accessibility, touch, text+scroll |
-| `Extensions/Polling.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `broadcastCurrentHierarchy`, polling loop, `sendInterface` |
+| `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
+| `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
 | `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
 | `Extensions/AutoStart.swift` | `@_cdecl` bridge for ObjC auto-start |
@@ -155,27 +157,25 @@ flowchart TD
 
 Two paths trigger hierarchy broadcasts:
 
-### 1. Pulse-driven (primary)
+### 1. Pulse-driven invalidation (primary)
 
 ```mermaid
 flowchart LR
-    AX["Accessibility notification"] --> Schedule["scheduleHierarchyUpdate()"]
+    AX["Accessibility notification / notifyChange()"] --> Schedule["scheduleHierarchyUpdate()"]
     Schedule --> SetFlag["hierarchyInvalidated = true"]
-    SetFlag --> Check{"tripwire already settled?"}
-    Check -->|yes| Coalesce["~16ms coalesce task → broadcastCurrentHierarchy()"]
-    Check -->|no| Wait["Wait for next .settled transition"]
+    SetFlag --> Wait["Wait for next .settled transition"]
     Wait --> Pulse["handlePulseTransition(.settled)"]
-    Pulse --> Broadcast["broadcastCurrentHierarchy()"]
+    Pulse --> Broadcast["broadcastIfChanged()"]
 ```
 
 There is **no debounce timer**. The mechanism is entirely pulse-driven:
 - `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
-- If already settled: spawns a ~16ms (1-frame) coalesce task that broadcasts
-- If not settled: the `.settled` transition fires `handlePulseTransition` which clears the flag and broadcasts
+- the next `.settled` transition fires `handlePulseTransition`
+- `broadcastIfChanged()` refreshes Bagman, compares the snapshot hash, and broadcasts the same shared interface payload path
 
-### 2. Polling (supplementary)
+### 2. Settle-driven polling (supplementary)
 
-Periodic at configurable interval (default 1s). Compares `elements.hashValue` to `lastHierarchyHash`. Only broadcasts on change. Gates on `tripwire.allClear()` — skips if UI is not settled. **Disabled by default** (`isPollingEnabled = false`); auto-started instances enable it.
+`startPolling(interval:)` enables an optional loop that waits on `tripwire.waitForAllClear(timeout:)`, then calls the same `broadcastIfChanged()` path. The timeout defaults to 2s and is clamped to a 0.5s minimum. **Disabled by default** (`isPollingEnabled = false`); auto-started instances can enable it.
 
 ## Lifecycle State Machine
 
@@ -195,6 +195,7 @@ stateDiagram-v2
         ServerUp --> Advertising: NetService.publish()
         Advertising --> Observing: startAccessibilityObservation + startLifecycleObservation
         Observing --> Pulsing: tripwire.startPulse()
+        Pulsing --> OptionalPolling: startPolling(interval) [optional]
     }
 
     state Suspended {

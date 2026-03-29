@@ -11,6 +11,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             UICollectionView, provides exhaustive search with item count tracking.
 
             Examples:
+              buttonheist scroll_to_visible --heist-id buttonheist.longList.last
               buttonheist scroll_to_visible --label "Color Picker"
               buttonheist scroll_to_visible --identifier "market.row.colorPicker"
               buttonheist scroll_to_visible --label "Settings" --traits button
@@ -18,23 +19,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             """
     )
 
-    @Option(name: .long, help: "Match element by accessibility label (exact)")
-    var label: String?
-
-    @Option(name: .long, help: "Match element by accessibility identifier (exact)")
-    var identifier: String?
-
-    @Option(name: .long, help: "Match element by accessibility value (exact)")
-    var value: String?
-
-    @Option(name: .long, help: "Required traits (all must be present)")
-    var traits: [String] = []
-
-    @Option(name: .long, help: "Excluded traits (none may be present)")
-    var excludeTraits: [String] = []
-
-    @Option(name: .long, help: "Match scope: elements (leaves only, default), containers, or both")
-    var scope: String?
+    @OptionGroup var element: ElementTargetOptions
 
     @Option(name: .long, help: "Maximum scroll attempts (default: 20)")
     var maxScrolls: Int?
@@ -50,27 +35,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard label != nil || identifier != nil || value != nil
-            || !traits.isEmpty || !excludeTraits.isEmpty else {
-            throw ValidationError("Must specify at least one match field (--label, --identifier, --value, --traits, or --exclude-traits)")
-        }
-
-        var matchScope: MatchScope?
-        if let scope {
-            guard let parsed = MatchScope(rawValue: scope.lowercased()) else {
-                throw ValidationError("Invalid scope '\(scope)'. Valid: \(MatchScope.allCases.map(\.rawValue).joined(separator: ", "))")
-            }
-            matchScope = parsed
-        }
-
-        let matcher = ElementMatcher(
-            label: label,
-            identifier: identifier,
-            value: value,
-            traits: traits.isEmpty ? nil : traits,
-            excludeTraits: excludeTraits.isEmpty ? nil : excludeTraits,
-            scope: matchScope
-        )
+        let elTarget = try element.requireTarget()
 
         var searchDirection: ScrollSearchDirection?
         if let direction {
@@ -81,7 +46,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
         }
 
         let target = ScrollToVisibleTarget(
-            match: matcher,
+            elementTarget: elTarget,
             maxScrolls: maxScrolls,
             direction: searchDirection
         )

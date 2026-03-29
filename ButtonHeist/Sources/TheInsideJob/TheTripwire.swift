@@ -217,6 +217,17 @@ final class TheTripwire {
         await waitForSettle(timeout: timeout)
     }
 
+    /// Yield to the main run loop for N display frames. Each iteration
+    /// flushes pending Core Animation transactions and gives layout a
+    /// chance to run — enough for lazy containers to materialise content
+    /// without waiting for animations to finish.
+    func yieldFrames(_ count: Int) async {
+        for _ in 0..<count {
+            CATransaction.flush()
+            await Task.yield()
+        }
+    }
+
     // MARK: - Tick Handler
 
     fileprivate func onTick() {

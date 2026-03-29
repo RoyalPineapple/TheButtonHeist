@@ -202,30 +202,46 @@ final class TheFenceHandlerTests: XCTestCase {
     func testElementTargetWithIdentifier() {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["identifier": "myButton"]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.identifier, "myButton")
-        XCTAssertNil(target?.order)
+        guard let target = fence.elementTarget(dict),
+              case .matcher(let matcher) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "myButton")
     }
 
     @ButtonHeistActor
-    func testElementTargetWithOrder() {
+    func testElementTargetWithHeistId() {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["order": 3]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.order, 3)
-        XCTAssertNil(target?.identifier)
+        let dict: [String: Any] = ["heistId": "button_save"]
+        guard let target = fence.elementTarget(dict),
+              case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "button_save")
     }
 
     @ButtonHeistActor
-    func testElementTargetWithBoth() {
+    func testElementTargetWithMatcherFields() {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["identifier": "btn", "order": 2]
-        let target = fence.elementTarget(dict)
-        XCTAssertNotNil(target)
-        XCTAssertEqual(target?.identifier, "btn")
-        XCTAssertEqual(target?.order, 2)
+        let dict: [String: Any] = ["label": "Save", "traits": ["button"]]
+        guard let target = fence.elementTarget(dict),
+              case .matcher(let matcher) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.traits, ["button"])
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithHeistIdAndMatcher() {
+        let (fence, _) = makeConnectedFence()
+        let dict: [String: Any] = ["heistId": "button_save", "label": "Save"]
+        // heistId wins when both are present
+        guard let target = fence.elementTarget(dict),
+              case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "button_save")
     }
 
     @ButtonHeistActor
@@ -576,7 +592,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleMissingElement() async {
         await assertValidationError(
             ["command": "scroll_to_visible"],
-            contains: "Must specify at least one match field"
+            contains: "Must specify heistId or at least one match field"
         )
     }
 
@@ -584,6 +600,13 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleValidPassesValidation() async {
         await assertPassesValidation(
             ["command": "scroll_to_visible", "identifier": "targetElement"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToVisibleHeistIdPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "scroll_to_visible", "heistId": "targetElement"]
         )
     }
 
@@ -763,6 +786,44 @@ final class TheFenceHandlerTests: XCTestCase {
     func testGetPasteboardPassesValidation() async {
         await assertPassesValidation(
             ["command": "get_pasteboard"]
+        )
+    }
+
+    // MARK: - Wait For Validation
+
+    @ButtonHeistActor
+    func testWaitForMissingMatchFields() async {
+        await assertValidationError(
+            ["command": "wait_for"],
+            contains: "Must specify heistId or at least one match field"
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithLabelPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "label": "Loading"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithIdentifierPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "identifier": "spinner"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithTraitsPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "traits": ["button"]]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForWithAbsentPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for", "label": "Loading", "absent": true, "timeout": 5.0]
         )
     }
 

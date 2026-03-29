@@ -52,7 +52,7 @@ enum ToolDefinitions {
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
-        waitForIdle, startRecording, stopRecording, listDevices,
+        waitForIdle, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
@@ -66,7 +66,8 @@ enum ToolDefinitions {
         description: """
             Get the current UI element hierarchy from the connected iOS device. Returns elements with \
             heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
-            Target elements in subsequent calls using heistId.
+            Target elements in subsequent calls using heistId. \
+            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list.
             """,
         inputSchema: [
             "type": "object",
@@ -81,6 +82,11 @@ enum ToolDefinitions {
                     "items": ["type": "string"],
                     "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
+                "label": ["type": "string", "description": "Filter by accessibility label (first match)"],
+                "identifier": ["type": "string", "description": "Filter by accessibility identifier (first match)"],
+                "value": ["type": "string", "description": "Filter by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
             ],
             "additionalProperties": false,
         ],
@@ -93,7 +99,8 @@ enum ToolDefinitions {
             Activate a UI element. This is the primary way to interact with buttons, links, and controls. \
             Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
             falls back to synthetic tap at the element's activation point. \
-            Target by heistId (preferred), identifier, or order from get_interface. \
+            Target by heistId (preferred), or by matcher fields (label, traits, identifier, etc.). \
+            Matcher fields return the first match — add more fields to narrow if needed. \
             Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
             """,
         inputSchema: [
@@ -101,7 +108,11 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
                 "expect": expectProperty,
             ],
@@ -113,7 +124,8 @@ enum ToolDefinitions {
         name: "type_text",
         description: """
             Type text and/or delete characters via keyboard injection. Optionally target an element \
-            to focus it first and read back the resulting value.
+            to focus it first and read back the resulting value. \
+            Target by heistId (preferred), matcher fields (label, traits), or identifier.
             """,
         inputSchema: [
             "type": "object",
@@ -121,8 +133,13 @@ enum ToolDefinitions {
                 "text": ["type": "string", "description": "Text to type character-by-character"],
                 "deleteCount": ["type": "integer", "description": "Number of delete key taps before typing"],
                 "clearFirst": ["type": "boolean", "description": "Clear all existing text before typing (select-all + delete)"],
-                "identifier": ["type": "string", "description": "Element to tap for focus (reads value back)"],
-                "order": ["type": "integer", "description": "Element order index to tap for focus"],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
+                "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
+
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "expect": expectProperty,
             ],
             "additionalProperties": false,
@@ -142,7 +159,10 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "direction": [
                     "type": "string",
                     "description": "Swipe direction: up, down, left, right",
@@ -166,6 +186,31 @@ enum ToolDefinitions {
                     "required": .array([.string("x"), .string("y")]),
                 ],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
+                "expect": expectProperty,
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let waitFor = Tool(
+        name: "wait_for",
+        description: """
+            Wait for an element matching a predicate to appear (or disappear). \
+            Polls the accessibility tree on UI settle events — no busy-waiting. \
+            Returns the matched element on success, or diagnostic info on timeout. \
+            Use 'absent: true' to wait for an element to disappear.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
+                "label": ["type": "string", "description": "Match by accessibility label (first match)"],
+                "identifier": ["type": "string", "description": "Match by accessibility identifier (first match)"],
+                "value": ["type": "string", "description": "Match by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of these traits may be present"],
+                "absent": ["type": "boolean", "description": "Wait for element to NOT exist (default: false)"],
+                "timeout": ["type": "number", "description": "Max seconds to wait (default: 10, max: 30)"],
                 "expect": expectProperty,
             ],
             "additionalProperties": false,
@@ -248,7 +293,11 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "direction": [
                     "type": "string",
                     "enum": .array(["up", "down", "left", "right", "next", "previous"].map { .string($0) }),
@@ -264,25 +313,20 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Search for an element by scrolling through the nearest scroll view. Matches elements \
-            by any combination of heistId, identifier, label, value, and traits. All specified fields \
-            must match (AND). Returns the found element or diagnostic info about the search. \
+            Search for an element by scrolling through the nearest scroll view. Target the element \
+            by heistId or describe it by accessibility properties: identifier, label, value, and/or traits. \
+            All specified matcher fields must match (AND). Returns the found element or diagnostic info about the search. \
             For UITableView/UICollectionView, provides exhaustive search with item count tracking.
             """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "heistId": ["type": "string", "description": "Match element by stable heistId"],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred when already known)"],
                 "identifier": ["type": "string", "description": "Match element by accessibility identifier"],
-                "label": ["type": "string", "description": "Match element by accessibility label (exact)"],
-                "value": ["type": "string", "description": "Match element by accessibility value (exact)"],
+                "label": ["type": "string", "description": "Match element by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Match element by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
-                "scope": [
-                    "type": "string",
-                    "enum": ["elements", "containers", "both"],
-                    "description": "Match scope: elements (leaves only, default), containers, or both",
-                ],
                 "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,
@@ -299,7 +343,11 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "edge": [
                     "type": "string",
                     "enum": .array(["top", "bottom", "left", "right"].map { .string($0) }),
@@ -319,7 +367,7 @@ enum ToolDefinitions {
         description: """
             Perform low-level touch gestures. For element interactions, prefer 'activate' instead. \
             Set 'type' to one of: one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier. \
-            Common params: identifier/order (element target) or x/y (coordinates). \
+            Common params: heistId or matcher fields (element target) or x/y (coordinates). \
             one_finger_tap: synthetic tap at coordinates (use 'activate' for element interactions instead). \
             drag: endX, endY required. \
             long_press: duration (seconds, default 1.0). \
@@ -341,7 +389,11 @@ enum ToolDefinitions {
                 ],
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "order": ["type": "integer", "description": "Target element by traversal order index"],
+
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
+                "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
+                "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "x": ["type": "number", "description": "X coordinate"],
                 "y": ["type": "number", "description": "Y coordinate"],
                 "startX": ["type": "number", "description": "Start X coordinate (draw_bezier)"],

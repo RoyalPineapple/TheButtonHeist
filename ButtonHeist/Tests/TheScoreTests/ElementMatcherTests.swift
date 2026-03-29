@@ -3,30 +3,48 @@ import XCTest
 
 final class ElementMatcherTests: XCTestCase {
 
-    // MARK: - Absent Flag
-
-    func testAbsentDefaultsFalse() {
-        let matcher = ElementMatcher(label: "Save")
-        XCTAssertFalse(matcher.isAbsent)
+    func testHasPredicatesIgnoresEmptyTraitArrays() {
+        XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)
+        XCTAssertFalse(ElementMatcher(traits: [], excludeTraits: []).hasPredicates)
+        XCTAssertTrue(ElementMatcher(label: "Save", traits: []).hasPredicates)
     }
 
-    func testAbsentTrue() {
-        let matcher = ElementMatcher(label: "Save", absent: true)
-        XCTAssertTrue(matcher.isAbsent)
+    func testNonEmptyReturnsNilForEmptyMatcher() {
+        XCTAssertNil(ElementMatcher().nonEmpty)
+        XCTAssertNil(ElementMatcher(traits: []).nonEmpty)
+        XCTAssertEqual(ElementMatcher(label: "Save").nonEmpty, ElementMatcher(label: "Save"))
     }
 
-    func testAbsentNilIsFalse() {
-        let matcher = ElementMatcher(label: "Save", absent: nil)
-        XCTAssertFalse(matcher.isAbsent)
+    func testElementTargetMatcherInitializerDropsEmptyMatcher() {
+        XCTAssertNil(ElementTarget(matcher: ElementMatcher()))
+
+        let target = ElementTarget(heistId: "save_button", matcher: ElementMatcher())
+        guard case .heistId(let id) = target else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
+    }
+
+    func testScrollToVisibleTargetWithElementTarget() {
+        // No element target
+        let empty = ScrollToVisibleTarget()
+        XCTAssertNil(empty.elementTarget)
+
+        // With heistId
+        let withId = ScrollToVisibleTarget(elementTarget: .heistId("save_button"))
+        guard case .heistId(let id) = withId.elementTarget else {
+            return XCTFail("Expected .heistId")
+        }
+        XCTAssertEqual(id, "save_button")
     }
 
     // MARK: - Codable Round-Trip
 
     func testEncodeDecodeAllFields() throws {
         let matcher = ElementMatcher(
-            label: "Save", identifier: "saveBtn", heistId: "button_save",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"],
-            scope: .both, absent: true
+            label: "Save", identifier: "saveBtn",
+            value: "active", traits: ["button"], excludeTraits: ["disabled"]
         )
         let data = try JSONEncoder().encode(matcher)
         let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
@@ -57,9 +75,7 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.traits, ["header", "button"])
         XCTAssertEqual(matcher.excludeTraits, ["disabled"])
         XCTAssertNil(matcher.identifier)
-        XCTAssertNil(matcher.heistId)
         XCTAssertNil(matcher.value)
-        XCTAssertNil(matcher.absent)
     }
 
     // MARK: - Equatable
@@ -74,79 +90,5 @@ final class ElementMatcherTests: XCTestCase {
         let a = ElementMatcher(label: "Save")
         let b = ElementMatcher(label: "Cancel")
         XCTAssertNotEqual(a, b)
-    }
-
-    // MARK: - MatchScope
-
-    func testScopeDefaultsToElements() {
-        let matcher = ElementMatcher(label: "Save")
-        XCTAssertNil(matcher.scope)
-        XCTAssertEqual(matcher.resolvedScope, .elements)
-    }
-
-    func testScopeContainers() {
-        let matcher = ElementMatcher(label: "Save", scope: .containers)
-        XCTAssertEqual(matcher.scope, .containers)
-        XCTAssertEqual(matcher.resolvedScope, .containers)
-    }
-
-    func testScopeBoth() {
-        let matcher = ElementMatcher(label: "Save", scope: .both)
-        XCTAssertEqual(matcher.resolvedScope, .both)
-    }
-
-    func testScopeEncodesDecodes() throws {
-        let matcher = ElementMatcher(label: "Save", scope: .containers)
-        let data = try JSONEncoder().encode(matcher)
-        let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertEqual(decoded.scope, .containers)
-    }
-
-    func testScopeDecodesFromJSON() throws {
-        let json = """
-        {"label":"Nav","scope":"both"}
-        """
-        let data = Data(json.utf8)
-        let matcher = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertEqual(matcher.scope, .both)
-    }
-
-    func testScopeMissingInJSONDefaultsToNil() throws {
-        let json = """
-        {"label":"Save"}
-        """
-        let data = Data(json.utf8)
-        let matcher = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertNil(matcher.scope)
-        XCTAssertEqual(matcher.resolvedScope, .elements)
-    }
-
-    func testScopeEqualityIncludesScope() {
-        let a = ElementMatcher(label: "Save", scope: .elements)
-        let b = ElementMatcher(label: "Save", scope: .containers)
-        XCTAssertNotEqual(a, b)
-    }
-
-    func testEncodeDecodeAllFieldsWithScope() throws {
-        let matcher = ElementMatcher(
-            label: "Save", identifier: "saveBtn", heistId: "button_save",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"],
-            scope: .both, absent: true
-        )
-        let data = try JSONEncoder().encode(matcher)
-        let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
-        XCTAssertEqual(matcher, decoded)
-    }
-
-    // MARK: - MatchScope Enum
-
-    func testMatchScopeAllCases() {
-        XCTAssertEqual(MatchScope.allCases, [.elements, .containers, .both])
-    }
-
-    func testMatchScopeRawValues() {
-        XCTAssertEqual(MatchScope.elements.rawValue, "elements")
-        XCTAssertEqual(MatchScope.containers.rawValue, "containers")
-        XCTAssertEqual(MatchScope.both.rawValue, "both")
     }
 }
