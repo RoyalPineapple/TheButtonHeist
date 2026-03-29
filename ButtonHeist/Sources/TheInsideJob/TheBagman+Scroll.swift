@@ -49,25 +49,19 @@ extension TheBagman {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        let isLazy = safecracker.queryCollectionTotalItems(scrollView) == nil
         let success = safecracker.scrollToEdge(scrollView, edge: target.edge)
 
-        // Lazy containers (SwiftUI LazyVGrid/LazyVStack) grow contentSize as
-        // content is rendered. After each edge jump, pause a few frames for
-        // SwiftUI to materialise more content, then re-jump if contentSize grew.
-        if success && isLazy {
-            let maxIterations = 20
-            for _ in 0..<maxIterations {
+        // Content may grow after the jump (lazy containers materialise on
+        // scroll). Settle, then re-jump until contentSize stops changing.
+        if success {
+            for _ in 0..<20 {
                 _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
-                let prevSize = scrollView.contentSize
+                let prev = scrollView.contentSize
                 let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
                 if moved {
                     _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
                 }
-                let newSize = scrollView.contentSize
-                if !moved && newSize.width == prevSize.width && newSize.height == prevSize.height {
-                    break
-                }
+                if !moved && scrollView.contentSize == prev { break }
             }
         }
 
@@ -149,25 +143,17 @@ extension TheBagman {
     ) async -> TheSafecracker.InteractionResult? {
         guard let safecracker else { return nil }
         var allSeen = onScreen
-        // Lazy containers (SwiftUI LazyVGrid/LazyVStack) report incomplete
-        // contentSize — only what has been rendered. We skip the contentSize
-        // clamp so scrollByPage can push past the current boundary, and pause
-        // a few display frames between scrolls so SwiftUI can materialise the
-        // next batch of content.
-        let isLazy = totalItems == nil
+        let uiDir = uiScrollDirection(for: direction)
 
         while scrollCount < maxScrolls {
-            let uiDir = uiScrollDirection(for: direction)
-            let scrolled = safecracker.scrollByPage(
+            // Scroll one page without clamping to contentSize — lazy
+            // containers grow contentSize as content is rendered.
+            _ = safecracker.scrollByPage(
                 scrollView, direction: uiDir, animated: false,
-                clampToContentSize: !isLazy
+                clampToContentSize: false
             )
 
-            if !scrolled && !isLazy { break }
-
-            // Pause a few frames for SwiftUI to render lazy content and grow
-            // contentSize. For UIKit collection/table views this is nearly
-            // instant since layout is synchronous.
+            // Let the layout settle so new content materialises.
             _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
 
             scrollCount += 1
@@ -186,20 +172,10 @@ extension TheBagman {
                 )
             }
 
+            // No new elements → content exhausted in this direction.
             let newIds = onScreen.subtracting(allSeen)
             allSeen.formUnion(onScreen)
             if newIds.isEmpty { break }
-
-            if let totalItems, allSeen.count >= totalItems {
-                return TheSafecracker.InteractionResult(
-                    success: false, method: .scrollToVisible,
-                    message: "Element not found (exhaustive search)", value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount, uniqueElementsSeen: allSeen.count,
-                        totalItems: totalItems, exhaustive: true
-                    )
-                )
-            }
         }
         return nil
     }
