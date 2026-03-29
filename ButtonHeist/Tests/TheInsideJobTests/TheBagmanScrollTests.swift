@@ -18,51 +18,7 @@ final class TheBagmanScrollTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - scrollableAncestors
-
-    func testScrollableAncestorsReturnsInnermostFirst() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-        outerScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        innerScroll.isScrollEnabled = true
-        innerScroll.contentSize = CGSize(width: 800, height: 200)
-        outerScroll.addSubview(innerScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        innerScroll.addSubview(label)
-
-        let ancestors = bagman.scrollableAncestors(of: label, includeSelf: false)
-        XCTAssertEqual(ancestors.count, 2)
-        XCTAssertTrue(ancestors[0] === innerScroll, "First ancestor should be innermost")
-        XCTAssertTrue(ancestors[1] === outerScroll, "Second ancestor should be outermost")
-    }
-
-    func testScrollableAncestorsIncludesSelfWhenScrollView() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        scrollView.isScrollEnabled = true
-
-        let ancestors = bagman.scrollableAncestors(of: scrollView, includeSelf: true)
-        XCTAssertEqual(ancestors.count, 1)
-        XCTAssertTrue(ancestors[0] === scrollView)
-    }
-
-    func testScrollableAncestorsExcludesDisabledScrollViews() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-
-        let disabledScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        disabledScroll.isScrollEnabled = false
-        outerScroll.addSubview(disabledScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        disabledScroll.addSubview(label)
-
-        let ancestors = bagman.scrollableAncestors(of: label, includeSelf: false)
-        XCTAssertEqual(ancestors.count, 1)
-        XCTAssertTrue(ancestors[0] === outerScroll, "Disabled scroll view should be skipped")
-    }
+    // MARK: - scrollableAncestor (ensureOnScreen fallback)
 
     func testScrollableAncestorReturnsInnermost() {
         let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
@@ -79,82 +35,131 @@ final class TheBagmanScrollTests: XCTestCase {
         XCTAssertTrue(ancestor === innerScroll, "scrollableAncestor should return innermost")
     }
 
-    // MARK: - resolveScrollView
-
-    func testResolveScrollViewWithExplicitHeistId() {
+    func testScrollableAncestorIncludesSelf() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         scrollView.isScrollEnabled = true
 
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-
-        bagman.screenElements["myScrollView"] = TheBagman.ScreenElement(
-            heistId: "myScrollView",
-            contentSpaceOrigin: nil,
-            lastTraversalIndex: 0,
-            wire: makeWire(heistId: "myScrollView"),
-            presented: true,
-            object: scrollView,
-            scrollView: nil
-        )
-
-        let resolved = bagman.resolveScrollView(heistId: "myScrollView", element: label, includeSelf: false)
-        XCTAssertTrue(resolved === scrollView)
+        let ancestor = bagman.scrollableAncestor(of: scrollView, includeSelf: true)
+        XCTAssertTrue(ancestor === scrollView)
     }
 
-    func testResolveScrollViewFallsBackToAncestorWhenNoHeistId() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        scrollView.isScrollEnabled = true
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        scrollView.addSubview(label)
-
-        let resolved = bagman.resolveScrollView(heistId: nil, element: label, includeSelf: false)
-        XCTAssertTrue(resolved === scrollView)
-    }
-
-    func testResolveScrollViewReturnsNilForUnknownHeistId() {
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-
-        let resolved = bagman.resolveScrollView(heistId: "nonexistent", element: label, includeSelf: false)
-        XCTAssertNil(resolved)
-    }
-
-    // MARK: - findAllScrollViews
-
-    func testFindAllScrollViewsDeduplicates() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        scrollView.isScrollEnabled = true
-
-        let label1 = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        scrollView.addSubview(label1)
-        let label2 = UILabel(frame: CGRect(x: 10, y: 40, width: 100, height: 20))
-        scrollView.addSubview(label2)
-
-        registerOnScreen("label1", object: label1, index: 0)
-        registerOnScreen("label2", object: label2, index: 1)
-
-        let scrollViews = bagman.findAllScrollViews()
-        XCTAssertEqual(scrollViews.count, 1, "Same scroll view should not be duplicated")
-        XCTAssertTrue(scrollViews[0] === scrollView)
-    }
-
-    func testFindAllScrollViewsFindsNestedScrollViews() {
+    func testScrollableAncestorExcludesDisabled() {
         let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         outerScroll.isScrollEnabled = true
 
+        let disabledScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
+        disabledScroll.isScrollEnabled = false
+        outerScroll.addSubview(disabledScroll)
+
+        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
+        disabledScroll.addSubview(label)
+
+        let ancestor = bagman.scrollableAncestor(of: label, includeSelf: false)
+        XCTAssertTrue(ancestor === outerScroll, "Disabled scroll view should be skipped")
+    }
+
+    // MARK: - resolveScrollTarget (accessibility hierarchy driven)
+
+    func testResolveScrollTargetFromScreenElementScrollView() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        scrollView.isScrollEnabled = true
+        scrollView.contentSize = CGSize(width: 400, height: 2000)
+
+        let screenEl = TheBagman.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            lastTraversalIndex: 0,
+            wire: makeWire(heistId: "item"),
+            presented: true,
+            object: UILabel(),
+            scrollView: scrollView
+        )
+
+        let target = bagman.resolveScrollTarget(heistId: nil, screenElement: screenEl)
+        if case .uiScrollView(let sv) = target {
+            XCTAssertTrue(sv === scrollView)
+        } else {
+            XCTFail("Expected .uiScrollView, got \(String(describing: target))")
+        }
+    }
+
+    func testResolveScrollTargetAxisMismatchWalksAncestors() {
+        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        outerScroll.isScrollEnabled = true
+        outerScroll.contentSize = CGSize(width: 400, height: 2000) // vertical only
+
         let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         innerScroll.isScrollEnabled = true
+        innerScroll.contentSize = CGSize(width: 2000, height: 200) // horizontal only
         outerScroll.addSubview(innerScroll)
 
         let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
         innerScroll.addSubview(label)
 
-        registerOnScreen("label", object: label, index: 0)
+        // screenElement.scrollView is the inner horizontal, but we want vertical
+        let screenEl = TheBagman.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            lastTraversalIndex: 0,
+            wire: makeWire(heistId: "item"),
+            presented: true,
+            object: label,
+            scrollView: innerScroll
+        )
 
-        let scrollViews = bagman.findAllScrollViews()
-        XCTAssertEqual(scrollViews.count, 2)
-        XCTAssertTrue(scrollViews[0] === innerScroll, "Innermost should be first")
-        XCTAssertTrue(scrollViews[1] === outerScroll, "Outermost should be second")
+        let target = bagman.resolveScrollTarget(heistId: nil, screenElement: screenEl, axis: .vertical)
+        if case .uiScrollView(let sv) = target {
+            XCTAssertTrue(sv === outerScroll, "Should walk ancestors to find vertical scroll view")
+        } else {
+            XCTFail("Expected .uiScrollView(outer), got \(String(describing: target))")
+        }
+    }
+
+    func testResolveScrollTargetExplicitHeistId() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        scrollView.isScrollEnabled = true
+
+        let screenEl = TheBagman.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            lastTraversalIndex: 0,
+            wire: makeWire(heistId: "item"),
+            presented: true,
+            object: UILabel(),
+            scrollView: nil
+        )
+
+        bagman.screenElements["myScroll"] = TheBagman.ScreenElement(
+            heistId: "myScroll",
+            contentSpaceOrigin: nil,
+            lastTraversalIndex: 1,
+            wire: makeWire(heistId: "myScroll"),
+            presented: true,
+            object: scrollView,
+            scrollView: nil
+        )
+
+        let target = bagman.resolveScrollTarget(heistId: "myScroll", screenElement: screenEl)
+        if case .uiScrollView(let sv) = target {
+            XCTAssertTrue(sv === scrollView)
+        } else {
+            XCTFail("Expected .uiScrollView, got \(String(describing: target))")
+        }
+    }
+
+    func testResolveScrollTargetReturnsNilWhenNoScrollView() {
+        let screenEl = TheBagman.ScreenElement(
+            heistId: "item",
+            contentSpaceOrigin: nil,
+            lastTraversalIndex: 0,
+            wire: makeWire(heistId: "item"),
+            presented: true,
+            object: UILabel(),
+            scrollView: nil
+        )
+
+        let target = bagman.resolveScrollTarget(heistId: nil, screenElement: screenEl)
+        XCTAssertNil(target)
     }
 
     // MARK: - Scroll Axis Detection
@@ -192,112 +197,6 @@ final class TheBagmanScrollTests: XCTestCase {
 
         let axis = bagman.scrollableAxis(of: scrollView)
         XCTAssertTrue(axis.isEmpty)
-    }
-
-    // MARK: - Axis-Aware resolveScrollView
-
-    func testResolveScrollViewAxisSkipsHorizontalForDown() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-        outerScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        innerScroll.isScrollEnabled = true
-        innerScroll.contentSize = CGSize(width: 2000, height: 200)
-        outerScroll.addSubview(innerScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        innerScroll.addSubview(label)
-
-        let resolved = bagman.resolveScrollView(
-            heistId: nil, element: label, includeSelf: false, axis: .vertical
-        )
-        XCTAssertTrue(resolved === outerScroll, "Should skip horizontal inner, return vertical outer")
-    }
-
-    func testResolveScrollViewAxisReturnsHorizontalForRight() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-        outerScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        innerScroll.isScrollEnabled = true
-        innerScroll.contentSize = CGSize(width: 2000, height: 200)
-        outerScroll.addSubview(innerScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        innerScroll.addSubview(label)
-
-        let resolved = bagman.resolveScrollView(
-            heistId: nil, element: label, includeSelf: false, axis: .horizontal
-        )
-        XCTAssertTrue(resolved === innerScroll, "Should return horizontal inner for right scroll")
-    }
-
-    func testResolveScrollViewAxisFallsBackWhenNoMatch() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-        outerScroll.contentSize = CGSize(width: 2000, height: 800)
-
-        let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        innerScroll.isScrollEnabled = true
-        innerScroll.contentSize = CGSize(width: 2000, height: 200)
-        outerScroll.addSubview(innerScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        innerScroll.addSubview(label)
-
-        let resolved = bagman.resolveScrollView(
-            heistId: nil, element: label, includeSelf: false, axis: .vertical
-        )
-        XCTAssertNotNil(resolved, "Should fall back to innermost when no axis match")
-        XCTAssertTrue(resolved === innerScroll, "Fallback should be innermost ancestor")
-    }
-
-    func testResolveScrollViewExplicitHeistIdIgnoresAxis() {
-        let horizontalScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        horizontalScroll.isScrollEnabled = true
-        horizontalScroll.contentSize = CGSize(width: 2000, height: 200)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-
-        bagman.screenElements["myHorizScroll"] = TheBagman.ScreenElement(
-            heistId: "myHorizScroll",
-            contentSpaceOrigin: nil,
-            lastTraversalIndex: 0,
-            wire: makeWire(heistId: "myHorizScroll"),
-            presented: true,
-            object: horizontalScroll,
-            scrollView: nil
-        )
-
-        let resolved = bagman.resolveScrollView(
-            heistId: "myHorizScroll", element: label, includeSelf: false, axis: .vertical
-        )
-        XCTAssertTrue(resolved === horizontalScroll, "Explicit heistId should override axis")
-    }
-
-    // MARK: - Search Order
-
-    func testFindAllScrollViewsOutermostFirstForSearch() {
-        let outerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        outerScroll.isScrollEnabled = true
-        outerScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        let innerScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        innerScroll.isScrollEnabled = true
-        innerScroll.contentSize = CGSize(width: 2000, height: 200)
-        outerScroll.addSubview(innerScroll)
-
-        let label = UILabel(frame: CGRect(x: 10, y: 10, width: 100, height: 20))
-        innerScroll.addSubview(label)
-
-        registerOnScreen("label", object: label, index: 0)
-
-        let scrollViews = bagman.findAllScrollViewsOutermostFirst()
-        XCTAssertEqual(scrollViews.count, 2)
-        XCTAssertTrue(scrollViews[0] === outerScroll, "Outermost should be first for search")
-        XCTAssertTrue(scrollViews[1] === innerScroll, "Innermost should be second for search")
     }
 
     // MARK: - adaptDirection
@@ -342,19 +241,6 @@ final class TheBagmanScrollTests: XCTestCase {
             frameWidth: 0, frameHeight: 0, activationPointX: 0, activationPointY: 0,
             actions: []
         )
-    }
-
-    private func registerOnScreen(_ heistId: String, object: NSObject, index: Int) {
-        bagman.screenElements[heistId] = TheBagman.ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            lastTraversalIndex: index,
-            wire: makeWire(heistId: heistId),
-            presented: true,
-            object: object,
-            scrollView: nil
-        )
-        bagman.onScreen.insert(heistId)
     }
 }
 
