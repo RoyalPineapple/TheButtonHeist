@@ -21,7 +21,7 @@ final class TheBagmanResolutionTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func el(
+    private func element(
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -50,7 +50,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
         if index >= bagman.cachedElements.count {
             bagman.cachedElements.append(contentsOf:
-                Array(repeating: el(), count: index - bagman.cachedElements.count + 1)
+                Array(repeating: element, count: index - bagman.cachedElements.count + 1)
             )
         }
         bagman.cachedElements[index] = element
@@ -73,7 +73,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     // MARK: - heistId Resolution
 
     func testHeistIdResolvesPresented() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.heistId("button_ok"))
@@ -86,7 +86,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testHeistIdNotFoundReturnsNotFound() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.heistId("button_nope"))
@@ -98,7 +98,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testHeistIdNotPresentedReturnsNotFound() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
         // Mark as not presented
         bagman.screenElements["button_ok"]?.presented = false
@@ -111,7 +111,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testHeistIdNotFoundShowsSimilar() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.heistId("button"))
@@ -125,7 +125,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     // MARK: - Matcher Resolution
 
     func testMatcherResolvesUniqueElement() {
-        let element = el(label: "Save", traits: .button)
+        let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
@@ -137,8 +137,8 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testMatcherAmbiguousReturnsCandidates() {
-        let save1 = el(label: "Save", value: "draft")
-        let save2 = el(label: "Save", value: "final")
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
@@ -152,8 +152,8 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testMatcherAmbiguousCandidatesIncludeDetails() {
-        let save1 = el(label: "Save", value: "draft", identifier: "save1")
-        let save2 = el(label: "Save", value: "final", identifier: "save2")
+        let save1 = element(label: "Save", value: "draft", identifier: "save1")
+        let save2 = element(label: "Save", value: "final", identifier: "save2")
         register(save1, heistId: "save1", index: 0)
         register(save2, heistId: "save2", index: 1)
 
@@ -167,7 +167,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testMatcherNoMatchReturnsNotFound() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Cancel")))
@@ -179,7 +179,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testMatcherNearMissDiagnostics() {
-        let element = el(label: "Save", value: "draft")
+        let element = element(label: "Save", value: "draft")
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save", value: "final")))
@@ -199,8 +199,8 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testResolvedPropertyReturnsNilForAmbiguous() {
-        let save1 = el(label: "Save")
-        let save2 = el(label: "Save")
+        let save1 = element(label: "Save")
+        let save2 = element(label: "Save")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
@@ -209,7 +209,7 @@ final class TheBagmanResolutionTests: XCTestCase {
     }
 
     func testDiagnosticsEmptyForResolved() {
-        let element = el(label: "OK", traits: .button)
+        let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.heistId("button_ok"))
@@ -219,8 +219,8 @@ final class TheBagmanResolutionTests: XCTestCase {
     // MARK: - elementNotFoundMessage Delegation
 
     func testElementNotFoundMessageDelegatesToResolveTarget() {
-        let save1 = el(label: "Save", value: "draft")
-        let save2 = el(label: "Save", value: "final")
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
