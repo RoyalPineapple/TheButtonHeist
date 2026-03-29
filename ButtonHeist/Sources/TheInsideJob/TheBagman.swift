@@ -31,13 +31,9 @@ final class TheBagman {
     /// Parsed accessibility hierarchy from the last refresh.
     private(set) var cachedHierarchy: [AccessibilityHierarchy] = []
 
-    /// Maps scrollable containers from the hierarchy to their UIScrollView objects.
-    /// Rebuilt on each accessibility refresh alongside `cachedHierarchy`.
-    private(set) var scrollViewLookup: [AccessibilityContainer: UIScrollView] = [:]
-
-    /// Maps ALL scrollable containers to their backing UIView (even non-UIScrollViews).
-    /// Used for `accessibilityScroll:` which works on any view with scrollable trait.
-    private(set) var scrollableViewLookup: [AccessibilityContainer: UIView] = [:]
+    /// Maps scrollable containers from the hierarchy to their backing UIView.
+    /// Rebuilt on each accessibility refresh. Check `as? UIScrollView` at point of use.
+    private(set) var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
 
     /// Weak reference wrapper for accessibility objects.
     struct WeakObject {
@@ -159,35 +155,35 @@ final class TheBagman {
     // MARK: - Element Actions
 
     /// Check if the element supports interaction.
-    func hasInteractiveObject(_ screenEl: ScreenElement) -> Bool {
-        guard let obj = screenEl.object else { return false }
-        let index = screenEl.lastTraversalIndex
+    func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
+        guard let obj = screenElement.object else { return false }
+        let index = screenElement.lastTraversalIndex
         guard index >= 0, index < cachedElements.count else { return false }
-        let el = cachedElements[index]
-        return el.respondsToUserInteraction
-            || el.traits.contains(.adjustable)
-            || !el.customActions.isEmpty
+        let element = cachedElements[index]
+        return element.respondsToUserInteraction
+            || element.traits.contains(.adjustable)
+            || !element.customActions.isEmpty
             || obj.accessibilityRespondsToUserInteraction
     }
 
     /// Perform accessibilityActivate.
-    func activate(_ screenEl: ScreenElement) -> Bool {
-        screenEl.object?.accessibilityActivate() ?? false
+    func activate(_ screenElement: ScreenElement) -> Bool {
+        screenElement.object?.accessibilityActivate() ?? false
     }
 
     /// Perform accessibilityIncrement.
-    func increment(_ screenEl: ScreenElement) {
-        screenEl.object?.accessibilityIncrement()
+    func increment(_ screenElement: ScreenElement) {
+        screenElement.object?.accessibilityIncrement()
     }
 
     /// Perform accessibilityDecrement.
-    func decrement(_ screenEl: ScreenElement) {
-        screenEl.object?.accessibilityDecrement()
+    func decrement(_ screenElement: ScreenElement) {
+        screenElement.object?.accessibilityDecrement()
     }
 
     /// Perform a named custom action.
-    func performCustomAction(named name: String, on screenEl: ScreenElement) -> Bool {
-        guard let actions = screenEl.object?.accessibilityCustomActions else {
+    func performCustomAction(named name: String, on screenElement: ScreenElement) -> Bool {
+        guard let actions = screenElement.object?.accessibilityCustomActions else {
             return false
         }
         for action in actions where action.name == name {
@@ -220,8 +216,8 @@ final class TheBagman {
                 ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
                 : cachedHierarchy
             if let unique = source.uniqueMatch(matcher) {
-                if let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) {
-                    return .resolved(ResolvedTarget(screenElement: screenEl, element: unique.element, traversalIndex: unique.traversalIndex))
+                if let screenElement = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) {
+                    return .resolved(ResolvedTarget(screenElement: screenElement, element: unique.element, traversalIndex: unique.traversalIndex))
                 }
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
             }
@@ -258,8 +254,8 @@ final class TheBagman {
             return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
         case .matcher(let matcher):
             guard let found = findMatch(matcher) else { return nil }
-            guard let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == found.index }) else { return nil }
-            return ResolvedTarget(screenElement: screenEl, element: found.element, traversalIndex: found.index)
+            guard let screenElement = screenElements.values.first(where: { $0.lastTraversalIndex == found.index }) else { return nil }
+            return ResolvedTarget(screenElement: screenElement, element: found.element, traversalIndex: found.index)
         }
     }
 
@@ -504,8 +500,7 @@ final class TheBagman {
         var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
 
-        var scrollViewLookup: [AccessibilityContainer: UIScrollView] = [:]
-        var scrollableViewLookup: [AccessibilityContainer: UIView] = [:]
+        var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
 
         // Accessibility property reads return autoreleased ObjC objects.
         // Draining per-window keeps high-water mark proportional to one window's tree.
@@ -520,10 +515,7 @@ final class TheBagman {
                     },
                     containerVisitor: { container, object in
                         if case .scrollable = container.type {
-                            if let scrollView = object as? UIScrollView {
-                                scrollViewLookup[container] = scrollView
-                            }
-                            scrollableViewLookup[container] = object as? UIView
+                            scrollableContainerViews[container] = object as? UIView
                         }
                     }
                 )
@@ -560,7 +552,7 @@ final class TheBagman {
         }
 
         // Update the screen element registry — flows live object refs into ScreenElement
-        updateScreenElements(scrollViewLookup: scrollViewLookup, scrollableViewLookup: scrollableViewLookup, elementObjects: rawObjects)
+        updateScreenElements(scrollableContainerViews: scrollableContainerViews, elementObjects: rawObjects)
 
         return allHierarchy
     }
@@ -572,7 +564,7 @@ final class TheBagman {
         for (element, weakObj) in elementObjects {
             if let obj = weakObj.object { rawObjects[element] = obj }
         }
-        updateScreenElements(scrollViewLookup: [:], scrollableViewLookup: [:], elementObjects: rawObjects)
+        updateScreenElements(scrollableContainerViews: [:], elementObjects: rawObjects)
     }
 
     /// Per-element context gathered during the hierarchy walk.
@@ -587,12 +579,10 @@ final class TheBagman {
     /// Walks the hierarchy tree to derive per-element context (content-space origins,
     /// scroll view refs, containers, live objects) — all from the accessibility tree.
     private func updateScreenElements(
-        scrollViewLookup newLookup: [AccessibilityContainer: UIScrollView],
-        scrollableViewLookup newViewLookup: [AccessibilityContainer: UIView],
+        scrollableContainerViews newViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
     ) {
-        scrollViewLookup = newLookup
-        scrollableViewLookup = newViewLookup
+        scrollableContainerViews = newViews
         // Track which heistIds are in this refresh's visible set
         var visibleThisRefresh: Set<String> = []
 
@@ -611,7 +601,7 @@ final class TheBagman {
         var contexts: [Int: ElementContext] = [:]
         walkHierarchy(
             cachedHierarchy, scrollView: nil, container: nil,
-            scrollViewLookup: scrollViewLookup, elementObjects: elementObjects,
+            scrollableContainerViews: scrollableContainerViews, elementObjects: elementObjects,
             contexts: &contexts
         )
 
@@ -719,7 +709,7 @@ final class TheBagman {
         _ nodes: [AccessibilityHierarchy],
         scrollView: UIScrollView?,
         container: AccessibilityContainer?,
-        scrollViewLookup: [AccessibilityContainer: UIScrollView],
+        scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject],
         contexts: inout [Int: ElementContext]
     ) {
@@ -743,10 +733,10 @@ final class TheBagman {
                 )
 
             case .container(let ctr, let children):
-                let childScrollView = scrollViewLookup[ctr] ?? scrollView
+                let childScrollView = (scrollableContainerViews[ctr] as? UIScrollView) ?? scrollView
                 walkHierarchy(
                     children, scrollView: childScrollView, container: ctr,
-                    scrollViewLookup: scrollViewLookup, elementObjects: elementObjects,
+                    scrollableContainerViews: scrollableContainerViews, elementObjects: elementObjects,
                     contexts: &contexts
                 )
             }
