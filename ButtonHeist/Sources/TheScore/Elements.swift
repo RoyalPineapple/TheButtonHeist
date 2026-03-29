@@ -277,11 +277,12 @@ extension HeistElement {
         CGPoint(x: activationPointX, y: activationPointY)
     }
 
-    /// Known accessibility trait name strings. Single source of truth for all
-    /// trait names that can appear on HeistElement.traits. Must match the
-    /// parser's knownTraits list in AccessibilityHierarchy+Codable.swift.
+    /// Cross-platform mirror of the parser's `UIAccessibilityTraits.knownTraits` names.
+    /// The parser (AccessibilityHierarchy+Codable.swift) is the authoritative source —
+    /// this mirror exists because TheScore is cross-platform and cannot import UIKit.
+    /// `testHeistElementKnownTraitsMatchParser` enforces that this set stays in sync.
     /// Used to reject unknown trait names in matcher queries (fail-safe).
-    static let knownTraitNames: Set<String> = [
+    public static let knownTraitNames: Set<String> = [
         "button", "link", "image", "selected", "playsSound",
         "keyboardKey", "staticText", "summaryElement", "notEnabled",
         "updatesFrequently", "searchField", "startsMediaSession",
