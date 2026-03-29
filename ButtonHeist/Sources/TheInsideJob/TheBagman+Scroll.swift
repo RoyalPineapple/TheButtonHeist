@@ -6,11 +6,46 @@ import TheScore
 
 // MARK: - Scroll Orchestration
 //
-// TheBagman finds scroll views from the accessibility hierarchy and drives
-// TheSafecracker's scroll primitives. TheSafecracker knows nothing about
-// elements — it takes a UIScrollView and moves it.
+// TheBagman finds scrollable containers from the accessibility hierarchy and
+// drives TheSafecracker's scroll primitives. Two paths:
+//
+//   UIScrollView → setContentOffset (fast, precise)
+//   Any scrollable → synthetic swipe gesture (universal fallback)
+//
+// The accessibility hierarchy marks containers as .scrollable with their
+// contentSize. When the backing view is a UIScrollView, we manipulate it
+// directly. When it's not (e.g. SwiftUI's PlatformContainer), we swipe.
 
 extension TheBagman {
+
+    /// A scrollable container discovered from the accessibility hierarchy.
+    /// Wraps either a UIScrollView (direct manipulation) or a frame + contentSize
+    /// (swipe-based scrolling) depending on whether the backing view is a UIScrollView.
+    @MainActor enum ScrollableTarget {
+        case uiScrollView(UIScrollView)
+        case swipeable(frame: CGRect, contentSize: CGSize)
+
+        var frame: CGRect {
+            switch self {
+            case .uiScrollView(let sv): return sv.frame
+            case .swipeable(let frame, _): return frame
+            }
+        }
+
+        var contentSize: CGSize {
+            switch self {
+            case .uiScrollView(let sv): return sv.contentSize
+            case .swipeable(_, let cs): return cs
+            }
+        }
+
+        var isLive: Bool {
+            switch self {
+            case .uiScrollView(let sv): return sv.window != nil
+            case .swipeable: return true
+            }
+        }
+    }
 
     // MARK: - Scroll Axis Detection
 
@@ -21,8 +56,14 @@ extension TheBagman {
     }
 
     func scrollableAxis(of scrollView: UIScrollView) -> ScrollAxis {
-        let frame = scrollView.frame.size
-        let content = scrollView.contentSize
+        scrollableAxis(frame: scrollView.frame.size, content: scrollView.contentSize)
+    }
+
+    func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
+        scrollableAxis(frame: target.frame.size, content: target.contentSize)
+    }
+
+    private func scrollableAxis(frame: CGSize, content: CGSize) -> ScrollAxis {
         var axis: ScrollAxis = []
         if content.width > frame.width { axis.insert(.horizontal) }
         if content.height > frame.height { axis.insert(.vertical) }
@@ -47,6 +88,24 @@ extension TheBagman {
         switch direction {
         case .up, .down: return .vertical
         case .left, .right: return .horizontal
+        }
+    }
+
+    // MARK: - Unified Scroll Dispatch
+
+    /// Scroll a target by one page. Uses setContentOffset for UIScrollViews,
+    /// synthetic swipe for everything else.
+    func scrollOnePage(
+        _ target: ScrollableTarget,
+        direction: UIAccessibilityScrollDirection,
+        animated: Bool = true
+    ) async -> Bool {
+        guard let safecracker else { return false }
+        switch target {
+        case .uiScrollView(let sv):
+            return safecracker.scrollByPage(sv, direction: direction, animated: animated)
+        case .swipeable(let frame, _):
+            return await safecracker.scrollBySwipe(frame: frame, direction: direction)
         }
     }
 
@@ -133,7 +192,7 @@ extension TheBagman {
             return foundResult(found, scrollCount: 0)
         }
 
-        guard let safecracker else {
+        guard safecracker != nil else {
             return .failure(.scrollToVisible, message: "No gesture engine available")
         }
 
@@ -144,9 +203,10 @@ extension TheBagman {
                 return .failure(.scrollToVisible, message: "Scroll view '\(heistId)' not found")
             }
             var scrollCount = 0
-            let dir = adaptDirection(searchDirection, for: sv)
+            let svTarget = ScrollableTarget.uiScrollView(sv)
+            let dir = adaptDirection(searchDirection, for: svTarget)
             while scrollCount < maxScrolls {
-                guard safecracker.scrollByPage(sv, direction: dir, animated: false) else { break }
+                guard await scrollOnePage(svTarget, direction: dir, animated: false) else { break }
                 await tripwire.yieldFrames(2)
                 scrollCount += 1
                 refreshAccessibilityData()
@@ -158,22 +218,18 @@ extension TheBagman {
             return notFoundResult(scrollCount: scrollCount)
         }
 
-        // No explicit target — discover scroll views live from on-screen elements.
-        // After each edge-hit we re-discover, so newly-revealed scroll views
-        // (from outer scrolling) get picked up automatically.
-        var exhausted = Set<ObjectIdentifier>()
+        // Phase 1: scroll known UIScrollViews (from the hierarchy tree, outermost first).
+        var exhaustedScrollViews = Set<Int>()
         var scrollCount = 0
 
         while scrollCount < maxScrolls {
-            guard let scrollView = findLiveScrollView(
-                excluding: exhausted, direction: searchDirection
-            ) else { break }
+            guard let (svTarget, idx) = findLiveScrollTarget(excluding: exhaustedScrollViews) else { break }
 
-            let dir = adaptDirection(searchDirection, for: scrollView)
-            let moved = safecracker.scrollByPage(scrollView, direction: dir, animated: false)
+            let dir = adaptDirection(searchDirection, for: svTarget)
+            let moved = await scrollOnePage(svTarget, direction: dir, animated: false)
 
             if !moved {
-                exhausted.insert(ObjectIdentifier(scrollView))
+                exhaustedScrollViews.insert(idx)
                 continue
             }
 
@@ -187,26 +243,92 @@ extension TheBagman {
             }
         }
 
+        // Phase 2: swipe at on-screen element locations. Elements in different
+        // scrollable containers (carousels) have different Y positions. For each
+        // unique row, swipe in the cross-axis direction to scroll that container.
+        guard let safecracker else { return notFoundResult(scrollCount: scrollCount) }
+        let crossDir = crossAxisDirection(for: searchDirection)
+        let screenWidth = UIScreen.main.bounds.width
+
+        var triedRows = Set<Int>()
+
+        while scrollCount < maxScrolls {
+            // Find element rows we haven't tried yet (grouped by Y, 100pt buckets)
+            let untried = Set(
+                cachedElements.map { Int($0.activationPoint.y / 100) }
+            ).subtracting(triedRows).sorted()
+
+            guard let row = untried.first else { break }
+            triedRows.insert(row)
+
+            // Find a representative element in this row
+            guard let element = cachedElements.first(where: { Int($0.activationPoint.y / 100) == row }) else { continue }
+            let center = element.activationPoint
+
+            // Swipe at the element's Y using the full screen width
+            let swipeFrame = CGRect(x: 0, y: center.y - 25, width: screenWidth, height: 50)
+            var previousOnScreen = onScreen
+
+            // Keep swiping this row until stagnation
+            while scrollCount < maxScrolls {
+                let success = await safecracker.scrollBySwipe(frame: swipeFrame, direction: crossDir)
+                guard success else { break }
+
+                await tripwire.yieldFrames(3)
+                scrollCount += 1
+                refreshAccessibilityData()
+
+                if let found = resolveFirstMatch(searchTarget) {
+                    ensureOnScreenSync(found)
+                    return foundResult(found, scrollCount: scrollCount)
+                }
+
+                if onScreen == previousOnScreen { break }
+                previousOnScreen = onScreen
+            }
+        }
+
         return notFoundResult(scrollCount: scrollCount)
     }
 
-    /// Find a live, non-exhausted scroll view from current on-screen elements.
-    /// Uses `ScreenElement.scrollView` — the scroll view assigned from the accessibility
-    /// hierarchy's `.scrollable` containers, not from UIKit superview walking.
-    /// Returns the outermost scroll view first (most children = most content to reveal).
-    private func findLiveScrollView(
-        excluding exhausted: Set<ObjectIdentifier>,
-        direction: ScrollSearchDirection
-    ) -> UIScrollView? {
-        var childCount: [ObjectIdentifier: (sv: UIScrollView, count: Int)] = [:]
-        for (heistId, entry) in screenElements where onScreen.contains(heistId) {
-            guard let sv = entry.scrollView, sv.window != nil else { continue }
-            let id = ObjectIdentifier(sv)
-            guard !exhausted.contains(id) else { continue }
-            childCount[id, default: (sv, 0)].count += 1
+    /// Walk the cached accessibility hierarchy tree and collect scrollable containers
+    /// in tree order (outermost first). Returns the first non-exhausted target.
+    /// UIScrollView-backed containers become `.uiScrollView`, others become `.swipeable`.
+    private func findLiveScrollTarget(
+        excluding exhausted: Set<Int>
+    ) -> (target: ScrollableTarget, index: Int)? {
+        var result: [(ScrollableTarget, Int)] = []
+        var index = 0
+        collectScrollTargets(cachedHierarchy, into: &result, index: &index, excluding: exhausted)
+        return result.first.map { ($0.0, $0.1) }
+    }
+
+    /// Depth-first traversal of the hierarchy tree. Outer containers are visited
+    /// before their inner children — essential for scroll_to_visible to reveal
+    /// new sections before drilling into carousels.
+    private func collectScrollTargets(
+        _ nodes: [AccessibilityHierarchy],
+        into result: inout [(ScrollableTarget, Int)],
+        index: inout Int,
+        excluding exhausted: Set<Int>
+    ) {
+        for node in nodes {
+            guard case .container(let container, let children) = node else { continue }
+            if case .scrollable(let contentSize) = container.type {
+                let thisIndex = index
+                index += 1
+                guard !exhausted.contains(thisIndex) else {
+                    collectScrollTargets(children, into: &result, index: &index, excluding: exhausted)
+                    continue
+                }
+                if let sv = scrollViewLookup[container], sv.window != nil {
+                    result.append((.uiScrollView(sv), thisIndex))
+                } else {
+                    result.append((.swipeable(frame: container.frame, contentSize: contentSize), thisIndex))
+                }
+            }
+            collectScrollTargets(children, into: &result, index: &index, excluding: exhausted)
         }
-        // Most children first — the outermost scroll view owns the most on-screen elements.
-        return childCount.values.max(by: { $0.count < $1.count })?.sv
     }
 
     private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -370,15 +492,25 @@ extension TheBagman {
         }
     }
 
+    /// The forward cross-axis direction: down→right, right→down, up→left, left→up.
+    func crossAxisDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
+        switch direction {
+        case .down: return .right
+        case .up: return .left
+        case .right: return .down
+        case .left: return .up
+        }
+    }
+
     /// Map a search direction to the appropriate scroll direction for a specific scroll view.
     /// "Down" means "forward" — forward in a vertical scroll view = down, forward in a
     /// horizontal scroll view = right. This lets scroll_to_visible search every scroll view
     /// in its natural axis regardless of the caller's direction hint.
     func adaptDirection(
         _ direction: ScrollSearchDirection,
-        for scrollView: UIScrollView
+        for target: ScrollableTarget
     ) -> UIAccessibilityScrollDirection {
-        let axis = scrollableAxis(of: scrollView)
+        let axis = scrollableAxis(of: target)
         let requested = requiredAxis(for: direction)
         if axis.contains(requested) { return uiScrollDirection(for: direction) }
 
