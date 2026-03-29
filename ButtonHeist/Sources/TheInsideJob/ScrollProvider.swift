@@ -104,8 +104,8 @@ import TheScore
     private let tripwire: TheTripwire
 
     /// Number of real frames to wait for SPI scroll animation to settle.
-    /// Research showed ~5 frames needed, 8 for safety (~128ms at 60fps).
-    private let settleFrames = 8
+    /// Testing showed 3 frames (48ms) is the minimum for offset detection.
+    private let settleFrames = 3
 
     init(safecracker: TheSafecracker, tripwire: TheTripwire) {
         self.safecracker = safecracker
