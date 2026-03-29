@@ -259,9 +259,7 @@ flowchart TD
 
 ## Scroll-to-Visible Search Flow
 
-Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). Exits early on exhaustive coverage.
-
-**Lazy container support:** SwiftUI `LazyVGrid`/`LazyVStack` report incomplete `contentSize` — only what has been rendered. The scan loop detects lazy containers (no `totalItems` from `queryCollectionTotalItems`) and adapts: `scrollByPage` skips the content-size clamp (`clampToContentSize: false`) so it can push past the currently-materialized region, and each step uses `waitForSettle` instead of `layoutIfNeeded()` to give SwiftUI time to render the next batch.
+Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). Content-size clamp is always disabled (`clampToContentSize: false`) so lazy containers can scroll past the currently-materialized region. Each step settles via `waitForSettle(0.15s, 2 quiet frames)` to let new content render.
 
 ```mermaid
 flowchart TD
@@ -271,23 +269,16 @@ flowchart TD
     CHK -->|No| FSV["findFirstScrollView()<br/>(walk onScreen elements<br/>→ scrollableAncestor)"]
     FSV --> SVOK{Found<br/>scroll view?}
     SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
-    SVOK -->|Yes| QTI["queryCollectionTotalItems()"]
-    QTI --> LAZY{totalItems<br/>available?}
-    LAZY -->|Yes| UIKIT["UIKit mode:<br/>clamp to contentSize,<br/>break on no-scroll"]
-    LAZY -->|No| SWUI["Lazy mode:<br/>no clamp, waitForSettle<br/>between steps"]
+    SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
-    UIKIT --> PH1["Phase 1: scanLoop()<br/>Primary direction"]
-    SWUI --> PH1
-    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: !isLazy)"]
-    SLOOP --> SETTLE["waitForSettle(0.15s)<br/>(SwiftUI renders lazy content)"]
+    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
+    SLOOP --> SETTLE["waitForSettle(0.15s, 2 quiet frames)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
-    FM -->|Not found| NEW{New elements<br/>appeared?}
-    NEW -->|No new IDs| STALL["Break — content exhausted<br/>(UIKit only; lazy skips this)"]
-    NEW -->|Yes| EXHST{totalItems known<br/>& all seen?}
-    EXHST -->|Yes| EXDONE["Return failure:<br/>'exhaustive search'"]
-    EXHST -->|No| BUDGET{scrollCount<br/>< maxScrolls?}
+    FM -->|Not found| NEW{New heistIds<br/>appeared?}
+    NEW -->|No new IDs| STALL["Break — content exhausted"]
+    NEW -->|Yes| BUDGET{scrollCount<br/>< maxScrolls?}
     BUDGET -->|Yes| SLOOP
     BUDGET -->|No| STALL
 
@@ -295,7 +286,7 @@ flowchart TD
     PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
     SCAN2 --> RESULT{Found?}
     RESULT -->|Yes| END
-    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'<br/>+ exhaustive flag"]
+    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
 ```
 
 ## Delta Computation
