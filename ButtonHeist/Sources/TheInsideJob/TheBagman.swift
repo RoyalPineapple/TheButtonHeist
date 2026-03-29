@@ -540,8 +540,19 @@ final class TheBagman {
                         newElementObjects[element] = WeakObject(object: object)
                     },
                     containerVisitor: { container, object in
-                        if case .scrollable = container.type {
-                            scrollableContainerViews[container] = object as? UIView
+                        if case .scrollable = container.type, let view = object as? UIView {
+                            // For UIScrollViews, store directly. For non-UIScrollViews
+                            // (SwiftUI PlatformContainer), check if a scrollable child
+                            // exists one level deep (the inner HostingScrollView).
+                            if view is UIScrollView {
+                                scrollableContainerViews[container] = view
+                            } else if let scrollChild = view.subviews.first(where: {
+                                $0 is UIScrollView
+                            }) {
+                                scrollableContainerViews[container] = scrollChild
+                            } else {
+                                scrollableContainerViews[container] = view
+                            }
                         }
                     }
                 )

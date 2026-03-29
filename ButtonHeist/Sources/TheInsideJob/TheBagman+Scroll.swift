@@ -198,18 +198,21 @@ extension TheBagman {
         // containers get picked up. maxScrolls is a safety valve, not a budget.
         // Exhaustion is keyed by AccessibilityContainer (Hashable, value-type) so
         // it survives hierarchy rebuilds — no positional index drift.
-        var exhausted = Set<AccessibilityContainer>()
+        // Track exhaustion by view identity (ObjectIdentifier), not by
+        // AccessibilityContainer value. The container's contentSize/frame
+        // can change across refreshes (lazy materialization), creating new
+        // AccessibilityContainer values for the same physical scroll view.
+        var exhausted = Set<ScrollTargetId>()
         var scrollCount = 0
-        var containerAttempts: [AccessibilityContainer: Int] = [:]
 
         while scrollCount < maxScrolls {
-            guard let (scrollTarget, container) = findLiveScrollTarget(excluding: exhausted) else { break }
+            guard let (scrollTarget, targetId) = findLiveScrollTarget(excluding: exhausted) else { break }
 
             let dir = adaptDirection(searchDirection, for: scrollTarget)
             let before = onScreen
             let moved = await scrollOnePage(scrollTarget, direction: dir, animated: false)
 
-            if !moved { exhausted.insert(container); continue }
+            if !moved { exhausted.insert(targetId); continue }
 
             await tripwire.yieldFrames(3)
             scrollCount += 1
@@ -220,14 +223,7 @@ extension TheBagman {
                 return foundResult(found, scrollCount: scrollCount)
             }
 
-            // Track per-container attempts. A container that's been scrolled
-            // many times without finding the target is exhausted in this direction.
-            let attempts = (containerAttempts[container] ?? 0) + 1
-            containerAttempts[container] = attempts
-
-            if onScreen == before || attempts > 30 {
-                exhausted.insert(container)
-            }
+            if onScreen == before { exhausted.insert(targetId) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -238,24 +234,35 @@ extension TheBagman {
     /// The parser marks ALL containers where `_accessibilityIsScrollable == true` as
     /// `.scrollable`, and `containerVisitor` resolves the inner UIScrollView child
     /// for PlatformContainers. So this is a single tree walk — no fallback needed.
+    /// Stable identity for exhaustion tracking. Uses the backing view's
+    /// ObjectIdentifier when available (survives hierarchy rebuilds).
+    /// Falls back to container hash for viewless containers.
+    enum ScrollTargetId: Hashable {
+        case view(ObjectIdentifier)
+        case container(Int) // AccessibilityContainer.hashValue
+    }
+
     private func findLiveScrollTarget(
-        excluding exhausted: Set<AccessibilityContainer>
-    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        excluding exhausted: Set<ScrollTargetId>
+    ) -> (target: ScrollableTarget, id: ScrollTargetId)? {
         cachedHierarchy.reducedHierarchy(
-            nil as (ScrollableTarget, AccessibilityContainer)?
+            nil as (ScrollableTarget, ScrollTargetId)?
         ) { found, node in
             guard found == nil else { return found }
             guard case .container(let container, _) = node,
-                  case .scrollable(let contentSize) = container.type,
-                  !exhausted.contains(container) else { return nil }
+                  case .scrollable(let contentSize) = container.type else { return nil }
             if let view = scrollableContainerViews[container], view.window != nil {
+                let id = ScrollTargetId.view(ObjectIdentifier(view))
+                guard !exhausted.contains(id) else { return nil }
                 if let sv = view as? UIScrollView {
-                    return (.uiScrollView(sv), container)
+                    return (.uiScrollView(sv), id)
                 }
                 let screenFrame = view.convert(view.bounds, to: nil)
-                return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
+                return (.swipeable(frame: screenFrame, contentSize: contentSize), id)
             }
-            return (.swipeable(frame: container.frame, contentSize: contentSize), container)
+            let id = ScrollTargetId.container(container.hashValue)
+            guard !exhausted.contains(id) else { return nil }
+            return (.swipeable(frame: container.frame, contentSize: contentSize), id)
         }
     }
 
