@@ -16,8 +16,9 @@ extension TheBagman {
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target)
-        guard let resolved = resolveTarget(target) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: target))
+        let resolution = resolveTarget(target)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
 
         if let interactivityError = checkElementInteractivity(resolved.element) {
@@ -45,8 +46,9 @@ extension TheBagman {
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target)
-        guard let resolved = resolveTarget(target) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: target))
+        let resolution = resolveTarget(target)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.increment, message: "Element does not support increment")
@@ -59,8 +61,9 @@ extension TheBagman {
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target)
-        guard let resolved = resolveTarget(target) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: target))
+        let resolution = resolveTarget(target)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.decrement, message: "Element does not support decrement")
@@ -73,8 +76,9 @@ extension TheBagman {
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target.elementTarget)
-        guard let resolved = resolveTarget(target.elementTarget) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: target.elementTarget))
+        let resolution = resolveTarget(target.elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.customAction, message: "Element does not support custom actions")
@@ -318,8 +322,9 @@ extension TheBagman {
         // Step 0: If element target provided, resolve and tap to focus
         if let elementTarget = target.elementTarget {
             await ensureOnScreen(for: elementTarget)
-            guard let resolved = resolveTarget(elementTarget) else {
-                return .failure(.elementNotFound, message: elementNotFoundMessage(for: elementTarget))
+            let resolution = resolveTarget(elementTarget)
+            guard let resolved = resolution.resolved else {
+                return .failure(.elementNotFound, message: resolution.diagnostics)
             }
 
             let point = resolved.element.activationPoint
@@ -377,7 +382,7 @@ extension TheBagman {
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let resolved = resolveTarget(elementTarget) {
+            if let resolved = resolveTarget(elementTarget).resolved {
                 fieldValue = resolved.element.value
             }
         }

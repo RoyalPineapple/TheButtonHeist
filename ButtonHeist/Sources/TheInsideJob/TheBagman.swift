@@ -25,7 +25,8 @@ final class TheBagman {
     // MARK: - Element Storage
 
     /// Parsed accessibility elements from the last hierarchy refresh.
-    private(set) var cachedElements: [AccessibilityElement] = []
+    /// Setter is internal (not private) so resolveTarget tests can inject elements.
+    var cachedElements: [AccessibilityElement] = []
 
     /// Parsed accessibility hierarchy from the last refresh.
     private(set) var cachedHierarchy: [AccessibilityHierarchy] = []
@@ -71,7 +72,8 @@ final class TheBagman {
 
     /// HeistIds currently on screen — rebuilt each refresh cycle.
     /// Elements in screenElements but not in this set have scrolled off screen.
-    private(set) var onScreen: Set<String> = []
+    /// Setter is internal (not private) so scroll tests can inject state.
+    var onScreen: Set<String> = []
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     var lastHierarchyHash: Int = 0
@@ -125,6 +127,27 @@ final class TheBagman {
         let traversalIndex: Int
     }
 
+    /// Three-case result from `resolveTarget` — eliminates the redundant
+    /// `elementNotFoundMessage` re-scan by producing diagnostics inline.
+    enum TargetResolution {
+        case resolved(ResolvedTarget)
+        case notFound(diagnostics: String)
+        case ambiguous(candidates: [String], diagnostics: String)
+
+        var resolved: ResolvedTarget? {
+            if case .resolved(let r) = self { return r }
+            return nil
+        }
+
+        var diagnostics: String {
+            switch self {
+            case .resolved: return ""
+            case .notFound(let d): return d
+            case .ambiguous(_, let d): return d
+            }
+        }
+    }
+
     // MARK: - Element Actions
 
     /// Check if the element supports interaction.
@@ -171,22 +194,48 @@ final class TheBagman {
         return false
     }
 
-    /// Resolve a target to a unique element. Returns nil on miss or ambiguity.
-    /// Use `elementNotFoundMessage(for:)` for diagnostics on nil.
-    func resolveTarget(_ target: ElementTarget) -> ResolvedTarget? {
+    /// Resolve a target to a unique element. Returns `.resolved` on success,
+    /// `.notFound` or `.ambiguous` with diagnostics on failure.
+    func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = screenElements[heistId], entry.presented else { return nil }
+            guard let entry = screenElements[heistId], entry.presented else {
+                return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
+            }
             let i = entry.lastTraversalIndex
-            guard i >= 0, i < cachedElements.count else { return nil }
-            return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
+            guard i >= 0, i < cachedElements.count else {
+                return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
+            }
+            return .resolved(ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i))
         case .matcher(let matcher):
             let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
                 ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
                 : cachedHierarchy
-            guard let unique = source.uniqueMatch(matcher) else { return nil }
-            guard let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) else { return nil }
-            return ResolvedTarget(screenElement: screenEl, element: unique.element, traversalIndex: unique.traversalIndex)
+            if let unique = source.uniqueMatch(matcher) {
+                if let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) {
+                    return .resolved(ResolvedTarget(screenElement: screenEl, element: unique.element, traversalIndex: unique.traversalIndex))
+                }
+                return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+            }
+            // uniqueMatch failed — check if ambiguous or truly not found
+            let allHits = source.allMatches(matcher)
+            if allHits.count > 1 {
+                let candidates = allHits.prefix(10).map { match -> String in
+                    var parts: [String] = []
+                    if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
+                    if let id = match.element.identifier, !id.isEmpty { parts.append("id=\(id)") }
+                    if let val = match.element.value, !val.isEmpty { parts.append("value=\(val)") }
+                    return parts.joined(separator: " ")
+                }
+                let query = formatMatcher(matcher)
+                var lines = ["\(allHits.count) elements match: \(query)"]
+                lines.append(contentsOf: candidates.map { "  \($0)" })
+                if allHits.count > 10 {
+                    lines.append("  ... and \(allHits.count - 10) more")
+                }
+                return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
+            }
+            return .notFound(diagnostics: matcherNotFoundMessage(matcher))
         }
     }
 
@@ -241,18 +290,9 @@ final class TheBagman {
     }
 
     /// Build a diagnostic message for a failed element lookup.
-    ///
-    /// Tiers:
-    /// 1. Ambiguous: substring matched multiple elements → list them
-    /// 2. Near-miss: matched all but one field → "found it, but value='7' not '6'"
-    /// 3. Total miss: nothing close → compact element summary for self-correction
+    /// Delegates to `resolveTarget` so diagnostics are computed once.
     func elementNotFoundMessage(for target: ElementTarget) -> String {
-        switch target {
-        case .heistId(let heistId):
-            return heistIdNotFoundMessage(heistId)
-        case .matcher(let matcher):
-            return matcherNotFoundMessage(matcher)
-        }
+        resolveTarget(target).diagnostics
     }
 
     private func heistIdNotFoundMessage(_ heistId: String) -> String {
@@ -264,35 +304,17 @@ final class TheBagman {
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
 
+    /// Diagnostics for a matcher that had zero matches (not ambiguous — that's
+    /// handled by `resolveTarget` returning `.ambiguous`).
     private func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         let query = formatMatcher(matcher)
 
-        // Tier 1: Ambiguous — substring matched multiple elements.
-        let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
-            ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
-            : cachedHierarchy
-        let matches = source.allMatches(matcher)
-        if matches.count > 1 {
-            var lines = ["\(matches.count) elements match: \(query)"]
-            for match in matches.prefix(10) {
-                var parts: [String] = []
-                if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
-                if let id = match.element.identifier, !id.isEmpty { parts.append("id=\(id)") }
-                if let val = match.element.value, !val.isEmpty { parts.append("value=\(val)") }
-                lines.append("  \(parts.joined(separator: " "))")
-            }
-            if matches.count > 10 {
-                lines.append("  ... and \(matches.count - 10) more")
-            }
-            return lines.joined(separator: "\n")
-        }
-
-        // Tier 2: Near-miss — relax one predicate at a time to find what diverged.
+        // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
         if let nearMiss = findNearMiss(for: matcher) {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
-        // Tier 3: Nothing close — dump a compact summary.
+        // Tier 2: Nothing close — dump a compact summary.
         return "No match for: \(query)\n\(compactElementSummary())"
     }
 
@@ -399,8 +421,9 @@ final class TheBagman {
         pointY: Double?
     ) -> TheSafecracker.PointResolution {
         if let elementTarget {
-            guard let resolved = resolveTarget(elementTarget) else {
-                return .failure(.failure(.elementNotFound, message: elementNotFoundMessage(for: elementTarget)))
+            let resolution = resolveTarget(elementTarget)
+            guard let resolved = resolution.resolved else {
+                return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
             }
             return .success(resolved.element.activationPoint)
         } else if let x = pointX, let y = pointY {
@@ -412,8 +435,7 @@ final class TheBagman {
 
     /// Resolve the accessibility frame for an element target.
     func resolveFrame(for elementTarget: ElementTarget) -> CGRect? {
-        guard let resolved = resolveTarget(elementTarget) else { return nil }
-        return resolved.element.shape.frame
+        resolveTarget(elementTarget).resolved?.element.shape.frame
     }
 
     // Scroll command execution moved to TheBagman+Scroll.swift
@@ -808,7 +830,7 @@ final class TheBagman {
         var elementValue: String?
         var elementTraits: [HeistTrait]?
         if let target {
-            let postElement = resolveTarget(target)?.element
+            let postElement = resolveTarget(target).resolved?.element
             elementLabel = postElement?.label
             elementValue = postElement?.value
             if let traits = postElement?.traits {

@@ -735,10 +735,13 @@ public struct ScrollTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
     /// Scroll direction
     public let direction: ScrollDirection
+    /// Explicit scroll view to target by heistId (overrides automatic ancestor discovery)
+    public let scrollViewHeistId: String?
 
-    public init(elementTarget: ElementTarget? = nil, direction: ScrollDirection) {
+    public init(elementTarget: ElementTarget? = nil, direction: ScrollDirection, scrollViewHeistId: String? = nil) {
         self.elementTarget = elementTarget
         self.direction = direction
+        self.scrollViewHeistId = scrollViewHeistId
     }
 }
 
@@ -755,15 +758,19 @@ public struct ScrollToVisibleTarget: Sendable {
     public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
+    /// Explicit scroll view to target by heistId (overrides automatic ancestor discovery)
+    public let scrollViewHeistId: String?
 
     public init(
         elementTarget: ElementTarget? = nil,
         maxScrolls: Int? = nil,
-        direction: ScrollSearchDirection? = nil
+        direction: ScrollSearchDirection? = nil,
+        scrollViewHeistId: String? = nil
     ) {
         self.elementTarget = elementTarget
         self.maxScrolls = maxScrolls
         self.direction = direction
+        self.scrollViewHeistId = scrollViewHeistId
     }
 
     public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
@@ -773,7 +780,7 @@ public struct ScrollToVisibleTarget: Sendable {
 extension ScrollToVisibleTarget: Codable {
     private enum CodingKeys: String, CodingKey {
         case heistId, label, identifier, value, traits, excludeTraits
-        case maxScrolls, direction
+        case maxScrolls, direction, scrollViewHeistId
     }
 
     public init(from decoder: Decoder) throws {
@@ -782,6 +789,7 @@ extension ScrollToVisibleTarget: Codable {
         self.elementTarget = try? ElementTarget(from: decoder)
         self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
+        self.scrollViewHeistId = try container.decodeIfPresent(String.self, forKey: .scrollViewHeistId)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -791,6 +799,7 @@ extension ScrollToVisibleTarget: Codable {
         }
         try container.encodeIfPresent(maxScrolls, forKey: .maxScrolls)
         try container.encodeIfPresent(direction, forKey: .direction)
+        try container.encodeIfPresent(scrollViewHeistId, forKey: .scrollViewHeistId)
     }
 }
 
@@ -805,9 +814,12 @@ public struct ScrollToEdgeTarget: Codable, Sendable {
     public let elementTarget: ElementTarget?
     /// Which edge to scroll to
     public let edge: ScrollEdge
+    /// Explicit scroll view to target by heistId (overrides automatic ancestor discovery)
+    public let scrollViewHeistId: String?
 
-    public init(elementTarget: ElementTarget? = nil, edge: ScrollEdge) {
+    public init(elementTarget: ElementTarget? = nil, edge: ScrollEdge, scrollViewHeistId: String? = nil) {
         self.elementTarget = elementTarget
         self.edge = edge
+        self.scrollViewHeistId = scrollViewHeistId
     }
 }

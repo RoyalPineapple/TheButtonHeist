@@ -261,8 +261,9 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
             }
+            let scrollViewId = stringArg(args, "scrollViewHeistId")
             return try await sendAction(
-                .scroll(ScrollTarget(elementTarget: target, direction: direction))
+                .scroll(ScrollTarget(elementTarget: target, direction: direction, scrollViewHeistId: scrollViewId))
             )
         case .scrollToVisible:
             guard let elTarget = try elementTarget(args) else {
@@ -279,7 +280,8 @@ extension TheFence {
             let target = ScrollToVisibleTarget(
                 elementTarget: elTarget,
                 maxScrolls: intArg(args, "maxScrolls"),
-                direction: direction
+                direction: direction,
+                scrollViewHeistId: stringArg(args, "scrollViewHeistId")
             )
             let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
@@ -296,7 +298,8 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
-            return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
+            let scrollViewId = stringArg(args, "scrollViewHeistId")
+            return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge, scrollViewHeistId: scrollViewId)))
         default:
             return .error("Unknown scroll action: \(command.rawValue)")
         }
