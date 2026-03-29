@@ -62,7 +62,10 @@ extension TheBagman {
         }
         let axis = requiredAxis(for: target.direction)
         guard let object = resolved.screenElement.object,
-              let scrollView = resolveScrollView(heistId: target.scrollViewHeistId, element: object, includeSelf: true, axis: axis),
+              let scrollView = resolveScrollView(
+                  heistId: target.scrollViewHeistId, element: object,
+                  screenElement: resolved.screenElement, includeSelf: true, axis: axis
+              ),
               let safecracker else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
@@ -86,7 +89,10 @@ extension TheBagman {
         }
         let axis = requiredAxis(for: target.edge)
         guard let object = resolved.screenElement.object,
-              let scrollView = resolveScrollView(heistId: target.scrollViewHeistId, element: object, includeSelf: true, axis: axis),
+              let scrollView = resolveScrollView(
+                  heistId: target.scrollViewHeistId, element: object,
+                  screenElement: resolved.screenElement, includeSelf: true, axis: axis
+              ),
               let safecracker else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
@@ -309,23 +315,26 @@ extension TheBagman {
 
     /// Resolve an explicit scroll view by heistId, or fall back to axis-aware ancestor discovery.
     /// When `axis` is provided and no `heistId` is specified, returns the first ancestor
-    /// whose content is scrollable along the requested axis. Falls back to innermost
-    /// ancestor if no axis-compatible scroll view is found.
+    /// whose content is scrollable along the requested axis. Falls back to the accessibility
+    /// hierarchy's stored scroll view, then to the innermost ancestor.
     func resolveScrollView(
         heistId: String?,
         element: NSObject,
+        screenElement: ScreenElement? = nil,
         includeSelf: Bool,
         axis: ScrollAxis? = nil
     ) -> UIScrollView? {
         if let heistId, let entry = screenElements[heistId], let obj = entry.object {
             return obj as? UIScrollView ?? scrollableAncestor(of: obj, includeSelf: true)
         }
-        guard let axis else {
-            return scrollableAncestor(of: element, includeSelf: includeSelf)
-        }
         let ancestors = scrollableAncestors(of: element, includeSelf: includeSelf)
-        return ancestors.first { scrollableAxis(of: $0).contains(axis) }
-            ?? ancestors.first
+        if let axis {
+            if let match = ancestors.first(where: { scrollableAxis(of: $0).contains(axis) }) {
+                return match
+            }
+        }
+        // Fall back to the accessibility hierarchy's scroll view, then any ancestor.
+        return ancestors.first ?? screenElement?.scrollView
     }
 
     private func nextAncestor(of candidate: NSObject) -> NSObject? {
