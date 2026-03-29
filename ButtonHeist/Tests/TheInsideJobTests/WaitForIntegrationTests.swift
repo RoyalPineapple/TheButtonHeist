@@ -7,7 +7,7 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class WaitForTests: XCTestCase {
+final class WaitForIntegrationTests: XCTestCase {
 
     private var insideJob: TheInsideJob!
     private var window: UIWindow!
