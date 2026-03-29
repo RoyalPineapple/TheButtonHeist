@@ -126,19 +126,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
-
-      - name: Warm binary cache for external dependencies
-        timeout-minutes: 10
-        run: tuist cache --external-only
-
-      - name: Boot simulator
-        timeout-minutes: 3
+      - name: Boot simulator in background
         run: |
           set -eo pipefail
-          # Find the newest available iOS 18.x iPhone 16 Pro and boot it
           read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
           import subprocess, json
           runtimes = json.loads(subprocess.check_output(
@@ -161,7 +151,23 @@ jobs:
           echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
           echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
           xcrun simctl boot "$SIM_UDID" || true
-          perl -e 'alarm 120; exec @ARGV' xcrun simctl bootstatus "$SIM_UDID" -b
+          # Boot continues asynchronously — don't wait for bootstatus here
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
+
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
+
+      - name: Wait for simulator boot
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$SIM_UDID" -b
+
+      - name: Generate project
+        timeout-minutes: 3
+        run: tuist generate --no-open
 
       - name: Run iOS tests
         timeout-minutes: 10
