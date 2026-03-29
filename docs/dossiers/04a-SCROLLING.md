@@ -107,7 +107,7 @@ newOffset.x = offset.x + (frame.width - 44)    // right
 newOffset.x = offset.x - (frame.width - 44)    // left
 ```
 
-Offsets are clamped to `[-insets.top, contentSize.height + insets.bottom - frame.height]` (vertical) and the equivalent horizontal range by default. When `clampToContentSize: false`, forward directions (down, right, next) skip the upper clamp — needed for SwiftUI lazy containers where `contentSize` grows as content is rendered. Returns `false` if the computed offset equals the current offset (already at the edge).
+Offsets are clamped to `[-insets.top, contentSize.height + insets.bottom - frame.height]` (vertical) and the equivalent horizontal range. Returns `false` if the computed offset equals the current offset (already at the edge).
 
 Directions: `.up`, `.down`, `.left`, `.right`, `.next` (alias for down), `.previous` (alias for up).
 
@@ -123,7 +123,7 @@ Searches for an element matching an `ElementMatcher` predicate by scrolling thro
 
 1. **Phase 0 — Check current tree.** Before scrolling, `refreshAccessibilityData()` and check if the element is already visible via `resolveFirstMatch`. If found, return immediately with `scrollCount: 0`.
 
-2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — scrolls one page at a time (via `scrollByPage(animated: false, clampToContentSize: false)`), yields 2 display frames via `yieldFrames(2)` (`CATransaction.flush()` + `Task.yield()`), refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (content exhausted). The content-size clamp is always disabled so lazy containers can scroll past the currently-materialized region.
+2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — advances contentOffset by one page directly (bypassing `scrollByPage`'s contentSize clamp), yields 2 display frames via `yieldFrames(2)`, refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (content exhausted). The raw offset advance means lazy containers can scroll past the currently-materialized region.
 
 3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains, jump to the opposite edge via `scrollToOppositeEdge`, yield frames, and run `scanLoop()` again in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
 
@@ -141,7 +141,7 @@ flowchart TD
     SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
     SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
-    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
+    PH1 --> SLOOP["setContentOffset(offset + pageStep)<br/>(unclamped, animated: false)"]
     SLOOP --> SETTLE["yieldFrames(2)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}

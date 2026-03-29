@@ -11,16 +11,10 @@ extension TheSafecracker {
 
     /// Scroll by one page in the given direction with a 44pt overlap.
     /// Returns false if already at the edge (no movement possible).
-    ///
-    /// When `clampToContentSize` is false, the forward direction is not clamped
-    /// to `contentSize`. This is needed for SwiftUI lazy containers where
-    /// contentSize grows as content is rendered — clamping would prevent
-    /// scrolling past the currently-materialised region.
     func scrollByPage(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection,
-        animated: Bool = true,
-        clampToContentSize: Bool = true
+        animated: Bool = true
     ) -> Bool {
         let overlap: CGFloat = 44
         let size = scrollView.frame.size
@@ -34,28 +28,16 @@ extension TheSafecracker {
         case .up:
             newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
         case .down:
-            if clampToContentSize {
-                newOffset.y = min(offset.y + size.height - overlap,
-                                 contentSize.height + insets.bottom - size.height)
-            } else {
-                newOffset.y = offset.y + size.height - overlap
-            }
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
         case .left:
             newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
         case .right:
-            if clampToContentSize {
-                newOffset.x = min(offset.x + size.width - overlap,
-                                 contentSize.width + insets.right - size.width)
-            } else {
-                newOffset.x = offset.x + size.width - overlap
-            }
+            newOffset.x = min(offset.x + size.width - overlap,
+                             contentSize.width + insets.right - size.width)
         case .next:
-            if clampToContentSize {
-                newOffset.y = min(offset.y + size.height - overlap,
-                                 contentSize.height + insets.bottom - size.height)
-            } else {
-                newOffset.y = offset.y + size.height - overlap
-            }
+            newOffset.y = min(offset.y + size.height - overlap,
+                             contentSize.height + insets.bottom - size.height)
         case .previous:
             newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
         @unknown default:
