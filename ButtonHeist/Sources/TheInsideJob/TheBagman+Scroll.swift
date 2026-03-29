@@ -258,7 +258,7 @@ extension TheBagman {
     /// One page of scroll travel (with 44pt overlap) as a signed delta vector.
     /// Used by the scan loop to advance the offset directly without contentSize clamping.
     private func scrollPageStep(_ scrollView: UIScrollView, direction: ScrollSearchDirection) -> CGPoint {
-        let overlap: CGFloat = 44
+        let overlap = TheSafecracker.pageOverlap
         let size = scrollView.frame.size
         switch direction {
         case .down:  return CGPoint(x: 0, y: size.height - overlap)

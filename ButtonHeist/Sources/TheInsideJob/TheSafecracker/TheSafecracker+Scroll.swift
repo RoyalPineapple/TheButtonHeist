@@ -9,6 +9,9 @@ import TheScore
 /// scroll view from the accessibility hierarchy and passes it here.
 extension TheSafecracker {
 
+    /// Points of overlap retained between page scrolls so users keep context.
+    static let pageOverlap: CGFloat = 44
+
     /// Scroll by one page in the given direction with a 44pt overlap.
     /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
@@ -16,7 +19,7 @@ extension TheSafecracker {
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) -> Bool {
-        let overlap: CGFloat = 44
+        let overlap = Self.pageOverlap
         let size = scrollView.frame.size
         let offset = scrollView.contentOffset
         let contentSize = scrollView.contentSize
