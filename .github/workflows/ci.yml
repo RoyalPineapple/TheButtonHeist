@@ -65,14 +65,10 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
-      - name: Warm binary cache for external dependencies
-        timeout-minutes: 10
-        run: tuist cache --external-only
-
-      - name: Generate project and verify freshness
+      - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate --no-open
+          tuist generate --no-binary-cache
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
             echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
             echo "::group::Diff"
@@ -80,6 +76,14 @@ jobs:
             echo "::endgroup::"
             exit 1
           }
+
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
+
+      - name: Regenerate project with cached binaries
+        timeout-minutes: 3
+        run: tuist generate --no-open
 
       - name: Run macOS tests
         timeout-minutes: 10
@@ -90,7 +94,7 @@ jobs:
 
   ios-tests:
     runs-on: macos-15
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -122,17 +126,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
-
-      - name: Boot simulator and warm cache in parallel
-        timeout-minutes: 10
+      - name: Boot simulator in background
         run: |
           set -eo pipefail
-          # Start simulator boot in background
-          (
-            read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
+          read -r SIM_UDID SIM_OS < <(python3 << 'PYEOF'
           import subprocess, json
           runtimes = json.loads(subprocess.check_output(
               ["xcrun", "simctl", "list", "runtimes", "-j"]))["runtimes"]
@@ -150,22 +147,23 @@ jobs:
           raise SystemExit("No iPhone 16 Pro found on iOS 18.x")
           PYEOF
           )
-            echo "$SIM_UDID" > /tmp/sim_udid
-            echo "$SIM_OS" > /tmp/sim_os
-            xcrun simctl boot "$SIM_UDID" || true
-            xcrun simctl bootstatus "$SIM_UDID" -b
-          ) &
-          SIM_PID=$!
+          echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"
+          echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
+          echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
+          xcrun simctl boot "$SIM_UDID" || true
+          # Boot continues asynchronously — don't wait for bootstatus here
 
-          # Warm binary cache in foreground
-          tuist cache --external-only
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
 
-          # Wait for simulator boot to finish
-          wait $SIM_PID
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
 
-          # Export env vars from temp files
-          echo "SIM_UDID=$(cat /tmp/sim_udid)" >> "$GITHUB_ENV"
-          echo "SIM_OS=$(cat /tmp/sim_os)" >> "$GITHUB_ENV"
+      - name: Wait for simulator boot
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Generate project
         timeout-minutes: 3
