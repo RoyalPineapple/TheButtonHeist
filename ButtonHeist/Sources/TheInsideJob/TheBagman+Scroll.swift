@@ -196,44 +196,23 @@ extension TheBagman {
             return .failure(.scrollToVisible, message: "No gesture engine available")
         }
 
-        // Explicit scroll view target — only search that one.
-        if let heistId = target.scrollViewHeistId {
-            guard let entry = screenElements[heistId], let obj = entry.object,
-                  let sv = obj as? UIScrollView ?? scrollableAncestor(of: obj, includeSelf: true) else {
-                return .failure(.scrollToVisible, message: "Scroll view '\(heistId)' not found")
-            }
-            var scrollCount = 0
-            let svTarget = ScrollableTarget.uiScrollView(sv)
-            let dir = adaptDirection(searchDirection, for: svTarget)
-            while scrollCount < maxScrolls {
-                guard await scrollOnePage(svTarget, direction: dir, animated: false) else { break }
-                await tripwire.yieldFrames(2)
-                scrollCount += 1
-                refreshAccessibilityData()
-                if let found = resolveFirstMatch(searchTarget) {
-                    ensureOnScreenSync(found)
-                    return foundResult(found, scrollCount: scrollCount)
-                }
-            }
-            return notFoundResult(scrollCount: scrollCount)
-        }
-
-        // Phase 1: scroll known UIScrollViews (from the hierarchy tree, outermost first).
-        var exhaustedScrollViews = Set<Int>()
+        // Walk the hierarchy tree for scrollable containers (outermost first).
+        // Scroll each one in its natural axis until no new elements appear, then
+        // move to the next. After each scroll, re-walk the tree so newly-revealed
+        // containers get picked up. maxScrolls is a safety valve, not a budget.
+        var exhausted = Set<Int>()
         var scrollCount = 0
 
         while scrollCount < maxScrolls {
-            guard let (svTarget, idx) = findLiveScrollTarget(excluding: exhaustedScrollViews) else { break }
+            guard let (target, idx) = findLiveScrollTarget(excluding: exhausted) else { break }
 
-            let dir = adaptDirection(searchDirection, for: svTarget)
-            let moved = await scrollOnePage(svTarget, direction: dir, animated: false)
+            let dir = adaptDirection(searchDirection, for: target)
+            let before = onScreen
+            let moved = await scrollOnePage(target, direction: dir, animated: false)
 
-            if !moved {
-                exhaustedScrollViews.insert(idx)
-                continue
-            }
+            if !moved { exhausted.insert(idx); continue }
 
-            await tripwire.yieldFrames(2)
+            await tripwire.yieldFrames(3)
             scrollCount += 1
             refreshAccessibilityData()
 
@@ -241,51 +220,9 @@ extension TheBagman {
                 ensureOnScreenSync(found)
                 return foundResult(found, scrollCount: scrollCount)
             }
-        }
 
-        // Phase 2: swipe at on-screen element locations. Elements in different
-        // scrollable containers (carousels) have different Y positions. For each
-        // unique row, swipe in the cross-axis direction to scroll that container.
-        guard let safecracker else { return notFoundResult(scrollCount: scrollCount) }
-        let crossDir = crossAxisDirection(for: searchDirection)
-        let screenWidth = UIScreen.main.bounds.width
-
-        var triedRows = Set<Int>()
-
-        while scrollCount < maxScrolls {
-            // Find element rows we haven't tried yet (grouped by Y, 100pt buckets)
-            let untried = Set(
-                cachedElements.map { Int($0.activationPoint.y / 100) }
-            ).subtracting(triedRows).sorted()
-
-            guard let row = untried.first else { break }
-            triedRows.insert(row)
-
-            // Find a representative element in this row
-            guard let element = cachedElements.first(where: { Int($0.activationPoint.y / 100) == row }) else { continue }
-            let center = element.activationPoint
-
-            // Swipe at the element's Y using the full screen width
-            let swipeFrame = CGRect(x: 0, y: center.y - 25, width: screenWidth, height: 50)
-            var previousOnScreen = onScreen
-
-            // Keep swiping this row until stagnation
-            while scrollCount < maxScrolls {
-                let success = await safecracker.scrollBySwipe(frame: swipeFrame, direction: crossDir)
-                guard success else { break }
-
-                await tripwire.yieldFrames(3)
-                scrollCount += 1
-                refreshAccessibilityData()
-
-                if let found = resolveFirstMatch(searchTarget) {
-                    ensureOnScreenSync(found)
-                    return foundResult(found, scrollCount: scrollCount)
-                }
-
-                if onScreen == previousOnScreen { break }
-                previousOnScreen = onScreen
-            }
+            // No new elements → this container is exhausted in this direction
+            if onScreen == before { exhausted.insert(idx) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -489,16 +426,6 @@ extension TheBagman {
         case .right: return .right
         case .next: return .next
         case .previous: return .previous
-        }
-    }
-
-    /// The forward cross-axis direction: down→right, right→down, up→left, left→up.
-    func crossAxisDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
-        switch direction {
-        case .down: return .right
-        case .up: return .left
-        case .right: return .down
-        case .left: return .up
         }
     }
 
