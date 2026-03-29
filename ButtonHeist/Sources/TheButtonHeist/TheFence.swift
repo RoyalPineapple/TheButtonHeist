@@ -233,16 +233,16 @@ public final class TheFence {
             return try await handleGesture(command: command, args: args)
         case .scroll, .scrollToVisible, .scrollToEdge:
             return try await handleScrollAction(command: command, args: args)
+        case .waitFor:
+            return try await handleWaitFor(args)
         case .activate, .increment, .decrement, .performCustomAction:
             return try await handleAccessibilityAction(command: command, args: args)
         case .typeText:
             return try await handleTypeText(args)
         case .editAction:
             return try await handleEditAction(args)
-        case .setPasteboard:
-            return try await handleSetPasteboard(args)
-        case .getPasteboard:
-            return try await handleGetPasteboard()
+        case .setPasteboard, .getPasteboard:
+            return try await handlePasteboard(command: command, args: args)
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
         case .startRecording:
@@ -333,27 +333,22 @@ public final class TheFence {
         return UnitPoint(x: x, y: y)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) -> ActionTarget? {
-        let identifier = stringArg(dictionary, "identifier")
-        let heistId = stringArg(dictionary, "heistId")
-        let order = intArg(dictionary, "order")
-        guard identifier != nil || heistId != nil || order != nil else { return nil }
-        return ActionTarget(identifier: identifier, heistId: heistId, order: order)
+    func elementTarget(_ dictionary: [String: Any]) -> ElementTarget? {
+        ElementTarget(
+            heistId: stringArg(dictionary, "heistId"),
+            matcher: elementMatcher(dictionary)
+        )
     }
 
     func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
         let traits = (dictionary["traits"] as? [String])
         let excludeTraits = (dictionary["excludeTraits"] as? [String])
-        let scope: MatchScope? = stringArg(dictionary, "scope").flatMap { MatchScope(rawValue: $0) }
         return ElementMatcher(
             label: stringArg(dictionary, "label"),
             identifier: stringArg(dictionary, "identifier"),
-            heistId: stringArg(dictionary, "heistId"),
             value: stringArg(dictionary, "value"),
             traits: traits,
-            excludeTraits: excludeTraits,
-            scope: scope,
-            absent: boolArg(dictionary, "absent")
+            excludeTraits: excludeTraits
         )
     }
 

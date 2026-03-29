@@ -310,6 +310,25 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 - When adding a new command, action type, or option set: define it as a `String`-backed enum with `CaseIterable` in the appropriate module, not as string literals scattered across switch statements.
 - Use `.rawValue` only at serialization boundaries — never compare `.rawValue` against a string literal deeper in the stack.
 
+## Currency Types: Elements and Targets
+
+Two type families are the currency for referring to UI elements. Use them everywhere — never invent new types to represent a subset of their data.
+
+**Canonical element types** (from AccessibilitySnapshotParser):
+- `AccessibilityElement` — a leaf element with label, identifier, value, traits, frame, activation point, and custom actions. This is the parsed representation of a live UIKit accessibility element.
+- `AccessibilityHierarchy` — the tree: `.element(AccessibilityElement, traversalIndex)` or `.container(AccessibilityContainer, children)`. TheBagman owns and caches these after each accessibility refresh.
+
+**Target types** (TheScore wire types):
+- `ElementTarget` — how callers refer to an element: `.heistId(String)` for stable ID lookup, `.matcher(ElementMatcher)` for predicate-based search. This is the currency type passed through TheFence, TheSafecracker, MCP, and CLI. Only TheBagman resolves it to a live element.
+- `ElementMatcher` — the predicate struct: label, identifier, value, traits, excludeTraits. String fields use case-insensitive substring matching. Traits use exact bitmask comparison.
+- `HeistElement` — the wire representation sent to clients via `get_interface`. Contains heistId, label, value, traits, actions, frame, etc. Built by TheBagman from `AccessibilityElement` + heistId assignment. This is a progressive-disclosure view for external consumers.
+
+**Rules:**
+- Pass `AccessibilityElement` and `AccessibilityHierarchy` internally when working with parsed accessibility data.
+- Pass `ElementTarget` when referring to an element abstractly (all layers above TheBagman).
+- Do not create wrapper structs, snapshot types, or intermediate representations to hold subsets of these types. If you need a subset, pass the original and read what you need.
+- Wire types (`HeistElement`, `ElementMatcher`, `ElementTarget`) live in TheScore and cross the Codable boundary. Internal types (`AccessibilityElement`, `AccessibilityHierarchy`) stay inside TheInsideJob.
+
 ## Versioning and Releases
 
 - **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `docs/VERSIONING.md`.
@@ -373,10 +392,12 @@ Recordings are saved to `demos/` with timestamped filenames. Default settings: `
 
 ## AccessibilitySnapshot Submodule
 
-The `AccessibilitySnapshot` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshot`) on the `buttonheist` branch. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). The `buttonheist` branch is rebased on upstream `main` and carries only two targeted commits:
+The `AccessibilitySnapshot` submodule points at our fork (`RoyalPineapple/AccessibilitySnapshot`) on the `buttonheist` branch. Upstream is `cashapp/AccessibilitySnapshot` (default branch: `main`). The `buttonheist` branch is rebased on upstream `main` and carries four targeted commits:
 
 1. `elementVisitor` closure on the hierarchy parser + xcodegen project support
 2. `Hashable` conformance on `AccessibilityElement`
+3. `traitNames` computed property and `fromNames` static method on UIAccessibilityTraits
+4. `containerVisitor` closure on the hierarchy parser + `.scrollable(contentSize:)` container type
 
 **Rules for this submodule:**
 - Only touch files in the hierarchy parser (`Sources/AccessibilitySnapshot/Parser/`).

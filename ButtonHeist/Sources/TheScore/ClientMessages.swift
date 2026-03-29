@@ -49,13 +49,13 @@ public enum ClientMessage: Codable, Sendable {
     // MARK: - Action Commands
 
     /// Activate an element
-    case activate(ActionTarget)
+    case activate(ElementTarget)
 
     /// Increment an adjustable element (e.g., slider)
-    case increment(ActionTarget)
+    case increment(ElementTarget)
 
     /// Decrement an adjustable element
-    case decrement(ActionTarget)
+    case decrement(ElementTarget)
 
     /// Perform a custom action on an element
     case performCustomAction(CustomActionTarget)
@@ -116,6 +116,9 @@ public enum ClientMessage: Codable, Sendable {
     /// Wait for all animations to complete, then return the settled interface
     case waitForIdle(WaitForIdleTarget)
 
+    /// Wait for an element matching a predicate to appear (or disappear)
+    case waitFor(WaitForTarget)
+
     /// Request a capture of the current screen
     case requestScreen
 
@@ -133,12 +136,12 @@ public enum ClientMessage: Codable, Sendable {
     case watch(WatchPayload)
 
     /// Extract the element target from any action command, if present.
-    public var actionTarget: ActionTarget? {
+    public var actionTarget: ElementTarget? {
         switch self {
         case .activate(let t), .increment(let t), .decrement(let t):
             return t
-        case .scrollToVisible:
-            return nil
+        case .scrollToVisible(let t):
+            return t.elementTarget
         case .performCustomAction(let t):
             return t.elementTarget
         case .editAction:
@@ -167,6 +170,8 @@ public enum ClientMessage: Codable, Sendable {
             return t.elementTarget
         case .scrollToEdge(let t):
             return t.elementTarget
+        case .waitFor(let t):
+            return t.elementTarget
         default:
             return nil
         }
@@ -175,28 +180,84 @@ public enum ClientMessage: Codable, Sendable {
 
 // MARK: - Action Targets
 
-/// Target for element actions
-public struct ActionTarget: Codable, Sendable {
-    /// Developer-provided accessibility identifier (most stable)
-    public let identifier: String?
-    /// Synthesized stable ID from traits + label (stable across reorders)
-    public let heistId: String?
-    /// Element order in current snapshot (positional, fragile)
-    public let order: Int?
+/// Target for element actions.
+/// Two resolution strategies: heistId (assigned token from get_interface) or
+/// match (describe the element by accessibility properties). HeistId takes
+/// priority when both are present.
+/// How to target an element: by stable heistId or by predicate matcher.
+/// HeistId is preferred when available (fast, exact). Matcher fields use
+/// case-insensitive substring matching with ambiguity detection.
+public enum ElementTarget: Sendable, Equatable {
+    /// Stable ID assigned by get_interface — fast O(1) lookup.
+    case heistId(String)
+    /// Predicate matcher: label, identifier, value, traits, excludeTraits.
+    case matcher(ElementMatcher)
 
-    public init(identifier: String? = nil, heistId: String? = nil, order: Int? = nil) {
-        self.identifier = identifier
-        self.heistId = heistId
-        self.order = order
+    /// Convenience: build from optional fields. HeistId wins if present.
+    /// Returns nil if both are empty.
+    public init?(heistId: String? = nil, matcher: ElementMatcher) {
+        if let heistId {
+            self = .heistId(heistId)
+        } else if let match = matcher.nonEmpty {
+            self = .matcher(match)
+        } else {
+            return nil
+        }
+    }
+}
+
+// MARK: - ElementTarget Codable (flat wire format)
+
+extension ElementTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId
+        case label, identifier, value, traits, excludeTraits
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let heistId = try container.decodeIfPresent(String.self, forKey: .heistId) {
+            self = .heistId(heistId)
+            return
+        }
+        let matcher = ElementMatcher(
+            label: try container.decodeIfPresent(String.self, forKey: .label),
+            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
+            value: try container.decodeIfPresent(String.self, forKey: .value),
+            traits: try container.decodeIfPresent([String].self, forKey: .traits),
+            excludeTraits: try container.decodeIfPresent([String].self, forKey: .excludeTraits)
+        )
+        if let match = matcher.nonEmpty {
+            self = .matcher(match)
+        } else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "ElementTarget requires heistId or at least one matcher field (label, identifier, value, traits, excludeTraits)"
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .heistId(let id):
+            try container.encode(id, forKey: .heistId)
+        case .matcher(let m):
+            try container.encodeIfPresent(m.label, forKey: .label)
+            try container.encodeIfPresent(m.identifier, forKey: .identifier)
+            try container.encodeIfPresent(m.value, forKey: .value)
+            try container.encodeIfPresent(m.traits, forKey: .traits)
+            try container.encodeIfPresent(m.excludeTraits, forKey: .excludeTraits)
+        }
     }
 }
 
 /// Target for custom actions
 public struct CustomActionTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget
+    public let elementTarget: ElementTarget
     public let actionName: String
 
-    public init(elementTarget: ActionTarget, actionName: String) {
+    public init(elementTarget: ElementTarget, actionName: String) {
         self.elementTarget = elementTarget
         self.actionName = actionName
     }
@@ -207,12 +268,12 @@ public struct CustomActionTarget: Codable, Sendable {
 /// Target for tap gesture
 public struct TouchTapTarget: Codable, Sendable {
     /// Use element's interaction point
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     /// Or specify exact screen coordinates
     public let pointX: Double?
     public let pointY: Double?
 
-    public init(elementTarget: ActionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
+    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
         self.elementTarget = elementTarget
         self.pointX = pointX
         self.pointY = pointY
@@ -226,13 +287,13 @@ public struct TouchTapTarget: Codable, Sendable {
 
 /// Target for long press gesture
 public struct LongPressTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     public let pointX: Double?
     public let pointY: Double?
     /// Duration in seconds
     public let duration: Double
 
-    public init(elementTarget: ActionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
+    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
         self.elementTarget = elementTarget
         self.pointX = pointX
         self.pointY = pointY
@@ -261,7 +322,7 @@ public struct UnitPoint: Codable, Sendable, Equatable {
 /// Target for swipe gesture
 public struct SwipeTarget: Codable, Sendable {
     /// Start from element's interaction point
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     /// Or start from explicit coordinates
     public let startX: Double?
     public let startY: Double?
@@ -278,7 +339,7 @@ public struct SwipeTarget: Codable, Sendable {
     public let end: UnitPoint?
 
     public init(
-        elementTarget: ActionTarget? = nil,
+        elementTarget: ElementTarget? = nil,
         startX: Double? = nil, startY: Double? = nil,
         endX: Double? = nil, endY: Double? = nil,
         direction: SwipeDirection? = nil,
@@ -301,7 +362,7 @@ public struct SwipeTarget: Codable, Sendable {
 
 /// Target for drag gesture
 public struct DragTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     public let startX: Double?
     public let startY: Double?
     public let endX: Double
@@ -310,7 +371,7 @@ public struct DragTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        elementTarget: ActionTarget? = nil,
+        elementTarget: ElementTarget? = nil,
         startX: Double? = nil, startY: Double? = nil,
         endX: Double, endY: Double,
         duration: Double? = nil
@@ -333,7 +394,7 @@ public struct DragTarget: Codable, Sendable {
 
 /// Target for pinch/zoom gesture
 public struct PinchTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
     /// Scale factor: >1.0 zooms in (spread), <1.0 zooms out (pinch)
@@ -344,7 +405,7 @@ public struct PinchTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        elementTarget: ActionTarget? = nil,
+        elementTarget: ElementTarget? = nil,
         centerX: Double? = nil, centerY: Double? = nil,
         scale: Double, spread: Double? = nil, duration: Double? = nil
     ) {
@@ -357,7 +418,7 @@ public struct PinchTarget: Codable, Sendable {
 
 /// Target for rotation gesture
 public struct RotateTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
     /// Rotation angle in radians (positive = counter-clockwise)
@@ -368,7 +429,7 @@ public struct RotateTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        elementTarget: ActionTarget? = nil,
+        elementTarget: ElementTarget? = nil,
         centerX: Double? = nil, centerY: Double? = nil,
         angle: Double, radius: Double? = nil, duration: Double? = nil
     ) {
@@ -381,14 +442,14 @@ public struct RotateTarget: Codable, Sendable {
 
 /// Target for two-finger tap gesture
 public struct TwoFingerTapTarget: Codable, Sendable {
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
     /// Distance between the two fingers in points
     public let spread: Double?
 
     public init(
-        elementTarget: ActionTarget? = nil,
+        elementTarget: ElementTarget? = nil,
         centerX: Double? = nil, centerY: Double? = nil,
         spread: Double? = nil
     ) {
@@ -492,9 +553,9 @@ public struct TypeTextTarget: Codable, Sendable {
     public let clearFirst: Bool?
     /// Optional element to tap first to bring up keyboard (text field).
     /// Also used to read back the current value after typing.
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
 
-    public init(text: String? = nil, deleteCount: Int? = nil, clearFirst: Bool? = nil, elementTarget: ActionTarget? = nil) {
+    public init(text: String? = nil, deleteCount: Int? = nil, clearFirst: Bool? = nil, elementTarget: ElementTarget? = nil) {
         self.text = text
         self.deleteCount = deleteCount
         self.clearFirst = clearFirst
@@ -534,6 +595,47 @@ public struct WaitForIdleTarget: Codable, Sendable {
 
     public init(timeout: Double? = nil) {
         self.timeout = timeout
+    }
+}
+
+/// Target for wait_for command — wait for an element to appear or disappear.
+/// Uses ElementTarget so both heistId and matcher predicates work.
+public struct WaitForTarget: Sendable {
+    /// Element to wait for — by heistId or matcher predicate.
+    public let elementTarget: ElementTarget
+    /// When true, wait for the element to NOT exist
+    public let absent: Bool?
+    /// Maximum time to wait in seconds (default: 10, max: 30)
+    public let timeout: Double?
+
+    public init(elementTarget: ElementTarget, absent: Bool? = nil, timeout: Double? = nil) {
+        self.elementTarget = elementTarget
+        self.absent = absent
+        self.timeout = timeout
+    }
+
+    public var resolvedAbsent: Bool { absent ?? false }
+    public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
+}
+
+extension WaitForTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId, label, identifier, value, traits, excludeTraits
+        case absent, timeout
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.elementTarget = try ElementTarget(from: decoder)
+        self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
+        self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try elementTarget.encode(to: encoder)
+        try container.encodeIfPresent(absent, forKey: .absent)
+        try container.encodeIfPresent(timeout, forKey: .timeout)
     }
 }
 
@@ -630,11 +732,11 @@ public enum ScrollDirection: String, Codable, Sendable {
 /// Target for scroll command
 public struct ScrollTarget: Codable, Sendable {
     /// Element to scroll from (bubbles up to nearest scroll view ancestor)
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     /// Scroll direction
     public let direction: ScrollDirection
 
-    public init(elementTarget: ActionTarget? = nil, direction: ScrollDirection) {
+    public init(elementTarget: ElementTarget? = nil, direction: ScrollDirection) {
         self.elementTarget = elementTarget
         self.direction = direction
     }
@@ -645,27 +747,51 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
 }
 
-/// Target for scroll-to-visible search with element matching
-public struct ScrollToVisibleTarget: Codable, Sendable {
-    /// Predicate describing the element to find
-    public let match: ElementMatcher
+/// Target for scroll-to-visible search.
+public struct ScrollToVisibleTarget: Sendable {
+    /// Element to search for while scrolling.
+    public let elementTarget: ElementTarget?
     /// Maximum scroll attempts before giving up (default: 20)
     public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
 
     public init(
-        match: ElementMatcher,
+        elementTarget: ElementTarget? = nil,
         maxScrolls: Int? = nil,
         direction: ScrollSearchDirection? = nil
     ) {
-        self.match = match
+        self.elementTarget = elementTarget
         self.maxScrolls = maxScrolls
         self.direction = direction
     }
 
     public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
+}
+
+extension ScrollToVisibleTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId, label, identifier, value, traits, excludeTraits
+        case maxScrolls, direction
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Decode element target from flat fields — nil if no targeting fields present
+        self.elementTarget = try? ElementTarget(from: decoder)
+        self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
+        self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let elementTarget {
+            try elementTarget.encode(to: encoder)
+        }
+        try container.encodeIfPresent(maxScrolls, forKey: .maxScrolls)
+        try container.encodeIfPresent(direction, forKey: .direction)
+    }
 }
 
 /// Edge for scroll-to-edge commands
@@ -676,11 +802,11 @@ public enum ScrollEdge: String, Codable, Sendable {
 /// Target for scroll-to-edge command
 public struct ScrollToEdgeTarget: Codable, Sendable {
     /// Element whose nearest scroll view ancestor to scroll
-    public let elementTarget: ActionTarget?
+    public let elementTarget: ElementTarget?
     /// Which edge to scroll to
     public let edge: ScrollEdge
 
-    public init(elementTarget: ActionTarget? = nil, edge: ScrollEdge) {
+    public init(elementTarget: ElementTarget? = nil, edge: ScrollEdge) {
         self.elementTarget = elementTarget
         self.edge = edge
     }

@@ -56,8 +56,8 @@ final class TheBagmanConversionTests: XCTestCase {
         )
     }
 
-    private func snapshot(_ elements: [HeistElement]) -> TheBagman.ElementSnapshot {
-        TheBagman.ElementSnapshot(elements: elements)
+    private func snapshot(_ elements: [HeistElement]) -> [HeistElement] {
+        elements
     }
 
     // MARK: - heistId: Developer Identifier Passthrough
@@ -315,6 +315,15 @@ final class TheBagmanConversionTests: XCTestCase {
     func testSnapshotScreenNameNilWhenNoHeader() {
         let elements = [makeElement(heistId: "button_ok", label: "OK", traits: ["button"])]
         XCTAssertNil(snapshot(elements).screenName)
+    }
+
+    // MARK: - Trait Name Sync
+
+    func testHeistElementKnownTraitsMatchParser() {
+        let parserNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+        let wireNames = HeistElement.knownTraitNames
+        XCTAssertEqual(wireNames, parserNames,
+                       "HeistElement.knownTraitNames must match parser's knownTraits")
     }
 
     // MARK: - Delta: Identical Snapshots

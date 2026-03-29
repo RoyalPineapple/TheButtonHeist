@@ -500,6 +500,22 @@ Wait for all animations to complete, then return the settled interface.
 
 Returns an `actionResult` with `method: "waitForIdle"`, an `interfaceDelta` containing the full interface, and `animating: true` if the timeout expired before animations settled.
 
+### waitFor
+
+Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
+
+```json
+{"protocolVersion":"6.5","type":"waitFor","payload":{"match":{"label":"Loading"},"absent":true,"timeout":5.0}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match` | `ElementMatcher` | Predicate describing the element to wait for |
+| `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
+| `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
+
+Returns an `actionResult` with `method: "waitFor"` and an `interfaceDelta` containing the settled interface.
+
 ### ping
 
 Keepalive ping.
@@ -732,6 +748,7 @@ Possible methods:
 - `getPasteboard` - Text read from general pasteboard
 - `resignFirstResponder` - First responder resigned (keyboard dismissed)
 - `waitForIdle` - Wait-for-idle completed
+- `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
@@ -926,11 +943,10 @@ Container types:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `heistId` | `String?` | Stable element identifier (preferred — survives layout changes) |
-| `identifier` | `String?` | Element's accessibility identifier |
-| `order` | `Int?` | Element's traversal index (positional, may shift between snapshots) |
+| `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
+| `match` | `ElementMatcher?` | Predicate matcher for accessibility-based resolution |
 
-At least one field should be provided. Resolution priority: `heistId` > `identifier` > `order`.
+Two resolution strategies. Resolution priority: `heistId` > `match`. At least one field should be provided.
 
 ### TouchTapTarget
 
@@ -959,8 +975,9 @@ At least one field should be provided. Resolution priority: `heistId` > `identif
 | `endX` | `Double?` | End X coordinate |
 | `endY` | `Double?` | End Y coordinate |
 | `direction` | `String?` | Swipe direction: "up", "down", "left", "right" |
-| `distance` | `Double?` | Swipe distance in points (with direction) |
 | `duration` | `Double?` | Duration in seconds (default: 0.15) |
+| `start` | `UnitPoint?` | Unit-point start relative to element frame (0–1) |
+| `end` | `UnitPoint?` | Unit-point end relative to element frame (0–1) |
 
 ### DragTarget
 
@@ -1095,34 +1112,23 @@ Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
 ### ElementMatcher
 
-Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`.
+Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `scrollToVisible`, `waitFor`, `get_interface` filtering, and all action commands via `ActionTarget.match`.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `label` | `String?` | Exact match on accessibility label |
 | `identifier` | `String?` | Exact match on accessibility identifier |
-| `heistId` | `String?` | Exact match on heistId (wire-level only — ignored by hierarchy-level matching) |
 | `value` | `String?` | Exact match on accessibility value |
 | `traits` | `[String]?` | All listed traits must be present on the element |
 | `excludeTraits` | `[String]?` | None of the listed traits may be present |
-| `scope` | `MatchScope?` | Which node types to evaluate (default: `"elements"`) |
 | `absent` | `Bool?` | When `true`, inverts the match — succeeds when no element matches. Does not affect per-element predicate evaluation. |
-
-### MatchScope
-
-Controls which node types `ElementMatcher` evaluates when walking the accessibility tree.
-
-| Value | Description |
-|-------|-------------|
-| `"elements"` | Match leaf elements only (default) |
-| `"containers"` | Match container nodes only |
-| `"both"` | Match both leaf elements and containers |
 
 ### ScrollToVisibleTarget
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `match` | `ElementMatcher` | Predicate for the element to find |
+| `heistId` | `String?` | Stable heistId to search for while scrolling |
+| `match` | `ElementMatcher?` | Predicate for the element to find |
 | `maxScrolls` | `Int?` | Maximum scroll attempts (default: 20, clamped to >= 1) |
 | `direction` | `ScrollSearchDirection?` | Starting scroll direction (default: `"down"`) |
 
@@ -1152,6 +1158,23 @@ Diagnostic output from `scrollToVisible`, included on every `actionResult` for t
 | Field | Type | Description |
 |-------|------|-------------|
 | `timeout` | `Double?` | Maximum wait time in seconds (default: 5.0, max: 60.0) |
+
+### WaitForTarget
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match` | `ElementMatcher` | Predicate describing the element to wait for |
+| `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
+| `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
+
+### UnitPoint
+
+A point in unit coordinates (0–1) relative to an element's accessibility frame. `(0, 0)` is top-left, `(1, 1)` is bottom-right.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `x` | `Double` | Horizontal position (0 = left, 1 = right) |
+| `y` | `Double` | Vertical position (0 = top, 1 = bottom) |
 
 ### ActionResult
 
