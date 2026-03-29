@@ -277,14 +277,18 @@ extension HeistElement {
         CGPoint(x: activationPointX, y: activationPointY)
     }
 
-    /// Known accessibility trait name strings. Must stay in sync with the
-    /// parser's trait mapping. Used to reject unknown trait names (fail-safe).
-    private static let knownTraitNames: Set<String> = [
-        "button", "link", "image", "selected", "staticText", "header",
-        "searchField", "adjustable", "notEnabled", "updatesFrequently",
-        "keyboardKey", "summaryElement", "startsMediaSession", "allowsDirectInteraction",
-        "causesPageTurn", "tabBar", "backButton", "textEntry", "switchButton",
-        "scrollable", "toggle"
+    /// Known accessibility trait name strings. Single source of truth for all
+    /// trait names that can appear on HeistElement.traits. Must match the
+    /// parser's knownTraits list in AccessibilityHierarchy+Codable.swift.
+    /// Used to reject unknown trait names in matcher queries (fail-safe).
+    static let knownTraitNames: Set<String> = [
+        "button", "link", "image", "selected", "playsSound",
+        "keyboardKey", "staticText", "summaryElement", "notEnabled",
+        "updatesFrequently", "searchField", "startsMediaSession",
+        "adjustable", "allowsDirectInteraction", "causesPageTurn",
+        "header", "tabBar",
+        "textEntry", "isEditing", "backButton", "tabBarItem",
+        "scrollable", "switchButton",
     ]
 
     /// Match this wire element against an ElementMatcher predicate.

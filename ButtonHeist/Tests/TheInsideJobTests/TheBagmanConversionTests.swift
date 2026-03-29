@@ -317,6 +317,15 @@ final class TheBagmanConversionTests: XCTestCase {
         XCTAssertNil(snapshot(elements).screenName)
     }
 
+    // MARK: - Trait Name Sync
+
+    func testHeistElementKnownTraitsMatchParser() {
+        let parserNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+        let wireNames = HeistElement.knownTraitNames
+        XCTAssertEqual(wireNames, parserNames,
+                       "HeistElement.knownTraitNames must match parser's knownTraits")
+    }
+
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {
