@@ -82,9 +82,9 @@ enum ToolDefinitions {
                     "items": ["type": "string"],
                     "description": "Optional list of heistIds to filter. Returns only matching elements. Omit for full tree.",
                 ],
-                "label": ["type": "string", "description": "Filter by accessibility label (exact match)"],
-                "identifier": ["type": "string", "description": "Filter by accessibility identifier (exact match)"],
-                "value": ["type": "string", "description": "Filter by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Filter by accessibility label (first match)"],
+                "identifier": ["type": "string", "description": "Filter by accessibility identifier (first match)"],
+                "value": ["type": "string", "description": "Filter by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
             ],
@@ -100,6 +100,7 @@ enum ToolDefinitions {
             Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
             falls back to synthetic tap at the element's activation point. \
             Target by heistId (preferred), or by matcher fields (label, traits, identifier, etc.). \
+            Matcher fields return the first match — add more fields to narrow if needed. \
             Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
             """,
         inputSchema: [
@@ -108,8 +109,8 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
 
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "action": ["type": "string", "description": "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"],
@@ -135,8 +136,8 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
 
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "expect": expectProperty,
@@ -158,8 +159,8 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "direction": [
@@ -202,9 +203,10 @@ enum ToolDefinitions {
         inputSchema: [
             "type": "object",
             "properties": [
-                "label": ["type": "string", "description": "Match by accessibility label (exact)"],
-                "identifier": ["type": "string", "description": "Match by accessibility identifier (exact)"],
-                "value": ["type": "string", "description": "Match by accessibility value (exact)"],
+                "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
+                "label": ["type": "string", "description": "Match by accessibility label (first match)"],
+                "identifier": ["type": "string", "description": "Match by accessibility identifier (first match)"],
+                "value": ["type": "string", "description": "Match by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of these traits may be present"],
                 "absent": ["type": "boolean", "description": "Wait for element to NOT exist (default: false)"],
@@ -292,8 +294,8 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
 
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "direction": [
@@ -321,8 +323,8 @@ enum ToolDefinitions {
             "properties": [
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred when already known)"],
                 "identifier": ["type": "string", "description": "Match element by accessibility identifier"],
-                "label": ["type": "string", "description": "Match element by accessibility label (exact)"],
-                "value": ["type": "string", "description": "Match element by accessibility value (exact)"],
+                "label": ["type": "string", "description": "Match element by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Match element by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "All listed traits must be present on the element"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "None of the listed traits may be present"],
                 "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
@@ -342,8 +344,8 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
 
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "edge": [
@@ -388,8 +390,8 @@ enum ToolDefinitions {
                 "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
                 "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
 
-                "label": ["type": "string", "description": "Target by accessibility label (exact match)"],
-                "value": ["type": "string", "description": "Target by accessibility value (exact match)"],
+                "label": ["type": "string", "description": "Target by accessibility label (first match)"],
+                "value": ["type": "string", "description": "Target by accessibility value (first match)"],
                 "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
                 "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
                 "x": ["type": "number", "description": "X coordinate"],
