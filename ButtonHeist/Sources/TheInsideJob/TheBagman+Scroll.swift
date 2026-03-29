@@ -149,45 +149,37 @@ extension TheBagman {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         let axis = requiredAxis(for: target.edge)
-
-        // scroll_to_edge needs a UIScrollView for direct offset manipulation.
-        // Try the accessibility hierarchy first, fall back to UIKit ancestor.
-        guard let scrollView = resolved.screenElement.scrollView
-            ?? resolved.screenElement.object.flatMap({ scrollableAncestor(of: $0, includeSelf: true) }),
-              let safecracker else {
+        guard let scrollTarget = resolveScrollTarget(
+            heistId: target.scrollViewHeistId, screenElement: resolved.screenElement, axis: axis
+        ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        // If axis doesn't match, walk ancestors for a better one.
-        let sv: UIScrollView
-        if !scrollableAxis(of: scrollView).contains(axis),
-           let object = resolved.screenElement.object,
-           let match = scrollableAncestorOnAxis(of: object, axis: axis) {
-            sv = match
-        } else {
-            sv = scrollView
-        }
-
-        let success = safecracker.scrollToEdge(sv, edge: target.edge)
-
-        // Content may grow after the jump (lazy containers materialise on
-        // scroll). Yield a couple of frames, then re-jump until contentSize
-        // stops changing.
-        if success {
-            for _ in 0..<20 {
-                await tripwire.yieldFrames(2)
-                let prev = sv.contentSize
-                let moved = safecracker.scrollToEdge(sv, edge: target.edge)
-                if moved { await tripwire.yieldFrames(2) }
-                if !moved && sv.contentSize == prev { break }
-            }
+        // Scroll repeatedly in the edge direction until no movement.
+        // This works for all container types and handles lazy content naturally.
+        let direction = edgeDirection(for: target.edge)
+        var moved = false
+        for _ in 0..<50 {
+            let stepped = await scrollOnePage(scrollTarget, direction: direction, animated: false)
+            if !stepped { break }
+            moved = true
+            await tripwire.yieldFrames(2)
         }
 
         return TheSafecracker.InteractionResult(
-            success: success, method: .scrollToEdge,
-            message: success ? nil : "Already at edge",
+            success: moved, method: .scrollToEdge,
+            message: moved ? nil : "Already at edge",
             value: nil
         )
+    }
+
+    private func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
+        switch edge {
+        case .top: return .up
+        case .bottom: return .down
+        case .left: return .left
+        case .right: return .right
+        }
     }
 
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
@@ -299,7 +291,7 @@ extension TheBagman {
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = resolved.screenElement.scrollView ?? scrollableAncestor(of: object, includeSelf: false),
+        guard let scrollView = resolved.screenElement.scrollView,
               let safecracker else { return }
         if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
@@ -312,7 +304,9 @@ extension TheBagman {
         let frame = responder.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = scrollableAncestor(of: responder, includeSelf: false),
+        // Find the responder in screenElements to get its hierarchy scroll view
+        guard let scrollView = screenElements.values
+            .first(where: { $0.object === responder })?.scrollView,
               let safecracker else { return }
         if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
@@ -326,7 +320,7 @@ extension TheBagman {
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = resolved.screenElement.scrollView ?? scrollableAncestor(of: object, includeSelf: false) else { return }
+        guard let scrollView = resolved.screenElement.scrollView else { return }
         _ = safecracker.scrollToMakeVisible(frame, in: scrollView)
     }
 
@@ -334,8 +328,7 @@ extension TheBagman {
 
     /// Find the scrollable container for a resolved element from the accessibility hierarchy.
     /// When `heistId` is provided, looks up that specific container. Otherwise uses the
-    /// element's stored `scrollView` ref (from the hierarchy tree). Prefers containers
-    /// whose axis matches the requested direction.
+    /// element's stored `scrollView` ref (from the hierarchy tree).
     func resolveScrollTarget(
         heistId: String?,
         screenElement: ScreenElement,
@@ -350,53 +343,9 @@ extension TheBagman {
 
         // Use the accessibility hierarchy's scroll view for this element
         if let sv = screenElement.scrollView {
-            if let axis, !scrollableAxis(of: sv).contains(axis) {
-                // Wrong axis — walk UIKit ancestors for a better match
-                if let object = screenElement.object,
-                   let match = scrollableAncestorOnAxis(of: object, axis: axis) {
-                    return .uiScrollView(match)
-                }
-            }
             return .uiScrollView(sv)
         }
 
-        return nil
-    }
-
-    /// Walk UIKit ancestors to find a UIScrollView whose content is scrollable on the given axis.
-    /// Used as a fallback when the accessibility hierarchy's scroll view doesn't match.
-    private func scrollableAncestorOnAxis(of object: NSObject, axis: ScrollAxis) -> UIScrollView? {
-        var current: NSObject? = object
-        while let candidate = current {
-            if let sv = candidate as? UIScrollView,
-               sv.isScrollEnabled,
-               scrollableAxis(of: sv).contains(axis) {
-                return sv
-            }
-            current = nextAncestor(of: candidate)
-        }
-        return nil
-    }
-
-    /// Walk the UIKit/accessibility container chain to find the nearest UIScrollView.
-    /// Used only by ensureOnScreen as a fallback when screenElement.scrollView is nil.
-    func scrollableAncestor(of object: NSObject, includeSelf: Bool) -> UIScrollView? {
-        var current: NSObject? = includeSelf ? object : nextAncestor(of: object)
-        while let candidate = current {
-            if let sv = candidate as? UIScrollView, sv.isScrollEnabled { return sv }
-            current = nextAncestor(of: candidate)
-        }
-        return nil
-    }
-
-    private func nextAncestor(of candidate: NSObject) -> NSObject? {
-        if let view = candidate as? UIView { return view.superview }
-        if let element = candidate as? UIAccessibilityElement {
-            return element.accessibilityContainer as? NSObject
-        }
-        if candidate.responds(to: Selector(("accessibilityContainer"))) {
-            return candidate.value(forKey: "accessibilityContainer") as? NSObject
-        }
         return nil
     }
 
