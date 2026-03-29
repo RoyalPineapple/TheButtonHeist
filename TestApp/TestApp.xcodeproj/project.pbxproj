@@ -18,6 +18,7 @@
 		2207F605FE5B90CBFAA698BA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 08C502CD65C96FA553FDE94E /* Assets.xcassets */; };
 		29CCAAF777CC31474B45D927 /* swift-crypto_CCryptoBoringSSLShims.bundle in Resources */ = {isa = PBXBuildFile; fileRef = ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		3446F6FA07532BAC23F137EF /* AlertsSheetDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B30DEF646D2A291B883C6733 /* AlertsSheetDemo.swift */; };
+		35520C4748BADADD6E39476D /* TraitProbeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0671D10ADFFDE0D79EC23086 /* TraitProbeView.swift */; };
 		383CC0131F162CD101132059 /* GridGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B56E5A3E3980E2D0BE602F9 /* GridGalleryView.swift */; };
 		3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED3E93AE1108866F17601CB8 /* SettingsView.swift */; };
 		41BCD5493551504A86D47AB5 /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79538EA411CEC1C55C14AE0E /* NotesView.swift */; };
@@ -140,6 +141,7 @@
 
 /* Begin PBXFileReference section */
 		00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdjustableControlsDemo.swift; sourceTree = "<group>"; };
+		0671D10ADFFDE0D79EC23086 /* TraitProbeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraitProbeView.swift; sourceTree = "<group>"; };
 		08096B81FBB34A677903EC34 /* DemoTableViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTableViewController.swift; sourceTree = "<group>"; };
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		10CDD5E500E477B98B606858 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -234,6 +236,7 @@
 				F7D07E273A0048DA7FE282A3 /* TodoListView.swift */,
 				FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */,
 				BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */,
+				0671D10ADFFDE0D79EC23086 /* TraitProbeView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -519,6 +522,7 @@
 				F72D8F1D2B784116A32F363B /* TodoListView.swift in Sources */,
 				8CFF7D3CBED9A5220DD83FCC /* TogglePickerDemo.swift in Sources */,
 				A7AFDDCAB62A9EDAB026F09D /* TouchCanvasView.swift in Sources */,
+				35520C4748BADADD6E39476D /* TraitProbeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
