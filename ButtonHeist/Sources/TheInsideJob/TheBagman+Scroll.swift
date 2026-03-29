@@ -52,15 +52,14 @@ extension TheBagman {
         let success = safecracker.scrollToEdge(scrollView, edge: target.edge)
 
         // Content may grow after the jump (lazy containers materialise on
-        // scroll). Settle, then re-jump until contentSize stops changing.
+        // scroll). Yield a couple of frames, then re-jump until contentSize
+        // stops changing.
         if success {
             for _ in 0..<20 {
-                _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
+                await yieldFrames(2)
                 let prev = scrollView.contentSize
                 let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
-                if moved {
-                    _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
-                }
+                if moved { await yieldFrames(2) }
                 if !moved && scrollView.contentSize == prev { break }
             }
         }
@@ -110,7 +109,7 @@ extension TheBagman {
         // Phase 2: jump to opposite edge, scan again
         if scrollCount < maxScrolls {
             safecracker.scrollToOppositeEdge(scrollView, from: primaryDirection)
-            _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
+            await yieldFrames(2)
             refreshAccessibilityData()
 
             if let result = await scanLoop(
@@ -153,8 +152,8 @@ extension TheBagman {
                 clampToContentSize: false
             )
 
-            // Let the layout settle so new content materialises.
-            _ = await tripwire.waitForSettle(timeout: 0.15, requiredQuietFrames: 2)
+            // Yield a couple of frames so layout runs and new content appears.
+            await yieldFrames(2)
 
             scrollCount += 1
             refreshAccessibilityData()
@@ -271,6 +270,19 @@ extension TheBagman {
         case .right: return .right
         case .next: return .next
         case .previous: return .previous
+        }
+    }
+
+    // MARK: - Frame Yielding
+
+    /// Yield to the main run loop for N display frames. Each iteration
+    /// flushes pending Core Animation transactions and gives layout a
+    /// chance to run — enough for lazy containers to materialise content
+    /// without waiting for animations to finish.
+    private func yieldFrames(_ count: Int) async {
+        for _ in 0..<count {
+            CATransaction.flush()
+            await Task.yield()
         }
     }
 }
