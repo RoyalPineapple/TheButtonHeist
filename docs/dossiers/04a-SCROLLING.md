@@ -123,11 +123,11 @@ Searches for an element matching an `ElementMatcher` predicate by scrolling thro
 
 1. **Phase 0 — Check current tree.** Before scrolling, `refreshAccessibilityData()` and check if the element is already visible via `resolveFirstMatch`. If found, return immediately with `scrollCount: 0`.
 
-2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — scrolls one page at a time (via `scrollByPage(animated: false, clampToContentSize: false)`), waits for settle (`waitForSettle(0.15s, 2 quiet frames)`), refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (content exhausted). The content-size clamp is always disabled so lazy containers can scroll past the currently-materialized region.
+2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — scrolls one page at a time (via `scrollByPage(animated: false, clampToContentSize: false)`), yields 2 display frames via `yieldFrames(2)` (`CATransaction.flush()` + `Task.yield()`), refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (content exhausted). The content-size clamp is always disabled so lazy containers can scroll past the currently-materialized region.
 
-3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains, jump to the opposite edge via `scrollToOppositeEdge`, wait for settle, and run `scanLoop()` again in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
+3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains, jump to the opposite edge via `scrollToOppositeEdge`, yield frames, and run `scanLoop()` again in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
 
-**Non-blocking scroll:** Unlike the auto-scroll path (which uses `animated: true` + settle wait), scroll-to-visible uses `animated: false` + short settle waits (0.15s, 2 quiet frames). This is much faster for multi-page searches — no animation delay per step. The settle wait also gives SwiftUI lazy containers time to materialize new content.
+**Non-blocking scroll:** The scroll loop uses `yieldFrames(2)` — just `CATransaction.flush()` + `Task.yield()` per frame — instead of the heavier `waitForSettle`. This is enough for layout to run and lazy containers to materialize content, without waiting for animations to finish. Combined with `animated: false`, multi-page searches are very fast.
 
 **Response:** Every `scrollToVisible` result includes a `scrollSearchResult` with `scrollCount`, `uniqueElementsSeen`, `totalItems`, `exhaustive`, and `foundElement`.
 
@@ -142,7 +142,7 @@ flowchart TD
     SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
     PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
-    SLOOP --> SETTLE["waitForSettle(0.15s, 2 quiet frames)"]
+    SLOOP --> SETTLE["yieldFrames(2)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
@@ -152,7 +152,7 @@ flowchart TD
     BUDGET -->|Yes| SLOOP
     BUDGET -->|No| STALL
 
-    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ waitForSettle"]
+    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ yieldFrames(2)"]
     PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
     SCAN2 --> RESULT{Found?}
     RESULT -->|Yes| END
@@ -172,7 +172,7 @@ Jumps the content offset to the absolute edge of the content:
 
 Returns `true` without scrolling if already at the target edge.
 
-**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` settles and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement. This handles both UIKit and SwiftUI containers uniformly.
+**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` yields frames and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement. Uses `yieldFrames(2)` between iterations — lightweight frame yielding, not full settle polling.
 
 ## Ancestor Walk
 
@@ -206,7 +206,7 @@ After settle, `bagman.refreshAccessibilityData()` rebuilds the element cache. Th
 
 The `scroll` command does **not** settle or refresh internally — it returns immediately after `setContentOffset`. The settle and delta computation happens in the outer `performInteraction` pipeline after the command returns.
 
-`scroll_to_visible` and `scroll_to_edge` are now `async` and handle their own settle internally — `scroll_to_visible` uses `waitForSettle(0.15s, 2 quiet frames)` between each page step, and `scroll_to_edge` iterates with settle waits for lazy containers. The outer pipeline still runs `actionResultWithDelta` after they return.
+`scroll_to_visible` and `scroll_to_edge` are now `async` and handle their own frame yielding internally — both use `yieldFrames(2)` (`CATransaction.flush()` + `Task.yield()` per frame) between steps. This is lighter than `waitForSettle` — just enough for layout to run and lazy content to materialize, without waiting for animations to finish. The outer pipeline still runs `actionResultWithDelta` after they return.
 
 ## Implementation Notes
 
