@@ -155,15 +155,20 @@ extension TheBagman {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        // Scroll repeatedly in the edge direction until no movement.
-        // This works for all container types and handles lazy content naturally.
+        // Scroll repeatedly in the edge direction until stagnation.
+        // scrollByPage returns false at edge for UIScrollViews. For swipe-based
+        // targets (which always return true), we detect stagnation by checking
+        // whether the accessibility tree changed after each swipe.
         let direction = edgeDirection(for: target.edge)
         var moved = false
         for _ in 0..<50 {
+            let before = onScreen
             let stepped = await scrollOnePage(scrollTarget, direction: direction, animated: false)
             if !stepped { break }
-            moved = true
             await tripwire.yieldFrames(2)
+            refreshAccessibilityData()
+            if onScreen == before { break }
+            moved = true
         }
 
         return TheSafecracker.InteractionResult(
@@ -204,29 +209,35 @@ extension TheBagman {
         // Scroll each one in its natural axis until no new elements appear, then
         // move to the next. After each scroll, re-walk the tree so newly-revealed
         // containers get picked up. maxScrolls is a safety valve, not a budget.
-        var exhausted = Set<Int>()
+        // Exhaustion is keyed by AccessibilityContainer (Hashable, value-type) so
+        // it survives hierarchy rebuilds — no positional index drift.
+        var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
 
         while scrollCount < maxScrolls {
-            guard let (target, idx) = findLiveScrollTarget(excluding: exhausted) else { break }
+            guard let (scrollTarget, container) = findLiveScrollTarget(excluding: exhausted) else { break }
 
-            let dir = adaptDirection(searchDirection, for: target)
+            let dir = adaptDirection(searchDirection, for: scrollTarget)
             let before = onScreen
-            let moved = await scrollOnePage(target, direction: dir, animated: false)
+            let moved = await scrollOnePage(scrollTarget, direction: dir, animated: false)
 
-            if !moved { exhausted.insert(idx); continue }
+            if !moved { exhausted.insert(container); continue }
 
             await tripwire.yieldFrames(3)
-            scrollCount += 1
             refreshAccessibilityData()
 
             if let found = resolveFirstMatch(searchTarget) {
                 ensureOnScreenSync(found)
+                scrollCount += 1
                 return foundResult(found, scrollCount: scrollCount)
             }
 
             // No new elements → this container is exhausted in this direction
-            if onScreen == before { exhausted.insert(idx) }
+            if onScreen == before {
+                exhausted.insert(container)
+            } else {
+                scrollCount += 1
+            }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -235,30 +246,21 @@ extension TheBagman {
     /// Walk the cached hierarchy tree (pre-order = outermost first) and return the
     /// first non-exhausted scrollable container as a `ScrollableTarget`.
     private func findLiveScrollTarget(
-        excluding exhausted: Set<Int>
-    ) -> (target: ScrollableTarget, index: Int)? {
-        struct State {
-            var index = 0
-            var first: (ScrollableTarget, Int)?
-        }
-        let state = cachedHierarchy.reducedHierarchy(State()) { state, node in
-            var state = state
-            guard state.first == nil else { return state }
+        excluding exhausted: Set<AccessibilityContainer>
+    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+            guard found == nil else { return found }
             guard case .container(let container, _) = node,
-                  case .scrollable(let contentSize) = container.type else { return state }
-            let thisIndex = state.index
-            state.index += 1
-            guard !exhausted.contains(thisIndex) else { return state }
+                  case .scrollable(let contentSize) = container.type,
+                  !exhausted.contains(container) else { return nil }
             if let sv = scrollViewLookup[container], sv.window != nil {
-                state.first = (.uiScrollView(sv), thisIndex)
+                return (.uiScrollView(sv), container)
             } else if let view = scrollableViewLookup[container], view.window != nil {
-                state.first = (.accessibilityScrollable(view: view, contentSize: contentSize), thisIndex)
+                return (.accessibilityScrollable(view: view, contentSize: contentSize), container)
             } else {
-                state.first = (.swipeable(frame: container.frame, contentSize: contentSize), thisIndex)
+                return (.swipeable(frame: container.frame, contentSize: contentSize), container)
             }
-            return state
         }
-        return state.first
     }
 
     private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -334,11 +336,12 @@ extension TheBagman {
         screenElement: ScreenElement,
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
-        // Explicit scrollViewHeistId → look up that container
-        if let heistId, let entry = screenElements[heistId], let obj = entry.object {
+        // Explicit scrollViewHeistId → look up that container only, don't fall through
+        if let heistId {
+            guard let entry = screenElements[heistId], let obj = entry.object else { return nil }
             if let sv = obj as? UIScrollView { return .uiScrollView(sv) }
             let frame = obj.accessibilityFrame
-            if !frame.isNull { return .swipeable(frame: frame, contentSize: frame.size) }
+            return frame.isNull ? nil : .swipeable(frame: frame, contentSize: frame.size)
         }
 
         // Use the accessibility hierarchy's scroll view for this element

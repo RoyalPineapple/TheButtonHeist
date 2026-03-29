@@ -305,7 +305,7 @@ enum ToolDefinitions {
         inputSchema: .object([
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
-                "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
+                "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 50)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "scrollViewHeistId": ["type": "string", "description": "Explicit scroll view heistId to target (overrides automatic discovery)"],
                 "expect": expectProperty,
