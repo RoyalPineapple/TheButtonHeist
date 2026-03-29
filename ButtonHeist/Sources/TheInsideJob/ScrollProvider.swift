@@ -10,14 +10,22 @@ import TheScore
 ///   - `AccessibilitySPIScrollProvider` — private accessibility SPI
 ///     (animated, cooperative, natural deceleration)
 ///
-/// Both handle UIScrollViews. For non-UIScrollView containers (SwiftUI's
-/// PlatformContainer), both fall back to synthetic swipe via TheSafecracker.
+/// Both handle UIScrollViews directly. For non-UIScrollView scrollable
+/// containers (SwiftUI's PlatformContainer), the SPI provider uses
+/// accessibilityScrollDownPage etc., ContentOffset falls back to swipe.
 @MainActor protocol ScrollProvider {
 
     /// Scroll a UIScrollView by one page in the given direction.
     /// Returns false if already at the edge (no movement possible).
     func scrollByPage(
         _ scrollView: UIScrollView,
+        direction: UIAccessibilityScrollDirection
+    ) async -> Bool
+
+    /// Scroll any view by one page using accessibility SPI or swipe fallback.
+    /// For non-UIScrollView containers (e.g. SwiftUI PlatformContainer).
+    func scrollViewByPage(
+        _ view: UIView,
         direction: UIAccessibilityScrollDirection
     ) async -> Bool
 
@@ -46,6 +54,7 @@ import TheScore
 
 /// Scrolls by directly setting contentOffset on UIScrollViews.
 /// Fast, precise, predictable page size (frame - 44pt overlap).
+/// For non-UIScrollView containers, falls back to synthetic swipe.
 @MainActor final class ContentOffsetScrollProvider: ScrollProvider {
 
     private let safecracker: TheSafecracker
@@ -59,6 +68,14 @@ import TheScore
         direction: UIAccessibilityScrollDirection
     ) async -> Bool {
         safecracker.scrollByPage(scrollView, direction: direction, animated: false)
+    }
+
+    func scrollViewByPage(
+        _ view: UIView,
+        direction: UIAccessibilityScrollDirection
+    ) async -> Bool {
+        let screenFrame = view.convert(view.bounds, to: nil)
+        return await safecracker.scrollBySwipe(frame: screenFrame, direction: direction)
     }
 
     func scrollToMakeVisible(
@@ -89,15 +106,19 @@ import TheScore
 ///   - accessibilityScrollDownPage / UpPage / LeftPage / RightPage
 ///   - _accessibilityScrollToTop / _accessibilityScrollToBottom
 ///
-/// Animated, cooperative with the system, natural deceleration near edges.
-/// Edge detection via contentOffset comparison before/after.
+/// Works on ANY view the accessibility system considers scrollable — including
+/// SwiftUI's PlatformContainer which is not a UIScrollView but responds to the
+/// SPI scroll selectors.
 ///
-/// Two caveats discovered during research:
-/// 1. Lazy containers (SwiftUI List) start with contentSize < frame.
-///    The SPI refuses to scroll when content appears to fit. A small
-///    setContentOffset bump materializes cells and grows contentSize.
-/// 2. The SPI queues an animated scroll via CADisplayLink. Needs real
-///    wall-clock time (~128ms) to settle, not just Task.yield().
+/// Edge detection: for UIScrollViews, compares contentOffset before/after.
+/// For non-UIScrollViews (no contentOffset), returns true optimistically and
+/// lets the caller's stagnation check handle termination.
+///
+/// Caveats:
+/// 1. Lazy containers start with contentSize < frame. A 1pt setContentOffset
+///    bump materializes cells before the first SPI scroll.
+/// 2. The SPI queues an animated scroll via CADisplayLink. Needs 3 real frames
+///    (~48ms) to settle.
 @MainActor final class AccessibilitySPIScrollProvider: ScrollProvider {
 
     private let safecracker: TheSafecracker
@@ -116,26 +137,32 @@ import TheScore
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection
     ) async -> Bool {
-        // Lazy contentSize bootstrap: if content fits in frame, the SPI
-        // won't scroll. Bump contentOffset by 1pt to force cell materialization.
         if needsBootstrap(scrollView, direction: direction) {
             let tiny = bootstrapOffset(scrollView, direction: direction)
             scrollView.setContentOffset(tiny, animated: false)
-            await settleAnimation()
+            await settle()
         }
-
         let before = scrollView.contentOffset
         performSPIScroll(scrollView, direction: direction)
-        await settleAnimation()
+        await settle()
         return scrollView.contentOffset != before
+    }
+
+    func scrollViewByPage(
+        _ view: UIView,
+        direction: UIAccessibilityScrollDirection
+    ) async -> Bool {
+        // PlatformContainer responds to accessibilityScrollDownPage etc.
+        // No contentOffset to compare — return true and let caller detect stagnation.
+        performSPIScroll(view, direction: direction)
+        await settle()
+        return true
     }
 
     func scrollToMakeVisible(
         _ targetFrame: CGRect,
         in scrollView: UIScrollView
     ) async -> Bool {
-        // _accessibilityScrollToVisible requires the element object, not a frame.
-        // Fall back to setContentOffset for the frame-based path.
         safecracker.scrollToMakeVisible(targetFrame, in: scrollView)
     }
 
@@ -151,50 +178,37 @@ import TheScore
         edge: TheScore.ScrollEdge
     ) async -> Bool {
         let before = scrollView.contentOffset
-        let sel: Selector
         switch edge {
-        case .top:    sel = NSSelectorFromString("_accessibilityScrollToTop")
-        case .bottom: sel = NSSelectorFromString("_accessibilityScrollToBottom")
+        case .top:
+            _ = scrollView.perform(NSSelectorFromString("_accessibilityScrollToTop"))
+        case .bottom:
+            _ = scrollView.perform(NSSelectorFromString("_accessibilityScrollToBottom"))
         case .left, .right:
-            // No SPI for left/right edge — fall back to setContentOffset
             return safecracker.scrollToEdge(scrollView, edge: edge)
         }
-        _ = scrollView.perform(sel)
-        await settleAnimation()
+        await settle()
         return scrollView.contentOffset != before
     }
 
     // MARK: - Private
 
-    private func performSPIScroll(
-        _ scrollView: UIScrollView,
-        direction: UIAccessibilityScrollDirection
-    ) {
+    private func performSPIScroll(_ view: UIView, direction: UIAccessibilityScrollDirection) {
         let sel: Selector
         switch direction {
-        case .down, .next:
-            sel = NSSelectorFromString("accessibilityScrollDownPage")
-        case .up, .previous:
-            sel = NSSelectorFromString("accessibilityScrollUpPage")
-        case .right:
-            sel = NSSelectorFromString("accessibilityScrollRightPage")
-        case .left:
-            sel = NSSelectorFromString("accessibilityScrollLeftPage")
-        @unknown default:
-            return
+        case .down, .next:     sel = NSSelectorFromString("accessibilityScrollDownPage")
+        case .up, .previous:   sel = NSSelectorFromString("accessibilityScrollUpPage")
+        case .right:           sel = NSSelectorFromString("accessibilityScrollRightPage")
+        case .left:            sel = NSSelectorFromString("accessibilityScrollLeftPage")
+        @unknown default: return
         }
-        _ = scrollView.perform(sel)
+        guard view.responds(to: sel) else { return }
+        _ = view.perform(sel)
     }
 
-    /// The SPI queues an animated scroll via CADisplayLink. Need real wall-clock
-    /// time for the animation to process — Task.yield() alone isn't enough.
-    private func settleAnimation() async {
+    private func settle() async {
         await tripwire.yieldRealFrames(settleFrames)
     }
 
-    /// Check if the scroll view needs a contentSize bootstrap.
-    /// Lazy SwiftUI containers start with contentSize ≤ frame, causing the SPI
-    /// to refuse scrolling. A 1pt offset bump materializes cells.
     private func needsBootstrap(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection
@@ -209,7 +223,6 @@ import TheScore
         }
     }
 
-    /// A tiny offset bump to force lazy content materialization.
     private func bootstrapOffset(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection

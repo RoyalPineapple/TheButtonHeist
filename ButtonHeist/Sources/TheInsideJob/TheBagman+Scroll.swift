@@ -19,14 +19,17 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// UIScrollView → direct setContentOffset. Everything else → synthetic swipe.
+    /// Three tiers: UIScrollView (direct offset), scrollable UIView (SPI page scroll),
+    /// swipeable frame (synthetic swipe fallback).
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
+        case scrollableView(view: UIView, contentSize: CGSize)
         case swipeable(frame: CGRect, contentSize: CGSize)
 
         var frame: CGRect {
             switch self {
             case .uiScrollView(let sv): return sv.frame
+            case .scrollableView(let v, _): return v.frame
             case .swipeable(let frame, _): return frame
             }
         }
@@ -34,6 +37,7 @@ extension TheBagman {
         var contentSize: CGSize {
             switch self {
             case .uiScrollView(let sv): return sv.contentSize
+            case .scrollableView(_, let cs): return cs
             case .swipeable(_, let cs): return cs
             }
         }
@@ -91,6 +95,8 @@ extension TheBagman {
         switch target {
         case .uiScrollView(let sv):
             return await scrollProvider.scrollByPage(sv, direction: direction)
+        case .scrollableView(let view, _):
+            return await scrollProvider.scrollViewByPage(view, direction: direction)
         case .swipeable(let frame, _):
             return await scrollProvider.scrollBySwipe(frame: frame, direction: direction)
         }
@@ -142,8 +148,8 @@ extension TheBagman {
         case .uiScrollView(let sv):
             guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
             moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
-        case .swipeable:
-            // Swipe-based: scroll repeatedly until stagnation
+        case .scrollableView, .swipeable:
+            // Non-UIScrollView: scroll repeatedly until stagnation
             let direction = edgeDirection(for: target.edge)
             var didMove = false
             for _ in 0..<50 {
@@ -235,7 +241,8 @@ extension TheBagman {
     private func findLiveScrollTarget(
         excluding exhausted: Set<AccessibilityContainer>
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+        // First: check parser-detected .scrollable containers (UIScrollViews)
+        let fromParser: (ScrollableTarget, AccessibilityContainer)? = cachedHierarchy.reducedHierarchy(nil) { found, node in
             guard found == nil else { return found }
             guard case .container(let container, _) = node,
                   case .scrollable(let contentSize) = container.type,
@@ -244,13 +251,52 @@ extension TheBagman {
                 if let sv = view as? UIScrollView {
                     return (.uiScrollView(sv), container)
                 }
-                // Non-UIScrollView container (e.g. SwiftUI PlatformContainer) —
-                // use screen-space frame, not the parser's root-relative frame.
-                let screenFrame = view.convert(view.bounds, to: nil)
-                return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
+                return (.scrollableView(view: view, contentSize: contentSize), container)
             }
             return (.swipeable(frame: container.frame, contentSize: contentSize), container)
         }
+        if let fromParser { return fromParser }
+
+        // Second: detect non-UIScrollView scrollable containers via child frame overflow.
+        // SwiftUI's PlatformContainer has a child PlatformGroupContainer whose frame
+        // is the full content size (e.g. {2300, 197} for a horizontal carousel).
+        // The parser doesn't mark these as .scrollable, but they respond to
+        // accessibilityScrollDownPage and friends.
+        for (_, entry) in screenElements where onScreen.contains(entry.heistId) {
+            guard let object = entry.object else { continue }
+            guard let view = viewWithScrollableChild(above: object) else { continue }
+            let syntheticContainer = AccessibilityContainer(
+                type: .scrollable(contentSize: .zero),
+                frame: view.frame
+            )
+            guard !exhausted.contains(syntheticContainer) else { continue }
+            if let child = view.subviews.first {
+                let contentSize = CGSize(
+                    width: max(child.frame.width, view.frame.width),
+                    height: max(child.frame.height, view.frame.height)
+                )
+                return (.scrollableView(view: view, contentSize: contentSize), syntheticContainer)
+            }
+        }
+
+        return nil
+    }
+
+    /// Walk up from an element's backing object to find a view whose child
+    /// overflows its bounds (indicating a scrollable container the parser missed).
+    /// Stops at the first UIScrollView (already handled by the parser path).
+    private func viewWithScrollableChild(above object: NSObject) -> UIView? {
+        var current: UIView? = (object as? UIView)?.superview
+        while let view = current {
+            if view is UIScrollView { return nil } // parser handles these
+            if let child = view.subviews.first,
+               child.frame.width > view.frame.width + 1 ||
+               child.frame.height > view.frame.height + 1 {
+                return view
+            }
+            current = view.superview
+        }
+        return nil
     }
 
     private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -338,10 +384,19 @@ extension TheBagman {
                 if let (axisTarget, _) = findScrollTargetForAxis(axis) {
                     return axisTarget
                 }
-                // No scrollable container in the tree either — swipe at the
-                // element's position using a full-width/height band. This handles
-                // SwiftUI's PlatformContainer carousels which aren't UIScrollViews
-                // and aren't marked .scrollable by the parser.
+                // No parser-detected container either — look for a view with
+                // child frame overflow (SwiftUI PlatformContainer pattern).
+                if let object = screenElement.object,
+                   let view = viewWithScrollableChild(above: object) {
+                    if let child = view.subviews.first {
+                        let contentSize = CGSize(
+                            width: max(child.frame.width, view.frame.width),
+                            height: max(child.frame.height, view.frame.height)
+                        )
+                        return .scrollableView(view: view, contentSize: contentSize)
+                    }
+                }
+                // Last resort: swipe at the element's position
                 if let object = screenElement.object {
                     let elFrame = object.accessibilityFrame
                     if !elFrame.isNull, !elFrame.isEmpty {
