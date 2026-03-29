@@ -38,6 +38,10 @@ struct RootView: View {
                         CornerScrollView()
                     }
                     .accessibilityIdentifier("buttonheist.root.cornerScroll")
+                    NavigationLink("Nested Scrolls") {
+                        NestedScrollView()
+                    }
+                    .accessibilityIdentifier("buttonheist.root.nestedScrolls")
                 }
             }
             .navigationTitle("ButtonHeist Test App")

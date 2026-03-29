@@ -731,7 +731,7 @@ public enum ScrollDirection: String, Codable, Sendable {
 
 /// Target for scroll command
 public struct ScrollTarget: Codable, Sendable {
-    /// Element to scroll from (bubbles up to nearest scroll view ancestor)
+    /// Element to scroll from (axis-aware: finds scrollable container matching direction)
     public let elementTarget: ElementTarget?
     /// Scroll direction
     public let direction: ScrollDirection
@@ -755,7 +755,6 @@ public struct ScrollToVisibleTarget: Sendable {
     public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
-
     public init(
         elementTarget: ElementTarget? = nil,
         maxScrolls: Int? = nil,
@@ -766,7 +765,7 @@ public struct ScrollToVisibleTarget: Sendable {
         self.direction = direction
     }
 
-    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 20, 1) }
+    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 50, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
 }
 
@@ -782,6 +781,7 @@ extension ScrollToVisibleTarget: Codable {
         self.elementTarget = try? ElementTarget(from: decoder)
         self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
+
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -791,6 +791,7 @@ extension ScrollToVisibleTarget: Codable {
         }
         try container.encodeIfPresent(maxScrolls, forKey: .maxScrolls)
         try container.encodeIfPresent(direction, forKey: .direction)
+
     }
 }
 
@@ -801,7 +802,7 @@ public enum ScrollEdge: String, Codable, Sendable {
 
 /// Target for scroll-to-edge command
 public struct ScrollToEdgeTarget: Codable, Sendable {
-    /// Element whose nearest scroll view ancestor to scroll
+    /// Element whose scrollable container to scroll
     public let elementTarget: ElementTarget?
     /// Which edge to scroll to
     public let edge: ScrollEdge

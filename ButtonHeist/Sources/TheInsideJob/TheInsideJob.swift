@@ -468,7 +468,7 @@ public final class TheInsideJob {
     /// Uses hasTarget (existence check) — doesn't require unique match.
     /// Snapshots after each refresh so heistId lookup stays current.
     private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
-        let elTarget = target.elementTarget
+        let elementTarget = target.elementTarget
         let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
         let start = CFAbsoluteTimeGetCurrent()
 
@@ -476,11 +476,11 @@ public final class TheInsideJob {
         bagman.refreshAccessibilityData()
         _ = bagman.snapshotElements()
         if target.resolvedAbsent {
-            if !bagman.hasTarget(elTarget) {
+            if !bagman.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
             }
         } else {
-            if bagman.hasTarget(elTarget) {
+            if bagman.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
             }
         }
@@ -492,11 +492,11 @@ public final class TheInsideJob {
             _ = bagman.snapshotElements()
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
-                if !bagman.hasTarget(elTarget) {
+                if !bagman.hasTarget(elementTarget) {
                     return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
                 }
             } else {
-                if bagman.hasTarget(elTarget) {
+                if bagman.hasTarget(elementTarget) {
                     return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
                 }
             }

@@ -6,29 +6,115 @@ import TheScore
 
 // MARK: - Scroll Orchestration
 //
-// TheBagman finds scroll views from the accessibility hierarchy and drives
-// TheSafecracker's scroll primitives. TheSafecracker knows nothing about
-// elements — it takes a UIScrollView and moves it.
+// TheBagman finds scrollable containers from the accessibility hierarchy and
+// drives TheSafecracker's scroll primitives. Two paths:
+//
+//   UIScrollView → setContentOffset (fast, precise)
+//   Any scrollable → synthetic swipe gesture (universal fallback)
+//
+// The accessibility hierarchy marks containers as .scrollable with their
+// contentSize. When the backing view is a UIScrollView, we manipulate it
+// directly. When it's not (e.g. SwiftUI's PlatformContainer), we swipe.
 
 extension TheBagman {
 
+    /// A scrollable container discovered from the accessibility hierarchy.
+    /// UIScrollView → direct setContentOffset. Everything else → synthetic swipe.
+    @MainActor enum ScrollableTarget {
+        case uiScrollView(UIScrollView)
+        case swipeable(frame: CGRect, contentSize: CGSize)
+
+        var frame: CGRect {
+            switch self {
+            case .uiScrollView(let sv): return sv.frame
+            case .swipeable(let frame, _): return frame
+            }
+        }
+
+        var contentSize: CGSize {
+            switch self {
+            case .uiScrollView(let sv): return sv.contentSize
+            case .swipeable(_, let cs): return cs
+            }
+        }
+    }
+
+    // MARK: - Scroll Axis Detection
+
+    struct ScrollAxis: OptionSet, Sendable {
+        let rawValue: Int
+        static let horizontal = ScrollAxis(rawValue: 1 << 0)
+        static let vertical   = ScrollAxis(rawValue: 1 << 1)
+    }
+
+    func scrollableAxis(of scrollView: UIScrollView) -> ScrollAxis {
+        scrollableAxis(of: .uiScrollView(scrollView))
+    }
+
+    func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
+        var axis: ScrollAxis = []
+        if target.contentSize.width > target.frame.width { axis.insert(.horizontal) }
+        if target.contentSize.height > target.frame.height { axis.insert(.vertical) }
+        return axis
+    }
+
+    func requiredAxis(for direction: ScrollDirection) -> ScrollAxis {
+        switch direction {
+        case .up, .down, .next, .previous: return .vertical
+        case .left, .right: return .horizontal
+        }
+    }
+
+    func requiredAxis(for edge: ScrollEdge) -> ScrollAxis {
+        switch edge {
+        case .top, .bottom: return .vertical
+        case .left, .right: return .horizontal
+        }
+    }
+
+    func requiredAxis(for direction: ScrollSearchDirection) -> ScrollAxis {
+        switch direction {
+        case .up, .down: return .vertical
+        case .left, .right: return .horizontal
+        }
+    }
+
+    // MARK: - Unified Scroll Dispatch
+
+    /// Scroll a target by one page. Delegates to the active ScrollProvider.
+    func scrollOnePage(
+        _ target: ScrollableTarget,
+        direction: UIAccessibilityScrollDirection,
+        animated: Bool = true
+    ) async -> Bool {
+        guard let scrollProvider else { return false }
+        switch target {
+        case .uiScrollView(let sv):
+            return await scrollProvider.scrollByPage(sv, direction: direction)
+        case .swipeable(let frame, _):
+            return await scrollProvider.scrollBySwipe(frame: frame, direction: direction)
+        }
+    }
+
     // MARK: - Scroll Command Execution
 
-    func executeScroll(_ target: ScrollTarget) -> TheSafecracker.InteractionResult {
+    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
-        guard let resolved = resolveTarget(elementTarget) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: elementTarget))
+        let resolution = resolveTarget(elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        guard let object = resolved.screenElement.object,
-              let scrollView = scrollableAncestor(of: object, includeSelf: true),
-              let safecracker else {
+        let axis = requiredAxis(for: target.direction)
+        guard let scrollTarget = resolveScrollTarget(
+            screenElement: resolved.screenElement, axis: axis
+        ) else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
 
         let uiDirection = uiScrollDirection(for: target.direction)
-        let success = safecracker.scrollByPage(scrollView, direction: uiDirection)
+        let success = await scrollOnePage(scrollTarget, direction: uiDirection)
         return TheSafecracker.InteractionResult(
             success: success, method: .scroll,
             message: success ? nil : "Already at edge",
@@ -40,35 +126,52 @@ extension TheBagman {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
-        guard let resolved = resolveTarget(elementTarget) else {
-            return .failure(.elementNotFound, message: elementNotFoundMessage(for: elementTarget))
+        let resolution = resolveTarget(elementTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        guard let object = resolved.screenElement.object,
-              let scrollView = scrollableAncestor(of: object, includeSelf: true),
-              let safecracker else {
+        let axis = requiredAxis(for: target.edge)
+        guard let scrollTarget = resolveScrollTarget(
+            screenElement: resolved.screenElement, axis: axis
+        ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        let success = safecracker.scrollToEdge(scrollView, edge: target.edge)
-
-        // Content may grow after the jump (lazy containers materialise on
-        // scroll). Yield a couple of frames, then re-jump until contentSize
-        // stops changing.
-        if success {
-            for _ in 0..<20 {
+        let moved: Bool
+        switch scrollTarget {
+        case .uiScrollView(let sv):
+            guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
+            moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
+        case .swipeable:
+            // Swipe-based: scroll repeatedly until stagnation
+            let direction = edgeDirection(for: target.edge)
+            var didMove = false
+            for _ in 0..<50 {
+                let before = onScreen
+                let stepped = await scrollOnePage(scrollTarget, direction: direction, animated: false)
+                if !stepped { break }
+                didMove = true
                 await tripwire.yieldFrames(2)
-                let prev = scrollView.contentSize
-                let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
-                if moved { await tripwire.yieldFrames(2) }
-                if !moved && scrollView.contentSize == prev { break }
+                refreshAccessibilityData()
+                if onScreen == before { break }
             }
+            moved = didMove
         }
 
         return TheSafecracker.InteractionResult(
-            success: success, method: .scrollToEdge,
-            message: success ? nil : "Already at edge",
+            success: moved, method: .scrollToEdge,
+            message: moved ? nil : "Already at edge",
             value: nil
         )
+    }
+
+    private func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
+        switch edge {
+        case .top: return .up
+        case .bottom: return .down
+        case .left: return .left
+        case .right: return .right
+        }
     }
 
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
@@ -76,122 +179,113 @@ extension TheBagman {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
         let maxScrolls = target.resolvedMaxScrolls
-        let primaryDirection = target.resolvedDirection
+        let searchDirection = target.resolvedDirection
 
-        // Phase 0: check current tree
+        // Already visible?
         refreshAccessibilityData()
         if let found = resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
-            let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
-            return TheSafecracker.InteractionResult(
-                success: true, method: .scrollToVisible, message: nil, value: nil,
-                scrollSearchResult: ScrollSearchResult(
-                    scrollCount: 0, uniqueElementsSeen: cachedElements.count,
-                    totalItems: nil, exhaustive: false, foundElement: wireElement
-                )
-            )
+            return foundResult(found, scrollCount: 0)
         }
 
-        guard let scrollView = findFirstScrollView(),
-              let safecracker else {
-            return .failure(.scrollToVisible, message: "No scroll view found on screen")
+        guard scrollProvider != nil else {
+            return .failure(.scrollToVisible, message: "No scroll provider available")
         }
 
-        let totalItems = safecracker.queryCollectionTotalItems(scrollView)
+        // Walk the hierarchy tree for scrollable containers (outermost first).
+        // Scroll each one in its natural axis until no new elements appear, then
+        // move to the next. After each scroll, re-walk the tree so newly-revealed
+        // containers get picked up. maxScrolls is a safety valve, not a budget.
+        // Exhaustion is keyed by AccessibilityContainer (Hashable, value-type) so
+        // it survives hierarchy rebuilds — no positional index drift.
+        var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
 
-        // Phase 1: scan in primary direction
-        if let result = await scanLoop(
-            target: searchTarget, scrollView: scrollView, direction: primaryDirection,
-            maxScrolls: maxScrolls, scrollCount: &scrollCount, totalItems: totalItems
-        ) { return result }
+        while scrollCount < maxScrolls {
+            guard let (scrollTarget, container) = findLiveScrollTarget(excluding: exhausted) else { break }
 
-        // Phase 2: jump to opposite edge, scan again
-        if scrollCount < maxScrolls {
-            safecracker.scrollToOppositeEdge(scrollView, from: primaryDirection)
-            await tripwire.yieldFrames(2)
+            let dir = adaptDirection(searchDirection, for: scrollTarget)
+            let before = onScreen
+            let moved = await scrollOnePage(scrollTarget, direction: dir, animated: false)
+
+            if !moved { exhausted.insert(container); continue }
+
+            await tripwire.yieldFrames(3)
             refreshAccessibilityData()
 
-            if let result = await scanLoop(
-                target: searchTarget, scrollView: scrollView, direction: primaryDirection,
-                maxScrolls: maxScrolls, scrollCount: &scrollCount, totalItems: totalItems
-            ) { return result }
+            if let found = resolveFirstMatch(searchTarget) {
+                ensureOnScreenSync(found)
+                scrollCount += 1
+                return foundResult(found, scrollCount: scrollCount)
+            }
+
+            // No new elements → this container is exhausted in this direction
+            if onScreen == before {
+                exhausted.insert(container)
+            } else {
+                scrollCount += 1
+            }
         }
 
-        let totalSeen = screenElements.count
-        let exhaustive = totalItems.map { totalSeen >= $0 } ?? false
-        return TheSafecracker.InteractionResult(
+        return notFoundResult(scrollCount: scrollCount)
+    }
+
+    /// Walk the cached hierarchy tree (pre-order = outermost first) and return the
+    /// first non-exhausted scrollable container as a `ScrollableTarget`.
+    private func findLiveScrollTarget(
+        excluding exhausted: Set<AccessibilityContainer>
+    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+            guard found == nil else { return found }
+            guard case .container(let container, _) = node,
+                  case .scrollable(let contentSize) = container.type,
+                  !exhausted.contains(container) else { return nil }
+            if let view = scrollableContainerViews[container], view.window != nil {
+                if let sv = view as? UIScrollView {
+                    return (.uiScrollView(sv), container)
+                }
+                // Non-UIScrollView container (e.g. SwiftUI PlatformContainer) —
+                // use screen-space frame, not the parser's root-relative frame.
+                let screenFrame = view.convert(view.bounds, to: nil)
+                return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
+            }
+            return (.swipeable(frame: container.frame, contentSize: contentSize), container)
+        }
+    }
+
+    private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
+        TheSafecracker.InteractionResult(
             success: false, method: .scrollToVisible,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: totalSeen,
-                totalItems: totalItems, exhaustive: exhaustive
+                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
+                totalItems: nil, exhaustive: true
             )
         )
     }
 
-    // MARK: - Scan Loop
-
-    private func scanLoop(
-        target: ElementTarget,
-        scrollView: UIScrollView,
-        direction: ScrollSearchDirection,
-        maxScrolls: Int,
-        scrollCount: inout Int,
-        totalItems: Int?
-    ) async -> TheSafecracker.InteractionResult? {
-        var allSeen = onScreen
-
-        let pageStep = scrollPageStep(scrollView, direction: direction)
-
-        while scrollCount < maxScrolls {
-            // Advance by one page. Animated so it looks human — iOS rubber-bands
-            // naturally if we overshoot contentSize. Stagnation (no new elements)
-            // is the only termination signal, so clamping is unnecessary.
-            let offset = scrollView.contentOffset
-            scrollView.setContentOffset(
-                CGPoint(x: offset.x + pageStep.x, y: offset.y + pageStep.y),
-                animated: true
+    private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
+        let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
+        return TheSafecracker.InteractionResult(
+            success: true, method: .scrollToVisible, message: nil, value: nil,
+            scrollSearchResult: ScrollSearchResult(
+                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
+                totalItems: nil, exhaustive: false, foundElement: wireElement
             )
-
-            // Yield a few frames for layout to materialise new content.
-            await tripwire.yieldFrames(3)
-
-            scrollCount += 1
-            refreshAccessibilityData()
-
-            if let found = resolveFirstMatch(target) {
-                ensureOnScreenSync(found)
-                let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
-                return TheSafecracker.InteractionResult(
-                    success: true, method: .scrollToVisible, message: nil, value: nil,
-                    scrollSearchResult: ScrollSearchResult(
-                        scrollCount: scrollCount,
-                        uniqueElementsSeen: allSeen.union(onScreen).count,
-                        totalItems: totalItems, exhaustive: false, foundElement: wireElement
-                    )
-                )
-            }
-
-            // No new elements → content exhausted in this direction.
-            let newIds = onScreen.subtracting(allSeen)
-            allSeen.formUnion(onScreen)
-            if newIds.isEmpty { break }
-        }
-        return nil
+        )
     }
 
     // MARK: - Ensure On Screen
 
     func ensureOnScreen(for target: ElementTarget) async {
-        guard let resolved = resolveTarget(target),
+        guard let resolved = resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = scrollableAncestor(of: object, includeSelf: false),
-              let safecracker else { return }
-        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+        guard let scrollView = resolved.screenElement.scrollView,
+              let scrollProvider else { return }
+        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
@@ -202,9 +296,10 @@ extension TheBagman {
         let frame = responder.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = scrollableAncestor(of: responder, includeSelf: false),
-              let safecracker else { return }
-        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+        guard let scrollView = screenElements.values
+            .first(where: { $0.object === responder })?.scrollView,
+              let scrollProvider else { return }
+        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
@@ -212,59 +307,81 @@ extension TheBagman {
 
     private func ensureOnScreenSync(_ resolved: ResolvedTarget) {
         guard let object = resolved.screenElement.object,
-              let safecracker else { return }
+              let scrollProvider else { return }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = scrollableAncestor(of: object, includeSelf: false) else { return }
-        _ = safecracker.scrollToMakeVisible(frame, in: scrollView)
-    }
-
-    // MARK: - Scroll View Discovery
-
-    func findFirstScrollView() -> UIScrollView? {
-        for (heistId, entry) in screenElements where onScreen.contains(heistId) {
-            guard let object = entry.object,
-                  let scrollView = scrollableAncestor(of: object, includeSelf: true) else { continue }
-            return scrollView
+        guard let scrollView = resolved.screenElement.scrollView else { return }
+        // scrollToMakeVisible is async in the protocol but the sync variant
+        // only needs the ContentOffset path which completes synchronously.
+        Task { @MainActor in
+            _ = await scrollProvider.scrollToMakeVisible(frame, in: scrollView)
         }
-        return nil
     }
 
-    func scrollableAncestor(of object: NSObject, includeSelf: Bool) -> UIScrollView? {
-        var current: NSObject? = includeSelf ? object : nextAncestor(of: object)
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView, scrollView.isScrollEnabled {
-                return scrollView
+    // MARK: - Scroll Target Resolution (Accessibility Hierarchy)
+
+    /// Find the scrollable container for a resolved element from the accessibility hierarchy.
+    /// Uses the element's stored `scrollView` ref (set by the hierarchy tree's containerVisitor).
+    /// When `axis` is provided and the stored scroll view can't scroll in that axis,
+    /// searches the hierarchy tree for a container that can (e.g. an inner carousel
+    /// when the stored scroll view is the outer vertical).
+    func resolveScrollTarget(
+        screenElement: ScreenElement,
+        axis: ScrollAxis? = nil
+    ) -> ScrollableTarget? {
+        if let sv = screenElement.scrollView {
+            let target = ScrollableTarget.uiScrollView(sv)
+            if let axis, !scrollableAxis(of: target).contains(axis) {
+                // The stored scroll view can't scroll in the requested axis.
+                // Search the hierarchy tree for a container that can.
+                if let (axisTarget, _) = findScrollTargetForAxis(axis) {
+                    return axisTarget
+                }
+                // No scrollable container in the tree either — swipe at the
+                // element's position using a full-width/height band. This handles
+                // SwiftUI's PlatformContainer carousels which aren't UIScrollViews
+                // and aren't marked .scrollable by the parser.
+                if let object = screenElement.object {
+                    let elFrame = object.accessibilityFrame
+                    if !elFrame.isNull, !elFrame.isEmpty {
+                        let screen = UIScreen.main.bounds
+                        let swipeFrame: CGRect
+                        if axis == .horizontal {
+                            swipeFrame = CGRect(x: 0, y: elFrame.midY - 25, width: screen.width, height: 50)
+                        } else {
+                            swipeFrame = CGRect(x: elFrame.midX - 25, y: 0, width: 50, height: screen.height)
+                        }
+                        return .swipeable(frame: swipeFrame, contentSize: screen.size)
+                    }
+                }
             }
-            current = nextAncestor(of: candidate)
+            return target
         }
         return nil
     }
 
-    private func nextAncestor(of candidate: NSObject) -> NSObject? {
-        if let view = candidate as? UIView { return view.superview }
-        if let element = candidate as? UIAccessibilityElement {
-            return element.accessibilityContainer as? NSObject
-        }
-        if candidate.responds(to: Selector(("accessibilityContainer"))) {
-            return candidate.value(forKey: "accessibilityContainer") as? NSObject
-        }
-        return nil
-    }
-
-    // MARK: - Page Step
-
-    /// One page of scroll travel (with 44pt overlap) as a signed delta vector.
-    /// Used by the scan loop to advance the offset directly without contentSize clamping.
-    private func scrollPageStep(_ scrollView: UIScrollView, direction: ScrollSearchDirection) -> CGPoint {
-        let overlap = TheSafecracker.pageOverlap
-        let size = scrollView.frame.size
-        switch direction {
-        case .down:  return CGPoint(x: 0, y: size.height - overlap)
-        case .up:    return CGPoint(x: 0, y: -(size.height - overlap))
-        case .right: return CGPoint(x: size.width - overlap, y: 0)
-        case .left:  return CGPoint(x: -(size.width - overlap), y: 0)
+    /// Find a scrollable container from the hierarchy tree that can scroll on a given axis.
+    private func findScrollTargetForAxis(
+        _ axis: ScrollAxis
+    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+            guard found == nil else { return found }
+            guard case .container(let container, _) = node,
+                  case .scrollable(let contentSize) = container.type else { return nil }
+            let target: ScrollableTarget
+            if let view = scrollableContainerViews[container], view.window != nil {
+                if let sv = view as? UIScrollView {
+                    target = .uiScrollView(sv)
+                } else {
+                    let screenFrame = view.convert(view.bounds, to: nil)
+                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
+                }
+            } else {
+                target = .swipeable(frame: container.frame, contentSize: contentSize)
+            }
+            guard scrollableAxis(of: target).contains(axis) else { return nil }
+            return (target, container)
         }
     }
 
@@ -288,6 +405,25 @@ extension TheBagman {
         case .next: return .next
         case .previous: return .previous
         }
+    }
+
+    /// Map a search direction to the appropriate scroll direction for a specific scroll view.
+    /// "Down" means "forward" — forward in a vertical scroll view = down, forward in a
+    /// horizontal scroll view = right. This lets scroll_to_visible search every scroll view
+    /// in its natural axis regardless of the caller's direction hint.
+    func adaptDirection(
+        _ direction: ScrollSearchDirection,
+        for target: ScrollableTarget
+    ) -> UIAccessibilityScrollDirection {
+        let axis = scrollableAxis(of: target)
+        let requested = requiredAxis(for: direction)
+        if axis.contains(requested) { return uiScrollDirection(for: direction) }
+
+        let isForward = direction == .down || direction == .right
+        if axis.contains(.horizontal) { return isForward ? .right : .left }
+        if axis.contains(.vertical) { return isForward ? .down : .up }
+
+        return uiScrollDirection(for: direction)
     }
 
 }
