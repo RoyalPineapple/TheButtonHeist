@@ -398,7 +398,7 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 
 ### scroll
 
-Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation. For nested scroll views, targets the innermost by default — use `scrollViewHeistId` to target a specific scroll view.
+Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation for UIScrollView, synthetic swipe for other scrollable containers.
 
 **By identifier:**
 ```json
@@ -410,20 +410,15 @@ Scroll the nearest scroll view ancestor of a target element by approximately one
 {"protocolVersion":"6.2","type":"scroll","payload":{"elementTarget":{"order":10},"direction":"down"}}
 ```
 
-**Targeting an outer scroll view:**
-```json
-{"protocolVersion":"6.2","type":"scroll","payload":{"elementTarget":{"identifier":"item"},"direction":"down","scrollViewHeistId":"outerScrollView"}}
-```
-
 Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Search for an element by scrolling through scroll views. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Supports nested scroll views: tries the innermost first, falls back to outer ones on stagnation. Use `scrollViewHeistId` to target a specific scroll view.
+Search for an element by scrolling through scroll views. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Walks the accessibility hierarchy tree (outermost first), scrolling each container until the target appears or all containers are exhausted.
 
 **Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
 
-**Search options:** `maxScrolls` (default: 50), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`), `scrollViewHeistId` (explicit scroll view target).
+**Search options:** `maxScrolls` (default: 50), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
 
 **By label:**
 ```json
@@ -442,16 +437,11 @@ Search for an element by scrolling through scroll views. Uses an `ElementMatcher
 
 ### scrollToEdge
 
-Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right). Use `scrollViewHeistId` to target a specific scroll view in nested layouts.
+Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
 
 **By identifier:**
 ```json
 {"protocolVersion":"6.2","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
-```
-
-**Targeting an outer scroll view:**
-```json
-{"protocolVersion":"6.2","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"item"},"edge":"top","scrollViewHeistId":"outerScrollView"}}
 ```
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
