@@ -224,8 +224,8 @@ extension ElementTarget: Codable {
             label: try container.decodeIfPresent(String.self, forKey: .label),
             identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
             value: try container.decodeIfPresent(String.self, forKey: .value),
-            traits: try container.decodeIfPresent([String].self, forKey: .traits),
-            excludeTraits: try container.decodeIfPresent([String].self, forKey: .excludeTraits)
+            traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
+            excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
         if let match = matcher.nonEmpty {
             self = .matcher(match)

@@ -11,8 +11,9 @@ extension TheBagman {
     /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
     /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
     /// for trait naming (22 traits including private traits like textEntry, switchButton).
-    func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
-        traits.traitNames
+    /// Strings are mapped to HeistTrait; unknown names are preserved via .unknown().
+    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+        traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
 }
 
@@ -94,7 +95,7 @@ extension TheBagman {
             groupType = .tabBar
             label = nil; value = nil; identifier = nil
         case .scrollable(let contentSize):
-            typeName = .scrollable
+            groupType = .scrollable
             label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
         }
         return Group(
@@ -151,9 +152,9 @@ extension TheBagman {
 
     /// Trait priority for heistId prefix — most descriptive wins.
     /// Names come from AccessibilitySnapshotParser's knownTraits.
-    private static let traitPriority: [String] = [
-        "backButton", "searchField", "textEntry", "switchButton", "adjustable",
-        "button", "link", "image", "header", "tabBar",
+    private static let traitPriority: [HeistTrait] = [
+        .backButton, .searchField, .textEntry, .switchButton, .adjustable,
+        .button, .link, .image, .header, .tabBar,
     ]
 
     /// Assign deterministic `heistId` to each element.
@@ -339,7 +340,7 @@ extension TheBagman {
 extension Array where Element == HeistElement {
     /// Label of the first header-traited element (screen name hint).
     var screenName: String? {
-        first { $0.traits.contains("header") }?.label
+        first { $0.traits.contains(.header) }?.label
     }
 }
 

@@ -38,7 +38,7 @@ struct TypeCommand: AsyncParsableCommand {
         let message = ClientMessage.typeText(TypeTextTarget(
             text: text,
             deleteCount: delete,
-            elementTarget: element.actionTarget
+            elementTarget: try element.actionTarget()
         ))
 
         let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)

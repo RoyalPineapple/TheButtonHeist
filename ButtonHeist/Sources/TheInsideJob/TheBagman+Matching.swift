@@ -160,13 +160,15 @@ extension AccessibilityElement {
         if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {
             // Unknown trait names must cause a miss — fromNames drops them silently
             // and .contains(.none) is always true, so validate every name resolved.
-            for name in requiredTraits where !Self.knownTraitNames.contains(name) { return false }
-            let mask = UIAccessibilityTraits.fromNames(requiredTraits)
+            let requiredNames = requiredTraits.map(\.rawValue)
+            for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
+            let mask = UIAccessibilityTraits.fromNames(requiredNames)
             if !traits.contains(mask) { return false }
         }
         if let excludedTraits = matcher.excludeTraits, !excludedTraits.isEmpty {
-            for name in excludedTraits where !Self.knownTraitNames.contains(name) { return false }
-            let mask = UIAccessibilityTraits.fromNames(excludedTraits)
+            let excludedNames = excludedTraits.map(\.rawValue)
+            for name in excludedNames where !Self.knownTraitNames.contains(name) { return false }
+            let mask = UIAccessibilityTraits.fromNames(excludedNames)
             if !traits.isDisjoint(with: mask) { return false }
         }
         return true

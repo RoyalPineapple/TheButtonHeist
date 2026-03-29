@@ -333,16 +333,30 @@ public final class TheFence {
         return UnitPoint(x: x, y: y)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) -> ElementTarget? {
+    func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
         ElementTarget(
             heistId: stringArg(dictionary, "heistId"),
-            matcher: elementMatcher(dictionary)
+            matcher: try elementMatcher(dictionary)
         )
     }
 
-    func elementMatcher(_ dictionary: [String: Any]) -> ElementMatcher {
-        let traits = (dictionary["traits"] as? [String])
-        let excludeTraits = (dictionary["excludeTraits"] as? [String])
+    func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
+        let traits: [HeistTrait]? = try (dictionary["traits"] as? [String])?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw FenceError.invalidRequest(
+                    "Unknown trait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                )
+            }
+            return trait
+        }
+        let excludeTraits: [HeistTrait]? = try (dictionary["excludeTraits"] as? [String])?.map { name in
+            guard let trait = HeistTrait(rawValue: name) else {
+                throw FenceError.invalidRequest(
+                    "Unknown excludeTrait '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
+                )
+            }
+            return trait
+        }
         return ElementMatcher(
             label: stringArg(dictionary, "label"),
             identifier: stringArg(dictionary, "identifier"),

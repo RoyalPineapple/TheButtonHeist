@@ -44,7 +44,7 @@ final class ElementMatcherTests: XCTestCase {
     func testEncodeDecodeAllFields() throws {
         let matcher = ElementMatcher(
             label: "Save", identifier: "saveBtn",
-            value: "active", traits: ["button"], excludeTraits: ["disabled"]
+            value: "active", traits: [.button], excludeTraits: [.unknown("disabled")]
         )
         let data = try JSONEncoder().encode(matcher)
         let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)
