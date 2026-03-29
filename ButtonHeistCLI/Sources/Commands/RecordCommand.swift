@@ -33,34 +33,40 @@ struct RecordCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let envConfig = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(
-            deviceFilter: envConfig.deviceFilter, token: envConfig.token, driverId: envConfig.driverId,
-            quiet: connection.quiet
+        // Step 1: Start recording
+        var startRequest: [String: Any] = [
+            "command": TheFence.Command.startRecording.rawValue,
+            "fps": fps,
+            "inactivity_timeout": inactivityTimeout,
+            "max_duration": maxDuration,
+        ]
+        if let scale { startRequest["scale"] = scale }
+
+        let (fence, _) = try await CLIRunner.execute(
+            connection: connection,
+            request: startRequest,
+            statusMessage: "Starting recording..."
         )
-        try await connector.connect()
-        defer { connector.disconnect() }
+        defer { fence.stop() }
 
-        if !connection.quiet { logStatus("Starting recording...") }
-
-        let config = RecordingConfig(
-            fps: fps,
-            scale: scale,
-            inactivityTimeout: inactivityTimeout,
-            maxDuration: maxDuration
-        )
-        connector.send(.startRecording(config))
-
-        let payload = try await connector.waitForRecording(timeout: maxDuration + 30)
+        // Step 2: Wait for the device to auto-stop (via inactivity timeout or max duration)
+        let payload = try await fence.waitForRecording(timeout: maxDuration + 30)
 
         guard let videoData = Data(base64Encoded: payload.videoData) else {
             throw ValidationError("Failed to decode video data")
         }
-
         let url = URL(fileURLWithPath: output)
         try videoData.write(to: url)
+        saveActionLog(payload: payload)
+        if !connection.quiet {
+            logRecordingStats(path: output, payload: payload)
+        }
+    }
 
-        if let actionLogPath = actionLog, let log = payload.interactionLog, !log.isEmpty {
+    private func saveActionLog(payload: RecordingPayload) {
+        guard let actionLogPath = actionLog,
+              let log = payload.interactionLog, !log.isEmpty else { return }
+        do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
@@ -69,18 +75,19 @@ struct RecordCommand: AsyncParsableCommand {
             if !connection.quiet {
                 logStatus("  Action log saved: \(actionLogPath) (\(log.count) events)")
             }
+        } catch {
+            logStatus("  Failed to save action log: \(error.localizedDescription)")
         }
+    }
 
-        if !connection.quiet {
-            logStatus("Recording saved: \(output)")
-            logStatus("  Duration: \(String(format: "%.1f", payload.duration))s")
-            logStatus("  Frames: \(payload.frameCount)")
-            logStatus("  Resolution: \(payload.width)x\(payload.height)")
-            logStatus("  Size: \(videoData.count / 1024)KB")
-            logStatus("  Stop reason: \(payload.stopReason.rawValue)")
-            if let log = payload.interactionLog {
-                logStatus("  Interactions: \(log.count)")
-            }
+    private func logRecordingStats(path: String, payload: RecordingPayload) {
+        logStatus("Recording saved: \(path)")
+        logStatus("  Duration: \(String(format: "%.1f", payload.duration))s")
+        logStatus("  Frames: \(payload.frameCount)")
+        logStatus("  Resolution: \(payload.width)x\(payload.height)")
+        logStatus("  Stop reason: \(payload.stopReason.rawValue)")
+        if let log = payload.interactionLog {
+            logStatus("  Interactions: \(log.count)")
         }
     }
 }

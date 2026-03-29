@@ -571,12 +571,12 @@ final class TheFenceTests: XCTestCase {
 
         do {
             _ = try await fence.waitForRecording(timeout: 1.0)
-            XCTFail("Expected RecordingError.serverError to be thrown")
-        } catch let error as TheFence.RecordingError {
-            if case .serverError(let msg) = error {
-                XCTAssertEqual(msg, "disk full")
+            XCTFail("Expected FenceError.actionFailed to be thrown")
+        } catch let error as FenceError {
+            if case .actionFailed(let msg) = error {
+                XCTAssertTrue(msg.contains("disk full"), "Expected message to contain 'disk full', got: \(msg)")
             } else {
-                XCTFail("Unexpected RecordingError case: \(error)")
+                XCTFail("Expected FenceError.actionFailed, got \(error)")
             }
         }
     }
@@ -587,9 +587,11 @@ final class TheFenceTests: XCTestCase {
 
         do {
             _ = try await fence.waitForRecording(timeout: 0.05)
-            XCTFail("Expected ActionError.timeout to be thrown")
-        } catch is TheFence.ActionError {
-            // Expected
+            XCTFail("Expected FenceError.actionTimeout to be thrown")
+        } catch let error as FenceError {
+            guard case .actionTimeout = error else {
+                return XCTFail("Expected FenceError.actionTimeout, got \(error)")
+            }
         }
     }
 

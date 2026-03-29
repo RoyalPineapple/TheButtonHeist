@@ -15,17 +15,15 @@ struct WaitForIdleCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet {
-            logStatus("Waiting for idle...")
-        }
-
-        connector.send(.waitForIdle(WaitForIdleTarget(timeout: timeout)))
-        let result = try await connector.waitForActionResult(timeout: timeout + 5)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Wait for idle")
+        let request: [String: Any] = [
+            "command": TheFence.Command.waitForIdle.rawValue,
+            "timeout": timeout,
+        ]
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Waiting for idle..."
+        )
     }
 }

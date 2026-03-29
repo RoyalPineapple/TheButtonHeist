@@ -391,11 +391,11 @@ public final class TheHandoff {
             savedOnDisconnected?(reason)
         }
         onAuthFailed = { reason in
-            connectionError = ConnectionError.authFailed(reason)
+            connectionError = FenceError.authFailed(reason)
             savedOnAuthFailed?(reason)
         }
         onSessionLocked = { payload in
-            connectionError = ConnectionError.sessionLocked(payload.message)
+            connectionError = FenceError.sessionLocked(payload.message)
             savedOnSessionLocked?(payload)
         }
 
@@ -410,7 +410,7 @@ public final class TheHandoff {
                 onDisconnected = savedOnDisconnected
                 onAuthFailed = savedOnAuthFailed
                 onSessionLocked = savedOnSessionLocked
-                throw ConnectionError.connectionTimeout
+                throw FenceError.connectionTimeout
             }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
@@ -422,10 +422,10 @@ public final class TheHandoff {
         onSessionLocked = savedOnSessionLocked
 
         if let connectionError {
-            if let handoffError = connectionError as? ConnectionError {
-                throw handoffError
+            if let fenceError = connectionError as? FenceError {
+                throw fenceError
             }
-            throw ConnectionError.connectionFailed("\(type(of: connectionError)): \(connectionError.localizedDescription)")
+            throw FenceError.connectionFailed("\(type(of: connectionError)): \(connectionError.localizedDescription)")
         }
 
         onStatus?("Connected to \(displayName(for: device))")
@@ -440,16 +440,7 @@ public final class TheHandoff {
             discoveryTimeout: discoveryTimeout,
             getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
         )
-        do {
-            return try await resolver.resolve()
-        } catch let error as DeviceResolver.ResolutionError {
-            switch error {
-            case .noDeviceFound:
-                throw ConnectionError.noDeviceFound
-            case .noMatchingDevice(let filter, let available):
-                throw ConnectionError.noMatchingDevice(filter: filter, available: available)
-            }
-        }
+        return try await resolver.resolve()
     }
 
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
@@ -486,34 +477,6 @@ public final class TheHandoff {
             }
         }
         onStatus?("Auto-reconnect gave up after 60 attempts")
-    }
-
-    /// Errors from the session management lifecycle.
-    public enum ConnectionError: Error, LocalizedError {
-        case noDeviceFound
-        case noMatchingDevice(filter: String, available: [String])
-        case connectionTimeout
-        case connectionFailed(String)
-        case sessionLocked(String)
-        case authFailed(String)
-
-        public var errorDescription: String? {
-            switch self {
-            case .noDeviceFound:
-                return "No devices found within timeout. Is the app running?"
-            case .noMatchingDevice(let filter, let available):
-                let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
-                return "No device matching '\(filter)'. Available: \(list)"
-            case .connectionTimeout:
-                return "Connection timed out"
-            case .connectionFailed(let message):
-                return "Connection failed: \(message)"
-            case .sessionLocked(let message):
-                return "Session locked: \(message)"
-            case .authFailed(let message):
-                return "Auth failed: \(message)"
-            }
-        }
     }
 
     // MARK: - Display Names

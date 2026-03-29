@@ -151,7 +151,7 @@ public enum FenceResponse {
     case targets([String: TargetConfig], defaultTarget: String?)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
-    var actionResult: ActionResult? {
+    public var actionResult: ActionResult? {
         if case .action(let result, _) = self { return result }
         return nil
     }

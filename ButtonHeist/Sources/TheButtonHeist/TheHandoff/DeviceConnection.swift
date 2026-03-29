@@ -7,6 +7,15 @@ import os.log
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "connection")
 
 /// Structured reason for why a connection was closed.
+///
+/// Kept separate from FenceError because DisconnectReason is a value type
+/// used in the `onDisconnected` callback and `ConnectionEvent.disconnected`,
+/// not a thrown error. It carries transport-level detail (bufferOverflow,
+/// serverClosed, networkError, certificateMismatch, protocolMismatch,
+/// localDisconnect) that callers never need to catch — they observe it
+/// through the callback to decide whether to reconnect. FenceError is
+/// the single thrown error type for all of TheFence, TheHandoff, and
+/// DeviceResolver.
 public enum DisconnectReason: Error, LocalizedError {
     case networkError(Error)
     case bufferOverflow

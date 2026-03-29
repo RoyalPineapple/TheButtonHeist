@@ -20,17 +20,14 @@ struct GetPasteboardCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet {
-            logStatus("Reading pasteboard...")
-        }
-
-        connector.send(.getPasteboard)
-        let result = try await connector.waitForActionResult(timeout: 15)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Get pasteboard")
+        let request: [String: Any] = [
+            "command": TheFence.Command.getPasteboard.rawValue,
+        ]
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Reading pasteboard..."
+        )
     }
 }
