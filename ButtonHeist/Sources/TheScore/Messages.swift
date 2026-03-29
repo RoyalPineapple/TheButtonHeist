@@ -60,6 +60,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case recordingStopped
     case recording
     case recordingError
+    case waitFor
     case interaction
     case watch
 }

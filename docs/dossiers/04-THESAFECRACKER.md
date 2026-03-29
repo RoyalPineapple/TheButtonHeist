@@ -16,7 +16,7 @@ TheSafecracker is the hands of the operation:
 6. **Keyboard management** — detect visibility (via TheTripwire flag + UIKeyboardImpl fallback), dismiss keyboard
 7. **Pasteboard operations** — read/write UIPasteboard.general
 8. **Accessibility actions** — activate, increment, decrement, custom actions
-9. **Point resolution** — resolve target coordinates from element identifier/order/heistId or explicit x/y
+9. **Point resolution** — resolve target coordinates from element heistId/match or explicit x/y
 10. **Scrolling** — page scroll, scroll-to-visible, scroll-to-edge via UIScrollView.setContentOffset
 11. **Auto-scroll to visible** — transparent pre-interaction scroll ensuring targets are within screen bounds
 12. **First responder lookup** — walks the view hierarchy to find the current first responder
@@ -201,9 +201,9 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 > **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheSafecracker owns all scrolling: three explicit commands (`scroll`, `scroll_to_visible`, `scroll_to_edge`) and an automatic pre-interaction scroll.
+TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, and `scrollToOppositeEdge`.
 
-**Auto-scroll** runs transparently before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, walks the ancestor chain (`superview` / `accessibilityContainer`) to find the nearest `UIScrollView`, scrolls with minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by TheBagman's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, walks the ancestor chain to find the nearest `UIScrollView`, calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 
@@ -217,28 +217,20 @@ TheSafecracker owns all scrolling: three explicit commands (`scroll`, `scroll_to
 
 ## Element Resolution Flow
 
+> Full targeting system documentation: [15-UNIFIED-TARGETING.md](../dossiers/15-UNIFIED-TARGETING.md)
+
+All action executors resolve elements via `TheBagman.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget(element, traversalIndex)`.
+
 ```mermaid
 flowchart TD
-    Target["ActionTarget — identifier? / heistId? / order?"]
-
-    Target --> ByHeistId{heistId provided?}
-    ByHeistId -->|yes| SearchHID["Search cachedElements by heistId"]
-    ByHeistId -->|no| ByIdent{identifier provided?}
-    ByIdent -->|yes| SearchIdent["Search by accessibilityIdentifier"]
-    ByIdent -->|no| ByOrder{order provided?}
-    ByOrder -->|yes| SearchOrder["Index into cachedElements"]
-    ByOrder -->|no| Fail["elementNotFound"]
-
-    SearchHID --> Found{found?}
-    SearchIdent --> Found
-    SearchOrder --> Found
-
-    Found -->|yes| WeakRef["Retrieve live NSObject from TheBagman.elementObjects"]
-    Found -->|no| Fail
-
+    Target["ActionTarget - (heistId? / match?)"]
+    Target --> Resolve["bagman.resolveTarget(target)"]
+    Resolve --> Found{resolved?}
+    Found -->|yes| WeakRef["bagman.object(at: traversalIndex) - → live NSObject via weak ref"]
+    Found -->|no| Fail["elementNotFound + diagnostic message"]
     WeakRef --> Alive{still alive?}
     Alive -->|yes| UseElement["Return element + live object"]
-    Alive -->|no| Dealloc["elementDeallocated"]
+    Alive -->|no| Dealloc["nil (deallocated)"]
 ```
 
 ## Items Flagged for Review

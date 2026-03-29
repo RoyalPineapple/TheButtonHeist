@@ -8,30 +8,11 @@ import TheScore
 
 extension TheBagman {
 
-    /// All known trait-to-name mappings, evaluated in declaration order.
-    private static let traitMapping: [(UIAccessibilityTraits, String)] = [
-        (.button, "button"),
-        (.link, "link"),
-        (.image, "image"),
-        (.staticText, "staticText"),
-        (.header, "header"),
-        (.adjustable, "adjustable"),
-        (.searchField, "searchField"),
-        (.selected, "selected"),
-        (.notEnabled, "notEnabled"),
-        (.keyboardKey, "keyboardKey"),
-        (.summaryElement, "summaryElement"),
-        (.updatesFrequently, "updatesFrequently"),
-        (.playsSound, "playsSound"),
-        (.startsMediaSession, "startsMediaSession"),
-        (.allowsDirectInteraction, "allowsDirectInteraction"),
-        (.causesPageTurn, "causesPageTurn"),
-        (.tabBar, "tabBar"),
-        (UIAccessibilityTraits(rawValue: 0x8000000), "backButton"),
-    ]
-
+    /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
+    /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
+    /// for trait naming (22 traits including private traits like textEntry, switchButton).
     func traitNames(_ traits: UIAccessibilityTraits) -> [String] {
-        Self.traitMapping.compactMap { traits.contains($0.0) ? $0.1 : nil }
+        traits.traitNames
     }
 }
 
@@ -112,6 +93,9 @@ extension TheBagman {
         case .tabBar:
             typeName = .tabBar
             label = nil; value = nil; identifier = nil
+        case .scrollable(let contentSize):
+            typeName = .scrollable
+            label = nil; value = "\(Int(contentSize.width))x\(Int(contentSize.height))"; identifier = nil
         }
         return Group(
             type: typeName,
@@ -147,28 +131,28 @@ extension TheBagman {
 
 extension TheBagman {
 
-    /// Convert current cachedElements to wire HeistElements for delta comparison.
-    struct ElementSnapshot {
-        let elements: [HeistElement]
-
-        /// Label of the first header-traited element (screen name hint).
-        var screenName: String? {
-            elements.first { $0.traits.contains("header") }?.label
+    /// Return wire elements for the currently visible set and mark them as presented.
+    /// The screen element registry is updated during refreshAccessibilityData() —
+    /// this method is a cheap read that extracts the visible subset.
+    func snapshotElements() -> [HeistElement] {
+        var result: [HeistElement] = []
+        for heistId in onScreen {
+            guard var entry = screenElements[heistId] else { continue }
+            if !entry.presented {
+                entry.presented = true
+                screenElements[heistId] = entry
+            }
+            result.append(entry.wire)
         }
-    }
-
-    func snapshotElements() -> ElementSnapshot {
-        var elements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
-        assignHeistIds(&elements)
-        lastSnapshot = elements
-        return ElementSnapshot(elements: elements)
+        return result.sorted { $0.order < $1.order }
     }
 
     // MARK: - Stable ID Synthesis
 
     /// Trait priority for heistId prefix — most descriptive wins.
+    /// Names come from AccessibilitySnapshotParser's knownTraits.
     private static let traitPriority: [String] = [
-        "backButton", "searchField", "textField", "adjustable",
+        "backButton", "searchField", "textEntry", "switchButton", "adjustable",
         "button", "link", "image", "header", "tabBar",
     ]
 
@@ -236,32 +220,29 @@ extension TheBagman {
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(
-        before: ElementSnapshot,
-        after: ElementSnapshot,
+        before: [HeistElement],
+        after: [HeistElement],
         afterTree: [AccessibilityHierarchy]?,
         isScreenChange: Bool
     ) -> InterfaceDelta {
-        let beforeEls = before.elements
-        let afterEls = after.elements
-
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
             let tree = afterTree?.map { convertHierarchyNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: afterEls, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), elements: after, tree: tree)
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: afterEls.count,
+                elementCount: after.count,
                 newInterface: fullInterface
             )
         }
 
         // Same screen — quick check: if identical, nothing changed
-        if beforeEls.hashValue == afterEls.hashValue && beforeEls == afterEls {
-            return InterfaceDelta(kind: .noChange, elementCount: afterEls.count)
+        if before.hashValue == after.hashValue && before == after {
+            return InterfaceDelta(kind: .noChange, elementCount: after.count)
         }
 
         // Same screen, something changed — element-level diff
-        return computeElementDelta(beforeEls: beforeEls, afterEls: afterEls)
+        return computeElementDelta(beforeEls: before, afterEls: after)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -351,6 +332,15 @@ extension TheBagman {
         return ElementUpdate(heistId: new.heistId, changes: changes)
     }
 
+}
+
+// MARK: - HeistElement Array Helpers
+
+extension Array where Element == HeistElement {
+    /// Label of the first header-traited element (screen name hint).
+    var screenName: String? {
+        first { $0.traits.contains("header") }?.label
+    }
 }
 
 // MARK: - Shape Helper
