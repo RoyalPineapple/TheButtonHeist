@@ -20,7 +20,38 @@ final class TheBagman {
 
     /// Back-reference to the gesture engine. TheBagman drives TheSafecracker
     /// for synthetic touch when accessibility activation fails.
-    weak var safecracker: TheSafecracker?
+    weak var safecracker: TheSafecracker? {
+        didSet { rebuildScrollProvider() }
+    }
+
+    /// Scroll primitive provider — swappable between setContentOffset and accessibility SPI.
+    /// Set automatically when `safecracker` is assigned. Override for testing.
+    var scrollProvider: (any ScrollProvider)?
+
+    /// Which scroll implementation to use. Change at runtime to compare behavior.
+    var scrollProviderMode: ScrollProviderMode = .contentOffset {
+        didSet { rebuildScrollProvider() }
+    }
+
+    enum ScrollProviderMode {
+        case contentOffset
+        case accessibilitySPI
+    }
+
+    private func rebuildScrollProvider() {
+        guard let safecracker else { scrollProvider = nil; return }
+        switch scrollProviderMode {
+        case .contentOffset:
+            scrollProvider = ContentOffsetScrollProvider(safecracker: safecracker)
+        case .accessibilitySPI:
+            scrollProvider = AccessibilitySPIScrollProvider(
+                safecracker: safecracker,
+                yieldFrames: { [weak self] count in
+                    await self?.tripwire.yieldFrames(count)
+                }
+            )
+        }
+    }
 
     // MARK: - Element Storage
 
