@@ -17,7 +17,7 @@ TheSafecracker is the hands of the operation:
 7. **Pasteboard operations** — read/write UIPasteboard.general
 8. **Accessibility actions** — activate, increment, decrement, custom actions
 9. **Point resolution** — resolve target coordinates from element heistId/match or explicit x/y
-10. **Scrolling** — page scroll, scroll-to-visible, scroll-to-edge via UIScrollView.setContentOffset
+10. **Scrolling** — `scrollByPage` (UIScrollView.setContentOffset), `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe` (synthetic swipe for non-UIScrollView containers)
 11. **Auto-scroll to visible** — transparent pre-interaction scroll ensuring targets are within screen bounds
 12. **First responder lookup** — walks the view hierarchy to find the current first responder
 
@@ -201,9 +201,17 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 > **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, and `scrollToOppositeEdge`.
+TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
 
-**Auto-scroll** is driven by TheBagman's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, walks the ancestor chain to find the nearest `UIScrollView`, calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+| Primitive | Input | Mechanism |
+|-----------|-------|-----------|
+| `scrollByPage` | UIScrollView + direction | `setContentOffset` with 44pt overlap, clamped to content bounds |
+| `scrollToEdge` | UIScrollView + edge | `setContentOffset` to absolute boundary |
+| `scrollToMakeVisible` | CGRect + UIScrollView | Minimum offset adjustment to bring frame into visible rect |
+| `scrollToOppositeEdge` | UIScrollView + direction | Jump to opposite content edge (no animation) |
+| `scrollBySwipe` | CGRect + direction | Synthetic swipe gesture at 75% travel, 0.25s duration |
+
+**Auto-scroll** is driven by TheBagman's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 
