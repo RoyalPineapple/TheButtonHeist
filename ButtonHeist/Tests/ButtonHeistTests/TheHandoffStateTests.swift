@@ -305,7 +305,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
             XCTFail("Expected noMatchingDevice to be thrown")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as FenceError {
             guard case .noMatchingDevice(let filter, let available) = error else {
                 return XCTFail("Expected noMatchingDevice, got \(error)")
             }

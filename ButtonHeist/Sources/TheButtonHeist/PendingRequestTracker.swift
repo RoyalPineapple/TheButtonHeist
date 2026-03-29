@@ -6,7 +6,7 @@ import os
 /// Each pending request is identified by a `requestId` string. Callers await a response
 /// via `wait(requestId:timeout:)`, and the corresponding response arrives later via
 /// `resolve(requestId:result:)`. If no response arrives within the timeout, the
-/// continuation resumes with `ActionError.timeout`.
+/// continuation resumes with `FenceError.actionTimeout`.
 ///
 /// This type replaces the three hand-rolled `pending*Requests` dictionaries and the
 /// shared `waitForResponse<T>` method that previously lived in `TheFence`.
@@ -34,7 +34,7 @@ final class PendingRequestTracker<T: Sendable> {
                 }
                 if shouldResume {
                     self.pending.removeValue(forKey: requestId)
-                    continuation.resume(throwing: TheFence.ActionError.timeout)
+                    continuation.resume(throwing: FenceError.actionTimeout)
                 }
             }
 
