@@ -701,9 +701,9 @@ Messages sent from client to server.
 - `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll)
 - `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
 - `getPasteboard` - Read text from general pasteboard
-- `scroll(ScrollTarget)` - Scroll the nearest scroll view ancestor by one page
-- `scrollToVisible(ScrollToVisibleTarget)` - Bidirectional scroll search for element matching an `ElementMatcher` predicate
-- `scrollToEdge(ScrollToEdgeTarget)` - Scroll the nearest scroll view ancestor to an edge
+- `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
+- `scrollToVisible(ScrollToVisibleTarget)` - Hierarchy-driven scroll search with swipe fallback for nested layouts
+- `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
 - `resignFirstResponder` - Dismiss keyboard
 - `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
 - `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
@@ -872,8 +872,9 @@ public struct ScrollTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget?` - Element to scroll from (bubbles up to nearest scroll view ancestor)
+- `elementTarget: ActionTarget?` - Element to scroll from (axis-aware: finds scroll view matching direction's axis)
 - `direction: ScrollDirection` - Scroll direction
+- `scrollViewHeistId: String?` - Explicit scroll view to target (overrides automatic ancestor discovery)
 
 ### ScrollEdge
 
@@ -896,8 +897,9 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll
+- `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll (axis-aware)
 - `edge: ScrollEdge` - Which edge to scroll to
+- `scrollViewHeistId: String?` - Explicit scroll view to target (overrides automatic ancestor discovery)
 
 ### ElementMatcher
 
@@ -926,8 +928,9 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 - `heistId: String?` - Stable heistId to search for while scrolling
 - `match: ElementMatcher?` - Predicate for the element to find
-- `maxScrolls: Int?` - Maximum scroll attempts (default: 20, clamped to >= 1)
-- `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`)
+- `maxScrolls: Int?` - Maximum scroll attempts (default: 50, safety valve — not a budget)
+- `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`), adapted to each container's natural axis
+- `scrollViewHeistId: String?` - Explicit scroll view to search within (overrides automatic hierarchy walk)
 
 ### ScrollSearchDirection
 

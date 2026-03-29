@@ -1,9 +1,40 @@
 # Scrolling Deep Dive
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBagman+Scroll.swift` (orchestration), `TheSafecracker+Actions.swift` (scroll primitives)
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBagman+Scroll.swift` (orchestration), `TheSafecracker+Scroll.swift` (scroll primitives)
 > **Parent dossiers:** [13-THEBAGMAN.md](13-THEBAGMAN.md), [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
 
-TheBagman owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`) but never decides what to scroll or when.
+TheBagman owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
+
+## Scrollable Container Discovery
+
+Scrollable containers are discovered from the **accessibility hierarchy tree**, not from UIKit view hierarchy walking. The accessibility parser marks containers as `.scrollable(contentSize:)` when their backing view is a `UIScrollView` subclass (or reports scrollable traits). Two lookups are stored:
+
+| Lookup | Key | Value | Used for |
+|--------|-----|-------|----------|
+| `scrollViewLookup` | `AccessibilityContainer` | `UIScrollView` | Direct `setContentOffset` manipulation |
+| `scrollableViewLookup` | `AccessibilityContainer` | `UIView` | `accessibilityScroll:` with swipe fallback |
+
+Both are rebuilt on every `refreshAccessibilityData()` call via the `containerVisitor` callback.
+
+### ScrollableTarget
+
+A `ScrollableTarget` enum wraps a discovered scrollable container with three tiers:
+
+```
+.uiScrollView(UIScrollView)           — direct setContentOffset (fast, precise)
+.accessibilityScrollable(UIView, CGSize) — accessibilityScroll: then swipe fallback
+.swipeable(CGRect, CGSize)             — synthetic swipe gesture (universal)
+```
+
+`scrollOnePage(_:direction:animated:)` dispatches through these tiers. For `.accessibilityScrollable`, it tries `view.accessibilityScroll(direction)` first — if that returns `false` (common for SwiftUI's `PlatformContainer`), it falls back to `scrollBySwipe` at the view's screen-space frame.
+
+### Axis-Aware Resolution
+
+`ScrollAxis` is an `OptionSet` with `.horizontal` and `.vertical`. Three `requiredAxis(for:)` overloads map `ScrollDirection`, `ScrollEdge`, and `ScrollSearchDirection` to the axis they operate on.
+
+For `scroll` and `scroll_to_edge`, `resolveScrollView` walks the UIKit ancestor chain and returns the first scroll view whose axis matches the requested direction. If no axis match, falls back to the accessibility hierarchy's stored `screenElement.scrollView`.
+
+For `scroll_to_visible`, `adaptDirection` maps the caller's direction hint to each container's natural axis: "down" means "forward" — forward in a vertical = `.down`, forward in a horizontal = `.right`. This lets the search iterate every scroll view regardless of axis.
 
 ## Auto-Scroll to Visible
 
@@ -27,7 +58,7 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 ### What it does when an element is off-screen
 
-1. Walks the accessibility/view hierarchy upward from the element via `nextAncestor(of:)` to find the nearest `UIScrollView` with `isScrollEnabled == true`
+1. Checks `screenElement.scrollView` (from the accessibility hierarchy) first, then walks the UIKit ancestor chain via `nextAncestor(of:)` to find the nearest `UIScrollView` with `isScrollEnabled == true`
 2. Calls `scrollToMakeVisible(_:in:)` which converts the element's frame into the scroll view's coordinate space and adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
 3. Waits for the scroll animation to settle via `tripwire.waitForAllClear(timeout: 1.0)` — this uses presentation-layer diffing, not a fixed sleep
 4. Refreshes the element cache via `bagman.refreshAccessibilityData()` so subsequent reads (activation points, frames) reflect post-scroll positions
@@ -45,8 +76,8 @@ flowchart TD
     Valid -->|yes| OnScreen{frame within<br/>UIScreen.main.bounds?}
     OnScreen -->|yes| Execute
 
-    OnScreen -->|no| Walk["Walk ancestor chain<br/>nextAncestor(of:)"]
-    Walk --> ScrollView{found UIScrollView<br/>with isScrollEnabled?}
+    OnScreen -->|no| Walk["screenElement.scrollView<br/>?? ancestor walk"]
+    Walk --> ScrollView{found UIScrollView?}
     ScrollView -->|no| Execute
     ScrollView -->|yes| Scroll["scrollToMakeVisible()<br/>minimum contentOffset adjustment"]
     Scroll --> Settle["tripwire.waitForAllClear(1.0s)<br/>presentation-layer diffing"]
@@ -63,108 +94,72 @@ Two public methods resolve their target, then delegate to a shared private imple
 | `ensureOnScreen(for: ElementTarget)` | TheBagman screenElements registry | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
 | `ensureFirstResponderOnScreen()` | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
 
-Both resolve to a live `NSObject` and check its `accessibilityFrame` against `UIScreen.main.bounds`. `NSObject` is the right abstraction because `accessibilityFrame` lives on NSObject via the UIAccessibility informal protocol, and the ancestor walk needs the live object to climb `superview` / `accessibilityContainer`. A bare `CGRect` can't tell you which scroll view to scroll.
-
-### Requirements
-
-- **UIScrollView ancestor.** The element must be inside a `UIScrollView` (or subclass — `UITableView`, `UICollectionView`, `UITextView`, etc.) with `isScrollEnabled == true`. If no scrollable ancestor exists, the check is a no-op.
-- **Valid accessibilityFrame.** The live `NSObject` must return a non-null, non-empty `accessibilityFrame`. Elements with `.isNull` or `.isEmpty` frames are skipped.
-- **Reachable via ancestor walk.** `nextAncestor(of:)` traverses `UIView.superview`, `UIAccessibilityElement.accessibilityContainer`, and KVO `accessibilityContainer`. If the hierarchy is broken or uses a non-standard container pattern the walk won't find the scroll view.
-- **TheTripwire injected.** If `tripwire` is nil the scroll still happens but there's no settle wait — the interaction proceeds immediately after adjusting the content offset.
-
-### Limitations
-
-- **Single scroll view.** The ancestor walk stops at the first `UIScrollView` it finds. Nested scroll views (e.g. a horizontal carousel inside a vertical table) will only scroll the innermost one. If the element is off-screen in the outer scroll view, the inner scroll adjustment alone won't bring it into the viewport.
-- **No retry.** If the scroll doesn't fully bring the element on screen (e.g. the element is larger than the viewport, or the scroll view has constraints that prevent reaching the target offset), there is no second attempt.
-- **No synthetic touch scrolling.** All scrolling uses `UIScrollView.setContentOffset(animated: true)` directly. This bypasses gesture recognizers, scroll view delegates, and any custom scrolling behavior that only responds to touch events. Paging scroll views, scroll views with `scrollViewWillEndDragging` snapping, and custom pull-to-refresh headers may not behave as expected.
-- **Frame-based only.** The check uses `accessibilityFrame` which is a rectangle in screen coordinates. It does not account for scroll view content insets reducing the actual visible area — though `scrollToMakeVisible` does account for `adjustedContentInset` when computing the visible rect and clamping the offset.
-- **Raw coordinate gestures bypass the check.** Gestures specified by explicit `pointX`/`pointY` coordinates (no element target) skip auto-scroll entirely. If an agent sends a tap at coordinates that happen to be off-screen, there's no element to scroll to.
-
 ### Best-effort guarantee
 
-The auto-scroll never blocks or fails the command. If anything goes wrong — element can't be resolved, no scrollable ancestor, frame is null, tripwire is nil — the interaction proceeds at the current position, exactly as it did before this feature existed.
+The auto-scroll never blocks or fails the command. If anything goes wrong — element can't be resolved, no scrollable ancestor, frame is null, tripwire is nil — the interaction proceeds at the current position.
 
 ## Explicit Scroll Commands
 
-Three commands expose scrolling directly to agents. These are not auto-scroll — they are standalone commands the agent sends intentionally.
+Three commands expose scrolling directly to agents. These are not auto-scroll — they are standalone commands the agent sends intentionally. All three accept an optional `scrollViewHeistId` parameter to explicitly target a specific scroll view by heistId.
 
 | Command | Method | Behavior |
 |---------|--------|----------|
-| `scroll` | `TheBagman.executeScroll` → `scrollByPage` | Moves contentOffset by `frame.height - 44pt` overlap in the given direction |
-| `scroll_to_visible` | `TheBagman.executeScrollToVisible` | Bidirectional scroll search with lazy container support |
-| `scroll_to_edge` | `TheBagman.executeScrollToEdge` → `scrollToEdge` | Jumps to content extreme, iterates for lazy containers |
-
-TheBagman orchestrates all three. `scroll` delegates to TheSafecracker's `scrollByPage`; `scroll_to_edge` delegates to TheSafecracker's `scrollToEdge`. `scroll_to_visible` drives its own scan loop via raw `setContentOffset` — it does not use `scrollByPage`.
+| `scroll` | `executeScroll` → `scrollByPage` | Axis-aware page scroll: finds the scroll view matching the direction's axis |
+| `scroll_to_visible` | `executeScrollToVisible` | Hierarchy-driven search with swipe fallback for non-UIScrollView containers |
+| `scroll_to_edge` | `executeScrollToEdge` → `scrollToEdge` | Axis-aware edge jump, iterates for lazy containers |
 
 ### scroll (page step)
 
-Scrolls the nearest `UIScrollView` ancestor by one page in the given direction. "One page" is the scroll view's frame dimension minus a 44pt overlap, so the user retains context across pages.
+Scrolls the axis-appropriate scroll view ancestor by one page in the given direction. "One page" is the scroll view's frame dimension minus a 44pt overlap, so the user retains context across pages.
 
-```
-newOffset.y = offset.y + (frame.height - 44)   // down/next
-newOffset.y = offset.y - (frame.height - 44)   // up/previous
-newOffset.x = offset.x + (frame.width - 44)    // right
-newOffset.x = offset.x - (frame.width - 44)    // left
-```
+`resolveScrollView` picks the right scroll view:
+1. If `scrollViewHeistId` is provided, uses that explicit scroll view
+2. Otherwise walks UIKit ancestors, returns first whose scrollable axis matches the direction
+3. Falls back to `screenElement.scrollView` from the accessibility hierarchy
 
-Offsets are clamped to `[-insets.top, contentSize.height + insets.bottom - frame.height]` (vertical) and the equivalent horizontal range. Returns `false` if the computed offset equals the current offset (already at the edge).
+Offsets are clamped to valid content bounds. Returns `false` if already at the edge.
 
-Directions: `.up`, `.down`, `.left`, `.right`, `.next` (alias for down), `.previous` (alias for up).
+### scroll_to_visible (hierarchy-driven search)
 
-### scroll_to_visible (bidirectional search)
+Searches for an element by scrolling through scrollable containers discovered from the accessibility hierarchy tree. Uses `reducedHierarchy` (pre-order traversal) to visit containers outermost first.
 
-Searches for an element matching an `ElementMatcher` predicate by scrolling through the nearest scroll view. Unlike `scroll` (one page) or `scrollToMakeVisible` (minimal adjustment for a known element), this is a search operation — it finds elements that may not be on screen yet.
+**Input:** `ScrollToVisibleTarget` containing an `ElementTarget` predicate, optional `maxScrolls` (default 50, safety valve), and optional `direction` (default `.down`).
 
-**Input:** `ScrollToVisibleTarget` containing an `ElementTarget` predicate, optional `maxScrolls` (default 20, clamped to >= 1), and optional `direction` (default `.down`).
+**Algorithm:**
 
-**Matching:** Uses `resolveFirstMatch` with first-match semantics — any match is success, no uniqueness check. This is different from `resolveTarget` (which requires exactly one match). Matching runs on the canonical `AccessibilityHierarchy` tree, not on wire types.
-
-**Two-phase algorithm:**
-
-1. **Phase 0 — Check current tree.** Before scrolling, `refreshAccessibilityData()` and check if the element is already visible via `resolveFirstMatch`. If found, return immediately with `scrollCount: 0`.
-
-2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — advances `contentOffset` by one page directly via `setContentOffset(offset + pageStep, animated: true)`, bypassing `scrollByPage` entirely (no contentSize clamping). Yields 3 display frames via `yieldFrames(3)`, refreshes the element cache, then checks for a match. Tracks unique heistIds to detect stagnation (no new IDs = content exhausted). iOS rubber-bands naturally on overshoot.
-
-3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains, jump to the opposite edge via `scrollToOppositeEdge`, yield 2 frames, and run `scanLoop()` again in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
-
-**Uniform lazy handling:** The scan loop makes no distinction between UIKit and SwiftUI containers. Raw offset advance with no contentSize clamping works for both — UIKit scroll views stop naturally at their content edge, SwiftUI lazy containers grow `contentSize` as content renders. Stagnation (no new heistIds) is the single termination signal.
-
-**Lightweight frame yielding:** Each scan step uses `yieldFrames(3)` — `CATransaction.flush()` + `Task.yield()` per frame — instead of the heavier `waitForSettle`. This is enough for layout to run and lazy containers to materialize content, without waiting for animations to finish.
-
-**Response:** Every `scrollToVisible` result includes a `scrollSearchResult` with `scrollCount`, `uniqueElementsSeen`, `totalItems`, `exhaustive`, and `foundElement`.
+1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
+2. **Scroll loop.** `findLiveScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePage` scrolls it (UIScrollView → setContentOffset, else → swipe). After each scroll, yield 3 frames, refresh, check for match. If no new elements appeared, mark the container exhausted.
+3. **Exhaustion.** When all scrollable containers are exhausted (no movement or no new elements), the search is complete. `maxScrolls` is a safety valve, not a budget — unproductive scrolls don't count.
 
 ```mermaid
 flowchart TD
     S["executeScrollToVisible(target)"] --> REF["refreshAccessibilityData()"]
     REF --> CHK{"resolveFirstMatch(target)<br/>Already visible?"}
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
-    CHK -->|No| FSV["findFirstScrollView()<br/>(walk onScreen elements<br/>→ scrollableAncestor)"]
-    FSV --> SVOK{Found<br/>scroll view?}
-    SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
-    SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
+    CHK -->|No| LOOP["while scrollCount < maxScrolls"]
 
-    PH1 --> SLOOP["setContentOffset(<br/>offset + pageStep, animated: true)"]
-    SLOOP --> SETTLE["yieldFrames(3)<br/>(CATransaction.flush + Task.yield × 3)"]
-    SETTLE --> REFR["refreshAccessibilityData()"]
-    REFR --> FM{"resolveFirstMatch(target)"}
+    LOOP --> FIND["findLiveScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
+    FIND --> SVOK{Found<br/>container?}
+    SVOK -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
+    SVOK -->|Yes| ADAPT["adaptDirection(searchDir, for: target)<br/>down→right for horizontal containers"]
+
+    ADAPT --> SCROLL["scrollOnePage(target, direction)<br/>UIScrollView / accessibilityScroll / swipe"]
+    SCROLL --> MOVED{moved?}
+    MOVED -->|No| EXHAUST["Mark container exhausted"]
+    EXHAUST --> LOOP
+
+    MOVED -->|Yes| SETTLE["yieldFrames(3)<br/>+ refreshAccessibilityData()"]
+    SETTLE --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| ENS["ensureOnScreenSync(found)"]
     ENS --> END["Return success<br/>+ ScrollSearchResult"]
-    FM -->|Not found| NEW{New heistIds<br/>appeared?}
-    NEW -->|No new IDs| STALL["Break — content exhausted"]
-    NEW -->|Yes| BUDGET{scrollCount<br/>< maxScrolls?}
-    BUDGET -->|Yes| SLOOP
-    BUDGET -->|No| STALL
-
-    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ yieldFrames(2)"]
-    PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
-    SCAN2 --> RESULT{Found?}
-    RESULT -->|Yes| END
-    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
+    FM -->|Not found| NEW{New elements<br/>appeared?}
+    NEW -->|No| EXHAUST
+    NEW -->|Yes| LOOP
 ```
 
 ### scroll_to_edge (jump to extreme)
 
-Jumps the content offset to the absolute edge of the content:
+Jumps the content offset to the absolute edge of the content. Uses axis-aware resolution (same as `scroll`) to find the right scroll view.
 
 | Edge | Offset |
 |------|--------|
@@ -173,54 +168,31 @@ Jumps the content offset to the absolute edge of the content:
 | `.left` | `x = -insets.left` |
 | `.right` | `x = contentSize.width + insets.right - frame.width` |
 
-Returns `true` without scrolling if already at the target edge.
-
-**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` yields frames and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement. Uses `yieldFrames(2)` between iterations — lightweight frame yielding, not full settle polling.
+**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` yields frames and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement.
 
 ## Ancestor Walk
 
-All scroll operations share `nextAncestor(of:)` to find the nearest scrollable container. It handles three cases:
+The UIKit ancestor walk via `nextAncestor(of:)` handles three cases:
 
 1. **UIView** → `view.superview` — standard UIKit view hierarchy
 2. **UIAccessibilityElement** → `element.accessibilityContainer` cast to `NSObject` — VoiceOver container elements that aren't UIViews
-3. **Other NSObject** → KVO `value(forKey: "accessibilityContainer")` — covers custom accessibility containers that implement the informal protocol
+3. **Other NSObject** → KVO `value(forKey: "accessibilityContainer")` — covers custom accessibility containers
 
-The walk stops at the first `UIScrollView` (or subclass) with `isScrollEnabled == true`. This means:
-- `UITableView`, `UICollectionView`, `UITextView` are all found (they're UIScrollView subclasses)
-- Disabled scroll views (`isScrollEnabled = false`) are skipped — the walk continues upward
-- SwiftUI `ScrollView` works because it's backed by a `UIScrollView` in the underlying UIKit hierarchy
-
-### What the walk cannot find
-
-- Scroll views behind a broken container chain (e.g. a custom `UIAccessibilityElement` whose `accessibilityContainer` is nil)
-- Non-UIScrollView custom scrolling containers (e.g. a custom `UIView` that implements its own pan-gesture-driven scrolling)
-- SwiftUI `LazyVStack` without a `ScrollView` parent — there's no UIScrollView in the hierarchy to find
+The walk finds `UIScrollView` subclasses with `isScrollEnabled == true`. For containers where the UIKit walk fails (SwiftUI's `PlatformContainer` is not a `UIScrollView`), `resolveScrollView` falls back to `screenElement.scrollView` — the scroll view reference stored from the accessibility hierarchy's `containerVisitor` during parsing.
 
 ## Settle After Scroll
 
-After any `setContentOffset(animated: true)` call, the scroll view runs a Core Animation animation (~300ms). The auto-scroll path waits for this to complete using `tripwire.waitForAllClear(timeout: 1.0)`.
+After any `setContentOffset(animated: true)` call, the scroll view runs a Core Animation animation (~300ms). The auto-scroll path waits for this using `tripwire.waitForAllClear(timeout: 1.0)` — presentation-layer diffing that returns when all animations complete.
 
-TheTripwire's settle detection works by repeatedly snapshotting CALayer presentation trees and comparing them. When all presentation layers match their model layers (no in-flight animations), it returns. This covers both UIKit animations and SwiftUI transitions that might be triggered by the scroll.
+The `scroll` command does **not** settle internally — it returns immediately after `setContentOffset`. The settle and delta computation happens in the outer `performInteraction` pipeline.
 
-After settle, `bagman.refreshAccessibilityData()` rebuilds the element cache. This is necessary because:
-- `accessibilityFrame` values change after scrolling (the views moved)
-- `activationPoint` values change (derived from frames)
-- The agent's next action needs to tap/interact at the new position
-
-The `scroll` command does **not** settle or refresh internally — it returns immediately after `setContentOffset`. The settle and delta computation happens in the outer `performInteraction` pipeline after the command returns.
-
-`scroll_to_visible` and `scroll_to_edge` are `async` and handle their own frame yielding internally. `scroll_to_visible` uses `yieldFrames(3)` per scan step; `scroll_to_edge` uses `yieldFrames(2)` per re-jump iteration. Both use `CATransaction.flush()` + `Task.yield()` per frame — lighter than `waitForSettle`, just enough for layout to run and lazy content to materialize. The outer pipeline still runs `actionResultWithDelta` after they return.
+`scroll_to_visible` and `scroll_to_edge` handle their own frame yielding. `scroll_to_visible` uses `yieldFrames(3)` per step; `scroll_to_edge` uses `yieldFrames(2)` per re-jump. Both use `CATransaction.flush()` + `Task.yield()` per frame — lighter than `waitForSettle`.
 
 ## Implementation Notes
 
-### Why setContentOffset, not synthetic touch
+### Why setContentOffset + swipe fallback
 
-Synthetic touch scrolling would require simulating a multi-step pan gesture:
-1. Touch down
-2. Multiple touch-moved events with appropriate velocity
-3. Touch up with deceleration
-
-This is fragile — scroll view physics, deceleration curves, and content inset handling are complex. `setContentOffset(animated: true)` gives us exact positioning with UIKit handling all the animation. The trade-off is that we bypass `UIScrollViewDelegate` methods like `scrollViewWillEndDragging(_:withVelocity:targetContentOffset:)`, which means paging snap behavior won't trigger.
+`setContentOffset` gives exact positioning for `UIScrollView` instances. But SwiftUI's internal scroll containers (e.g. `HostingScrollView.PlatformContainer`) are not `UIScrollView` subclasses on iOS 26 — they don't respond to `setContentOffset`. For these, a synthetic swipe gesture at 75% travel covers a full page reliably. The three-tier `ScrollableTarget` dispatch tries the fastest method first and falls through to the universal fallback.
 
 ### Why the 44pt overlap in page scroll
 
@@ -228,6 +200,4 @@ The 44pt overlap when paging ensures continuity — the last few lines of the pr
 
 ### Why NSObject for ensureOnScreen
 
-The auto-scroll has two callers: element-targeted commands (resolve through TheBagman) and first-responder commands (resolve through the UIView responder chain). Both produce a live `NSObject` that has `accessibilityFrame` and participates in the view hierarchy. Accepting `NSObject` lets both paths share one implementation without forcing either to convert to the other's resolution type.
-
-A `CGRect` parameter was considered and rejected because the ancestor walk needs the live object reference — you can't climb `superview` from a rectangle.
+The auto-scroll has two callers: element-targeted commands (resolve through TheBagman) and first-responder commands (resolve through the UIView responder chain). Both produce a live `NSObject` that has `accessibilityFrame` and participates in the view hierarchy. Accepting `NSObject` lets both paths share one implementation.
