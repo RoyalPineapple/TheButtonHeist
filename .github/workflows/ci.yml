@@ -65,14 +65,10 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
-      - name: Warm binary cache for external dependencies
-        timeout-minutes: 10
-        run: tuist cache --external-only
-
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate
+          tuist generate --no-binary-cache
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
             echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
             echo "::group::Diff"
@@ -80,6 +76,14 @@ jobs:
             echo "::endgroup::"
             exit 1
           }
+
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
+
+      - name: Regenerate project with cached binaries
+        timeout-minutes: 3
+        run: tuist generate --no-open
 
       - name: Run macOS tests
         timeout-minutes: 10
