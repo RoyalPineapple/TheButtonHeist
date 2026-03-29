@@ -19,15 +19,17 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// Wraps either a UIScrollView (direct manipulation) or a frame + contentSize
-    /// (swipe-based scrolling) depending on whether the backing view is a UIScrollView.
+    /// Three tiers: UIScrollView (direct offset), accessibilityScroll (VoiceOver page),
+    /// swipe gesture (universal fallback).
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
+        case accessibilityScrollable(view: UIView, contentSize: CGSize)
         case swipeable(frame: CGRect, contentSize: CGSize)
 
         var frame: CGRect {
             switch self {
             case .uiScrollView(let sv): return sv.frame
+            case .accessibilityScrollable(let v, _): return v.frame
             case .swipeable(let frame, _): return frame
             }
         }
@@ -35,14 +37,8 @@ extension TheBagman {
         var contentSize: CGSize {
             switch self {
             case .uiScrollView(let sv): return sv.contentSize
+            case .accessibilityScrollable(_, let cs): return cs
             case .swipeable(_, let cs): return cs
-            }
-        }
-
-        var isLive: Bool {
-            switch self {
-            case .uiScrollView(let sv): return sv.window != nil
-            case .swipeable: return true
             }
         }
     }
@@ -93,8 +89,12 @@ extension TheBagman {
 
     // MARK: - Unified Scroll Dispatch
 
-    /// Scroll a target by one page. Uses setContentOffset for UIScrollViews,
-    /// synthetic swipe for everything else.
+    /// Scroll a target by one page. Three tiers:
+    /// 1. UIScrollView → setContentOffset (fast, precise)
+    /// 2. accessibilityScroll: → VoiceOver page scroll (works on any scrollable view)
+    /// 3. Synthetic swipe → universal fallback
+    /// accessibilityScroll: falls through to swipe on failure since some views
+    /// respond to the selector but return NO (SwiftUI PlatformContainer).
     func scrollOnePage(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
@@ -104,6 +104,11 @@ extension TheBagman {
         switch target {
         case .uiScrollView(let sv):
             return safecracker.scrollByPage(sv, direction: direction, animated: animated)
+        case .accessibilityScrollable(let view, _):
+            if view.accessibilityScroll(direction) { return true }
+            // accessibilityScroll: returned NO — fall back to swipe at the view's frame
+            let screenFrame = view.convert(view.bounds, to: nil)
+            return await safecracker.scrollBySwipe(frame: screenFrame, direction: direction)
         case .swipeable(let frame, _):
             return await safecracker.scrollBySwipe(frame: frame, direction: direction)
         }
@@ -260,6 +265,8 @@ extension TheBagman {
                 }
                 if let sv = scrollViewLookup[container], sv.window != nil {
                     result.append((.uiScrollView(sv), thisIndex))
+                } else if let view = scrollableViewLookup[container], view.window != nil {
+                    result.append((.accessibilityScrollable(view: view, contentSize: contentSize), thisIndex))
                 } else {
                     result.append((.swipeable(frame: container.frame, contentSize: contentSize), thisIndex))
                 }
