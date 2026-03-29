@@ -123,15 +123,11 @@ Searches for an element matching an `ElementMatcher` predicate by scrolling thro
 
 1. **Phase 0 — Check current tree.** Before scrolling, `refreshAccessibilityData()` and check if the element is already visible via `resolveFirstMatch`. If found, return immediately with `scrollCount: 0`.
 
-2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — scrolls one page at a time (via `scrollByPage(animated: false)`), waits for settle (`waitForSettle` with 2 quiet frames), refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (stall detection). Exits early when `totalItems` known and all seen.
+2. **Phase 1 — Scroll in primary direction.** Uses `scanLoop()` — scrolls one page at a time (via `scrollByPage(animated: false, clampToContentSize: false)`), waits for settle (`waitForSettle(0.15s, 2 quiet frames)`), refreshes the element cache, then checks for a match. Tracks unique heistIds via `onScreen` set to detect when new content stops appearing (content exhausted). The content-size clamp is always disabled so lazy containers can scroll past the currently-materialized region.
 
 3. **Phase 2 — Reverse search.** If Phase 1 didn't find the element and budget remains, jump to the opposite edge via `scrollToOppositeEdge`, wait for settle, and run `scanLoop()` again in the primary direction to cover content before the original starting position. Skipped entirely if Phase 1 exhausted the budget.
 
-**Lazy container support:** SwiftUI `LazyVGrid`/`LazyVStack` report incomplete `contentSize` — only what has been rendered. The scan loop detects lazy containers (no `totalItems` from `queryCollectionTotalItems`) and adapts: `scrollByPage` skips the content-size clamp so it can push past the currently-materialized region, and the stall-detection break (no-scroll returned) is disabled since `scrollByPage` may report no movement at the current content boundary while SwiftUI is still rendering. The `waitForSettle` between steps gives SwiftUI time to materialize the next batch.
-
-**Non-blocking scroll:** Unlike the auto-scroll path (which uses `animated: true` + settle wait), scroll-to-visible uses `animated: false` + short settle waits (0.15s, 2 quiet frames). This is much faster for multi-page searches — no animation delay per step.
-
-**Collection metadata:** For `UITableView` and `UICollectionView`, `queryCollectionTotalItems` reads the data source's total item count. This enables the `exhaustive` flag in `ScrollSearchResult` — when `uniqueElementsSeen >= totalItems`, the search provably visited every item.
+**Non-blocking scroll:** Unlike the auto-scroll path (which uses `animated: true` + settle wait), scroll-to-visible uses `animated: false` + short settle waits (0.15s, 2 quiet frames). This is much faster for multi-page searches — no animation delay per step. The settle wait also gives SwiftUI lazy containers time to materialize new content.
 
 **Response:** Every `scrollToVisible` result includes a `scrollSearchResult` with `scrollCount`, `uniqueElementsSeen`, `totalItems`, `exhaustive`, and `foundElement`.
 
@@ -143,23 +139,16 @@ flowchart TD
     CHK -->|No| FSV["findFirstScrollView()<br/>(walk onScreen elements<br/>→ scrollableAncestor)"]
     FSV --> SVOK{Found<br/>scroll view?}
     SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
-    SVOK -->|Yes| QTI["queryCollectionTotalItems()"]
-    QTI --> LAZY{totalItems<br/>available?}
-    LAZY -->|Yes| UIKIT["UIKit mode:<br/>clamp to contentSize,<br/>break on no-scroll"]
-    LAZY -->|No| SWUI["Lazy mode:<br/>no clamp, waitForSettle<br/>between steps"]
+    SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
-    UIKIT --> PH1["Phase 1: scanLoop()<br/>Primary direction"]
-    SWUI --> PH1
-    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: !isLazy)"]
-    SLOOP --> SETTLE["waitForSettle(0.15s)<br/>(SwiftUI renders lazy content)"]
+    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
+    SLOOP --> SETTLE["waitForSettle(0.15s, 2 quiet frames)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
-    FM -->|Not found| NEW{New elements<br/>appeared?}
-    NEW -->|No new IDs| STALL["Break — content exhausted<br/>(UIKit only; lazy skips this)"]
-    NEW -->|Yes| EXHST{totalItems known<br/>& all seen?}
-    EXHST -->|Yes| EXDONE["Return failure:<br/>'exhaustive search'"]
-    EXHST -->|No| BUDGET{scrollCount<br/>< maxScrolls?}
+    FM -->|Not found| NEW{New heistIds<br/>appeared?}
+    NEW -->|No new IDs| STALL["Break — content exhausted"]
+    NEW -->|Yes| BUDGET{scrollCount<br/>< maxScrolls?}
     BUDGET -->|Yes| SLOOP
     BUDGET -->|No| STALL
 
@@ -167,7 +156,7 @@ flowchart TD
     PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
     SCAN2 --> RESULT{Found?}
     RESULT -->|Yes| END
-    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'<br/>+ exhaustive flag"]
+    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
 ```
 
 ### scroll_to_edge (jump to extreme)
@@ -183,7 +172,7 @@ Jumps the content offset to the absolute edge of the content:
 
 Returns `true` without scrolling if already at the target edge.
 
-**Lazy container iteration:** For SwiftUI lazy containers (`LazyVGrid`, `LazyVStack`), `contentSize` grows as content is rendered. A single `scrollToEdge` may not reach the true end because more content materializes after the jump. `executeScrollToEdge` detects lazy containers (no `totalItems` from `queryCollectionTotalItems`) and iterates: after each edge jump, it waits for settle (0.15s, 2 quiet frames), then re-jumps if `contentSize` grew. This repeats up to 20 times until both `contentSize` stabilizes and `scrollToEdge` reports no movement.
+**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` settles and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement. This handles both UIKit and SwiftUI containers uniformly.
 
 ## Ancestor Walk
 
