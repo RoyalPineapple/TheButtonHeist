@@ -56,6 +56,57 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertNil(decoded.direction)
     }
 
+    // MARK: - scrollViewHeistId
+
+    func testScrollToVisibleTargetWithScrollViewHeistId() throws {
+        let target = ScrollToVisibleTarget(
+            elementTarget: .matcher(ElementMatcher(label: "Item")),
+            direction: .down,
+            scrollViewHeistId: "outerScrollView"
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
+        XCTAssertEqual(decoded.scrollViewHeistId, "outerScrollView")
+        guard case .matcher(let matcher) = decoded.elementTarget else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertEqual(matcher.label, "Item")
+    }
+
+    func testScrollToVisibleTargetWithoutScrollViewHeistId() throws {
+        let target = ScrollToVisibleTarget(
+            elementTarget: .matcher(ElementMatcher(label: "Item")),
+            direction: .down
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
+        XCTAssertNil(decoded.scrollViewHeistId)
+    }
+
+    func testScrollTargetWithScrollViewHeistId() throws {
+        let target = ScrollTarget(
+            elementTarget: .heistId("button_ok"),
+            direction: .down,
+            scrollViewHeistId: "outerScrollView"
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ScrollTarget.self, from: data)
+        XCTAssertEqual(decoded.scrollViewHeistId, "outerScrollView")
+        XCTAssertEqual(decoded.direction, .down)
+    }
+
+    func testScrollToEdgeTargetWithScrollViewHeistId() throws {
+        let target = ScrollToEdgeTarget(
+            elementTarget: .heistId("button_ok"),
+            edge: .bottom,
+            scrollViewHeistId: "outerScrollView"
+        )
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ScrollToEdgeTarget.self, from: data)
+        XCTAssertEqual(decoded.scrollViewHeistId, "outerScrollView")
+        XCTAssertEqual(decoded.edge, .bottom)
+    }
+
     // MARK: - ScrollSearchDirection
 
     func testScrollSearchDirectionAllCases() {

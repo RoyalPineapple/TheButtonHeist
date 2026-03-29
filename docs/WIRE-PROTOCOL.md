@@ -398,7 +398,7 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 
 ### scroll
 
-Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation.
+Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation. For nested scroll views, targets the innermost by default — use `scrollViewHeistId` to target a specific scroll view.
 
 **By identifier:**
 ```json
@@ -410,15 +410,20 @@ Scroll the nearest scroll view ancestor of a target element by approximately one
 {"protocolVersion":"6.2","type":"scroll","payload":{"elementTarget":{"order":10},"direction":"down"}}
 ```
 
+**Targeting an outer scroll view:**
+```json
+{"protocolVersion":"6.2","type":"scroll","payload":{"elementTarget":{"identifier":"item"},"direction":"down","scrollViewHeistId":"outerScrollView"}}
+```
+
 Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Search for an element by scrolling through the nearest scroll view. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
+Search for an element by scrolling through scroll views. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Supports nested scroll views: tries the innermost first, falls back to outer ones on stagnation. Use `scrollViewHeistId` to target a specific scroll view.
 
 **Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
 
-**Search options:** `maxScrolls` (default: 20), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
+**Search options:** `maxScrolls` (default: 20), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`), `scrollViewHeistId` (explicit scroll view target).
 
 **By label:**
 ```json
@@ -437,11 +442,16 @@ Search for an element by scrolling through the nearest scroll view. Uses an `Ele
 
 ### scrollToEdge
 
-Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
+Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right). Use `scrollViewHeistId` to target a specific scroll view in nested layouts.
 
 **By identifier:**
 ```json
 {"protocolVersion":"6.2","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
+```
+
+**Targeting an outer scroll view:**
+```json
+{"protocolVersion":"6.2","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"item"},"edge":"top","scrollViewHeistId":"outerScrollView"}}
 ```
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
