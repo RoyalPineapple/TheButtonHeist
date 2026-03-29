@@ -594,7 +594,7 @@ public final class TheFence {
     // is what correlates request to response. A PendingRequestTracker<RecordingPayload> would
     // require either synthesizing a fake requestId or changing the TheHandoff callback
     // signatures, neither of which is warranted for a single call site.
-    func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+    public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {

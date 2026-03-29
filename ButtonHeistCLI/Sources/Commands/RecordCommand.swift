@@ -49,31 +49,17 @@ struct RecordCommand: AsyncParsableCommand {
         )
         defer { fence.stop() }
 
-        // Step 2: Stop recording and retrieve the video data
-        let stopRequest: [String: Any] = [
-            "command": TheFence.Command.stopRecording.rawValue,
-            "output": output,
-        ]
-        let response = try await fence.execute(request: stopRequest)
+        // Step 2: Wait for the device to auto-stop (via inactivity timeout or max duration)
+        let payload = try await fence.waitForRecording(timeout: maxDuration + 30)
 
-        switch response {
-        case .recording(let path, let payload):
-            saveActionLog(payload: payload)
-            if !connection.quiet {
-                logRecordingStats(path: path, payload: payload)
-            }
-        case .recordingData(let payload):
-            guard let videoData = Data(base64Encoded: payload.videoData) else {
-                throw ValidationError("Failed to decode video data")
-            }
-            let url = URL(fileURLWithPath: output)
-            try videoData.write(to: url)
-            saveActionLog(payload: payload)
-            if !connection.quiet {
-                logRecordingStats(path: output, payload: payload)
-            }
-        default:
-            CLIRunner.outputResponse(response, format: .human)
+        guard let videoData = Data(base64Encoded: payload.videoData) else {
+            throw ValidationError("Failed to decode video data")
+        }
+        let url = URL(fileURLWithPath: output)
+        try videoData.write(to: url)
+        saveActionLog(payload: payload)
+        if !connection.quiet {
+            logRecordingStats(path: output, payload: payload)
         }
     }
 
