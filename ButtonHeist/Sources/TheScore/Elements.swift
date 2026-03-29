@@ -66,7 +66,7 @@ extension ElementAction: Codable {
 /// Named accessibility traits — aligned 1:1 with the AccessibilitySnapshot parser's
 /// `knownTraits` in `AccessibilityHierarchy+Codable.swift`.
 /// Standard UIAccessibilityTraits plus private traits the parser exposes.
-public enum HeistTrait: String, CaseIterable, Codable, Sendable {
+public enum HeistTrait: Equatable, Hashable, Sendable {
     // Standard traits
     case button, link, image, staticText, header, adjustable
     case searchField, selected, notEnabled, keyboardKey
@@ -75,13 +75,110 @@ public enum HeistTrait: String, CaseIterable, Codable, Sendable {
     case causesPageTurn, tabBar
     // Private traits (from UIAccessibility+SnapshotAdditions)
     case textEntry, isEditing, backButton, tabBarItem, scrollable, switchButton
+    /// Unknown trait from a newer server — preserved for round-tripping.
+    case unknown(String)
+}
+
+extension HeistTrait: CaseIterable {
+    /// All known cases (excludes `.unknown`).
+    public static var allCases: [HeistTrait] {
+        [.button, .link, .image, .staticText, .header, .adjustable,
+         .searchField, .selected, .notEnabled, .keyboardKey,
+         .summaryElement, .updatesFrequently, .playsSound,
+         .startsMediaSession, .allowsDirectInteraction,
+         .causesPageTurn, .tabBar,
+         .textEntry, .isEditing, .backButton, .tabBarItem, .scrollable, .switchButton]
+    }
+}
+
+extension HeistTrait: RawRepresentable {
+    private static let nameToTrait: [String: HeistTrait] = {
+        var map: [String: HeistTrait] = [:]
+        for c in allCases { map[c.nameValue] = c }
+        return map
+    }()
+
+    /// Returns nil for unknown trait strings. Use Codable for forward-compatible decoding.
+    public init?(rawValue: String) {
+        guard let known = Self.nameToTrait[rawValue] else { return nil }
+        self = known
+    }
+
+    /// The string name for known cases. `.unknown` stores its own value.
+    private var nameValue: String {
+        switch self {
+        case .unknown(let value): return value
+        default: return String(describing: self)
+        }
+    }
+
+    public var rawValue: String { nameValue }
+}
+
+extension HeistTrait: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self = HeistTrait(rawValue: value) ?? .unknown(value)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - Group Type
 
 /// Container group classification in the element tree.
-public enum GroupType: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
-    case semanticGroup, list, landmark, dataTable, tabBar
+public enum GroupType: Equatable, Hashable, Sendable {
+    case semanticGroup, list, landmark, dataTable, tabBar, scrollable
+    case unknown(String)
+}
+
+extension GroupType: CaseIterable {
+    public static var allCases: [GroupType] {
+        [.semanticGroup, .list, .landmark, .dataTable, .tabBar, .scrollable]
+    }
+}
+
+extension GroupType: RawRepresentable {
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "semanticGroup": self = .semanticGroup
+        case "list": self = .list
+        case "landmark": self = .landmark
+        case "dataTable": self = .dataTable
+        case "tabBar": self = .tabBar
+        case "scrollable": self = .scrollable
+        default: return nil
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .semanticGroup: return "semanticGroup"
+        case .list: return "list"
+        case .landmark: return "landmark"
+        case .dataTable: return "dataTable"
+        case .tabBar: return "tabBar"
+        case .scrollable: return "scrollable"
+        case .unknown(let value): return value
+        }
+    }
+}
+
+extension GroupType: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self = GroupType(rawValue: value) ?? .unknown(value)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - Interface
@@ -97,18 +194,6 @@ public struct Interface: Codable, Sendable {
         self.elements = elements
         self.tree = tree
     }
-}
-
-// MARK: - Tree Types
-
-/// Known container group types in the element tree
-public enum GroupType: String, Codable, Equatable, Hashable, Sendable, CaseIterable {
-    case semanticGroup
-    case list
-    case landmark
-    case dataTable
-    case tabBar
-    case scrollable
 }
 
 /// A container group in the element tree
@@ -246,9 +331,9 @@ public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
 /// logic itself lives as an extension on AccessibilityHierarchy in TheInsideJob,
 /// where it operates on the canonical tree directly.
 ///
-/// Trait names use the same string mapping as HeistElement (e.g. "button",
-/// "header", "selected"). The hierarchy-level matcher bridges these to
-/// UIAccessibilityTraits bitmasks via AccessibilitySnapshotParser's knownTraits.
+/// Trait values use the HeistTrait enum (e.g. .button, .header, .selected).
+/// The hierarchy-level matcher bridges these to UIAccessibilityTraits bitmasks
+/// via AccessibilitySnapshotParser's knownTraits.
 public struct ElementMatcher: Codable, Sendable, Equatable {
     /// Case-insensitive substring match against element label
     public let label: String?
@@ -259,14 +344,14 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     /// All listed traits must be present on the element (AND)
     public let traits: [HeistTrait]?
     /// None of the listed traits may be present on the element
-    public let excludeTraits: [String]?
+    public let excludeTraits: [HeistTrait]?
 
     public init(
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
-        traits: [String]? = nil,
-        excludeTraits: [String]? = nil
+        traits: [HeistTrait]? = nil,
+        excludeTraits: [HeistTrait]? = nil
     ) {
         self.label = label
         self.identifier = identifier
@@ -300,26 +385,14 @@ extension HeistElement {
         CGPoint(x: activationPointX, y: activationPointY)
     }
 
-    /// Cross-platform mirror of the parser's `UIAccessibilityTraits.knownTraits` names.
-    /// The parser (AccessibilityHierarchy+Codable.swift) is the authoritative source —
-    /// this mirror exists because TheScore is cross-platform and cannot import UIKit.
-    /// `testHeistElementKnownTraitsMatchParser` enforces that this set stays in sync.
-    /// Used to reject unknown trait names in matcher queries (fail-safe).
-    public static let knownTraitNames: Set<String> = [
-        "button", "link", "image", "selected", "playsSound",
-        "keyboardKey", "staticText", "summaryElement", "notEnabled",
-        "updatesFrequently", "searchField", "startsMediaSession",
-        "adjustable", "allowsDirectInteraction", "causesPageTurn",
-        "header", "tabBar",
-        "textEntry", "isEditing", "backButton", "tabBarItem",
-        "scrollable", "switchButton",
-    ]
+    /// Known trait values. Used to reject unknown traits in matcher queries (fail-safe).
+    private static let knownTraits = Set(HeistTrait.allCases)
 
     /// Match this wire element against an ElementMatcher predicate.
     /// Used for client-side filtering of serialized interface data (get_interface).
     /// String fields use case-insensitive substring matching, consistent with
     /// AccessibilityElement.matches in TheBagman+Matching.
-    /// Unknown trait names in required/excluded cause a miss (fail-safe).
+    /// Unknown traits in required/excluded cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {
             guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
@@ -332,11 +405,11 @@ extension HeistElement {
         }
         let traitSet = matcher.hasTraitPredicates ? Set(traits) : []
         if let required = matcher.traits, !required.isEmpty {
-            for t in required where !Self.knownTraitNames.contains(t) { return false }
+            for t in required where !Self.knownTraits.contains(t) { return false }
             for t in required where !traitSet.contains(t) { return false }
         }
         if let excluded = matcher.excludeTraits, !excluded.isEmpty {
-            for t in excluded where !Self.knownTraitNames.contains(t) { return false }
+            for t in excluded where !Self.knownTraits.contains(t) { return false }
             for t in excluded where traitSet.contains(t) { return false }
         }
         return true
