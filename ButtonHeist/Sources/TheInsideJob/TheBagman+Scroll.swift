@@ -140,20 +140,22 @@ extension TheBagman {
         scrollCount: inout Int,
         totalItems: Int?
     ) async -> TheSafecracker.InteractionResult? {
-        guard let safecracker else { return nil }
         var allSeen = onScreen
-        let uiDir = uiScrollDirection(for: direction)
+
+        let pageStep = scrollPageStep(scrollView, direction: direction)
 
         while scrollCount < maxScrolls {
-            // Scroll one page without clamping to contentSize — lazy
-            // containers grow contentSize as content is rendered.
-            _ = safecracker.scrollByPage(
-                scrollView, direction: uiDir, animated: false,
-                clampToContentSize: false
+            // Advance by one page. Animated so it looks human — iOS rubber-bands
+            // naturally if we overshoot contentSize. Stagnation (no new elements)
+            // is the only termination signal, so clamping is unnecessary.
+            let offset = scrollView.contentOffset
+            scrollView.setContentOffset(
+                CGPoint(x: offset.x + pageStep.x, y: offset.y + pageStep.y),
+                animated: true
             )
 
-            // Yield a couple of frames so layout runs and new content appears.
-            await tripwire.yieldFrames(2)
+            // Yield a few frames for layout to materialise new content.
+            await tripwire.yieldFrames(3)
 
             scrollCount += 1
             refreshAccessibilityData()
@@ -249,6 +251,21 @@ extension TheBagman {
             return candidate.value(forKey: "accessibilityContainer") as? NSObject
         }
         return nil
+    }
+
+    // MARK: - Page Step
+
+    /// One page of scroll travel (with 44pt overlap) as a signed delta vector.
+    /// Used by the scan loop to advance the offset directly without contentSize clamping.
+    private func scrollPageStep(_ scrollView: UIScrollView, direction: ScrollSearchDirection) -> CGPoint {
+        let overlap: CGFloat = 44
+        let size = scrollView.frame.size
+        switch direction {
+        case .down:  return CGPoint(x: 0, y: size.height - overlap)
+        case .up:    return CGPoint(x: 0, y: -(size.height - overlap))
+        case .right: return CGPoint(x: size.width - overlap, y: 0)
+        case .left:  return CGPoint(x: -(size.width - overlap), y: 0)
+        }
     }
 
     // MARK: - Direction Mapping
