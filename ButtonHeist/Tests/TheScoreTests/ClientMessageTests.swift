@@ -201,14 +201,14 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - WaitFor Tests
 
     func testWaitForMatcherRoundTrip() throws {
-        let target = ElementTarget.matcher(ElementMatcher(label: "Loading", traits: ["staticText"]))
+        let target = ElementTarget.matcher(ElementMatcher(label: "Loading", traits: [.staticText]))
         let message = ClientMessage.waitFor(WaitForTarget(elementTarget: target, absent: true, timeout: 5.0))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .waitFor(let wf) = decoded, case .matcher(let m) = wf.elementTarget {
             XCTAssertEqual(m.label, "Loading")
-            XCTAssertEqual(m.traits, ["staticText"])
+            XCTAssertEqual(m.traits, [.staticText])
             XCTAssertEqual(wf.absent, true)
             XCTAssertEqual(wf.timeout, 5.0)
         } else {

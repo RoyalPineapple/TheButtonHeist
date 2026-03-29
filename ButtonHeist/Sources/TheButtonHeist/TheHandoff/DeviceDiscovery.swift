@@ -195,12 +195,12 @@ public final class DeviceDiscovery: DeviceDiscovering {
         var sessionActive: Bool?
         var certFingerprint: String?
         if let txtRecord {
-            simUDID = txtRecord["simudid"]
-            installationId = txtRecord["installationid"]
-            displayDeviceName = txtRecord["devicename"]
-            instanceId = txtRecord["instanceid"]
-            certFingerprint = txtRecord["certfp"]
-            if let value = txtRecord["sessionactive"] {
+            simUDID = txtRecord[TXTRecordKey.simUDID.rawValue]
+            installationId = txtRecord[TXTRecordKey.installationId.rawValue]
+            displayDeviceName = txtRecord[TXTRecordKey.deviceName.rawValue]
+            instanceId = txtRecord[TXTRecordKey.instanceId.rawValue]
+            certFingerprint = txtRecord[TXTRecordKey.certFingerprint.rawValue]
+            if let value = txtRecord[TXTRecordKey.sessionActive.rawValue] {
                 sessionActive = value == "1"
             }
         }

@@ -7,7 +7,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Color Picker", traits: ["button"])),
+            elementTarget: .matcher(ElementMatcher(label: "Color Picker", traits: [.button])),
             maxScrolls: 30,
             direction: .up
         )
@@ -17,7 +17,7 @@ final class ScrollToVisibleTests: XCTestCase {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.label, "Color Picker")
-        XCTAssertEqual(matcher.traits, ["button"])
+        XCTAssertEqual(matcher.traits, [.button])
         XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .up)
     }
@@ -80,7 +80,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let element = HeistElement(
             heistId: "button_color_picker", order: 5, description: "Color Picker",
             label: "Color Picker", value: nil, identifier: nil,
-            traits: ["button"],
+            traits: [.button],
             frameX: 0, frameY: 200, frameWidth: 375, frameHeight: 44,
             actions: [.activate]
         )
@@ -112,7 +112,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Settings", traits: ["header"])),
+            elementTarget: .matcher(ElementMatcher(label: "Settings", traits: [.header])),
             maxScrolls: 10,
             direction: .down
         )
@@ -124,7 +124,7 @@ final class ScrollToVisibleTests: XCTestCase {
             return XCTFail("Expected scrollToVisible with matcher")
         }
         XCTAssertEqual(matcher.label, "Settings")
-        XCTAssertEqual(matcher.traits, ["header"])
+        XCTAssertEqual(matcher.traits, [.header])
         XCTAssertEqual(decodedTarget.maxScrolls, 10)
         XCTAssertEqual(decodedTarget.direction, .down)
     }

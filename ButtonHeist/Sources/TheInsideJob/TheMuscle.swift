@@ -90,14 +90,14 @@ final class TheMuscle {
 
     init(explicitToken: String?) {
         self.authToken = explicitToken ?? UUID().uuidString
-        if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_RESTRICT_WATCHERS"] {
-            self.restrictWatchers = ["1", "true", "yes"].contains(envValue.lowercased())
+        if EnvironmentKey.insideJobRestrictWatchers.value != nil {
+            self.restrictWatchers = EnvironmentKey.insideJobRestrictWatchers.boolValue
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
             self.restrictWatchers = plistValue
         } else {
             self.restrictWatchers = true
         }
-        if let envTimeout = ProcessInfo.processInfo.environment["INSIDEJOB_SESSION_TIMEOUT"],
+        if let envTimeout = EnvironmentKey.insideJobSessionTimeout.value,
            let parsed = TimeInterval(envTimeout) {
             self.sessionReleaseTimeout = max(1.0, parsed)
         } else {

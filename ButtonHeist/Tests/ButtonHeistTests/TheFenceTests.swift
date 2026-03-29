@@ -6,6 +6,45 @@ final class TheFenceTests: XCTestCase {
 
     // MARK: - Command Enum
 
+    // MARK: - Element Matcher Validation
+
+    @ButtonHeistActor
+    func testElementMatcherRejectsUnknownTrait() {
+        let fence = TheFence()
+        let args: [String: Any] = ["traits": ["madeUpTrait"]]
+        XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(message.contains("Unknown trait 'madeUpTrait'"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testElementMatcherRejectsUnknownExcludeTrait() {
+        let fence = TheFence()
+        let args: [String: Any] = ["excludeTraits": ["bogus"]]
+        XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(message.contains("Unknown excludeTrait 'bogus'"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testElementMatcherAcceptsKnownTraits() throws {
+        let fence = TheFence()
+        let args: [String: Any] = ["traits": ["button", "header"], "excludeTraits": ["selected"]]
+        let matcher = try fence.elementMatcher(args)
+        XCTAssertEqual(matcher.traits, [.button, .header])
+        XCTAssertEqual(matcher.excludeTraits, [.selected])
+    }
+
+    // MARK: - Command Enum
+
     func testCommandCaseCount() {
         XCTAssertEqual(TheFence.Command.allCases.count, 36)
     }
