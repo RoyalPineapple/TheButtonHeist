@@ -88,11 +88,10 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// All leaf elements in the tree that satisfy the property predicates.
     func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
-        reducedHierarchy([]) { acc, node in
-            guard case let .element(element, traversalIndex) = node,
-                  element.matches(matcher) else { return acc }
-            return acc + [.init(element: element, traversalIndex: traversalIndex)]
-        }
+        flattenToElements()
+            .enumerated()
+            .filter { $0.element.matches(matcher) }
+            .map { AccessibilityHierarchy.MatchResult(element: $0.element, traversalIndex: $0.offset) }
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.

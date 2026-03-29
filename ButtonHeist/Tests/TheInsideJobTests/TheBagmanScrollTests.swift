@@ -25,7 +25,7 @@ final class TheBagmanScrollTests: XCTestCase {
         scrollView.isScrollEnabled = true
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let screenEl = TheBagman.ScreenElement(
+        let screenElement = TheBagman.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
             lastTraversalIndex: 0,
@@ -35,39 +35,7 @@ final class TheBagmanScrollTests: XCTestCase {
             scrollView: scrollView
         )
 
-        let target = bagman.resolveScrollTarget(heistId: nil, screenElement: screenEl)
-        if case .uiScrollView(let sv) = target {
-            XCTAssertTrue(sv === scrollView)
-        } else {
-            XCTFail("Expected .uiScrollView, got \(String(describing: target))")
-        }
-    }
-
-    func testResolveScrollTargetExplicitHeistId() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        scrollView.isScrollEnabled = true
-
-        let screenEl = TheBagman.ScreenElement(
-            heistId: "item",
-            contentSpaceOrigin: nil,
-            lastTraversalIndex: 0,
-            wire: makeWire(heistId: "item"),
-            presented: true,
-            object: UILabel(),
-            scrollView: nil
-        )
-
-        bagman.screenElements["myScroll"] = TheBagman.ScreenElement(
-            heistId: "myScroll",
-            contentSpaceOrigin: nil,
-            lastTraversalIndex: 1,
-            wire: makeWire(heistId: "myScroll"),
-            presented: true,
-            object: scrollView,
-            scrollView: nil
-        )
-
-        let target = bagman.resolveScrollTarget(heistId: "myScroll", screenElement: screenEl)
+        let target = bagman.resolveScrollTarget(screenElement: screenElement)
         if case .uiScrollView(let sv) = target {
             XCTAssertTrue(sv === scrollView)
         } else {
@@ -76,7 +44,7 @@ final class TheBagmanScrollTests: XCTestCase {
     }
 
     func testResolveScrollTargetReturnsNilWhenNoScrollView() {
-        let screenEl = TheBagman.ScreenElement(
+        let screenElement = TheBagman.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
             lastTraversalIndex: 0,
@@ -86,7 +54,7 @@ final class TheBagmanScrollTests: XCTestCase {
             scrollView: nil
         )
 
-        let target = bagman.resolveScrollTarget(heistId: nil, screenElement: screenEl)
+        let target = bagman.resolveScrollTarget(screenElement: screenElement)
         XCTAssertNil(target)
     }
 

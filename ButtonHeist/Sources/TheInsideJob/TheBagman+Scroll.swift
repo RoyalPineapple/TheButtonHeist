@@ -19,17 +19,14 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// Three tiers: UIScrollView (direct offset), accessibilityScroll (VoiceOver page),
-    /// swipe gesture (universal fallback).
+    /// UIScrollView → direct setContentOffset. Everything else → synthetic swipe.
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
-        case accessibilityScrollable(view: UIView, contentSize: CGSize)
         case swipeable(frame: CGRect, contentSize: CGSize)
 
         var frame: CGRect {
             switch self {
             case .uiScrollView(let sv): return sv.frame
-            case .accessibilityScrollable(let v, _): return v.frame
             case .swipeable(let frame, _): return frame
             }
         }
@@ -37,7 +34,6 @@ extension TheBagman {
         var contentSize: CGSize {
             switch self {
             case .uiScrollView(let sv): return sv.contentSize
-            case .accessibilityScrollable(_, let cs): return cs
             case .swipeable(_, let cs): return cs
             }
         }
@@ -52,17 +48,13 @@ extension TheBagman {
     }
 
     func scrollableAxis(of scrollView: UIScrollView) -> ScrollAxis {
-        scrollableAxis(frame: scrollView.frame.size, content: scrollView.contentSize)
+        scrollableAxis(of: .uiScrollView(scrollView))
     }
 
     func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
-        scrollableAxis(frame: target.frame.size, content: target.contentSize)
-    }
-
-    private func scrollableAxis(frame: CGSize, content: CGSize) -> ScrollAxis {
         var axis: ScrollAxis = []
-        if content.width > frame.width { axis.insert(.horizontal) }
-        if content.height > frame.height { axis.insert(.vertical) }
+        if target.contentSize.width > target.frame.width { axis.insert(.horizontal) }
+        if target.contentSize.height > target.frame.height { axis.insert(.vertical) }
         return axis
     }
 
@@ -89,12 +81,9 @@ extension TheBagman {
 
     // MARK: - Unified Scroll Dispatch
 
-    /// Scroll a target by one page. Three tiers:
-    /// 1. UIScrollView → setContentOffset (fast, precise)
-    /// 2. accessibilityScroll: → VoiceOver page scroll (works on any scrollable view)
-    /// 3. Synthetic swipe → universal fallback
-    /// accessibilityScroll: falls through to swipe on failure since some views
-    /// respond to the selector but return NO (SwiftUI PlatformContainer).
+    /// Scroll a target by one page.
+    /// UIScrollView → setContentOffset (fast, precise, returns false at edge).
+    /// Everything else → synthetic swipe (universal, always returns true).
     func scrollOnePage(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
@@ -104,11 +93,6 @@ extension TheBagman {
         switch target {
         case .uiScrollView(let sv):
             return safecracker.scrollByPage(sv, direction: direction, animated: animated)
-        case .accessibilityScrollable(let view, _):
-            if view.accessibilityScroll(direction) { return true }
-            // accessibilityScroll: returned NO — fall back to swipe at the view's frame
-            let screenFrame = view.convert(view.bounds, to: nil)
-            return await safecracker.scrollBySwipe(frame: screenFrame, direction: direction)
         case .swipeable(let frame, _):
             return await safecracker.scrollBySwipe(frame: frame, direction: direction)
         }
@@ -126,7 +110,7 @@ extension TheBagman {
         }
         let axis = requiredAxis(for: target.direction)
         guard let scrollTarget = resolveScrollTarget(
-            heistId: target.scrollViewHeistId, screenElement: resolved.screenElement, axis: axis
+            screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
@@ -150,7 +134,7 @@ extension TheBagman {
         }
         let axis = requiredAxis(for: target.edge)
         guard let scrollTarget = resolveScrollTarget(
-            heistId: target.scrollViewHeistId, screenElement: resolved.screenElement, axis: axis
+            screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
@@ -253,13 +237,10 @@ extension TheBagman {
             guard case .container(let container, _) = node,
                   case .scrollable(let contentSize) = container.type,
                   !exhausted.contains(container) else { return nil }
-            if let sv = scrollViewLookup[container], sv.window != nil {
+            if let sv = scrollableContainerViews[container] as? UIScrollView, sv.window != nil {
                 return (.uiScrollView(sv), container)
-            } else if let view = scrollableViewLookup[container], view.window != nil {
-                return (.accessibilityScrollable(view: view, contentSize: contentSize), container)
-            } else {
-                return (.swipeable(frame: container.frame, contentSize: contentSize), container)
             }
+            return (.swipeable(frame: container.frame, contentSize: contentSize), container)
         }
     }
 
@@ -329,27 +310,13 @@ extension TheBagman {
     // MARK: - Scroll Target Resolution (Accessibility Hierarchy)
 
     /// Find the scrollable container for a resolved element from the accessibility hierarchy.
-    /// When `heistId` is provided, looks up that specific container. Otherwise uses the
-    /// element's stored `scrollView` ref (from the hierarchy tree).
+    /// Uses the element's stored `scrollView` ref (set by the hierarchy tree's containerVisitor).
     func resolveScrollTarget(
-        heistId: String?,
         screenElement: ScreenElement,
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
-        // Explicit scrollViewHeistId → look up that container only, don't fall through
-        if let heistId {
-            guard let entry = screenElements[heistId], let obj = entry.object else { return nil }
-            if let sv = obj as? UIScrollView { return .uiScrollView(sv) }
-            let frame = obj.accessibilityFrame
-            return frame.isNull ? nil : .swipeable(frame: frame, contentSize: frame.size)
-        }
-
-        // Use the accessibility hierarchy's scroll view for this element
-        if let sv = screenElement.scrollView {
-            return .uiScrollView(sv)
-        }
-
-        return nil
+        guard let sv = screenElement.scrollView else { return nil }
+        return .uiScrollView(sv)
     }
 
     // MARK: - Direction Mapping

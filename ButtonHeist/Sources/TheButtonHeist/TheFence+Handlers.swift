@@ -261,12 +261,11 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
             }
-            let scrollViewId = stringArg(args, "scrollViewHeistId")
             return try await sendAction(
-                .scroll(ScrollTarget(elementTarget: target, direction: direction, scrollViewHeistId: scrollViewId))
+                .scroll(ScrollTarget(elementTarget: target, direction: direction))
             )
         case .scrollToVisible:
-            guard let elTarget = try elementTarget(args) else {
+            guard let target = try elementTarget(args) else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
             }
             let directionStr = stringArg(args, "direction")
@@ -277,13 +276,12 @@ extension TheFence {
                     return .error("Invalid direction '\(directionStr)'. Valid: \(ScrollSearchDirection.allCases.map(\.rawValue).joined(separator: ", "))")
                 }
             }
-            let target = ScrollToVisibleTarget(
-                elementTarget: elTarget,
+            let scrollToVisibleTarget = ScrollToVisibleTarget(
+                elementTarget: target,
                 maxScrolls: intArg(args, "maxScrolls"),
                 direction: direction,
-                scrollViewHeistId: stringArg(args, "scrollViewHeistId")
             )
-            let result: ActionResult = try await sendAndAwait(.scrollToVisible(target)) { requestId in
+            let result: ActionResult = try await sendAndAwait(.scrollToVisible(scrollToVisibleTarget)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
             }
             lastActionResult = result
@@ -298,8 +296,7 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
-            let scrollViewId = stringArg(args, "scrollViewHeistId")
-            return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge, scrollViewHeistId: scrollViewId)))
+            return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         default:
             return .error("Unknown scroll action: \(command.rawValue)")
         }
@@ -407,16 +404,16 @@ extension TheFence {
     // MARK: - Handler: Wait For
 
     func handleWaitFor(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let elTarget = try elementTarget(args) else {
+        guard let target = try elementTarget(args) else {
             return .error("Must specify heistId or at least one match field (label, identifier, value, traits, or excludeTraits) for wait_for")
         }
-        let target = WaitForTarget(
-            elementTarget: elTarget,
+        let waitForTarget = WaitForTarget(
+            elementTarget: target,
             absent: boolArg(args, "absent"),
             timeout: doubleArg(args, "timeout")
         )
-        let result: ActionResult = try await sendAndAwait(.waitFor(target)) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: target.resolvedTimeout + 5)
+        let result: ActionResult = try await sendAndAwait(.waitFor(waitForTarget)) { requestId in
+            try await self.waitForActionResult(requestId: requestId, timeout: waitForTarget.resolvedTimeout + 5)
         }
         lastActionResult = result
         return .action(result: result)
