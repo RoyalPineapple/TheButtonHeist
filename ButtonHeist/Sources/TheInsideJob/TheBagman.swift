@@ -18,6 +18,10 @@ final class TheBagman {
         self.tripwire = tripwire
     }
 
+    /// Back-reference to the gesture engine. TheBagman drives TheSafecracker
+    /// for synthetic touch when accessibility activation fails.
+    weak var safecracker: TheSafecracker?
+
     // MARK: - Element Storage
 
     /// Parsed accessibility elements from the last hierarchy refresh.
@@ -85,28 +89,16 @@ final class TheBagman {
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
 
-    /// Active scroll container for a scroll_to_visible search.
-    /// Weak by rule: TheBagman never owns live UI lifetime.
-    weak var activeScrollSearchView: UIScrollView?
+    // MARK: - Element Access (index-based, for conversion)
 
-    struct ScrollSearchPreparation {
-        let totalItems: Int?
-    }
-
-    /// Reverse index: traversal index → heistId. Rebuilt each refresh in updateScreenElements.
-    private var indexToHeistId: [Int: String] = [:]
-
-    // MARK: - Element Access (heistId-based)
-
-    /// Look up the live NSObject for an element by heistId.
-    private func object(forHeistId heistId: String) -> NSObject? {
-        screenElements[heistId]?.object
-    }
-
-    /// Look up the live NSObject for an element at a given traversal index. O(1) via reverse index.
-    private func object(at index: Int) -> NSObject? {
-        guard let heistId = indexToHeistId[index] else { return nil }
-        return screenElements[heistId]?.object
+    /// Look up the live NSObject by traversal index. Used during wire conversion.
+    func object(at index: Int) -> NSObject? {
+        for heistId in onScreen {
+            if let entry = screenElements[heistId], entry.lastTraversalIndex == index {
+                return entry.object
+            }
+        }
+        return nil
     }
 
     /// Check if an interactive object exists at the given traversal index.
@@ -119,29 +111,52 @@ final class TheBagman {
             || obj.accessibilityRespondsToUserInteraction
     }
 
-    /// Return custom action names for the interactive object at the given index.
+    /// Return custom action names for the element at the given index.
     func customActionNames(elementAt index: Int) -> [String] {
         object(at: index)?.accessibilityCustomActions?.map { $0.name } ?? []
     }
 
-    /// Perform accessibilityActivate on the object at the given index.
-    func activate(elementAt index: Int) -> Bool {
-        object(at: index)?.accessibilityActivate() ?? false
+    // MARK: - Unified Element Resolution
+
+    /// Result of resolving an ElementTarget to a concrete element.
+    struct ResolvedTarget {
+        let screenElement: ScreenElement
+        let element: AccessibilityElement
+        let traversalIndex: Int
     }
 
-    /// Perform accessibilityIncrement on the object at the given index.
-    func increment(elementAt index: Int) {
-        object(at: index)?.accessibilityIncrement()
+    // MARK: - Element Actions
+
+    /// Check if the element supports interaction.
+    func hasInteractiveObject(_ screenEl: ScreenElement) -> Bool {
+        guard let obj = screenEl.object else { return false }
+        let index = screenEl.lastTraversalIndex
+        guard index >= 0, index < cachedElements.count else { return false }
+        let el = cachedElements[index]
+        return el.respondsToUserInteraction
+            || el.traits.contains(.adjustable)
+            || !el.customActions.isEmpty
+            || obj.accessibilityRespondsToUserInteraction
     }
 
-    /// Perform accessibilityDecrement on the object at the given index.
-    func decrement(elementAt index: Int) {
-        object(at: index)?.accessibilityDecrement()
+    /// Perform accessibilityActivate.
+    func activate(_ screenEl: ScreenElement) -> Bool {
+        screenEl.object?.accessibilityActivate() ?? false
     }
 
-    /// Perform a named custom action on the object at the given index.
-    func performCustomAction(named name: String, elementAt index: Int) -> Bool {
-        guard let actions = object(at: index)?.accessibilityCustomActions else {
+    /// Perform accessibilityIncrement.
+    func increment(_ screenEl: ScreenElement) {
+        screenEl.object?.accessibilityIncrement()
+    }
+
+    /// Perform accessibilityDecrement.
+    func decrement(_ screenEl: ScreenElement) {
+        screenEl.object?.accessibilityDecrement()
+    }
+
+    /// Perform a named custom action.
+    func performCustomAction(named name: String, on screenEl: ScreenElement) -> Bool {
+        guard let actions = screenEl.object?.accessibilityCustomActions else {
             return false
         }
         for action in actions where action.name == name {
@@ -156,30 +171,22 @@ final class TheBagman {
         return false
     }
 
-    // MARK: - Unified Element Resolution
-
-    /// Result of resolving an ElementTarget to a concrete element.
-    struct ResolvedTarget {
-        let element: AccessibilityElement
-        let traversalIndex: Int
-    }
-
     /// Resolve a target to a unique element. Returns nil on miss or ambiguity.
     /// Use `elementNotFoundMessage(for:)` for diagnostics on nil.
     func resolveTarget(_ target: ElementTarget) -> ResolvedTarget? {
         switch target {
         case .heistId(let heistId):
-            // O(1) dictionary lookup — only presented elements are targetable
             guard let entry = screenElements[heistId], entry.presented else { return nil }
             let i = entry.lastTraversalIndex
             guard i >= 0, i < cachedElements.count else { return nil }
-            return ResolvedTarget(element: cachedElements[i], traversalIndex: i)
+            return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
         case .matcher(let matcher):
             let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
                 ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
                 : cachedHierarchy
             guard let unique = source.uniqueMatch(matcher) else { return nil }
-            return ResolvedTarget(element: unique.element, traversalIndex: unique.traversalIndex)
+            guard let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) else { return nil }
+            return ResolvedTarget(screenElement: screenEl, element: unique.element, traversalIndex: unique.traversalIndex)
         }
     }
 
@@ -191,10 +198,11 @@ final class TheBagman {
             guard let entry = screenElements[heistId], entry.presented else { return nil }
             let i = entry.lastTraversalIndex
             guard i >= 0, i < cachedElements.count else { return nil }
-            return ResolvedTarget(element: cachedElements[i], traversalIndex: i)
+            return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
         case .matcher(let matcher):
             guard let found = findMatch(matcher) else { return nil }
-            return ResolvedTarget(element: found.element, traversalIndex: found.index)
+            guard let screenEl = screenElements.values.first(where: { $0.lastTraversalIndex == found.index }) else { return nil }
+            return ResolvedTarget(screenElement: screenEl, element: found.element, traversalIndex: found.index)
         }
     }
 
@@ -408,90 +416,7 @@ final class TheBagman {
         return resolved.element.shape.frame
     }
 
-    func ensureOnScreen(for target: ElementTarget) async {
-        guard let resolved = resolveTarget(target) else { return }
-        await ensureOnScreen(elementAt: resolved.traversalIndex)
-    }
-
-    func ensureFirstResponderOnScreen() async {
-        guard let responder = tripwire.currentFirstResponder() else { return }
-        await ensureOnScreen(object: responder)
-    }
-
-    func scroll(elementAt index: Int, direction: UIAccessibilityScrollDirection) -> Bool {
-        guard let object = object(at: index),
-              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
-        return scrollByPage(scrollView, direction: direction)
-    }
-
-    func scrollToVisible(elementAt index: Int) -> Bool {
-        guard let object = object(at: index) else { return false }
-        let elementFrame = object.accessibilityFrame
-        guard !elementFrame.isNull && !elementFrame.isEmpty,
-              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
-        return scrollToMakeVisible(elementFrame, in: scrollView)
-    }
-
-    func scrollToEdge(elementAt index: Int, edge: ScrollEdge) -> Bool {
-        guard let object = object(at: index),
-              let scrollView = scrollableAncestor(of: object, includeSelf: true) else { return false }
-
-        let insets = scrollView.adjustedContentInset
-        var newOffset = scrollView.contentOffset
-
-        switch edge {
-        case .top:
-            newOffset.y = -insets.top
-        case .bottom:
-            newOffset.y = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        case .left:
-            newOffset.x = -insets.left
-        case .right:
-            newOffset.x = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        }
-
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return true
-        }
-        scrollView.setContentOffset(newOffset, animated: true)
-        return true
-    }
-
-    func beginScrollSearch() -> ScrollSearchPreparation? {
-        guard let scrollView = findFirstScrollView() else {
-            activeScrollSearchView = nil
-            return nil
-        }
-        activeScrollSearchView = scrollView
-        return ScrollSearchPreparation(totalItems: queryCollectionTotalItems(scrollView))
-    }
-
-    func scrollActiveSearchContainer(direction: ScrollSearchDirection, animated: Bool = true) -> Bool {
-        guard let scrollView = activeScrollSearchView else { return false }
-        return scrollByPage(scrollView, direction: uiScrollDirection(for: direction), animated: animated)
-    }
-
-    func moveActiveSearchContainerToOppositeEdge(from direction: ScrollSearchDirection) {
-        guard let scrollView = activeScrollSearchView else { return }
-        let insets = scrollView.adjustedContentInset
-
-        switch direction {
-        case .down:
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: -insets.top), animated: false)
-        case .up:
-            let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: maxY), animated: false)
-        case .right:
-            scrollView.setContentOffset(CGPoint(x: -insets.left, y: scrollView.contentOffset.y), animated: false)
-        case .left:
-            let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-            scrollView.setContentOffset(CGPoint(x: maxX, y: scrollView.contentOffset.y), animated: false)
-        }
-    }
-
-    func endScrollSearch() {
-        activeScrollSearchView = nil
-    }
+    // Scroll command execution moved to TheBagman+Scroll.swift
 
     // MARK: - Refresh
 
@@ -532,7 +457,6 @@ final class TheBagman {
         cachedElements.removeAll()
         screenElements.removeAll()
         onScreen.removeAll()
-        indexToHeistId.removeAll()
         lastHierarchyHash = 0
     }
 
@@ -753,14 +677,6 @@ final class TheBagman {
         }
 
         onScreen = visibleThisRefresh
-
-        // Rebuild reverse index for O(1) traversal-index → heistId lookup
-        indexToHeistId.removeAll(keepingCapacity: true)
-        for id in visibleThisRefresh {
-            if let entry = screenElements[id] {
-                indexToHeistId[entry.lastTraversalIndex] = id
-            }
-        }
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
@@ -961,162 +877,6 @@ final class TheBagman {
     /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
     func captureActionFrame() {
         stakeout?.captureActionFrame()
-    }
-
-    // MARK: - Scroll Helpers
-
-    private func ensureOnScreen(elementAt index: Int) async {
-        guard let object = object(at: index) else { return }
-        await ensureOnScreen(object: object)
-    }
-
-    private func ensureOnScreen(object: NSObject) async {
-        let frame = object.accessibilityFrame
-        guard !frame.isNull && !frame.isEmpty else { return }
-
-        let screenBounds = UIScreen.main.bounds
-        if screenBounds.contains(frame) { return }
-
-        guard let scrollView = scrollableAncestor(of: object, includeSelf: false) else { return }
-        if scrollToMakeVisible(frame, in: scrollView) {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
-            refreshAccessibilityData()
-        }
-    }
-
-    private func findFirstScrollView() -> UIScrollView? {
-        for index in cachedElements.indices {
-            guard let object = object(at: index),
-                  let scrollView = scrollableAncestor(of: object, includeSelf: true) else { continue }
-            return scrollView
-        }
-        return nil
-    }
-
-    private func scrollableAncestor(of object: NSObject, includeSelf: Bool) -> UIScrollView? {
-        var current: NSObject? = includeSelf ? object : nextAncestor(of: object)
-        while let candidate = current {
-            if let scrollView = candidate as? UIScrollView,
-               scrollView.isScrollEnabled {
-                return scrollView
-            }
-            current = nextAncestor(of: candidate)
-        }
-        return nil
-    }
-
-    private func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
-        if let collectionView = scrollView as? UICollectionView {
-            let sections = collectionView.numberOfSections
-            var total = 0
-            for section in 0..<sections {
-                total += collectionView.numberOfItems(inSection: section)
-            }
-            return total
-        }
-        if let tableView = scrollView as? UITableView {
-            let sections = tableView.numberOfSections
-            var total = 0
-            for section in 0..<sections {
-                total += tableView.numberOfRows(inSection: section)
-            }
-            return total
-        }
-        return nil
-    }
-
-    private func scrollByPage(_ scrollView: UIScrollView, direction: UIAccessibilityScrollDirection, animated: Bool = true) -> Bool {
-        let overlap: CGFloat = 44
-        let size = scrollView.frame.size
-        let offset = scrollView.contentOffset
-        let contentSize = scrollView.contentSize
-        let insets = scrollView.adjustedContentInset
-
-        var newOffset = offset
-
-        switch direction {
-        case .up:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
-        case .down:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
-        case .left:
-            newOffset.x = max(offset.x - (size.width - overlap), -insets.left)
-        case .right:
-            newOffset.x = min(offset.x + size.width - overlap,
-                             contentSize.width + insets.right - size.width)
-        case .next:
-            newOffset.y = min(offset.y + size.height - overlap,
-                             contentSize.height + insets.bottom - size.height)
-        case .previous:
-            newOffset.y = max(offset.y - (size.height - overlap), -insets.top)
-        @unknown default:
-            return false
-        }
-
-        if newOffset.x == offset.x && newOffset.y == offset.y { return false }
-        scrollView.setContentOffset(newOffset, animated: animated)
-        return true
-    }
-
-    private func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView) -> Bool {
-        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
-
-        let visibleRect = CGRect(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
-            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
-        )
-
-        if visibleRect.contains(targetInScrollView) { return true }
-
-        var newOffset = scrollView.contentOffset
-
-        if targetInScrollView.minX < visibleRect.minX {
-            newOffset.x -= visibleRect.minX - targetInScrollView.minX
-        } else if targetInScrollView.maxX > visibleRect.maxX {
-            newOffset.x += targetInScrollView.maxX - visibleRect.maxX
-        }
-
-        if targetInScrollView.minY < visibleRect.minY {
-            newOffset.y -= visibleRect.minY - targetInScrollView.minY
-        } else if targetInScrollView.maxY > visibleRect.maxY {
-            newOffset.y += targetInScrollView.maxY - visibleRect.maxY
-        }
-
-        let insets = scrollView.adjustedContentInset
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
-        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
-
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return true
-        }
-
-        scrollView.setContentOffset(newOffset, animated: true)
-        return true
-    }
-
-    private func nextAncestor(of candidate: NSObject) -> NSObject? {
-        if let view = candidate as? UIView {
-            return view.superview
-        } else if let element = candidate as? UIAccessibilityElement {
-            return element.accessibilityContainer as? NSObject
-        } else if candidate.responds(to: Selector(("accessibilityContainer"))) {
-            return candidate.value(forKey: "accessibilityContainer") as? NSObject
-        }
-        return nil
-    }
-
-    private func uiScrollDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
-        switch direction {
-        case .down: return .down
-        case .up: return .up
-        case .left: return .left
-        case .right: return .right
-        }
     }
 }
 

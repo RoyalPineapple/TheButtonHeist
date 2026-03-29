@@ -7,18 +7,20 @@
 
 Unified targeting turns a caller's intent ("tap the Submit button") into a concrete `AccessibilityElement` and traversal index on the iOS side. Every action command — activate, scroll, swipe, type_text, gesture, edit_action — flows through the same resolution pipeline.
 
-There are exactly **two targeting strategies**:
+There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
-1. **heistId** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. Fast lookup via the snapshot index.
-2. **match** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
+1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. O(1) lookup via `screenElements` dictionary.
+2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with case-insensitive substring matching. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
-A single method, `TheBagman.resolveTarget(_:)`, implements this priority chain and returns both the `AccessibilityElement` and its `traversalIndex`. Every action executor calls this method — there are no alternative resolution paths.
+A single method, `TheBagman.resolveTarget(_:)`, implements this and returns `ResolvedTarget(screenElement, element, traversalIndex)`. Every action executor calls this method — there are no alternative resolution paths.
 
-### What was removed
+### What was removed/changed
 
-- **`identifier` on ActionTarget** — accessibility identifier is an accessibility property, so it belongs in the matcher. Sending `{"identifier": "btn"}` builds `ActionTarget(match: ElementMatcher(identifier: "btn"))`.
-- **`order` on ActionTarget** — fragile positional index that shifts when anything on screen changes. Encouraged callers to skip understanding what they're targeting. Removed entirely.
-- **`heistId` on ElementMatcher** — heistId is an assigned token, not an accessibility property. It lives on ActionTarget, not in the matcher.
+- **`ActionTarget` struct** — replaced by `ElementTarget` enum. The old struct had two optional fields (`heistId: String?`, `match: ElementMatcher?`) creating four states, two of which were invalid. The enum has exactly two valid cases.
+- **`identifier` on ActionTarget** — accessibility identifier is an accessibility property, so it belongs in the matcher.
+- **`order` on ActionTarget** — fragile positional index that shifts when anything on screen changes. Removed entirely.
+- **`heistId` on ElementMatcher** — heistId is an assigned token, not an accessibility property. It lives on ElementTarget, not in the matcher.
+- **`lastSnapshot` array** — replaced by `screenElements` dictionary for O(1) heistId lookup.
 - **Legacy resolution methods** — `findElement(for:)` and `resolveTraversalIndex(for:)` were dead code. Removed.
 
 ## Data Flow
@@ -27,61 +29,62 @@ A single method, `TheBagman.resolveTarget(_:)`, implements this priority chain a
 sequenceDiagram
     participant Caller as CLI / MCP
     participant TF as TheFence (macOS)
-    participant Wire as ActionTarget (JSON)
+    participant Wire as ElementTarget (JSON)
     participant IJ as TheInsideJob (iOS)
     participant TB as TheBagman
     participant TS as TheSafecracker
 
     Caller->>TF: {"command":"activate", "label":"Submit", "traits":["button"]}
-    TF->>TF: elementTarget(args) — build ActionTarget
-    TF->>Wire: ActionTarget(match: ElementMatcher(label,traits))
+    TF->>TF: elementTarget(args) — build ElementTarget
+    TF->>Wire: .matcher(ElementMatcher(label,traits))
     Wire->>IJ: ClientMessage over TLS
     IJ->>TB: refreshAccessibilityData()
-    IJ->>TS: executeActivate(target)
-    TS->>TB: resolveTarget(target)
-    TB->>TB: heistId? → skip (nil)
-    TB->>TB: match? → findMatch(matcher) ✓
-    TB-->>TS: ResolvedTarget(element, traversalIndex)
-    TS->>TS: checkInteractivity, activate/tap
-    TS-->>IJ: InteractionResult
+    IJ->>TB: executeActivate(target)
+    TB->>TB: ensureOnScreen(target)
+    TB->>TB: resolveTarget(.matcher) → uniqueMatch
+    TB->>TB: checkInteractivity, activate
+    TB-->>TB: activate failed?
+    TB->>TS: fallback tap(at: activationPoint)
+    TS-->>TB: success
+    TB-->>IJ: InteractionResult
 ```
 
 ## Entry Point: TheFence.elementTarget()
 
-`TheFence.swift` — called from every action handler. Reads raw args and builds an `ActionTarget`.
+`TheFence.swift` — called from every action handler. Reads raw args and builds an `ElementTarget`.
 
-**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ActionTarget` directly. Both can coexist — heistId takes priority in resolution.
+**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ElementTarget` directly. Both can coexist — heistId takes priority in resolution.
 
 ```
 args: {"identifier":"btn", "traits":["button"]}
-  → ActionTarget(match: ElementMatcher(identifier:"btn", traits:["button"]))
+  → ElementTarget(match: ElementMatcher(identifier:"btn", traits:["button"]))
 
 args: {"identifier":"btn"}
-  → ActionTarget(match: ElementMatcher(identifier:"btn"))
+  → ElementTarget(match: ElementMatcher(identifier:"btn"))
 
 args: {"heistId":"button-Submit-0"}
-  → ActionTarget(heistId: "button-Submit-0")
+  → ElementTarget(heistId: "button-Submit-0")
 
 args: {"heistId":"button-Submit-0", "label":"Submit"}
-  → ActionTarget(heistId: "button-Submit-0", match: ElementMatcher(label:"Submit"))
+  → ElementTarget(heistId: "button-Submit-0", match: ElementMatcher(label:"Submit"))
 ```
 
 There are two builder methods:
-- **`elementTarget(_:)`** — used by all action commands. Produces `ActionTarget`.
+- **`elementTarget(_:)`** — used by all action commands. Produces `ElementTarget`.
 - **`elementMatcher(_:)`** — used by `get_interface`, `scroll_to_visible`, `wait_for`. Produces `ElementMatcher` directly (includes `absent` flag).
 
 ## Wire Types
 
-### ActionTarget (TheScore/ClientMessages.swift)
+### ElementTarget (TheScore/Elements.swift)
 
 ```swift
-struct ActionTarget: Codable, Sendable {
-    let heistId: String?       // assigned token from get_interface
-    let match: ElementMatcher? // describe by accessibility properties
+enum ElementTarget: Codable, Sendable {
+    case heistId(String)          // assigned token from get_interface
+    case matcher(ElementMatcher)  // describe by accessibility properties
 }
 ```
 
-At most one strategy is active. When both are present, heistId wins.
+Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves backward compatibility with JSON like `{"heistId": "btn"}` or `{"label": "Submit", "traits": ["button"]}`.
 
 ### ElementMatcher (TheScore/Elements.swift)
 
@@ -102,26 +105,40 @@ Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via
 
 ## Resolution: TheBagman.resolveTarget()
 
-`TheBagman.swift` — the single resolution method. Returns `ResolvedTarget(element, traversalIndex)` or nil.
+`TheBagman.swift` — the single resolution method. Returns `ResolvedTarget(screenElement, element, traversalIndex)` or nil.
 
 ```mermaid
 flowchart TD
-    Target["ActionTarget"]
-    Target --> HeistId{heistId?}
-    HeistId -->|yes| LookupSnap["lastSnapshot scan by heistId → cachedElements[order]"]
-    HeistId -->|no| Match{match?}
-    Match -->|yes| FindMatch["findMatch(matcher) → first element matching all predicates"]
-    Match -->|no| Nil["nil — no target provided"]
+    A["resolveTarget(ElementTarget)"] --> B{Target type?}
+    B -->|".heistId(id)"| C["screenElements[id] lookup<br/>O(1) dictionary access"]
+    C --> D{Entry exists<br/>& presented<br/>& valid index?}
+    D -->|Yes| E["Return ResolvedTarget<br/>(screenElement, element, traversalIndex)"]
+    D -->|No| F["Return nil"]
 
-    LookupSnap --> Result["ResolvedTarget(element, traversalIndex)"]
-    FindMatch --> Result
+    B -->|".matcher(m)"| G["Build source from<br/>cachedHierarchy"]
+    G --> H["uniqueMatch(matcher)<br/>Case-insensitive substring<br/>on label, identifier, value"]
+    H --> I{Result?}
+    I -->|Exactly 1 match| J["Find matching screenElement<br/>by traversalIndex"]
+    J --> E
+    I -->|0 or 2+ matches| F
 ```
 
 ## Error Diagnostics: Progressive Disclosure
 
-When `resolveTarget` returns nil, the error message anticipates what the caller needs to self-correct. Three tiers, from most to least specific:
+When `resolveTarget` returns nil, the caller invokes `elementNotFoundMessage(for:)` which produces a tiered diagnostic. Three tiers, from most to least specific:
 
-### Tier 1: Near-miss — "you're right but something changed"
+### Tier 1: Ambiguous — "too many matches"
+
+When 2+ elements match the substring predicate, lists all candidates (up to 10):
+
+```
+3 elements match: label="Save"
+  "Save Changes" id=saveChangesBtn
+  "Save Draft" id=saveDraftBtn
+  "Save as Template"
+```
+
+### Tier 2: Near-miss — "you're right but something changed"
 
 Progressively relaxes one predicate at a time (value first, then traits, label, identifier). When a relaxed matcher finds an element, reports what diverged:
 
@@ -130,16 +147,7 @@ No match for: label="Volume" traits=[adjustable] value="6"
 near miss: matched all fields except value — actual value=8
 ```
 
-Value is relaxed first because it's the most likely to drift (slider moved, text changed). This gives the caller the actual value so they can retry with correct expectations or proceed knowing the current state.
-
-### Tier 2: Substring match — "did you mean...?"
-
-When no near-miss is found but the label partially matches existing elements:
-
-```
-No match for: label="Save"
-similar labels: "Save Changes", "Save Draft", "Save as Template"
-```
+Value is relaxed first because it's the most likely to drift (slider moved, text changed). Only relaxations that leave at least one remaining predicate are tried — dropping the only predicate matches everything, which isn't useful.
 
 ### Tier 3: Total miss — "here's what I see"
 
@@ -170,36 +178,39 @@ The hierarchy tree is the primary surface. `findMatch(_:)` searches `cachedHiera
 
 ### Match evaluation (AccessibilityElement.matches)
 
-1. `label` — exact string equality
-2. `identifier` — exact string equality
-3. `value` — exact string equality
+1. `label` — case-insensitive substring via `localizedCaseInsensitiveContains`
+2. `identifier` — case-insensitive substring via `localizedCaseInsensitiveContains`
+3. `value` — case-insensitive substring via `localizedCaseInsensitiveContains`
 4. `traits` — resolve names to bitmask, check `traits.contains(mask)`. Unknown names → miss.
 5. `excludeTraits` — resolve names to bitmask, check `traits.isDisjoint(with: mask)`. Unknown names → miss.
 
-All checks are AND — first failure short-circuits to false.
+All checks are AND — first failure short-circuits to false. String matching is single-pass with no separate fuzzy tier.
 
 ## Callers
 
-Every action executor in TheSafecracker calls `bagman.resolveTarget(target)`:
+Every action executor in TheBagman calls `resolveTarget(target)`:
 
 | Method | File | What it needs |
 |--------|------|--------------|
-| `ensureOnScreen(for:)` | TheSafecracker+Actions.swift | traversalIndex → object → scroll ancestor |
-| `executeScroll(_:)` | TheSafecracker+Actions.swift | traversalIndex → scroll ancestor |
-| `executeScrollToEdge(_:)` | TheSafecracker+Actions.swift | traversalIndex → scroll to edge |
-| `executeActivate(_:)` | TheSafecracker+Actions.swift | element (interactivity check) + traversalIndex (activate/tap) |
-| `executeIncrement(_:)` | TheSafecracker+Actions.swift | element (fingerprint point) + traversalIndex (increment) |
-| `executeDecrement(_:)` | TheSafecracker+Actions.swift | element (fingerprint point) + traversalIndex (decrement) |
-| `executeCustomAction(_:)` | TheSafecracker+Actions.swift | traversalIndex (perform action) |
-| `executeTypeText(_:)` | TheSafecracker+TextEntry.swift | element (activation point for tap-to-focus) |
+| `ensureOnScreen(for:)` | TheBagman+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScroll(_:)` | TheBagman+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScrollToEdge(_:)` | TheBagman+Scroll.swift | screenElement → object → scroll to edge |
+| `executeScrollToVisible(_:)` | TheBagman+Scroll.swift | resolveFirstMatch (first-match semantics) |
+| `executeActivate(_:)` | TheBagman+Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
+| `executeIncrement(_:)` | TheBagman+Actions.swift | screenElement (increment) + element (fingerprint point) |
+| `executeDecrement(_:)` | TheBagman+Actions.swift | screenElement (decrement) + element (fingerprint point) |
+| `executeCustomAction(_:)` | TheBagman+Actions.swift | screenElement (perform action) |
+| `executeTypeText(_:)` | TheBagman+Actions.swift | element (activation point for tap-to-focus) |
+| `executeTap(_:)` | TheBagman+Actions.swift | resolvePoint → element activation point |
+| `executeSwipe(_:)` | TheBagman+Actions.swift | resolvePoint or resolveFrame for unit-point swipe |
 | `resolvePoint(from:)` | TheBagman.swift | element (activation point for gesture origin) |
 | `actionResultWithDelta(...)` | TheBagman.swift | element (post-action label/value/traits readback) |
 
-Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally.
+Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally. TheSafecracker is called only for the raw gesture synthesis after TheBagman has resolved the target.
 
-### Commands that bypass ActionTarget
+### Commands that bypass ElementTarget
 
-These commands use `ElementMatcher` directly (not `ActionTarget`):
+These commands use `ElementMatcher` directly (not `ElementTarget`):
 
 | Command | Why |
 |---------|-----|
@@ -210,7 +221,7 @@ These commands use `ElementMatcher` directly (not `ActionTarget`):
 ## Design Principles
 
 1. **Two strategies, nothing else.** heistId (you got this token) or matcher (describe what you want). No positional indices, no guessing.
-2. **Single resolution path** — `resolveTarget()` is the only way to go from `ActionTarget` to a live element. No alternative code paths that could fall out of sync.
+2. **Single resolution path** — `resolveTarget()` is the only way to go from `ElementTarget` to a live element. No alternative code paths that could fall out of sync.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
 5. **heistId always wins** — fastest path (snapshot lookup by stable ID), deterministic. When a caller has a heistId, they know exactly which element they want.
@@ -223,7 +234,7 @@ These commands use `ElementMatcher` directly (not `ActionTarget`):
 
 | Flag | Maps to |
 |------|---------|
-| `--heist-id` | `ActionTarget.heistId` |
+| `--heist-id` | `ElementTarget.heistId` |
 | `--label` | `ElementMatcher.label` |
 | `--identifier` | `ElementMatcher.identifier` |
 | `--value` | `ElementMatcher.value` |
@@ -232,6 +243,10 @@ These commands use `ElementMatcher` directly (not `ActionTarget`):
 
 `WaitForCommand` is the exception: it builds an `ElementMatcher` directly (no `--heist-id`, since `wait_for` polls by predicate, not by assigned token).
 
-## Snapshot Storage
+## Element Registry
 
-`snapshotElements()` converts `cachedElements` to wire `HeistElement` values, assigns heistIds, and stores the result in `lastSnapshot: [HeistElement]`. This array is the sole wire-level cache — no separate index or generation counter. HeistId resolution in `resolveTarget()` scans `lastSnapshot` directly (element counts are small enough that linear scan is negligible). Matching always operates on the canonical `cachedHierarchy` / `cachedElements`, never on wire types.
+`screenElements: [String: ScreenElement]` is the persistent element registry, keyed by heistId. It lives for the screen's duration and is populated during `updateScreenElements()` (called from `refreshAccessibilityData()`). Screen change = scorched earth (full wipe + rebuild from cached data).
+
+`snapshotElements()` reads from `screenElements` and returns the currently visible elements (those in `onScreen`) as `[HeistElement]`. This is the wire-level view used for `get_interface` responses and delta computation.
+
+HeistId resolution via `resolveTarget(.heistId)` is O(1) dictionary lookup into `screenElements`. The `presented` flag ensures only elements that have been sent to clients can be targeted by heistId. Matching always operates on the canonical `cachedHierarchy` / `cachedElements`, never on wire types.

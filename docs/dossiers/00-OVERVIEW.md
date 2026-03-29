@@ -20,13 +20,13 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
-| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element cache, hierarchy parsing, delta computation, screen capture |
+| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution, scroll orchestration, delta computation, screen capture |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Cross-Cutting
 | Dossier | Covers |
 |---------|--------|
-| [Unified Targeting](15-UNIFIED-TARGETING.md) | Element resolution pipeline: TheFence → ActionTarget → TheBagman.resolveTarget → TheSafecracker |
+| [Unified Targeting](15-UNIFIED-TARGETING.md) | Element resolution pipeline: TheFence → ElementTarget → TheBagman.resolveTarget → action execution |
 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |

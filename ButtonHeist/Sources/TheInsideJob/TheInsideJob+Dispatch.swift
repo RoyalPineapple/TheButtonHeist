@@ -33,21 +33,21 @@ extension TheInsideJob {
     ) async -> Bool {
         switch message {
         case .activate(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeActivate(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeActivate(target) }
         case .increment(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeIncrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeIncrement(target) }
         case .decrement(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDecrement(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeDecrement(target) }
         case .performCustomAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeCustomAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeCustomAction(target) }
         case .editAction(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeEditAction(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeEditAction(target) }
         case .setPasteboard(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeSetPasteboard(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeSetPasteboard(target) }
         case .getPasteboard:
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeGetPasteboard() }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeGetPasteboard() }
         case .resignFirstResponder:
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeResignFirstResponder() }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeResignFirstResponder() }
         default:
             return false
         }
@@ -63,19 +63,19 @@ extension TheInsideJob {
     ) async -> Bool {
         switch message {
         case .touchTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTap(target) }
         case .touchLongPress(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeLongPress(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeLongPress(target) }
         case .touchSwipe(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeSwipe(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeSwipe(target) }
         case .touchDrag(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeDrag(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeDrag(target) }
         case .touchPinch(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executePinch(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executePinch(target) }
         case .touchRotate(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeRotate(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTwoFingerTap(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
             guard target.points.count <= 10_000 else {
                 let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)",
@@ -84,7 +84,7 @@ extension TheInsideJob {
                 return true
             }
             await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.theSafecracker.executeDrawPath(target)
+                await self.bagman.executeDrawPath(target)
             }
         case .touchDrawBezier(let target):
             guard target.segments.count <= 1_000 else {
@@ -94,7 +94,7 @@ extension TheInsideJob {
                 return true
             }
             await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.theSafecracker.executeDrawBezier(target)
+                await self.bagman.executeDrawBezier(target)
             }
         default:
             return false
@@ -111,13 +111,13 @@ extension TheInsideJob {
     ) async -> Bool {
         switch message {
         case .typeText(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.theSafecracker.executeTypeText(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTypeText(target) }
         case .scroll(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeScroll(target) }
         case .scrollToVisible(let target):
             await performScrollToVisibleSearch(target: target, command: message, requestId: requestId, respond: respond)
         case .scrollToEdge(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeScrollToEdge(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScrollToEdge(target) }
         case .waitFor(let target):
             await performWaitFor(target: target, command: message, requestId: requestId, respond: respond)
         default:

@@ -201,9 +201,9 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 > **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheSafecracker owns all scrolling: three explicit commands (`scroll`, `scroll_to_visible`, `scroll_to_edge`) and an automatic pre-interaction scroll.
+TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, and `scrollToOppositeEdge`.
 
-**Auto-scroll** runs transparently before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, walks the ancestor chain (`superview` / `accessibilityContainer`) to find the nearest `UIScrollView`, scrolls with minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by TheBagman's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, walks the ancestor chain to find the nearest `UIScrollView`, calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 

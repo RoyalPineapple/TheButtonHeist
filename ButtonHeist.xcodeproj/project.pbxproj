@@ -14,6 +14,7 @@
 		08AC4A9AA192B564B9FFBA5B /* TheFence+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD8ED05F8A920806D4175663 /* TheFence+Formatting.swift */; };
 		0B727DFA33963386D57AA5BD /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */; };
 		10225D3B3C868E82D45D1CAC /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
+		111478ED9DB0CF6CD31A8B06 /* TheBagman+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E81A25DE099E1AE4EC58765 /* TheBagman+Actions.swift */; };
 		172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
 		1DCE97491DF9EAC2AA50E6EB /* DeviceConnectionTLSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D6FCAB01DA8EBABEF0F5E94 /* DeviceConnectionTLSTests.swift */; };
@@ -32,6 +33,7 @@
 		35EBC59194F55574BEF113CB /* TheFence+CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */; };
 		3CA92319C3F0C158E06E578A /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */; };
 		3EB1B7099693FEACF46E8F37 /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */; };
+		4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */; };
 		43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
 		444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */; };
 		45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */; };
@@ -45,6 +47,7 @@
 		500C86B095B0F024D2F4B97C /* ServerMessages+WireCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */; };
 		5016FC7A53548764BBC63C6A /* ConnectionScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
+		5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */; };
 		5EF13631934912FD7D933DB1 /* Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6E45285127FD6657C85307 /* Screen.swift */; };
 		6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011FC701399ED6B199815A4C /* AutoStart.swift */; };
 		62DE534419EEF19F9A0C383D /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
@@ -287,6 +290,7 @@
 		4E41C475F84218C390FCF3E5 /* AccessibilityTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccessibilityTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		505ED717985FBDFE68196CEB /* SyntheticTouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouch.swift; sourceTree = "<group>"; };
 		558658BD430870069086F3A8 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
+		56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecrackerScrollTests.swift; sourceTree = "<group>"; };
 		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagman.swift; sourceTree = "<group>"; };
 		5B12846943603FCF34BBBFCA /* Mocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
@@ -315,6 +319,7 @@
 		9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsTests.swift; sourceTree = "<group>"; };
 		9A918FE0F8CB350A49C5A16C /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollToVisibleTests.swift; sourceTree = "<group>"; };
+		9E81A25DE099E1AE4EC58765 /* TheBagman+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBagman+Actions.swift"; sourceTree = "<group>"; };
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
@@ -326,6 +331,7 @@
 		B7DCE7080D77CE75A99A0C49 /* TheBagman+Matching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBagman+Matching.swift"; sourceTree = "<group>"; };
 		BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD8ED05F8A920806D4175663 /* TheFence+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting.swift"; sourceTree = "<group>"; };
+		BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Scroll.swift"; sourceTree = "<group>"; };
 		C22E288C7ED5647AD70907B9 /* KeyboardBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBridge.swift; sourceTree = "<group>"; };
 		C307C5131F207C1B1AAB9EE9 /* AuthFlowIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowIntegrationTests.swift; sourceTree = "<group>"; };
 		C33FA97BFD66D89E91027A83 /* TheMuscle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscle.swift; sourceTree = "<group>"; };
@@ -498,6 +504,7 @@
 				1E836566E11E4B5CB5815D28 /* ServerTransport.swift */,
 				A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */,
 				5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */,
+				9E81A25DE099E1AE4EC58765 /* TheBagman+Actions.swift */,
 				144A5EA0D6BE40725DC8F36F /* TheBagman+Conversion.swift */,
 				B7DCE7080D77CE75A99A0C49 /* TheBagman+Matching.swift */,
 				6B21D75DFCBE788797264E9D /* TheBagman+Scroll.swift */,
@@ -580,6 +587,7 @@
 				78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */,
 				321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */,
 				4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */,
+				BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */,
 				DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */,
 			);
 			path = TheSafecracker;
@@ -593,6 +601,7 @@
 				8615682DE7968262317CF9E9 /* TheBagmanConversionTests.swift */,
 				F22162F87098F2854C31BB74 /* TheBagmanTopologyTests.swift */,
 				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
+				56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */,
 				424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */,
 				CDD59EB8684A62ABBB0EFEF4 /* TheTripwireTests.swift */,
 				ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */,
@@ -942,6 +951,7 @@
 				941DD066B32A0D60D5B6EB8B /* ServerTransport.swift in Sources */,
 				E2F793CFC12A5894338CC018 /* SimpleSocketServer.swift in Sources */,
 				4D3FAF8D7AAA5F9F98997531 /* TLSIdentity.swift in Sources */,
+				111478ED9DB0CF6CD31A8B06 /* TheBagman+Actions.swift in Sources */,
 				D207FAE9BC6BD64E7765BB78 /* TheBagman+Conversion.swift in Sources */,
 				CEAD7C06542AB216F5685750 /* TheBagman+Matching.swift in Sources */,
 				4FAC2C9357CF29C8B1208BF6 /* TheBagman+Scroll.swift in Sources */,
@@ -957,6 +967,7 @@
 				FF72FE3ED77B03A1BC1CBA46 /* TheSafecracker+Bezier.swift in Sources */,
 				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
 				C631D8CED9D54B65D5B59413 /* TheSafecracker+MultiTouch.swift in Sources */,
+				5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */,
 				84A337C8A25148BC81B2DE3B /* TheSafecracker+TextEntry.swift in Sources */,
 				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
 				E3EB50B8FF78DE114640D797 /* TheStakeout.swift in Sources */,
@@ -1021,6 +1032,7 @@
 				8028DC9900D585A182B68FB9 /* TheBagmanConversionTests.swift in Sources */,
 				7567958784B5D6C347282E99 /* TheBagmanTopologyTests.swift in Sources */,
 				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
+				4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */,
 				7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */,
 				D19C1AD163D7F2C987339045 /* TheTripwireTests.swift in Sources */,
 				A3C01AF95DA5F2B88C93AD73 /* TripwireIntegrationTests.swift in Sources */,
