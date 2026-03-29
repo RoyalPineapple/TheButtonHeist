@@ -56,10 +56,10 @@ extension TheBagman {
         // stops changing.
         if success {
             for _ in 0..<20 {
-                await yieldFrames(2)
+                await tripwire.yieldFrames(2)
                 let prev = scrollView.contentSize
                 let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
-                if moved { await yieldFrames(2) }
+                if moved { await tripwire.yieldFrames(2) }
                 if !moved && scrollView.contentSize == prev { break }
             }
         }
@@ -109,7 +109,7 @@ extension TheBagman {
         // Phase 2: jump to opposite edge, scan again
         if scrollCount < maxScrolls {
             safecracker.scrollToOppositeEdge(scrollView, from: primaryDirection)
-            await yieldFrames(2)
+            await tripwire.yieldFrames(2)
             refreshAccessibilityData()
 
             if let result = await scanLoop(
@@ -153,7 +153,7 @@ extension TheBagman {
             )
 
             // Yield a couple of frames so layout runs and new content appears.
-            await yieldFrames(2)
+            await tripwire.yieldFrames(2)
 
             scrollCount += 1
             refreshAccessibilityData()
@@ -273,18 +273,6 @@ extension TheBagman {
         }
     }
 
-    // MARK: - Frame Yielding
-
-    /// Yield to the main run loop for N display frames. Each iteration
-    /// flushes pending Core Animation transactions and gives layout a
-    /// chance to run — enough for lazy containers to materialise content
-    /// without waiting for animations to finish.
-    private func yieldFrames(_ count: Int) async {
-        for _ in 0..<count {
-            CATransaction.flush()
-            await Task.yield()
-        }
-    }
 }
 
 #endif // DEBUG
