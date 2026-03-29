@@ -13,7 +13,7 @@ TheBagman handles all the goods during TheInsideJob:
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
 4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup, `.matcher` → `uniqueMatch` predicate search. Returns `ResolvedTarget(screenElement, element, traversalIndex)`. See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
-6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` with two-phase bidirectional scan. `scroll` delegates to TheSafecracker's `scrollByPage`; `scrollToEdge` delegates to TheSafecracker's `scrollToEdge` with re-jump iteration; `scrollToVisible` drives its own scan loop via raw `setContentOffset` (no `scrollByPage`, no contentSize clamp).
+6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `reducedHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility snapshot using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 8. **HeistId synthesis** — assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation via content-space position matching for scroll stability
 9. **Topology-based screen change detection** — detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
@@ -100,10 +100,11 @@ graph TD
         end
 
         subgraph Scrolling["Scroll Orchestration (TheBagman+Scroll)"]
-            Scroll["executeScroll(_:)"]
-            ScrollEdge["executeScrollToEdge(_:)"]
-            ScrollVisible["executeScrollToVisible(_:)"]
-            ScanLoop["scanLoop() — page-by-page search"]
+            Scroll["executeScroll(_:) — resolveScrollTarget"]
+            ScrollEdge["executeScrollToEdge(_:) — resolveScrollTarget"]
+            ScrollVisible["executeScrollToVisible(_:) — hierarchy tree walk"]
+            FindTarget["findLiveScrollTarget() — reducedHierarchy, outermost first"]
+            ScrollOnePage["scrollOnePage() — UIScrollView / swipe"]
             EnsureOnScreen["ensureOnScreen(for:)"]
         end
 
@@ -199,7 +200,7 @@ flowchart TD
     PARSE --> FLAT["flattenToElements()"]
 
     EV --> STORE["elementObjects = newElementObjects"]
-    CV --> SVL["scrollViewLookup: [Container: UIScrollView]"]
+    CV --> SVL["scrollableContainerViews: [Container: UIView]"]
     FLAT --> CACHE["cachedHierarchy + cachedElements"]
 
     STORE --> USE["updateScreenElements()"]
@@ -259,38 +260,34 @@ flowchart TD
 
 ## Scroll-to-Visible Search Flow
 
-Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check).
+Walks the accessibility hierarchy tree (outermost first via `reducedHierarchy`) and scrolls each scrollable container until the target appears or all containers are exhausted. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check).
 
-The scan loop advances `contentOffset` directly via `setContentOffset(offset + pageStep, animated: true)` — no `scrollByPage`, no contentSize clamping. iOS rubber-bands naturally on overshoot, and stagnation (no new heistIds) is the only termination signal. This handles both UIKit and SwiftUI lazy containers uniformly. Each step yields 3 display frames via `yieldFrames(3)` to let layout run and lazy content materialize.
+`adaptDirection` maps the caller's direction hint to each container's natural axis ("down" → "right" for horizontal carousels). `scrollOnePage` dispatches through two tiers: `setContentOffset` for UIScrollViews, synthetic swipe for everything else.
 
 ```mermaid
 flowchart TD
     S["executeScrollToVisible(target)"] --> REF["refreshAccessibilityData()"]
     REF --> CHK{"resolveFirstMatch(target)<br/>Already visible?"}
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
-    CHK -->|No| FSV["findFirstScrollView()<br/>(walk onScreen elements<br/>→ scrollableAncestor)"]
-    FSV --> SVOK{Found<br/>scroll view?}
-    SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
-    SVOK -->|Yes| STEP["scrollPageStep()<br/>(frame.size - 44pt overlap)"]
-    STEP --> PH1["Phase 1: scanLoop()<br/>Primary direction"]
+    CHK -->|No| LOOP["while scrollCount < maxScrolls"]
 
-    PH1 --> SLOOP["setContentOffset(<br/>offset + pageStep, animated: true)"]
-    SLOOP --> YIELD["yieldFrames(3)<br/>(CATransaction.flush + Task.yield × 3)"]
-    YIELD --> REFR["refreshAccessibilityData()"]
-    REFR --> FM{"resolveFirstMatch(target)"}
+    LOOP --> FIND["findLiveScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
+    FIND --> SVOK{Found<br/>container?}
+    SVOK -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
+    SVOK -->|Yes| ADAPT["adaptDirection(searchDir, for: target)<br/>down→right for horizontal containers"]
+
+    ADAPT --> SCROLL["scrollOnePage(target, direction)<br/>UIScrollView / swipe"]
+    SCROLL --> MOVED{moved?}
+    MOVED -->|No| EXHAUST["Mark container exhausted"]
+    EXHAUST --> LOOP
+
+    MOVED -->|Yes| SETTLE["yieldFrames(3)<br/>+ refreshAccessibilityData()"]
+    SETTLE --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| ENS["ensureOnScreenSync(found)"]
     ENS --> END["Return success<br/>+ ScrollSearchResult"]
-    FM -->|Not found| NEW{New heistIds<br/>appeared?}
-    NEW -->|No new IDs| STALL["Break — content exhausted"]
-    NEW -->|Yes| BUDGET{scrollCount<br/>< maxScrolls?}
-    BUDGET -->|Yes| SLOOP
-    BUDGET -->|No| STALL
-
-    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ yieldFrames(2)"]
-    PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
-    SCAN2 --> RESULT{Found?}
-    RESULT -->|Yes| END
-    RESULT -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
+    FM -->|Not found| NEW{New elements<br/>appeared?}
+    NEW -->|No| EXHAUST
+    NEW -->|Yes| LOOP
 ```
 
 ## Delta Computation

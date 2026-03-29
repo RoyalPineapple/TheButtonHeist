@@ -398,7 +398,7 @@ Stop an active recording. The server finalizes the video and sends a `recording`
 
 ### scroll
 
-Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation.
+Scroll the nearest scroll view ancestor of a target element by approximately one page in the given direction. Uses direct `setContentOffset` manipulation for UIScrollView, synthetic swipe for other scrollable containers.
 
 **By identifier:**
 ```json
@@ -414,11 +414,11 @@ Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
 
 ### scrollToVisible
 
-Search for an element by scrolling through the nearest scroll view. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
+Search for an element by scrolling through scroll views. Uses an `ElementMatcher` predicate — all specified fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics. Walks the accessibility hierarchy tree (outermost first), scrolling each container until the target appears or all containers are exhausted.
 
 **Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
 
-**Search options:** `maxScrolls` (default: 20), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
+**Search options:** `maxScrolls` (default: 50), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
 
 **By label:**
 ```json
@@ -1129,7 +1129,7 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 |-------|------|-------------|
 | `heistId` | `String?` | Stable heistId to search for while scrolling |
 | `match` | `ElementMatcher?` | Predicate for the element to find |
-| `maxScrolls` | `Int?` | Maximum scroll attempts (default: 20, clamped to >= 1) |
+| `maxScrolls` | `Int?` | Maximum scroll attempts (default: 50, clamped to >= 1) |
 | `direction` | `ScrollSearchDirection?` | Starting scroll direction (default: `"down"`) |
 
 ### ScrollSearchDirection

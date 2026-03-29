@@ -113,7 +113,7 @@ extension TheInsideJob {
         case .typeText(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTypeText(target) }
         case .scroll(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { self.bagman.executeScroll(target) }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScroll(target) }
         case .scrollToVisible(let target):
             await performScrollToVisibleSearch(target: target, command: message, requestId: requestId, respond: respond)
         case .scrollToEdge(let target):

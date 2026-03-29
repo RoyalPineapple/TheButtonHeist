@@ -228,6 +228,18 @@ final class TheTripwire {
         }
     }
 
+    /// Yield frames with real wall-clock time between each.
+    /// Unlike `yieldFrames` (which uses `Task.yield()`), this uses
+    /// `Task.sleep` to give CADisplayLink animations time to process.
+    /// Required for accessibility SPI scroll methods that queue animated
+    /// scrolls — `Task.yield()` alone doesn't advance the animation.
+    func yieldRealFrames(_ count: Int, intervalMs: UInt64 = 16) async {
+        for _ in 0..<count {
+            CATransaction.flush()
+            try? await Task.sleep(for: .milliseconds(intervalMs))
+        }
+    }
+
     // MARK: - Tick Handler
 
     fileprivate func onTick() {
