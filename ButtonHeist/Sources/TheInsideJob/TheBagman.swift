@@ -915,13 +915,9 @@ final class TheBagman {
 extension Array where Element == AccessibilityHierarchy {
     func reindexed(offset: Int) -> [AccessibilityHierarchy] {
         guard offset != 0 else { return self }
-        return map { node in
-            switch node {
-            case let .element(element, index):
-                return .element(element, traversalIndex: index + offset)
-            case let .container(container, children):
-                return .container(container, children: children.reindexed(offset: offset))
-            }
+        return mappedHierarchy { node in
+            guard case let .element(element, index) = node else { return node }
+            return .element(element, traversalIndex: index + offset)
         }
     }
 }
