@@ -72,6 +72,7 @@
 		F8653ABF476DECEF4671858E /* TuistBundle+AccessibilityTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E724C266432DF64AF26AFB6E /* TuistBundle+AccessibilityTestApp.swift */; };
 		FF4B4B09FCF7966536731B18 /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		FF5C92BE686249DA687A9F14 /* swift-crypto_CCryptoBoringSSLShims.bundle in Resources */ = {isa = PBXBuildFile; fileRef = ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
+		FFF84ED177C718B02DDB913A /* ScrollSPIHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C03E336FCBC4504C5926366B /* ScrollSPIHarnessView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -169,6 +170,7 @@
 		B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsDemoView.swift; sourceTree = "<group>"; };
 		B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInputDemo.swift; sourceTree = "<group>"; };
 		BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCanvasView.swift; sourceTree = "<group>"; };
+		C03E336FCBC4504C5926366B /* ScrollSPIHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollSPIHarnessView.swift; sourceTree = "<group>"; };
 		C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser_ObjC.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCollectionViewController.swift; sourceTree = "<group>"; };
 		D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -226,6 +228,7 @@
 				792340DE945D6E9BEF960BEA /* NestedScrollView.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
 				7EB069D6039881E065A92F23 /* RootView.swift */,
+				C03E336FCBC4504C5926366B /* ScrollSPIHarnessView.swift */,
 				ED3E93AE1108866F17601CB8 /* SettingsView.swift */,
 				B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */,
 				F7D07E273A0048DA7FE282A3 /* TodoListView.swift */,
@@ -510,6 +513,7 @@
 				C5B183F2331C0AB903B86AA8 /* NestedScrollView.swift in Sources */,
 				41BCD5493551504A86D47AB5 /* NotesView.swift in Sources */,
 				BA04B66749F873353950DA7A /* RootView.swift in Sources */,
+				FFF84ED177C718B02DDB913A /* ScrollSPIHarnessView.swift in Sources */,
 				3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */,
 				7EDC08F72FF1AA94E23C68AE /* TextInputDemo.swift in Sources */,
 				F72D8F1D2B784116A32F363B /* TodoListView.swift in Sources */,

@@ -22,13 +22,6 @@ import TheScore
         direction: UIAccessibilityScrollDirection
     ) async -> Bool
 
-    /// Scroll any view by one page using accessibility SPI or swipe fallback.
-    /// For non-UIScrollView containers (e.g. SwiftUI PlatformContainer).
-    func scrollViewByPage(
-        _ view: UIView,
-        direction: UIAccessibilityScrollDirection
-    ) async -> Bool
-
     /// Scroll the minimum distance to make a target frame visible in a scroll view.
     /// Frame is in screen coordinates. Returns true if already visible or scroll triggered.
     func scrollToMakeVisible(
@@ -68,14 +61,6 @@ import TheScore
         direction: UIAccessibilityScrollDirection
     ) async -> Bool {
         safecracker.scrollByPage(scrollView, direction: direction, animated: false)
-    }
-
-    func scrollViewByPage(
-        _ view: UIView,
-        direction: UIAccessibilityScrollDirection
-    ) async -> Bool {
-        let screenFrame = view.convert(view.bounds, to: nil)
-        return await safecracker.scrollBySwipe(frame: screenFrame, direction: direction)
     }
 
     func scrollToMakeVisible(
@@ -146,17 +131,6 @@ import TheScore
         performSPIScroll(scrollView, direction: direction)
         await settle()
         return scrollView.contentOffset != before
-    }
-
-    func scrollViewByPage(
-        _ view: UIView,
-        direction: UIAccessibilityScrollDirection
-    ) async -> Bool {
-        // PlatformContainer responds to accessibilityScrollDownPage etc.
-        // No contentOffset to compare — return true and let caller detect stagnation.
-        performSPIScroll(view, direction: direction)
-        await settle()
-        return true
     }
 
     func scrollToMakeVisible(
