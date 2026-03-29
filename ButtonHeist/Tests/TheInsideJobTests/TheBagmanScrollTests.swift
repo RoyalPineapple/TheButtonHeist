@@ -303,30 +303,33 @@ final class TheBagmanScrollTests: XCTestCase {
     // MARK: - adaptDirection
 
     func testAdaptDirectionMatchingAxis() {
-        let verticalScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        verticalScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        XCTAssertEqual(bagman.adaptDirection(.down, for: verticalScroll), .down)
-        XCTAssertEqual(bagman.adaptDirection(.up, for: verticalScroll), .up)
+        let target = TheBagman.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 2000)
+        )
+        XCTAssertEqual(bagman.adaptDirection(.down, for: target), .down)
+        XCTAssertEqual(bagman.adaptDirection(.up, for: target), .up)
     }
 
     func testAdaptDirectionCrossAxis() {
-        let horizontalScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        horizontalScroll.contentSize = CGSize(width: 2000, height: 200)
-
-        XCTAssertEqual(bagman.adaptDirection(.down, for: horizontalScroll), .right,
+        let target = TheBagman.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
+            contentSize: CGSize(width: 2000, height: 200)
+        )
+        XCTAssertEqual(bagman.adaptDirection(.down, for: target), .right,
                        "Forward vertical → forward horizontal")
-        XCTAssertEqual(bagman.adaptDirection(.up, for: horizontalScroll), .left,
+        XCTAssertEqual(bagman.adaptDirection(.up, for: target), .left,
                        "Backward vertical → backward horizontal")
     }
 
     func testAdaptDirectionCrossAxisVertical() {
-        let verticalScroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
-        verticalScroll.contentSize = CGSize(width: 400, height: 2000)
-
-        XCTAssertEqual(bagman.adaptDirection(.right, for: verticalScroll), .down,
+        let target = TheBagman.ScrollableTarget.swipeable(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 2000)
+        )
+        XCTAssertEqual(bagman.adaptDirection(.right, for: target), .down,
                        "Forward horizontal → forward vertical")
-        XCTAssertEqual(bagman.adaptDirection(.left, for: verticalScroll), .up,
+        XCTAssertEqual(bagman.adaptDirection(.left, for: target), .up,
                        "Backward horizontal → backward vertical")
     }
 
