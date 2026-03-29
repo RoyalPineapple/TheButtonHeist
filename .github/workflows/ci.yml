@@ -21,6 +21,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
