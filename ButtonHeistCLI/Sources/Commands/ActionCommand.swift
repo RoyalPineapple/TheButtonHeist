@@ -43,32 +43,31 @@ struct ActionCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        let message: ClientMessage
+        let command: String
+        var request: [String: Any]
         let verb: String
 
         switch type.lowercased() {
         case "increment":
-            let target = try element.requireTarget()
-            message = .increment(target)
+            _ = try element.requireTarget()
+            command = TheFence.Command.increment.rawValue
+            request = ["command": command]
+            element.applyTo(&request)
             verb = "Increment"
         case "decrement":
-            let target = try element.requireTarget()
-            message = .decrement(target)
+            _ = try element.requireTarget()
+            command = TheFence.Command.decrement.rawValue
+            request = ["command": command]
+            element.applyTo(&request)
             verb = "Decrement"
         case "custom":
-            let target = try element.requireTarget()
+            _ = try element.requireTarget()
             guard let actionName = customAction else {
                 throw ValidationError("--custom-action required for type 'custom'")
             }
-            message = .performCustomAction(CustomActionTarget(
-                elementTarget: target,
-                actionName: actionName
-            ))
+            command = TheFence.Command.performCustomAction.rawValue
+            request = ["command": command, "action": actionName]
+            element.applyTo(&request)
             verb = "Custom action"
         case "edit":
             guard let editStr = editAction else {
@@ -78,10 +77,12 @@ struct ActionCommand: AsyncParsableCommand {
             guard let action = EditAction.allCases.first(where: { $0.rawValue.lowercased().replacingOccurrences(of: "_", with: "") == normalizedStr }) else {
                 throw ValidationError("Unknown edit action: \(editStr). Valid: copy, paste, cut, select, select_all")
             }
-            message = .editAction(EditActionTarget(action: action))
+            command = TheFence.Command.editAction.rawValue
+            request = ["command": command, "action": action.rawValue]
             verb = action.rawValue
         case "dismiss_keyboard", "dismisskeyboard":
-            message = .resignFirstResponder
+            command = TheFence.Command.dismissKeyboard.rawValue
+            request = ["command": command]
             verb = "Dismiss keyboard"
         default:
             throw ValidationError(
@@ -89,13 +90,13 @@ struct ActionCommand: AsyncParsableCommand {
             )
         }
 
-        if !connection.quiet {
-            logStatus("Sending \(verb.lowercased())...")
-        }
+        request["timeout"] = timeout
 
-        connector.send(message)
-
-        let result = try await connector.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: verb)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending \(verb.lowercased())..."
+        )
     }
 }

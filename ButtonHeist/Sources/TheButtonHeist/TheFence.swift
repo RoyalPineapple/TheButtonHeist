@@ -194,14 +194,10 @@ public final class TheFence {
 
     private func connect() async throws {
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-        do {
-            try await handoff.connectWithDiscovery(
-                filter: filter,
-                timeout: config.connectionTimeout
-            )
-        } catch let error as TheHandoff.ConnectionError {
-            throw error.asFenceError()
-        }
+        try await handoff.connectWithDiscovery(
+            filter: filter,
+            timeout: config.connectionTimeout
+        )
     }
 
     // MARK: - Command Dispatch (thin router)
@@ -278,14 +274,8 @@ public final class TheFence {
     }
 
     private func mapCaughtError(_ error: Error) -> FenceError {
-        if error is ActionError {
-            return .actionTimeout
-        }
-        if let recordingError = error as? RecordingError {
-            switch recordingError {
-            case .serverError(let message):
-                return .actionFailed(message)
-            }
+        if let fenceError = error as? FenceError {
+            return fenceError
         }
         return .actionFailed(error.localizedDescription)
     }
@@ -618,55 +608,15 @@ public final class TheFence {
             recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }
         handoff.onRecordingError = { message in
-            recordingTracker.resolve(requestId: syntheticId, result: .failure(RecordingError.serverError(message)))
+            recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
         return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
     }
 
     private func cancelAllPendingRequests() {
-        actionTracker.cancelAll(error: ActionError.timeout)
-        interfaceTracker.cancelAll(error: ActionError.timeout)
-        screenTracker.cancelAll(error: ActionError.timeout)
+        actionTracker.cancelAll(error: FenceError.actionTimeout)
+        interfaceTracker.cancelAll(error: FenceError.actionTimeout)
+        screenTracker.cancelAll(error: FenceError.actionTimeout)
     }
 
-    // MARK: - Error Types
-
-    public enum RecordingError: Error, LocalizedError {
-        case serverError(String)
-        public var errorDescription: String? {
-            switch self {
-            case .serverError(let msg): return "Recording failed: \(msg)"
-            }
-        }
-    }
-
-    public enum ActionError: Error, LocalizedError {
-        case timeout
-        public var errorDescription: String? {
-            switch self {
-            case .timeout: return "Action timed out"
-            }
-        }
-    }
-}
-
-// MARK: - ConnectionError → FenceError Bridge
-
-extension TheHandoff.ConnectionError {
-    func asFenceError() -> FenceError {
-        switch self {
-        case .noDeviceFound:
-            return .noDeviceFound
-        case .noMatchingDevice(let filter, let available):
-            return .noMatchingDevice(filter: filter, available: available)
-        case .connectionTimeout:
-            return .connectionTimeout
-        case .connectionFailed(let message):
-            return .connectionFailed(message)
-        case .sessionLocked(let message):
-            return .sessionLocked(message)
-        case .authFailed(let message):
-            return .authFailed(message)
-        }
-    }
 }
