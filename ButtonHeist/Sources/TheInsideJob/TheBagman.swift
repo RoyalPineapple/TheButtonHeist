@@ -44,12 +44,7 @@ final class TheBagman {
         case .contentOffset:
             scrollProvider = ContentOffsetScrollProvider(safecracker: safecracker)
         case .accessibilitySPI:
-            scrollProvider = AccessibilitySPIScrollProvider(
-                safecracker: safecracker,
-                yieldFrames: { [weak self] count in
-                    await self?.tripwire.yieldFrames(count)
-                }
-            )
+            scrollProvider = AccessibilitySPIScrollProvider(safecracker: safecracker, tripwire: tripwire)
         }
     }
 
