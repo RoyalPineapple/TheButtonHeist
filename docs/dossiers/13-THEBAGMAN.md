@@ -13,7 +13,7 @@ TheBagman handles all the goods during TheInsideJob:
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
 4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup, `.matcher` → `uniqueMatch` predicate search. Returns `ResolvedTarget(screenElement, element, traversalIndex)`. See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
-6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` with two-phase bidirectional scan. TheSafecracker provides scroll primitives (`scrollByPage`, `scrollToEdge`); TheBagman drives the search logic.
+6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` with two-phase bidirectional scan. `scroll` delegates to TheSafecracker's `scrollByPage`; `scrollToEdge` delegates to TheSafecracker's `scrollToEdge` with re-jump iteration; `scrollToVisible` drives its own scan loop via raw `setContentOffset` (no `scrollByPage`, no contentSize clamp).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility snapshot using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 8. **HeistId synthesis** — assigns stable, deterministic `heistId` identifiers to elements (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation via content-space position matching for scroll stability
 9. **Topology-based screen change detection** — detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
@@ -259,7 +259,9 @@ flowchart TD
 
 ## Scroll-to-Visible Search Flow
 
-Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). The scan loop advances contentOffset directly (animated, no contentSize clamping) — iOS rubber-bands naturally on overshoot and stagnation (no new elements) is the only termination signal. Each step yields a few display frames via `yieldFrames(3)` to let layout run and lazy content materialize.
+Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check).
+
+The scan loop advances `contentOffset` directly via `setContentOffset(offset + pageStep, animated: true)` — no `scrollByPage`, no contentSize clamping. iOS rubber-bands naturally on overshoot, and stagnation (no new heistIds) is the only termination signal. This handles both UIKit and SwiftUI lazy containers uniformly. Each step yields 3 display frames via `yieldFrames(3)` to let layout run and lazy content materialize.
 
 ```mermaid
 flowchart TD
@@ -269,13 +271,15 @@ flowchart TD
     CHK -->|No| FSV["findFirstScrollView()<br/>(walk onScreen elements<br/>→ scrollableAncestor)"]
     FSV --> SVOK{Found<br/>scroll view?}
     SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
-    SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
+    SVOK -->|Yes| STEP["scrollPageStep()<br/>(frame.size - 44pt overlap)"]
+    STEP --> PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
-    PH1 --> SLOOP["setContentOffset(offset + pageStep,<br/>animated: true)"]
-    SLOOP --> SETTLE["yieldFrames(3)"]
-    SETTLE --> REFR["refreshAccessibilityData()"]
+    PH1 --> SLOOP["setContentOffset(<br/>offset + pageStep, animated: true)"]
+    SLOOP --> YIELD["yieldFrames(3)<br/>(CATransaction.flush + Task.yield × 3)"]
+    YIELD --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
-    FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
+    FM -->|Found| ENS["ensureOnScreenSync(found)"]
+    ENS --> END["Return success<br/>+ ScrollSearchResult"]
     FM -->|Not found| NEW{New heistIds<br/>appeared?}
     NEW -->|No new IDs| STALL["Break — content exhausted"]
     NEW -->|Yes| BUDGET{scrollCount<br/>< maxScrolls?}
