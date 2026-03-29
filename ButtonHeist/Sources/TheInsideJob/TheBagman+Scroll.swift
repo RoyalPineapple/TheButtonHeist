@@ -106,8 +106,9 @@ extension TheBagman {
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
+        let axis = requiredAxis(for: target.direction)
         guard let scrollTarget = resolveScrollTarget(
-            screenElement: resolved.screenElement
+            screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
@@ -129,8 +130,9 @@ extension TheBagman {
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
+        let axis = requiredAxis(for: target.edge)
         guard let scrollTarget = resolveScrollTarget(
-            screenElement: resolved.screenElement
+            screenElement: resolved.screenElement, axis: axis
         ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
@@ -238,8 +240,14 @@ extension TheBagman {
             guard case .container(let container, _) = node,
                   case .scrollable(let contentSize) = container.type,
                   !exhausted.contains(container) else { return nil }
-            if let sv = scrollableContainerViews[container] as? UIScrollView, sv.window != nil {
-                return (.uiScrollView(sv), container)
+            if let view = scrollableContainerViews[container], view.window != nil {
+                if let sv = view as? UIScrollView {
+                    return (.uiScrollView(sv), container)
+                }
+                // Non-UIScrollView container (e.g. SwiftUI PlatformContainer) —
+                // use screen-space frame, not the parser's root-relative frame.
+                let screenFrame = view.convert(view.bounds, to: nil)
+                return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
             }
             return (.swipeable(frame: container.frame, contentSize: contentSize), container)
         }
@@ -315,11 +323,66 @@ extension TheBagman {
 
     /// Find the scrollable container for a resolved element from the accessibility hierarchy.
     /// Uses the element's stored `scrollView` ref (set by the hierarchy tree's containerVisitor).
+    /// When `axis` is provided and the stored scroll view can't scroll in that axis,
+    /// searches the hierarchy tree for a container that can (e.g. an inner carousel
+    /// when the stored scroll view is the outer vertical).
     func resolveScrollTarget(
-        screenElement: ScreenElement
+        screenElement: ScreenElement,
+        axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
-        guard let sv = screenElement.scrollView else { return nil }
-        return .uiScrollView(sv)
+        if let sv = screenElement.scrollView {
+            let target = ScrollableTarget.uiScrollView(sv)
+            if let axis, !scrollableAxis(of: target).contains(axis) {
+                // The stored scroll view can't scroll in the requested axis.
+                // Search the hierarchy tree for a container that can.
+                if let (axisTarget, _) = findScrollTargetForAxis(axis) {
+                    return axisTarget
+                }
+                // No scrollable container in the tree either — swipe at the
+                // element's position using a full-width/height band. This handles
+                // SwiftUI's PlatformContainer carousels which aren't UIScrollViews
+                // and aren't marked .scrollable by the parser.
+                if let object = screenElement.object {
+                    let elFrame = object.accessibilityFrame
+                    if !elFrame.isNull, !elFrame.isEmpty {
+                        let screen = UIScreen.main.bounds
+                        let swipeFrame: CGRect
+                        if axis == .horizontal {
+                            swipeFrame = CGRect(x: 0, y: elFrame.midY - 25, width: screen.width, height: 50)
+                        } else {
+                            swipeFrame = CGRect(x: elFrame.midX - 25, y: 0, width: 50, height: screen.height)
+                        }
+                        return .swipeable(frame: swipeFrame, contentSize: screen.size)
+                    }
+                }
+            }
+            return target
+        }
+        return nil
+    }
+
+    /// Find a scrollable container from the hierarchy tree that can scroll on a given axis.
+    private func findScrollTargetForAxis(
+        _ axis: ScrollAxis
+    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
+        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+            guard found == nil else { return found }
+            guard case .container(let container, _) = node,
+                  case .scrollable(let contentSize) = container.type else { return nil }
+            let target: ScrollableTarget
+            if let view = scrollableContainerViews[container], view.window != nil {
+                if let sv = view as? UIScrollView {
+                    target = .uiScrollView(sv)
+                } else {
+                    let screenFrame = view.convert(view.bounds, to: nil)
+                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
+                }
+            } else {
+                target = .swipeable(frame: container.frame, contentSize: contentSize)
+            }
+            guard scrollableAxis(of: target).contains(axis) else { return nil }
+            return (target, container)
+        }
     }
 
     // MARK: - Direction Mapping
