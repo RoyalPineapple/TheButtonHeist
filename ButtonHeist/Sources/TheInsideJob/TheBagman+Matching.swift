@@ -141,8 +141,8 @@ extension Array where Element == AccessibilityHierarchy {
 
 extension AccessibilityElement {
 
-    /// Cached set of known trait name strings — avoids rebuilding per-element during search.
-    private static let knownTraitNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
+    /// Known trait name strings — references the parser's authoritative set directly.
+    private static let knownTraitNames = UIAccessibilityTraits.knownTraitNames
 
     /// Does this element satisfy all property predicates in the matcher?
     /// String fields (label, identifier, value) use case-insensitive substring matching.
