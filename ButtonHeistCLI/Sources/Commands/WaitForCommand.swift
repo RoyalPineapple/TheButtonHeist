@@ -30,20 +30,20 @@ struct WaitForCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let elTarget = try element.requireTarget()
+        _ = try element.requireTarget()
 
-        let connector = DeviceConnector(deviceFilter: connection.device, token: connection.token, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
+        var request: [String: Any] = [
+            "command": TheFence.Command.waitFor.rawValue,
+            "timeout": timeout,
+        ]
+        element.applyTo(&request)
+        if absent { request["absent"] = true }
 
-        if !connection.quiet {
-            let verb = absent ? "disappear" : "appear"
-            logStatus("Waiting for element to \(verb)...")
-        }
-
-        let waitTarget = WaitForTarget(elementTarget: elTarget, absent: absent ? true : nil, timeout: timeout)
-        connector.send(.waitFor(waitTarget))
-        let result = try await connector.waitForActionResult(timeout: min(timeout, 30) + 5)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Wait for")
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: absent ? "Waiting for element to disappear..." : "Waiting for element to appear..."
+        )
     }
 }

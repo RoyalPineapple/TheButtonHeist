@@ -30,26 +30,24 @@ struct ScrollCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let target = try element.requireTarget()
+        _ = try element.requireTarget()
 
-        guard let scrollDirection = ScrollDirection(rawValue: direction.lowercased()) else {
+        guard ScrollDirection(rawValue: direction.lowercased()) != nil else {
             throw ValidationError("Invalid direction '\(direction)'. Valid: up, down, left, right, next, previous")
         }
 
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
+        var request: [String: Any] = [
+            "command": TheFence.Command.scroll.rawValue,
+            "direction": direction.lowercased(),
+            "timeout": timeout,
+        ]
+        element.applyTo(&request)
 
-        let message = ClientMessage.scroll(ScrollTarget(elementTarget: target, direction: scrollDirection))
-
-        if !connection.quiet {
-            logStatus("Sending scroll...")
-        }
-
-        connector.send(message)
-
-        let result = try await connector.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Scroll")
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending scroll..."
+        )
     }
 }

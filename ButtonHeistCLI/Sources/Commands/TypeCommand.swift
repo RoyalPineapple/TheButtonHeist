@@ -35,24 +35,19 @@ struct TypeCommand: AsyncParsableCommand {
             throw ValidationError("Must specify --text, --delete, or both")
         }
 
-        let message = ClientMessage.typeText(TypeTextTarget(
-            text: text,
-            deleteCount: delete,
-            elementTarget: try element.actionTarget()
-        ))
+        var request: [String: Any] = [
+            "command": TheFence.Command.typeText.rawValue,
+            "timeout": timeout,
+        ]
+        if let text { request["text"] = text }
+        if let delete { request["deleteCount"] = delete }
+        element.applyTo(&request)
 
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet {
-            logStatus("Sending type command...")
-        }
-
-        connector.send(message)
-
-        let result = try await connector.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Type")
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending type command..."
+        )
     }
 }
