@@ -1,17 +1,17 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
+import TheScore
 
 /// Scroll primitives abstraction. TheBagman delegates all scrolling to a
 /// ScrollProvider — this lets us swap between implementations:
 ///
-///   - `ContentOffsetScrollProvider` — setContentOffset (current, precise)
-///   - `AccessibilitySPIScrollProvider` — accessibilityScrollDownPage etc.
-///     (animated, cooperative with the system, natural deceleration)
+///   - `ContentOffsetScrollProvider` — setContentOffset (fast, precise)
+///   - `AccessibilitySPIScrollProvider` — private accessibility SPI
+///     (animated, cooperative, natural deceleration)
 ///
-/// Both providers handle UIScrollViews. For non-UIScrollView containers
-/// (SwiftUI's PlatformContainer), both fall back to synthetic swipe via
-/// TheSafecracker.
+/// Both handle UIScrollViews. For non-UIScrollView containers (SwiftUI's
+/// PlatformContainer), both fall back to synthetic swipe via TheSafecracker.
 @MainActor protocol ScrollProvider {
 
     /// Scroll a UIScrollView by one page in the given direction.
@@ -34,13 +34,18 @@ import UIKit
         frame: CGRect,
         direction: UIAccessibilityScrollDirection
     ) async -> Bool
+
+    /// Jump to an absolute edge. Returns false if already there.
+    func scrollToEdge(
+        _ scrollView: UIScrollView,
+        edge: TheScore.ScrollEdge
+    ) async -> Bool
 }
 
-// MARK: - ContentOffset Provider (current implementation)
+// MARK: - ContentOffset Provider
 
 /// Scrolls by directly setting contentOffset on UIScrollViews.
 /// Fast, precise, predictable page size (frame - 44pt overlap).
-/// Fights SwiftUI's layout engine on some containers.
 @MainActor final class ContentOffsetScrollProvider: ScrollProvider {
 
     private let safecracker: TheSafecracker
@@ -69,58 +74,69 @@ import UIKit
     ) async -> Bool {
         await safecracker.scrollBySwipe(frame: frame, direction: direction)
     }
+
+    func scrollToEdge(
+        _ scrollView: UIScrollView,
+        edge: TheScore.ScrollEdge
+    ) async -> Bool {
+        safecracker.scrollToEdge(scrollView, edge: edge)
+    }
 }
 
 // MARK: - Accessibility SPI Provider
 
 /// Scrolls using private accessibility SPI methods:
 ///   - accessibilityScrollDownPage / UpPage / LeftPage / RightPage
-///   - _accessibilityScrollToVisible
+///   - _accessibilityScrollToTop / _accessibilityScrollToBottom
 ///
 /// Animated, cooperative with the system, natural deceleration near edges.
 /// Edge detection via contentOffset comparison before/after.
-/// Requires run loop to be active (~5 frames for offset to settle).
+///
+/// Two caveats discovered during research:
+/// 1. Lazy containers (SwiftUI List) start with contentSize < frame.
+///    The SPI refuses to scroll when content appears to fit. A small
+///    setContentOffset bump materializes cells and grows contentSize.
+/// 2. The SPI queues an animated scroll via CADisplayLink. Needs real
+///    wall-clock time (~128ms) to settle, not just Task.yield().
 @MainActor final class AccessibilitySPIScrollProvider: ScrollProvider {
 
     private let safecracker: TheSafecracker
-    private let yieldFrames: (Int) async -> Void
+    private let tripwire: TheTripwire
 
-    init(safecracker: TheSafecracker, yieldFrames: @escaping (Int) async -> Void) {
+    /// Number of real frames to wait for SPI scroll animation to settle.
+    /// Research showed ~5 frames needed, 8 for safety (~128ms at 60fps).
+    private let settleFrames = 8
+
+    init(safecracker: TheSafecracker, tripwire: TheTripwire) {
         self.safecracker = safecracker
-        self.yieldFrames = yieldFrames
+        self.tripwire = tripwire
     }
 
     func scrollByPage(
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection
     ) async -> Bool {
+        // Lazy contentSize bootstrap: if content fits in frame, the SPI
+        // won't scroll. Bump contentOffset by 1pt to force cell materialization.
+        if needsBootstrap(scrollView, direction: direction) {
+            let tiny = bootstrapOffset(scrollView, direction: direction)
+            scrollView.setContentOffset(tiny, animated: false)
+            await settleAnimation()
+        }
+
         let before = scrollView.contentOffset
         performSPIScroll(scrollView, direction: direction)
-        // SPI scroll is animated — needs the run loop to process.
-        // Research showed ~5 frames, use 10 for safety.
-        await yieldFrames(10)
-        let after = scrollView.contentOffset
-        return before != after
+        await settleAnimation()
+        return scrollView.contentOffset != before
     }
 
     func scrollToMakeVisible(
         _ targetFrame: CGRect,
         in scrollView: UIScrollView
     ) async -> Bool {
-        // Convert target frame to find the element at that position
-        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
-        let visibleRect = CGRect(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
-            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
-        )
-        if visibleRect.contains(targetInScrollView) { return true }
-
-        // Fall back to setContentOffset — _accessibilityScrollToVisible needs
-        // the element object, not a frame. The frame-based path uses the same
-        // logic as ContentOffsetScrollProvider.
-        return safecracker.scrollToMakeVisible(targetFrame, in: scrollView)
+        // _accessibilityScrollToVisible requires the element object, not a frame.
+        // Fall back to setContentOffset for the frame-based path.
+        safecracker.scrollToMakeVisible(targetFrame, in: scrollView)
     }
 
     func scrollBySwipe(
@@ -130,7 +146,25 @@ import UIKit
         await safecracker.scrollBySwipe(frame: frame, direction: direction)
     }
 
-    // MARK: - Private SPI dispatch
+    func scrollToEdge(
+        _ scrollView: UIScrollView,
+        edge: TheScore.ScrollEdge
+    ) async -> Bool {
+        let before = scrollView.contentOffset
+        let sel: Selector
+        switch edge {
+        case .top:    sel = NSSelectorFromString("_accessibilityScrollToTop")
+        case .bottom: sel = NSSelectorFromString("_accessibilityScrollToBottom")
+        case .left, .right:
+            // No SPI for left/right edge — fall back to setContentOffset
+            return safecracker.scrollToEdge(scrollView, edge: edge)
+        }
+        _ = scrollView.perform(sel)
+        await settleAnimation()
+        return scrollView.contentOffset != before
+    }
+
+    // MARK: - Private
 
     private func performSPIScroll(
         _ scrollView: UIScrollView,
@@ -150,6 +184,45 @@ import UIKit
             return
         }
         _ = scrollView.perform(sel)
+    }
+
+    /// The SPI queues an animated scroll via CADisplayLink. Need real wall-clock
+    /// time for the animation to process — Task.yield() alone isn't enough.
+    private func settleAnimation() async {
+        await tripwire.yieldRealFrames(settleFrames)
+    }
+
+    /// Check if the scroll view needs a contentSize bootstrap.
+    /// Lazy SwiftUI containers start with contentSize ≤ frame, causing the SPI
+    /// to refuse scrolling. A 1pt offset bump materializes cells.
+    private func needsBootstrap(
+        _ scrollView: UIScrollView,
+        direction: UIAccessibilityScrollDirection
+    ) -> Bool {
+        switch direction {
+        case .down, .next, .up, .previous:
+            return scrollView.contentSize.height <= scrollView.frame.height
+        case .right, .left:
+            return scrollView.contentSize.width <= scrollView.frame.width
+        @unknown default:
+            return false
+        }
+    }
+
+    /// A tiny offset bump to force lazy content materialization.
+    private func bootstrapOffset(
+        _ scrollView: UIScrollView,
+        direction: UIAccessibilityScrollDirection
+    ) -> CGPoint {
+        var offset = scrollView.contentOffset
+        switch direction {
+        case .down, .next: offset.y += 1
+        case .up, .previous: offset.y = max(offset.y - 1, 0)
+        case .right: offset.x += 1
+        case .left: offset.x = max(offset.x - 1, 0)
+        @unknown default: break
+        }
+        return offset
     }
 }
 

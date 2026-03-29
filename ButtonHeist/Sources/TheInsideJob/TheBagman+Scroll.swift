@@ -135,20 +135,25 @@ extension TheBagman {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
 
-        // Scroll repeatedly in the edge direction until no more movement.
-        // scrollByPage returns false at edge for UIScrollViews.
-        // For swipe-based targets (always return true), stagnation (no new
-        // elements) is the fallback termination signal.
-        let direction = edgeDirection(for: target.edge)
-        var moved = false
-        for _ in 0..<50 {
-            let before = onScreen
-            let stepped = await scrollOnePage(scrollTarget, direction: direction, animated: false)
-            if !stepped { break }
-            moved = true
-            await tripwire.yieldFrames(2)
-            refreshAccessibilityData()
-            if onScreen == before { break }
+        let moved: Bool
+        switch scrollTarget {
+        case .uiScrollView(let sv):
+            guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
+            moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
+        case .swipeable:
+            // Swipe-based: scroll repeatedly until stagnation
+            let direction = edgeDirection(for: target.edge)
+            var didMove = false
+            for _ in 0..<50 {
+                let before = onScreen
+                let stepped = await scrollOnePage(scrollTarget, direction: direction, animated: false)
+                if !stepped { break }
+                didMove = true
+                await tripwire.yieldFrames(2)
+                refreshAccessibilityData()
+                if onScreen == before { break }
+            }
+            moved = didMove
         }
 
         return TheSafecracker.InteractionResult(
