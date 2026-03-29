@@ -108,9 +108,8 @@ extension TheBagman {
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        let axis = requiredAxis(for: target.direction)
         guard let scrollTarget = resolveScrollTarget(
-            screenElement: resolved.screenElement, axis: axis
+            screenElement: resolved.screenElement
         ) else {
             return .failure(.scroll, message: "No scrollable ancestor found for element")
         }
@@ -132,9 +131,8 @@ extension TheBagman {
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        let axis = requiredAxis(for: target.edge)
         guard let scrollTarget = resolveScrollTarget(
-            screenElement: resolved.screenElement, axis: axis
+            screenElement: resolved.screenElement
         ) else {
             return .failure(.scrollToEdge, message: "No scrollable ancestor found for element")
         }
@@ -312,8 +310,7 @@ extension TheBagman {
     /// Find the scrollable container for a resolved element from the accessibility hierarchy.
     /// Uses the element's stored `scrollView` ref (set by the hierarchy tree's containerVisitor).
     func resolveScrollTarget(
-        screenElement: ScreenElement,
-        axis: ScrollAxis? = nil
+        screenElement: ScreenElement
     ) -> ScrollableTarget? {
         guard let sv = screenElement.scrollView else { return nil }
         return .uiScrollView(sv)

@@ -874,7 +874,6 @@ public struct ScrollTarget: Codable, Sendable
 
 - `elementTarget: ActionTarget?` - Element to scroll from (axis-aware: finds scroll view matching direction's axis)
 - `direction: ScrollDirection` - Scroll direction
-- `scrollViewHeistId: String?` - Explicit scroll view to target (overrides automatic ancestor discovery)
 
 ### ScrollEdge
 
@@ -899,7 +898,6 @@ public struct ScrollToEdgeTarget: Codable, Sendable
 
 - `elementTarget: ActionTarget?` - Element whose nearest scroll view ancestor to scroll (axis-aware)
 - `edge: ScrollEdge` - Which edge to scroll to
-- `scrollViewHeistId: String?` - Explicit scroll view to target (overrides automatic ancestor discovery)
 
 ### ElementMatcher
 
@@ -930,7 +928,6 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 - `match: ElementMatcher?` - Predicate for the element to find
 - `maxScrolls: Int?` - Maximum scroll attempts (default: 50, safety valve — not a budget)
 - `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`), adapted to each container's natural axis
-- `scrollViewHeistId: String?` - Explicit scroll view to search within (overrides automatic hierarchy walk)
 
 ### ScrollSearchDirection
 
