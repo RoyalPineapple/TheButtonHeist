@@ -161,7 +161,7 @@ jobs:
           echo "SIM_OS=$SIM_OS" >> "$GITHUB_ENV"
           echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
           xcrun simctl boot "$SIM_UDID" || true
-          timeout 120 xcrun simctl bootstatus "$SIM_UDID" -b
+          perl -e 'alarm 120; exec @ARGV' xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
         timeout-minutes: 10
