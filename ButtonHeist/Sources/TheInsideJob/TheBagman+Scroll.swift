@@ -233,46 +233,33 @@ extension TheBagman {
         return notFoundResult(scrollCount: scrollCount)
     }
 
-    /// Walk the cached accessibility hierarchy tree and collect scrollable containers
-    /// in tree order (outermost first). Returns the first non-exhausted target.
-    /// UIScrollView-backed containers become `.uiScrollView`, others become `.swipeable`.
+    /// Walk the cached hierarchy tree (pre-order = outermost first) and return the
+    /// first non-exhausted scrollable container as a `ScrollableTarget`.
     private func findLiveScrollTarget(
         excluding exhausted: Set<Int>
     ) -> (target: ScrollableTarget, index: Int)? {
-        var result: [(ScrollableTarget, Int)] = []
-        var index = 0
-        collectScrollTargets(cachedHierarchy, into: &result, index: &index, excluding: exhausted)
-        return result.first.map { ($0.0, $0.1) }
-    }
-
-    /// Depth-first traversal of the hierarchy tree. Outer containers are visited
-    /// before their inner children — essential for scroll_to_visible to reveal
-    /// new sections before drilling into carousels.
-    private func collectScrollTargets(
-        _ nodes: [AccessibilityHierarchy],
-        into result: inout [(ScrollableTarget, Int)],
-        index: inout Int,
-        excluding exhausted: Set<Int>
-    ) {
-        for node in nodes {
-            guard case .container(let container, let children) = node else { continue }
-            if case .scrollable(let contentSize) = container.type {
-                let thisIndex = index
-                index += 1
-                guard !exhausted.contains(thisIndex) else {
-                    collectScrollTargets(children, into: &result, index: &index, excluding: exhausted)
-                    continue
-                }
-                if let sv = scrollViewLookup[container], sv.window != nil {
-                    result.append((.uiScrollView(sv), thisIndex))
-                } else if let view = scrollableViewLookup[container], view.window != nil {
-                    result.append((.accessibilityScrollable(view: view, contentSize: contentSize), thisIndex))
-                } else {
-                    result.append((.swipeable(frame: container.frame, contentSize: contentSize), thisIndex))
-                }
-            }
-            collectScrollTargets(children, into: &result, index: &index, excluding: exhausted)
+        struct State {
+            var index = 0
+            var first: (ScrollableTarget, Int)?
         }
+        let state = cachedHierarchy.reducedHierarchy(State()) { state, node in
+            var state = state
+            guard state.first == nil else { return state }
+            guard case .container(let container, _) = node,
+                  case .scrollable(let contentSize) = container.type else { return state }
+            let thisIndex = state.index
+            state.index += 1
+            guard !exhausted.contains(thisIndex) else { return state }
+            if let sv = scrollViewLookup[container], sv.window != nil {
+                state.first = (.uiScrollView(sv), thisIndex)
+            } else if let view = scrollableViewLookup[container], view.window != nil {
+                state.first = (.accessibilityScrollable(view: view, contentSize: contentSize), thisIndex)
+            } else {
+                state.first = (.swipeable(frame: container.frame, contentSize: contentSize), thisIndex)
+            }
+            return state
+        }
+        return state.first
     }
 
     private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
