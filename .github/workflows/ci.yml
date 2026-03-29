@@ -38,9 +38,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Init required submodules
+        id: submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive AccessibilitySnapshot
+          echo "a11y-hash=$(git rev-parse HEAD:AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
       - name: Install Tuist
         uses: jdx/mise-action@v2
@@ -57,7 +59,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/tuist/Binaries
-          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved', 'AccessibilitySnapshot') }}
+          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
@@ -103,9 +105,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Init required submodules
+        id: submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive AccessibilitySnapshot
+          echo "a11y-hash=$(git rev-parse HEAD:AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
       - name: Install Tuist
         uses: jdx/mise-action@v2
@@ -122,7 +126,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/tuist/Binaries
-          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved', 'AccessibilitySnapshot') }}
+          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
