@@ -9,7 +9,7 @@ final class ElementMatcherTests: XCTestCase {
 
     // MARK: - Test Fixtures
 
-    private func el(
+    private func element(
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -38,26 +38,26 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Label Matching
 
     func testMatchByLabelExact() {
-        let element = el(label: "Save")
+        let element = element(label: "Save")
         let matcher = ElementMatcher(label: "Save")
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testLabelMismatch() {
-        let element = el(label: "Save")
+        let element = element(label: "Save")
         let matcher = ElementMatcher(label: "Cancel")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testLabelIsCaseInsensitive() {
-        let element = el(label: "Save")
+        let element = element(label: "Save")
         XCTAssertTrue(element.matches(ElementMatcher(label: "save")))
         XCTAssertTrue(element.matches(ElementMatcher(label: "SAVE")))
         XCTAssertTrue(element.matches(ElementMatcher(label: "sAvE")))
     }
 
     func testLabelSubstringMatch() {
-        let element = el(label: "Save Changes")
+        let element = element(label: "Save Changes")
         XCTAssertTrue(element.matches(ElementMatcher(label: "Save")))
         XCTAssertTrue(element.matches(ElementMatcher(label: "Changes")))
         XCTAssertTrue(element.matches(ElementMatcher(label: "save changes")))
@@ -65,14 +65,14 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelNilOnElementDoesNotMatchEmptyString() {
-        let element = el(label: nil)
+        let element = element(label: nil)
         let matcher = ElementMatcher(label: "")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testLabelEmptyStringMatches() {
         // Empty matcher label is a substring of any label — always matches
-        let element = el(label: "")
+        let element = element(label: "")
         let matcher = ElementMatcher(label: "")
         // "".localizedCaseInsensitiveContains("") is false per Foundation
         // semantics, so empty-string matcher against empty-string label
@@ -81,20 +81,20 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelWithUnicode() {
-        let element = el(label: "🔴 Error")
+        let element = element(label: "🔴 Error")
         let matcher = ElementMatcher(label: "🔴 Error")
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testLabelWithNewline() {
-        let element = el(label: "Line 1\nLine 2")
+        let element = element(label: "Line 1\nLine 2")
         let matcher = ElementMatcher(label: "Line 1\nLine 2")
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testLabelWithLeadingTrailingWhitespace() {
         // Substring matching — "Save" is found inside " Save "
-        let element = el(label: " Save ")
+        let element = element(label: " Save ")
         XCTAssertTrue(element.matches(ElementMatcher(label: "Save")))
         XCTAssertTrue(element.matches(ElementMatcher(label: " Save ")))
     }
@@ -102,25 +102,25 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Identifier Matching
 
     func testMatchByIdentifierExact() {
-        let element = el(identifier: "com.app.saveButton")
+        let element = element(identifier: "com.app.saveButton")
         let matcher = ElementMatcher(identifier: "com.app.saveButton")
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testIdentifierMismatch() {
-        let element = el(identifier: "com.app.saveButton")
+        let element = element(identifier: "com.app.saveButton")
         let matcher = ElementMatcher(identifier: "com.app.cancelButton")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testIdentifierNilOnElement() {
-        let element = el(identifier: nil)
+        let element = element(identifier: nil)
         let matcher = ElementMatcher(identifier: "anything")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testIdentifierIsCaseInsensitive() {
-        let element = el(identifier: "SaveBtn")
+        let element = element(identifier: "SaveBtn")
         XCTAssertTrue(element.matches(ElementMatcher(identifier: "savebtn")))
         XCTAssertTrue(element.matches(ElementMatcher(identifier: "SAVEBTN")))
         XCTAssertFalse(element.matches(ElementMatcher(identifier: "OtherBtn")))
@@ -129,26 +129,26 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Value Matching
 
     func testMatchByValueExact() {
-        let element = el(value: "50%")
+        let element = element(value: "50%")
         let matcher = ElementMatcher(value: "50%")
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testValueMismatch() {
-        let element = el(value: "50%")
+        let element = element(value: "50%")
         let matcher = ElementMatcher(value: "75%")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testValueNilOnElementDoesNotMatchEmptyString() {
-        let element = el(value: nil)
+        let element = element(value: nil)
         let matcher = ElementMatcher(value: "")
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testValueEmptyStringMatchesEmptyString() {
         // Foundation: "".localizedCaseInsensitiveContains("") is false
-        let element = el(value: "")
+        let element = element(value: "")
         let matcher = ElementMatcher(value: "")
         XCTAssertFalse(element.matches(matcher))
     }
@@ -156,31 +156,31 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Trait Matching (Required)
 
     func testSingleTraitPresent() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: [.button])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testSingleTraitAbsent() {
-        let element = el(traits: .staticText)
+        let element = element(traits: .staticText)
         let matcher = ElementMatcher(traits: [.button])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testMultipleTraitsAllPresent() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(traits: [.button, .selected])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testMultipleTraitsOneAbsent() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: [.button, .selected])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testTraitOrderDoesNotMatter() {
-        let element = el(traits: [.header, .button])
+        let element = element(traits: [.header, .button])
         let matcherAB = ElementMatcher(traits: [.button, .header])
         let matcherBA = ElementMatcher(traits: [.header, .button])
         XCTAssertTrue(element.matches(matcherAB))
@@ -188,49 +188,49 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testElementHasExtraTraitsStillMatches() {
-        let element = el(traits: [.button, .selected, .header])
+        let element = element(traits: [.button, .selected, .header])
         let matcher = ElementMatcher(traits: [.button])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testEmptyTraitsArrayMatchesAnything() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: [])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testTraitsNilMatchesAnything() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: nil)
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testNoTraitsDoesNotMatchRequiredTrait() {
-        let element = el(traits: .none)
+        let element = element(traits: .none)
         let matcher = ElementMatcher(traits: [.button])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testBackButtonTrait() {
-        let element = el(traits: UIAccessibilityTraits(rawValue: 0x8000000))
+        let element = element(traits: UIAccessibilityTraits(rawValue: 0x8000000))
         let matcher = ElementMatcher(traits: [.backButton])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testAdjustableTrait() {
-        let element = el(traits: .adjustable)
+        let element = element(traits: .adjustable)
         let matcher = ElementMatcher(traits: [.adjustable])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testSearchFieldTrait() {
-        let element = el(traits: .searchField)
+        let element = element(traits: .searchField)
         let matcher = ElementMatcher(traits: [.searchField])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testNotEnabledTrait() {
-        let element = el(traits: .notEnabled)
+        let element = element(traits: .notEnabled)
         let matcher = ElementMatcher(traits: [.notEnabled])
         XCTAssertTrue(element.matches(matcher))
     }
@@ -238,37 +238,37 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Trait Exclusion
 
     func testExcludeSingleTraitAbsent() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(excludeTraits: [.selected])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testExcludeSingleTraitPresent() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(excludeTraits: [.selected])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testExcludeMultipleTraitsNonePresent() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(excludeTraits: [.selected, .notEnabled])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testExcludeMultipleTraitsOnePresent() {
-        let element = el(traits: [.button, .notEnabled])
+        let element = element(traits: [.button, .notEnabled])
         let matcher = ElementMatcher(excludeTraits: [.selected, .notEnabled])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testExcludeEmptyArrayMatchesAnything() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(excludeTraits: [])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testExcludeNilMatchesAnything() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(excludeTraits: nil)
         XCTAssertTrue(element.matches(matcher))
     }
@@ -276,25 +276,25 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Combined Trait Include + Exclude
 
     func testIncludeAndExcludeBothSatisfied() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: [.button], excludeTraits: [.selected])
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testIncludeSatisfiedButExcludeViolated() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(traits: [.button], excludeTraits: [.selected])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testIncludeViolatedExcludeSatisfied() {
-        let element = el(traits: .staticText)
+        let element = element(traits: .staticText)
         let matcher = ElementMatcher(traits: [.button], excludeTraits: [.selected])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testSameTraitInIncludeAndExcludeAlwaysFails() {
-        let element = el(traits: .button)
+        let element = element(traits: .button)
         let matcher = ElementMatcher(traits: [.button], excludeTraits: [.button])
         XCTAssertFalse(element.matches(matcher))
     }
@@ -302,7 +302,7 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Compound Predicate (Multiple Fields)
 
     func testLabelAndIdentifier() {
-        let element = el(label: "Save", identifier: "saveBtn")
+        let element = element(label: "Save", identifier: "saveBtn")
         XCTAssertTrue(element.matches(
             ElementMatcher(label: "Save", identifier: "saveBtn")))
         XCTAssertFalse(element.matches(
@@ -312,7 +312,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelAndValue() {
-        let element = el(label: "Volume", value: "50%")
+        let element = element(label: "Volume", value: "50%")
         XCTAssertTrue(element.matches(
             ElementMatcher(label: "Volume", value: "50%")))
         XCTAssertFalse(element.matches(
@@ -320,7 +320,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelAndTraits() {
-        let element = el(label: "Settings", traits: .header)
+        let element = element(label: "Settings", traits: .header)
         XCTAssertTrue(element.matches(
             ElementMatcher(label: "Settings", traits: [.header])))
         XCTAssertFalse(element.matches(
@@ -328,7 +328,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelIdentifierValueTraits() {
-        let element = el(label: "Dark Mode", value: "ON", identifier: "darkModeToggle", traits: [.button, .selected])
+        let element = element(label: "Dark Mode", value: "ON", identifier: "darkModeToggle", traits: [.button, .selected])
         let matcher = ElementMatcher(
             label: "Dark Mode", identifier: "darkModeToggle",
             value: "ON", traits: [.button, .selected]
@@ -337,7 +337,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testAllFieldsMustMatchAndOneDoesNot() {
-        let element = el(label: "Dark Mode", value: "ON", identifier: "darkModeToggle", traits: [.button, .selected])
+        let element = element(label: "Dark Mode", value: "ON", identifier: "darkModeToggle", traits: [.button, .selected])
         // Wrong value
         XCTAssertFalse(element.matches(
             ElementMatcher(label: "Dark Mode", identifier: "darkModeToggle", value: "OFF", traits: [.button, .selected])
@@ -345,8 +345,8 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testLabelAndExcludeTraits() {
-        let enabled = el(label: "Submit", traits: .button)
-        let disabled = el(label: "Submit", traits: [.button, .notEnabled])
+        let enabled = element(label: "Submit", traits: .button)
+        let disabled = element(label: "Submit", traits: [.button, .notEnabled])
         let matcher = ElementMatcher(label: "Submit", excludeTraits: [.notEnabled])
         XCTAssertTrue(enabled.matches(matcher))
         XCTAssertFalse(disabled.matches(matcher))
@@ -356,13 +356,13 @@ final class ElementMatcherTests: XCTestCase {
 
     func testEmptyMatcherMatchesEverything() {
         let matcher = ElementMatcher()
-        XCTAssertTrue(el(label: "Save", traits: .button).matches(matcher))
-        XCTAssertTrue(el(label: nil, traits: .none).matches(matcher))
-        XCTAssertTrue(el(value: "100%", identifier: "slider").matches(matcher))
+        XCTAssertTrue(element(label: "Save", traits: .button).matches(matcher))
+        XCTAssertTrue(element(label: nil, traits: .none).matches(matcher))
+        XCTAssertTrue(element(value: "100%", identifier: "slider").matches(matcher))
     }
 
     func testNilFieldsAreWildcards() {
-        let element = el(label: "Save", value: "draft", identifier: "btn", traits: .button)
+        let element = element(label: "Save", value: "draft", identifier: "btn", traits: .button)
         // Only label specified — value, identifier, traits are wildcards
         XCTAssertTrue(element.matches(ElementMatcher(label: "Save")))
         // Only identifier specified
@@ -410,13 +410,13 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Unknown Trait Names
 
     func testUnknownTraitNameNeverMatches() {
-        let element = el(traits: [.button, .selected, .header])
+        let element = element(traits: [.button, .selected, .header])
         let matcher = ElementMatcher(traits: [.unknown("madeUpTrait")])
         XCTAssertFalse(element.matches(matcher))
     }
 
     func testUnknownExcludeTraitNeverMatches() {
-        let element = el(traits: [.button, .selected])
+        let element = element(traits: [.button, .selected])
         let matcher = ElementMatcher(excludeTraits: [.unknown("madeUpTrait")])
         XCTAssertFalse(element.matches(matcher))
     }
@@ -425,13 +425,13 @@ final class ElementMatcherTests: XCTestCase {
 
     func testVeryLongLabel() {
         let longLabel = String(repeating: "a", count: 10_000)
-        let element = el(label: longLabel)
+        let element = element(label: longLabel)
         let matcher = ElementMatcher(label: longLabel)
         XCTAssertTrue(element.matches(matcher))
     }
 
     func testLabelWithNullCharacter() {
-        let element = el(label: "before\0after")
+        let element = element(label: "before\0after")
         let matcher = ElementMatcher(label: "before\0after")
         XCTAssertTrue(element.matches(matcher))
         // Substring matching — "before" is found inside "before\0after"
@@ -439,7 +439,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testAllFieldsNilOnElement() {
-        let element = el()
+        let element = element()
         XCTAssertTrue(element.matches(ElementMatcher()))
         XCTAssertFalse(element.matches(ElementMatcher(label: "anything")))
         XCTAssertFalse(element.matches(ElementMatcher(identifier: "anything")))
@@ -450,9 +450,9 @@ final class ElementMatcherTests: XCTestCase {
 
     func testFirstMatchFindsFirst() {
         let elements = [
-            el(label: "Alpha", traits: .button),
-            el(label: "Beta", traits: .button),
-            el(label: "Gamma", traits: .header),
+            element(label: "Alpha", traits: .button),
+            element(label: "Beta", traits: .button),
+            element(label: "Gamma", traits: .header),
         ]
         let matcher = ElementMatcher(traits: [.button])
         let result = elements.firstMatch(matcher)
@@ -463,9 +463,9 @@ final class ElementMatcherTests: XCTestCase {
 
     func testFirstMatchFindsSecond() {
         let elements = [
-            el(label: "Alpha", traits: .header),
-            el(label: "Beta", traits: .button),
-            el(label: "Gamma", traits: .button),
+            element(label: "Alpha", traits: .header),
+            element(label: "Beta", traits: .button),
+            element(label: "Gamma", traits: .button),
         ]
         let matcher = ElementMatcher(traits: [.button])
         let result = elements.firstMatch(matcher)
@@ -474,7 +474,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testFirstMatchReturnsNilWhenNoMatch() {
-        let elements = [el(label: "Alpha"), el(label: "Beta")]
+        let elements = [element(label: "Alpha"), element(label: "Beta")]
         let matcher = ElementMatcher(label: "Gamma")
         XCTAssertNil(elements.firstMatch(matcher))
     }
@@ -488,12 +488,12 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - Array Matching: hasMatch
 
     func testHasMatchTrue() {
-        let elements = [el(label: "Alpha"), el(label: "Beta")]
+        let elements = [element(label: "Alpha"), element(label: "Beta")]
         XCTAssertTrue(elements.hasMatch(ElementMatcher(label: "Beta")))
     }
 
     func testHasMatchFalse() {
-        let elements = [el(label: "Alpha"), el(label: "Beta")]
+        let elements = [element(label: "Alpha"), element(label: "Beta")]
         XCTAssertFalse(elements.hasMatch(ElementMatcher(label: "Gamma")))
     }
 
@@ -512,7 +512,7 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testHierarchyMatchFindsLeaf() {
-        let leaf = AccessibilityHierarchy.element(el(label: "Target", traits: .button), traversalIndex: 3)
+        let leaf = AccessibilityHierarchy.element(element(label: "Target", traits: .button), traversalIndex: 3)
         let matcher = ElementMatcher(label: "Target")
         let result = leaf.matches(matcher)
         XCTAssertNotNil(result)
@@ -522,7 +522,7 @@ final class ElementMatcherTests: XCTestCase {
 
     func testHierarchyMatchSkipsContainer() {
         let container = group(children: [
-            .element(el(label: "Child", traits: .button), traversalIndex: 0)
+            .element(element(label: "Child", traits: .button), traversalIndex: 0)
         ])
         let matcher = ElementMatcher(label: "Child")
         let result = container.matches(matcher)
@@ -531,16 +531,16 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testHierarchyMatchReturnsNilWhenNoMatch() {
-        let leaf = AccessibilityHierarchy.element(el(label: "Other"), traversalIndex: 0)
+        let leaf = AccessibilityHierarchy.element(element(label: "Other"), traversalIndex: 0)
         let matcher = ElementMatcher(label: "Target")
         XCTAssertNil(leaf.matches(matcher))
     }
 
     func testHierarchyArrayFirstMatch() {
         let tree: [AccessibilityHierarchy] = [
-            .element(el(label: "First", traits: .header), traversalIndex: 0),
-            .element(el(label: "Second", traits: .button), traversalIndex: 1),
-            .element(el(label: "Third", traits: .button), traversalIndex: 2),
+            .element(element(label: "First", traits: .header), traversalIndex: 0),
+            .element(element(label: "Second", traits: .button), traversalIndex: 1),
+            .element(element(label: "Third", traits: .button), traversalIndex: 2),
         ]
         let matcher = ElementMatcher(traits: [.button])
         let result = tree.firstMatch(matcher)
@@ -550,9 +550,9 @@ final class ElementMatcherTests: XCTestCase {
 
     func testHierarchyArrayAllMatches() {
         let tree: [AccessibilityHierarchy] = [
-            .element(el(label: "A", traits: .button), traversalIndex: 0),
-            .element(el(label: "B", traits: .header), traversalIndex: 1),
-            .element(el(label: "C", traits: .button), traversalIndex: 2),
+            .element(element(label: "A", traits: .button), traversalIndex: 0),
+            .element(element(label: "B", traits: .header), traversalIndex: 1),
+            .element(element(label: "C", traits: .button), traversalIndex: 2),
         ]
         let results = tree.allMatches(ElementMatcher(traits: [.button]))
         XCTAssertEqual(results.count, 2)
@@ -564,7 +564,7 @@ final class ElementMatcherTests: XCTestCase {
         let tree: [AccessibilityHierarchy] = [
             group(children: [
                 group(children: [
-                    .element(el(label: "Deep Target", identifier: "deep"), traversalIndex: 5)
+                    .element(element(label: "Deep Target", identifier: "deep"), traversalIndex: 5)
                 ])
             ])
         ]
@@ -580,7 +580,7 @@ final class ElementMatcherTests: XCTestCase {
             .container(
                 AccessibilityContainer(type: .semanticGroup(label: "Settings", value: nil, identifier: nil), frame: .zero),
                 children: [
-                    .element(el(label: "Volume"), traversalIndex: 0)
+                    .element(element(label: "Volume"), traversalIndex: 0)
                 ]
             )
         ]
@@ -596,40 +596,40 @@ final class ElementMatcherTests: XCTestCase {
     // MARK: - StableKey
 
     func testStableKeyEqualForSameProperties() {
-        let a = el(label: "Save", value: "draft", identifier: "btn", traits: .button)
-        let b = el(label: "Save", value: "draft", identifier: "btn", traits: .button)
+        let a = element(label: "Save", value: "draft", identifier: "btn", traits: .button)
+        let b = element(label: "Save", value: "draft", identifier: "btn", traits: .button)
         XCTAssertEqual(a.stableKey, b.stableKey)
     }
 
     func testStableKeyDiffersOnLabel() {
-        let a = el(label: "Save")
-        let b = el(label: "Cancel")
+        let a = element(label: "Save")
+        let b = element(label: "Cancel")
         XCTAssertNotEqual(a.stableKey, b.stableKey)
     }
 
     func testStableKeyDiffersOnIdentifier() {
-        let a = el(label: "Save", identifier: "a")
-        let b = el(label: "Save", identifier: "b")
+        let a = element(label: "Save", identifier: "a")
+        let b = element(label: "Save", identifier: "b")
         XCTAssertNotEqual(a.stableKey, b.stableKey)
     }
 
     func testStableKeyDiffersOnValue() {
-        let a = el(label: "Slider", value: "50%")
-        let b = el(label: "Slider", value: "75%")
+        let a = element(label: "Slider", value: "50%")
+        let b = element(label: "Slider", value: "75%")
         XCTAssertNotEqual(a.stableKey, b.stableKey)
     }
 
     func testStableKeyDiffersOnTraits() {
-        let a = el(label: "Save", traits: .button)
-        let b = el(label: "Save", traits: [.button, .selected])
+        let a = element(label: "Save", traits: .button)
+        let b = element(label: "Save", traits: [.button, .selected])
         XCTAssertNotEqual(a.stableKey, b.stableKey)
     }
 
     func testStableKeySetDeduplicates() {
         let elements = [
-            el(label: "Save", traits: .button),
-            el(label: "Save", traits: .button),
-            el(label: "Cancel", traits: .button),
+            element(label: "Save", traits: .button),
+            element(label: "Save", traits: .button),
+            element(label: "Cancel", traits: .button),
         ]
         let keys = Set(elements.map(\.stableKey))
         XCTAssertEqual(keys.count, 2)
@@ -701,7 +701,7 @@ final class ElementMatcherTests: XCTestCase {
 
     func testHierarchyMatchesLeafElement() {
         let tree: [AccessibilityHierarchy] = [
-            .element(el(label: "Save"), traversalIndex: 0)
+            .element(element(label: "Save"), traversalIndex: 0)
         ]
         let result = tree.firstMatch(ElementMatcher(label: "Save"))
         XCTAssertNotNil(result)
@@ -711,7 +711,7 @@ final class ElementMatcherTests: XCTestCase {
     func testHierarchySkipsContainers() {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Nav", children: [
-                .element(el(label: "Item"), traversalIndex: 0)
+                .element(element(label: "Item"), traversalIndex: 0)
             ])
         ]
         // Container label "Nav" should not match — only leaf elements match
@@ -721,7 +721,7 @@ final class ElementMatcherTests: XCTestCase {
     func testHierarchyRecursesIntoContainersToFindLeaves() {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Section", children: [
-                .element(el(label: "Target"), traversalIndex: 0)
+                .element(element(label: "Target"), traversalIndex: 0)
             ])
         ]
         let result = tree.firstMatch(ElementMatcher(label: "Target"))
@@ -733,7 +733,7 @@ final class ElementMatcherTests: XCTestCase {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Outer", children: [
                 labeledGroup(label: "Inner", children: [
-                    .element(el(label: "Leaf"), traversalIndex: 0)
+                    .element(element(label: "Leaf"), traversalIndex: 0)
                 ])
             ])
         ]
@@ -745,8 +745,8 @@ final class ElementMatcherTests: XCTestCase {
     func testAllMatchesFindsMultipleLeaves() {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Section", children: [
-                .element(el(label: "Item"), traversalIndex: 0),
-                .element(el(label: "Item"), traversalIndex: 1),
+                .element(element(label: "Item"), traversalIndex: 0),
+                .element(element(label: "Item"), traversalIndex: 1),
             ])
         ]
         let results = tree.allMatches(ElementMatcher(label: "Item"))

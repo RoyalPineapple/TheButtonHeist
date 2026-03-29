@@ -40,7 +40,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollToVisibleTargetDefaults() {
         let target = ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Test")))
-        XCTAssertEqual(target.resolvedMaxScrolls, 20)
+        XCTAssertEqual(target.resolvedMaxScrolls, 50)
         XCTAssertEqual(target.resolvedDirection, .down)
     }
 

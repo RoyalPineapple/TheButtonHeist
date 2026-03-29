@@ -139,6 +139,46 @@ extension TheSafecracker {
         }
     }
 
+    /// Scroll a region by one page using a synthetic swipe gesture.
+    /// Used for scrollable containers that aren't UIScrollViews (e.g. SwiftUI's
+    /// HostingScrollView.PlatformContainer). The swipe covers 75% of the frame
+    /// in the given direction, slow enough for iOS to recognize as a scroll.
+    func scrollBySwipe(
+        frame: CGRect,
+        direction: UIAccessibilityScrollDirection,
+        duration: TimeInterval = 0.25
+    ) async -> Bool {
+        let travel: CGFloat = 0.75
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        let start: CGPoint
+        let end: CGPoint
+
+        switch direction {
+        case .down:
+            start = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+        case .up:
+            start = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+        case .right:
+            start = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+        case .left:
+            start = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+        case .next:
+            start = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+        case .previous:
+            start = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+        @unknown default:
+            return false
+        }
+
+        return await swipe(from: start, to: end, duration: duration)
+    }
+
     /// Total items in a UITableView or UICollectionView (for exhaustive search).
     func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
         if let collectionView = scrollView as? UICollectionView {

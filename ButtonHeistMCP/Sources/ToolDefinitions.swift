@@ -274,7 +274,9 @@ enum ToolDefinitions {
         name: "scroll",
         description: """
             Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor \
-            of the specified element, or the main scroll view if no element is specified.
+            of the specified element, or the main scroll view if no element is specified. \
+            The direction determines which axis to scroll — scrolling "right" on an element inside \
+            a horizontal carousel scrolls the carousel, while scrolling "down" scrolls the outer list.
             """,
         inputSchema: .object([
             "type": "object",
@@ -294,15 +296,16 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Search for an element by scrolling through the nearest scroll view. Target the element \
-            by heistId or describe it by accessibility properties: identifier, label, value, and/or traits. \
-            All specified matcher fields must match (AND). Returns the found element or diagnostic info about the search. \
-            For UITableView/UICollectionView, provides exhaustive search with item count tracking.
+            Search for an element by scrolling. Target the element by heistId or describe it by \
+            accessibility properties: identifier, label, value, and/or traits. All specified matcher \
+            fields must match (AND). Automatically searches through all scrollable containers on screen \
+            (outermost first), adapting the scroll direction to each container's natural axis. \
+            Returns the found element or diagnostic info about the search.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object(elementTargetProperties.merging([
-                "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 20)"],
+                "maxScrolls": ["type": "integer", "description": "Maximum scroll attempts (default: 50)"],
                 "direction": ["type": "string", "enum": ["down", "up", "left", "right"], "description": "Starting scroll direction (default: down)"],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
@@ -312,7 +315,11 @@ enum ToolDefinitions {
 
     static let scrollToEdge = Tool(
         name: "scroll_to_edge",
-        description: "Scroll the nearest scroll view ancestor to an edge. Useful for scrolling to the top or bottom of a list.",
+        description: """
+            Scroll to an edge. Useful for scrolling to the top or bottom of a list. \
+            Targets the scrollable container that matches the edge's axis — "top"/"bottom" \
+            scroll vertically, "left"/"right" scroll horizontally.
+            """,
         inputSchema: .object([
             "type": "object",
             "properties": .object(elementTargetProperties.merging([

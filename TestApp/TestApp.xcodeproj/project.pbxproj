@@ -52,6 +52,7 @@
 		BA04B66749F873353950DA7A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EB069D6039881E065A92F23 /* RootView.swift */; };
 		BA06AC07DEFEA59F05F3BAA5 /* ControlsDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D2D7886DC0DE680588E698 /* ControlsDemoView.swift */; };
 		BBCDE07C34B4141E1373FF8A /* TheScore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C5B183F2331C0AB903B86AA8 /* NestedScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 792340DE945D6E9BEF960BEA /* NestedScrollView.swift */; };
 		C5DCE8138771A3FA9B3E9A3C /* AdjustableControlsDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00733DA9C5222B02C98C7D9B /* AdjustableControlsDemo.swift */; };
 		C9F9D234CD27745B80E98ED1 /* swift-crypto_CCryptoBoringSSLShims.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		CAEE1266D2675D603710FD16 /* swift-crypto__CryptoExtras.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */; };
@@ -153,6 +154,7 @@
 		695D9B596D045BB41F8C95A6 /* FormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormViewController.swift; sourceTree = "<group>"; };
 		6EF972032CB124C82F21FE17 /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		792340DE945D6E9BEF960BEA /* NestedScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NestedScrollView.swift; sourceTree = "<group>"; };
 		79538EA411CEC1C55C14AE0E /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
 		7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclosureGroupingDemo.swift; sourceTree = "<group>"; };
 		7EB069D6039881E065A92F23 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */,
 				9B56E5A3E3980E2D0BE602F9 /* GridGalleryView.swift */,
 				98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */,
+				792340DE945D6E9BEF960BEA /* NestedScrollView.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
 				7EB069D6039881E065A92F23 /* RootView.swift */,
 				ED3E93AE1108866F17601CB8 /* SettingsView.swift */,
@@ -504,6 +507,7 @@
 				D2985988AB6E8AFB376EB2D1 /* DisplayDemo.swift in Sources */,
 				383CC0131F162CD101132059 /* GridGalleryView.swift in Sources */,
 				D764F43BCDD8A2B20B50EE16 /* LongListView.swift in Sources */,
+				C5B183F2331C0AB903B86AA8 /* NestedScrollView.swift in Sources */,
 				41BCD5493551504A86D47AB5 /* NotesView.swift in Sources */,
 				BA04B66749F873353950DA7A /* RootView.swift in Sources */,
 				3BE30ADF243371CBA76D2110 /* SettingsView.swift in Sources */,
