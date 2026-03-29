@@ -286,13 +286,22 @@ extension TheBagman {
     /// overflows its bounds (indicating a scrollable container the parser missed).
     /// Stops at the first UIScrollView (already handled by the parser path).
     private func viewWithScrollableChild(above object: NSObject) -> UIView? {
-        var current: UIView? = (object as? UIView)?.superview
+        // Start from the object itself if it's a UIView, or walk its
+        // accessibility container chain to find one.
+        var start: UIView?
+        if let view = object as? UIView {
+            start = view.superview
+        } else if let element = object as? UIAccessibilityElement,
+                  let container = element.accessibilityContainer as? UIView {
+            start = container
+        }
+        var current = start
         while let view = current {
             if view is UIScrollView { return nil } // parser handles these
-            if let child = view.subviews.first,
-               child.frame.width > view.frame.width + 1 ||
-               child.frame.height > view.frame.height + 1 {
-                return view
+            if let child = view.subviews.first {
+                let overflows = child.frame.width > view.frame.width + 1
+                    || child.frame.height > view.frame.height + 1
+                if overflows { return view }
             }
             current = view.superview
         }
