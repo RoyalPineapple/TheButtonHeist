@@ -259,7 +259,7 @@ flowchart TD
 
 ## Scroll-to-Visible Search Flow
 
-Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). Content-size clamp is always disabled (`clampToContentSize: false`) so lazy containers can scroll past the currently-materialized region. Each step yields 2 display frames via `yieldFrames(2)` (`CATransaction.flush()` + `Task.yield()`) to let layout run and lazy content materialize — much lighter than `waitForSettle`.
+Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). The scan loop advances contentOffset directly (animated, no contentSize clamping) — iOS rubber-bands naturally on overshoot and stagnation (no new elements) is the only termination signal. Each step yields a few display frames via `yieldFrames(3)` to let layout run and lazy content materialize.
 
 ```mermaid
 flowchart TD
@@ -271,8 +271,8 @@ flowchart TD
     SVOK -->|No| FAIL0["Return failure:<br/>'No scroll view found'"]
     SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
-    PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
-    SLOOP --> SETTLE["yieldFrames(2)"]
+    PH1 --> SLOOP["setContentOffset(offset + pageStep,<br/>animated: true)"]
+    SLOOP --> SETTLE["yieldFrames(3)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
