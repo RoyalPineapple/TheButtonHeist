@@ -79,6 +79,7 @@ public final class TheInsideJob {
         self.bagman = TheBagman(tripwire: self.tripwire)
         self.theSafecracker.bagman = self.bagman
         self.theSafecracker.tripwire = self.tripwire
+        self.bagman.safecracker = self.theSafecracker
 
         if let scopes = allowedScopes {
             self.allowedScopes = scopes
@@ -521,7 +522,7 @@ public final class TheInsideJob {
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
-        let result = bagman.executeScrollToVisible(target)
+        let result = await bagman.executeScrollToVisible(target)
 
         var actionResult: ActionResult
         if result.success {

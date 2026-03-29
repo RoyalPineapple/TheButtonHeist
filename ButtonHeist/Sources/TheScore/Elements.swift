@@ -200,6 +200,7 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.customContent = customContent
         self.actions = actions
     }
+
 }
 
 /// Custom content attached to a HeistElement (maps to AccessibilityElement.CustomContent)
