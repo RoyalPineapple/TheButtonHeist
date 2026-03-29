@@ -259,7 +259,7 @@ flowchart TD
 
 ## Scroll-to-Visible Search Flow
 
-Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). Content-size clamp is always disabled (`clampToContentSize: false`) so lazy containers can scroll past the currently-materialized region. Each step settles via `waitForSettle(0.15s, 2 quiet frames)` to let new content render.
+Two-phase scan: scroll in the primary direction, then jump to the opposite edge and scan again. Uses `resolveFirstMatch` (first-match semantics — any match is success, no uniqueness check). Content-size clamp is always disabled (`clampToContentSize: false`) so lazy containers can scroll past the currently-materialized region. Each step yields 2 display frames via `yieldFrames(2)` (`CATransaction.flush()` + `Task.yield()`) to let layout run and lazy content materialize — much lighter than `waitForSettle`.
 
 ```mermaid
 flowchart TD
@@ -272,7 +272,7 @@ flowchart TD
     SVOK -->|Yes| PH1["Phase 1: scanLoop()<br/>Primary direction"]
 
     PH1 --> SLOOP["scrollByPage(animated: false,<br/>clampToContentSize: false)"]
-    SLOOP --> SETTLE["waitForSettle(0.15s, 2 quiet frames)"]
+    SLOOP --> SETTLE["yieldFrames(2)"]
     SETTLE --> REFR["refreshAccessibilityData()"]
     REFR --> FM{"resolveFirstMatch(target)"}
     FM -->|Found| END["Return success<br/>+ ScrollSearchResult"]
@@ -282,7 +282,7 @@ flowchart TD
     BUDGET -->|Yes| SLOOP
     BUDGET -->|No| STALL
 
-    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ waitForSettle"]
+    STALL --> PH2["Phase 2: scrollToOppositeEdge()<br/>+ yieldFrames(2)"]
     PH2 --> SCAN2["scanLoop() again<br/>(same direction, remaining budget)"]
     SCAN2 --> RESULT{Found?}
     RESULT -->|Yes| END

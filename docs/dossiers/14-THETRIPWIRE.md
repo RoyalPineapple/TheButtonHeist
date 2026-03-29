@@ -73,6 +73,10 @@ graph TD
             Waiters["settleWaiters: [SettleWaiter]"]
         end
 
+        subgraph FrameYield["Lightweight Frame Yield"]
+            YieldFrames["yieldFrames(count)<br/>CATransaction.flush() + Task.yield()"]
+        end
+
         subgraph Windows["Window Access"]
             GetWindows["getTraversableWindows()"]
         end
@@ -93,7 +97,7 @@ graph TD
     end
 
     IJ -->|"owns, sets onTransition"| TheTripwire
-    BM -->|"getTraversableWindows, waitForAllClear, isScreenChange"| TheTripwire
+    BM -->|"getTraversableWindows, waitForAllClear,<br/>yieldFrames, isScreenChange"| TheTripwire
     SC -->|"weak ref, keyboardVisibleFlag"| TheTripwire
 ```
 
@@ -232,6 +236,23 @@ Key design: each waiter starts its own quiet-frame counter at zero, independent 
 | `sendInterface()` | 0.5s | Wait before sending interface snapshot |
 | `actionResultWithDelta()` | 1.0s | Wait after action before computing delta |
 | `handleWaitForIdle()` | user-specified (clamped to 60s) | Explicit idle wait command |
+
+## Lightweight Frame Yielding
+
+`yieldFrames(_:)` is a minimal alternative to `waitForSettle` for scroll loops that need layout to run but don't need to wait for animations to finish. Each iteration does:
+
+1. `CATransaction.flush()` — commit pending Core Animation transactions (flushes SwiftUI layout)
+2. `Task.yield()` — yield to the main run loop so layout and rendering can execute
+
+This is used by `TheBagman`'s scroll scan loop and scroll-to-edge re-jump loop. Two frames is enough for SwiftUI lazy containers to materialize content after a `contentOffset` change, without the overhead of the full pulse-based settle detection.
+
+**Why not `waitForSettle`:** The settle path waits for presentation layers to match model layers (no in-flight animations). In a scroll scan, we don't care about animations finishing — we just need layout to run so new accessibility elements appear. `yieldFrames` is ~2 orders of magnitude faster per step.
+
+| Caller | Frames | Purpose |
+|--------|--------|---------|
+| `scanLoop()` | 2 | Let lazy content materialize between page scrolls |
+| `executeScrollToEdge()` | 2 | Let lazy content grow `contentSize` between re-jumps |
+| `executeScrollToVisible()` Phase 2 | 2 | Let layout settle after jumping to opposite edge |
 
 ## Keyboard and Text Input Tracking
 
