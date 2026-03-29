@@ -79,7 +79,7 @@ final class TheBagman {
     /// Screen name from the registry (first header element by traversal order).
     var lastScreenName: String? {
         screenElements.values
-            .filter { $0.wire.traits.contains("header") }
+            .filter { $0.wire.traits.contains(.header) }
             .min(by: { $0.lastTraversalIndex < $1.lastTraversalIndex })?
             .wire.label
     }
@@ -302,8 +302,8 @@ final class TheBagman {
         if let l = matcher.label { fields.append("label=\"\(l)\"") }
         if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
         if let v = matcher.value { fields.append("value=\"\(v)\"") }
-        if let t = matcher.traits { fields.append("traits=[\(t.joined(separator: ","))]") }
-        if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.joined(separator: ","))]") }
+        if let t = matcher.traits { fields.append("traits=[\(t.map(\.rawValue).joined(separator: ","))]") }
+        if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.map(\.rawValue).joined(separator: ","))]") }
         return fields.joined(separator: " ")
     }
 
@@ -725,10 +725,6 @@ final class TheBagman {
 
     // MARK: - Topology-Based Screen Change
 
-    /// Private UIAccessibilityTrait for back buttons (bit 27).
-    /// Set by UIKit on navigation bar back button items.
-    private static let backButtonTrait = UIAccessibilityTraits(rawValue: 0x8000000)
-
     /// Did the accessibility topology change between two element snapshots?
     /// Checks two signals using the parser's native `AccessibilityElement`:
     /// - Back button trait appeared or disappeared (navigation push/pop)
@@ -737,8 +733,9 @@ final class TheBagman {
         before: [AccessibilityElement],
         after: [AccessibilityElement]
     ) -> Bool {
-        let hadBackButton = before.contains { $0.traits.contains(Self.backButtonTrait) }
-        let hasBackButton = after.contains { $0.traits.contains(Self.backButtonTrait) }
+        let backButtonTrait = UIAccessibilityTraits(rawValue: 1 << 27)
+        let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
+        let hasBackButton = after.contains { $0.traits.contains(backButtonTrait) }
         if hadBackButton != hasBackButton { return true }
 
         let beforeHeaders = Set(before.compactMap { $0.traits.contains(.header) ? $0.label : nil })
@@ -809,7 +806,7 @@ final class TheBagman {
         // Look up the acted-on element in the post-action parsed hierarchy
         var elementLabel: String?
         var elementValue: String?
-        var elementTraits: [String]?
+        var elementTraits: [HeistTrait]?
         if let target {
             let postElement = resolveTarget(target)?.element
             elementLabel = postElement?.label

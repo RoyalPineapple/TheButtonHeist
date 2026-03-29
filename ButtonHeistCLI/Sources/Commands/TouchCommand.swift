@@ -64,12 +64,12 @@ struct TapSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (x != nil && y != nil) else {
+        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if let target = element.actionTarget {
+        if let target = try element.actionTarget() {
             message = .touchTap(TouchTapTarget(elementTarget: target))
         } else {
             message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
@@ -103,12 +103,12 @@ struct LongPressSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (x != nil && y != nil) else {
+        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if let target = element.actionTarget {
+        if let target = try element.actionTarget() {
             message = .touchLongPress(LongPressTarget(elementTarget: target, duration: duration))
         } else {
             message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
@@ -174,7 +174,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
         let unitEnd: UnitPoint?
 
         if let sx = startUnitX, let sy = startUnitY, let ex = endUnitX, let ey = endUnitY {
-            guard element.actionTarget != nil else {
+            guard try element.actionTarget() != nil else {
                 throw ValidationError("Unit-point swipe requires an element target (--identifier, --heist-id, or --index)")
             }
             unitStart = UnitPoint(x: sx, y: sy)
@@ -183,7 +183,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
             unitStart = nil
             unitEnd = nil
 
-            guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
+            guard try element.actionTarget() != nil || (fromX != nil && fromY != nil) else {
                 throw ValidationError("Must specify element target, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
@@ -202,7 +202,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
         }
 
         let message = ClientMessage.touchSwipe(SwipeTarget(
-            elementTarget: element.actionTarget,
+            elementTarget: try element.actionTarget(),
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             direction: swipeDirection,
@@ -244,12 +244,12 @@ struct DragSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (fromX != nil && fromY != nil) else {
+        guard try element.actionTarget() != nil || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
         }
 
         let message = ClientMessage.touchDrag(DragTarget(
-            elementTarget: element.actionTarget,
+            elementTarget: try element.actionTarget(),
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             duration: duration
@@ -289,12 +289,12 @@ struct PinchSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (x != nil && y != nil) else {
+        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if let target = element.actionTarget {
+        if let target = try element.actionTarget() {
             message = .touchPinch(PinchTarget(elementTarget: target, scale: scale, spread: spread, duration: duration))
         } else {
             message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
@@ -334,12 +334,12 @@ struct RotateSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (x != nil && y != nil) else {
+        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if let target = element.actionTarget {
+        if let target = try element.actionTarget() {
             message = .touchRotate(RotateTarget(elementTarget: target, angle: angle, radius: radius, duration: duration))
         } else {
             message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
@@ -373,12 +373,12 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard element.actionTarget != nil || (x != nil && y != nil) else {
+        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
         let message: ClientMessage
-        if let target = element.actionTarget {
+        if let target = try element.actionTarget() {
             message = .touchTwoFingerTap(TwoFingerTapTarget(elementTarget: target, spread: spread))
         } else {
             message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))

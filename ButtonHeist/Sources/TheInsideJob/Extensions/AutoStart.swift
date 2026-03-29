@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import os.log
+import TheScore
 
 private let autoStartLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "autostart")
 
@@ -20,8 +21,7 @@ public func theInsideJobAutoStartFromLoad() {
     autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
 
     // Check INSIDEJOB_DISABLE environment variable
-    if let envValue = ProcessInfo.processInfo.environment["INSIDEJOB_DISABLE"],
-       ["true", "1", "yes"].contains(envValue.lowercased()) {
+    if EnvironmentKey.insideJobDisable.boolValue {
         autoStartLogger.info("Auto-start disabled via INSIDEJOB_DISABLE")
         return
     }
@@ -34,7 +34,7 @@ public func theInsideJobAutoStartFromLoad() {
 
     // Get polling interval (default 1.0, minimum 0.5)
     var interval: TimeInterval = 1.0
-    if let envInterval = ProcessInfo.processInfo.environment["INSIDEJOB_POLLING_INTERVAL"],
+    if let envInterval = EnvironmentKey.insideJobPollingInterval.value,
        let parsed = TimeInterval(envInterval) {
         interval = max(0.5, parsed)
     } else if let plistInterval = Bundle.main.object(forInfoDictionaryKey: "InsideJobPollingInterval") as? Double {
@@ -43,7 +43,7 @@ public func theInsideJobAutoStartFromLoad() {
 
     // Get auth token
     var token: String?
-    if let envToken = ProcessInfo.processInfo.environment["INSIDEJOB_TOKEN"] {
+    if let envToken = EnvironmentKey.insideJobToken.value {
         token = envToken
     } else if let plistToken = Bundle.main.object(forInfoDictionaryKey: "InsideJobToken") as? String {
         token = plistToken
@@ -51,7 +51,7 @@ public func theInsideJobAutoStartFromLoad() {
 
     // Get instance ID
     var instanceId: String?
-    if let envId = ProcessInfo.processInfo.environment["INSIDEJOB_ID"] {
+    if let envId = EnvironmentKey.insideJobId.value {
         instanceId = envId
     } else if let plistId = Bundle.main.object(forInfoDictionaryKey: "InsideJobInstanceId") as? String {
         instanceId = plistId
@@ -59,7 +59,7 @@ public func theInsideJobAutoStartFromLoad() {
 
     // Get preferred port (0 = any available)
     var port: UInt16 = 0
-    if let envPort = ProcessInfo.processInfo.environment["INSIDEJOB_PORT"],
+    if let envPort = EnvironmentKey.insideJobPort.value,
        let parsed = UInt16(envPort), parsed > 0 {
         port = parsed
     } else if let plistPort = Bundle.main.object(forInfoDictionaryKey: "InsideJobPort") as? Int,
