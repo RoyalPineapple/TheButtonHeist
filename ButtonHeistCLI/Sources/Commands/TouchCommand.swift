@@ -64,18 +64,21 @@ struct TapSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
+        guard element.hasTarget || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
-        let message: ClientMessage
-        if let target = try element.actionTarget() {
-            message = .touchTap(TouchTapTarget(elementTarget: target))
-        } else {
-            message = .touchTap(TouchTapTarget(pointX: x, pointY: y))
-        }
+        var request: [String: Any] = ["command": TheFence.Command.oneFingerTap.rawValue]
+        element.applyTo(&request)
+        if let x { request["x"] = x }
+        if let y { request["y"] = y }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -103,18 +106,24 @@ struct LongPressSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
+        guard element.hasTarget || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
-        let message: ClientMessage
-        if let target = try element.actionTarget() {
-            message = .touchLongPress(LongPressTarget(elementTarget: target, duration: duration))
-        } else {
-            message = .touchLongPress(LongPressTarget(pointX: x, pointY: y, duration: duration))
-        }
+        var request: [String: Any] = [
+            "command": TheFence.Command.longPress.rawValue,
+            "duration": duration,
+        ]
+        element.applyTo(&request)
+        if let x { request["x"] = x }
+        if let y { request["y"] = y }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -170,20 +179,12 @@ struct SwipeSubcommand: AsyncParsableCommand {
             throw ValidationError("Unit-point swipe requires both --start-x/--start-y and --end-x/--end-y")
         }
 
-        let unitStart: UnitPoint?
-        let unitEnd: UnitPoint?
-
-        if let sx = startUnitX, let sy = startUnitY, let ex = endUnitX, let ey = endUnitY {
-            guard try element.actionTarget() != nil else {
+        if hasUnitStart {
+            guard element.hasTarget else {
                 throw ValidationError("Unit-point swipe requires an element target (--identifier, --heist-id, or --index)")
             }
-            unitStart = UnitPoint(x: sx, y: sy)
-            unitEnd = UnitPoint(x: ex, y: ey)
         } else {
-            unitStart = nil
-            unitEnd = nil
-
-            guard try element.actionTarget() != nil || (fromX != nil && fromY != nil) else {
+            guard element.hasTarget || (fromX != nil && fromY != nil) else {
                 throw ValidationError("Must specify element target, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
@@ -191,26 +192,33 @@ struct SwipeSubcommand: AsyncParsableCommand {
             }
         }
 
-        let swipeDirection: SwipeDirection?
         if let dir = direction {
-            guard let d = SwipeDirection(rawValue: dir.lowercased()) else {
+            guard SwipeDirection(rawValue: dir.lowercased()) != nil else {
                 throw ValidationError("Invalid direction: \(dir). Valid: up, down, left, right")
             }
-            swipeDirection = d
-        } else {
-            swipeDirection = nil
         }
 
-        let message = ClientMessage.touchSwipe(SwipeTarget(
-            elementTarget: try element.actionTarget(),
-            startX: fromX, startY: fromY,
-            endX: toX, endY: toY,
-            direction: swipeDirection,
-            duration: duration,
-            start: unitStart, end: unitEnd
-        ))
+        var request: [String: Any] = ["command": TheFence.Command.swipe.rawValue]
+        element.applyTo(&request)
+        if let fromX { request["startX"] = fromX }
+        if let fromY { request["startY"] = fromY }
+        if let toX { request["endX"] = toX }
+        if let toY { request["endY"] = toY }
+        if let direction { request["direction"] = direction.lowercased() }
+        if let duration { request["duration"] = duration }
+        if let startUnitX, let startUnitY {
+            request["start"] = ["x": startUnitX, "y": startUnitY]
+        }
+        if let endUnitX, let endUnitY {
+            request["end"] = ["x": endUnitX, "y": endUnitY]
+        }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -244,18 +252,26 @@ struct DragSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (fromX != nil && fromY != nil) else {
+        guard element.hasTarget || (fromX != nil && fromY != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
         }
 
-        let message = ClientMessage.touchDrag(DragTarget(
-            elementTarget: try element.actionTarget(),
-            startX: fromX, startY: fromY,
-            endX: toX, endY: toY,
-            duration: duration
-        ))
+        var request: [String: Any] = [
+            "command": TheFence.Command.drag.rawValue,
+            "endX": toX,
+            "endY": toY,
+        ]
+        element.applyTo(&request)
+        if let fromX { request["startX"] = fromX }
+        if let fromY { request["startY"] = fromY }
+        if let duration { request["duration"] = duration }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -289,18 +305,26 @@ struct PinchSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
+        guard element.hasTarget || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
-        let message: ClientMessage
-        if let target = try element.actionTarget() {
-            message = .touchPinch(PinchTarget(elementTarget: target, scale: scale, spread: spread, duration: duration))
-        } else {
-            message = .touchPinch(PinchTarget(centerX: x, centerY: y, scale: scale, spread: spread, duration: duration))
-        }
+        var request: [String: Any] = [
+            "command": TheFence.Command.pinch.rawValue,
+            "scale": scale,
+        ]
+        element.applyTo(&request)
+        if let x { request["x"] = x }
+        if let y { request["y"] = y }
+        if let spread { request["spread"] = spread }
+        if let duration { request["duration"] = duration }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -334,18 +358,26 @@ struct RotateSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
+        guard element.hasTarget || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
-        let message: ClientMessage
-        if let target = try element.actionTarget() {
-            message = .touchRotate(RotateTarget(elementTarget: target, angle: angle, radius: radius, duration: duration))
-        } else {
-            message = .touchRotate(RotateTarget(centerX: x, centerY: y, angle: angle, radius: radius, duration: duration))
-        }
+        var request: [String: Any] = [
+            "command": TheFence.Command.rotate.rawValue,
+            "angle": angle,
+        ]
+        element.applyTo(&request)
+        if let x { request["x"] = x }
+        if let y { request["y"] = y }
+        if let radius { request["radius"] = radius }
+        if let duration { request["duration"] = duration }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
 }
 
@@ -373,37 +405,21 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard try element.actionTarget() != nil || (x != nil && y != nil) else {
+        guard element.hasTarget || (x != nil && y != nil) else {
             throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
         }
 
-        let message: ClientMessage
-        if let target = try element.actionTarget() {
-            message = .touchTwoFingerTap(TwoFingerTapTarget(elementTarget: target, spread: spread))
-        } else {
-            message = .touchTwoFingerTap(TwoFingerTapTarget(centerX: x, centerY: y, spread: spread))
-        }
+        var request: [String: Any] = ["command": TheFence.Command.twoFingerTap.rawValue]
+        element.applyTo(&request)
+        if let x { request["x"] = x }
+        if let y { request["y"] = y }
+        if let spread { request["spread"] = spread }
 
-        try await sendTouchGesture(message: message, connection: connection, timeout: timeout, format: output.format)
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
     }
-}
-
-// MARK: - Shared Connection Helper
-
-@ButtonHeistActor
-private func sendTouchGesture(message: ClientMessage, connection: ConnectionOptions,
-                              timeout: Double, format: OutputFormat?) async throws {
-    let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-    let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-    try await connector.connect()
-    defer { connector.disconnect() }
-
-    if !connection.quiet {
-        logStatus("Sending gesture...")
-    }
-
-    connector.send(message)
-
-    let result = try await connector.waitForActionResult(timeout: timeout)
-    outputActionResult(result, format: format, quiet: connection.quiet, verb: "Gesture")
 }

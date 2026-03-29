@@ -56,4 +56,21 @@ struct ElementTargetOptions: ParsableArguments {
         }
         return target
     }
+
+    /// Apply targeting options to a TheFence request dictionary.
+    /// Uses the raw CLI option values so TheFence can parse them natively.
+    func applyTo(_ request: inout [String: Any]) {
+        if let heistId { request["heistId"] = heistId }
+        if let identifier { request["identifier"] = identifier }
+        if let label { request["label"] = label }
+        if let value { request["value"] = value }
+        if !traits.isEmpty { request["traits"] = traits }
+        if !excludeTraits.isEmpty { request["excludeTraits"] = excludeTraits }
+    }
+
+    /// Returns true if any targeting option is specified.
+    var hasTarget: Bool {
+        heistId != nil || identifier != nil || label != nil || value != nil
+            || !traits.isEmpty || !excludeTraits.isEmpty
+    }
 }

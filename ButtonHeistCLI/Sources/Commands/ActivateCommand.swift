@@ -30,20 +30,15 @@ struct ActivateCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let target = try element.requireTarget()
-
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet {
-            logStatus("Activating element...")
-        }
-
-        connector.send(.activate(target))
-
-        let result = try await connector.waitForActionResult(timeout: timeout)
-        outputActionResult(result, format: output.format, quiet: connection.quiet, verb: "Activate")
+        _ = try element.requireTarget()
+        var request: [String: Any] = ["command": TheFence.Command.activate.rawValue]
+        element.applyTo(&request)
+        request["timeout"] = timeout
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Activating element..."
+        )
     }
 }

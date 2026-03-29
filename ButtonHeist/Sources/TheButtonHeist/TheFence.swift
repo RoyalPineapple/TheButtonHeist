@@ -1,5 +1,4 @@
 import Foundation
-import os
 
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
@@ -98,9 +97,9 @@ public final class TheFence {
 
     // MARK: - Pending Request Tracking
 
-    private var pendingActionRequests: [String: @Sendable (Result<ActionResult, Error>) -> Void] = [:]
-    private var pendingInterfaceRequests: [String: @Sendable (Result<Interface, Error>) -> Void] = [:]
-    private var pendingScreenRequests: [String: @Sendable (Result<ScreenPayload, Error>) -> Void] = [:]
+    private let actionTracker = PendingRequestTracker<ActionResult>()
+    private let interfaceTracker = PendingRequestTracker<Interface>()
+    private let screenTracker = PendingRequestTracker<ScreenPayload>()
 
     public init(configuration: Configuration = .init()) {
         self.config = configuration
@@ -118,24 +117,18 @@ public final class TheFence {
 
     private func wireUpResponseCallbacks() {
         handoff.onInterface = { [weak self] payload, requestId in
-            guard let self else { return }
-            if let requestId, let callback = self.pendingInterfaceRequests.removeValue(forKey: requestId) {
-                callback(.success(payload))
-            }
+            guard let self, let requestId else { return }
+            self.interfaceTracker.resolve(requestId: requestId, result: .success(payload))
         }
 
         handoff.onActionResult = { [weak self] result, requestId in
-            guard let self else { return }
-            if let requestId, let callback = self.pendingActionRequests.removeValue(forKey: requestId) {
-                callback(.success(result))
-            }
+            guard let self, let requestId else { return }
+            self.actionTracker.resolve(requestId: requestId, result: .success(result))
         }
 
         handoff.onScreen = { [weak self] payload, requestId in
-            guard let self else { return }
-            if let requestId, let callback = self.pendingScreenRequests.removeValue(forKey: requestId) {
-                callback(.success(payload))
-            }
+            guard let self, let requestId else { return }
+            self.screenTracker.resolve(requestId: requestId, result: .success(payload))
         }
     }
 
@@ -201,14 +194,10 @@ public final class TheFence {
 
     private func connect() async throws {
         let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-        do {
-            try await handoff.connectWithDiscovery(
-                filter: filter,
-                timeout: config.connectionTimeout
-            )
-        } catch let error as TheHandoff.ConnectionError {
-            throw error.asFenceError()
-        }
+        try await handoff.connectWithDiscovery(
+            filter: filter,
+            timeout: config.connectionTimeout
+        )
     }
 
     // MARK: - Command Dispatch (thin router)
@@ -285,14 +274,8 @@ public final class TheFence {
     }
 
     private func mapCaughtError(_ error: Error) -> FenceError {
-        if error is ActionError {
-            return .actionTimeout
-        }
-        if let recordingError = error as? RecordingError {
-            switch recordingError {
-            case .serverError(let message):
-                return .actionFailed(message)
-            }
+        if let fenceError = error as? FenceError {
+            return fenceError
         }
         return .actionFailed(error.localizedDescription)
     }
@@ -593,122 +576,47 @@ public final class TheFence {
     // MARK: - Async Wait Methods
 
     func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await waitForResponse(timeout: timeout) { complete in
-            pendingActionRequests[requestId] = complete
-        }
+        try await actionTracker.wait(requestId: requestId, timeout: timeout)
     }
 
     func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await waitForResponse(timeout: timeout) { complete in
-            pendingInterfaceRequests[requestId] = complete
-        }
+        try await interfaceTracker.wait(requestId: requestId, timeout: timeout)
     }
 
     func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await waitForResponse(timeout: timeout) { complete in
-            pendingScreenRequests[requestId] = complete
-        }
+        try await screenTracker.wait(requestId: requestId, timeout: timeout)
     }
 
-    func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
+    // Recording uses a fundamentally different pattern from the request-id-based trackers:
+    // it temporarily swaps TheHandoff's onRecording/onRecordingError callbacks and restores
+    // them in a defer block. There is no requestId — the server sends exactly one recording
+    // response per stop_recording command, and the callback identity (not a dictionary key)
+    // is what correlates request to response. A PendingRequestTracker<RecordingPayload> would
+    // require either synthesizing a fake requestId or changing the TheHandoff callback
+    // signatures, neither of which is warranted for a single call site.
+    public func waitForRecording(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         let previousOnRecording = handoff.onRecording
         let previousOnRecordingError = handoff.onRecordingError
         defer {
             handoff.onRecording = previousOnRecording
             handoff.onRecordingError = previousOnRecordingError
         }
-        return try await waitForResponse(timeout: timeout) { complete in
-            handoff.onRecording = { complete(.success($0)) }
-            handoff.onRecordingError = { complete(.failure(RecordingError.serverError($0))) }
+
+        let recordingTracker = PendingRequestTracker<RecordingPayload>()
+        let syntheticId = "recording"
+        handoff.onRecording = { payload in
+            recordingTracker.resolve(requestId: syntheticId, result: .success(payload))
         }
-    }
-
-    private func waitForResponse<T: Sendable>(
-        timeout: TimeInterval,
-        install: (@escaping @Sendable (Result<T, Error>) -> Void) -> Void
-    ) async throws -> T {
-        try await withCheckedThrowingContinuation { continuation in
-            let didResume = OSAllocatedUnfairLock(initialState: false)
-
-            let timeoutTask = Task {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                let shouldResume = didResume.withLock { flag -> Bool in
-                    guard !flag else { return false }
-                    flag = true
-                    return true
-                }
-                if shouldResume {
-                    continuation.resume(throwing: ActionError.timeout)
-                }
-            }
-
-            install { result in
-                let shouldResume = didResume.withLock { flag -> Bool in
-                    guard !flag else { return false }
-                    flag = true
-                    return true
-                }
-                if shouldResume {
-                    timeoutTask.cancel()
-                    continuation.resume(with: result)
-                }
-            }
+        handoff.onRecordingError = { message in
+            recordingTracker.resolve(requestId: syntheticId, result: .failure(FenceError.actionFailed("Recording failed: \(message)")))
         }
+        return try await recordingTracker.wait(requestId: syntheticId, timeout: timeout)
     }
 
     private func cancelAllPendingRequests() {
-        for (_, callback) in pendingActionRequests {
-            callback(.failure(ActionError.timeout))
-        }
-        pendingActionRequests.removeAll()
-        for (_, callback) in pendingInterfaceRequests {
-            callback(.failure(ActionError.timeout))
-        }
-        pendingInterfaceRequests.removeAll()
-        for (_, callback) in pendingScreenRequests {
-            callback(.failure(ActionError.timeout))
-        }
-        pendingScreenRequests.removeAll()
+        actionTracker.cancelAll(error: FenceError.actionTimeout)
+        interfaceTracker.cancelAll(error: FenceError.actionTimeout)
+        screenTracker.cancelAll(error: FenceError.actionTimeout)
     }
 
-    // MARK: - Error Types
-
-    public enum RecordingError: Error, LocalizedError {
-        case serverError(String)
-        public var errorDescription: String? {
-            switch self {
-            case .serverError(let msg): return "Recording failed: \(msg)"
-            }
-        }
-    }
-
-    public enum ActionError: Error, LocalizedError {
-        case timeout
-        public var errorDescription: String? {
-            switch self {
-            case .timeout: return "Action timed out"
-            }
-        }
-    }
-}
-
-// MARK: - ConnectionError → FenceError Bridge
-
-extension TheHandoff.ConnectionError {
-    func asFenceError() -> FenceError {
-        switch self {
-        case .noDeviceFound:
-            return .noDeviceFound
-        case .noMatchingDevice(let filter, let available):
-            return .noMatchingDevice(filter: filter, available: available)
-        case .connectionTimeout:
-            return .connectionTimeout
-        case .connectionFailed(let message):
-            return .connectionFailed(message)
-        case .sessionLocked(let message):
-            return .sessionLocked(message)
-        case .authFailed(let message):
-            return .authFailed(message)
-        }
-    }
 }
