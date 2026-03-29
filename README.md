@@ -2,6 +2,8 @@
 
 # Interface out. Agents in. Clean escape.
 
+[![SafeSkill 85/100](https://img.shields.io/badge/SafeSkill-85%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/royalpineapple-thebuttonheist)
+
 Button Heist gives AI agents (and humans) full programmatic control of iOS apps. Embed one framework, connect over MCP or CLI, and drive any screen — tap, swipe, type, scroll, inspect, record — all through a persistent TLS-encrypted connection.
 
 ## Why Button Heist
