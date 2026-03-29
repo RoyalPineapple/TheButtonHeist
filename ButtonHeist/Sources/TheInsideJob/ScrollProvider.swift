@@ -96,7 +96,9 @@ import UIKit
     ) async -> Bool {
         let before = scrollView.contentOffset
         performSPIScroll(scrollView, direction: direction)
-        await yieldFrames(5)
+        // SPI scroll is animated — needs the run loop to process.
+        // Research showed ~5 frames, use 10 for safety.
+        await yieldFrames(10)
         let after = scrollView.contentOffset
         return before != after
     }
@@ -134,18 +136,20 @@ import UIKit
         _ scrollView: UIScrollView,
         direction: UIAccessibilityScrollDirection
     ) {
+        let sel: Selector
         switch direction {
         case .down, .next:
-            scrollView.perform(Selector(("accessibilityScrollDownPage")))
+            sel = NSSelectorFromString("accessibilityScrollDownPage")
         case .up, .previous:
-            scrollView.perform(Selector(("accessibilityScrollUpPage")))
+            sel = NSSelectorFromString("accessibilityScrollUpPage")
         case .right:
-            scrollView.perform(Selector(("accessibilityScrollRightPage")))
+            sel = NSSelectorFromString("accessibilityScrollRightPage")
         case .left:
-            scrollView.perform(Selector(("accessibilityScrollLeftPage")))
+            sel = NSSelectorFromString("accessibilityScrollLeftPage")
         @unknown default:
-            break
+            return
         }
+        _ = scrollView.perform(sel)
     }
 }
 
