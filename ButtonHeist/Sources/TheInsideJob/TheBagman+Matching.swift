@@ -141,7 +141,7 @@ extension Array where Element == AccessibilityHierarchy {
 
 extension AccessibilityElement {
 
-    /// Cached set of known trait name strings — avoids rebuilding per-element during search.
+    /// Cached set of known trait name strings — derived from the parser's authoritative list.
     private static let knownTraitNames = Set(UIAccessibilityTraits.knownTraits.map(\.name))
 
     /// Does this element satisfy all property predicates in the matcher?
