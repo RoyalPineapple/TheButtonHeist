@@ -286,7 +286,7 @@ final class TheBagmanConversionTests: XCTestCase {
     }
 
     func testBackButtonPrivateTraitMapped() {
-        let traits = bagman.traitNames(UIAccessibilityTraits.backButton)
+        let traits = bagman.traitNames(UIAccessibilityTraits(rawValue: 1 << 27))
         XCTAssertEqual(traits, [.backButton])
     }
 
@@ -319,11 +319,11 @@ final class TheBagmanConversionTests: XCTestCase {
 
     // MARK: - Trait Name Sync
 
-    func testHeistElementKnownTraitsMatchParser() {
+    func testHeistTraitAllCasesMatchParser() {
         let parserNames = UIAccessibilityTraits.knownTraitNames
-        let wireNames = HeistElement.knownTraitNames
+        let wireNames = Set(HeistTrait.allCases.map(\.rawValue))
         XCTAssertEqual(wireNames, parserNames,
-                       "HeistElement.knownTraitNames must match parser's knownTraitNames")
+                       "HeistTrait.allCases must match parser's knownTraitNames")
     }
 
     // MARK: - Delta: Identical Snapshots

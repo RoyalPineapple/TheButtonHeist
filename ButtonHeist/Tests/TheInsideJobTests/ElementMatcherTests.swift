@@ -415,10 +415,10 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(element.matches(matcher))
     }
 
-    func testUnknownExcludeTraitAlwaysPasses() {
+    func testUnknownExcludeTraitNeverMatches() {
         let element = el(traits: [.button, .selected])
         let matcher = ElementMatcher(excludeTraits: [.unknown("madeUpTrait")])
-        XCTAssertTrue(element.matches(matcher))
+        XCTAssertFalse(element.matches(matcher))
     }
 
     // MARK: - Edge Cases
