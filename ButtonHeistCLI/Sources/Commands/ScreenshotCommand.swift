@@ -18,32 +18,33 @@ struct ScreenshotCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     func run() async throws {
-        let config = EnvironmentConfig.resolve(deviceFilter: connection.device, token: connection.token)
-        let connector = DeviceConnector(deviceFilter: config.deviceFilter, token: config.token, driverId: config.driverId, quiet: connection.quiet)
-        try await connector.connect()
-        defer { connector.disconnect() }
-
-        if !connection.quiet {
-            logStatus("Requesting screenshot...")
-        }
-
-        connector.send(.requestScreen)
-
-        let payload = try await connector.waitForScreen(timeout: timeout)
-
-        guard let pngData = Data(base64Encoded: payload.pngData) else {
-            throw ValidationError("Failed to decode screenshot data")
-        }
-
+        var request: [String: Any] = ["command": TheFence.Command.getScreen.rawValue]
         if let outputPath = output {
-            let url = URL(fileURLWithPath: outputPath)
-            try pngData.write(to: url)
-            if !connection.quiet {
-                logStatus("Screenshot saved to: \(outputPath)")
-            }
+            // When saving to file, TheFence handles the write and returns .screenshot
+            request["output"] = outputPath
+            try await CLIRunner.run(
+                connection: connection,
+                format: .human,
+                request: request,
+                statusMessage: "Requesting screenshot..."
+            )
         } else {
-            // Write raw PNG to stdout for piping
-            FileHandle.standardOutput.write(pngData)
+            // When writing to stdout, we need the raw PNG data
+            let (fence, response) = try await CLIRunner.execute(
+                connection: connection,
+                request: request,
+                statusMessage: "Requesting screenshot..."
+            )
+            defer { fence.stop() }
+
+            if case .screenshotData(let pngData, _, _) = response {
+                guard let data = Data(base64Encoded: pngData) else {
+                    throw ValidationError("Failed to decode screenshot data")
+                }
+                FileHandle.standardOutput.write(data)
+            } else {
+                CLIRunner.outputResponse(response, format: .human)
+            }
         }
     }
 }
