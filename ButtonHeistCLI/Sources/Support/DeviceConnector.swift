@@ -44,29 +44,49 @@ final class DeviceConnector {
 
     // MARK: - Commands (delegated to handoff)
 
+    /// The requestId from the last `send()` call, used by `waitFor*` to correlate
+    /// the response to the exact request that produced it.
+    private var lastRequestId: String?
+
     func send(_ message: ClientMessage) {
-        handoff.send(message)
+        let requestId = UUID().uuidString
+        lastRequestId = requestId
+        handoff.send(message, requestId: requestId)
     }
 
     func requestInterface() {
-        handoff.send(.requestInterface)
+        let requestId = UUID().uuidString
+        lastRequestId = requestId
+        handoff.send(.requestInterface, requestId: requestId)
     }
 
     func waitForActionResult(timeout: TimeInterval) async throws -> ActionResult {
-        try await waitForResponse(timeout: timeout) { complete in
-            handoff.onActionResult = { result, _ in complete(.success(result)) }
+        let expectedId = lastRequestId
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onActionResult = { result, requestId in
+                guard expectedId == nil || requestId == expectedId else { return }
+                complete(.success(result))
+            }
         }
     }
 
     func waitForInterface(timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await waitForResponse(timeout: timeout) { complete in
-            handoff.onInterface = { payload, _ in complete(.success(payload)) }
+        let expectedId = lastRequestId
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onInterface = { payload, requestId in
+                guard expectedId == nil || requestId == expectedId else { return }
+                complete(.success(payload))
+            }
         }
     }
 
     func waitForScreen(timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await waitForResponse(timeout: timeout) { complete in
-            handoff.onScreen = { payload, _ in complete(.success(payload)) }
+        let expectedId = lastRequestId
+        return try await waitForResponse(timeout: timeout) { complete in
+            handoff.onScreen = { payload, requestId in
+                guard expectedId == nil || requestId == expectedId else { return }
+                complete(.success(payload))
+            }
         }
     }
 
