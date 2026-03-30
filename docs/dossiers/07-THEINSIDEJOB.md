@@ -65,6 +65,7 @@ graph TD
 |------|---------|
 | `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performScrollToVisibleSearch` |
 | `TheInsideJob+Dispatch.swift` | Three-part interaction dispatch: accessibility, touch, text+scroll |
+| `ScreenManifest.swift` | Full-screen element census: scrolls all containers, records every element, restores scroll positions |
 | `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
 | `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
 | `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |

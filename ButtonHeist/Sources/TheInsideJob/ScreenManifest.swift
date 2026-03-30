@@ -98,11 +98,12 @@ extension TheBagman {
             return manifest
         }
 
-        let containers = findScrollableContainers()
-        manifest.addPendingContainers(containers)
+        manifest.addPendingContainers(findScrollableContainers())
+
+        while !manifest.pendingContainers.isEmpty {
 
         // Sort: largest overflow first (outermost containers reveal inner ones)
-        let sorted = containers.sorted { a, b in
+        let batch = manifest.pendingContainers.sorted { a, b in
             guard case .scrollable(let csA) = a.type,
                   case .scrollable(let csB) = b.type else { return false }
             let overflowA = max(0, csA.width - a.frame.width) + max(0, csA.height - a.frame.height)
@@ -110,7 +111,7 @@ extension TheBagman {
             return overflowA > overflowB
         }
 
-        for container in sorted {
+        for container in batch {
             guard case .scrollable(let contentSize) = container.type,
                   let view = scrollableContainerViews[container],
                   let scrollView = view as? UIScrollView,
@@ -167,6 +168,8 @@ extension TheBagman {
                 .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
             manifest.addPendingContainers(newContainers)
         }
+
+        } // while pendingContainers
 
         manifest.explorationTime = CACurrentMediaTime() - startTime
         return manifest

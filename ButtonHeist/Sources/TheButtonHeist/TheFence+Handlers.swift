@@ -297,7 +297,7 @@ extension TheFence {
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
         case .explore:
-            return try await sendAction(.explore)
+            return try await handleExplore(args)
         default:
             return .error("Unknown scroll action: \(command.rawValue)")
         }
