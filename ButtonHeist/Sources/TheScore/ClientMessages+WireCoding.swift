@@ -67,6 +67,7 @@ extension ClientMessage {
         case .waitForIdle: return .waitForIdle
         case .waitFor: return .waitFor
         case .requestScreen: return .requestScreen
+        case .explore: return .explore
         case .startRecording: return .startRecording
         case .stopRecording: return .stopRecording
         case .watch: return .watch
@@ -76,7 +77,7 @@ extension ClientMessage {
     fileprivate var hasPayload: Bool {
         switch self {
         case .clientHello, .requestInterface, .subscribe, .unsubscribe, .ping, .status,
-             .resignFirstResponder, .getPasteboard, .requestScreen, .stopRecording:
+             .resignFirstResponder, .getPasteboard, .requestScreen, .explore, .stopRecording:
             return false
         default:
             return true
@@ -94,6 +95,7 @@ extension ClientMessage {
         case .resignFirstResponder: return .resignFirstResponder
         case .getPasteboard: return .getPasteboard
         case .requestScreen: return .requestScreen
+        case .explore: return .explore
         case .stopRecording: return .stopRecording
         default: return nil
         }
