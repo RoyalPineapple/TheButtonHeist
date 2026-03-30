@@ -296,6 +296,8 @@ extension TheFence {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
+        case .explore:
+            return try await sendAction(.explore)
         default:
             return .error("Unknown scroll action: \(command.rawValue)")
         }
@@ -398,6 +400,16 @@ extension TheFence {
 
     func handleGetPasteboard() async throws -> FenceResponse {
         return try await sendAction(.getPasteboard)
+    }
+
+    // MARK: - Handler: Explore
+
+    func handleExplore(_ args: [String: Any]) async throws -> FenceResponse {
+        let result: ActionResult = try await sendAndAwait(.explore) { requestId in
+            try await self.waitForActionResult(requestId: requestId, timeout: 60)
+        }
+        lastActionResult = result
+        return .action(result: result)
     }
 
     // MARK: - Handler: Wait For

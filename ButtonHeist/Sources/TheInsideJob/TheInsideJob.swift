@@ -566,6 +566,21 @@ public final class TheInsideJob {
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
+    func performExplore(
+        command: ClientMessage,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) async {
+        stakeout?.noteActivity()
+        let manifest = await bagman.exploreScreen()
+        let actionResult = ActionResult(
+            success: true,
+            method: .scrollToVisible,
+            message: "\(manifest.elementCount) elements, \(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s"
+        )
+        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
+    }
+
     /// Record to stakeout, send response, and broadcast to subscribers.
     private func recordAndBroadcast(
         command: ClientMessage,
