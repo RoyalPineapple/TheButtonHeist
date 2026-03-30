@@ -575,7 +575,7 @@ public final class TheInsideJob {
         let manifest = await bagman.exploreScreen()
         let actionResult = ActionResult(
             success: true,
-            method: .scrollToVisible,
+            method: .explore,
             message: "\(manifest.elementCount) elements, \(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s"
         )
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)

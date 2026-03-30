@@ -1,6 +1,6 @@
 # Button Heist Wire Protocol Specification
 
-**Version**: 6.3
+**Version**: 6.7
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
@@ -446,6 +446,18 @@ Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
+### explore
+
+Discover every element on screen, including off-screen content inside scrollable containers. Scroll positions are saved and restored after discovery — no visual change occurs.
+
+No payload required.
+
+```json
+{"protocolVersion":"6.7","type":"explore"}
+```
+
+Returns an `actionResult` with `method: "explore"` containing the element count, scroll count, and exploration time in the `message` field.
+
 ### editAction
 
 Perform a standard edit action via the responder chain.
@@ -709,7 +721,7 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `scrollToEdge`, or `explore` commands.
 
 ```json
 {"protocolVersion":"6.2","type":"actionResult","payload":{
@@ -752,6 +764,7 @@ Possible methods:
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
+- `explore` - Full element census completed (all scrollable content discovered, scroll positions restored)
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 

@@ -73,7 +73,7 @@ enum ToolDefinitions {
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
-        scroll, scrollToVisible, scrollToEdge,
+        scroll, scrollToVisible, scrollToEdge, explore,
         runBatch, getSessionState,
         connect, listTargets,
     ]
@@ -330,6 +330,22 @@ enum ToolDefinitions {
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "required": .array([.string("edge")]),
+            "additionalProperties": false,
+        ])
+    )
+
+    static let explore = Tool(
+        name: "explore",
+        description: """
+            Discover every element on the current screen, including off-screen content inside scrollable \
+            containers. Scrolls each container to its limits and back — scroll positions are saved and \
+            restored, so the user sees no visual change. Returns the total element count, scroll count, \
+            and exploration time. Use this before scroll_to_visible when you need a complete picture of \
+            the screen, or to verify that an element exists somewhere on screen.
+            """,
+        inputSchema: .object([
+            "type": "object",
+            "properties": .object([:] as [String: Value]),
             "additionalProperties": false,
         ])
     )

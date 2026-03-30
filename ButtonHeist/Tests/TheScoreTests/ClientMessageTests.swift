@@ -267,6 +267,36 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - Explore
+
+    func testExploreEncodeDecode() throws {
+        let message = ClientMessage.explore
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .explore = decoded {
+            // Success
+        } else {
+            XCTFail("Expected explore, got \(decoded)")
+        }
+    }
+
+    func testExploreEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "explore-1",
+            message: .explore
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "explore-1")
+        if case .explore = decoded.message {
+            // Success
+        } else {
+            XCTFail("Expected explore, got \(decoded.message)")
+        }
+    }
+
     // MARK: - UnitPoint Tests
 
     func testUnitPointRoundTrip() throws {

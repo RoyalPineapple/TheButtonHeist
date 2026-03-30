@@ -32,6 +32,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             // Navigation
             ScrollToVisibleCommand.self,
             ScrollToEdgeCommand.self,
+            ExploreCommand.self,
 
             // Accessibility actions (mirrors MCP accessibility_action)
             ActionCommand.self,
