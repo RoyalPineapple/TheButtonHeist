@@ -58,6 +58,8 @@ public enum Timeouts {
     static let actionSeconds: TimeInterval = 15
     /// Long action timeout (30 seconds)
     static let longActionSeconds: TimeInterval = 30
+    /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
+    static let exploreSeconds: TimeInterval = 60
 }
 
 @ButtonHeistActor

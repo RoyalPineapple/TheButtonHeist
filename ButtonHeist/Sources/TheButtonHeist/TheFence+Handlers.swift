@@ -12,7 +12,7 @@ extension TheFence {
         // Full mode: explore the screen first, return all discovered elements
         if full {
             let result: ActionResult = try await sendAndAwait(.explore) { requestId in
-                try await self.waitForActionResult(requestId: requestId, timeout: 60)
+                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.exploreSeconds)
             }
             lastActionResult = result
             guard let exploreResult = result.exploreResult else {

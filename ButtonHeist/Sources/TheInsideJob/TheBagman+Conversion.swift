@@ -150,7 +150,9 @@ extension TheBagman {
     /// Return wire elements for ALL known elements — visible and off-screen.
     /// Used by get_interface --full to return the complete screen census.
     func snapshotAllElements() -> [HeistElement] {
-        screenElements.values.map(\.wire)
+        screenElements.values
+            .sorted { $0.lastTraversalIndex < $1.lastTraversalIndex }
+            .map(\.wire)
     }
 
     // MARK: - Stable ID Synthesis
