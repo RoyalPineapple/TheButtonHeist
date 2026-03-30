@@ -120,20 +120,19 @@ Offsets are clamped to valid content bounds. Returns `false` if already at the e
 
 Searches for an element by scrolling through scrollable containers discovered from the accessibility hierarchy tree. Uses `reducedHierarchy` (pre-order traversal) to visit containers outermost first.
 
-**Input:** `ScrollToVisibleTarget` containing an `ElementTarget` predicate, optional `maxScrolls` (default 50, safety valve), and optional `direction` (default `.down`).
+**Input:** `ScrollToVisibleTarget` containing an `ElementTarget` predicate and optional `direction` (default `.down`). Scrolls until found or all containers exhausted.
 
 **Algorithm:**
 
 1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
 2. **Scroll loop.** `findLiveScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePage` scrolls it (UIScrollView → setContentOffset, else → swipe). After each scroll, yield 3 frames, refresh, check for match. If no new elements appeared, mark the container exhausted.
-3. **Exhaustion.** When all scrollable containers are exhausted (no movement or no new elements), the search is complete. `maxScrolls` is a safety valve, not a budget — unproductive scrolls don't count.
 
 ```mermaid
 flowchart TD
     S["executeScrollToVisible(target)"] --> REF["refreshAccessibilityData()"]
     REF --> CHK{"resolveFirstMatch(target)<br/>Already visible?"}
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
-    CHK -->|No| LOOP["while scrollCount < maxScrolls"]
+    CHK -->|No| LOOP["while containers remain"]
 
     LOOP --> FIND["findLiveScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
     FIND --> SVOK{Found<br/>container?}

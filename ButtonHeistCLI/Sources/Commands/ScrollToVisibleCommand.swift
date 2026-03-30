@@ -15,14 +15,11 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
               buttonheist scroll_to_visible --label "Color Picker"
               buttonheist scroll_to_visible --identifier "market.row.colorPicker"
               buttonheist scroll_to_visible --label "Settings" --traits button
-              buttonheist scroll_to_visible --label "Color Picker" --direction up --max-scrolls 30
+              buttonheist scroll_to_visible --label "Color Picker" --direction up
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
-
-    @Option(name: .long, help: "Maximum scroll attempts (default: 20)")
-    var maxScrolls: Int?
 
     @Option(name: .long, help: "Starting scroll direction: down, up, left, right (default: down)")
     var direction: String?
@@ -48,7 +45,6 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             "timeout": timeout,
         ]
         element.applyTo(&request)
-        if let maxScrolls { request["maxScrolls"] = maxScrolls }
         if let direction { request["direction"] = direction.lowercased() }
 
         try await CLIRunner.run(

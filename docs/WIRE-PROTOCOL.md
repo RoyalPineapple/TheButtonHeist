@@ -418,7 +418,7 @@ Search for an element by scrolling through scroll views. Uses an `ElementMatcher
 
 **Match fields:** `label`, `identifier`, `value` (exact string match), `traits` (all must be present), `excludeTraits` (none may be present). Note: `heistId` is not supported for `scrollToVisible` — use `identifier` or `label` instead.
 
-**Search options:** `maxScrolls` (default: 50), `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
+**Search options:** `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
 
 **By label:**
 ```json
@@ -427,7 +427,7 @@ Search for an element by scrolling through scroll views. Uses an `ElementMatcher
 
 **Compound match with direction:**
 ```json
-{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up","maxScrolls":30}}
+{"protocolVersion":"6.4","type":"scrollToVisible","payload":{"match":{"label":"Settings","traits":["header"]},"direction":"up"}}
 ```
 
 **Response** includes `scrollSearchResult` on the `actionResult`:
@@ -1129,7 +1129,6 @@ Predicate for matching elements in the accessibility tree. All specified fields 
 |-------|------|-------------|
 | `heistId` | `String?` | Stable heistId to search for while scrolling |
 | `match` | `ElementMatcher?` | Predicate for the element to find |
-| `maxScrolls` | `Int?` | Maximum scroll attempts (default: 50, clamped to >= 1) |
 | `direction` | `ScrollSearchDirection?` | Starting scroll direction (default: `"down"`) |
 
 ### ScrollSearchDirection

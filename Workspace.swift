@@ -13,7 +13,7 @@ let workspace = Workspace(
                 .project(path: ".", target: "TheInsideJobTests"),
                 .project(path: ".", target: "TheInsideJob"),
                 .project(path: ".", target: "TheScore"),
-                .project(path: "TestApp", target: "AccessibilityTestApp"),
+                .project(path: "TestApp", target: "BH Demo"),
             ]),
             testAction: .targets([
                 .testableTarget(target: .project(path: ".", target: "TheInsideJobTests")),

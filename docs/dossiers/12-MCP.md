@@ -73,7 +73,7 @@ graph TD
 | 13 | `set_pasteboard` | direct | `text` |
 | 14 | `get_pasteboard` | direct | (no params) |
 | 15 | `scroll` | direct | element target, `direction` |
-| 16 | `scroll_to_visible` | direct | match fields, `scope`, `maxScrolls`, `direction` |
+| 16 | `scroll_to_visible` | direct | match fields, `scope`, `direction` |
 | 17 | `scroll_to_edge` | direct | element target, `edge` |
 | 18 | `run_batch` | direct | `commands` array |
 | 19 | `get_session_state` | direct | (no params) |
@@ -102,7 +102,6 @@ graph TD
 ### `scroll_to_visible`
 - Match fields: `heistId`, `identifier`, `label`, `value`, `traits`, `excludeTraits` — all specified fields must match (AND logic)
 - `scope`: `"elements"` (leaves only, default), `"containers"`, `"both"`
-- `maxScrolls`: integer, default 20
 - `direction`: `"down"` (default), `"up"`, `"left"`, `"right"`
 
 ### Shared `expect` property
