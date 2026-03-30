@@ -41,8 +41,8 @@ jobs:
         id: submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive AccessibilitySnapshot
-          echo "a11y-hash=$(git rev-parse HEAD:AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
+          git submodule update --init --recursive submodules/AccessibilitySnapshot
+          echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
       - name: Install Tuist
         uses: jdx/mise-action@v2
@@ -108,8 +108,8 @@ jobs:
         id: submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive AccessibilitySnapshot
-          echo "a11y-hash=$(git rev-parse HEAD:AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
+          git submodule update --init --recursive submodules/AccessibilitySnapshot
+          echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
       - name: Install Tuist
         uses: jdx/mise-action@v2
