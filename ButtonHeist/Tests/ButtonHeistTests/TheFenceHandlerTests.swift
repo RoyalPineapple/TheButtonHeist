@@ -1043,6 +1043,19 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(failedIndex, 0, "Failed index should be the error step")
     }
 
+    // MARK: - Explore via get_interface --full
+
+    @ButtonHeistActor
+    func testGetInterfaceFullSendsExploreMessage() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: ["command": "get_interface", "full": true])
+        guard let (message, _) = mockConn.sent.last,
+              case .explore = message else {
+            XCTFail("Expected explore message, got \(String(describing: mockConn.sent.last))")
+            return
+        }
+    }
+
     @ButtonHeistActor
     func testBatchWithNoExpectationsShowsZeroCounts() async throws {
         let (fence, mockConn) = makeConnectedFence()

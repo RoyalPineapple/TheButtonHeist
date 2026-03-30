@@ -267,6 +267,84 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - Explore
+
+    func testExploreEncodeDecode() throws {
+        let message = ClientMessage.explore
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .explore = decoded {
+            // Success
+        } else {
+            XCTFail("Expected explore, got \(decoded)")
+        }
+    }
+
+    func testExploreEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "explore-1",
+            message: .explore
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "explore-1")
+        if case .explore = decoded.message {
+            // Success
+        } else {
+            XCTFail("Expected explore, got \(decoded.message)")
+        }
+    }
+
+    func testExploreResultEncodeDecode() throws {
+        let elements = (0..<3).map { i in
+            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
+        }
+        let result = ExploreResult(
+            elements: elements, scrollCount: 6,
+            containersExplored: 3, explorationTime: 1.25
+        )
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ExploreResult.self, from: data)
+        XCTAssertEqual(decoded.elementCount, 3)
+        XCTAssertEqual(decoded.elements.count, 3)
+        XCTAssertEqual(decoded.elements[0].heistId, "el_0")
+        XCTAssertEqual(decoded.scrollCount, 6)
+        XCTAssertEqual(decoded.containersExplored, 3)
+        XCTAssertEqual(decoded.explorationTime, 1.25)
+    }
+
+    func testActionResultWithExploreResult() throws {
+        let elements = (0..<100).map { i in
+            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
+        }
+        let exploreResult = ExploreResult(
+            elements: elements, scrollCount: 12,
+            containersExplored: 2, explorationTime: 3.5
+        )
+        let result = ActionResult(
+            success: true, method: .explore,
+            message: "100 elements, 12 scrolls, 3.50s",
+            exploreResult: exploreResult
+        )
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertTrue(decoded.success)
+        XCTAssertEqual(decoded.method, .explore)
+        XCTAssertEqual(decoded.exploreResult?.elementCount, 100)
+        XCTAssertEqual(decoded.exploreResult?.scrollCount, 12)
+        XCTAssertEqual(decoded.exploreResult?.containersExplored, 2)
+        XCTAssertEqual(decoded.exploreResult?.explorationTime, 3.5)
+    }
+
+    func testActionResultWithoutExploreResult() throws {
+        let result = ActionResult(success: true, method: .activate)
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertNil(decoded.exploreResult)
+    }
+
     // MARK: - UnitPoint Tests
 
     func testUnitPointRoundTrip() throws {
@@ -285,5 +363,26 @@ final class ClientMessageTests: XCTestCase {
         } else {
             XCTFail("Expected touchSwipe, got \(decoded)")
         }
+    }
+}
+
+// MARK: - Test Helpers
+
+extension HeistElement {
+    static func stub(
+        heistId: String = "test",
+        label: String? = nil,
+        traits: [HeistTrait] = []
+    ) -> HeistElement {
+        HeistElement(
+            heistId: heistId,
+            description: label ?? heistId,
+            label: label,
+            value: nil,
+            identifier: nil,
+            traits: traits,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
     }
 }

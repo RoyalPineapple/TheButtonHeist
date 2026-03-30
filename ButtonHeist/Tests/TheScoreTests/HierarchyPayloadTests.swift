@@ -20,7 +20,6 @@ final class SnapshotTests: XCTestCase {
     func testPayloadWithMultipleElements() throws {
         let elements = (0..<10).map { i in
             HeistElement(
-                order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
                 value: nil,
@@ -43,7 +42,6 @@ final class SnapshotTests: XCTestCase {
 
         XCTAssertEqual(decoded.elements.count, 10)
         for i in 0..<10 {
-            XCTAssertEqual(decoded.elements[i].order, i)
             XCTAssertEqual(decoded.elements[i].label, "Label \(i)")
         }
     }

@@ -120,6 +120,8 @@ extension TheInsideJob {
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScrollToEdge(target) }
         case .waitFor(let target):
             await performWaitFor(target: target, command: message, requestId: requestId, respond: respond)
+        case .explore:
+            await performExplore(command: message, requestId: requestId, respond: respond)
         default:
             return false
         }
