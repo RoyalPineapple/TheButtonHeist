@@ -98,7 +98,9 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── allClear() — sync gate backed by the latest pulse reading when running
 │   └── waitForSettle(timeout:) / waitForAllClear(timeout:) — per-waiter quiet-frame settle tracking
 ├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
-│   └── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
+│   ├── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
+│   ├── ScreenManifest — exploration state: element-to-container map, stagnation detection
+│   └── exploreScreen(target:) — scrolls all containers, discovers off-screen elements, restores positions
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
 │   │   TheSafecracker.swift             — touch primitives, keyboard helpers
 │   │   TheSafecracker+Actions.swift     — execute* methods for actions and gestures

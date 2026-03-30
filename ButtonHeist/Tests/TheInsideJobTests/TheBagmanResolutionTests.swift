@@ -59,7 +59,7 @@ final class TheBagmanResolutionTests: XCTestCase {
             contentSpaceOrigin: nil,
             lastTraversalIndex: index,
             wire: HeistElement(
-                heistId: heistId, order: index, description: element.description,
+                heistId: heistId, description: element.description,
                 label: element.label, value: element.value, identifier: element.identifier,
                 hint: nil, traits: [], frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
                 activationPointX: 0, activationPointY: 0, actions: []

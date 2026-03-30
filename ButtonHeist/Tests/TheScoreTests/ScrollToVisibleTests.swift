@@ -72,7 +72,7 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollSearchResultEncodeDecode() throws {
         let element = HeistElement(
-            heistId: "button_color_picker", order: 5, description: "Color Picker",
+            heistId: "button_color_picker", description: "Color Picker",
             label: "Color Picker", value: nil, identifier: nil,
             traits: [.button],
             frameX: 0, frameY: 200, frameWidth: 375, frameHeight: 44,

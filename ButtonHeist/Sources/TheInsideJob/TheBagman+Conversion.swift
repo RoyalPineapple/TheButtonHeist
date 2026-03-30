@@ -24,7 +24,6 @@ extension TheBagman {
     func convertElement(_ element: AccessibilityElement, index: Int) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
-            order: index,
             description: element.description,
             label: element.label,
             value: element.value,
@@ -136,16 +135,24 @@ extension TheBagman {
     /// The screen element registry is updated during refreshAccessibilityData() —
     /// this method is a cheap read that extracts the visible subset.
     func snapshotElements() -> [HeistElement] {
-        var result: [HeistElement] = []
+        var result: [(Int, HeistElement)] = []
         for heistId in onScreen {
             guard var entry = screenElements[heistId] else { continue }
             if !entry.presented {
                 entry.presented = true
                 screenElements[heistId] = entry
             }
-            result.append(entry.wire)
+            result.append((entry.lastTraversalIndex, entry.wire))
         }
-        return result.sorted { $0.order < $1.order }
+        return result.sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    /// Return wire elements for ALL known elements — visible and off-screen.
+    /// Used by get_interface --full to return the complete screen census.
+    func snapshotAllElements() -> [HeistElement] {
+        screenElements.values
+            .sorted { $0.lastTraversalIndex < $1.lastTraversalIndex }
+            .map(\.wire)
     }
 
     // MARK: - Stable ID Synthesis

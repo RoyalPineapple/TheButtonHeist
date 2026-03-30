@@ -86,7 +86,9 @@ enum ToolDefinitions {
             Get the current UI element hierarchy from the connected iOS device. Returns elements with \
             heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
             Target elements in subsequent calls using heistId. \
-            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list.
+            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list. \
+            Set full=true to discover every element on screen including off-screen content inside \
+            scrollable containers (scrolls each container to its limits and back, restoring positions).
             """,
         inputSchema: .object([
             "type": "object",
@@ -95,6 +97,13 @@ enum ToolDefinitions {
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
                     "description": "Level of detail: summary (default, no geometry) or full (includes frame, activation point, hints)",
+                ],
+                "full": [
+                    "type": "boolean",
+                    "description": """
+                        When true, explores the entire screen including off-screen content \
+                        in scroll views. Returns all elements, not just visible ones.
+                        """,
                 ],
                 "elements": [
                     "type": "array",

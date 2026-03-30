@@ -58,6 +58,8 @@ public enum Timeouts {
     static let actionSeconds: TimeInterval = 15
     /// Long action timeout (30 seconds)
     static let longActionSeconds: TimeInterval = 30
+    /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
+    static let exploreSeconds: TimeInterval = 60
 }
 
 @ButtonHeistActor
@@ -527,7 +529,7 @@ public final class TheFence {
                 elementCount: nil,
                 error: result.success ? nil : result.message
             )
-        case .interface(let iface, _, _):
+        case .interface(let iface, _, _, _):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
