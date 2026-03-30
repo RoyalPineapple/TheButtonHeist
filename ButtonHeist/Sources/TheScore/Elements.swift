@@ -67,27 +67,52 @@ extension ElementAction: Codable {
 /// `knownTraits` in `AccessibilityHierarchy+Codable.swift`.
 /// Standard UIAccessibilityTraits plus private traits the parser exposes.
 public enum HeistTrait: Equatable, Hashable, Sendable {
-    // Standard traits
+    // Standard traits (public UIAccessibilityTraits, bits 0-14, 16-17)
     case button, link, image, staticText, header, adjustable
     case searchField, selected, notEnabled, keyboardKey
     case summaryElement, updatesFrequently, playsSound
     case startsMediaSession, allowsDirectInteraction
     case causesPageTurn, tabBar
-    // Private traits (from UIAccessibility+SnapshotAdditions)
-    case textEntry, isEditing, backButton, tabBarItem, scrollable, switchButton
+    // Private traits — core set (used for element classification)
+    case textEntry, isEditing, backButton, tabBarItem, textArea, switchButton
+    // Private traits — extended set (from AXRuntime, surfaced for diagnostics)
+    case webContent, pickerElement, radioButton, launchIcon, statusBarElement
+    case secureTextField, inactive, footer, autoCorrectCandidate, deleteKey
+    case selectionDismissesItem, visited, spacer, tableIndex, map
+    case textOperationsAvailable, draggable, popupButton, menuItem, alert
     /// Unknown trait from a newer server — preserved for round-tripping.
     case unknown(String)
+
+    /// Whether this trait is from the extended AXRuntime private set (not standard UIKit).
+    /// Clients can use this to show/hide private diagnostic traits in their UI.
+    public var isExtendedPrivate: Bool {
+        Self.extendedPrivateSet.contains(self)
+    }
+
+    private static let extendedPrivateSet: Set<HeistTrait> = [
+        .webContent, .pickerElement, .radioButton, .launchIcon, .statusBarElement,
+        .secureTextField, .inactive, .footer, .autoCorrectCandidate, .deleteKey,
+        .selectionDismissesItem, .visited, .spacer, .tableIndex, .map,
+        .textOperationsAvailable, .draggable, .popupButton, .menuItem, .alert,
+    ]
 }
 
 extension HeistTrait: CaseIterable {
     /// All known cases (excludes `.unknown`).
     public static var allCases: [HeistTrait] {
-        [.button, .link, .image, .staticText, .header, .adjustable,
+        [// Standard
+         .button, .link, .image, .staticText, .header, .adjustable,
          .searchField, .selected, .notEnabled, .keyboardKey,
          .summaryElement, .updatesFrequently, .playsSound,
          .startsMediaSession, .allowsDirectInteraction,
          .causesPageTurn, .tabBar,
-         .textEntry, .isEditing, .backButton, .tabBarItem, .scrollable, .switchButton]
+         // Private — core
+         .textEntry, .isEditing, .backButton, .tabBarItem, .textArea, .switchButton,
+         // Private — extended (AXRuntime)
+         .webContent, .pickerElement, .radioButton, .launchIcon, .statusBarElement,
+         .secureTextField, .inactive, .footer, .autoCorrectCandidate, .deleteKey,
+         .selectionDismissesItem, .visited, .spacer, .tableIndex, .map,
+         .textOperationsAvailable, .draggable, .popupButton, .menuItem, .alert]
     }
 }
 

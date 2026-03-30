@@ -269,7 +269,7 @@ flowchart TD
     S["executeScrollToVisible(target)"] --> REF["refreshAccessibilityData()"]
     REF --> CHK{"resolveFirstMatch(target)<br/>Already visible?"}
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
-    CHK -->|No| LOOP["while scrollCount < maxScrolls"]
+    CHK -->|No| LOOP["while containers remain"]
 
     LOOP --> FIND["findLiveScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
     FIND --> SVOK{Found<br/>container?}

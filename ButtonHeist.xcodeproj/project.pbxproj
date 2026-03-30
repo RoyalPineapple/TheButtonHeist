@@ -8,8 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AD4580D4093B2C32B02A43 /* ScrollToVisibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */; };
-		01CFA4F46672EC6F17C7AAA9 /* AccessibilityTestApp.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 4E41C475F84218C390FCF3E5 /* AccessibilityTestApp.app */; };
-		02C1760133F1D668D151DBDC /* ScrollProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3980E5C19E8EB807C315C9 /* ScrollProvider.swift */; };
+		0396556B127BB166C42DB438 /* BH Demo.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 5598A55C05BC6726CABD5670 /* BH Demo.app */; };
 		04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
 		08817F353A28D70410522D5B /* TheBagmanResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF68558C8D801C0880F59B3 /* TheBagmanResolutionTests.swift */; };
@@ -119,6 +118,7 @@
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		DA20C64B2DDE851A0E0B6A6C /* GroupTypeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2334D19902AFA33A9459E48C /* GroupTypeTests.swift */; };
+		DC7C882C0847C34A72E1B4A0 /* HeistTraitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */; };
 		DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BC478345C6BE0A8B155580 /* ObjCRuntime.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
 		E2F793CFC12A5894338CC018 /* SimpleSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */; };
@@ -212,7 +212,7 @@
 			buildActionMask = 8;
 			dstSubfolderSpec = 16;
 			files = (
-				01CFA4F46672EC6F17C7AAA9 /* AccessibilityTestApp.app in Dependencies */,
+				0396556B127BB166C42DB438 /* BH Demo.app in Dependencies */,
 				C5342E6482326D40D2501735 /* swift-crypto_CCryptoBoringSSL.bundle in Dependencies */,
 				28B7A718F42369C803E58495 /* swift-crypto_CCryptoBoringSSLShims.bundle in Dependencies */,
 				C7C2040B34E358C9BDE7C21C /* swift-crypto_CryptoBoringWrapper.bundle in Dependencies */,
@@ -297,16 +297,15 @@
 		4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+MultiTouch.swift"; sourceTree = "<group>"; };
 		4C34776C3FA2EF395B509E52 /* Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Animation.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
-		4E41C475F84218C390FCF3E5 /* AccessibilityTestApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AccessibilityTestApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		505ED717985FBDFE68196CEB /* SyntheticTouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticTouch.swift; sourceTree = "<group>"; };
 		52EB3108DFAB4DF60AB11A4C /* AccessibilityHierarchyFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityHierarchyFilterTests.swift; sourceTree = "<group>"; };
 		55705E02DEA7790A18E98DD1 /* WaitForIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitForIntegrationTests.swift; sourceTree = "<group>"; };
 		558658BD430870069086F3A8 /* DiscoveredDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveredDevice.swift; sourceTree = "<group>"; };
+		5598A55C05BC6726CABD5670 /* BH Demo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BH Demo.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecrackerScrollTests.swift; sourceTree = "<group>"; };
 		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagman.swift; sourceTree = "<group>"; };
 		5B12846943603FCF34BBBFCA /* Mocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
-		5C3980E5C19E8EB807C315C9 /* ScrollProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollProvider.swift; sourceTree = "<group>"; };
 		5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ButtonHeist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6205334704A8DE8880261680 /* EnvironmentConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentConfig.swift; sourceTree = "<group>"; };
 		6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSLShims.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -337,6 +336,7 @@
 		A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleSocketServer.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
+		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
 		ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityTests.swift; sourceTree = "<group>"; };
 		AD647E6B8282C97B896CBBB8 /* TLSIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentity.swift; sourceTree = "<group>"; };
 		AE718BCA882D0B81118A3974 /* ActionExpectationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExpectationTests.swift; sourceTree = "<group>"; };
@@ -487,7 +487,7 @@
 			isa = PBXGroup;
 			children = (
 				A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */,
-				4E41C475F84218C390FCF3E5 /* AccessibilityTestApp.app */,
+				5598A55C05BC6726CABD5670 /* BH Demo.app */,
 				5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */,
 				2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */,
 				E52AAF089A5FF3332696D2C8 /* Crypto.framework */,
@@ -519,7 +519,6 @@
 				DE2A055195EB170C7CE3CF0D /* Extensions */,
 				9F1C7D991B4200C2941046D0 /* TheSafecracker */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
-				5C3980E5C19E8EB807C315C9 /* ScrollProvider.swift */,
 				1E836566E11E4B5CB5815D28 /* ServerTransport.swift */,
 				A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */,
 				5AB50C4C1FDF47B7376A6A2A /* TheBagman.swift */,
@@ -677,6 +676,7 @@
 				9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */,
 				EA2B9DBB624B59914F1B4849 /* ElementMatcherTests.swift */,
 				2334D19902AFA33A9459E48C /* GroupTypeTests.swift */,
+				A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */,
 				3FEBFC658B72A791C1BFEF2B /* HierarchyPayloadTests.swift */,
 				8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */,
 				A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */,
@@ -955,6 +955,7 @@
 				57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */,
 				C1B5DC54A2F58EC4B8BCCD3B /* ElementMatcherTests.swift in Sources */,
 				DA20C64B2DDE851A0E0B6A6C /* GroupTypeTests.swift in Sources */,
+				DC7C882C0847C34A72E1B4A0 /* HeistTraitTests.swift in Sources */,
 				72B63867F39709CBEC77B303 /* HierarchyPayloadTests.swift in Sources */,
 				075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */,
 				1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */,
@@ -974,7 +975,6 @@
 				6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */,
 				A965361589138EE1069D5DD3 /* Pulse.swift in Sources */,
 				5EF13631934912FD7D933DB1 /* Screen.swift in Sources */,
-				02C1760133F1D668D151DBDC /* ScrollProvider.swift in Sources */,
 				941DD066B32A0D60D5B6EB8B /* ServerTransport.swift in Sources */,
 				E2F793CFC12A5894338CC018 /* SimpleSocketServer.swift in Sources */,
 				4D3FAF8D7AAA5F9F98997531 /* TLSIdentity.swift in Sources */,
@@ -1355,7 +1355,7 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-Owholemodule";
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AccessibilityTestApp.app/AccessibilityTestApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BH Demo.app/BH Demo";
 			};
 			name = Release;
 		};
@@ -1737,7 +1737,7 @@
 				SWIFT_COMPILATION_MODE = singlefile;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AccessibilityTestApp.app/AccessibilityTestApp";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BH Demo.app/BH Demo";
 			};
 			name = Debug;
 		};

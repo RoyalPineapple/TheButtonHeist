@@ -19,7 +19,7 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// UIScrollView → direct setContentOffset. Everything else → synthetic swipe.
+    /// UIScrollView → direct setContentOffset. swipeable → synthetic swipe (no UIScrollView ref).
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
         case swipeable(frame: CGRect, contentSize: CGSize)
@@ -81,18 +81,24 @@ extension TheBagman {
 
     // MARK: - Unified Scroll Dispatch
 
-    /// Scroll a target by one page. Delegates to the active ScrollProvider.
+    /// Scroll a target by one page. UIScrollViews get direct setContentOffset
+    /// (returns false at edge). Swipeable targets get a synthetic swipe and
+    /// compare on-screen elements before/after to detect actual movement.
     func scrollOnePage(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> Bool {
-        guard let scrollProvider else { return false }
+        guard let safecracker else { return false }
         switch target {
         case .uiScrollView(let sv):
-            return await scrollProvider.scrollByPage(sv, direction: direction)
+            return safecracker.scrollByPage(sv, direction: direction, animated: false)
         case .swipeable(let frame, _):
-            return await scrollProvider.scrollBySwipe(frame: frame, direction: direction)
+            let before = onScreen
+            _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
+            await tripwire.yieldFrames(2)
+            refreshAccessibilityData()
+            return onScreen != before
         }
     }
 
@@ -140,10 +146,10 @@ extension TheBagman {
         let moved: Bool
         switch scrollTarget {
         case .uiScrollView(let sv):
-            guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
-            moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
+            guard let safecracker else { return .failure(.scrollToEdge, message: "No gesture engine") }
+            moved = safecracker.scrollToEdge(sv, edge: target.edge)
         case .swipeable:
-            // Swipe-based: scroll repeatedly until stagnation
+            // Non-UIScrollView: scroll repeatedly until stagnation
             let direction = edgeDirection(for: target.edge)
             var didMove = false
             for _ in 0..<50 {
@@ -178,7 +184,6 @@ extension TheBagman {
         guard let searchTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
-        let maxScrolls = target.resolvedMaxScrolls
         let searchDirection = target.resolvedDirection
 
         // Already visible?
@@ -188,18 +193,22 @@ extension TheBagman {
             return foundResult(found, scrollCount: 0)
         }
 
-        guard scrollProvider != nil else {
-            return .failure(.scrollToVisible, message: "No scroll provider available")
+        guard safecracker != nil else {
+            return .failure(.scrollToVisible, message: "No gesture engine available")
         }
 
         // Walk the hierarchy tree for scrollable containers (outermost first).
-        // Scroll each one in its natural axis until no new elements appear, then
-        // move to the next. After each scroll, re-walk the tree so newly-revealed
-        // containers get picked up. maxScrolls is a safety valve, not a budget.
-        // Exhaustion is keyed by AccessibilityContainer (Hashable, value-type) so
-        // it survives hierarchy rebuilds — no positional index drift.
+        // Scroll each one in its natural axis until no new elements appear,
+        // then move to the next. Re-walks the tree after each scroll so
+        // newly-revealed containers get picked up.
+        // Exhaustion keyed by AccessibilityContainer (Hashable value type) —
+        // uses type + frame for identity. Stable within a single search;
+        // no ObjectIdentifier (cell reuse invalidates pointer identity).
         var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
+        // Hard cap prevents infinite loops on swipeable containers (which always
+        // report moved=true) with infinite/paginated content (onScreen always changes).
+        let maxScrolls = 200
 
         while scrollCount < maxScrolls {
             guard let (scrollTarget, container) = findLiveScrollTarget(excluding: exhausted) else { break }
@@ -211,20 +220,15 @@ extension TheBagman {
             if !moved { exhausted.insert(container); continue }
 
             await tripwire.yieldFrames(3)
+            scrollCount += 1
             refreshAccessibilityData()
 
             if let found = resolveFirstMatch(searchTarget) {
                 ensureOnScreenSync(found)
-                scrollCount += 1
                 return foundResult(found, scrollCount: scrollCount)
             }
 
-            // No new elements → this container is exhausted in this direction
-            if onScreen == before {
-                exhausted.insert(container)
-            } else {
-                scrollCount += 1
-            }
+            if onScreen == before { exhausted.insert(container) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -232,10 +236,15 @@ extension TheBagman {
 
     /// Walk the cached hierarchy tree (pre-order = outermost first) and return the
     /// first non-exhausted scrollable container as a `ScrollableTarget`.
+    /// The parser marks ALL containers where `_accessibilityIsScrollable == true` as
+    /// `.scrollable`, and `containerVisitor` resolves the inner UIScrollView child
+    /// for PlatformContainers. So this is a single tree walk — no fallback needed.
     private func findLiveScrollTarget(
         excluding exhausted: Set<AccessibilityContainer>
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
+        cachedHierarchy.reducedHierarchy(
+            nil as (ScrollableTarget, AccessibilityContainer)?
+        ) { found, node in
             guard found == nil else { return found }
             guard case .container(let container, _) = node,
                   case .scrollable(let contentSize) = container.type,
@@ -244,8 +253,6 @@ extension TheBagman {
                 if let sv = view as? UIScrollView {
                     return (.uiScrollView(sv), container)
                 }
-                // Non-UIScrollView container (e.g. SwiftUI PlatformContainer) —
-                // use screen-space frame, not the parser's root-relative frame.
                 let screenFrame = view.convert(view.bounds, to: nil)
                 return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
             }
@@ -284,8 +291,8 @@ extension TheBagman {
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = resolved.screenElement.scrollView,
-              let scrollProvider else { return }
-        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
+              let safecracker else { return }
+        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
@@ -298,25 +305,23 @@ extension TheBagman {
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = screenElements.values
             .first(where: { $0.object === responder })?.scrollView,
-              let scrollProvider else { return }
-        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
+              let safecracker else { return }
+        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
     }
 
+    /// Synchronous scroll-to-visible — setContentOffset is immediate,
+    /// no detached Task needed.
     private func ensureOnScreenSync(_ resolved: ResolvedTarget) {
         guard let object = resolved.screenElement.object,
-              let scrollProvider else { return }
+              let safecracker else { return }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = resolved.screenElement.scrollView else { return }
-        // scrollToMakeVisible is async in the protocol but the sync variant
-        // only needs the ContentOffset path which completes synchronously.
-        Task { @MainActor in
-            _ = await scrollProvider.scrollToMakeVisible(frame, in: scrollView)
-        }
+        _ = safecracker.scrollToMakeVisible(frame, in: scrollView)
     }
 
     // MARK: - Scroll Target Resolution (Accessibility Hierarchy)
@@ -337,23 +342,6 @@ extension TheBagman {
                 // Search the hierarchy tree for a container that can.
                 if let (axisTarget, _) = findScrollTargetForAxis(axis) {
                     return axisTarget
-                }
-                // No scrollable container in the tree either — swipe at the
-                // element's position using a full-width/height band. This handles
-                // SwiftUI's PlatformContainer carousels which aren't UIScrollViews
-                // and aren't marked .scrollable by the parser.
-                if let object = screenElement.object {
-                    let elFrame = object.accessibilityFrame
-                    if !elFrame.isNull, !elFrame.isEmpty {
-                        let screen = UIScreen.main.bounds
-                        let swipeFrame: CGRect
-                        if axis == .horizontal {
-                            swipeFrame = CGRect(x: 0, y: elFrame.midY - 25, width: screen.width, height: 50)
-                        } else {
-                            swipeFrame = CGRect(x: elFrame.midX - 25, y: 0, width: 50, height: screen.height)
-                        }
-                        return .swipeable(frame: swipeFrame, contentSize: screen.size)
-                    }
                 }
             }
             return target

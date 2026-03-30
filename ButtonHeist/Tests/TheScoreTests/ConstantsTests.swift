@@ -8,7 +8,7 @@ final class ConstantsTests: XCTestCase {
     }
 
     func testProtocolVersion() {
-        XCTAssertEqual(protocolVersion, "6.5")
+        XCTAssertEqual(protocolVersion, "6.6")
     }
 
     func testServiceTypeFormat() {

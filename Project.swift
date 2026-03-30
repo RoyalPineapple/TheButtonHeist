@@ -108,7 +108,7 @@ let project = Project(
             ]
         ),
 
-        // MARK: - TheInsideJob Tests (iOS Simulator, hosted in AccessibilityTestApp)
+        // MARK: - TheInsideJob Tests (iOS Simulator, hosted in BH Demo)
         .target(
             name: "TheInsideJobTests",
             destinations: [.iPhone, .iPad],
@@ -121,10 +121,10 @@ let project = Project(
                 .target(name: "TheInsideJob"),
                 .target(name: "TheScore"),
                 .external(name: "Crypto"),
-                .project(target: "AccessibilityTestApp", path: "TestApp"),
+                .project(target: "BH Demo", path: "TestApp"),
             ],
             settings: .settings(base: [
-                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/AccessibilityTestApp.app/AccessibilityTestApp",
+                "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/BH Demo.app/BH Demo",
                 "BUNDLE_LOADER": "$(TEST_HOST)",
             ])
         ),

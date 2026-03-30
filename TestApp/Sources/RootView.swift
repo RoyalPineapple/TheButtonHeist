@@ -44,7 +44,7 @@ struct RootView: View {
                     .accessibilityIdentifier("buttonheist.root.nestedScrolls")
                 }
             }
-            .navigationTitle("ButtonHeist Test App")
+            .navigationTitle("ButtonHeist Demo")
             .listRowInsets(settings.compactMode ? EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16) : nil)
         }
     }

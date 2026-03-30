@@ -17,16 +17,16 @@ let project = Project(
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [
-        // MARK: - SwiftUI Test App
+        // MARK: - Demo App
         .target(
-            name: "AccessibilityTestApp",
+            name: "BH Demo",
             destinations: .iOS,
             product: .app,
             bundleId: "com.buttonheist.testapp",
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
-                "CFBundleDisplayName": "A11y SwiftUI",
+                "CFBundleDisplayName": "BH Demo",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
                 "InsideJobPort": 1455,
@@ -45,7 +45,34 @@ let project = Project(
             ])
         ),
 
-        // MARK: - UIKit Test App
+        // MARK: - Research App (SPI harness, trait probes)
+        .target(
+            name: "ResearchApp",
+            destinations: .iOS,
+            product: .app,
+            bundleId: "com.buttonheist.research",
+            deploymentTargets: .iOS("17.0"),
+            infoPlist: .extendingDefault(with: [
+                "UILaunchScreen": [:],
+                "CFBundleDisplayName": "BH Research",
+                "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
+                "NSBonjourServices": ["_buttonheist._tcp"],
+                "InsideJobPort": 1457,
+                "InsideJobToken": "INJECTED-TOKEN-12345",
+            ]),
+            sources: ["ResearchSources/**"],
+            scripts: [copyResourceBundleScript],
+            dependencies: [
+                .project(target: "TheScore", path: ".."),
+                .project(target: "TheInsideJob", path: ".."),
+            ],
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "",
+            ])
+        ),
+
+        // MARK: - UIKit Demo App
         .target(
             name: "UIKitTestApp",
             destinations: .iOS,
@@ -54,7 +81,7 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
-                "CFBundleDisplayName": "A11y UIKit",
+                "CFBundleDisplayName": "BH UIKit Demo",
                 "UIApplicationSceneManifest": [
                     "UIApplicationSupportsMultipleScenes": false,
                     "UISceneConfigurations": [
