@@ -879,6 +879,37 @@ Error message.
 
 ## Element Discovery
 
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant TheFence
+    participant TheInsideJob
+    participant TheBagman
+
+    Note over Agent,TheBagman: get_interface (visible only)
+    Agent->>TheFence: get_interface
+    TheFence->>TheInsideJob: requestInterface
+    TheInsideJob->>TheBagman: snapshotElements()
+    TheBagman-->>Agent: interface (visible elements)
+
+    Note over Agent,TheBagman: get_interface --full (explore)
+    Agent->>TheFence: get_interface(full: true)
+    TheFence->>TheInsideJob: explore
+    TheInsideJob->>TheBagman: exploreScreen()
+
+    loop each scrollable container
+        TheBagman->>TheBagman: save scroll position
+        loop scroll forward until stagnation
+            TheBagman->>TheBagman: scrollByPage
+            TheBagman->>TheBagman: refreshAccessibilityData
+            TheBagman->>TheBagman: record new elements
+        end
+        TheBagman->>TheBagman: restore scroll position
+    end
+
+    TheBagman-->>Agent: interface (all elements + explore metadata)
+```
+
 Three ways to find elements, each suited to a different situation:
 
 | Command | What it returns | When to use |
@@ -894,6 +925,18 @@ Three ways to find elements, each suited to a different situation:
 - **`scroll_to_visible`** is a navigation action. It scrolls to the target and leaves the viewport there so you can interact with the element. Use it when you already know what you want and need to get to it.
 
 Both use the same internal exploration algorithm. `get_interface --full` with no target does a complete census. `scroll_to_visible` uses element-first search and stops early when the target is found.
+
+```mermaid
+flowchart TD
+    A[Need to find an element?] --> B{Is it likely visible?}
+    B -->|Yes| C[get_interface]
+    B -->|No / unsure| D{Need to interact with it?}
+    D -->|Yes| E[scroll_to_visible<br>Navigates to element,<br>leaves viewport there]
+    D -->|No, just check existence| F[get_interface --full<br>Census then restore<br>scroll positions]
+    C --> G{Found it?}
+    G -->|Yes| H[activate / scroll / interact]
+    G -->|No| D
+```
 
 ### When you don't need either
 
