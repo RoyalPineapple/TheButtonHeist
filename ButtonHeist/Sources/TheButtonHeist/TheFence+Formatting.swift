@@ -136,7 +136,7 @@ public enum FenceResponse {
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil)
+    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil, explore: ExploreResult? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
@@ -173,7 +173,7 @@ public enum FenceResponse {
             return "Not connected"
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface, _, _):
+        case .interface(let interface, _, _, _):
             return formatInterface(interface)
         case .action(let result, let expectation):
             var text = formatActionResult(result)
@@ -276,8 +276,8 @@ public enum FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface, let detail, let filteredFrom):
-            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom)
+        case .interface(let interface, let detail, let filteredFrom, let explore):
+            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom, explore: explore)
         case .action(let result, let expectation):
             return actionWithExpectationJsonDict(result, expectation: expectation)
         case .screenshot(let path, let width, let height):
@@ -310,7 +310,8 @@ public enum FenceResponse {
     }
 
     private func interfaceJsonDict(
-        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?
+        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?,
+        explore: ExploreResult? = nil
     ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": "ok",
@@ -318,6 +319,13 @@ public enum FenceResponse {
             "interface": interfaceDictionary(interface, detail: detail),
         ]
         if let filteredFrom { dict["filteredFrom"] = filteredFrom }
+        if let explore {
+            dict["explore"] = [
+                "scrollCount": explore.scrollCount,
+                "containersExplored": explore.containersExplored,
+                "explorationTime": String(format: "%.2f", explore.explorationTime),
+            ] as [String: Any]
+        }
         return dict
     }
 
@@ -405,16 +413,6 @@ public enum FenceResponse {
         if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
         if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits.map(\.rawValue) }
         if let screenName = result.screenName { payload["screenName"] = screenName }
-
-        if let explore = result.exploreResult {
-            payload["explore"] = [
-                "elementCount": explore.elementCount,
-                "scrollCount": explore.scrollCount,
-                "containersExplored": explore.containersExplored,
-                "explorationTime": String(format: "%.2f", explore.explorationTime),
-                "elements": explore.elements.map { elementDictionary($0, detail: .summary) }
-            ] as [String: Any]
-        }
 
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
@@ -577,7 +575,7 @@ public enum FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface, _, let filteredFrom):
+        case .interface(let interface, _, let filteredFrom, _):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
             var lines: [String] = [header]

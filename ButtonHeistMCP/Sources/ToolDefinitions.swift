@@ -73,7 +73,7 @@ enum ToolDefinitions {
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
-        scroll, scrollToVisible, scrollToEdge, explore,
+        scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
         connect, listTargets,
     ]
@@ -86,7 +86,9 @@ enum ToolDefinitions {
             Get the current UI element hierarchy from the connected iOS device. Returns elements with \
             heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
             Target elements in subsequent calls using heistId. \
-            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list.
+            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list. \
+            Set full=true to discover every element on screen including off-screen content inside \
+            scrollable containers (scrolls each container to its limits and back, restoring positions).
             """,
         inputSchema: .object([
             "type": "object",
@@ -95,6 +97,13 @@ enum ToolDefinitions {
                     "type": "string",
                     "enum": .array(["summary", "full"].map { .string($0) }),
                     "description": "Level of detail: summary (default, no geometry) or full (includes frame, activation point, hints)",
+                ],
+                "full": [
+                    "type": "boolean",
+                    "description": """
+                        When true, explores the entire screen including off-screen content \
+                        in scroll views. Returns all elements, not just visible ones.
+                        """,
                 ],
                 "elements": [
                     "type": "array",
@@ -330,23 +339,6 @@ enum ToolDefinitions {
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
             "required": .array([.string("edge")]),
-            "additionalProperties": false,
-        ])
-    )
-
-    static let explore = Tool(
-        name: "explore",
-        description: """
-            Discover every element on the current screen, including off-screen content inside scrollable \
-            containers. Like get_interface but for the entire screen — returns the complete element list, \
-            not just what's currently visible. Scrolls each container to its limits and back; scroll \
-            positions are saved and restored, so the user sees no visual change. Use this when you need \
-            to know what elements exist on the full screen, or to find elements buried in long lists or \
-            carousels without navigating to them.
-            """,
-        inputSchema: .object([
-            "type": "object",
-            "properties": .object([:] as [String: Value]),
             "additionalProperties": false,
         ])
     )

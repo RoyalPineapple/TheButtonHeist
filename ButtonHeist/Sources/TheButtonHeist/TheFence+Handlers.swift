@@ -7,6 +7,26 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
+        let full = boolArg(args, "full") == true
+
+        // Full mode: explore the screen first, return all discovered elements
+        if full {
+            let result: ActionResult = try await sendAndAwait(.explore) { requestId in
+                try await self.waitForActionResult(requestId: requestId, timeout: 60)
+            }
+            lastActionResult = result
+            guard let exploreResult = result.exploreResult else {
+                return .error("Explore failed: \(result.message ?? "unknown error")")
+            }
+            let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
+            let interface = Interface(
+                timestamp: Date(),
+                elements: exploreResult.elements,
+                tree: nil
+            )
+            return .interface(interface, detail: detail, explore: exploreResult)
+        }
+
         let interface: Interface = try await sendAndAwait(.requestInterface) { requestId in
             try await self.waitForInterface(requestId: requestId, timeout: Timeouts.actionSeconds)
         }
@@ -296,8 +316,6 @@ extension TheFence {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")
             }
             return try await sendAction(.scrollToEdge(ScrollToEdgeTarget(elementTarget: target, edge: edge)))
-        case .explore:
-            return try await handleExplore(args)
         default:
             return .error("Unknown scroll action: \(command.rawValue)")
         }
@@ -400,16 +418,6 @@ extension TheFence {
 
     func handleGetPasteboard() async throws -> FenceResponse {
         return try await sendAction(.getPasteboard)
-    }
-
-    // MARK: - Handler: Explore
-
-    func handleExplore(_ args: [String: Any]) async throws -> FenceResponse {
-        let result: ActionResult = try await sendAndAwait(.explore) { requestId in
-            try await self.waitForActionResult(requestId: requestId, timeout: 60)
-        }
-        lastActionResult = result
-        return .action(result: result)
     }
 
     // MARK: - Handler: Wait For

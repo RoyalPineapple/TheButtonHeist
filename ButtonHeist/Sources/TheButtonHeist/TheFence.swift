@@ -220,7 +220,7 @@ public final class TheFence {
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
             return try await handleGesture(command: command, args: args)
-        case .scroll, .scrollToVisible, .scrollToEdge, .explore:
+        case .scroll, .scrollToVisible, .scrollToEdge:
             return try await handleScrollAction(command: command, args: args)
         case .waitFor:
             return try await handleWaitFor(args)
@@ -527,7 +527,7 @@ public final class TheFence {
                 elementCount: nil,
                 error: result.success ? nil : result.message
             )
-        case .interface(let iface, _, _):
+        case .interface(let iface, _, _, _):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil

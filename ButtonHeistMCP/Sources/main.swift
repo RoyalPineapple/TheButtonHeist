@@ -50,7 +50,7 @@ struct ButtonHeistMCPServer {
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
                  "wait_for_idle", "wait_for", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
-                 "scroll", "scroll_to_visible", "scroll_to_edge", "explore",
+                 "scroll", "scroll_to_visible", "scroll_to_edge",
                  "edit_action", "dismiss_keyboard",
                  "run_batch", "get_session_state",
                  "connect", "list_targets":
