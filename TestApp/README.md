@@ -65,8 +65,12 @@ xcodebuild -workspace ButtonHeist.xcworkspace \
 # Install and launch
 APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
 xcrun simctl install "$SIM_UDID" "$APP"
-APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
-SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+TASK_SLUG="accra-scroll-detection"  # use {workspace}-{task-slug}
+INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
+SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
 ### Known Issue: Resource Bundle
@@ -77,8 +81,10 @@ Tuist doesn't copy `AccessibilitySnapshot_AccessibilitySnapshotParser.bundle` in
 INSTALLED=$(xcrun simctl get_app_container "$SIM_UDID" com.buttonheist.testapp)
 BUNDLE=$(find ~/Library/Developer/Xcode/DerivedData -name "AccessibilitySnapshot_AccessibilitySnapshotParser.bundle" -path "*/Debug-iphonesimulator/*" | head -1)
 cp -R "$BUNDLE" "$INSTALLED/Frameworks/"
-APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
-SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
 ### Verify

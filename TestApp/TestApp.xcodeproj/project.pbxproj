@@ -676,9 +676,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/ResearchApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -688,18 +688,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.research;
 				PRODUCT_NAME = ResearchApp;
@@ -729,9 +729,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/BH Demo-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -741,18 +741,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.testapp;
 				PRODUCT_NAME = "BH Demo";
@@ -836,9 +836,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/BH Demo-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -848,18 +848,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.testapp;
 				PRODUCT_NAME = "BH Demo";
@@ -885,9 +885,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/ResearchApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -897,18 +897,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.research;
 				PRODUCT_NAME = ResearchApp;
@@ -934,9 +934,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/UIKitTestApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -946,18 +946,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.uikittestapp;
 				PRODUCT_NAME = UIKitTestApp;
@@ -1047,9 +1047,9 @@
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(inherited)",
-					"$(SRCROOT)/../AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/../submodules/AccessibilitySnapshot/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/UIKitTestApp-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -1059,18 +1059,18 @@
 				);
 				OTHER_CFLAGS = (
 					"$(inherited)",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				OTHER_SWIFT_FLAGS = (
 					"$(inherited)",
 					"-Xcc",
-					"-fmodule-map-file=$(SRCROOT)/../AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
-					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include/module.modulemap",
 					"-Xcc",
 					"-fmodule-map-file=$(SRCROOT)/../Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include/module.modulemap",
+					"-Xcc",
+					"-fmodule-map-file=$(SRCROOT)/../submodules/AccessibilitySnapshot/Derived/AccessibilitySnapshotParser_ObjC.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.buttonheist.uikittestapp;
 				PRODUCT_NAME = UIKitTestApp;
