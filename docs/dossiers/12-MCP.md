@@ -80,7 +80,6 @@ graph TD
 | 20 | `connect` | direct | `device`, `token` |
 | 21 | `list_targets` | direct | (no params) |
 | 22 | `wait_for` | direct | element match fields, `absent`, `timeout` |
-| 23 | `explore` | direct | (no params) |
 
 ### Gesture subtypes
 
@@ -91,6 +90,7 @@ graph TD
 
 ### `get_interface`
 - `detail`: `"summary"` (default — no geometry) or `"full"` (adds frame, activation point, hints)
+- `full`: `true` to explore the full screen including off-screen content in scroll views (returns all elements, restores scroll positions)
 - `elements`: optional `[String]` — heistIds to filter; omit for full tree
 - `readOnlyHint: true`, `idempotentHint: true`
 

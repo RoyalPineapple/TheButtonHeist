@@ -30,9 +30,9 @@ graph TD
         Dispatch["dispatch(command:args:) - 37-command switch"]
         Reconnect["Auto-Reconnect - via TheHandoff.setupAutoReconnect"]
 
-        subgraph Commands["Command Catalog (37)"]
+        subgraph Commands["Command Catalog (36)"]
             Conn["help, status, quit, exit, list_devices"]
-            IF["get_interface, get_screen, wait_for_idle, explore"]
+            IF["get_interface (full mode for explore), get_screen, wait_for_idle"]
             Access["activate (with optional action param), - increment, decrement, - perform_custom_action"]
             Gesture["one_finger_tap, long_press, swipe, drag, - pinch, rotate, two_finger_tap, - draw_path, draw_bezier"]
             Scroll["scroll, scroll_to_visible, scroll_to_edge"]

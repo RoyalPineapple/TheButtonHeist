@@ -525,7 +525,7 @@ cd ButtonHeistMCP && swift build -c release
 
 | Tool | Description | Key Parameters |
 |------|-------------|----------------|
-| `get_interface` | Get UI element hierarchy | `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
+| `get_interface` | Get UI element hierarchy. Pass `full: true` to include off-screen elements in scroll views. | `full`, `label`, `identifier`, `value`, `traits`, `excludeTraits` (optional filtering) |
 | `activate` | **Primary interaction tool.** Activate a UI element (activation-first pattern). Pass `action` for named actions (increment, decrement, custom) | `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `action`, `expect` |
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `swipe` | Swipe on element or between coordinates | `heistId` + `direction`, `start`/`end` (unit points), or `startX`/`startY`/`endX`/`endY`, `expect` |
@@ -541,7 +541,6 @@ cd ButtonHeistMCP && swift build -c release
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `direction`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
-| `explore` | Discover every element on screen including off-screen content in scrollable containers; scroll positions saved and restored | — |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
 | `run_batch` | Execute an ordered batch of Fence requests in one MCP call | `steps` (required), `policy` |
@@ -1140,7 +1139,7 @@ public enum ActionMethod: String, Codable, Sendable
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Full element census completed (all scrollable content discovered, scroll positions restored)
+- `explore` - Full element census completed (dispatched internally by `get_interface` with `full: true`)
 - `elementNotFound` - Element could not be found
 - `elementDeallocated` - Element's view was deallocated
 
