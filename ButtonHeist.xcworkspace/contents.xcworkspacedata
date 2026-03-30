@@ -5,11 +5,15 @@
       location = "group:ButtonHeist.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:AccessibilitySnapshot/AccessibilitySnapshot.xcodeproj">
-   </FileRef>
-   <FileRef
       location = "group:TestApp/TestApp.xcodeproj">
    </FileRef>
+   <Group
+      location = "group:submodules"
+      name = "submodules">
+      <FileRef
+         location = "group:AccessibilitySnapshot/AccessibilitySnapshot.xcodeproj">
+      </FileRef>
+   </Group>
    <Group
       location = "container:"
       name = "Dependencies">
