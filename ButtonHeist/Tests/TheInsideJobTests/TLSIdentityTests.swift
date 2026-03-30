@@ -78,7 +78,7 @@ final class TLSIdentityTests: XCTestCase {
         XCTAssertNil(error)
     }
 
-    // MARK: - Keychain Integration (hosted in AccessibilityTestApp for entitlements)
+    // MARK: - Keychain Integration (hosted in BH Demo for entitlements)
 
     func testGetOrCreateAndRetrieve() throws {
         let label = "com.buttonheist.tls.test.\(UUID().uuidString)"
