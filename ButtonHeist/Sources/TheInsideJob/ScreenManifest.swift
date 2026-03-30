@@ -11,7 +11,7 @@ import TheScore
 // Scroll positions are saved and restored; the user sees no visual change.
 //
 // Used by:
-//   explore command  → full census (target: nil), returns manifest
+//   get_interface --full → full census (target: nil), returns manifest
 //   scroll_to_visible → targeted search (target: ElementTarget), stops early
 
 /// Complete element map for a screen, including off-screen content.

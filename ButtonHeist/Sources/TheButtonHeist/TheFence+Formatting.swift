@@ -321,9 +321,10 @@ public enum FenceResponse {
         if let filteredFrom { dict["filteredFrom"] = filteredFrom }
         if let explore {
             dict["explore"] = [
+                "elementCount": explore.elementCount,
                 "scrollCount": explore.scrollCount,
                 "containersExplored": explore.containersExplored,
-                "explorationTime": String(format: "%.2f", explore.explorationTime),
+                "explorationTime": explore.explorationTime,
             ] as [String: Any]
         }
         return dict
