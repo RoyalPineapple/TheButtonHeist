@@ -81,19 +81,24 @@ extension TheBagman {
 
     // MARK: - Unified Scroll Dispatch
 
-    /// Scroll a target by one page. UIScrollViews get direct setContentOffset,
-    /// everything else gets a synthetic swipe gesture.
+    /// Scroll a target by one page. UIScrollViews get direct setContentOffset
+    /// (returns false at edge). Swipeable targets get a synthetic swipe and
+    /// compare on-screen elements before/after to detect actual movement.
     func scrollOnePage(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> Bool {
-        guard let scrollProvider else { return false }
+        guard let safecracker else { return false }
         switch target {
         case .uiScrollView(let sv):
-            return await scrollProvider.scrollByPage(sv, direction: direction)
+            return safecracker.scrollByPage(sv, direction: direction, animated: false)
         case .swipeable(let frame, _):
-            return await scrollProvider.scrollBySwipe(frame: frame, direction: direction)
+            let before = onScreen
+            _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
+            await tripwire.yieldFrames(2)
+            refreshAccessibilityData()
+            return onScreen != before
         }
     }
 
@@ -141,8 +146,8 @@ extension TheBagman {
         let moved: Bool
         switch scrollTarget {
         case .uiScrollView(let sv):
-            guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
-            moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
+            guard let safecracker else { return .failure(.scrollToEdge, message: "No gesture engine") }
+            moved = safecracker.scrollToEdge(sv, edge: target.edge)
         case .swipeable:
             // Non-UIScrollView: scroll repeatedly until stagnation
             let direction = edgeDirection(for: target.edge)
@@ -188,8 +193,8 @@ extension TheBagman {
             return foundResult(found, scrollCount: 0)
         }
 
-        guard scrollProvider != nil else {
-            return .failure(.scrollToVisible, message: "No scroll provider available")
+        guard safecracker != nil else {
+            return .failure(.scrollToVisible, message: "No gesture engine available")
         }
 
         // Walk the hierarchy tree for scrollable containers (outermost first).
@@ -298,8 +303,8 @@ extension TheBagman {
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = resolved.screenElement.scrollView,
-              let scrollProvider else { return }
-        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
+              let safecracker else { return }
+        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
@@ -312,25 +317,23 @@ extension TheBagman {
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = screenElements.values
             .first(where: { $0.object === responder })?.scrollView,
-              let scrollProvider else { return }
-        if await scrollProvider.scrollToMakeVisible(frame, in: scrollView) {
+              let safecracker else { return }
+        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refreshAccessibilityData()
         }
     }
 
+    /// Synchronous scroll-to-visible — setContentOffset is immediate,
+    /// no detached Task needed.
     private func ensureOnScreenSync(_ resolved: ResolvedTarget) {
         guard let object = resolved.screenElement.object,
-              let scrollProvider else { return }
+              let safecracker else { return }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = resolved.screenElement.scrollView else { return }
-        // scrollToMakeVisible is async in the protocol but the sync variant
-        // only needs the ContentOffset path which completes synchronously.
-        Task { @MainActor in
-            _ = await scrollProvider.scrollToMakeVisible(frame, in: scrollView)
-        }
+        _ = safecracker.scrollToMakeVisible(frame, in: scrollView)
     }
 
     // MARK: - Scroll Target Resolution (Accessibility Hierarchy)
