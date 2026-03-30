@@ -19,14 +19,17 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// UIScrollView → direct setContentOffset/SPI. Everything else → synthetic swipe.
+    /// UIScrollView → direct setContentOffset. scrollableView → SPI page scroll
+    /// with swipe fallback. swipeable → synthetic swipe only (no view ref).
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
+        case scrollableView(view: UIView, contentSize: CGSize)
         case swipeable(frame: CGRect, contentSize: CGSize)
 
         var frame: CGRect {
             switch self {
             case .uiScrollView(let sv): return sv.frame
+            case .scrollableView(let v, _): return v.frame
             case .swipeable(let frame, _): return frame
             }
         }
@@ -34,6 +37,7 @@ extension TheBagman {
         var contentSize: CGSize {
             switch self {
             case .uiScrollView(let sv): return sv.contentSize
+            case .scrollableView(_, let cs): return cs
             case .swipeable(_, let cs): return cs
             }
         }
@@ -82,6 +86,8 @@ extension TheBagman {
     // MARK: - Unified Scroll Dispatch
 
     /// Scroll a target by one page. Delegates to the active ScrollProvider.
+    /// For .scrollableView (non-UIScrollView but _accessibilityIsScrollable),
+    /// tries SPI page scroll first, falls back to synthetic swipe.
     func scrollOnePage(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
@@ -91,9 +97,34 @@ extension TheBagman {
         switch target {
         case .uiScrollView(let sv):
             return await scrollProvider.scrollByPage(sv, direction: direction)
+        case .scrollableView(let view, _):
+            // Try SPI page scroll on the view (e.g. PlatformContainer)
+            if performSPIPageScroll(view, direction: direction) {
+                await tripwire.yieldRealFrames(3)
+                return true
+            }
+            // Fall back to swipe at the view's screen frame
+            let screenFrame = view.convert(view.bounds, to: nil)
+            return await scrollProvider.scrollBySwipe(frame: screenFrame, direction: direction)
         case .swipeable(let frame, _):
             return await scrollProvider.scrollBySwipe(frame: frame, direction: direction)
         }
+    }
+
+    /// Try the accessibility SPI page scroll on any view.
+    /// Returns true if the selector exists and was called (caller must settle and check movement).
+    private func performSPIPageScroll(_ view: UIView, direction: UIAccessibilityScrollDirection) -> Bool {
+        let sel: Selector
+        switch direction {
+        case .down, .next:   sel = NSSelectorFromString("accessibilityScrollDownPage")
+        case .up, .previous: sel = NSSelectorFromString("accessibilityScrollUpPage")
+        case .right:         sel = NSSelectorFromString("accessibilityScrollRightPage")
+        case .left:          sel = NSSelectorFromString("accessibilityScrollLeftPage")
+        @unknown default: return false
+        }
+        guard view.responds(to: sel) else { return false }
+        _ = view.perform(sel)
+        return true
     }
 
     // MARK: - Scroll Command Execution
@@ -142,7 +173,7 @@ extension TheBagman {
         case .uiScrollView(let sv):
             guard let scrollProvider else { return .failure(.scrollToEdge, message: "No scroll provider") }
             moved = await scrollProvider.scrollToEdge(sv, edge: target.edge)
-        case .swipeable:
+        case .scrollableView, .swipeable:
             // Non-UIScrollView: scroll repeatedly until stagnation
             let direction = edgeDirection(for: target.edge)
             var didMove = false
@@ -256,8 +287,7 @@ extension TheBagman {
                 if let sv = view as? UIScrollView {
                     return (.uiScrollView(sv), id)
                 }
-                let screenFrame = view.convert(view.bounds, to: nil)
-                return (.swipeable(frame: screenFrame, contentSize: contentSize), id)
+                return (.scrollableView(view: view, contentSize: contentSize), id)
             }
             let id = ScrollTargetId.container(container.hashValue)
             guard !exhausted.contains(id) else { return nil }
@@ -369,8 +399,7 @@ extension TheBagman {
                 if let sv = view as? UIScrollView {
                     target = .uiScrollView(sv)
                 } else {
-                    let screenFrame = view.convert(view.bounds, to: nil)
-                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
+                    target = .scrollableView(view: view, contentSize: contentSize)
                 }
             } else {
                 target = .swipeable(frame: container.frame, contentSize: contentSize)
