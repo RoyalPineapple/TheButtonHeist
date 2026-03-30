@@ -57,7 +57,7 @@ struct ScreenManifest {
         container: AccessibilityContainer? = nil
     ) {
         for heistId in onScreen where elementContainers[heistId] == nil {
-            elementContainers[heistId] = container
+            elementContainers.updateValue(container, forKey: heistId)
         }
     }
 
