@@ -51,6 +51,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case scrollToEdge
     case resignFirstResponder
     case requestScreen
+    case explore
     case screen
     case waitForIdle
     case sessionLocked
