@@ -70,18 +70,25 @@ Use the helpers in `Tuist/ProjectDescriptionHelpers/Project+Templates.swift`:
 
 Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
 
-### Demo app details
+### App targets
 
-The two test apps in `TestApp/Project.swift` both embed TheInsideJob and TheScore:
+Three apps in `TestApp/Project.swift`, all embedding TheInsideJob and TheScore:
 
-- **AccessibilityTestApp** (`com.buttonheist.testapp`) — SwiftUI, sources in `TestApp/Sources/`
-- **UIKitTestApp** (`com.buttonheist.uikittestapp`) — UIKit, sources in `TestApp/UIKitSources/`
+| App | Bundle ID | Port | Sources | Purpose |
+|-----|-----------|------|---------|---------|
+| **BH Demo** (AccessibilityTestApp) | `com.buttonheist.testapp` | 1455 | `TestApp/Sources/` | SwiftUI demo screens for agents and benchmarking. Keep clean — no research or diagnostic UI. |
+| **BH UIKit Demo** (UIKitTestApp) | `com.buttonheist.uikittestapp` | — | `TestApp/UIKitSources/` | UIKit variant of the demo app. |
+| **BH Research** (ResearchApp) | `com.buttonheist.research` | 1457 | `TestApp/ResearchSources/` | Accessibility SPI harness, trait probes, and diagnostic tools. Not for production use. |
 
-Both include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
+All include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
+
+When adding new screens:
+- **Demo screens** (controls, scroll tests, standard UI patterns) go in `TestApp/Sources/` and are wired into `RootView.swift`
+- **Research screens** (SPI experiments, trait probing, runtime inspection) go in `TestApp/ResearchSources/` and are wired into `ResearchApp.swift`
 
 ## Simulator Quick Start
 
-Build and deploy the test app to an iOS Simulator for end-to-end testing.
+Build and deploy the demo app to an iOS Simulator for end-to-end testing.
 
 ### 1. Pick a simulator
 
@@ -98,7 +105,7 @@ SIM_UDID=<paste-udid-here>
 xcrun simctl boot "$SIM_UDID"
 ```
 
-### 2. Build the test app
+### 2. Build the demo app
 
 ```bash
 xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
