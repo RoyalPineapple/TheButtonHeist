@@ -275,7 +275,7 @@ USB devices appear alongside WiFi in `buttonheist list` — no extra configurati
 
 ```bash
 $BH list
-# [0] a1b2c3d4  AccessibilityTestApp  (WiFi)
+# [0] a1b2c3d4  BH Demo  (WiFi)
 # [1] usb-iPhone  iPhone (USB)
 ```
 

@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A5279DE30B7AF901FE29167D"
-               BuildableName = "AccessibilityTestApp.app"
-               BlueprintName = "AccessibilityTestApp"
+               BlueprintIdentifier = "A8BDA269958E0C38583749E1"
+               BuildableName = "BH Demo.app"
+               BlueprintName = "BH Demo"
                ReferencedContainer = "container:TestApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -45,9 +45,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5279DE30B7AF901FE29167D"
-            BuildableName = "AccessibilityTestApp.app"
-            BlueprintName = "AccessibilityTestApp"
+            BlueprintIdentifier = "A8BDA269958E0C38583749E1"
+            BuildableName = "BH Demo.app"
+            BlueprintName = "BH Demo"
             ReferencedContainer = "container:TestApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -62,9 +62,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A5279DE30B7AF901FE29167D"
-            BuildableName = "AccessibilityTestApp.app"
-            BlueprintName = "AccessibilityTestApp"
+            BlueprintIdentifier = "A8BDA269958E0C38583749E1"
+            BuildableName = "BH Demo.app"
+            BlueprintName = "BH Demo"
             ReferencedContainer = "container:TestApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
