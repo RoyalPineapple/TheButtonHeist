@@ -22,7 +22,6 @@ final class TheBagmanConversionTests: XCTestCase {
 
     private func makeElement(
         heistId: String = "",
-        order: Int = 0,
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
@@ -39,7 +38,6 @@ final class TheBagmanConversionTests: XCTestCase {
     ) -> HeistElement {
         HeistElement(
             heistId: heistId,
-            order: order,
             description: description,
             label: label,
             value: value,
@@ -641,9 +639,7 @@ final class TheBagmanConversionTests: XCTestCase {
         // Same elements, different object identity but equal values
         let el = makeElement(heistId: "btn", label: "OK", traits: [.button], actions: [])
         let before = [el]
-        var afterEl = el
-        afterEl.order = 0 // same order, same everything
-        let after = [afterEl]
+        let after = [el]
 
         let delta = bagman.computeDelta(
             before: snapshot(before),

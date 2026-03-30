@@ -566,6 +566,45 @@ public final class TheInsideJob {
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
+    func performExplore(
+        command: ClientMessage,
+        requestId: String?,
+        respond: @escaping (Data) -> Void
+    ) async {
+        stakeout?.noteActivity()
+        bagman.refreshAccessibilityData()
+        let beforeSnapshot = bagman.snapshotElements()
+        let beforeCachedElements = bagman.cachedElements
+        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+
+        let manifest = await bagman.exploreScreen()
+
+        let exploreResult = ExploreResult(
+            elements: bagman.snapshotAllElements(),
+            scrollCount: manifest.scrollCount,
+            containersExplored: manifest.exploredContainers.count,
+            explorationTime: manifest.explorationTime
+        )
+        let baseResult = await bagman.actionResultWithDelta(
+            success: true,
+            method: .explore,
+            message: "\(manifest.elementCount) elements, \(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s",
+            beforeSnapshot: beforeSnapshot,
+            beforeCachedElements: beforeCachedElements,
+            beforeVC: beforeVC
+        )
+        let actionResult = ActionResult(
+            success: baseResult.success,
+            method: baseResult.method,
+            message: baseResult.message,
+            interfaceDelta: baseResult.interfaceDelta,
+            animating: baseResult.animating,
+            screenName: baseResult.screenName,
+            exploreResult: exploreResult
+        )
+        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
+    }
+
     /// Record to stakeout, send response, and broadcast to subscribers.
     private func recordAndBroadcast(
         command: ClientMessage,

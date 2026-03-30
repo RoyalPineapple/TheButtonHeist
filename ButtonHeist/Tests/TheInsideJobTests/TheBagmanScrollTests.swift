@@ -132,7 +132,7 @@ final class TheBagmanScrollTests: XCTestCase {
 
     private func makeWire(heistId: String) -> HeistElement {
         HeistElement(
-            heistId: heistId, order: 0, description: "", label: nil, value: nil,
+            heistId: heistId, description: "", label: nil, value: nil,
             identifier: nil, hint: nil, traits: [], frameX: 0, frameY: 0,
             frameWidth: 0, frameHeight: 0, activationPointX: 0, activationPointY: 0,
             actions: []

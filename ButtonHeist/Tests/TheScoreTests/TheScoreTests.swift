@@ -43,7 +43,6 @@ final class MessageIntegrationTests: XCTestCase {
     func testLargeSnapshotPayload() throws {
         let elements = (0..<100).map { i in
             HeistElement(
-                order: i,
                 description: "Element \(i)",
                 label: "Label \(i)",
                 value: i % 2 == 0 ? "Value" : nil,
@@ -67,7 +66,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         if case .interface(let decodedPayload) = decoded {
             XCTAssertEqual(decodedPayload.elements.count, 100)
-            XCTAssertEqual(decodedPayload.elements[50].order, 50)
+            XCTAssertEqual(decodedPayload.elements[50].label, "Label 50")
         } else {
             XCTFail("Expected interface message")
         }
@@ -162,7 +161,6 @@ final class MessageIntegrationTests: XCTestCase {
 
         for i in 0..<5 {
             let element = HeistElement(
-                order: 0,
                 description: "Update \(i)",
                 label: "Label \(i)",
                 value: nil,

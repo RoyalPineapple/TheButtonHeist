@@ -112,7 +112,7 @@ enum NetDeltaAccumulator {
             }
         }
 
-        let addedList = netAdded.values.sorted { $0.order < $1.order }
+        let addedList = netAdded.values.sorted { $0.heistId < $1.heistId }
         let removedList = netRemoved.sorted()
         let updatedList = netUpdated.map { ElementUpdate(heistId: $0.key, changes: $0.value) }
             .sorted { $0.heistId < $1.heistId }
@@ -136,7 +136,7 @@ public enum FenceResponse {
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case devices([DiscoveredDevice])
-    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil)
+    case interface(Interface, detail: InterfaceDetail = .summary, filteredFrom: Int? = nil, explore: ExploreResult? = nil)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
     case screenshot(path: String, width: Double, height: Double)
     case screenshotData(pngData: String, width: Double, height: Double)
@@ -173,7 +173,7 @@ public enum FenceResponse {
             return "Not connected"
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface, _, _):
+        case .interface(let interface, _, _, _):
             return formatInterface(interface)
         case .action(let result, let expectation):
             var text = formatActionResult(result)
@@ -276,8 +276,8 @@ public enum FenceResponse {
             return payload
         case .devices(let devices):
             return devicesJsonDict(devices)
-        case .interface(let interface, let detail, let filteredFrom):
-            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom)
+        case .interface(let interface, let detail, let filteredFrom, let explore):
+            return interfaceJsonDict(interface, detail: detail, filteredFrom: filteredFrom, explore: explore)
         case .action(let result, let expectation):
             return actionWithExpectationJsonDict(result, expectation: expectation)
         case .screenshot(let path, let width, let height):
@@ -310,7 +310,8 @@ public enum FenceResponse {
     }
 
     private func interfaceJsonDict(
-        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?
+        _ interface: Interface, detail: InterfaceDetail, filteredFrom: Int?,
+        explore: ExploreResult? = nil
     ) -> [String: Any] {
         var dict: [String: Any] = [
             "status": "ok",
@@ -318,6 +319,14 @@ public enum FenceResponse {
             "interface": interfaceDictionary(interface, detail: detail),
         ]
         if let filteredFrom { dict["filteredFrom"] = filteredFrom }
+        if let explore {
+            dict["explore"] = [
+                "elementCount": explore.elementCount,
+                "scrollCount": explore.scrollCount,
+                "containersExplored": explore.containersExplored,
+                "explorationTime": explore.explorationTime,
+            ] as [String: Any]
+        }
         return dict
     }
 
@@ -487,17 +496,17 @@ public enum FenceResponse {
         if interface.elements.isEmpty {
             output += "  (no elements)\n"
         } else {
-            for element in interface.elements {
-                output += formatElement(element)
+            for (i, element) in interface.elements.enumerated() {
+                output += formatElement(element, displayIndex: i)
             }
         }
         output += String(repeating: "-", count: 60)
         return output
     }
 
-    private func formatElement(_ element: HeistElement) -> String {
+    private func formatElement(_ element: HeistElement, displayIndex: Int) -> String {
         var output = ""
-        let index = String(format: "  [%2d]", element.order)
+        let index = String(format: "  [%2d]", displayIndex)
         let label = element.label ?? element.description
         output += "\(index) \(label)\n"
 
@@ -567,12 +576,12 @@ public enum FenceResponse {
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
                 .joined(separator: "\n")
-        case .interface(let interface, _, let filteredFrom):
+        case .interface(let interface, _, let filteredFrom, _):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
             var lines: [String] = [header]
-            for element in interface.elements {
-                lines.append(Self.compactElementLine(element))
+            for (i, element) in interface.elements.enumerated() {
+                lines.append(Self.compactElementLine(element, displayIndex: i))
             }
             return lines.joined(separator: "\n")
         case .action(let result, let expectation):
@@ -707,9 +716,9 @@ public enum FenceResponse {
 
     /// Compact one-line-per-element format for LLM agents.
     /// Geometry is omitted by default — agents can request it via `get_interface --detail full`.
-    public static func compactElementLine(_ element: HeistElement) -> String {
+    public static func compactElementLine(_ element: HeistElement, displayIndex: Int? = nil) -> String {
         var parts: [String] = []
-        parts.append("[\(element.order)]")
+        if let displayIndex { parts.append("[\(displayIndex)]") }
         parts.append(element.heistId)
 
         if let label = element.label {
@@ -735,8 +744,8 @@ public enum FenceResponse {
 
     public static func compactInterface(_ interface: Interface) -> String {
         var lines: [String] = ["\(interface.elements.count) elements"]
-        for element in interface.elements {
-            lines.append(compactElementLine(element))
+        for (i, element) in interface.elements.enumerated() {
+            lines.append(compactElementLine(element, displayIndex: i))
         }
         return lines.joined(separator: "\n")
     }
@@ -795,7 +804,6 @@ public enum FenceResponse {
     private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
-            "order": element.order,
             "description": element.description,
             "traits": element.traits.map(\.rawValue),
             "actions": element.actions.map(\.description),

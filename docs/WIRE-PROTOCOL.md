@@ -1,6 +1,6 @@
 # Button Heist Wire Protocol Specification
 
-**Version**: 6.3
+**Version**: 6.7
 
 This document specifies the communication protocol between TheInsideJob (iOS) and clients (ButtonHeist framework, CLI, Python scripts).
 
@@ -155,7 +155,7 @@ The optional `driverId` field provides a unique driver identity for session lock
 
 ### requestInterface
 
-Request current UI element interface.
+Request current UI element interface. Returns only elements currently visible on screen.
 
 ```json
 {"protocolVersion":"6.2","type":"requestInterface"}
@@ -446,6 +446,20 @@ Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right).
 
 Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
 
+### explore
+
+Full screen element census. Scrolls every scrollable container to its limits and back, discovering all elements including off-screen content. Scroll positions are saved and restored — no visual change occurs.
+
+No payload required.
+
+```json
+{"protocolVersion":"6.7","type":"explore"}
+```
+
+Returns an `actionResult` with `method: "explore"` and an `exploreResult` containing the complete element list, scroll count, containers explored, and exploration time.
+
+> **Note**: `explore` is not exposed as a standalone CLI/MCP command. It is dispatched internally by `get_interface` when the `full` parameter is true. See [Element Discovery](#element-discovery) for usage guidance.
+
 ### editAction
 
 Perform a standard edit action via the responder chain.
@@ -709,7 +723,7 @@ The `tree` field is optional. When present, it provides the hierarchical contain
 
 ### actionResult
 
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands.
+Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, or `scrollToEdge` commands. Also returned internally by `explore` (dispatched via `get_interface` with `full: true`).
 
 ```json
 {"protocolVersion":"6.2","type":"actionResult","payload":{
@@ -752,6 +766,7 @@ Possible methods:
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
 - `scrollToEdge` - Scroll view scrolled to an edge
+- `explore` - Full element census completed (all scrollable content discovered, scroll positions restored)
 - `elementNotFound` - Target element could not be found
 - `elementDeallocated` - Element's underlying view was deallocated
 
@@ -861,6 +876,77 @@ Error message.
 ```json
 {"protocolVersion":"6.2","type":"error","payload":"Root view not available"}
 ```
+
+## Element Discovery
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant TheFence
+    participant TheInsideJob
+    participant TheBagman
+
+    Note over Agent,TheBagman: get_interface (visible only)
+    Agent->>TheFence: get_interface
+    TheFence->>TheInsideJob: requestInterface
+    TheInsideJob->>TheBagman: snapshotElements()
+    TheBagman-->>Agent: interface (visible elements)
+
+    Note over Agent,TheBagman: get_interface --full (explore)
+    Agent->>TheFence: get_interface(full: true)
+    TheFence->>TheInsideJob: explore
+    TheInsideJob->>TheBagman: exploreScreen()
+
+    loop each scrollable container
+        TheBagman->>TheBagman: save scroll position
+        loop scroll forward until stagnation
+            TheBagman->>TheBagman: scrollByPage
+            TheBagman->>TheBagman: refreshAccessibilityData
+            TheBagman->>TheBagman: record new elements
+        end
+        TheBagman->>TheBagman: restore scroll position
+    end
+
+    TheBagman-->>Agent: interface (all elements + explore metadata)
+```
+
+Three ways to find elements, each suited to a different situation:
+
+| Command | What it returns | When to use |
+|---------|----------------|-------------|
+| `get_interface` | Visible elements only | Fast reads. You know the element is on screen, or you want the current viewport. |
+| `get_interface` with `full: true` | Every element on screen, including off-screen content | You need to know what exists in scroll views without navigating. Returns the same `interface` response with all elements populated. |
+| `scroll_to_visible` | Scrolls until the target element is found, leaves viewport on it | You know the element exists and want to **navigate to it** for interaction. Changes the scroll position. |
+
+### Choosing between full and scroll_to_visible
+
+- **`get_interface --full`** is a read operation. It explores, then restores scroll positions. The user sees no change. Use it when you need a census — "what elements are on this screen?" — without committing to navigate anywhere.
+
+- **`scroll_to_visible`** is a navigation action. It scrolls to the target and leaves the viewport there so you can interact with the element. Use it when you already know what you want and need to get to it.
+
+Both use the same internal exploration algorithm. `get_interface --full` with no target does a complete census. `scroll_to_visible` uses element-first search and stops early when the target is found.
+
+```mermaid
+flowchart TD
+    A[Need to find an element?] --> B{Is it likely visible?}
+    B -->|Yes| C[get_interface]
+    B -->|No / unsure| D{Need to interact with it?}
+    D -->|Yes| E[scroll_to_visible<br>Navigates to element,<br>leaves viewport there]
+    D -->|No, just check existence| F[get_interface --full<br>Census then restore<br>scroll positions]
+    C --> G{Found it?}
+    G -->|Yes| H[activate / scroll / interact]
+    G -->|No| D
+```
+
+### When you don't need either
+
+Most agent workflows don't need full exploration. The typical pattern is:
+
+1. `get_interface` — see what's visible
+2. `activate` / `scroll` / `swipe` — interact with visible elements
+3. `scroll_to_visible` — find a specific off-screen element when needed
+
+Use `get_interface --full` when the screen has deep scrollable content and you need to make decisions based on elements that aren't currently visible (e.g., checking if a specific item exists in a long list before deciding what to do).
 
 ## Data Types
 
