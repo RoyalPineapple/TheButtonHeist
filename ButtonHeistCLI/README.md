@@ -24,7 +24,7 @@ All commands accept `--device <filter>`. The filter matches case-insensitively a
 
 ```bash
 buttonheist --device a1b2 activate --identifier loginButton
-buttonheist --device "AccessibilityTestApp" screenshot --output screen.png
+buttonheist --device "BH Demo" screenshot --output screen.png
 ```
 
 Without `--device`, direct commands expect exactly one reachable target. No guessing, no roulette.

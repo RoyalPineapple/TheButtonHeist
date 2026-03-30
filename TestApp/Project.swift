@@ -19,7 +19,7 @@ let project = Project(
     targets: [
         // MARK: - Demo App
         .target(
-            name: "AccessibilityTestApp",
+            name: "BH Demo",
             destinations: .iOS,
             product: .app,
             bundleId: "com.buttonheist.testapp",

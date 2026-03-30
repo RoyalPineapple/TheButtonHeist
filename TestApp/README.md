@@ -7,7 +7,7 @@ Both apps embed TheInsideJob — it auto-starts when the app launches, no code c
 ## SwiftUI Test App — "A11y SwiftUI"
 
 - **Bundle ID**: `com.buttonheist.testapp`
-- **Scheme**: `AccessibilityTestApp`
+- **Scheme**: `BH Demo`
 
 ### Screens
 
@@ -59,11 +59,11 @@ xcrun simctl boot "$SIM_UDID"
 
 # Build
 xcodebuild -workspace ButtonHeist.xcworkspace \
-  -scheme AccessibilityTestApp \
+  -scheme BH Demo \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 
 # Install and launch
-APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/AccessibilityTestApp.app | head -1)
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
 xcrun simctl install "$SIM_UDID" "$APP"
 APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp

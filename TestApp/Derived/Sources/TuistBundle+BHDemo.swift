@@ -6,12 +6,12 @@ import Foundation
 // MARK: - Swift Bundle Accessor for Frameworks
 private class BundleFinder {}
 extension Foundation.Bundle {
-/// Since AccessibilityTestApp is a application, the bundle for classes within this module can be used directly.
+/// Since BH Demo is a application, the bundle for classes within this module can be used directly.
 static let module = Bundle(for: BundleFinder.self)
 }
 // MARK: - Objective-C Bundle Accessor
 @objc
-public class AccessibilityTestAppResources: NSObject {
+public class BHDemoResources: NSObject {
 @objc public class var bundle: Bundle {
     return .module
 }

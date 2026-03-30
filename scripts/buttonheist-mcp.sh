@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [ -z "$BUTTONHEIST_DEVICE" ]; then
-    APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/AccessibilityTestApp.app 2>/dev/null | head -1)
+    APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app 2>/dev/null | head -1)
     if [ -n "$APP" ]; then
         PORT=$(/usr/libexec/PlistBuddy -c "Print :InsideJobPort" "$APP/Info.plist" 2>/dev/null)
         if [ -n "$PORT" ] && [ "$PORT" -gt 0 ] 2>/dev/null; then
