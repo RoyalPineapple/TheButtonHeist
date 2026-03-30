@@ -751,47 +751,35 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
 public struct ScrollToVisibleTarget: Sendable {
     /// Element to search for while scrolling.
     public let elementTarget: ElementTarget?
-    /// Maximum scroll attempts before giving up (default: 20)
-    public let maxScrolls: Int?
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
     public init(
         elementTarget: ElementTarget? = nil,
-        maxScrolls: Int? = nil,
         direction: ScrollSearchDirection? = nil
     ) {
         self.elementTarget = elementTarget
-        self.maxScrolls = maxScrolls
         self.direction = direction
     }
 
-    public var resolvedMaxScrolls: Int { max(maxScrolls ?? 50, 1) }
     public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
 }
 
 extension ScrollToVisibleTarget: Codable {
     private enum CodingKeys: String, CodingKey {
         case heistId, label, identifier, value, traits, excludeTraits
-        case maxScrolls, direction
+        case direction
     }
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Decode element target from flat fields — nil if no targeting fields present
         self.elementTarget = try? ElementTarget(from: decoder)
-        self.maxScrolls = try container.decodeIfPresent(Int.self, forKey: .maxScrolls)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
-
     }
 
     public func encode(to encoder: Encoder) throws {
+        if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        if let elementTarget {
-            try elementTarget.encode(to: encoder)
-        }
-        try container.encodeIfPresent(maxScrolls, forKey: .maxScrolls)
         try container.encodeIfPresent(direction, forKey: .direction)
-
     }
 }
 

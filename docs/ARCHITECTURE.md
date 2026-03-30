@@ -55,7 +55,7 @@ graph TB
 - `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)
 - `ElementMatcher` - Composable predicate for matching elements by label, identifier, value, traits, and excludeTraits
 - `UnitPoint` - Unit coordinates (0–1) relative to element frame for device-independent swiping
-- `ScrollToVisibleTarget` - Search target wrapping an optional `heistId` or `ElementMatcher` with `maxScrolls` and `direction`
+- `ScrollToVisibleTarget` - Search target wrapping an optional `heistId` or `ElementMatcher` with `direction`
 - `WaitForTarget` - Wait for element to appear/disappear with predicate matching and timeout (max 30s)
 - `ScrollSearchResult` - Scroll search diagnostics (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `ScreenPayload` - Base64-encoded PNG with dimensions

@@ -146,88 +146,105 @@ struct TraitProbeView: View {
             .compactMap({ $0 as? UIWindowScene })
             .first?.windows.first else { return }
 
-        // Walk the UIView hierarchy for UIKit controls (UISwitch, UITextField, etc.)
-        // AND collect hosting views to walk their SwiftUI accessibility trees.
-        var hostingViews: [UIView] = []
-        walkViews(window, depth: 0, hostingViews: &hostingViews)
-
-        // Walk SwiftUI accessibility trees rooted at each hosting view.
-        for host in hostingViews {
-            walkSwiftUIAccessibilityTree(host, depth: 0)
-        }
+        // Walk ALL UIViews — record traits and also probe private SPI
+        walkAllViews(window, depth: 0)
     }
 
-    private func walkViews(_ view: UIView, depth: Int, hostingViews: inout [UIView]) {
-        let traits = view.accessibilityTraits.rawValue
-        if traits != 0 {
-            let label = view.accessibilityLabel ?? String(describing: type(of: view))
-            let id = view.accessibilityIdentifier
-            addResult(label: label, identifier: id, traits: traits, depth: depth, source: "view")
-        }
-        // Detect SwiftUI hosting views — they contain the accessibility tree root
+    /// Walk the entire UIView hierarchy. For every view:
+    /// 1. Record raw accessibilityTraits if non-zero
+    /// 2. Probe _accessibilityIsScrollable SPI
+    /// 3. Walk accessibilityElements (crosses into SwiftUI AccessibilityNode tree)
+    private func walkAllViews(_ view: UIView, depth: Int) {
         let cls = String(describing: type(of: view))
-        if cls.contains("HostingView") || cls.contains("HostingController") {
-            hostingViews.append(view)
+        let traits = view.accessibilityTraits.rawValue
+
+        // Always record views with traits
+        if traits != 0 {
+            let label = view.accessibilityLabel ?? cls
+            addResult(label: label, identifier: view.accessibilityIdentifier,
+                      traits: traits, depth: depth, source: "view")
         }
+
+        // Probe _accessibilityIsScrollable SPI on scroll views
+        let scrollableSel = NSSelectorFromString("_accessibilityIsScrollable")
+        if view.responds(to: scrollableSel),
+           let result = view.perform(scrollableSel) {
+            // performSelector returns Unmanaged; for BOOL the pointer IS the value
+            let isScrollable = Int(bitPattern: result.toOpaque()) != 0
+            if isScrollable {
+                // Record this view with its traits + scrollable annotation
+                let label = view.accessibilityLabel ?? cls
+                var extra = "scrollable=YES"
+                // Also check scroll status
+                let statusSel = NSSelectorFromString("_accessibilityScrollStatus")
+                if view.responds(to: statusSel),
+                   let statusResult = view.perform(statusSel)?.takeUnretainedValue() as? String {
+                    extra += " status=\"\(statusResult)\""
+                }
+                addResult(label: "\(label) [\(extra)]",
+                          identifier: view.accessibilityIdentifier,
+                          traits: traits, depth: depth, source: "spi")
+            }
+        }
+
+        // Walk accessibilityElements — this crosses into SwiftUI's AccessibilityNode tree
+        if let elements = view.accessibilityElements {
+            for element in elements {
+                guard let obj = element as? NSObject else { continue }
+                walkAccessibilityNode(obj, depth: depth + 1)
+            }
+        }
+
+        // Recurse into subviews
         for sub in view.subviews {
-            walkViews(sub, depth: depth + 1, hostingViews: &hostingViews)
+            walkAllViews(sub, depth: depth + 1)
         }
     }
 
-    /// Walk the SwiftUI accessibility tree by finding hosting views and
-    /// walking their accessibilityElement children recursively.
-    /// SwiftUI hosting views expose AccessibilityNode children via
-    /// accessibilityElement(at:) — not via _accessibilityNodeChildrenUnsorted
-    /// which returns Swift Arrays that don't bridge through performSelector.
-    private func walkSwiftUIAccessibilityTree(_ obj: NSObject, depth: Int) {
+    /// Walk a SwiftUI AccessibilityNode and its children recursively.
+    /// AccessibilityNodes expose children via accessibilityElements property.
+    private func walkAccessibilityNode(_ obj: NSObject, depth: Int) {
         guard depth < 20 else { return }
 
-        // Walk accessibilityElements property if available
-        if let elements = obj.accessibilityElements {
-            for element in elements {
-                guard let child = element as? NSObject else { continue }
-                recordAndRecurse(child, depth: depth)
-            }
-            return
-        }
-
-        // Walk indexed accessibility elements
-        let count = obj.accessibilityElementCount()
-        if count > 0, count < 500, count != NSNotFound {
-            for i in 0..<count {
-                guard let child = obj.accessibilityElement(at: i) as? NSObject else { continue }
-                recordAndRecurse(child, depth: depth)
-            }
-        }
-    }
-
-    private func recordAndRecurse(_ child: NSObject, depth: Int) {
-        let traits = child.accessibilityTraits.rawValue
-        let isElement = child.isAccessibilityElement
-        let label = child.accessibilityLabel
-        let cls = String(describing: type(of: child))
+        let traits = obj.accessibilityTraits.rawValue
+        let isElement = obj.isAccessibilityElement
+        let label = obj.accessibilityLabel
+        let cls = String(describing: type(of: obj))
 
         if traits != 0 || isElement {
             let displayLabel = label ?? cls
-            let id = (child as? UIAccessibilityIdentification)?.accessibilityIdentifier
-            addResult(label: displayLabel, identifier: id, traits: traits, depth: depth, source: "swui")
+            let id = (obj as? UIAccessibilityIdentification)?.accessibilityIdentifier
+            addResult(label: displayLabel, identifier: id, traits: traits,
+                      depth: depth, source: "node")
         }
 
-        walkSwiftUIAccessibilityTree(child, depth: depth + 1)
+        // Walk children via accessibilityElements
+        if let elements = obj.accessibilityElements {
+            for element in elements {
+                guard let child = element as? NSObject else { continue }
+                walkAccessibilityNode(child, depth: depth + 1)
+            }
+        }
     }
-
     private func addResult(label: String, identifier: String?, traits: UInt64, depth: Int, source: String) {
         let known: [(Int, String)] = [
+            // Public traits (bits 0-14, 16-17)
             (0, "button"), (1, "link"), (2, "image"), (3, "selected"),
             (4, "playsSound"), (5, "keyboardKey"), (6, "staticText"),
             (7, "summaryElement"), (8, "notEnabled"), (9, "updatesFrequently"),
             (10, "searchField"), (11, "startsMediaSession"), (12, "adjustable"),
-            (13, "allowsDirectInteraction"), (14, "causesPageTurn"), (15, "header"),
-            (18, "textEntry"), (21, "isEditing"), (24, "secureTextField"),
-            (27, "backButton"), (28, "tabBarItem"), (47, "scrollable"),
-            (48, "tabBar"), (53, "switchButton"),
+            (13, "allowsDirectInteraction"), (14, "causesPageTurn"),
+            (16, "header"), (17, "tabBar"),
+            // Private traits (confirmed via AccessibilitySnapshotParser + AXRuntime)
+            (18, "textEntry"), (19, "pickerElement"), (20, "radioButton"),
+            (21, "isEditing"), (22, "launchIcon"), (23, "statusBarElement"),
+            (24, "secureTextField"), (25, "inactive"), (26, "footer"),
+            (27, "backButton"), (28, "tabBarItem"),
+            // Higher private traits
+            (29, "autoCorrectCandidate"), (30, "deleteKey"),
+            (31, "selectionDismissesItem"), (32, "visited"),
+            (47, "scrollable"), (53, "switchButton"),
         ]
-        _ = Set(known.map(\.0))
 
         var bits: [String] = []
         var unknowns: [String] = []

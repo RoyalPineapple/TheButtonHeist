@@ -12,6 +12,7 @@
 		06EA656669AD7FD0FDCBD16B /* TheScore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		07AA27471A9D9F2910748FDB /* swift-crypto_CCryptoBoringSSLShims.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		0B7EB1E6FE0F617D95F7095C /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		143743AB1E72FEAAF3812BCA /* TraitValidationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 478286F011EE335068140FB2 /* TraitValidationView.swift */; };
 		14E74B7559726E7E78954994 /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		18770BE558AFA7ED1A6D0254 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6EF972032CB124C82F21FE17 /* TheScore.framework */; };
 		1E1BF81AC448FD851070F7D5 /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -151,6 +152,7 @@
 		3043BA82964C737BBCED996A /* Crypto.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Crypto.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3C83CD8B9B8895CCCF58B8FB /* UIKitTestApp-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "UIKitTestApp-Info.plist"; sourceTree = "<group>"; };
 		3F615D34144CD2CEE208054B /* ButtonsActionsDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonsActionsDemo.swift; sourceTree = "<group>"; };
+		478286F011EE335068140FB2 /* TraitValidationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraitValidationView.swift; sourceTree = "<group>"; };
 		484B42EBF5AEA433BA605F9B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4917AB19CA54DDF7BFEB1849 /* AccessibilityTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTestApp.swift; sourceTree = "<group>"; };
 		568C6D6F3B1811E4D29924F9 /* SwiftASN1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftASN1.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -237,6 +239,7 @@
 				FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */,
 				BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */,
 				0671D10ADFFDE0D79EC23086 /* TraitProbeView.swift */,
+				478286F011EE335068140FB2 /* TraitValidationView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -523,6 +526,7 @@
 				8CFF7D3CBED9A5220DD83FCC /* TogglePickerDemo.swift in Sources */,
 				A7AFDDCAB62A9EDAB026F09D /* TouchCanvasView.swift in Sources */,
 				35520C4748BADADD6E39476D /* TraitProbeView.swift in Sources */,
+				143743AB1E72FEAAF3812BCA /* TraitValidationView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

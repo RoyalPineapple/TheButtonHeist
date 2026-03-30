@@ -278,8 +278,7 @@ extension TheFence {
             }
             let scrollToVisibleTarget = ScrollToVisibleTarget(
                 elementTarget: target,
-                maxScrolls: intArg(args, "maxScrolls"),
-                direction: direction,
+                direction: direction
             )
             let result: ActionResult = try await sendAndAwait(.scrollToVisible(scrollToVisibleTarget)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)

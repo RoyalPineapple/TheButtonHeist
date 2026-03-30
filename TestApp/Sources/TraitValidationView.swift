@@ -1,0 +1,341 @@
+import SwiftUI
+import UIKit
+import MapKit
+import WebKit
+
+// MARK: - Trait Validation Screen
+
+/// Exercises every known private accessibility trait so we can validate bit positions.
+/// Tap "Scan All" to walk the full accessibility tree and dump raw trait bitmasks.
+struct TraitValidationView: View {
+    @State private var results: [TraitScanResult] = []
+    @State private var scanning = false
+    @State private var filterUnknownOnly = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            toolbar
+            Divider()
+            controlSurface
+            Divider()
+            resultsList
+        }
+        .navigationTitle("Trait Validation")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Toolbar
+
+    private var toolbar: some View {
+        HStack(spacing: 8) {
+            Button("Scan All") { runScan() }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("traitVal.scan")
+            Toggle("Unknown", isOn: $filterUnknownOnly)
+                .fixedSize()
+            Spacer()
+            Text("\(filteredResults.count)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Button("Clear") { results.removeAll() }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("traitVal.clear")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Results
+
+    private var filteredResults: [TraitScanResult] {
+        filterUnknownOnly ? results.filter { !$0.unknownBits.isEmpty } : results
+    }
+
+    private var resultsList: some View {
+        List(filteredResults) { r in
+            VStack(alignment: .leading, spacing: 2) {
+                Text(r.label)
+                    .font(.system(.caption, design: .monospaced))
+                    .bold()
+                Text(r.bitString)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                if !r.unknownBits.isEmpty {
+                    Text("UNKNOWN: \(r.unknownBits)")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .accessibilityIdentifier("traitVal.results")
+    }
+
+    // MARK: - Control Surface
+    //
+    // Every section targets a specific private trait. Controls are chosen to
+    // provoke the trait so the scanner can read the raw bitmask.
+
+    @State private var toggleVal = false
+    @State private var segVal = "A"
+    @State private var menuVal = "X"
+    @State private var sliderVal = 0.5
+    @State private var stepperVal = 3
+    @State private var dateVal = Date()
+    @State private var textVal = ""
+    @State private var secureVal = ""
+    @State private var bioText = "Editable text area for textArea trait"
+    @State private var searchText = ""
+    @State private var showAlert = false
+    @State private var showSheet = false
+    @State private var disclosureOpen = true
+
+    private var controlSurface: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                // bit 0: button + bit 8: notEnabled
+                Button("Button") {}.accessibilityIdentifier("tv.button")
+                Button("Disabled") {}.disabled(true).accessibilityIdentifier("tv.disabledButton")
+                // bit 1: link
+                Link("Link", destination: URL(string: "https://example.com")!).accessibilityIdentifier("tv.link")
+                // bit 2: image
+                Image(systemName: "star.fill").accessibilityLabel("Star").accessibilityIdentifier("tv.image")
+                // bit 3: selected
+                Picker("Seg", selection: $segVal) { Text("A").tag("A"); Text("B").tag("B") }
+                    .pickerStyle(.segmented).accessibilityIdentifier("tv.seg")
+                // bit 6: staticText
+                Text("Static").accessibilityIdentifier("tv.static")
+                // bit 9: updatesFrequently
+                ProgressView(value: 0.6).accessibilityIdentifier("tv.progress")
+                // bit 12: adjustable
+                Slider(value: $sliderVal).accessibilityIdentifier("tv.slider")
+                // bit 16: header
+                Text("Header").accessibilityAddTraits(.isHeader).accessibilityIdentifier("tv.header")
+                // bit 18: textEntry
+                TextField("Text", text: $textVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.text")
+                // bit 24: secureTextField
+                SecureField("Pass", text: $secureVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.secure")
+                // bit 39: popupButton
+                Menu("Menu") { Button("A") {}; Button("B") {} }.accessibilityIdentifier("tv.menu")
+                // bit 47: textArea — tested via Controls Demo > Text Input (bioEditor)
+                // bit 53: switchButton
+                Toggle("Toggle", isOn: $toggleVal).accessibilityIdentifier("tv.toggle")
+            }
+            .padding(.horizontal, 12)
+        }
+        .frame(height: 300)
+    }
+
+    @ViewBuilder
+    private func traitSection(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.tertiary)
+            content()
+        }
+    }
+
+    // MARK: - Scanner
+
+    private func runScan() {
+        results.removeAll()
+        nodeVisited.removeAll()
+        scanning = true
+        guard let window = UIApplication.shared
+            .connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first?.windows.first else { scanning = false; return }
+
+        walkAllViews(window, depth: 0)
+        scanning = false
+    }
+
+    private func walkAllViews(_ view: UIView, depth: Int) {
+        guard depth < 30 else { return }
+        let cls = String(describing: type(of: view))
+        let traits = view.accessibilityTraits.rawValue
+
+        if traits != 0 || view.isAccessibilityElement {
+            let label = view.accessibilityLabel ?? cls
+            record(label: label, identifier: view.accessibilityIdentifier,
+                   traits: traits, depth: depth, source: "view")
+        }
+
+        // SPI: _accessibilityIsScrollable
+        probeScrollableSPI(view, depth: depth)
+
+        // Cross into SwiftUI AccessibilityNode tree
+        if let elements = view.accessibilityElements {
+            for element in elements {
+                guard let obj = element as? NSObject else { continue }
+                walkAccessibilityNode(obj, depth: depth + 1)
+            }
+        }
+
+        for sub in view.subviews {
+            walkAllViews(sub, depth: depth + 1)
+        }
+    }
+
+    // Track visited nodes to avoid cycles in the accessibility tree
+    @State private var nodeVisited = Set<ObjectIdentifier>()
+
+    private func walkAccessibilityNode(_ obj: NSObject, depth: Int) {
+        guard depth < 25 else { return }
+        let oid = ObjectIdentifier(obj)
+        guard !nodeVisited.contains(oid) else { return }
+        nodeVisited.insert(oid)
+
+        let traits = obj.accessibilityTraits.rawValue
+        let isElement = obj.isAccessibilityElement
+        let label = obj.accessibilityLabel
+        let cls = String(describing: type(of: obj))
+
+        if traits != 0 || isElement {
+            let displayLabel = label ?? cls
+            let id = (obj as? UIAccessibilityIdentification)?.accessibilityIdentifier
+            record(label: displayLabel, identifier: id, traits: traits, depth: depth, source: "node")
+        }
+
+        // Walk children
+        if let elements = obj.accessibilityElements {
+            for element in elements {
+                guard let child = element as? NSObject else { continue }
+                walkAccessibilityNode(child, depth: depth + 1)
+            }
+        }
+    }
+
+    private func probeScrollableSPI(_ view: UIView, depth: Int) {
+        let sel = NSSelectorFromString("_accessibilityIsScrollable")
+        guard view.responds(to: sel),
+              let result = view.perform(sel) else { return }
+        let isScrollable = Int(bitPattern: result.toOpaque()) != 0
+        guard isScrollable else { return }
+
+        let cls = String(describing: type(of: view))
+        let label = view.accessibilityLabel ?? cls
+        var extra = "scrollable=YES"
+        let statusSel = NSSelectorFromString("_accessibilityScrollStatus")
+        if view.responds(to: statusSel),
+           let statusResult = view.perform(statusSel)?.takeUnretainedValue() as? String {
+            extra += " \"\(statusResult)\""
+        }
+        record(label: "\(label) [\(extra)]", identifier: view.accessibilityIdentifier,
+               traits: view.accessibilityTraits.rawValue, depth: depth, source: "spi")
+    }
+
+    // MARK: - Recording
+
+    // Complete trait map: public + all confirmed private bits from AXRuntime
+    private static let traitMap: [(Int, String)] = [
+        // Public UIAccessibilityTraits
+        (0, "button"), (1, "link"), (2, "image"), (3, "selected"),
+        (4, "playsSound"), (5, "keyboardKey"), (6, "staticText"),
+        (7, "summaryElement"), (8, "notEnabled"), (9, "updatesFrequently"),
+        (10, "searchField"), (11, "startsMediaSession"), (12, "adjustable"),
+        (13, "allowsDirectInteraction"), (14, "causesPageTurn"),
+        // Public but different bit than old header constant
+        (16, "header"),
+        // Private — from AXRuntime / empirical observation
+        (17, "webContent"), (18, "textEntry"), (19, "pickerElement"),
+        (20, "radioButton"), (21, "isEditing"), (22, "launchIcon"),
+        (23, "statusBarElement"), (24, "secureTextField"), (25, "inactive"),
+        (26, "footer"), (27, "backButton"), (28, "tabBarItem"),
+        (29, "autoCorrectCandidate"), (30, "deleteKey"),
+        (31, "selectionDismissesItem"), (32, "visited"),
+        (33, "AXScrollable"), (34, "spacer"), (35, "tableIndex"),
+        (36, "map"), (37, "textOpsAvailable"), (38, "draggable"),
+        (39, "popupButton"),
+        // Higher bits
+        (47, "textArea"), (48, "tabBar"),
+        (52, "menuItem"), (53, "switchButton"),
+        (56, "alert"),
+    ]
+
+    private func record(label: String, identifier: String?, traits: UInt64, depth: Int, source: String) {
+        var bits: [String] = []
+        var unknowns: [String] = []
+        for b in 0..<64 where traits & (1 << b) != 0 {
+            if let entry = Self.traitMap.first(where: { $0.0 == b }) {
+                bits.append("\(b):\(entry.1)")
+            } else {
+                bits.append("\(b):???")
+                unknowns.append("bit\(b)")
+            }
+        }
+
+        let prefix = String(repeating: "  ", count: min(depth, 3))
+        let idStr = identifier.map { " [\($0)]" } ?? ""
+        results.append(TraitScanResult(
+            label: "\(prefix)\(source)| \(label)\(idStr)",
+            bitString: bits.joined(separator: " "),
+            unknownBits: unknowns.joined(separator: " "),
+            rawValue: traits
+        ))
+    }
+}
+
+// MARK: - Helper Views
+
+/// UISearchBar wrapper — the only reliable way to get the searchField trait.
+struct SearchFieldWrapper: UIViewRepresentable {
+    @Binding var text: String
+
+    func makeUIView(context: Context) -> UISearchBar {
+        let bar = UISearchBar()
+        bar.placeholder = "Search..."
+        bar.searchBarStyle = .minimal
+        return bar
+    }
+
+    func updateUIView(_ uiView: UISearchBar, context: Context) {
+        uiView.text = text
+    }
+}
+
+/// UITabBar wrapper — avoids TabView/NavigationStack conflict.
+struct UITabBarProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> UITabBar {
+        let bar = UITabBar()
+        bar.items = [
+            UITabBarItem(title: "First", image: UIImage(systemName: "1.circle"), tag: 0),
+            UITabBarItem(title: "Second", image: UIImage(systemName: "2.circle"), tag: 1),
+        ]
+        bar.selectedItem = bar.items?.first
+        return bar
+    }
+
+    func updateUIView(_ uiView: UITabBar, context: Context) {}
+}
+
+/// MKMapView wrapper — lighter than SwiftUI Map inside a ScrollView.
+struct MapProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> MKMapView {
+        let mv = MKMapView()
+        mv.isScrollEnabled = false
+        mv.isZoomEnabled = false
+        return mv
+    }
+
+    func updateUIView(_ uiView: MKMapView, context: Context) {}
+}
+
+/// WKWebView wrapper to surface webContent trait.
+struct WebViewProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView {
+        let wv = WKWebView()
+        wv.loadHTMLString("<p>Web content for trait probe</p>", baseURL: nil)
+        return wv
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
+struct TraitScanResult: Identifiable {
+    let id = UUID()
+    let label: String
+    let bitString: String
+    let unknownBits: String
+    let rawValue: UInt64
+}
