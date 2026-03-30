@@ -18,6 +18,17 @@ final class TheBagman {
         self.tripwire = tripwire
     }
 
+    /// Find a UIScrollView at or below a view, bounded to `maxDepth` levels.
+    /// Returns the view itself if it's a UIScrollView, otherwise searches children.
+    static func findUIScrollView(in view: UIView, maxDepth: Int) -> UIScrollView? {
+        if let sv = view as? UIScrollView { return sv }
+        guard maxDepth > 0 else { return nil }
+        for child in view.subviews {
+            if let sv = findUIScrollView(in: child, maxDepth: maxDepth - 1) { return sv }
+        }
+        return nil
+    }
+
     /// Back-reference to the gesture engine. TheBagman drives TheSafecracker
     /// for synthetic touch when accessibility activation fails.
     weak var safecracker: TheSafecracker? {
@@ -541,15 +552,12 @@ final class TheBagman {
                     },
                     containerVisitor: { container, object in
                         if case .scrollable = container.type, let view = object as? UIView {
-                            // For UIScrollViews, store directly. For non-UIScrollViews
-                            // (SwiftUI PlatformContainer), check if a scrollable child
-                            // exists one level deep (the inner HostingScrollView).
-                            if view is UIScrollView {
-                                scrollableContainerViews[container] = view
-                            } else if let scrollChild = view.subviews.first(where: {
-                                $0 is UIScrollView
-                            }) {
-                                scrollableContainerViews[container] = scrollChild
+                            // Store the UIScrollView for direct setContentOffset.
+                            // If the view itself isn't a UIScrollView (SwiftUI
+                            // PlatformContainer), search children up to 3 levels
+                            // deep for the inner HostingScrollView.
+                            if let sv = Self.findUIScrollView(in: view, maxDepth: 3) {
+                                scrollableContainerViews[container] = sv
                             } else {
                                 scrollableContainerViews[container] = view
                             }
