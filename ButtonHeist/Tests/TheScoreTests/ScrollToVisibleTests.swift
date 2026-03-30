@@ -8,7 +8,6 @@ final class ScrollToVisibleTests: XCTestCase {
     func testScrollToVisibleTargetEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .matcher(ElementMatcher(label: "Color Picker", traits: [.button])),
-            maxScrolls: 30,
             direction: .up
         )
         let data = try JSONEncoder().encode(target)
@@ -18,14 +17,12 @@ final class ScrollToVisibleTests: XCTestCase {
         }
         XCTAssertEqual(matcher.label, "Color Picker")
         XCTAssertEqual(matcher.traits, [.button])
-        XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .up)
     }
 
     func testScrollToVisibleTargetHeistIdEncodeDecode() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .heistId("buttonheist.longList.last"),
-            maxScrolls: 30,
             direction: .down
         )
         let data = try JSONEncoder().encode(target)
@@ -34,13 +31,11 @@ final class ScrollToVisibleTests: XCTestCase {
             return XCTFail("Expected .heistId")
         }
         XCTAssertEqual(id, "buttonheist.longList.last")
-        XCTAssertEqual(decoded.maxScrolls, 30)
         XCTAssertEqual(decoded.direction, .down)
     }
 
     func testScrollToVisibleTargetDefaults() {
         let target = ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Test")))
-        XCTAssertEqual(target.resolvedMaxScrolls, 50)
         XCTAssertEqual(target.resolvedDirection, .down)
     }
 
@@ -52,7 +47,6 @@ final class ScrollToVisibleTests: XCTestCase {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.label, "Save")
-        XCTAssertNil(decoded.maxScrolls)
         XCTAssertNil(decoded.direction)
     }
 
@@ -113,7 +107,6 @@ final class ScrollToVisibleTests: XCTestCase {
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .matcher(ElementMatcher(label: "Settings", traits: [.header])),
-            maxScrolls: 10,
             direction: .down
         )
         let message = ClientMessage.scrollToVisible(target)
@@ -125,7 +118,6 @@ final class ScrollToVisibleTests: XCTestCase {
         }
         XCTAssertEqual(matcher.label, "Settings")
         XCTAssertEqual(matcher.traits, [.header])
-        XCTAssertEqual(decodedTarget.maxScrolls, 10)
         XCTAssertEqual(decodedTarget.direction, .down)
     }
 

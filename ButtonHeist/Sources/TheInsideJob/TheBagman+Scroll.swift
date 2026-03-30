@@ -178,7 +178,6 @@ extension TheBagman {
         guard let searchTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
-        let maxScrolls = target.resolvedMaxScrolls
         let searchDirection = target.resolvedDirection
 
         // Already visible?
@@ -205,7 +204,7 @@ extension TheBagman {
         var exhausted = Set<ScrollTargetId>()
         var scrollCount = 0
 
-        while scrollCount < maxScrolls {
+        while true {
             guard let (scrollTarget, targetId) = findLiveScrollTarget(excluding: exhausted) else { break }
 
             let dir = adaptDirection(searchDirection, for: scrollTarget)
