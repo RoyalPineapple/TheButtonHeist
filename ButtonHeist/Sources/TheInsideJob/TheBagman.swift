@@ -596,92 +596,15 @@ final class TheBagman {
         var visibleThisRefresh: Set<String> = []
 
         var wireElements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
+        assignHeistIds(&wireElements)
 
-        // Phase 1: assign base heistIds
-        for i in wireElements.indices {
-            if let identifier = wireElements[i].identifier, !identifier.isEmpty {
-                wireElements[i].heistId = identifier
-            } else {
-                wireElements[i].heistId = synthesizeBaseId(wireElements[i])
-            }
-        }
-
-        // Phase 2: walk hierarchy to gather per-element context
+        // Walk hierarchy to gather per-element context
         var contexts: [Int: ElementContext] = [:]
         walkHierarchy(
             cachedHierarchy, scrollView: nil, container: nil,
             scrollableContainerViews: scrollableContainerViews, elementObjects: elementObjects,
             contexts: &contexts
         )
-
-        // Phase 3: disambiguate duplicates with suffix stability.
-        // For each base ID with duplicates, check if any match previously-seen
-        // content-space positions in screenElements. Reuse existing suffixes for
-        // matching positions, assign new suffixes only for genuinely new positions.
-        var groups: [String: [Int]] = [:]
-        for i in wireElements.indices {
-            groups[wireElements[i].heistId, default: []].append(i)
-        }
-
-        for (baseId, indices) in groups {
-            // Check if this base ID has existing suffixed entries in screenElements
-            let hasExistingSuffixes = screenElements.keys.contains { $0.hasPrefix(baseId + "_") }
-
-            // Skip disambiguation if only one visible AND no prior suffixed entries
-            guard indices.count > 1 || hasExistingSuffixes else { continue }
-            // Collect existing suffixed entries for this base ID from screenElements.
-            // These are entries whose heistId starts with baseId + "_" (e.g. "button_ok_1").
-            let existingEntries: [(suffix: Int, origin: CGPoint)] = screenElements
-                .compactMap { (key, entry) -> (Int, CGPoint)? in
-                    guard key.hasPrefix(baseId + "_"),
-                          let suffixStr = key.dropFirst(baseId.count + 1).description as String?,
-                          let suffix = Int(suffixStr),
-                          let origin = entry.contentSpaceOrigin else { return nil }
-                    return (suffix, origin)
-                }
-
-            // For each current element, try to match an existing suffix by content-space origin
-            var assignedSuffixes: [Int: Int] = [:] // wireElement index → suffix
-            var usedSuffixes: Set<Int> = []
-
-            // First pass: match existing suffixes by content-space proximity
-            for index in indices {
-                guard let origin = contexts[index]?.contentSpaceOrigin else { continue }
-                for existing in existingEntries where !usedSuffixes.contains(existing.suffix) {
-                    let dy = abs(origin.y - existing.origin.y)
-                    let dx = abs(origin.x - existing.origin.x)
-                    // Match within a cell height — content-space positions are stable
-                    // but may shift slightly due to dynamic cell sizing
-                    if dy < 2 && dx < 2 {
-                        assignedSuffixes[index] = existing.suffix
-                        usedSuffixes.insert(existing.suffix)
-                        break
-                    }
-                }
-            }
-
-            // Second pass: assign new suffixes for unmatched elements
-            let sorted = indices.sorted { a, b in
-                if let originA = contexts[a]?.contentSpaceOrigin,
-                   let originB = contexts[b]?.contentSpaceOrigin {
-                    if originA.y != originB.y { return originA.y < originB.y }
-                    return originA.x < originB.x
-                }
-                return a < b
-            }
-            var nextSuffix = (usedSuffixes.max() ?? 0) + 1
-            for index in sorted where assignedSuffixes[index] == nil {
-                while usedSuffixes.contains(nextSuffix) { nextSuffix += 1 }
-                assignedSuffixes[index] = nextSuffix
-                usedSuffixes.insert(nextSuffix)
-                nextSuffix += 1
-            }
-
-            // Apply suffixes
-            for (index, suffix) in assignedSuffixes {
-                wireElements[index].heistId = "\(baseId)_\(suffix)"
-            }
-        }
 
         // Phase 4: upsert into screenElements with live object refs
         for (index, wire) in wireElements.enumerated() {

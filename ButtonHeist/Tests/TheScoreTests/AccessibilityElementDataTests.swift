@@ -44,7 +44,6 @@ final class HeistElementTests: XCTestCase {
 
     func testElementWithAllFields() throws {
         let element = HeistElement(
-            order: 10,
             description: "A complex button",
             label: "Submit Form",
             value: "Enabled",
@@ -56,7 +55,6 @@ final class HeistElementTests: XCTestCase {
         let data = try JSONEncoder().encode(element)
         let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
 
-        XCTAssertEqual(decoded.order, 10)
         XCTAssertEqual(decoded.description, "A complex button")
         XCTAssertEqual(decoded.label, "Submit Form")
         XCTAssertEqual(decoded.value, "Enabled")
@@ -66,7 +64,6 @@ final class HeistElementTests: XCTestCase {
 
     func testElementWithNilOptionals() throws {
         let element = HeistElement(
-            order: 0,
             description: "Minimal",
             label: nil,
             value: nil,
@@ -86,9 +83,8 @@ final class HeistElementTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String, index: Int) -> HeistElement {
+    private func makeElement(label: String, index: Int = 0) -> HeistElement {
         HeistElement(
-            order: index,
             description: label,
             label: label,
             value: nil,

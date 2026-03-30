@@ -112,7 +112,7 @@ enum NetDeltaAccumulator {
             }
         }
 
-        let addedList = netAdded.values.sorted { $0.order < $1.order }
+        let addedList = Array(netAdded.values)
         let removedList = netRemoved.sorted()
         let updatedList = netUpdated.map { ElementUpdate(heistId: $0.key, changes: $0.value) }
             .sorted { $0.heistId < $1.heistId }
@@ -496,17 +496,17 @@ public enum FenceResponse {
         if interface.elements.isEmpty {
             output += "  (no elements)\n"
         } else {
-            for element in interface.elements {
-                output += formatElement(element)
+            for (i, element) in interface.elements.enumerated() {
+                output += formatElement(element, displayIndex: i)
             }
         }
         output += String(repeating: "-", count: 60)
         return output
     }
 
-    private func formatElement(_ element: HeistElement) -> String {
+    private func formatElement(_ element: HeistElement, displayIndex: Int) -> String {
         var output = ""
-        let index = String(format: "  [%2d]", element.order)
+        let index = String(format: "  [%2d]", displayIndex)
         let label = element.label ?? element.description
         output += "\(index) \(label)\n"
 
@@ -580,8 +580,8 @@ public enum FenceResponse {
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
             var lines: [String] = [header]
-            for element in interface.elements {
-                lines.append(Self.compactElementLine(element))
+            for (i, element) in interface.elements.enumerated() {
+                lines.append(Self.compactElementLine(element, displayIndex: i))
             }
             return lines.joined(separator: "\n")
         case .action(let result, let expectation):
@@ -716,9 +716,9 @@ public enum FenceResponse {
 
     /// Compact one-line-per-element format for LLM agents.
     /// Geometry is omitted by default — agents can request it via `get_interface --detail full`.
-    public static func compactElementLine(_ element: HeistElement) -> String {
+    public static func compactElementLine(_ element: HeistElement, displayIndex: Int? = nil) -> String {
         var parts: [String] = []
-        parts.append("[\(element.order)]")
+        if let displayIndex { parts.append("[\(displayIndex)]") }
         parts.append(element.heistId)
 
         if let label = element.label {
@@ -744,8 +744,8 @@ public enum FenceResponse {
 
     public static func compactInterface(_ interface: Interface) -> String {
         var lines: [String] = ["\(interface.elements.count) elements"]
-        for element in interface.elements {
-            lines.append(compactElementLine(element))
+        for (i, element) in interface.elements.enumerated() {
+            lines.append(compactElementLine(element, displayIndex: i))
         }
         return lines.joined(separator: "\n")
     }
@@ -804,7 +804,6 @@ public enum FenceResponse {
     private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
-            "order": element.order,
             "description": element.description,
             "traits": element.traits.map(\.rawValue),
             "actions": element.actions.map(\.description),

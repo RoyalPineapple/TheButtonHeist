@@ -299,7 +299,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testExploreResultEncodeDecode() throws {
         let elements = (0..<3).map { i in
-            HeistElement.stub(heistId: "el_\(i)", order: i, label: "Element \(i)")
+            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
         }
         let result = ExploreResult(
             elements: elements, scrollCount: 6,
@@ -317,7 +317,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testActionResultWithExploreResult() throws {
         let elements = (0..<100).map { i in
-            HeistElement.stub(heistId: "el_\(i)", order: i, label: "Element \(i)")
+            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
         }
         let exploreResult = ExploreResult(
             elements: elements, scrollCount: 12,
@@ -371,13 +371,11 @@ final class ClientMessageTests: XCTestCase {
 extension HeistElement {
     static func stub(
         heistId: String = "test",
-        order: Int = 0,
         label: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
         HeistElement(
             heistId: heistId,
-            order: order,
             description: label ?? heistId,
             label: label,
             value: nil,

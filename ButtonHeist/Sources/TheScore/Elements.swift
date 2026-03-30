@@ -270,8 +270,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
     /// from traits + label (or value as fallback). Unique within a snapshot.
     public var heistId: String
-    /// Element order in the snapshot (0-based)
-    public var order: Int
     /// Human-readable description of the element
     public var description: String
     public var label: String?
@@ -298,7 +296,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
 
     public init(
         heistId: String = "",
-        order: Int,
         description: String,
         label: String?,
         value: String?,
@@ -316,7 +313,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         actions: [ElementAction]
     ) {
         self.heistId = heistId
-        self.order = order
         self.description = description
         self.label = label
         self.value = value
