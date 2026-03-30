@@ -17,7 +17,7 @@ let project = Project(
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
     targets: [
-        // MARK: - SwiftUI Test App
+        // MARK: - Demo App
         .target(
             name: "AccessibilityTestApp",
             destinations: .iOS,
@@ -26,7 +26,7 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
-                "CFBundleDisplayName": "A11y SwiftUI",
+                "CFBundleDisplayName": "BH Demo",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
                 "InsideJobPort": 1455,
@@ -54,7 +54,7 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
-                "CFBundleDisplayName": "A11y Research",
+                "CFBundleDisplayName": "BH Research",
                 "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
                 "NSBonjourServices": ["_buttonheist._tcp"],
                 "InsideJobPort": 1457,
@@ -72,7 +72,7 @@ let project = Project(
             ])
         ),
 
-        // MARK: - UIKit Test App
+        // MARK: - UIKit Demo App
         .target(
             name: "UIKitTestApp",
             destinations: .iOS,
@@ -81,7 +81,7 @@ let project = Project(
             deploymentTargets: .iOS("17.0"),
             infoPlist: .extendingDefault(with: [
                 "UILaunchScreen": [:],
-                "CFBundleDisplayName": "A11y UIKit",
+                "CFBundleDisplayName": "BH UIKit Demo",
                 "UIApplicationSceneManifest": [
                     "UIApplicationSupportsMultipleScenes": false,
                     "UISceneConfigurations": [
