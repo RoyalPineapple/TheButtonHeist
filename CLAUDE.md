@@ -179,8 +179,6 @@ xcrun simctl shutdown "$SIM_UDID"
 xcrun simctl delete "$SIM_UDID"
 ```
 
-Connect directly to the fixed port. The `.mcp.json` in this repo is already configured with the matching port.
-
 ## Pre-Commit Checklist
 
 Before pushing any commit, verify the following:
