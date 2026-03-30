@@ -117,7 +117,7 @@ flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
     Decode --> Switch{"tool name?"}
 
-    Switch -->|"22 direct tools"| Direct["request['command'] = toolName"]
+    Switch -->|"21 direct tools"| Direct["request['command'] = toolName"]
     Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
 
     Direct --> Execute["fence.execute(request:)"]

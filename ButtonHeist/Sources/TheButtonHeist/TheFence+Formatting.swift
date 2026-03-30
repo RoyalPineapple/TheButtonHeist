@@ -112,7 +112,7 @@ enum NetDeltaAccumulator {
             }
         }
 
-        let addedList = Array(netAdded.values)
+        let addedList = netAdded.values.sorted { $0.heistId < $1.heistId }
         let removedList = netRemoved.sorted()
         let updatedList = netUpdated.map { ElementUpdate(heistId: $0.key, changes: $0.value) }
             .sorted { $0.heistId < $1.heistId }
