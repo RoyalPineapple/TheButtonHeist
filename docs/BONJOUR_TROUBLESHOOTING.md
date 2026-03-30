@@ -58,54 +58,41 @@ log show --predicate 'process == "mDNSResponder"' --last 5m --style compact 2>&1
 
 When Bonjour is broken, bypass discovery entirely by pinning the server to a known port.
 
-### 1. Set the port in the app
+### 1. Set the port at launch time
 
-**Via Info.plist** (recommended for test apps — baked in at build time):
-
-```swift
-// In TestApp/Project.swift (Tuist)
-infoPlist: .extendingDefault(with: [
-    "InsideJobPort": 1455,
-    // ...
-])
-```
-
-**Via environment variable** (overrides Info.plist):
+Pass a unique port and a human-readable token (your task slug) when launching the app:
 
 ```bash
-SIMCTL_CHILD_INSIDEJOB_PORT=1455 xcrun simctl launch $SIM com.buttonheist.testapp
+TASK_SLUG="accra-scroll-detection"
+INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
+SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-### 2. Point clients at the fixed port
+### 2. Point clients at the port
 
 **CLI:**
 
 ```bash
-export BUTTONHEIST_DEVICE=127.0.0.1:1455
-export BUTTONHEIST_TOKEN=your-token
+export BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT"
+export BUTTONHEIST_TOKEN="$TASK_SLUG"
 buttonheist session
 ```
 
-**MCP server** (`.mcp.json`):
+**MCP server** (set env vars before invoking):
 
-```json
-{
-  "mcpServers": {
-    "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "env": {
-        "BUTTONHEIST_DEVICE": "127.0.0.1:1455",
-        "BUTTONHEIST_TOKEN": "your-token"
-      }
-    }
-  }
-}
+```bash
+BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT" \
+BUTTONHEIST_TOKEN="$TASK_SLUG" \
+./scripts/buttonheist-mcp.sh
 ```
 
 **Framework (TheFence):**
 
 ```bash
-export BUTTONHEIST_DEVICE=127.0.0.1:1455
+export BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT"
 ```
 
 ### 3. How it works

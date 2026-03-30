@@ -12,6 +12,27 @@ There are three connection modes:
 2. **UI approval** — The client sends an empty token via `authenticate`. If the server is in UI approval mode, an on-device prompt asks the user to Allow or Deny the connection. On Allow, the server sends the token back so the client can reuse it.
 3. **Watch (observer)** — The client sends `watch` instead of `authenticate`. By default, observers require a valid token (same as drivers). Set `INSIDEJOB_RESTRICT_WATCHERS=0` to auto-approve observers without a token. Observers receive all broadcasts but cannot send commands or claim a session. See [Watch (Observer) Connections](#watch-observer-connections) below.
 
+## Agent Isolation
+
+When multiple agents run in parallel, each agent must use its own simulator, port, and token to prevent cross-talk. The token doubles as a human-readable label scoped to the agent's work item.
+
+**Convention:** simulator name = token = instance ID = `{workspace}-{task-slug}`. See `.context/bh-infra/docs/MULTI_AGENT_SIMULATORS.md` (if available — clone via `/setup-context bh-infra`) for the full convention, pool architecture, and troubleshooting.
+
+```bash
+TASK_SLUG="accra-scroll-detection"
+SIM_UDID=$(xcrun simctl create "$TASK_SLUG" "iPhone 16 Pro")
+xcrun simctl boot "$SIM_UDID"
+
+SIMCTL_CHILD_INSIDEJOB_PORT="$((RANDOM % 10000 + 20000))" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+```
+
+**Why human-readable tokens?** When an agent gets an auth mismatch, the error includes the expected token. `accra-scroll-detection` tells the agent it hit the wrong simulator and whose it is. A UUID tells it nothing. Agents can reason about token ownership and self-correct.
+
+**Why per-task simulators?** Shared simulators lead to port collisions, stale app state, and agents killing each other's sessions. A dedicated simulator per task is cheap (`simctl create` takes milliseconds) and eliminates the entire class of interference bugs.
+
 ## Token Resolution
 
 The server resolves its auth token at startup using this priority:

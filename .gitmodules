@@ -1,7 +1,4 @@
-[submodule "AccessibilitySnapshot"]
-	path = AccessibilitySnapshot
+[submodule "submodules/AccessibilitySnapshot"]
+	path = submodules/AccessibilitySnapshot
 	url = https://github.com/RoyalPineapple/AccessibilitySnapshot.git
 	branch = buttonheist
-[submodule "ai-fuzzer"]
-	path = ai-fuzzer
-	url = https://github.com/RoyalPineapple/ai-fuzzer.git
