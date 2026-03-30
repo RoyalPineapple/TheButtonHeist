@@ -243,7 +243,7 @@ struct TraitProbeView: View {
             // Higher private traits
             (29, "autoCorrectCandidate"), (30, "deleteKey"),
             (31, "selectionDismissesItem"), (32, "visited"),
-            (47, "scrollable"), (53, "switchButton"),
+            (47, "textArea"), (53, "switchButton"),
         ]
 
         var bits: [String] = []

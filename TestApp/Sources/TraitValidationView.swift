@@ -248,7 +248,7 @@ struct TraitValidationView: View {
         (31, "selectionDismissesItem"), (32, "visited"),
         (33, "AXScrollable"), (34, "spacer"), (35, "tableIndex"),
         (36, "map"), (37, "textOpsAvailable"), (38, "draggable"),
-        (39, "popupButton"),
+        (40, "popupButton"),
         // Higher bits
         (47, "textArea"), (48, "tabBar"),
         (52, "menuItem"), (53, "switchButton"),
