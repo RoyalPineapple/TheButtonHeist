@@ -39,14 +39,15 @@ struct ScreenManifest {
     /// Containers discovered but not yet explored.
     var pendingContainers = Set<AccessibilityContainer>()
 
+    /// Safety cap on per-container scroll iterations. Prevents runaway scrolling
+    /// in pathological layouts (e.g. infinite-scroll feeds). If a container exceeds
+    /// this, the census for that container is silently truncated.
+    static let maxScrollsPerContainer = 200
+
     // MARK: - Queries
 
     func contains(_ heistId: String) -> Bool {
         elementContainers[heistId] != nil
-    }
-
-    func container(for heistId: String) -> AccessibilityContainer?? {
-        elementContainers[heistId]
     }
 
     // MARK: - Building
@@ -101,75 +102,73 @@ extension TheBagman {
         manifest.addPendingContainers(findScrollableContainers())
 
         while !manifest.pendingContainers.isEmpty {
-
-        // Sort: largest overflow first (outermost containers reveal inner ones)
-        let batch = manifest.pendingContainers.sorted { a, b in
-            guard case .scrollable(let csA) = a.type,
-                  case .scrollable(let csB) = b.type else { return false }
-            let overflowA = max(0, csA.width - a.frame.width) + max(0, csA.height - a.frame.height)
-            let overflowB = max(0, csB.width - b.frame.width) + max(0, csB.height - b.frame.height)
-            return overflowA > overflowB
-        }
-
-        for container in batch {
-            guard case .scrollable(let contentSize) = container.type,
-                  let view = scrollableContainerViews[container],
-                  let scrollView = view as? UIScrollView,
-                  view.window != nil else {
-                manifest.markExplored(container)
-                continue
+            // Sort: largest overflow first (outermost containers reveal inner ones)
+            let batch = manifest.pendingContainers.sorted { a, b in
+                guard case .scrollable(let csA) = a.type,
+                      case .scrollable(let csB) = b.type else { return false }
+                let overflowA = max(0, csA.width - a.frame.width) + max(0, csA.height - a.frame.height)
+                let overflowB = max(0, csB.width - b.frame.width) + max(0, csB.height - b.frame.height)
+                return overflowA > overflowB
             }
 
-            // Skip containers with no off-screen content
-            let hasHOverflow = contentSize.width > scrollView.frame.width + 1
-            let hasVOverflow = contentSize.height > scrollView.frame.height + 1
-            guard hasHOverflow || hasVOverflow else {
-                manifest.markExplored(container)
-                continue
-            }
+            for container in batch {
+                guard case .scrollable(let contentSize) = container.type,
+                      let view = scrollableContainerViews[container],
+                      let scrollView = view as? UIScrollView,
+                      view.window != nil else {
+                    manifest.markExplored(container)
+                    continue
+                }
 
-            let savedOffset = scrollView.contentOffset
-            let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
+                // Skip containers with no off-screen content
+                let hasHOverflow = contentSize.width > scrollView.frame.width + 1
+                let hasVOverflow = contentSize.height > scrollView.frame.height + 1
+                guard hasHOverflow || hasVOverflow else {
+                    manifest.markExplored(container)
+                    continue
+                }
 
-            // Scroll forward page by page. Stop when scrollByPage returns false
-            // (UIScrollView edge) OR no new elements appear (stagnation — catches
-            // UICollectionView edge bouncing where scrollByPage keeps returning true).
-            for _ in 0..<200 {
-                let beforeCount = manifest.elementCount
-                let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
-                guard moved else { break }
-                manifest.scrollCount += 1
-                await tripwire.yieldFrames(2)
-                refreshAccessibilityData()
-                manifest.recordVisibleElements(onScreen, container: container)
+                let savedOffset = scrollView.contentOffset
+                let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
 
-                // No new elements = content exhausted
-                if manifest.elementCount == beforeCount { break }
-
-                // Early exit if target found
-                if let target, resolveFirstMatch(target) != nil {
-                    scrollView.setContentOffset(savedOffset, animated: false)
+                // Scroll forward page by page. Stop when scrollByPage returns false
+                // (UIScrollView edge) OR no new elements appear (stagnation — catches
+                // UICollectionView edge bouncing where scrollByPage keeps returning true).
+                for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+                    let beforeCount = manifest.elementCount
+                    let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
+                    guard moved else { break }
+                    manifest.scrollCount += 1
                     await tripwire.yieldFrames(2)
                     refreshAccessibilityData()
-                    manifest.markExplored(container)
-                    manifest.explorationTime = CACurrentMediaTime() - startTime
-                    return manifest
+                    manifest.recordVisibleElements(onScreen, container: container)
+
+                    // No new elements = content exhausted
+                    if manifest.elementCount == beforeCount { break }
+
+                    // Early exit if target found
+                    if let target, resolveFirstMatch(target) != nil {
+                        scrollView.setContentOffset(savedOffset, animated: false)
+                        await tripwire.yieldFrames(2)
+                        refreshAccessibilityData()
+                        manifest.markExplored(container)
+                        manifest.explorationTime = CACurrentMediaTime() - startTime
+                        return manifest
+                    }
                 }
+
+                // Restore position
+                scrollView.setContentOffset(savedOffset, animated: false)
+                await tripwire.yieldFrames(2)
+                refreshAccessibilityData()
+                manifest.markExplored(container)
+
+                // Check for newly-revealed inner containers
+                let newContainers = findScrollableContainers()
+                    .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
+                manifest.addPendingContainers(newContainers)
             }
-
-            // Restore position
-            scrollView.setContentOffset(savedOffset, animated: false)
-            await tripwire.yieldFrames(2)
-            refreshAccessibilityData()
-            manifest.markExplored(container)
-
-            // Check for newly-revealed inner containers
-            let newContainers = findScrollableContainers()
-                .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
-            manifest.addPendingContainers(newContainers)
         }
-
-        } // while pendingContainers
 
         manifest.explorationTime = CACurrentMediaTime() - startTime
         return manifest

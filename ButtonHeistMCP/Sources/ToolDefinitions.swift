@@ -338,10 +338,11 @@ enum ToolDefinitions {
         name: "explore",
         description: """
             Discover every element on the current screen, including off-screen content inside scrollable \
-            containers. Scrolls each container to its limits and back — scroll positions are saved and \
-            restored, so the user sees no visual change. Returns the total element count, scroll count, \
-            and exploration time. Use this before scroll_to_visible when you need a complete picture of \
-            the screen, or to verify that an element exists somewhere on screen.
+            containers. Like get_interface but for the entire screen — returns the complete element list, \
+            not just what's currently visible. Scrolls each container to its limits and back; scroll \
+            positions are saved and restored, so the user sees no visual change. Use this when you need \
+            to know what elements exist on the full screen, or to find elements buried in long lists or \
+            carousels without navigating to them.
             """,
         inputSchema: .object([
             "type": "object",

@@ -187,6 +187,8 @@ public struct ActionResult: Codable, Sendable {
     public let screenName: String?
     /// Diagnostics from a scroll_to_visible search operation
     public let scrollSearchResult: ScrollSearchResult?
+    /// Diagnostics from an explore (full screen census) operation
+    public let exploreResult: ExploreResult?
 
     public init(
         success: Bool,
@@ -200,7 +202,8 @@ public struct ActionResult: Codable, Sendable {
         elementValue: String? = nil,
         elementTraits: [HeistTrait]? = nil,
         screenName: String? = nil,
-        scrollSearchResult: ScrollSearchResult? = nil
+        scrollSearchResult: ScrollSearchResult? = nil,
+        exploreResult: ExploreResult? = nil
     ) {
         self.success = success
         self.method = method
@@ -214,6 +217,7 @@ public struct ActionResult: Codable, Sendable {
         self.elementTraits = elementTraits
         self.screenName = screenName
         self.scrollSearchResult = scrollSearchResult
+        self.exploreResult = exploreResult
     }
 }
 
@@ -242,6 +246,36 @@ public struct ScrollSearchResult: Codable, Sendable {
         self.totalItems = totalItems
         self.exhaustive = exhaustive
         self.foundElement = foundElement
+    }
+}
+
+// MARK: - Explore Result
+
+/// Result from an explore (full screen census) operation.
+/// Contains every element discovered across all scroll positions.
+public struct ExploreResult: Codable, Sendable {
+    /// Every element discovered on the screen, including off-screen content
+    public let elements: [HeistElement]
+    /// Total scrollByPage calls during exploration
+    public let scrollCount: Int
+    /// Number of scrollable containers explored
+    public let containersExplored: Int
+    /// Wall-clock time spent exploring, in seconds
+    public let explorationTime: Double
+
+    /// Total unique elements discovered
+    public var elementCount: Int { elements.count }
+
+    public init(
+        elements: [HeistElement],
+        scrollCount: Int,
+        containersExplored: Int,
+        explorationTime: Double
+    ) {
+        self.elements = elements
+        self.scrollCount = scrollCount
+        self.containersExplored = containersExplored
+        self.explorationTime = explorationTime
     }
 }
 

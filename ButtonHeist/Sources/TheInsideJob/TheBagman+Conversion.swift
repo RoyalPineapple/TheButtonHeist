@@ -148,6 +148,14 @@ extension TheBagman {
         return result.sorted { $0.order < $1.order }
     }
 
+    /// Return wire elements for ALL known elements — visible and off-screen.
+    /// Used by explore to return the complete screen census.
+    func snapshotAllElements() -> [HeistElement] {
+        screenElements.values
+            .map(\.wire)
+            .sorted { $0.order < $1.order }
+    }
+
     // MARK: - Stable ID Synthesis
 
     /// Trait priority for heistId prefix — most descriptive wins.
