@@ -25,21 +25,6 @@ struct RootView: View {
                     SettingsView()
                 }
 
-                Section("SPI Research") {
-                    NavigationLink("Scroll SPI Harness") {
-                        ScrollSPIHarnessView()
-                    }
-                    .accessibilityIdentifier("buttonheist.root.scrollSPIHarness")
-                    NavigationLink("Trait Probe") {
-                        TraitProbeView()
-                    }
-                    .accessibilityIdentifier("buttonheist.root.traitProbe")
-                    NavigationLink("Trait Validation") {
-                        TraitValidationView()
-                    }
-                    .accessibilityIdentifier("buttonheist.root.traitValidation")
-                }
-
                 Section("Scroll Tests") {
                     NavigationLink("Long List") {
                         LongListView()

@@ -45,6 +45,33 @@ let project = Project(
             ])
         ),
 
+        // MARK: - Research App (SPI harness, trait probes)
+        .target(
+            name: "ResearchApp",
+            destinations: .iOS,
+            product: .app,
+            bundleId: "com.buttonheist.research",
+            deploymentTargets: .iOS("17.0"),
+            infoPlist: .extendingDefault(with: [
+                "UILaunchScreen": [:],
+                "CFBundleDisplayName": "A11y Research",
+                "NSLocalNetworkUsageDescription": "This app uses local network to communicate with the accessibility inspector.",
+                "NSBonjourServices": ["_buttonheist._tcp"],
+                "InsideJobPort": 1457,
+                "InsideJobToken": "INJECTED-TOKEN-12345",
+            ]),
+            sources: ["ResearchSources/**"],
+            scripts: [copyResourceBundleScript],
+            dependencies: [
+                .project(target: "TheScore", path: ".."),
+                .project(target: "TheInsideJob", path: ".."),
+            ],
+            settings: .settings(base: [
+                "CODE_SIGN_STYLE": "Automatic",
+                "DEVELOPMENT_TEAM": "",
+            ])
+        ),
+
         // MARK: - UIKit Test App
         .target(
             name: "UIKitTestApp",
