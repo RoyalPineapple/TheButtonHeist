@@ -38,7 +38,6 @@ extension TheFence {
         case stopRecording = "stop_recording"
         case runBatch = "run_batch"
         case getSessionState = "get_session_state"
-        case explore
         case connect
         case listTargets = "list_targets"
     }
