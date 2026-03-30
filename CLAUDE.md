@@ -10,7 +10,7 @@ This project uses [Tuist](https://tuist.io) to generate Xcode projects and works
 |------|---------|
 | `Workspace.swift` | Defines the `ButtonHeist` workspace (includes root project + `TestApp`) |
 | `Project.swift` | Root project: TheScore, TheInsideJob, ButtonHeist frameworks + tests |
-| `TestApp/Project.swift` | Demo apps: AccessibilityTestApp (SwiftUI) and UIKitTestApp (UIKit) |
+| `TestApp/Project.swift` | Demo apps: BH Demo (SwiftUI) and UIKitTestApp (UIKit) |
 | `Tuist.swift` | Tuist configuration (default) |
 | `Tuist/Package.swift` | External dependencies (ArgumentParser, AccessibilitySnapshotParser) |
 | `Tuist/ProjectDescriptionHelpers/` | Reusable helpers for framework/app target templates |
@@ -70,18 +70,25 @@ Use the helpers in `Tuist/ProjectDescriptionHelpers/Project+Templates.swift`:
 
 Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
 
-### Demo app details
+### App targets
 
-The two test apps in `TestApp/Project.swift` both embed TheInsideJob and TheScore:
+Three apps in `TestApp/Project.swift`, all embedding TheInsideJob and TheScore:
 
-- **AccessibilityTestApp** (`com.buttonheist.testapp`) — SwiftUI, sources in `TestApp/Sources/`
-- **UIKitTestApp** (`com.buttonheist.uikittestapp`) — UIKit, sources in `TestApp/UIKitSources/`
+| App | Bundle ID | Port | Sources | Purpose |
+|-----|-----------|------|---------|---------|
+| **BH Demo** | `com.buttonheist.testapp` | 1455 | `TestApp/Sources/` | SwiftUI demo screens for agents and benchmarking. Keep clean — no research or diagnostic UI. |
+| **BH UIKit Demo** (UIKitTestApp) | `com.buttonheist.uikittestapp` | — | `TestApp/UIKitSources/` | UIKit variant of the demo app. |
+| **BH Research** (ResearchApp) | `com.buttonheist.research` | 1457 | `TestApp/ResearchSources/` | Accessibility SPI harness, trait probes, and diagnostic tools. Not for production use. |
 
-Both include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
+All include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
+
+When adding new screens:
+- **Demo screens** (controls, scroll tests, standard UI patterns) go in `TestApp/Sources/` and are wired into `RootView.swift`
+- **Research screens** (SPI experiments, trait probing, runtime inspection) go in `TestApp/ResearchSources/` and are wired into `ResearchApp.swift`
 
 ## Simulator Quick Start
 
-Build and deploy the test app to an iOS Simulator for end-to-end testing.
+Build and deploy the demo app to an iOS Simulator for end-to-end testing.
 
 ### 1. Pick a simulator
 
@@ -98,20 +105,20 @@ SIM_UDID=<paste-udid-here>
 xcrun simctl boot "$SIM_UDID"
 ```
 
-### 2. Build the test app
+### 2. Build the demo app
 
 ```bash
-xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
+xcodebuild -workspace ButtonHeist.xcworkspace -scheme BH Demo \
   -destination "platform=iOS Simulator,id=$SIM_UDID" build
 ```
 
-Use the `AccessibilityTestApp` scheme — this embeds TheInsideJob and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
+Use the `BH Demo` scheme — this embeds TheInsideJob and all frameworks. Building just the `TheInsideJob` scheme only produces the framework without the app.
 
 ### 3. Install and launch
 
 ```bash
 # Find the freshest build
-APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/AccessibilityTestApp.app | head -1)
+APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
 
 # Install and launch (bundle ID: com.buttonheist.testapp)
 xcrun simctl install "$SIM_UDID" "$APP"
@@ -119,7 +126,7 @@ APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
 SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-The AccessibilityTestApp has `InsideJobPort` set in its Info.plist, so the server always binds to a fixed port. Override with `SIMCTL_CHILD_INSIDEJOB_PORT=<port>` if needed.
+The BH Demo has `InsideJobPort` set in its Info.plist, so the server always binds to a fixed port. Override with `SIMCTL_CHILD_INSIDEJOB_PORT=<port>` if needed.
 
 ### 4. Build the CLI and add to PATH
 
@@ -168,7 +175,7 @@ Before pushing any commit, verify the following:
   ```
 - For device builds, include signing:
   ```bash
-  xcodebuild -workspace ButtonHeist.xcworkspace -scheme AccessibilityTestApp \
+  xcodebuild -workspace ButtonHeist.xcworkspace -scheme BH Demo \
     -destination 'platform=iOS,name=Device' -allowProvisioningUpdates \
     CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=YOUR_TEAM_ID build
   ```
@@ -209,7 +216,7 @@ Before pushing any commit, verify the following:
 `tuist test` is the one true way to run tests in this repository.
 
 - `TheScoreTests` and `ButtonHeistTests` run as explicit Tuist schemes.
-- `TheInsideJobTests` must run as a hosted iOS test bundle via the `AccessibilityTestApp` test host, so always use the `TheInsideJobTests` scheme with an explicit simulator destination.
+- `TheInsideJobTests` must run as a hosted iOS test bundle via the `BH Demo` test host, so always use the `TheInsideJobTests` scheme with an explicit simulator destination.
 - Use `--no-selective-testing` when you need to force the full suite instead of Tuist's default selective run.
 - Treat `swift test` as a package-debugging tool, not as the source of truth for CI-style verification.
 

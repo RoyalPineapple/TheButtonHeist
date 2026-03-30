@@ -539,7 +539,7 @@ cd ButtonHeistMCP && swift build -c release
 | `edit_action` | Perform edit menu actions on first responder | `action` (required): `copy`, `paste`, `cut`, `select`, `selectAll`; `expect` |
 | `dismiss_keyboard` | Dismiss the software keyboard | `expect` |
 | `scroll` | Scroll a scroll view by one page in a direction | `direction` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
-| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `maxScrolls`, `direction`, `expect` |
+| `scroll_to_visible` | Search for an element by scrolling through a scroll view | `label`, `identifier`, `heistId`, `value`, `traits`, `excludeTraits`, `direction`, `expect` |
 | `scroll_to_edge` | Scroll to an edge of the nearest scroll view | `edge` (required), `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `set_pasteboard` | Write text to the general pasteboard | `text` (required), `expect` |
 | `get_pasteboard` | Read text from the general pasteboard | `expect` |
@@ -926,7 +926,6 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 - `heistId: String?` - Stable heistId to search for while scrolling
 - `match: ElementMatcher?` - Predicate for the element to find
-- `maxScrolls: Int?` - Maximum scroll attempts (default: 50, safety valve — not a budget)
 - `direction: ScrollSearchDirection?` - Starting scroll direction (default: `.down`), adapted to each container's natural axis
 
 ### ScrollSearchDirection

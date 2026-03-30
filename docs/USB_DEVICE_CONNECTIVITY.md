@@ -78,7 +78,7 @@ Target a USB device in `.mcp.json`:
 
 ```bash
 xcodebuild -workspace ButtonHeist.xcworkspace \
-  -scheme AccessibilityTestApp \
+  -scheme BH Demo \
   -destination 'platform=iOS,name=Your Device Name' \
   -allowProvisioningUpdates \
   CODE_SIGN_STYLE=Automatic \
@@ -91,7 +91,7 @@ xcodebuild -workspace ButtonHeist.xcworkspace \
 ```bash
 xcrun devicectl device install app \
   --device "Your Device Name" \
-  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/AccessibilityTestApp.app
+  ~/Library/Developer/Xcode/DerivedData/ButtonHeist-*/Build/Products/Debug-iphoneos/BH Demo.app
 
 xcrun devicectl device process launch \
   --device "Your Device Name" \

@@ -45,7 +45,7 @@ graph TD
     ButtonHeist["ButtonHeist — macOS Client Framework"]
     CLI["ButtonHeistCLI — CLI"]
     MCP["ButtonHeistMCP — MCP Server"]
-    TestApp["AccessibilityTestApp"]
+    TestApp["BH Demo"]
 
     Crypto["swift-crypto"]
     X509["swift-certificates"]

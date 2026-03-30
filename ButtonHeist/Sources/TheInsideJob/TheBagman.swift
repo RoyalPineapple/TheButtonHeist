@@ -20,38 +20,13 @@ final class TheBagman {
 
     /// Back-reference to the gesture engine. TheBagman drives TheSafecracker
     /// for synthetic touch when accessibility activation fails.
-    weak var safecracker: TheSafecracker? {
-        didSet { rebuildScrollProvider() }
-    }
-
-    /// Scroll primitive provider — swappable between setContentOffset and accessibility SPI.
-    /// Set automatically when `safecracker` is assigned. Override for testing.
-    var scrollProvider: (any ScrollProvider)?
-
-    /// Which scroll implementation to use. Change at runtime to compare behavior.
-    var scrollProviderMode: ScrollProviderMode = .contentOffset {
-        didSet { rebuildScrollProvider() }
-    }
-
-    enum ScrollProviderMode {
-        case contentOffset
-        case accessibilitySPI
-    }
-
-    private func rebuildScrollProvider() {
-        guard let safecracker else { scrollProvider = nil; return }
-        switch scrollProviderMode {
-        case .contentOffset:
-            scrollProvider = ContentOffsetScrollProvider(safecracker: safecracker)
-        case .accessibilitySPI:
-            scrollProvider = AccessibilitySPIScrollProvider(safecracker: safecracker, tripwire: tripwire)
-        }
-    }
+    weak var safecracker: TheSafecracker?
 
     // MARK: - Element Storage
 
     /// Parsed accessibility elements from the last hierarchy refresh.
-    /// Setter is internal (not private) so resolveTarget tests can inject elements.
+    /// Internal: read by TheInsideJob.performInteraction for before-snapshots,
+    /// mutated by TheBagman extensions and tests.
     var cachedElements: [AccessibilityElement] = []
 
     /// Parsed accessibility hierarchy from the last refresh.
@@ -98,14 +73,16 @@ final class TheBagman {
 
     /// Persistent element registry keyed by heistId. Lives for the screen's duration.
     /// Populated during refreshAccessibilityData(), cleared on screen change.
+    /// TheBagman-only: mutated by extensions across files. Tests inject via @testable.
     var screenElements: [String: ScreenElement] = [:]
 
     /// HeistIds currently on screen — rebuilt each refresh cycle.
     /// Elements in screenElements but not in this set have scrolled off screen.
-    /// Setter is internal (not private) so scroll tests can inject state.
+    /// TheBagman-only: mutated by extensions across files.
     var onScreen: Set<String> = []
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
+    /// Read/written by Pulse for change detection.
     var lastHierarchyHash: Int = 0
 
     /// Screen name from the registry (first header element by traversal order).
@@ -116,7 +93,7 @@ final class TheBagman {
             .wire.label
     }
 
-    let parser = AccessibilityHierarchyParser()
+    private let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
@@ -329,7 +306,8 @@ final class TheBagman {
         let similar = screenElements.keys.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
-            return "Element not found: \"\(heistId)\" (\(cachedElements.count) elements on screen)"
+            let count = cachedElements.count
+            return "Element not found: \"\(heistId)\" (\(count) elements on screen)"
         }
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
@@ -344,7 +322,7 @@ final class TheBagman {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
-        // Tier 2: Nothing close — dump a compact summary.
+        // Tier 2: Nothing close — dump a compact summary and suggest looking for a search field.
         return "No match for: \(query)\n\(compactElementSummary())"
     }
 
@@ -540,8 +518,13 @@ final class TheBagman {
                         newElementObjects[element] = WeakObject(object: object)
                     },
                     containerVisitor: { container, object in
-                        if case .scrollable = container.type {
-                            scrollableContainerViews[container] = object as? UIView
+                        if case .scrollable = container.type, let view = object as? UIView {
+                            // Store the view as-is. If it's a UIScrollView, we use
+                            // setContentOffset directly. If not (PlatformContainer),
+                            // we try SPI page scroll then fall back to swipe.
+                            // No subview digging — the view the parser gave us is
+                            // the one the accessibility system considers scrollable.
+                            scrollableContainerViews[container] = view
                         }
                     }
                 )

@@ -173,6 +173,17 @@ jobs:
         timeout-minutes: 3
         run: tuist generate --no-open
 
+      - name: Build iOS app targets
+        timeout-minutes: 10
+        run: |
+          set -eo pipefail
+          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
+            echo "Building $scheme for iOS Simulator..."
+            xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
+              -destination "platform=iOS Simulator,id=$SIM_UDID" \
+              build | tail -3
+          done
+
       - name: Run iOS tests
         timeout-minutes: 10
         run: |
