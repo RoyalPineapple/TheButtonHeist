@@ -201,8 +201,11 @@ extension TheBagman {
         // for viewless containers.
         var exhausted = Set<ScrollTargetId>()
         var scrollCount = 0
+        // Hard cap prevents infinite loops on swipeable containers (which always
+        // report moved=true) with infinite/paginated content (onScreen always changes).
+        let maxScrolls = 200
 
-        while true {
+        while scrollCount < maxScrolls {
             guard let (scrollTarget, targetId) = findLiveScrollTarget(excluding: exhausted) else { break }
 
             let dir = adaptDirection(searchDirection, for: scrollTarget)
@@ -236,7 +239,7 @@ extension TheBagman {
     /// Falls back to container hash for viewless containers.
     enum ScrollTargetId: Hashable {
         case view(ObjectIdentifier)
-        case container(Int) // AccessibilityContainer.hashValue
+        case container(AccessibilityContainer)
     }
 
     private func findLiveScrollTarget(
@@ -258,7 +261,7 @@ extension TheBagman {
                 let screenFrame = view.convert(view.bounds, to: nil)
                 return (.swipeable(frame: screenFrame, contentSize: contentSize), id)
             }
-            let id = ScrollTargetId.container(container.hashValue)
+            let id = ScrollTargetId.container(container)
             guard !exhausted.contains(id) else { return nil }
             return (.swipeable(frame: container.frame, contentSize: contentSize), id)
         }
