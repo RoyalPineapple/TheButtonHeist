@@ -247,7 +247,7 @@ extension TheFence {
         )
     }
 
-    // MARK: - Handler: Scroll Actions
+    // MARK: - Handler: Scroll Actions & Explore
 
     func handleScrollAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {

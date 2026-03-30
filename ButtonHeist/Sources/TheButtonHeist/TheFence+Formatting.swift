@@ -406,6 +406,16 @@ public enum FenceResponse {
         if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits.map(\.rawValue) }
         if let screenName = result.screenName { payload["screenName"] = screenName }
 
+        if let explore = result.exploreResult {
+            payload["explore"] = [
+                "elementCount": explore.elementCount,
+                "scrollCount": explore.scrollCount,
+                "containersExplored": explore.containersExplored,
+                "explorationTime": String(format: "%.2f", explore.explorationTime),
+                "elements": explore.elements.map { elementDictionary($0, detail: .summary) }
+            ] as [String: Any]
+        }
+
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
         }
