@@ -90,39 +90,30 @@ struct TraitValidationView: View {
     @State private var disclosureOpen = true
 
     private var controlSurface: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                // bit 0: button + bit 8: notEnabled
-                Button("Button") {}.accessibilityIdentifier("tv.button")
-                Button("Disabled") {}.disabled(true).accessibilityIdentifier("tv.disabledButton")
-                // bit 1: link
-                Link("Link", destination: URL(string: "https://example.com")!).accessibilityIdentifier("tv.link")
-                // bit 2: image
-                Image(systemName: "star.fill").accessibilityLabel("Star").accessibilityIdentifier("tv.image")
-                // bit 3: selected
-                Picker("Seg", selection: $segVal) { Text("A").tag("A"); Text("B").tag("B") }
-                    .pickerStyle(.segmented).accessibilityIdentifier("tv.seg")
-                // bit 6: staticText
-                Text("Static").accessibilityIdentifier("tv.static")
-                // bit 9: updatesFrequently
-                ProgressView(value: 0.6).accessibilityIdentifier("tv.progress")
-                // bit 12: adjustable
-                Slider(value: $sliderVal).accessibilityIdentifier("tv.slider")
-                // bit 16: header
-                Text("Header").accessibilityAddTraits(.isHeader).accessibilityIdentifier("tv.header")
-                // bit 18: textEntry
-                TextField("Text", text: $textVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.text")
-                // bit 24: secureTextField
-                SecureField("Pass", text: $secureVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.secure")
-                // bit 39: popupButton
-                Menu("Menu") { Button("A") {}; Button("B") {} }.accessibilityIdentifier("tv.menu")
-                // bit 47: textArea — tested via Controls Demo > Text Input (bioEditor)
-                // bit 53: switchButton
-                Toggle("Toggle", isOn: $toggleVal).accessibilityIdentifier("tv.toggle")
-            }
-            .padding(.horizontal, 12)
+        VStack(alignment: .leading, spacing: 4) {
+            // bit 0: button + bit 8: notEnabled
+            Button("Button") {}.accessibilityIdentifier("tv.button")
+            Button("Disabled") {}.disabled(true).accessibilityIdentifier("tv.disabledButton")
+            // bit 1: link
+            Link("Link", destination: URL(string: "https://example.com")!).accessibilityIdentifier("tv.link")
+            // bit 2: image
+            Image(systemName: "star.fill").accessibilityLabel("Star").accessibilityIdentifier("tv.image")
+            // bit 6: staticText
+            Text("Static").accessibilityIdentifier("tv.static")
+            // bit 9: updatesFrequently
+            ProgressView(value: 0.6).accessibilityIdentifier("tv.progress")
+            // bit 12: adjustable
+            Slider(value: $sliderVal).accessibilityIdentifier("tv.slider")
+            // bit 16: header
+            Text("Header").accessibilityAddTraits(.isHeader).accessibilityIdentifier("tv.header")
+            // bit 18: textEntry
+            TextField("Text", text: $textVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.text")
+            // bit 24: secureTextField
+            SecureField("Pass", text: $secureVal).textFieldStyle(.roundedBorder).accessibilityIdentifier("tv.secure")
+            // bit 53: switchButton
+            Toggle("Toggle", isOn: $toggleVal).accessibilityIdentifier("tv.toggle")
         }
-        .frame(height: 300)
+        .padding(.horizontal, 12)
     }
 
     @ViewBuilder
@@ -148,6 +139,17 @@ struct TraitValidationView: View {
 
         walkAllViews(window, depth: 0)
         scanning = false
+
+        // Write results to tmp file for easy reading
+        let lines = results.map { r in
+            var line = "\(r.label) | \(r.bitString)"
+            if !r.unknownBits.isEmpty { line += " | UNKNOWN: \(r.unknownBits)" }
+            return line
+        }
+        let content = lines.joined(separator: "\n")
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("trait_scan.txt")
+        try? content.write(to: path, atomically: true, encoding: .utf8)
+        print("[TraitValidation] Wrote \(results.count) results to \(path.path)")
     }
 
     private func walkAllViews(_ view: UIView, depth: Int) {
