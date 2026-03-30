@@ -58,7 +58,6 @@ final class ServerMessageTests: XCTestCase {
 
     func testInterfaceEncodeDecode() throws {
         let element = HeistElement(
-            order: 0,
             description: "Button",
             label: "Submit",
             value: nil,
