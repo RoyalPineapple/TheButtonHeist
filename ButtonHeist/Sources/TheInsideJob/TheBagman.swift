@@ -28,24 +28,9 @@ final class TheBagman {
     /// Set automatically when `safecracker` is assigned. Override for testing.
     var scrollProvider: (any ScrollProvider)?
 
-    /// Which scroll implementation to use. Change at runtime to compare behavior.
-    var scrollProviderMode: ScrollProviderMode = .contentOffset {
-        didSet { rebuildScrollProvider() }
-    }
-
-    enum ScrollProviderMode {
-        case contentOffset
-        case accessibilitySPI
-    }
-
     private func rebuildScrollProvider() {
         guard let safecracker else { scrollProvider = nil; return }
-        switch scrollProviderMode {
-        case .contentOffset:
-            scrollProvider = ContentOffsetScrollProvider(safecracker: safecracker)
-        case .accessibilitySPI:
-            scrollProvider = AccessibilitySPIScrollProvider(safecracker: safecracker, tripwire: tripwire)
-        }
+        scrollProvider = ContentOffsetScrollProvider(safecracker: safecracker)
     }
 
     // MARK: - Element Storage
@@ -329,7 +314,8 @@ final class TheBagman {
         let similar = screenElements.keys.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
-            return "Element not found: \"\(heistId)\" (\(cachedElements.count) elements on screen)"
+            let count = cachedElements.count
+            return "Element not found: \"\(heistId)\" (\(count) elements on screen)"
         }
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
@@ -344,7 +330,7 @@ final class TheBagman {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
-        // Tier 2: Nothing close — dump a compact summary.
+        // Tier 2: Nothing close — dump a compact summary and suggest looking for a search field.
         return "No match for: \(query)\n\(compactElementSummary())"
     }
 
