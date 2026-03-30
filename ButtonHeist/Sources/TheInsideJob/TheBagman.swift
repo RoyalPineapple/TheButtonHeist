@@ -25,7 +25,8 @@ final class TheBagman {
     // MARK: - Element Storage
 
     /// Parsed accessibility elements from the last hierarchy refresh.
-    /// Setter is internal (not private) so resolveTarget tests can inject elements.
+    /// Internal: read by TheInsideJob.performInteraction for before-snapshots,
+    /// mutated by TheBagman extensions and tests.
     var cachedElements: [AccessibilityElement] = []
 
     /// Parsed accessibility hierarchy from the last refresh.
@@ -72,14 +73,16 @@ final class TheBagman {
 
     /// Persistent element registry keyed by heistId. Lives for the screen's duration.
     /// Populated during refreshAccessibilityData(), cleared on screen change.
+    /// TheBagman-only: mutated by extensions across files. Tests inject via @testable.
     var screenElements: [String: ScreenElement] = [:]
 
     /// HeistIds currently on screen — rebuilt each refresh cycle.
     /// Elements in screenElements but not in this set have scrolled off screen.
-    /// Setter is internal (not private) so scroll tests can inject state.
+    /// TheBagman-only: mutated by extensions across files.
     var onScreen: Set<String> = []
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
+    /// Read/written by Pulse for change detection.
     var lastHierarchyHash: Int = 0
 
     /// Screen name from the registry (first header element by traversal order).
@@ -90,7 +93,7 @@ final class TheBagman {
             .wire.label
     }
 
-    let parser = AccessibilityHierarchyParser()
+    private let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
