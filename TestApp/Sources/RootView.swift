@@ -21,6 +21,33 @@ struct RootView: View {
                 NavigationLink("Touch Canvas") {
                     TouchCanvasView()
                 }
+                NavigationLink("Playlist") {
+                    PlaylistView()
+                }
+                NavigationLink("Messages") {
+                    MessagesView()
+                }
+                .accessibilityIdentifier("buttonheist.root.messages")
+                NavigationLink("Contacts") {
+                    ContactsView()
+                }
+                .accessibilityIdentifier("buttonheist.root.contacts")
+                NavigationLink("Dashboard") {
+                    DashboardView()
+                }
+                .accessibilityIdentifier("buttonheist.root.dashboard")
+                NavigationLink("Photos") {
+                    PhotosView()
+                }
+                .accessibilityIdentifier("buttonheist.root.photos")
+                NavigationLink("Login") {
+                    LoginView()
+                }
+                .accessibilityIdentifier("buttonheist.root.login")
+                NavigationLink("Cart") {
+                    CartView()
+                }
+                .accessibilityIdentifier("buttonheist.root.cart")
                 NavigationLink("Settings") {
                     SettingsView()
                 }
