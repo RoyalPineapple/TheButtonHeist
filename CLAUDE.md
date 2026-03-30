@@ -74,11 +74,11 @@ Or define targets directly in `Project.swift` / `TestApp/Project.swift`.
 
 Three apps in `TestApp/Project.swift`, all embedding TheInsideJob and TheScore:
 
-| App | Bundle ID | Port | Sources | Purpose |
-|-----|-----------|------|---------|---------|
-| **BH Demo** | `com.buttonheist.testapp` | 1455 | `TestApp/Sources/` | SwiftUI demo screens for agents and benchmarking. Keep clean — no research or diagnostic UI. |
-| **BH UIKit Demo** (UIKitTestApp) | `com.buttonheist.uikittestapp` | — | `TestApp/UIKitSources/` | UIKit variant of the demo app. |
-| **BH Research** (ResearchApp) | `com.buttonheist.research` | 1457 | `TestApp/ResearchSources/` | Accessibility SPI harness, trait probes, and diagnostic tools. Not for production use. |
+| App | Bundle ID | Sources | Purpose |
+|-----|-----------|---------|---------|
+| **BH Demo** | `com.buttonheist.testapp` | `TestApp/Sources/` | SwiftUI demo screens for agents and benchmarking. Keep clean — no research or diagnostic UI. |
+| **BH UIKit Demo** (UIKitTestApp) | `com.buttonheist.uikittestapp` | `TestApp/UIKitSources/` | UIKit variant of the demo app. |
+| **BH Research** (ResearchApp) | `com.buttonheist.research` | `TestApp/ResearchSources/` | Accessibility SPI harness, trait probes, and diagnostic tools. Not for production use. |
 
 All include a post-build script that copies the `AccessibilitySnapshotParser` resource bundle into the app (workaround for Tuist not handling this automatically).
 
@@ -90,20 +90,32 @@ When adding new screens:
 
 Build and deploy the demo app to an iOS Simulator for end-to-end testing.
 
-### 1. Pick a simulator
+### Agent isolation model
 
-Always target simulators by UDID, never by name (names can collide across runtimes).
+Multiple agents run simultaneously, each with their own simulator. The full convention is documented in `.context/bh-infra/docs/MULTI_AGENT_SIMULATORS.md` (if available — clone via `/setup-context bh-infra`). The short version: **simulator name = token = instance ID = `{workspace}-{task-slug}`**.
+
+Every agent must:
+
+1. **Create a dedicated simulator** named `{workspace}-{task-slug}` (e.g. `accra-scroll-detection`)
+2. **Launch the app with a unique port and a human-readable token** derived from the same slug
+3. **Connect using that port and token** — mismatches are rejected, and the token tells you whose session you hit
+
+The token is not just auth — it's a label. When an agent sees `accra-scroll-detection` in a connection error, it knows immediately whether that's its session or someone else's. Never use UUIDs or opaque strings as tokens.
+
+### 1. Create a simulator for your task
+
+Derive the simulator name and token from your workspace and task:
 
 ```bash
-# List available simulators
-xcrun simctl list devices available
+# Convention: {workspace}-{task-slug}
+TASK_SLUG="accra-scroll-detection"
 
-# Pick one and store its UDID
-SIM_UDID=<paste-udid-here>
-
-# Boot it
+# Create a dedicated simulator
+SIM_UDID=$(xcrun simctl create "$TASK_SLUG" "iPhone 16 Pro")
 xcrun simctl boot "$SIM_UDID"
 ```
+
+The same `TASK_SLUG` is used as the simulator name, the auth token, and the `INSIDEJOB_ID` — everything is self-documenting. Running `xcrun simctl list devices booted` becomes a dashboard of what every agent is doing.
 
 ### 2. Build the demo app
 
@@ -120,13 +132,18 @@ Use the `BH Demo` scheme — this embeds TheInsideJob and all frameworks. Buildi
 # Find the freshest build
 APP=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH Demo.app | head -1)
 
+# Pick a unique port; use the task slug as the token
+INSIDEJOB_PORT=$((RANDOM % 10000 + 20000))
+
 # Install and launch (bundle ID: com.buttonheist.testapp)
 xcrun simctl install "$SIM_UDID" "$APP"
-APP_TOKEN=${APP_TOKEN:-INJECTED-TOKEN-12345}
-SIMCTL_CHILD_INSIDEJOB_TOKEN="$APP_TOKEN" xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
+SIMCTL_CHILD_INSIDEJOB_PORT="$INSIDEJOB_PORT" \
+SIMCTL_CHILD_INSIDEJOB_TOKEN="$TASK_SLUG" \
+SIMCTL_CHILD_INSIDEJOB_ID="$TASK_SLUG" \
+xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```
 
-The BH Demo has `InsideJobPort` set in its Info.plist, so the server always binds to a fixed port. Override with `SIMCTL_CHILD_INSIDEJOB_PORT=<port>` if needed.
+Ports and tokens are dynamic — each agent must generate its own at launch time. Without env vars, the server picks an OS-assigned port and auto-generates a UUID token (visible in console logs). **Never use UUIDs or opaque strings as tokens** — use the human-readable task slug so agents can reason about session ownership.
 
 ### 4. Build the CLI and add to PATH
 
@@ -150,7 +167,16 @@ Should show an `Add` entry with the app name.
 **If Bonjour is broken** (MDM stealth mode — see `docs/BONJOUR_TROUBLESHOOTING.md`):
 
 ```bash
-BUTTONHEIST_DEVICE=127.0.0.1:$INSIDEJOB_PORT BUTTONHEIST_TOKEN="$APP_TOKEN" buttonheist session
+BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT" BUTTONHEIST_TOKEN="$TASK_SLUG" buttonheist session
+```
+
+### 6. Teardown
+
+When the task is complete, clean up the simulator:
+
+```bash
+xcrun simctl shutdown "$SIM_UDID"
+xcrun simctl delete "$SIM_UDID"
 ```
 
 Connect directly to the fixed port. The `.mcp.json` in this repo is already configured with the matching port.

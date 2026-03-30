@@ -20,10 +20,6 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>InsideJobPort</key>
-	<integer>1455</integer>
-	<key>InsideJobToken</key>
-	<string>INJECTED-TOKEN-12345</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBonjourServices</key>
