@@ -188,40 +188,116 @@ Complete new screen in the same response as the action. Zero additional calls.
 
 **`noChange`** — nothing moved. The agent knows immediately and can try something else.
 
-### How they compound
+### Expectations
 
-An agent adding a todo item with Button Heist:
+Every action can carry an `expect` — a declaration of what *should* happen. The framework checks the delta against the expectation and tells the agent whether it was met. This is inline verification: the test suite is built into the interaction, not bolted on after.
 
-```
-→ run_batch(steps: [
-    {command: "type_text", identifier: "titleField", text: "Buy milk"},
-    {command: "activate", identifier: "addButton", expect: "elements_changed"}
-  ])
-← 2 steps completed, expectation met, delta shows new row added
-```
+Three tiers, from broad to precise:
 
-Two actions, one round trip, verified outcome. **One agent turn.**
+**`screen_changed`** — assert that a new view controller appeared:
 
-The same task with an external tool:
-
-```
-→ get_accessibility_tree          (find the field)
-← tree
-→ tap(x: 187, y: 340)            (tap the field)
-← ok
-→ type("Buy milk")
-← ok
-→ get_accessibility_tree          (find the button)
-← tree
-→ tap(x: 305, y: 340)            (tap Add)
-← ok
-→ get_accessibility_tree          (verify it worked)
-← tree
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "button_login"},
+  "expect": "screen_changed"
+}
 ```
 
-Six calls, three tree fetches, no outcome verification. **Six agent turns.**
+```json
+{
+  "success": true,
+  "interfaceDelta": {"kind": "screenChanged", "elementCount": 12, "newInterface": {"elements": ["..."]}},
+  "expectation": {"met": true, "expectation": "screenChanged"}
+}
+```
 
-Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility. If the agent can't find a control, a VoiceOver user can't either.
+The agent asked "should this navigate?" and the framework answered yes, with the new screen already in hand.
+
+**`elements_changed`** — assert that *something* in the hierarchy changed (met by either `elementsChanged` or `screenChanged`):
+
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "button_add_row"},
+  "expect": "elements_changed"
+}
+```
+
+```json
+{
+  "success": true,
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 15,
+    "added": [{"heistId": "cell_row_3", "label": "New Item", "traits": ["staticText"]}]
+  },
+  "expectation": {"met": true, "expectation": "elementsChanged"}
+}
+```
+
+**`element_updated`** — assert a specific property change on a specific element. Say what you know, omit what you don't:
+
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "switch_darkmode"},
+  "expect": {"element_updated": {"heistId": "switch_darkmode", "property": "value", "newValue": "1"}}
+}
+```
+
+```json
+{
+  "success": true,
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "updated": [
+      {"heistId": "switch_darkmode", "changes": [{"property": "value", "old": "0", "new": "1"}]}
+    ]
+  },
+  "expectation": {"met": true, "expectation": {"element_updated": {"heistId": "switch_darkmode", "property": "value", "newValue": "1"}}}
+}
+```
+
+Toggle dark mode, assert the value flipped to "1". The framework scans `updated` for a match — if the heistId, property, and value all line up, it's met.
+
+When an expectation fails, the framework reports what it actually observed:
+
+```json
+{
+  "expectation": {
+    "met": false,
+    "expectation": "screenChanged",
+    "actual": "elementsChanged"
+  }
+}
+```
+
+The agent asked for a screen change but only got element updates — maybe a validation error appeared instead of navigating. The agent has the delta, the failed expectation, and the actual outcome. It can reason about what went wrong without re-fetching anything.
+
+### Batch + expect = inline test suite
+
+`run_batch` combines these into a single round trip where every step has its own assertion. The batch stops on the first failure (default `stop_on_error` policy) and reports exactly which step failed, what was expected, and what happened:
+
+```json
+{
+  "command": "run_batch",
+  "steps": [
+    {"command": "type_text", "target": {"heistId": "textfield_email"}, "text": "user@example.com",
+     "expect": {"element_updated": {"heistId": "textfield_email", "property": "value", "newValue": "user@example.com"}}},
+    {"command": "type_text", "target": {"heistId": "textfield_password"}, "text": "hunter2",
+     "expect": {"element_updated": {"heistId": "textfield_password", "property": "value"}}},
+    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": "screen_changed"}
+  ]
+}
+```
+
+Three actions. Three assertions. One round trip. If typing into the password field doesn't update the value, the batch stops at step 2 — it never taps submit with bad state.
+
+This is the fundamental difference. External tools treat every action as fire-and-forget: do something, screenshot, stare at pixels, decide if it worked. Button Heist treats every action as an assertion: do something, declare what should have happened, get a structured pass/fail with diagnostics. The test suite isn't a separate phase — it's woven into every interaction.
+
+Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility too. If the agent can't find a control, a VoiceOver user can't either.
 
 For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
 
