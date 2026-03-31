@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "config")
 
 /// A named connection target: device address + optional auth token.
 public struct TargetConfig: Codable, Sendable, Equatable {
@@ -59,7 +62,11 @@ public enum TargetConfigResolver {
             }
 
             guard let data = try? Data(contentsOf: url) else { continue }
-            guard let config = try? JSONDecoder().decode(ButtonHeistFileConfig.self, from: data) else {
+            let config: ButtonHeistFileConfig
+            do {
+                config = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)
+            } catch {
+                logger.warning("Skipping malformed config \(url.path): \(error)")
                 continue
             }
             return config

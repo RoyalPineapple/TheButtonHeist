@@ -113,7 +113,7 @@ final class TheMuscle {
     }
 
     func sendServerHello(clientId: Int) {
-        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: .serverHello)) else { return }
+        guard let data = encodeEnvelope(.serverHello) else { return }
         sendToClient?(data, clientId)
     }
 
@@ -146,7 +146,7 @@ final class TheMuscle {
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) {
-        guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data) else {
+        guard let envelope = decodeRequest(data) else {
             logger.warning("Client \(clientId) sent unparsable message before authenticating, disconnecting")
             disconnectClient?(clientId)
             return
@@ -562,20 +562,30 @@ final class TheMuscle {
         clientDriverIds.filter { $0.value == driverIdentity }.map(\.key)
     }
 
-    private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
-        let data: Data
+    func encodeEnvelope(_ message: ServerMessage) -> Data? {
         do {
-            data = try JSONEncoder().encode(ResponseEnvelope(message: message))
+            return try JSONEncoder().encode(ResponseEnvelope(message: message))
         } catch {
             logger.error("Failed to encode message: \(error)")
-            if let errorData = try? JSONEncoder().encode(
-                ResponseEnvelope(message: .error("Encoding failed: \(error.localizedDescription)"))
-            ) {
-                respond(errorData)
-            }
-            return
+            return nil
         }
-        respond(data)
+    }
+
+    func decodeRequest(_ data: Data) -> RequestEnvelope? {
+        do {
+            return try JSONDecoder().decode(RequestEnvelope.self, from: data)
+        } catch {
+            logger.error("Failed to decode client message: \(error)")
+            return nil
+        }
+    }
+
+    private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
+        if let data = encodeEnvelope(message) {
+            respond(data)
+        } else if let errorData = encodeEnvelope(.error("Encoding failed")) {
+            respond(errorData)
+        }
     }
 }
 #endif // DEBUG

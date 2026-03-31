@@ -367,6 +367,11 @@ public final class DeviceConnection: DeviceConnecting {
     }
 
     private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {
-        try? JSONDecoder().decode(ResponseEnvelope.self, from: data)
+        do {
+            return try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+        } catch {
+            logger.error("Failed to decode server response: \(error)")
+            return nil
+        }
     }
 }
