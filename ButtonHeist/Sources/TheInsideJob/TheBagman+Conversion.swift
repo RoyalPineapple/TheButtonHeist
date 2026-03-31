@@ -159,10 +159,17 @@ extension TheBagman {
 
     /// Return wire elements for ALL known elements — visible and off-screen.
     /// Used by get_interface --full to return the complete screen census.
+    /// Marks every returned element as presented so subsequent heistId lookups succeed.
     func snapshotAllElements() -> [HeistElement] {
-        screenElements.values
-            .sorted { $0.lastTraversalIndex < $1.lastTraversalIndex }
-            .map(\.wire)
+        var result: [(Int, HeistElement)] = []
+        for (heistId, var entry) in screenElements {
+            if !entry.presented {
+                entry.presented = true
+                screenElements[heistId] = entry
+            }
+            result.append((entry.lastTraversalIndex, entry.wire))
+        }
+        return result.sorted { $0.0 < $1.0 }.map(\.1)
     }
 
     // MARK: - Stable ID Synthesis
