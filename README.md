@@ -83,7 +83,6 @@ BH=./ButtonHeistCLI/.build/release/buttonheist
 $BH list                                                  # Discover devices (WiFi + USB)
 $BH session                                               # Interactive REPL
 $BH activate --identifier loginButton                     # Activate an element
-$BH touch one_finger_tap --x 100 --y 200                 # Coordinate tap
 $BH type --text "Hello" --identifier nameField            # Type into a field
 $BH scroll --direction down --identifier scrollView       # Scroll one page
 $BH scroll_to_visible --identifier targetElement          # Scroll until visible
