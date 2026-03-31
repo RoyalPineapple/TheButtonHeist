@@ -1,6 +1,6 @@
 # The Button Heist
 
-Every iOS app already describes itself. The accessibility layer tells VoiceOver — and the millions of blind and low-vision people who depend on it — what every control is, what it does, what state it's in, and how to interact with it. Give an AI agent that same interface and it gives you better results: it understands controls by name, interacts with them semantically, and confirms whether each interaction worked. In benchmarks, that translates to fewer turns, less wasted context, and faster task completion.
+Every iOS app already describes itself. The accessibility layer tells VoiceOver — and the millions of blind and low-vision people who depend on it — what every control is, what it does, what state it's in, and how to interact with it. Give an AI agent that same interface and it understands controls by name, interacts with them semantically, and confirms whether each interaction worked. When the agent understands the interface it's working with, it produces better results, more reliably, and faster.
 
 Button Heist is an MCP server backed by an embedded framework that runs inside the app's debug build. It reads `UIAccessibility` objects in-process via the AccessibilitySnapshot parser and interacts with the app using KIF-style touch injection. It works on simulators and real devices.
 
@@ -8,7 +8,7 @@ Button Heist is an MCP server backed by an embedded framework that runs inside t
 
 Every iOS app already has a complete semantic interface. The `UIAccessibility` layer provides labels, traits, actions, activation points, and traversal order — everything a non-visual intelligence needs to operate the app. Blind and low-vision users depend on this interface every day through VoiceOver. It's proven, it's comprehensive, and it's already built into every well-made iOS app.
 
-Give an agent that same interface and it can interact with a switch row, call an increment action, or trigger a delete action by name — without any discovery step. The agent doesn't need per-app instructions. It just needs the app's accessibility to be good. And when it is, the agent's intelligence goes toward your task instead of figuring out where to tap.
+Give an agent that same interface and it can interact with a switch row, call an increment action, or trigger a delete action by name — without any discovery step. The agent doesn't need per-app instructions. It just needs the app's accessibility to be good. And when it is, the agent produces better results, more reliably, and faster — because it's working with the app, not puzzling over it.
 
 Agents and VoiceOver users share this dependency. When the agent navigates through the accessibility interface, it's using the same paths that millions of people rely on. If the agent can't find a control or activate it, neither can VoiceOver. Fixing one fixes both. That was a design goal of KIF's predicate API, and Button Heist carries it forward.
 
