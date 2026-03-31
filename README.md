@@ -111,7 +111,8 @@ Button Heist runs **inside your app**, not across a process boundary. This means
 - **Full fidelity** — the agent reads live `UIAccessibility` objects directly. Activation points, custom content, custom rotors, available actions — nothing lost in serialization. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
 - **Deltas after every action** — tap a button, get back exactly what changed. No re-fetching the full tree.
 - **Animation-aware idle** — `wait_for_idle` watches `CALayer` animations. `wait_for` watches for a specific element. No fixed sleeps.
-- **Batch and expect** — `run_batch` sends multiple commands in one round trip. Each step can carry an `expect` declaring what should happen. The framework checks the delta and reports whether it was met.
+- **Inline expectations** — every action can carry an `expect` declaring what should happen. The framework checks the delta and reports pass/fail with diagnostics. This is what makes batching possible — because every step verifies itself, the agent can fire a sequence without stopping to look after each one.
+- **Batch execution** — `run_batch` sends multiple commands in one round trip. Each step gets its own delta and expectation check. Stops on first failure so the agent never pushes forward with bad state.
 
 ### Interface deltas
 
@@ -190,7 +191,7 @@ Complete new screen in the same response as the action. Zero additional calls.
 
 ### Expectations
 
-Every action can carry an `expect` — a declaration of what *should* happen. The framework checks the delta against the expectation and tells the agent whether it was met. This is inline verification: the test suite is built into the interaction, not bolted on after.
+Expectations are what make everything else work. Without them, the agent has to stop after every action, re-read the screen, and decide if it worked — which is exactly what external tools do. With them, each action verifies itself. The agent declares what *should* happen, the framework checks the delta, and the result comes back pass/fail with diagnostics. This is what unlocks batching: because every step carries its own assertion, the agent can send a whole sequence without stopping to look.
 
 Three tiers, from broad to precise:
 
@@ -276,9 +277,9 @@ When an expectation fails, the framework reports what it actually observed:
 
 The agent asked for a screen change but only got element updates — maybe a validation error appeared instead of navigating. The agent has the delta, the failed expectation, and the actual outcome. It can reason about what went wrong without re-fetching anything.
 
-### Batch + expect = inline test suite
+### Batching: what expectations unlock
 
-`run_batch` combines these into a single round trip where every step has its own assertion. The batch stops on the first failure (default `stop_on_error` policy) and reports exactly which step failed, what was expected, and what happened:
+Because every step verifies itself, the agent doesn't need to stop and look between actions. `run_batch` sends an ordered sequence in a single round trip — each step gets its own delta, its own expectation check, and the batch stops on the first failure (`stop_on_error` policy). The agent never pushes forward with bad state:
 
 ```json
 {
@@ -295,7 +296,7 @@ The agent asked for a screen change but only got element updates — maybe a val
 
 Three actions. Three assertions. One round trip. If typing into the password field doesn't update the value, the batch stops at step 2 — it never taps submit with bad state.
 
-This is the fundamental difference. External tools treat every action as fire-and-forget: do something, screenshot, stare at pixels, decide if it worked. Button Heist treats every action as an assertion: do something, declare what should have happened, get a structured pass/fail with diagnostics. The test suite isn't a separate phase — it's woven into every interaction.
+This is why external tools can't batch. Without inline verification, each action is fire-and-forget: do something, screenshot, stare at pixels, decide if it worked, then plan the next step. Batching requires knowing each step succeeded *before the response comes back to the agent*. Expectations make that possible — every action is an assertion, and the test suite is woven into the interaction itself.
 
 Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility too. If the agent can't find a control, a VoiceOver user can't either.
 
