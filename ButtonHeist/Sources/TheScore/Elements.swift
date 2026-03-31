@@ -244,13 +244,21 @@ public struct Interface: Codable, Sendable {
 
         for element in elements {
             let traits = element.traits
-            if traits.contains(.secureTextField) { secureFields += 1 }
-            else if traits.contains(.textEntry) { textFields += 1 }
-            else if traits.contains(.searchField) { searchFields += 1 }
-            else if traits.contains(.switchButton) { switches += 1 }
-            else if traits.contains(.adjustable) { sliders += 1 }
-            else if traits.contains(.link) { links += 1 }
-            else if traits.contains(.button) && !traits.contains(.backButton) { buttons += 1 }
+            if traits.contains(.secureTextField) {
+                secureFields += 1
+            } else if traits.contains(.textEntry) {
+                textFields += 1
+            } else if traits.contains(.searchField) {
+                searchFields += 1
+            } else if traits.contains(.switchButton) {
+                switches += 1
+            } else if traits.contains(.adjustable) {
+                sliders += 1
+            } else if traits.contains(.link) {
+                links += 1
+            } else if traits.contains(.button) && !traits.contains(.backButton) {
+                buttons += 1
+            }
         }
 
         var parts: [String] = []
