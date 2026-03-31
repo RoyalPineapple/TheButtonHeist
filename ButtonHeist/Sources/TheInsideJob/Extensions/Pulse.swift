@@ -40,7 +40,7 @@ extension TheInsideJob {
         guard muscle.hasSubscribers else { return }
         guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
 
-        let snapshot = bagman.snapshotElements()
+        let snapshot = bagman.snapshot(.visible)
         let currentHash = snapshot.hashValue
 
         guard currentHash != bagman.lastHierarchyHash || hierarchyInvalidated else { return }
@@ -68,7 +68,7 @@ extension TheInsideJob {
             return
         }
 
-        let snapshot = bagman.snapshotElements()
+        let snapshot = bagman.snapshot(.visible)
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
 
         let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)

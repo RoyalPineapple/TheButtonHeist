@@ -30,7 +30,6 @@ final class TheBagmanScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             lastTraversalIndex: 0,
             wire: makeWire(heistId: "item"),
-            presented: true,
             object: UILabel(),
             scrollView: scrollView
         )
@@ -49,7 +48,6 @@ final class TheBagmanScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             lastTraversalIndex: 0,
             wire: makeWire(heistId: "item"),
-            presented: true,
             object: UILabel(),
             scrollView: nil
         )

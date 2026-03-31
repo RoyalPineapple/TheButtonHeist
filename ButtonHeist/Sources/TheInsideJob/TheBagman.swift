@@ -63,12 +63,21 @@ final class TheBagman {
         var lastTraversalIndex: Int
         /// Wire representation (updated each refresh if element is visible).
         var wire: HeistElement
-        /// True after sent to clients via get_interface or delta.
-        var presented: Bool
         /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
         weak var object: NSObject?
         /// Parent scroll view for coordinate conversion. Weak — outlives children.
         weak var scrollView: UIScrollView?
+    }
+
+    /// Which elements have been sent to clients. Checked by resolveTarget to prevent
+    /// targeting elements the caller hasn't seen. Populated by snapshot(_:) — the single
+    /// path through which elements leave TheBagman.
+    var presentedHeistIds: Set<String> = []
+
+    /// Scope for snapshot: visible (current screen) or all (full scan census).
+    enum SnapshotScope {
+        case visible
+        case all
     }
 
     /// Persistent element registry keyed by heistId. Lives for the screen's duration.
@@ -206,7 +215,7 @@ final class TheBagman {
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = screenElements[heistId], entry.presented else {
+            guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else {
                 return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
             }
             let i = entry.lastTraversalIndex
@@ -251,7 +260,7 @@ final class TheBagman {
     func resolveFirstMatch(_ target: ElementTarget) -> ResolvedTarget? {
         switch target {
         case .heistId(let heistId):
-            guard let entry = screenElements[heistId], entry.presented else { return nil }
+            guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else { return nil }
             let i = entry.lastTraversalIndex
             guard i >= 0, i < cachedElements.count else { return nil }
             return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
@@ -264,12 +273,12 @@ final class TheBagman {
 
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks screenElements registry (presented elements only).
+    /// For heistId: checks presentedHeistIds (elements sent to clients).
     /// For matcher: checks cachedHierarchy/cachedElements.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return screenElements[heistId]?.presented == true
+            return presentedHeistIds.contains(heistId)
         case .matcher(let matcher):
             return hasMatch(matcher)
         }
@@ -486,6 +495,7 @@ final class TheBagman {
         cachedHierarchy.removeAll()
         cachedElements.removeAll()
         screenElements.removeAll()
+        presentedHeistIds.removeAll()
         onScreen.removeAll()
         lastHierarchyHash = 0
     }
@@ -624,7 +634,6 @@ final class TheBagman {
                     container: ctx?.container,
                     lastTraversalIndex: index,
                     wire: wire,
-                    presented: false,
                     object: ctx?.object,
                     scrollView: ctx?.scrollView
                 )
@@ -747,9 +756,10 @@ final class TheBagman {
             // refreshAccessibilityData() above upserted new-screen entries into
             // the old-screen dictionary. Wipe and rebuild clean.
             screenElements.removeAll()
+            presentedHeistIds.removeAll()
             rebuildScreenElements()
         }
-        let afterSnapshot = snapshotElements()
+        let afterSnapshot = snapshot(.visible)
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
             afterTree: afterTree, isScreenChange: isScreenChange

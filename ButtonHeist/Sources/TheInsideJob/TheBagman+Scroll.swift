@@ -200,9 +200,10 @@ extension TheBagman {
         // Fast path: if the element was discovered by a prior full scan, use its
         // cached content-space position to jump directly instead of page-by-page search.
         if case .heistId(let heistId) = searchTarget,
-           let entry = screenElements[heistId], entry.presented,
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
+            let savedOffset = scrollView.contentOffset
             let targetOffset = scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: false)
             await tripwire.yieldFrames(3)
@@ -214,8 +215,17 @@ extension TheBagman {
                 if let freshFound = resolveFirstMatch(searchTarget) {
                     return foundResult(freshFound, scrollCount: 1)
                 }
-                return foundResult(found, scrollCount: 1)
+                // found is stale after ensureOnScreenSync + refresh; re-resolve
+                // from the current snapshot to avoid returning outdated metadata.
+                if let reResolved = resolveFirstMatch(searchTarget) {
+                    return foundResult(reResolved, scrollCount: 1)
+                }
             }
+            // Fast path failed — restore original scroll position so the slow
+            // page-by-page search starts from where the user left off.
+            scrollView.setContentOffset(savedOffset, animated: false)
+            await tripwire.yieldFrames(3)
+            refreshAccessibilityData()
         }
 
         // Walk the hierarchy tree for scrollable containers (outermost first).
@@ -328,7 +338,7 @@ extension TheBagman {
         // Off-screen path: element was discovered by a full scan but is not currently
         // in cachedElements. Use the stored contentSpaceOrigin to scroll it into view.
         if case .heistId(let heistId) = target,
-           let entry = screenElements[heistId], entry.presented,
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView,
            let safecracker {
