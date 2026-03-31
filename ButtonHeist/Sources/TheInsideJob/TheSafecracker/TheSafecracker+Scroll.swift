@@ -55,7 +55,7 @@ extension TheSafecracker {
     /// Scroll the minimum distance needed to make a frame visible.
     /// Frame is in screen coordinates; converted to scroll view content space internally.
     /// Returns true if already visible or if scroll was triggered.
-    func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView) -> Bool {
+    func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView, animated: Bool = true) -> Bool {
         let targetInScrollView = scrollView.convert(targetFrame, from: nil)
 
         let visibleRect = CGRect(
@@ -91,7 +91,7 @@ extension TheSafecracker {
             return true
         }
 
-        scrollView.setContentOffset(newOffset, animated: true)
+        scrollView.setContentOffset(newOffset, animated: animated)
         return true
     }
 
