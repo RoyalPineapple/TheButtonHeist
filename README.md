@@ -63,19 +63,14 @@ cd ButtonHeistMCP && swift build -c release
 This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `screenshot`, and more. The agent discovers your app via Bonjour automatically. Here's what a session looks like:
 
 ```
-Agent: "Let me see what's on screen"
-→ get_interface → structured hierarchy with heistIds, traits, frames
-
-Agent: "Tap the login button"
-→ activate(heistId: "button_login")
-← delta: login screen dismissed, dashboard appeared — 3 new elements
-
-Agent: "Type credentials and submit"
-→ run_batch([type email, type password, tap submit])
-← 3 steps, 3 deltas, 1 round trip — stopped early if any step fails
+Agent: "I need to log the user in"
+→ get_interface → sees button_login, textfield_email, textfield_password
+→ run_batch([type email, type password, tap login])
+← each step confirmed, login screen gone, dashboard appeared — agent already
+  knows what's on screen and what to do next
 ```
 
-No screenshots to parse. No coordinates to compute. The agent reads the interface, not the pixels.
+The agent never stops to ask "did that work?" or "what's on screen now?" — every response carries the answer. It stays focused on the task, not on driving the app.
 
 ### 3. Or drive it yourself
 
@@ -153,7 +148,7 @@ Multiple paths in, one API out.
 
 Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface — the same one VoiceOver uses — not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name. Full fidelity, because there's no serialization boundary to lose it.
 
-This means three things that compound:
+Three things follow from this, and each one removes another reason for the agent to think about anything other than its task:
 
 ### 1. Every action tells the agent what changed
 
@@ -175,9 +170,9 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 }
 ```
 
-Login screen gone, dashboard appeared, new elements ready to target. No screenshot, no re-fetch, no guessing. Value updates carry the property change inline — old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent can try something else immediately.
+Login screen gone, dashboard appeared, new elements ready to target — the agent already knows what to do next without asking. Value updates carry the property change inline — old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
 
-This is what external tools can't do. They fire an action and then have to stop, take a screenshot, stare at pixels, and decide if anything happened. The delta tells the agent what happened *in the same response as the action*.
+The agent never has to stop and re-read the screen. It never takes a screenshot to figure out what happened. The context it needs to make its next decision arrives with the result of the last one.
 
 ### 2. Every action can verify itself
 
@@ -193,13 +188,13 @@ Each command can carry an `expect` — a declaration of what *should* happen. Th
 
 Response: `{"expectation": {"met": true, "expectation": "screenChanged"}}`.
 
-Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response says what *actually* happened — so the agent can reason about the mismatch without re-reading anything.
+Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response carries what *actually* happened — the agent has everything it needs to reason about the mismatch without going back to look.
 
-Without inline verification, the agent has to stop after every action, re-read the screen, and decide if it worked. That's exactly what external tools do — and it's where half the turns go. Expectations eliminate the round trip.
+The agent declares intent, the framework handles verification. That's what gives the agent confidence to move fast — it knows it'll be told if something breaks, so it doesn't have to slow down and check.
 
-### 3. Expectations unlock batching
+### 3. Confidence unlocks batching
 
-Because every step carries its own assertion, the agent doesn't need to stop and look between actions. `run_batch` sends an ordered sequence in a single round trip — each step gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
+An agent that trusts its feedback loop doesn't need to pause between steps. `run_batch` sends an ordered sequence in a single round trip — each step gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
 
 ```json
 {
@@ -214,7 +209,9 @@ Because every step carries its own assertion, the agent doesn't need to stop and
 
 Two actions. Two assertions. One round trip. If the email field doesn't update, the batch stops — it never taps submit with bad state.
 
-Deltas, expectations, and batching — each one enables the next. That's the compound advantage, and it's why this approach works. For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
+Each layer builds confidence. Deltas mean the agent doesn't re-read. Expectations mean it doesn't second-guess. Batching means it doesn't wait. Interface out, agent in, nothing left but the task. Clean escape.
+
+For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
 
 ## Meet the Crew
 
