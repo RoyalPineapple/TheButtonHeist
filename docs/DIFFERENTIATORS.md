@@ -1,6 +1,6 @@
 # What Makes Button Heist Different
 
-Every iOS app already describes itself through the accessibility layer — the same semantic interface that millions of VoiceOver users depend on. Button Heist gives AI agents that interface directly, by running inside the app. When the agent understands the interface it's working with, it produces better results, more reliably, and faster.
+Every iOS app already describes itself through the accessibility layer — the same semantic interface that millions of VoiceOver users depend on. Button Heist gives AI agents that interface directly, by running inside the app. When the agent understands the interface it's working with, everything else follows — better results, more reliably, faster.
 
 ## The Core Difference: In-Process
 
