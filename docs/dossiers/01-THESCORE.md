@@ -101,12 +101,11 @@ classDiagram
         +Date timestamp
         +[HeistElement] elements
         +[ElementNode]? tree
+        +screenDescription: String (computed)
     }
 
     class HeistElement {
         +String heistId
-        +Int order
-        +String description
         +String? label
         +String? value
         +String? identifier
@@ -118,7 +117,6 @@ classDiagram
         +Double frameHeight
         +Double activationPointX
         +Double activationPointY
-        +Bool respondsToUserInteraction
         +[ElementAction] actions
         +[HeistCustomContent]? customContent
         +frame: CGRect (computed)
@@ -196,9 +194,6 @@ classDiagram
         +String? value
         +InterfaceDelta? interfaceDelta
         +Bool? animating
-        +String? elementLabel
-        +String? elementValue
-        +[String]? elementTraits
         +String? screenName
         +ScrollSearchResult? scrollSearchResult
     }
