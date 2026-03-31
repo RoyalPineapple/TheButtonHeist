@@ -50,9 +50,7 @@ extension TheInsideJob {
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
 
-        if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interface(payload))) {
-            broadcastToSubscribed(data)
-        }
+        broadcastToSubscribed(.interface(payload))
 
         broadcastScreen()
         stakeout?.noteScreenChange()
