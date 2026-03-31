@@ -563,8 +563,16 @@ final class TheMuscle {
     }
 
     private func sendMessage(_ message: ServerMessage, respond: @escaping @Sendable (Data) -> Void) {
-        guard let data = try? JSONEncoder().encode(ResponseEnvelope(message: message)) else {
-            logger.error("Failed to encode message")
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(ResponseEnvelope(message: message))
+        } catch {
+            logger.error("Failed to encode message: \(error)")
+            if let errorData = try? JSONEncoder().encode(
+                ResponseEnvelope(message: .error("Encoding failed: \(error.localizedDescription)"))
+            ) {
+                respond(errorData)
+            }
             return
         }
         respond(data)

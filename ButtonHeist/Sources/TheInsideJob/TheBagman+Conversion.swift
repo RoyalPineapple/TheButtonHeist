@@ -4,6 +4,16 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
+// MARK: - Float Sanitization
+
+extension CGFloat {
+    /// Replace NaN/infinity with 0 so JSONEncoder doesn't throw.
+    /// UIPickerView's 3D-transformed cells can produce non-finite frame coordinates.
+    var sanitizedForJSON: CGFloat {
+        isFinite ? self : 0
+    }
+}
+
 // MARK: - Trait Names
 
 extension TheBagman {
@@ -30,12 +40,12 @@ extension TheBagman {
             identifier: element.identifier,
             hint: element.hint,
             traits: traitNames(element.traits),
-            frameX: frame.origin.x,
-            frameY: frame.origin.y,
-            frameWidth: frame.size.width,
-            frameHeight: frame.size.height,
-            activationPointX: element.activationPoint.x,
-            activationPointY: element.activationPoint.y,
+            frameX: frame.origin.x.sanitizedForJSON,
+            frameY: frame.origin.y.sanitizedForJSON,
+            frameWidth: frame.size.width.sanitizedForJSON,
+            frameHeight: frame.size.height.sanitizedForJSON,
+            activationPointX: element.activationPoint.x.sanitizedForJSON,
+            activationPointY: element.activationPoint.y.sanitizedForJSON,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: element.customContent.isEmpty ? nil : element.customContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
@@ -102,10 +112,10 @@ extension TheBagman {
             label: label,
             value: value,
             identifier: identifier,
-            frameX: container.frame.origin.x,
-            frameY: container.frame.origin.y,
-            frameWidth: container.frame.size.width,
-            frameHeight: container.frame.size.height
+            frameX: container.frame.origin.x.sanitizedForJSON,
+            frameY: container.frame.origin.y.sanitizedForJSON,
+            frameWidth: container.frame.size.width.sanitizedForJSON,
+            frameHeight: container.frame.size.height.sanitizedForJSON
         )
     }
 }

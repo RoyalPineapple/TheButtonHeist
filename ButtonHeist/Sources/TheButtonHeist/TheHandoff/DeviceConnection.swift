@@ -117,11 +117,15 @@ public final class DeviceConnection: DeviceConnecting {
         onSend?(message, requestId)
         guard let connection, isConnected else { return }
         let envelope = RequestEnvelope(requestId: requestId, message: message)
-        guard var data = try? JSONEncoder().encode(envelope) else {
-            logger.error("Failed to encode message: \(String(describing: message).prefix(100))")
+        let data: Data
+        do {
+            var encoded = try JSONEncoder().encode(envelope)
+            encoded.append(0x0A)
+            data = encoded
+        } catch {
+            logger.error("Failed to encode message: \(error)")
             return
         }
-        data.append(0x0A)
 
         connection.send(content: data, completion: .contentProcessed { error in
             if let error {
