@@ -1,12 +1,12 @@
 # What Makes Button Heist Different
 
-Button Heist is an in-process iOS automation framework. It runs inside the app, not outside it. That one architectural decision creates a cascade of capabilities that external tools cannot replicate.
+Every iOS app already describes itself through the accessibility layer — the same semantic interface that millions of VoiceOver users depend on. Button Heist gives AI agents that interface directly, by running inside the app. Give the agent the right interface and it gives you better results: it activates controls by name, reads their state, and confirms what changed — spending its intelligence on your task instead of translating pixels.
 
 ## The Core Difference: In-Process
 
-Every other iOS MCP tool operates **outside** the app process — shelling out to `idb`, `simctl`, Appium, or XCUITest. They get serialized snapshots of the accessibility tree through XPC, coordinate-based taps through the simulator's input pipeline, and no feedback on what happened.
+Button Heist runs **inside** the app. The framework is linked into the debug build. It reads live `UIAccessibility` objects directly and injects real `IOHIDEvent` touches through the hardware input pipeline. This gives the agent full access to the semantic interface the app already provides.
 
-Button Heist runs **inside** the app. The framework is linked into the debug build. It reads live `UIAccessibility` objects directly and injects real `IOHIDEvent` touches through the hardware input pipeline. This isn't a philosophical difference — it determines what's possible.
+External tools operate **outside** the app process — shelling out to `idb`, `simctl`, Appium, or XCUITest. They get serialized snapshots through XPC, coordinate-based taps, and no feedback on what happened. The agent gets a lossy translation instead of the real thing.
 
 ### What in-process gives you
 
@@ -128,7 +128,7 @@ Vision tools screenshot the screen, send it to a VLM, and get back coordinates t
 
 **Fundamental limitation:** The VLM can't see what VoiceOver can. Disabled states, custom actions, adjustable ranges, trait information, accessibility values — all invisible in pixels. The agent is guessing where to tap based on what things look like, not what they are.
 
-Button Heist gives the agent the same information VoiceOver gets — the complete semantic representation of the UI. The agent knows an element is a disabled adjustable stepper with value "3" and an increment action, not just "a grey box with a number in it."
+Give the agent the accessibility interface and it knows an element is a disabled adjustable stepper with value "3" and an increment action. It can reason about state, call actions by name, and confirm outcomes — because the app already describes itself.
 
 ## The Accessibility Feedback Loop
 
@@ -136,14 +136,10 @@ Agents and VoiceOver users share a dependency: the accessibility interface. When
 
 That shared dependency creates a feedback loop. If the agent can't find a control, neither can VoiceOver. If a stepper exposes `adjustable` when it's disabled, the agent sees that — and so does every VoiceOver user. Accessibility bugs surface as agent failures. Fixing them improves the experience for both.
 
-No external tool creates this loop. They operate outside the accessibility interface, so they can interact with controls that VoiceOver users can't reach — and they'll never tell you about the gap.
+No external tool creates this loop. They operate outside the accessibility interface, so they can interact with controls that VoiceOver users can't reach — and they'll never surface the gap.
 
 ## The Trade-Off
 
-Button Heist requires embedding a framework in the app's debug build. External tools don't. This is the cost of in-process access.
+In-process access means linking one framework into your debug build. For production apps with CI/CD, add `TheInsideJob` as a debug-only dependency — it's stripped from release builds, and the integration is two lines in your build config. For apps you don't control, use an external tool.
 
-For production apps with CI/CD: add `TheInsideJob` as a debug-only dependency. It's stripped from release builds. The integration is two lines in your build config.
-
-For apps you don't control: use an external tool. Button Heist can't drive apps you can't rebuild.
-
-This is a deliberate design choice. The alternative — operating from outside — means giving up everything that makes Button Heist better than the alternatives.
+That's the trade: embed the framework and the agent gets the full semantic interface. Skip it and the agent gets a lossy translation. Everything that makes Button Heist faster — deltas, expectations, batching, semantic activation — follows from being inside the app.
