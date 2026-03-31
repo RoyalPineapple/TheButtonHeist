@@ -4,7 +4,7 @@
 
 An MCP server that runs inside your iOS app. Link one framework into your debug build, and AI agents get the same interface VoiceOver uses — every label, trait, action, and activation point.
 
-The accessibility interface is already the agentic interface. It was designed so that a non-visual actor — VoiceOver — could understand and operate any app. An AI agent is the same kind of actor: it can't see pixels, but it can read labels, traits, and available actions, and it can activate controls by name. The entire problem of "how does an agent understand a GUI" was solved twenty years ago by accessibility engineers. Button Heist bridges the two: the agent doesn't reason about the interface, it *operates* the app — the same way a VoiceOver user does, through semantic controls that describe themselves.
+iOS has always had an answer to the question: how does an intelligence operate an app without a visual interface? Blind and low-vision users do it every day through VoiceOver — navigating by labels, traits, and actions instead of pixels. The accessibility layer is a complete semantic description of every control on screen: what it is, what it does, what state it's in, and how to interact with it. That's exactly what an AI agent needs. Button Heist bridges the two: the agent operates the app through the same semantic interface that millions of people already depend on — not by reasoning about screenshots, but by reading controls that describe themselves.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
