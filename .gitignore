@@ -27,7 +27,6 @@ __pycache__
 thoughts/
 .rp1/
 .context/
-.fuzzer-data/
 session/
 reports/
 research/
