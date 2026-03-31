@@ -2,13 +2,13 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it — quietly describes every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
+There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it daily — quietly describing every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
 
-Button Heist slips AI agents through that door. Link one framework into your debug build, and the agent works the interface from the inside: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, knows a button's activation point is offset from center — because the accessibility layer already says so.
+Button Heist lets AI agents in through that same door. Link one framework into your debug build and the agent works the interface from the inside — no coordinate math, no screenshot parsing. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly — because the accessibility layer already says what everything is and does.
 
-Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver. The same investment that makes your app agent-ready makes it accessible — and vice versa.
+Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-Once the agent can read the room, everything else follows.
+The heist goes smoothly because it's brazen. Walk in the front door, during business hours, grab the interface sitting right there. Clean escape. Once the agent can read the room, everything else follows.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -16,7 +16,7 @@ Once the agent can read the room, everything else follows.
 
 ### 1. Get the crew inside
 
-Link TheInsideJob to your debug target. It starts a local TCP server via ObjC `+load` — no setup code, no initialization call. DEBUG builds only; it's stripped from release builds automatically.
+Link TheInsideJob to your debug target. It starts a local TCP server via ObjC `+load` — no setup code. DEBUG only, stripped from release builds.
 
 ```swift
 import SwiftUI
@@ -60,7 +60,7 @@ cd ButtonHeistMCP && swift build -c release
 }
 ```
 
-This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `screenshot`, and more. The agent discovers your app via Bonjour automatically. Here's what a session looks like:
+This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `screenshot`, and more. The agent discovers your app via Bonjour automatically:
 
 ```
 Agent: "I need to log the user in"
@@ -70,7 +70,7 @@ Agent: "I need to log the user in"
   knows what's on screen and what to do next
 ```
 
-The agent never stops to ask "did that work?" or "what's on screen now?" — every response carries the answer. It stays focused on the task, not on driving the app.
+The agent stays focused on the task, not on driving the app.
 
 ### 3. Or drive it yourself
 
@@ -95,7 +95,7 @@ The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hell
 
 ### 4. USB devices
 
-USB works the same as WiFi — same API, same tools, no extra configuration. Useful when you need lower latency or your network blocks Bonjour.
+USB works the same as WiFi — same API, no extra configuration. Useful when you need lower latency or your network blocks Bonjour.
 
 ```bash
 $BH list
@@ -146,7 +146,7 @@ Multiple paths in, one API out.
 
 ## How It Works
 
-Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface — the same one VoiceOver uses — not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name. Full fidelity, because there's no serialization boundary to lose it.
+Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface — the same one VoiceOver uses — not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
 
 Three things follow from this, and each one removes another reason for the agent to think about anything other than its task:
 
@@ -170,9 +170,9 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 }
 ```
 
-Login screen gone, dashboard appeared, new elements ready to target — the agent already knows what to do next without asking. Value updates carry the property change inline — old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
+Login screen gone, dashboard appeared, new elements ready to target. Value updates carry the property change inline — old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
 
-The agent never has to stop and re-read the screen. It never takes a screenshot to figure out what happened. The context it needs to make its next decision arrives with the result of the last one.
+The context the agent needs to make its next decision arrives with the result of the last one.
 
 ### 2. Every action can verify itself
 
@@ -188,13 +188,13 @@ Each command can carry an `expect` — a declaration of what *should* happen. Th
 
 Response: `{"expectation": {"met": true, "expectation": "screenChanged"}}`.
 
-Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response carries what *actually* happened — the agent has everything it needs to reason about the mismatch without going back to look.
+Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response carries what *actually* happened.
 
-The agent declares intent, the framework handles verification. That's what gives the agent confidence to move fast — it knows it'll be told if something breaks, so it doesn't have to slow down and check.
+The agent declares intent, the framework handles verification. One less thing between the agent and the task.
 
 ### 3. Confidence unlocks batching
 
-An agent that trusts its feedback loop doesn't need to pause between steps. `run_batch` sends an ordered sequence in a single round trip — each step gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
+An agent that trusts its feedback loop can commit to a whole sequence at once. `run_batch` sends ordered steps in a single round trip — each one gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
 
 ```json
 {
@@ -207,11 +207,9 @@ An agent that trusts its feedback loop doesn't need to pause between steps. `run
 }
 ```
 
-Two actions. Two assertions. One round trip. If the email field doesn't update, the batch stops — it never taps submit with bad state.
+Two actions. Two assertions. One round trip. If the email field doesn't update, the batch stops.
 
-Each layer builds confidence. Deltas mean the agent doesn't re-read. Expectations mean it doesn't second-guess. Batching means it doesn't wait. Interface out, agent in, nothing left but the task. Clean escape.
-
-For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
+Deltas, expectations, and batching — each one enables the next. That's the compound advantage, and it's why this approach works. For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
 
 ## Meet the Crew
 
