@@ -133,7 +133,7 @@ final class ReplSession {
           wait label="Loading" absent=true  Wait for element to disappear
 
         Gestures:
-          tap <identifier>            Tap element by accessibility ID
+          tap <heistId>               Tap element by heistId
           tap 100 200                 Tap at coordinates
           press <id>                  Long press (duration=N for seconds)
           swipe up <id>               Swipe direction on element
@@ -167,7 +167,7 @@ final class ReplSession {
           record                      Start recording
           stop_recording              Stop and retrieve recording
 
-        Target elements by heistId or accessibility identifier.
+        Bare words are looked up as heistId (from get_interface).
         Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
@@ -311,7 +311,7 @@ final class ReplSession {
 
     private nonisolated static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
         guard let first = tokens.first else { return }
-        result["identifier"] = first
+        result["heistId"] = first
     }
 
     private nonisolated static func tokenize(_ line: String) -> [String] {

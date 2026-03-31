@@ -11,17 +11,17 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             UICollectionView, provides exhaustive search with item count tracking.
 
             Examples:
-              buttonheist scroll_to_visible --heist-id buttonheist.longList.last
-              buttonheist scroll_to_visible --label "Color Picker"
-              buttonheist scroll_to_visible --identifier "market.row.colorPicker"
-              buttonheist scroll_to_visible --label "Settings" --traits button
-              buttonheist scroll_to_visible --label "Color Picker" --direction up
+              buttonheist scroll_to_visible btn_last
+              buttonheist scroll_to_visible -l "Color Picker"
+              buttonheist scroll_to_visible -id "market.row.colorPicker"
+              buttonheist scroll_to_visible -l "Settings" --traits button
+              buttonheist scroll_to_visible -l "Color Picker" -d up
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .long, help: "Starting scroll direction: down, up, left, right (default: down)")
+    @Option(name: .shortAndLong, help: "Starting scroll direction: down, up, left, right (default: down)")
     var direction: String?
 
     @OptionGroup var connection: ConnectionOptions
@@ -44,7 +44,7 @@ struct ScrollToVisibleCommand: AsyncParsableCommand {
             "command": TheFence.Command.scrollToVisible.rawValue,
             "timeout": timeout,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let direction { request["direction"] = direction.lowercased() }
 
         try await CLIRunner.run(

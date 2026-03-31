@@ -15,9 +15,9 @@ struct ActivateCommand: AsyncParsableCommand {
             use `buttonheist touch one_finger_tap` instead.
 
             Examples:
-              buttonheist activate --heist-id button_login
-              buttonheist activate --label "Sign In" --identifier loginButton
-              buttonheist activate --label "Submit" --traits button
+              buttonheist activate btn_login
+              buttonheist activate -l "Sign In" -id loginButton
+              buttonheist activate -l "Submit" --traits button
             """
     )
 
@@ -32,7 +32,7 @@ struct ActivateCommand: AsyncParsableCommand {
     mutating func run() async throws {
         _ = try element.requireTarget()
         var request: [String: Any] = ["command": TheFence.Command.activate.rawValue]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         request["timeout"] = timeout
         try await CLIRunner.run(
             connection: connection,
