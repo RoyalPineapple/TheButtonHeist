@@ -2,11 +2,11 @@
 
 # Interface out. Agents in. Clean escape.
 
-An MCP server that runs inside your iOS app. Link one framework into your debug build, and AI agents get the same interface VoiceOver uses — every label, trait, action, and activation point.
+How does an intelligence operate an app without a visual interface? Blind and low-vision users already answered this — they navigate iOS every day through VoiceOver, using labels, traits, and actions instead of pixels. The accessibility layer is a complete semantic description of every control on screen: what it is, what it does, what state it's in, and how to interact with it.
 
-iOS has always had an answer to the question: how does an intelligence operate an app without a visual interface? Blind and low-vision users do it every day through VoiceOver — navigating by labels, traits, and actions instead of pixels. The accessibility layer is a complete semantic description of every control on screen: what it is, what it does, what state it's in, and how to interact with it. That's exactly what an AI agent needs. Button Heist bridges the two: the agent operates the app through the same semantic interface that millions of people already depend on — not by reasoning about screenshots, but by reading controls that describe themselves.
+An AI agent needs the same thing. And when you hand it a screenshot instead and ask it to figure out where to tap, you're paying for reasoning tokens to solve a problem the OS already solved — translating pixels into meaning. The agent is an LLM. It's good at understanding intent, planning sequences, and reacting to outcomes. It's wasted on coordinate math.
 
-Respect the agent's intelligence. When you hand an agent a screenshot and ask it to figure out where to tap, you're paying for reasoning tokens to solve a problem the OS already solved — translating pixels into meaning. The agent is an LLM. It's good at understanding intent, planning sequences, and reacting to outcomes. It's wasted on coordinate math. Give it `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)` and it spends its intelligence on your task, not on navigating your UI.
+Button Heist bridges the two. Link one framework into your debug build, and the agent operates your app through the same semantic interface that millions of people already depend on. `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. The agent spends its intelligence on your task, not on navigating your UI.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
