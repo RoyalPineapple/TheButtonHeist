@@ -10,6 +10,135 @@ Once the agent can read the room, everything else follows — better results, mo
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
+## Features
+
+### Interaction
+
+- **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
+- **Full gesture suite** — tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw arbitrary paths and bezier curves
+- **Text input** — type characters, delete, clear fields, read back values — works with software and hardware keyboard modes. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the iOS "Allow Paste" dialog
+- **Scroll semantics** — `scroll` (one page by direction), `scroll_to_visible` (bidirectional search for element matching label/identifier/value/traits predicate), `scroll_to_edge` (jump to top/bottom/left/right). All action commands accept flat matcher fields (`label`, `value`, `traits`, `excludeTraits`) alongside `heistId` for unified targeting
+- **Accessibility actions** — increment/decrement on adjustable elements, trigger named custom actions, dismiss keyboard
+
+### Inspection
+
+- **Structured UI hierarchy** — full accessibility tree with labels, values, traits (18 named mappings including private `backButton`), frames, activation points, custom content, and available actions
+- **heistId stable identifiers** — developer `accessibilityIdentifier` takes priority; otherwise synthesized from trait + label (e.g., `button_login`, `header_settings`). Disambiguated with `_1`, `_2` suffixes when duplicated
+- **Interface deltas** — four delta kinds: `screenChanged` (new view controller), `elementsChanged` (added/removed), `valuesChanged` (text updates), `noChange`. Returned after every action
+- **Screenshots** — PNG capture, inline base64 or saved to file
+- **Animation idle detection** — blocks until CALayer animations settle, no guessing
+
+### Recording
+
+- **H.264/MP4 screen recording** — configurable FPS (1–15), resolution scale (0.25–1.0)
+- **Auto-stop** — on inactivity timeout (default 5s) or max duration (default 60s)
+- **Touch overlay** — finger position indicators baked into the video via TheFingerprints
+- **Interaction log** — timestamped JSON of all actions during a recording session
+
+### Agent Integration
+
+- **18 MCP tools** — purpose-built for AI agents. Video data stripped from context window (metadata only unless output path given)
+- **Batch execution** — `run_batch` sends ordered steps in one call. Per-step expectations, `stop_on_error` or `continue_on_error` policy, aggregated timing
+- **Session state** — `get_session_state` returns connection status, device identity, recording state, last-action summary
+- **Outcome expectations** — `expect` on any action: `"screen_changed"`, `"elements_changed"`, or `{"elementUpdated": {…}}`. Framework reports; caller decides
+
+### Security
+
+- **TLS 1.2+** — self-signed ECDSA certificates generated at runtime, verified via SHA-256 fingerprint pinning through Bonjour TXT records
+- **Token auth** — auto-generated or configured secrets. On-device Allow/Deny approval UI for new connections
+- **Session locking** — one driver at a time. Additional connections get `sessionLocked` with context
+
+### Connectivity
+
+- **WiFi** — Bonjour auto-discovery on `_buttonheist._tcp`
+- **USB** — CoreDevice IPv6 tunnel discovery via `xcrun devicectl` + `lsof`. Same API as WiFi
+- **Multi-device** — run many instances on many simulators. `buttonheist list` verifies each candidate with a status probe before reporting
+- **Auto-reconnect** — session mode reconnects automatically on connection drop
+
+## Architecture
+
+```mermaid
+%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
+graph TD
+    AI["AI Agent<br/>(Claude, or any MCP client)"]
+    HUMAN["A Human<br/>(You even)"]
+    MCP["buttonheist-mcp<br/>18 tools"]
+    CLI["buttonheist CLI<br/>15 subcommands"]
+    Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
+    IJ["TheInsideJob<br/>(embedded in your app)"]
+    App["Your iOS App"]
+
+    AI -->|"MCP (JSON-RPC over stdio)"| MCP
+    MCP --> Client
+    HUMAN -->|"A Terminal"| CLI
+    CLI --> Client
+    Client -->|"TLS over WiFi / USB"| IJ
+    IJ --> App
+
+    subgraph Intelligence["Intelligence"]
+        HUMAN
+        AI
+    end
+
+    subgraph Mac["Your Mac"]
+        MCP
+        CLI
+        Client
+    end
+
+    subgraph Device["iOS Device or Simulator"]
+        IJ
+        App
+    end
+```
+
+### Modules
+
+| Module | Platform | What it does |
+|--------|----------|-------------|
+| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, `ElementMatcher`, protocol v6.3 |
+| **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
+| **ButtonHeist** | macOS | Client framework: TheFence (35-command dispatch + request correlation), TheHandoff (discovery + connection + state) |
+| **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
+| **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
+
+### Meet the Crew
+
+Every heist needs a team.
+
+#### The Score
+
+| Name | Role |
+|------|------|
+| **TheScore** | The shared playbook. Wire protocol types, messages, and constants used by both sides of the connection |
+
+#### The Inside Team (iOS)
+
+| Name | Role |
+|------|------|
+| **TheInsideJob** | The whole operation. TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
+| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions — all via IOHIDEvent |
+| **TheBagman** | Handles the goods. Accessibility hierarchy capture, heistId assignment, delta computation |
+| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock, connection scoping |
+| **TheStakeout** | The lookout. H.264 screen recording, frame timing, inactivity detection |
+| **TheFingerprints** | Evidence. Touch indicators rendered on-device and baked into recordings |
+| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions — animation detection, presentation layer fingerprinting, settle waits |
+| **ThePlant** | The advance. ObjC `+load` hook boots TheInsideJob before any Swift runs — link the framework, no app code |
+
+#### The Outside Team (macOS)
+
+| Name | Role |
+|------|------|
+| **TheFence** | Runs the show. 35 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
+
+#### The Legitimate Front
+
+| Name | Role |
+|------|------|
+| **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
+| **ButtonHeistMCP** | Agent interface. 18 tools that call through TheFence so AI agents can run the job natively |
+
 ## Quick Start
 
 ### 1. Get the crew inside

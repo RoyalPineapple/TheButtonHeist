@@ -667,45 +667,31 @@ UI element interface. Contains a flat element list and an optional tree structur
 
 ```json
 {"protocolVersion":"6.2","type":"interface","payload":{
+  "screenDescription":"Welcome — 1 button",
   "timestamp":"2026-02-03T10:30:45.123Z",
   "elements":[
     {
       "heistId":"staticText_welcome",
-      "order":0,
-      "description":"Welcome",
       "label":"Welcome",
-      "value":null,
-      "identifier":"welcomeLabel",
-      "hint":null,
       "traits":["staticText"],
       "frameX":16.0,
       "frameY":100.0,
       "frameWidth":361.0,
       "frameHeight":24.0,
       "activationPointX":196.5,
-      "activationPointY":112.0,
-      "respondsToUserInteraction":false,
-      "customContent":null,
-      "actions":[]
+      "activationPointY":112.0
     },
     {
       "heistId":"button_sign_in",
-      "order":1,
-      "description":"Sign In",
       "label":"Sign In",
-      "value":null,
       "identifier":"signInButton",
-      "hint":null,
       "traits":["button"],
       "frameX":16.0,
       "frameY":140.0,
       "frameWidth":361.0,
       "frameHeight":44.0,
       "activationPointX":196.5,
-      "activationPointY":162.0,
-      "respondsToUserInteraction":true,
-      "customContent":null,
-      "actions":["activate"]
+      "activationPointY":162.0
     }
   ],
   "tree":[
@@ -972,6 +958,7 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `screenDescription` | `String` | Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`) |
 | `timestamp` | `ISO8601 Date` | When interface was captured |
 | `elements` | `[HeistElement]` | Flat list of all UI elements |
 | `tree` | `[ElementNode]?` | Optional tree structure with containers |
@@ -981,22 +968,19 @@ Use `get_interface --full` when the screen has deep scrollable content and you n
 | Field | Type | Description |
 |-------|------|-------------|
 | `heistId` | `String` | Stable deterministic identifier (derived from developer identifier or synthesized from traits+label; value excluded for stability). Preferred for element targeting. |
-| `order` | `Int` | VoiceOver reading order (0-based) |
-| `description` | `String` | What VoiceOver reads |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value (for controls) |
 | `identifier` | `String?` | Identifier |
-| `hint` | `String?` | Accessibility hint |
+| `hint` | `String?` | Accessibility hint (full detail only) |
 | `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`, `"backButton"`) |
-| `frameX` | `Double` | Frame origin X in points |
-| `frameY` | `Double` | Frame origin Y in points |
-| `frameWidth` | `Double` | Frame width in points |
-| `frameHeight` | `Double` | Frame height in points |
-| `activationPointX` | `Double` | Activation point X (where VoiceOver would tap) |
-| `activationPointY` | `Double` | Activation point Y |
-| `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
-| `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
-| `actions` | `[ElementAction]` | Available actions. Built-in actions encode as plain strings (`"activate"`, `"increment"`, `"decrement"`). Custom actions encode as objects: `{"custom":"actionName"}`. |
+| `frameX` | `Double` | Frame origin X in points (full detail only) |
+| `frameY` | `Double` | Frame origin Y in points (full detail only) |
+| `frameWidth` | `Double` | Frame width in points (full detail only) |
+| `frameHeight` | `Double` | Frame height in points (full detail only) |
+| `activationPointX` | `Double` | Activation point X (full detail only) |
+| `activationPointY` | `Double` | Activation point Y (full detail only) |
+| `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
+| `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
 ### ElementNode
 
