@@ -2,7 +2,11 @@
 
 # Interface out. Agents in. Clean escape.
 
-An MCP server that runs inside your iOS app. Link one framework into your debug build, and AI agents get the same interface VoiceOver uses — every label, trait, action, and activation point.
+There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it — quietly describes every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
+
+Button Heist slips AI agents through that door. Link one framework into your debug build, and the agent works the interface from the inside: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, knows a button's activation point is offset from center — because the accessibility layer already says so.
+
+Once the agent can read the room, everything else follows — better results, more reliably, faster.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -83,6 +87,7 @@ BH=./ButtonHeistCLI/.build/release/buttonheist
 $BH list                                                  # Discover devices (WiFi + USB)
 $BH session                                               # Interactive REPL
 $BH activate --identifier loginButton                     # Activate an element
+$BH action --name "Delete" --identifier cell_row_3        # Named custom action
 $BH type --text "Hello" --identifier nameField            # Type into a field
 $BH scroll --direction down --identifier scrollView       # Scroll one page
 $BH scroll_to_visible --identifier targetElement          # Scroll until visible
@@ -109,42 +114,196 @@ See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
 Button Heist runs **inside your app**, not across a process boundary. This means four things:
 
 - **Full fidelity** — the agent reads live `UIAccessibility` objects directly. Activation points, custom content, custom rotors, available actions — nothing lost in serialization. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
-- **Deltas after every action** — tap a button, get back what changed: elements added, removed, values updated, or screen changed. No re-fetching the full tree to figure out what happened.
+- **Deltas after every action** — tap a button, get back exactly what changed. No re-fetching the full tree.
 - **Animation-aware idle** — `wait_for_idle` watches `CALayer` animations. `wait_for` watches for a specific element. No fixed sleeps.
-- **Batch and expect** — `run_batch` sends multiple commands in one round trip. Each step can carry an `expect` declaring what should happen. The framework checks the delta and reports whether it was met.
+- **Inline expectations** — every action can carry an `expect` declaring what should happen. The framework checks the delta and reports pass/fail with diagnostics. This is what makes batching possible — because every step verifies itself, the agent can fire a sequence without stopping to look after each one.
+- **Batch execution** — `run_batch` sends multiple commands in one round trip. Each step gets its own delta and expectation check. Stops on first failure so the agent never pushes forward with bad state.
 
-These compound. An agent adding a todo item:
+### Interface deltas
 
-```
-→ run_batch(steps: [
-    {command: "type_text", identifier: "titleField", text: "Buy milk"},
-    {command: "activate", identifier: "addButton", expect: "elements_changed"}
-  ])
-← 2 steps completed, expectation met, delta shows new row added
-```
+Every action returns an `interfaceDelta` — a structured diff of what changed in the hierarchy. Three kinds:
 
-Two actions, one round trip, verified outcome. **One agent turn.**
+**`elementsChanged`** — elements were added, removed, or updated. The delta carries exactly which ones:
 
-The same task with an external tool:
-
-```
-→ get_accessibility_tree          (find the field)
-← tree
-→ tap(x: 187, y: 340)            (tap the field)
-← ok
-→ type("Buy milk")
-← ok
-→ get_accessibility_tree          (find the button)
-← tree
-→ tap(x: 305, y: 340)            (tap Add)
-← ok
-→ get_accessibility_tree          (verify it worked)
-← tree
+```json
+{
+  "success": true,
+  "method": "activate",
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "removed": ["button_login", "textfield_password", "textfield_email"],
+    "added": [
+      {"heistId": "header_dashboard", "label": "Dashboard", "traits": ["header"]},
+      {"heistId": "button_settings", "label": "Settings", "traits": ["button"]},
+      {"heistId": "text_welcome", "label": "Welcome back", "traits": ["staticText"]}
+    ]
+  },
+  "screenName": "Dashboard"
+}
 ```
 
-Six calls, three tree fetches, no outcome verification. **Six agent turns.**
+The agent reads this and knows: login screen dismissed, dashboard appeared, three new elements to work with. No screenshot, no re-fetch.
 
-Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility. If the agent can't find a control, a VoiceOver user can't either.
+**`valuesChanged`** — something updated in place. Typing into a field:
+
+```json
+{
+  "success": true,
+  "method": "typeText",
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "updated": [
+      {
+        "heistId": "textfield_email",
+        "changes": [
+          {"property": "value", "old": "", "new": "user@example.com"}
+        ]
+      }
+    ]
+  },
+  "value": "user@example.com"
+}
+```
+
+The agent sees the value change confirmed in the delta *and* in the `value` field. No need to read it back.
+
+**`screenChanged`** — a new view controller appeared. The delta includes the full new interface:
+
+```json
+{
+  "success": true,
+  "method": "activate",
+  "interfaceDelta": {
+    "kind": "screenChanged",
+    "elementCount": 8,
+    "newInterface": {
+      "elements": [
+        {"heistId": "header_settings", "label": "Settings", "traits": ["header"]},
+        {"heistId": "switch_darkmode", "label": "Dark Mode", "value": "0", "traits": ["button"]},
+        {"heistId": "button_back", "label": "Back", "traits": ["button", "backButton"]}
+      ]
+    }
+  },
+  "screenName": "Settings"
+}
+```
+
+Complete new screen in the same response as the action. Zero additional calls.
+
+**`noChange`** — nothing moved. The agent knows immediately and can try something else.
+
+### Expectations
+
+Expectations are what make everything else work. Without them, the agent has to stop after every action, re-read the screen, and decide if it worked — which is exactly what external tools do. With them, each action verifies itself. The agent declares what *should* happen, the framework checks the delta, and the result comes back pass/fail with diagnostics. This is what unlocks batching: because every step carries its own assertion, the agent can send a whole sequence without stopping to look.
+
+Three tiers, from broad to precise:
+
+**`screen_changed`** — assert that a new view controller appeared:
+
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "button_login"},
+  "expect": "screen_changed"
+}
+```
+
+```json
+{
+  "success": true,
+  "interfaceDelta": {"kind": "screenChanged", "elementCount": 12, "newInterface": {"elements": ["..."]}},
+  "expectation": {"met": true, "expectation": "screenChanged"}
+}
+```
+
+The agent asked "should this navigate?" and the framework answered yes, with the new screen already in hand.
+
+**`elements_changed`** — assert that *something* in the hierarchy changed (met by either `elementsChanged` or `screenChanged`):
+
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "button_add_row"},
+  "expect": "elements_changed"
+}
+```
+
+```json
+{
+  "success": true,
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 15,
+    "added": [{"heistId": "cell_row_3", "label": "New Item", "traits": ["staticText"]}]
+  },
+  "expectation": {"met": true, "expectation": "elementsChanged"}
+}
+```
+
+**`element_updated`** — assert a specific property change on a specific element. Say what you know, omit what you don't:
+
+```json
+{
+  "command": "activate",
+  "target": {"heistId": "switch_darkmode"},
+  "expect": {"element_updated": {"heistId": "switch_darkmode", "property": "value", "newValue": "1"}}
+}
+```
+
+```json
+{
+  "success": true,
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "updated": [
+      {"heistId": "switch_darkmode", "changes": [{"property": "value", "old": "0", "new": "1"}]}
+    ]
+  },
+  "expectation": {"met": true, "expectation": {"element_updated": {"heistId": "switch_darkmode", "property": "value", "newValue": "1"}}}
+}
+```
+
+Toggle dark mode, assert the value flipped to "1". The framework scans `updated` for a match — if the heistId, property, and value all line up, it's met.
+
+When an expectation fails, the framework reports what it actually observed:
+
+```json
+{
+  "expectation": {
+    "met": false,
+    "expectation": "screenChanged",
+    "actual": "elementsChanged"
+  }
+}
+```
+
+The agent asked for a screen change but only got element updates — maybe a validation error appeared instead of navigating. The agent has the delta, the failed expectation, and the actual outcome. It can reason about what went wrong without re-fetching anything.
+
+### Batching: what expectations unlock
+
+Because every step verifies itself, the agent doesn't need to stop and look between actions. `run_batch` sends an ordered sequence in a single round trip — each step gets its own delta, its own expectation check, and the batch stops on the first failure (`stop_on_error` policy). The agent never pushes forward with bad state:
+
+```json
+{
+  "command": "run_batch",
+  "steps": [
+    {"command": "type_text", "target": {"heistId": "textfield_email"}, "text": "user@example.com",
+     "expect": {"element_updated": {"heistId": "textfield_email", "property": "value", "newValue": "user@example.com"}}},
+    {"command": "type_text", "target": {"heistId": "textfield_password"}, "text": "hunter2",
+     "expect": {"element_updated": {"heistId": "textfield_password", "property": "value"}}},
+    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": "screen_changed"}
+  ]
+}
+```
+
+Three actions. Three assertions. One round trip. If typing into the password field doesn't update the value, the batch stops at step 2 — it never taps submit with bad state.
+
+This is why external tools can't batch. Without inline verification, each action is fire-and-forget: do something, screenshot, stare at pixels, decide if it worked, then plan the next step. Batching requires knowing each step succeeded *before the response comes back to the agent*. Expectations make that possible — every action is an assertion, and the test suite is woven into the interaction itself.
+
+And because agents operate through the accessibility interface, every interaction is an implicit accessibility audit. If the agent can't find a control, neither can VoiceOver. The same investment that makes your app agent-ready makes it accessible — and vice versa.
 
 For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
 
