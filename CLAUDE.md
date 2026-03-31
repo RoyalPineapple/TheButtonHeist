@@ -1,5 +1,22 @@
 # CLAUDE.md
 
+## README.md is protected
+
+The README is the face of this project. Its tone, prose, structure, and argumentative arc were carefully crafted and are not up for rewrite. **Do not restructure, rephrase, or rewrite README.md.** You may:
+
+- Fix factual errors (stale counts, wrong tool names, broken links)
+- Fix grammar or typos
+- Add a new section if a feature ships that has no README coverage
+
+You may **not**:
+
+- Reorder sections or change the narrative flow
+- Rewrite prose to "improve" clarity or tone
+- Remove content unless the underlying feature was deleted
+- Summarize, condense, or expand existing sections
+
+If you believe the README needs substantive changes, say so and explain why — don't make the edit.
+
 ## Tuist Project Generation
 
 This project uses [Tuist](https://tuist.io) to generate Xcode projects and workspaces. The generated `.xcodeproj` and `.xcworkspace` files are checked into git, so you don't need to run `tuist generate` after a fresh clone.
