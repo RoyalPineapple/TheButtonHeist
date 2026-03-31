@@ -225,7 +225,7 @@ public final class TheInsideJob {
             Task { @MainActor in
                 guard let self else { return }
                 // Allow status probes after the version handshake, before full authentication.
-                if let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data),
+                if let envelope = self.decodeRequest(data),
                    case .status = envelope.message,
                    self.muscle.helloValidatedClients.contains(clientId) {
                     await self.handleClientMessage(clientId, data: data, respond: respond)
@@ -281,11 +281,7 @@ public final class TheInsideJob {
     }
 
     private func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
-        guard let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: data) else {
-            insideJobLogger.error("Failed to decode client message")
-            if String(data: data, encoding: .utf8) != nil {
-                insideJobLogger.debug("Unparsable message: \(data.count) bytes")
-            }
+        guard let envelope = decodeRequest(data) else {
             sendMessage(.error("Malformed message — could not decode"), respond: respond)
             return
         }
@@ -629,9 +625,7 @@ public final class TheInsideJob {
                 command: command,
                 result: actionResult
             )
-            if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .interaction(event))) {
-                broadcastToSubscribed(data)
-            }
+            broadcastToSubscribed(.interaction(event))
         }
     }
 
@@ -655,22 +649,55 @@ public final class TheInsideJob {
         sendMessage(.info(info), respond: respond)
     }
 
-    func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping (Data) -> Void) {
+    /// Encode a response envelope, logging the actual error on failure.
+    /// Returns nil only when encoding fails — callers decide how to handle that.
+    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil) -> Data? {
         let envelope = ResponseEnvelope(requestId: requestId, message: message)
-        guard let data = try? JSONEncoder().encode(envelope) else {
-            insideJobLogger.error("Failed to encode message")
-            return
+        do {
+            return try JSONEncoder().encode(envelope)
+        } catch {
+            insideJobLogger.error("Failed to encode message: \(error)")
+            return nil
         }
-        insideJobLogger.debug("Sending \(data.count) bytes")
-        respond(data)
     }
 
-    /// Send data only to clients that have explicitly subscribed.
+    /// Decode a client request, logging the actual error on failure.
+    func decodeRequest(_ data: Data) -> RequestEnvelope? {
+        do {
+            return try JSONDecoder().decode(RequestEnvelope.self, from: data)
+        } catch {
+            insideJobLogger.error("Failed to decode client message: \(error)")
+            return nil
+        }
+    }
+
+    func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping (Data) -> Void) {
+        if let data = encodeEnvelope(message, requestId: requestId) {
+            insideJobLogger.debug("Sending \(data.count) bytes")
+            respond(data)
+        } else if let errorData = encodeEnvelope(.error("Encoding failed"), requestId: requestId) {
+            respond(errorData)
+        }
+    }
+
+    /// Broadcast a message to subscribed clients, encoding once.
+    func broadcastToSubscribed(_ message: ServerMessage) {
+        guard let data = encodeEnvelope(message) else { return }
+        muscle.broadcastToSubscribed(data)
+    }
+
+    /// Broadcast a message to all connected clients, encoding once.
+    func broadcastToAll(_ message: ServerMessage) {
+        guard let data = encodeEnvelope(message) else { return }
+        transport?.broadcastToAll(data)
+    }
+
+    /// Send pre-encoded data to all subscribed clients.
     func broadcastToSubscribed(_ data: Data) {
         muscle.broadcastToSubscribed(data)
     }
 
-    /// Send data to all connected clients (used for recording completion broadcasts).
+    /// Send pre-encoded data to all connected clients.
     func broadcastToAll(_ data: Data) {
         transport?.broadcastToAll(data)
     }
