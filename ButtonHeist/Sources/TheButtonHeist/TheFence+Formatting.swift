@@ -579,7 +579,7 @@ public enum FenceResponse {
         case .interface(let interface, _, let filteredFrom, _):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
-            var lines: [String] = [header]
+            var lines: [String] = [interface.screenDescription, header]
             for (i, element) in interface.elements.enumerated() {
                 lines.append(Self.compactElementLine(element, displayIndex: i))
             }
@@ -798,6 +798,7 @@ public enum FenceResponse {
         if detail == .full, let tree = interface.tree {
             payload["tree"] = tree.map(elementNodeDictionary)
         }
+        payload["screenDescription"] = interface.screenDescription
         return payload
     }
 

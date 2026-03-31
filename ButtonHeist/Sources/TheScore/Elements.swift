@@ -214,10 +214,65 @@ public struct Interface: Codable, Sendable {
     /// Optional tree structure for grouped display
     public let tree: [ElementNode]?
 
+    /// Deterministic one-line screen summary built from element metadata.
+    /// Format: "{screen name} — {interactive element counts}"
+    public var screenDescription: String {
+        Self.buildScreenDescription(from: elements)
+    }
+
     public init(timestamp: Date, elements: [HeistElement], tree: [ElementNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
         self.tree = tree
+    }
+
+    // MARK: - Deterministic Screen Description
+
+    /// Build a one-line screen summary from element metadata.
+    static func buildScreenDescription(from elements: [HeistElement]) -> String {
+        let screenName = elements
+            .first(where: { $0.traits.contains(.header) })
+            .flatMap(\.label)
+
+        var textFields = 0
+        var buttons = 0
+        var switches = 0
+        var sliders = 0
+        var searchFields = 0
+        var links = 0
+        var secureFields = 0
+
+        for element in elements {
+            let traits = element.traits
+            if traits.contains(.secureTextField) { secureFields += 1 }
+            else if traits.contains(.textEntry) { textFields += 1 }
+            else if traits.contains(.searchField) { searchFields += 1 }
+            else if traits.contains(.switchButton) { switches += 1 }
+            else if traits.contains(.adjustable) { sliders += 1 }
+            else if traits.contains(.link) { links += 1 }
+            else if traits.contains(.button) && !traits.contains(.backButton) { buttons += 1 }
+        }
+
+        var parts: [String] = []
+        if textFields > 0 { parts.append("\(textFields) text field\(textFields == 1 ? "" : "s")") }
+        if secureFields > 0 { parts.append("\(secureFields) password field\(secureFields == 1 ? "" : "s")") }
+        if searchFields > 0 { parts.append("\(searchFields) search field\(searchFields == 1 ? "" : "s")") }
+        if buttons > 0 { parts.append("\(buttons) button\(buttons == 1 ? "" : "s")") }
+        if switches > 0 { parts.append("\(switches) toggle\(switches == 1 ? "" : "s")") }
+        if sliders > 0 { parts.append("\(sliders) slider\(sliders == 1 ? "" : "s")") }
+        if links > 0 { parts.append("\(links) link\(links == 1 ? "" : "s")") }
+
+        let summary = parts.joined(separator: ", ")
+
+        if let name = screenName, !summary.isEmpty {
+            return "\(name) — \(summary)"
+        } else if let name = screenName {
+            return name
+        } else if !summary.isEmpty {
+            return summary
+        } else {
+            return "\(elements.count) elements"
+        }
     }
 }
 
