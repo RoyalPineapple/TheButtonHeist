@@ -2,7 +2,7 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it daily — quietly describing every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
+There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it daily — quietly describes every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
 
 Button Heist lets AI agents in through that same door. Link one framework into your debug build and the agent works the interface from the inside — no coordinate math, no screenshot parsing. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly — because the accessibility layer already says what everything is and does.
 
@@ -60,12 +60,12 @@ cd ButtonHeistMCP && swift build -c release
 }
 ```
 
-This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `screenshot`, and more. The agent discovers your app via Bonjour automatically:
+This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
 
 ```
 Agent: "I need to log the user in"
 → get_interface → sees button_login, textfield_email, textfield_password
-→ run_batch([type email, type password, tap login])
+→ run_batch([type email, tap login])
 ← each step confirmed, login screen gone, dashboard appeared — agent already
   knows what's on screen and what to do next
 ```
@@ -109,7 +109,7 @@ See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
 
 ### Interact
 
-The agent works controls the way VoiceOver does — by meaning, not by pixel.
+The agent works the controls the way VoiceOver does — by meaning, not by pixel.
 
 - **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
 - **Full gesture suite** — long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
@@ -121,7 +121,7 @@ The agent works controls the way VoiceOver does — by meaning, not by pixel.
 
 Every element has a stable identity and every action has a structured receipt.
 
-- **Full accessibility tree** — labels, values, 18 named traits, frames, activation points, custom content, available actions
+- **Full accessibility tree** — labels, values, 41 named traits, frames, activation points, custom content, available actions
 - **Stable identifiers** — `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
 - **Screenshots** — PNG capture, inline base64 or saved to file
 - **Animation idle detection** — blocks until `CALayer` animations settle
@@ -238,7 +238,7 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheFence** | Runs the show. 35 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheFence** | Runs the show. 36 commands dispatched from CLI and MCP, request-response correlation, async waits |
 | **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
 
 ### The Legitimate Front
@@ -256,7 +256,7 @@ graph TD
     AI["AI Agent<br/>(Claude, or any MCP client)"]
     HUMAN["A Human<br/>(You even)"]
     MCP["buttonheist-mcp<br/>22 tools"]
-    CLI["buttonheist CLI<br/>15 subcommands"]
+    CLI["buttonheist CLI<br/>18 subcommands"]
     Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded in your app)"]
     App["Your iOS App"]
