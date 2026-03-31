@@ -2,43 +2,37 @@
 
 # Interface out. Agents in. Clean escape.
 
-Button Heist gives AI agents full programmatic control of iOS apps — 2-3x fewer turns than any other MCP server for iOS. Embed one framework, connect over MCP or CLI, and the agent drives any screen: tap, swipe, type, scroll, inspect, record.
+Button Heist is an MCP server that runs inside your iOS app. It reads live accessibility objects and injects real touches — giving AI agents 2-3x fewer turns than any external tool. You link one framework into your debug build (same pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.com/FLEXTool/FLEX)), and the agent gets the same semantic interface VoiceOver uses: every label, trait, action, and activation point, with nothing lost at a process boundary.
 
-The efficiency comes from five capabilities that build on each other. Each one is useful alone. Together, they compound.
+<!-- TODO: terminal GIF showing run_batch with delta response -->
 
 ## Why It's Fast
 
+Five capabilities that build on each other.
+
 ### 1. The agent knows what everything is
 
-Button Heist runs **inside your app**. It reads live `UIAccessibility` objects directly — labels, traits, activation points, custom actions, custom content, `respondsToUserInteraction`. The agent gets a complete, typed picture of every control on screen.
+Button Heist runs **inside your app**. It reads live `UIAccessibility` objects directly — labels, traits, activation points, custom actions, custom content. External tools serialize this data across process boundaries and lose activation points, custom content, custom rotors, and available actions in translation.
 
-External tools read accessibility data through XPC or WebDriverAgent, which serializes it across process boundaries. Activation points, custom content, custom rotors, and available actions get dropped in translation. The agent gets a lossy summary and has to guess what it's missing.
-
-When the agent knows a control is a stepper, it calls `increment`. When it knows a row has a "Delete" custom action, it calls `perform_custom_action("Delete")`. When it knows a button's activation point is offset from center, it taps in the right place. No guessing, no retries.
+When the agent knows a control is a stepper, it calls `increment`. When a row has a "Delete" custom action, it calls `perform_custom_action("Delete")`. No coordinate math, no guessing.
 
 ### 2. Every action tells the agent what changed
 
-After every command, Button Heist returns an **interface delta** — elements added, removed, or changed — not just "ok." The agent knows immediately whether tapping "Login" dismissed the login screen or showed a validation error, without re-reading the full tree.
+After every command, Button Heist returns an **interface delta** — elements added, removed, or changed. The agent knows immediately whether tapping "Login" dismissed the screen or showed a validation error, without re-reading the full tree.
 
-External tools return nothing after an action. The agent has to screenshot, re-fetch the tree, diff it mentally, and decide what happened. That's an extra round trip per action — and for an LLM, an extra reasoning step.
+External tools return nothing after an action. The agent re-fetches, diffs mentally, reasons about what happened. One extra round trip per action.
 
 ### 3. The agent knows when the UI is ready
 
 `wait_for_idle` watches `CALayer` animations and reports when the screen has settled. `wait_for` watches for a specific element to appear or disappear. No fixed sleeps, no screenshot polling.
 
-External tools can't see animation state — it doesn't cross the process boundary. Agents using them either sleep for a fixed duration (too long or too short) or screenshot in a loop until things look stable (expensive and unreliable).
-
 ### 4. Multiple actions in one call
 
-`run_batch` sends an ordered sequence of commands in a single MCP round trip. Type an email, type a password, tap submit — one call, three actions, three deltas back.
-
-This only works because of (2) and (3): each step in the batch gets its own delta, and the framework waits for idle between steps automatically. External tools can't batch because each action depends on re-reading the screen to plan the next one.
+`run_batch` sends an ordered sequence of commands in a single MCP round trip. Each step gets its own delta, and the framework waits for idle between steps automatically. External tools can't batch because each action depends on re-reading the screen to plan the next one.
 
 ### 5. The agent declares what should happen
 
-Each action or batch step can carry an `expect` — `"screen_changed"`, `"elements_changed"`, or a specific element update. The framework checks the delta against the expectation and reports whether it was met. If a batch step's expectation fails, the batch stops with diagnostics.
-
-The agent doesn't verify outcomes by re-inspecting — the tool does it inline. This is the final multiplier: the agent can fire-and-forget a confident sequence instead of interleaving actions with verification reads.
+Each action can carry an `expect` — `"screen_changed"`, `"elements_changed"`, or a specific element update. The framework checks the delta and reports whether the expectation was met. The agent doesn't verify outcomes by re-inspecting — the tool does it inline.
 
 ### How they compound
 
@@ -71,11 +65,45 @@ The same task with an external tool:
 ← tree
 ```
 
-Seven calls, three tree fetches, no outcome verification. **Seven agent turns** — and the agent still has to reason about whether the tree changed correctly.
+Seven calls, three tree fetches, no outcome verification. **Seven agent turns.**
 
-### Benchmarks
+Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility. If the agent can't find a control, a VoiceOver user can't either.
 
-Thirteen tasks, three MCP servers, same model (Claude Sonnet 4.6), same app. All achieve high accuracy — the difference is how many turns it takes:
+## What It Can Do
+
+### Interact
+
+- **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap
+- **Full gesture suite** — long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
+- **Text input** — type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
+- **Scroll semantics** — `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
+- **Accessibility actions** — increment/decrement, named custom actions, dismiss keyboard
+
+### Inspect
+
+- **Full accessibility tree** — labels, values, 18 named traits, frames, activation points, custom content, available actions
+- **Stable identifiers** — `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
+- **Interface deltas** — four kinds: `screenChanged`, `elementsChanged`, `valuesChanged`, `noChange`
+- **Screenshots** — PNG capture, inline base64 or saved to file
+- **Animation idle detection** — blocks until `CALayer` animations settle
+
+### Record
+
+- **H.264/MP4 screen recording** — configurable FPS (1-15), resolution scale (0.25-1.0)
+- **Touch overlay** — finger position indicators baked into the video
+- **Auto-stop** — on inactivity timeout or max duration
+- **Interaction log** — timestamped JSON of all actions during the session
+
+### Connect
+
+- **WiFi** — Bonjour auto-discovery on `_buttonheist._tcp`
+- **USB** — CoreDevice IPv6 tunnel discovery. Same API as WiFi
+- **Security** — TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
+- **Multi-device** — many instances, many simulators. Session locking (one driver at a time)
+
+## Benchmarks
+
+Thirteen tasks, three MCP servers, same model (Claude Sonnet 4.6), same app. All achieve high accuracy — the difference is efficiency:
 
 | | Turns | Wall time | Cost |
 |---|-------|-----------|------|
@@ -83,101 +111,7 @@ Thirteen tasks, three MCP servers, same model (Claude Sonnet 4.6), same app. All
 | ios-simulator-mcp | 49 | 188s | $0.84 |
 | **Button Heist** | **25** | **103s** | **$0.43** |
 
-Numbers for the 11-step full-workflow task. BH shows 2-3x fewer turns across the full suite, with the gap widening on gesture-heavy tasks (swipe actions: 7 turns vs 34 vs 80). Full data in [docs/the-argument.md](docs/the-argument.md).
-
-## What It Can Do
-
-**Interact** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Full gesture suite: long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths. Text input with edit actions (copy, paste, cut, select). Scroll by direction, scroll to edge, scroll until an element is visible. Increment/decrement on adjustable elements. Named custom actions.
-
-**Inspect** — Full accessibility tree with 18 named traits (including private `backButton`), frames, activation points, custom content, available actions. `heistId` stable identifiers derived from trait + label (`button_login`, `header_settings`). Interface deltas after every action. Screenshots.
-
-**Record** — H.264/MP4 screen recording with configurable FPS, resolution, touch overlay, and interaction logs. Auto-stops on inactivity or max duration.
-
-**Connect** — WiFi via Bonjour, USB via CoreDevice tunnels. TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny. Session locking (one driver at a time). Multi-device with per-instance isolation.
-
-## Architecture
-
-```mermaid
-%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
-graph TD
-    AI["AI Agent<br/>(Claude, or any MCP client)"]
-    HUMAN["A Human<br/>(You even)"]
-    MCP["buttonheist-mcp<br/>18 tools"]
-    CLI["buttonheist CLI<br/>15 subcommands"]
-    Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
-    IJ["TheInsideJob<br/>(embedded in your app)"]
-    App["Your iOS App"]
-
-    AI -->|"MCP (JSON-RPC over stdio)"| MCP
-    MCP --> Client
-    HUMAN -->|"A Terminal"| CLI
-    CLI --> Client
-    Client -->|"TLS over WiFi / USB"| IJ
-    IJ --> App
-
-    subgraph Intelligence["Intelligence"]
-        HUMAN
-        AI
-    end
-
-    subgraph Mac["Your Mac"]
-        MCP
-        CLI
-        Client
-    end
-
-    subgraph Device["iOS Device or Simulator"]
-        IJ
-        App
-    end
-```
-
-### Modules
-
-| Module | Platform | What it does |
-|--------|----------|-------------|
-| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, `ElementMatcher`, protocol v6.3 |
-| **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
-| **ButtonHeist** | macOS | Client framework: TheFence (35-command dispatch + request correlation), TheHandoff (discovery + connection + state) |
-| **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
-| **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
-
-### Meet the Crew
-
-Every heist needs a team.
-
-#### The Score
-
-| Name | Role |
-|------|------|
-| **TheScore** | The shared playbook. Wire protocol types, messages, and constants used by both sides of the connection |
-
-#### The Inside Team (iOS)
-
-| Name | Role |
-|------|------|
-| **TheInsideJob** | The whole operation. TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
-| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions — all via IOHIDEvent |
-| **TheBagman** | Handles the goods. Accessibility hierarchy capture, heistId assignment, delta computation |
-| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock, connection scoping |
-| **TheStakeout** | The lookout. H.264 screen recording, frame timing, inactivity detection |
-| **TheFingerprints** | Evidence. Touch indicators rendered on-device and baked into recordings |
-| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions — animation detection, presentation layer fingerprinting, settle waits |
-| **ThePlant** | The advance. ObjC `+load` hook boots TheInsideJob before any Swift runs — link the framework, no app code |
-
-#### The Outside Team (macOS)
-
-| Name | Role |
-|------|------|
-| **TheFence** | Runs the show. 35 commands dispatched from CLI and MCP, request-response correlation, async waits |
-| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
-
-#### The Legitimate Front
-
-| Name | Role |
-|------|------|
-| **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | Agent interface. 18 tools that call through TheFence so AI agents can run the job natively |
+Numbers for the 11-step full-workflow task. The gap widens on gesture-heavy tasks (swipe actions: 7 turns vs 34 vs 80). Full data in [docs/the-argument.md](docs/the-argument.md).
 
 ## Quick Start
 
@@ -249,7 +183,7 @@ Agent: "Type credentials and submit"
 
 ### Pair with XcodeBuildMCP for Full Agent Workflows
 
-For the best agent experience, run Button Heist alongside [**XcodeBuildMCP**](https://github.com/getsentry/XcodeBuildMCP) — it handles build, install, launch, terminate, and simulator lifecycle. Together they cover the full loop: XcodeBuildMCP builds and deploys, Button Heist drives the UI.
+Run Button Heist alongside [**XcodeBuildMCP**](https://github.com/getsentry/XcodeBuildMCP) for the full loop — XcodeBuildMCP builds and deploys your app, Button Heist drives the UI.
 
 ```json
 {
@@ -287,7 +221,7 @@ The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hell
 
 ### 4. USB Devices
 
-USB devices appear alongside WiFi in `buttonheist list` — no extra configuration. Button Heist discovers them via CoreDevice IPv6 tunnels.
+USB devices appear alongside WiFi in `buttonheist list` — no extra configuration.
 
 ```bash
 $BH list
@@ -297,13 +231,89 @@ $BH list
 
 See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
 
-## The Trade-Off
+## Architecture
 
-Button Heist runs inside your app. You link a framework into the debug build — the same pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.com/FLEXTool/FLEX). This is the trade-off: it doesn't work with apps you can't modify.
+```mermaid
+%% If you can read this, the diagram isn't rendering. Try github.com in a browser.
+graph TD
+    AI["AI Agent<br/>(Claude, or any MCP client)"]
+    HUMAN["A Human<br/>(You even)"]
+    MCP["buttonheist-mcp<br/>18 tools"]
+    CLI["buttonheist CLI<br/>15 subcommands"]
+    Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
+    IJ["TheInsideJob<br/>(embedded in your app)"]
+    App["Your iOS App"]
 
-For apps you don't control, [mobile-mcp](https://github.com/mobile-next/mobile-mcp) or [ios-simulator-mcp](https://github.com/joshuayoes/ios-simulator-mcp) work without integration. For apps you're building — where you can embed the framework and where 2-3x efficiency, batching, expectations, and real device support matter — Button Heist is the tool.
+    AI -->|"MCP (JSON-RPC over stdio)"| MCP
+    MCP --> Client
+    HUMAN -->|"A Terminal"| CLI
+    CLI --> Client
+    Client -->|"TLS over WiFi / USB"| IJ
+    IJ --> App
 
-The embedding requirement is also why everything above works. Live object access, real touch injection, animation detection, interface deltas, and direct accessibility actions are only possible from inside the app process. No external tool can replicate them.
+    subgraph Intelligence["Intelligence"]
+        HUMAN
+        AI
+    end
+
+    subgraph Mac["Your Mac"]
+        MCP
+        CLI
+        Client
+    end
+
+    subgraph Device["iOS Device or Simulator"]
+        IJ
+        App
+    end
+```
+
+### Modules
+
+| Module | Platform | What it does |
+|--------|----------|-------------|
+| **TheScore** | iOS + macOS | Wire protocol: 33 client messages, 18 server messages, `HeistElement`, `InterfaceDelta`, `ElementMatcher`, protocol v6.3 |
+| **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
+| **ButtonHeist** | macOS | Client framework: TheFence (35-command dispatch + request correlation), TheHandoff (discovery + connection + state) |
+| **ButtonHeistMCP** | macOS | MCP server: 18 tools dispatching through TheFence, including `run_batch` and `get_session_state` |
+| **buttonheist** | macOS | CLI: 15 subcommands + interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
+
+### Meet the Crew
+
+Every module has a name and a job.
+
+#### The Score
+
+| Name | Role |
+|------|------|
+| **TheScore** | The shared playbook. Wire protocol types, messages, and constants used by both sides of the connection |
+
+#### The Inside Team (iOS)
+
+| Name | Role |
+|------|------|
+| **TheInsideJob** | The whole operation. TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
+| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions — all via IOHIDEvent |
+| **TheBagman** | Handles the goods. Accessibility hierarchy capture, heistId assignment, delta computation |
+| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock, connection scoping |
+| **TheStakeout** | The lookout. H.264 screen recording, frame timing, inactivity detection |
+| **TheFingerprints** | Evidence. Touch indicators rendered on-device and baked into recordings |
+| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions — animation detection, presentation layer fingerprinting, settle waits |
+| **ThePlant** | The advance. ObjC `+load` hook boots TheInsideJob before any Swift runs — link the framework, no app code |
+
+#### The Outside Team (macOS)
+
+| Name | Role |
+|------|------|
+| **TheFence** | Runs the show. 35 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
+
+#### The Legitimate Front
+
+| Name | Role |
+|------|------|
+| **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
+| **ButtonHeistMCP** | Agent interface. 18 tools that call through TheFence so AI agents can run the job natively |
 
 ## Development
 
