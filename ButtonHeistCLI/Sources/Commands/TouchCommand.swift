@@ -65,11 +65,11 @@ struct TapSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
         var request: [String: Any] = ["command": TheFence.Command.oneFingerTap.rawValue]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
 
@@ -107,14 +107,14 @@ struct LongPressSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
         var request: [String: Any] = [
             "command": TheFence.Command.longPress.rawValue,
             "duration": duration,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
 
@@ -158,7 +158,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
     @Option(name: .customLong("to-y"), help: "Absolute end Y coordinate")
     var toY: Double?
 
-    @Option(name: .long, help: "Swipe direction: up, down, left, right")
+    @Option(name: .shortAndLong, help: "Swipe direction: up, down, left, right")
     var direction: String?
 
     @Option(name: .long, help: "Duration in seconds (default 0.15)")
@@ -181,11 +181,11 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
         if hasUnitStart {
             guard element.hasTarget else {
-                throw ValidationError("Unit-point swipe requires an element target (--identifier, --heist-id, or --index)")
+                throw ValidationError("Unit-point swipe requires an element target (heistId, -id, or -l)")
             }
         } else {
             guard element.hasTarget || (fromX != nil && fromY != nil) else {
-                throw ValidationError("Must specify element target, --from-x/--from-y, or --start-x/--start-y unit points")
+                throw ValidationError("Must specify a heistId, -id, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
                 throw ValidationError("Must specify --to-x/--to-y, --direction, or --end-x/--end-y unit points")
@@ -199,7 +199,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
         }
 
         var request: [String: Any] = ["command": TheFence.Command.swipe.rawValue]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let fromX { request["startX"] = fromX }
         if let fromY { request["startY"] = fromY }
         if let toX { request["endX"] = toX }
@@ -253,7 +253,7 @@ struct DragSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (fromX != nil && fromY != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --from-x/--from-y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --from-x/--from-y coordinates")
         }
 
         var request: [String: Any] = [
@@ -261,7 +261,7 @@ struct DragSubcommand: AsyncParsableCommand {
             "endX": toX,
             "endY": toY,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let fromX { request["startX"] = fromX }
         if let fromY { request["startY"] = fromY }
         if let duration { request["duration"] = duration }
@@ -306,14 +306,14 @@ struct PinchSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
         var request: [String: Any] = [
             "command": TheFence.Command.pinch.rawValue,
             "scale": scale,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
         if let spread { request["spread"] = spread }
@@ -359,14 +359,14 @@ struct RotateSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
         var request: [String: Any] = [
             "command": TheFence.Command.rotate.rawValue,
             "angle": angle,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
         if let radius { request["radius"] = radius }
@@ -406,11 +406,11 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard element.hasTarget || (x != nil && y != nil) else {
-            throw ValidationError("Must specify --identifier, --index, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
         var request: [String: Any] = ["command": TheFence.Command.twoFingerTap.rawValue]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if let x { request["x"] = x }
         if let y { request["y"] = y }
         if let spread { request["spread"] = spread }
