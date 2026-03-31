@@ -2,13 +2,13 @@
 
 # Interface out. Agents in. Clean escape.
 
-There's a second interface running underneath every iOS app. The accessibility layer — built for VoiceOver and the millions of blind and low-vision people who depend on it daily — quietly describes every control, every action, every state. A complete semantic map of the app, maintained by the developer, ignored by almost everyone else.
+There's a second interface running underneath every iOS app. Built for VoiceOver and the millions of blind and low-vision people who depend on it daily, the accessibility layer runs like plumbing beneath the UI. Invisible but essential, quietly connecting every control, every action, every state. A complete semantic map of the app, maintained by the developer. Like the best infrastructure, essential to some, unnoticed by most.
 
-Button Heist lets AI agents in through that same door. Link one framework into your debug build and the agent works the interface from the inside — no coordinate math, no screenshot parsing. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly — because the accessibility layer already says what everything is and does.
+Button Heist lets AI agents in through those pipes. Link one framework into your debug build and the agent works the interface from the inside. No coordinate math, no screenshot parsing. It activates a login button by name, calls `increment` on a stepper, triggers a "Delete" custom action directly, because the accessibility layer already says what everything is and does.
 
 Every interaction doubles as an accessibility audit: if the agent can't find a control, neither can VoiceOver.
 
-The heist goes smoothly because it's brazen. Walk in the front door, during business hours, grab the interface sitting right there. Clean escape. Once the agent can read the room, everything else follows.
+The heist works because the infrastructure was already in place. Apple built the tunnels, developers maintain them. Once the agent is inside, everything else follows.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -16,7 +16,7 @@ The heist goes smoothly because it's brazen. Walk in the front door, during busi
 
 ### 1. Get the crew inside
 
-Link TheInsideJob to your debug target. It starts a local TCP server via ObjC `+load` — no setup code. DEBUG only, stripped from release builds.
+Link TheInsideJob to your debug target. It starts a local TCP server via ObjC `+load`. No setup code. DEBUG only, stripped from release builds.
 
 ```swift
 import SwiftUI
@@ -60,13 +60,13 @@ cd ButtonHeistMCP && swift build -c release
 }
 ```
 
-This exposes 22 tools to your agent — `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
+This exposes 22 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
 
 ```
 Agent: "I need to log the user in"
 → get_interface → sees button_login, textfield_email, textfield_password
 → run_batch([type email, tap login])
-← each step confirmed, login screen gone, dashboard appeared — agent already
+← each step confirmed, login screen gone, dashboard appeared. Agent already
   knows what's on screen and what to do next
 ```
 
@@ -74,7 +74,7 @@ The agent stays focused on the task, not on driving the app.
 
 ### 3. Or drive it yourself
 
-The CLI is the canonical test client — every feature is available from the command line.
+The CLI is the canonical test client, and every feature is available from the command line.
 
 ```bash
 cd ButtonHeistCLI && swift build -c release && cd ..
@@ -95,7 +95,7 @@ The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hell
 
 ### 4. USB devices
 
-USB works the same as WiFi — same API, no extra configuration. Useful when you need lower latency or your network blocks Bonjour.
+USB works the same as WiFi, same API, no extra configuration. Useful when you need lower latency or your network blocks Bonjour.
 
 ```bash
 $BH list
@@ -109,50 +109,50 @@ See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
 
 ### Interact
 
-The agent works the controls the way VoiceOver does — by meaning, not by pixel.
+The agent works the controls the way VoiceOver does, by meaning, not by pixel.
 
-- **Accessibility-first activation** — `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
-- **Full gesture suite** — long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
-- **Text input** — type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
-- **Scroll semantics** — `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
-- **Accessibility actions** — increment/decrement, named custom actions, dismiss keyboard
+- **Accessibility-first activation.** `activate` calls `accessibilityActivate()` first, falls back to synthetic tap. Works on custom controls that swallow raw touch events
+- **Full gesture suite.** Long press, swipe, drag, pinch, rotate, two-finger tap, bezier paths via IOHIDEvent
+- **Text input.** Type, delete, clear, read back values. Edit actions: copy, paste, cut, select, selectAll. Pasteboard read/write without triggering the system paste dialog
+- **Scroll semantics.** `scroll` (one page), `scroll_to_visible` (find element), `scroll_to_edge` (jump to boundary)
+- **Accessibility actions.** Increment/decrement, named custom actions, dismiss keyboard
 
 ### Inspect
 
 Every element has a stable identity and every action has a structured receipt.
 
-- **Full accessibility tree** — labels, values, 41 named traits, frames, activation points, custom content, available actions
-- **Stable identifiers** — `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
-- **Screenshots** — PNG capture, inline base64 or saved to file
-- **Animation idle detection** — blocks until `CALayer` animations settle
+- **Full accessibility tree.** Labels, values, 41 named traits, frames, activation points, custom content, available actions
+- **Stable identifiers.** `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
+- **Screenshots.** PNG capture, inline base64 or saved to file
+- **Animation idle detection.** Blocks until `CALayer` animations settle
 
 ### Record
 
-Capture what the agent does — for debugging, demos, or audit trails.
+Capture what the agent does, for debugging, demos, or audit trails.
 
-- **H.264/MP4 screen recording** — configurable FPS (1-15), resolution scale (0.25-1.0)
-- **Touch overlay** — finger position indicators baked into the video
-- **Auto-stop** — on inactivity timeout or max duration
-- **Interaction log** — timestamped JSON of all actions during the session
+- **H.264/MP4 screen recording.** Configurable FPS (1-15), resolution scale (0.25-1.0)
+- **Touch overlay.** Finger position indicators baked into the video
+- **Auto-stop.** On inactivity timeout or max duration
+- **Interaction log.** Timestamped JSON of all actions during the session
 
 ### Connect
 
 Multiple paths in, one API out.
 
-- **WiFi** — Bonjour auto-discovery on `_buttonheist._tcp`
-- **USB** — CoreDevice IPv6 tunnel discovery. Same API as WiFi
-- **Security** — TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
-- **Multi-device** — many instances, many simulators. Session locking (one driver at a time)
+- **WiFi.** Bonjour auto-discovery on `_buttonheist._tcp`
+- **USB.** CoreDevice IPv6 tunnel discovery. Same API as WiFi
+- **Security.** TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
+- **Multi-device.** Many instances, many simulators. Session locking (one driver at a time)
 
 ## How It Works
 
-Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface — the same one VoiceOver uses — not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
+Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface, the same one VoiceOver uses, not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
 
-Three things follow from this, and each one removes another reason for the agent to think about anything other than its task:
+Three things follow from this:
 
 ### 1. Every action tells the agent what changed
 
-After every command, Button Heist diffs the accessibility hierarchy and returns what moved — an **interface delta**. Tap "Login" and the response carries exactly which elements disappeared and which appeared:
+After every command, Button Heist diffs the accessibility hierarchy and returns what moved: an **interface delta**. Tap "Login" and the response carries exactly which elements disappeared and which appeared:
 
 ```json
 {
@@ -170,13 +170,13 @@ After every command, Button Heist diffs the accessibility hierarchy and returns 
 }
 ```
 
-Login screen gone, dashboard appeared, new elements ready to target. Value updates carry the property change inline — old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
+Login screen gone, dashboard appeared, new elements ready to target. Value updates carry the property change inline: old value, new value, which element. When nothing changes, the delta says `"noChange"` and the agent pivots immediately.
 
-The context the agent needs to make its next decision arrives with the result of the last one.
+The agent doesn't need to re-read the screen. The next decision starts from where the last one landed.
 
 ### 2. Every action can verify itself
 
-Each command can carry an `expect` — a declaration of what *should* happen. The framework checks the delta against the expectation and reports pass/fail inline:
+Each command can carry an `expect`, a declaration of what *should* happen. The framework checks the delta against the expectation and reports pass/fail inline:
 
 ```json
 {
@@ -190,11 +190,11 @@ Response: `{"expectation": {"met": true, "expectation": "screenChanged"}}`.
 
 Three tiers: `screen_changed` (new view controller), `elements_changed` (anything in the hierarchy shifted), or `element_updated` with specific property checks. When an expectation fails, the response carries what *actually* happened.
 
-The agent declares intent, the framework handles verification. One less thing between the agent and the task.
+The agent says what it expects. The framework says whether that happened.
 
 ### 3. Confidence unlocks batching
 
-An agent that trusts its feedback loop can commit to a whole sequence at once. `run_batch` sends ordered steps in a single round trip — each one gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
+An agent that trusts its feedback loop can commit to a whole sequence at once. `run_batch` sends ordered steps in a single round trip. Each one gets its own delta and expectation check. If a step fails, the batch stops. The agent never pushes forward with bad state:
 
 ```json
 {
@@ -207,9 +207,9 @@ An agent that trusts its feedback loop can commit to a whole sequence at once. `
 }
 ```
 
-Two actions. Two assertions. One round trip. If the email field doesn't update, the batch stops.
+Two actions, two assertions, one round trip. If the email field doesn't update, the batch stops there.
 
-Deltas, expectations, and batching — each one enables the next. That's the compound advantage, and it's why this approach works. For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
+Deltas, expectations, and batching, each one enabling the next. That's the compound advantage. For the full breakdown with benchmarks and per-task comparisons, see [The Argument](docs/the-argument.md).
 
 ## Meet the Crew
 
@@ -219,20 +219,20 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheScore** | The shared playbook. Wire protocol types, messages, and constants — the contract both sides speak |
+| **TheScore** | The shared playbook. Wire protocol types, messages, and constants. The contract both sides speak |
 
 ### The Inside Team (iOS)
 
 | Name | Role |
 |------|------|
 | **TheInsideJob** | The whole operation. Runs in your app: TCP server, Bonjour, accessibility hierarchy, command dispatch to the crew |
-| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions — gets past any control via IOHIDEvent |
+| **TheSafecracker** | Cracks the UI. Taps, swipes, drags, pinch, rotate, text entry, edit actions. Gets past any control via IOHIDEvent |
 | **TheBagman** | Handles the goods. Element cache, hierarchy capture, heistId assignment, delta computation. Live view pointers never leave TheBagman |
-| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock — only one driver at a time |
+| **TheMuscle** | Keeps the door. Token validation, Allow/Deny UI, session lock. Only one driver at a time |
 | **TheStakeout** | The lookout. H.264 screen recording with frame timing and inactivity detection |
-| **TheFingerprints** | Evidence. Touch indicators on screen during gestures — visible live and baked into TheStakeout's recordings |
-| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions — animation detection, presentation layer fingerprinting, settle waits |
-| **ThePlant** | Runs the advance. ObjC `+load` hook boots TheInsideJob before any Swift runs — link the framework, no app code |
+| **TheFingerprints** | Evidence. Touch indicators on screen during gestures, visible live and baked into TheStakeout's recordings |
+| **TheTripwire** | Timing coordinator. Gates all "is the UI ready?" decisions: animation detection, presentation layer fingerprinting, settle waits |
+| **ThePlant** | Runs the advance. ObjC `+load` hook boots TheInsideJob before any Swift runs. Link the framework, no app code |
 
 ### The Outside Team (macOS)
 
@@ -289,7 +289,7 @@ graph TD
 
 | Module | Platform | What it does |
 |--------|----------|-------------|
-| **TheScore** | iOS + macOS | Wire protocol: `HeistElement`, `InterfaceDelta`, `ElementMatcher` — the contract both sides speak |
+| **TheScore** | iOS + macOS | Wire protocol: `HeistElement`, `InterfaceDelta`, `ElementMatcher`. The contract both sides speak |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
 | **ButtonHeist** | macOS | Client framework: TheFence (command dispatch + request correlation), TheHandoff (discovery + connection + state) |
 | **ButtonHeistMCP** | macOS | MCP server: 22 tools dispatching through TheFence |
@@ -360,9 +360,9 @@ All docs: [API](docs/API.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire 
 
 ## License
 
-Apache License 2.0 — see `LICENSE`.
+Apache License 2.0. See `LICENSE`.
 
 ## Acknowledgments
 
-- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF) — TheSafecracker's touch synthesis is built on KIF's pioneering work in programmatic iOS UI interaction.
-- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot) — Used for parsing UIKit accessibility hierarchies.
+- [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). TheSafecracker's touch synthesis is built on KIF's pioneering work in programmatic iOS UI interaction.
+- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot). Used for parsing UIKit accessibility hierarchies.
