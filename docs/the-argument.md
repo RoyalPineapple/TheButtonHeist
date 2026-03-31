@@ -6,11 +6,11 @@ The Button Heist is an MCP server backed by an embedded framework that runs insi
 
 ## Why Accessibility
 
-Agents can't see the screen. An agent interacting with an iOS app is in the same position as a VoiceOver user — it needs structured, semantic data to reason about the UI without seeing it.
+iOS already answers the question: how does an intelligence operate an app without a visual interface? Blind and low-vision users do it every day through VoiceOver — navigating by labels, traits, and actions instead of pixels. The `UIAccessibility` layer is a complete semantic description of every control on screen: what it is, what it does, what state it's in, and how to interact with it.
 
-The `UIAccessibility` interface already provides this: labels, traits, actions, activation points, traversal order. A well-structured accessibility surface hands the agent everything it needs to interact with a switch row, an increment action, or a delete action without any discovery step. The agent doesn't need per-app instructions — it just needs the app's accessibility to be good.
+An AI agent needs the same thing. It can read labels, traits, and available actions, and it can activate controls by name — just like a VoiceOver user. A well-structured accessibility surface hands the agent everything it needs to interact with a switch row, an increment action, or a delete action without any discovery step. The agent doesn't need per-app instructions — it just needs the app's accessibility to be good.
 
-That creates a useful loop. Using The Button Heist to test your app implicitly validates the accessibility surface, because the agent navigates through the same interface VoiceOver users depend on. If the agent can't find a control or activate it, a VoiceOver user can't either. That was a design goal of KIF's predicate API, and The Button Heist carries it forward.
+That means agents and VoiceOver users share a dependency. When the agent navigates through the accessibility interface, it's using the same paths that millions of people rely on. If the agent can't find a control or activate it, neither can VoiceOver. Fixing one fixes both. That was a design goal of KIF's predicate API, and Button Heist carries it forward.
 
 ## How It Works
 

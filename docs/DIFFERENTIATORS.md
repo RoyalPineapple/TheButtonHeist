@@ -68,7 +68,7 @@ These capabilities don't have external alternatives at any cost.
 | 17 | **Custom accessibility actions** | `accessibilityCustomActions` are in-memory closures on live objects. They don't serialize across XPC. |
 | 18 | **Custom accessibility content** | `accessibilityCustomContent` (AX custom descriptions) is lost at the process boundary. |
 | 19 | **Activation point fidelity** | Some elements override `accessibilityActivationPoint` to point at a different location than their frame center. External tools never see this. |
-| 20 | **The accessibility feedback loop** | Agent failures = VoiceOver failures. Using BH to test your app implicitly validates its accessibility. External tools bypass the accessibility surface entirely. |
+| 20 | **The accessibility feedback loop** | Agents and VoiceOver users share a dependency — the same interface. Agent failures surface accessibility bugs. External tools bypass this interface entirely. |
 
 ## Against Specific Alternatives
 
@@ -132,13 +132,11 @@ Button Heist gives the agent the same information VoiceOver gets — the complet
 
 ## The Accessibility Feedback Loop
 
-Button Heist's deepest differentiator isn't a feature — it's a side effect.
+Agents and VoiceOver users share a dependency: the accessibility interface. When the agent navigates your app, it's using the same paths that millions of blind and low-vision people rely on every day.
 
-Because agents navigate through the accessibility interface, every interaction implicitly validates the app's accessibility. If the agent can't find a control, a VoiceOver user can't either. If a stepper exposes `adjustable` when it's disabled, the agent sees that — and so does every VoiceOver user.
+That shared dependency creates a feedback loop. If the agent can't find a control, neither can VoiceOver. If a stepper exposes `adjustable` when it's disabled, the agent sees that — and so does every VoiceOver user. Accessibility bugs surface as agent failures. Fixing them improves the experience for both.
 
-This creates a feedback loop: using Button Heist to test your app makes the app more accessible. Accessibility bugs surface as agent failures. Fixing them improves both the agent experience and the human experience.
-
-No external tool creates this loop. They operate outside the accessibility surface, so they can interact with controls that VoiceOver users can't reach — and they'll never tell you about the gap.
+No external tool creates this loop. They operate outside the accessibility interface, so they can interact with controls that VoiceOver users can't reach — and they'll never tell you about the gap.
 
 ## The Trade-Off
 
