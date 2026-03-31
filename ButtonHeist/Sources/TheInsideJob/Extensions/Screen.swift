@@ -41,9 +41,7 @@ extension TheInsideJob {
             height: bounds.height
         )
 
-        if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .screen(screenPayload))) {
-            broadcastToSubscribed(data)
-        }
+        broadcastToSubscribed(.screen(screenPayload))
     }
 
     // MARK: - Screen Recording
@@ -61,13 +59,9 @@ extension TheInsideJob {
         recorder.onRecordingComplete = { [weak self] result in
             switch result {
             case .success(let payload):
-                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .recording(payload))) {
-                    self?.broadcastToAll(data)
-                }
+                self?.broadcastToAll(.recording(payload))
             case .failure(let error):
-                if let data = try? JSONEncoder().encode(ResponseEnvelope(message: .recordingError(error.localizedDescription))) {
-                    self?.broadcastToAll(data)
-                }
+                self?.broadcastToAll(.recordingError(error.localizedDescription))
             }
             self?.stakeout = nil
             self?.bagman.stakeout = nil
