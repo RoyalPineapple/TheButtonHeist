@@ -65,14 +65,41 @@ struct SettingsView: View {
             }
 
             Section("Current Values") {
-                LabeledContent("Color Scheme", value: settings.colorScheme.rawValue)
-                    .accessibilityIdentifier("buttonheist.settings.currentColorScheme")
-                LabeledContent("Accent Color", value: settings.accentColor.rawValue)
-                    .accessibilityIdentifier("buttonheist.settings.currentAccentColor")
-                LabeledContent("Text Size", value: settings.textSize.rawValue)
-                    .accessibilityIdentifier("buttonheist.settings.currentTextSize")
-                LabeledContent("Username", value: settings.username.isEmpty ? "(not set)" : settings.username)
-                    .accessibilityIdentifier("buttonheist.settings.currentUsername")
+                HStack {
+                    Text("Color Scheme")
+                    Spacer()
+                    Text(settings.colorScheme.rawValue)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("buttonheist.settings.currentColorScheme")
+
+                HStack {
+                    Text("Accent Color")
+                    Spacer()
+                    Text(settings.accentColor.rawValue)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("buttonheist.settings.currentAccentColor")
+
+                HStack {
+                    Text("Text Size")
+                    Spacer()
+                    Text(settings.textSize.rawValue)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("buttonheist.settings.currentTextSize")
+
+                HStack {
+                    Text("Username")
+                    Spacer()
+                    Text(settings.username.isEmpty ? "(not set)" : settings.username)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("buttonheist.settings.currentUsername")
             }
         }
         .navigationTitle("Settings")
