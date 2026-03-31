@@ -2,11 +2,9 @@
 
 # Interface out. Agents in. Clean escape.
 
-How does an intelligence operate an app without a visual interface? Blind and low-vision users already answered this — they navigate iOS every day through VoiceOver, using labels, traits, and actions instead of pixels. The accessibility layer is a complete semantic description of every control on screen: what it is, what it does, what state it's in, and how to interact with it.
+Every iOS app already describes itself. The accessibility layer tells VoiceOver — and the millions of blind and low-vision people who depend on it — what every control is, what it does, and how to interact with it. Labels, traits, actions, activation points. A complete semantic interface that lets any intelligence operate an app without seeing it.
 
-An AI agent needs the same thing. And when you hand it a screenshot instead and ask it to figure out where to tap, you're paying for reasoning tokens to solve a problem the OS already solved — translating pixels into meaning. The agent is an LLM. It's good at understanding intent, planning sequences, and reacting to outcomes. It's wasted on coordinate math.
-
-Button Heist bridges the two. Link one framework into your debug build, and the agent operates your app through the same semantic interface that millions of people already depend on. `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. The agent spends its intelligence on your task, not on navigating your UI.
+Button Heist gives AI agents that same interface. Link one framework into your debug build, and the agent reads controls that describe themselves: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, and knows a button's activation point is offset from center — because the accessibility layer already says so. The agent spends its intelligence on your task, not on translating pixels into meaning.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
