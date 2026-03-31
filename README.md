@@ -74,23 +74,6 @@ Agent: "Type credentials and submit"
 → 3 steps in one round trip, per-step results, short-circuits on failure
 ```
 
-Pair with [**XcodeBuildMCP**](https://github.com/getsentry/XcodeBuildMCP) for the full loop — XcodeBuildMCP builds and deploys your app, Button Heist drives the UI.
-
-```json
-{
-  "mcpServers": {
-    "xcodebuild": {
-      "command": "npx",
-      "args": ["-y", "xcodebuildmcp@latest", "mcp"]
-    },
-    "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
-      "args": []
-    }
-  }
-}
-```
-
 ### 3. Connect with the CLI
 
 ```bash
@@ -310,16 +293,6 @@ ButtonHeist/
 ├── AccessibilitySnapshot/        # Git submodule (hierarchy parsing)
 ├── docs/                         # Architecture, API, protocol, auth, USB docs
 │   └── dossiers/                 # Per-module technical documentation
-└── ai-fuzzer/                    # Git submodule: autonomous AI app fuzzer
-```
-
-### ai-fuzzer
-
-An autonomous iOS app fuzzer built entirely with prompt engineering on top of Button Heist — 6,000+ lines of markdown, zero traditional code. Included as a Git submodule.
-
-```bash
-git submodule update --init --recursive   # Initialize
-git submodule update --remote ai-fuzzer   # Update later
 ```
 
 ## Troubleshooting
@@ -363,9 +336,6 @@ git submodule update --remote ai-fuzzer   # Update later
 - [Differentiators](docs/DIFFERENTIATORS.md) — 20 optimizations ranked by measured impact
 - [The Argument](docs/the-argument.md) — Why this approach, why now
 - [Crew Dossiers](docs/dossiers/) — Per-crew-member technical deep dives
-
-**Project:**
-- [AI Fuzzer](ai-fuzzer/) — Autonomous iOS app fuzzer built on Button Heist
 
 ## License
 
