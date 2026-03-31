@@ -16,7 +16,7 @@ extension TheInsideJob {
             return
         }
 
-        let snapshot = bagman.snapshotElements()
+        let snapshot = bagman.snapshot(.visible)
         let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
 

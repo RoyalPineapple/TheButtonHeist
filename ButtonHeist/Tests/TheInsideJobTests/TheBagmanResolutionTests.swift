@@ -46,7 +46,7 @@ final class TheBagmanResolutionTests: XCTestCase {
         )
     }
 
-    /// Register an element in both cachedElements and screenElements.
+    /// Register an element in both cachedElements, screenElements, and presentedHeistIds.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
         if index >= bagman.cachedElements.count {
             bagman.cachedElements.append(contentsOf:
@@ -64,10 +64,10 @@ final class TheBagmanResolutionTests: XCTestCase {
                 hint: nil, traits: [], frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
                 activationPointX: 0, activationPointY: 0, actions: []
             ),
-            presented: true,
             object: nil,
             scrollView: nil
         )
+        bagman.presentedHeistIds.insert(heistId)
     }
 
     // MARK: - heistId Resolution
@@ -100,8 +100,8 @@ final class TheBagmanResolutionTests: XCTestCase {
     func testHeistIdNotPresentedReturnsNotFound() {
         let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
-        // Mark as not presented
-        bagman.screenElements["button_ok"]?.presented = false
+        // Remove from presented set
+        bagman.presentedHeistIds.remove("button_ok")
 
         let result = bagman.resolveTarget(.heistId("button_ok"))
         guard case .notFound = result else {
@@ -237,36 +237,36 @@ final class TheBagmanResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("screen is empty"))
     }
 
-    // MARK: - snapshotAllElements Presented Flag
+    // MARK: - Snapshot Presented Tracking
 
-    func testSnapshotAllElementsMarksPresented() {
+    func testSnapshotAllMarksPresented() {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
-        bagman.screenElements["button_save"]?.presented = false
+        bagman.presentedHeistIds.remove("button_save")
 
-        let result = bagman.snapshotAllElements()
+        let result = bagman.snapshot(.all)
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].heistId, "button_save")
-        XCTAssertTrue(bagman.screenElements["button_save"]?.presented == true,
-                       "snapshotAllElements must mark elements as presented")
+        XCTAssertTrue(bagman.presentedHeistIds.contains("button_save"),
+                       "snapshot(.all) must add to presentedHeistIds")
     }
 
-    func testSnapshotAllElementsEnablesSubsequentHeistIdLookup() {
+    func testSnapshotAllEnablesSubsequentHeistIdLookup() {
         let element = element(label: "Combobox", traits: .button)
         register(element, heistId: "button_combobox", index: 0)
-        bagman.screenElements["button_combobox"]?.presented = false
+        bagman.presentedHeistIds.remove("button_combobox")
 
-        // Before snapshotAllElements, heistId lookup should fail
+        // Before snapshot, heistId lookup should fail
         let beforeResult = bagman.resolveTarget(.heistId("button_combobox"))
         XCTAssertNil(beforeResult.resolved, "Should not resolve unpresented element")
 
-        // After snapshotAllElements, heistId lookup should succeed
-        _ = bagman.snapshotAllElements()
+        // After snapshot(.all), heistId lookup should succeed
+        _ = bagman.snapshot(.all)
         let afterResult = bagman.resolveTarget(.heistId("button_combobox"))
-        XCTAssertNotNil(afterResult.resolved, "Should resolve after snapshotAllElements marks as presented")
+        XCTAssertNotNil(afterResult.resolved, "Should resolve after snapshot(.all) marks as presented")
     }
 
-    func testSnapshotAllElementsIncludesOffScreenElements() {
+    func testSnapshotAllIncludesOffScreenElements() {
         let visible = element(label: "Visible", traits: .button)
         let offScreen = element(label: "OffScreen", traits: .button)
         register(visible, heistId: "button_visible", index: 0)
@@ -275,11 +275,25 @@ final class TheBagmanResolutionTests: XCTestCase {
         // Simulate off-screen: only "button_visible" is in onScreen set
         bagman.onScreen = Set(["button_visible"])
 
-        let all = bagman.snapshotAllElements()
+        let all = bagman.snapshot(.all)
         XCTAssertEqual(all.count, 2, "Should return both visible and off-screen elements")
         let heistIds = all.map(\.heistId)
         XCTAssertTrue(heistIds.contains("button_visible"))
         XCTAssertTrue(heistIds.contains("button_offscreen"))
+    }
+
+    func testSnapshotVisibleDoesNotPresentOffScreen() {
+        let visible = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "OffScreen", traits: .button)
+        register(visible, heistId: "button_visible", index: 0)
+        register(offScreen, heistId: "button_offscreen", index: 1)
+        bagman.presentedHeistIds.removeAll()
+        bagman.onScreen = Set(["button_visible"])
+
+        _ = bagman.snapshot(.visible)
+        XCTAssertTrue(bagman.presentedHeistIds.contains("button_visible"))
+        XCTAssertFalse(bagman.presentedHeistIds.contains("button_offscreen"),
+                        "snapshot(.visible) must not present off-screen elements")
     }
 }
 

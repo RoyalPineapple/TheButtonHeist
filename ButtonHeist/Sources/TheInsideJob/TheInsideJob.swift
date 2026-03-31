@@ -384,7 +384,7 @@ public final class TheInsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
+        let beforeSnapshot = bagman.snapshot(.visible)
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
@@ -429,7 +429,7 @@ public final class TheInsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
+        let beforeSnapshot = bagman.snapshot(.visible)
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
@@ -447,7 +447,7 @@ public final class TheInsideJob {
             )
         } else {
             bagman.refreshAccessibilityData()
-            let afterSnapshot = bagman.snapshotElements()
+            let afterSnapshot = bagman.snapshot(.visible)
             actionResult = ActionResult(
                 success: false,
                 method: .waitFor,
@@ -470,7 +470,7 @@ public final class TheInsideJob {
 
         // Phase 0: immediate check
         bagman.refreshAccessibilityData()
-        _ = bagman.snapshotElements()
+        _ = bagman.snapshot(.visible)
         if target.resolvedAbsent {
             if !bagman.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
@@ -485,7 +485,7 @@ public final class TheInsideJob {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             bagman.refreshAccessibilityData()
-            _ = bagman.snapshotElements()
+            _ = bagman.snapshot(.visible)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
                 if !bagman.hasTarget(elementTarget) {
@@ -514,7 +514,7 @@ public final class TheInsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
+        let beforeSnapshot = bagman.snapshot(.visible)
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
@@ -547,7 +547,7 @@ public final class TheInsideJob {
             )
         } else {
             bagman.refreshAccessibilityData()
-            let afterSnapshot = bagman.snapshotElements()
+            let afterSnapshot = bagman.snapshot(.visible)
             actionResult = ActionResult(
                 success: false,
                 method: result.method,
@@ -569,14 +569,14 @@ public final class TheInsideJob {
     ) async {
         stakeout?.noteActivity()
         bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
+        let beforeSnapshot = bagman.snapshot(.visible)
         let beforeCachedElements = bagman.cachedElements
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let manifest = await bagman.exploreScreen()
 
         let exploreResult = ExploreResult(
-            elements: bagman.snapshotAllElements(),
+            elements: bagman.snapshot(.all),
             scrollCount: manifest.scrollCount,
             containersExplored: manifest.exploredContainers.count,
             explorationTime: manifest.explorationTime
