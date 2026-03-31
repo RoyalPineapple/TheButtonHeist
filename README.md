@@ -2,7 +2,7 @@
 
 # Interface out. Agents in. Clean escape.
 
-Button Heist is an MCP server that runs inside your iOS app. It reads live accessibility objects and injects real touches — giving AI agents 2-3x fewer turns than any external tool. You link one framework into your debug build (same pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.com/FLEXTool/FLEX)), and the agent gets the same semantic interface VoiceOver uses: every label, trait, action, and activation point, with nothing lost at a process boundary.
+Button Heist is an MCP server that runs inside your iOS app. It reads live accessibility objects and injects real touches. You link one framework into your debug build (same pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.com/FLEXTool/FLEX)), and the agent gets the same semantic interface VoiceOver uses: every label, trait, action, and activation point, with nothing lost at a process boundary.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
@@ -100,18 +100,6 @@ Because agents navigate through the accessibility interface, every interaction i
 - **USB** — CoreDevice IPv6 tunnel discovery. Same API as WiFi
 - **Security** — TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
 - **Multi-device** — many instances, many simulators. Session locking (one driver at a time)
-
-## Benchmarks
-
-Thirteen tasks, three MCP servers, same model (Claude Sonnet 4.6), same app. All achieve high accuracy — the difference is efficiency:
-
-| | Turns | Wall time | Cost |
-|---|-------|-----------|------|
-| mobile-mcp | 61 | 308s | $0.99 |
-| ios-simulator-mcp | 49 | 188s | $0.84 |
-| **Button Heist** | **25** | **103s** | **$0.43** |
-
-Numbers for the 11-step full-workflow task. The gap widens on gesture-heavy tasks (swipe actions: 7 turns vs 34 vs 80). Full data in [docs/the-argument.md](docs/the-argument.md).
 
 ## Quick Start
 
@@ -395,7 +383,6 @@ git submodule update --remote ai-fuzzer   # Update later
 - [Competitive Landscape](docs/competitive-landscape.md) — How Button Heist compares
 - [Differentiators](docs/DIFFERENTIATORS.md) — 20 optimizations ranked by measured impact
 - [The Argument](docs/the-argument.md) — Why this approach, why now
-- Benchmark Data — Raw results in `benchmarks/results/`
 - [Crew Dossiers](docs/dossiers/) — Per-crew-member technical deep dives
 
 **Project:**
