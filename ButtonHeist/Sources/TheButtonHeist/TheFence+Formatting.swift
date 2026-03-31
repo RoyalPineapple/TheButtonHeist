@@ -410,9 +410,6 @@ public enum FenceResponse {
             payload["delta"] = deltaDictionary(delta)
         }
 
-        if let elementLabel = result.elementLabel { payload["elementLabel"] = elementLabel }
-        if let elementValue = result.elementValue { payload["elementValue"] = elementValue }
-        if let elementTraits = result.elementTraits { payload["elementTraits"] = elementTraits.map(\.rawValue) }
         if let screenName = result.screenName { payload["screenName"] = screenName }
 
         if !result.success {
@@ -579,7 +576,7 @@ public enum FenceResponse {
         case .interface(let interface, _, let filteredFrom, _):
             var header = "\(interface.elements.count) elements"
             if let filteredFrom { header += " (filtered from \(filteredFrom))" }
-            var lines: [String] = [header]
+            var lines: [String] = [interface.screenDescription, header]
             for (i, element) in interface.elements.enumerated() {
                 lines.append(Self.compactElementLine(element, displayIndex: i))
             }
@@ -733,10 +730,9 @@ public enum FenceResponse {
             parts.append("[\(meaningful.map(\.rawValue).joined(separator: ", "))]")
         }
 
-        let actions = element.actions.map(\.description)
-            .filter { $0 != "activate" || !element.traits.contains(.button) }
+        let actions = meaningfulActions(element)
         if !actions.isEmpty {
-            parts.append("{\(actions.joined(separator: ", "))}")
+            parts.append("{\(actions.map(\.description).joined(separator: ", "))}")
         }
 
         return parts.joined(separator: " ")
@@ -798,16 +794,20 @@ public enum FenceResponse {
         if detail == .full, let tree = interface.tree {
             payload["tree"] = tree.map(elementNodeDictionary)
         }
+        payload["screenDescription"] = interface.screenDescription
         return payload
     }
 
     private func elementDictionary(_ element: HeistElement, detail: InterfaceDetail = .full) -> [String: Any] {
         var payload: [String: Any] = [
             "heistId": element.heistId,
-            "description": element.description,
             "traits": element.traits.map(\.rawValue),
-            "actions": element.actions.map(\.description),
         ]
+        // Only include non-obvious actions (activate is implied by button trait)
+        let meaningfulActions = Self.meaningfulActions(element)
+        if !meaningfulActions.isEmpty {
+            payload["actions"] = meaningfulActions.map(\.description)
+        }
         if let label = element.label { payload["label"] = label }
         if let value = element.value { payload["value"] = value }
         if let identifier = element.identifier { payload["identifier"] = identifier }
@@ -820,7 +820,6 @@ public enum FenceResponse {
             payload["frameHeight"] = element.frameHeight
             payload["activationPointX"] = element.activationPointX
             payload["activationPointY"] = element.activationPointY
-            payload["respondsToUserInteraction"] = element.respondsToUserInteraction
             if let hint = element.hint { payload["hint"] = hint }
             if let customContent = element.customContent {
                 payload["customContent"] = customContent.map {
@@ -833,6 +832,18 @@ public enum FenceResponse {
             }
         }
         return payload
+    }
+
+    /// Actions that aren't implied by the element's traits.
+    /// `activate` is implied by `.button`; `increment`/`decrement` by `.adjustable`.
+    private static func meaningfulActions(_ element: HeistElement) -> [ElementAction] {
+        element.actions.filter { action in
+            switch action {
+            case .activate: return !element.traits.contains(.button)
+            case .increment, .decrement: return !element.traits.contains(.adjustable)
+            case .custom: return true
+            }
+        }
     }
 
     private func elementNodeDictionary(_ node: ElementNode) -> [String: Any] {
