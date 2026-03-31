@@ -4,6 +4,8 @@
 
 An MCP server that runs inside your iOS app. Link one framework into your debug build, and AI agents get the same interface VoiceOver uses — every label, trait, action, and activation point.
 
+The accessibility interface is already the agentic interface. It was designed so that a non-visual actor — VoiceOver — could understand and operate any app. An AI agent is the same kind of actor: it can't see pixels, but it can read labels, traits, and available actions, and it can activate controls by name. The entire problem of "how does an agent understand a GUI" was solved twenty years ago by accessibility engineers. Button Heist bridges the two: the agent doesn't reason about the interface, it *operates* the app — the same way a VoiceOver user does, through semantic controls that describe themselves.
+
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
 ## Quick Start
@@ -83,6 +85,7 @@ BH=./ButtonHeistCLI/.build/release/buttonheist
 $BH list                                                  # Discover devices (WiFi + USB)
 $BH session                                               # Interactive REPL
 $BH activate --identifier loginButton                     # Activate an element
+$BH action --name "Delete" --identifier cell_row_3        # Named custom action
 $BH type --text "Hello" --identifier nameField            # Type into a field
 $BH scroll --direction down --identifier scrollView       # Scroll one page
 $BH scroll_to_visible --identifier targetElement          # Scroll until visible
@@ -298,7 +301,7 @@ Three actions. Three assertions. One round trip. If typing into the password fie
 
 This is why external tools can't batch. Without inline verification, each action is fire-and-forget: do something, screenshot, stare at pixels, decide if it worked, then plan the next step. Batching requires knowing each step succeeded *before the response comes back to the agent*. Expectations make that possible — every action is an assertion, and the test suite is woven into the interaction itself.
 
-Because agents navigate through the accessibility interface, every interaction implicitly validates your app's accessibility too. If the agent can't find a control, a VoiceOver user can't either.
+And because agents operate through the accessibility interface, every interaction is an implicit accessibility audit. If the agent can't find a control, neither can VoiceOver. The same investment that makes your app agent-ready makes it accessible — and vice versa.
 
 For the full breakdown — benchmarks, per-task comparisons, and the compounding math — see [The Argument](docs/the-argument.md).
 
