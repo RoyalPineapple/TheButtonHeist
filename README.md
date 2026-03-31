@@ -6,7 +6,7 @@ Every iOS app already describes itself. The accessibility layer tells VoiceOver 
 
 Button Heist gives AI agents that same interface. Link one framework into your debug build, and the agent reads controls that describe themselves: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, and knows a button's activation point is offset from center — because the accessibility layer already says so.
 
-When the agent understands the interface it's working with, it produces better results, more reliably, and faster. That's the whole pitch.
+When the agent understands the interface it's working with, everything else follows — better results, more reliably, faster.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
