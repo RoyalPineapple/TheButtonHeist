@@ -224,7 +224,12 @@ extension TheBagman {
             refreshAccessibilityData()
 
             if let found = resolveFirstMatch(searchTarget) {
-                ensureOnScreenSync(found)
+                ensureOnScreenSync(found, animated: false)
+                await tripwire.yieldFrames(3)
+                refreshAccessibilityData()
+                if let freshFound = resolveFirstMatch(searchTarget) {
+                    return foundResult(freshFound, scrollCount: scrollCount)
+                }
                 return foundResult(found, scrollCount: scrollCount)
             }
 
@@ -314,14 +319,14 @@ extension TheBagman {
 
     /// Synchronous scroll-to-visible — setContentOffset is immediate,
     /// no detached Task needed.
-    private func ensureOnScreenSync(_ resolved: ResolvedTarget) {
+    private func ensureOnScreenSync(_ resolved: ResolvedTarget, animated: Bool = true) {
         guard let object = resolved.screenElement.object,
               let safecracker else { return }
         let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         guard let scrollView = resolved.screenElement.scrollView else { return }
-        _ = safecracker.scrollToMakeVisible(frame, in: scrollView)
+        _ = safecracker.scrollToMakeVisible(frame, in: scrollView, animated: animated)
     }
 
     // MARK: - Scroll Target Resolution (Accessibility Hierarchy)
