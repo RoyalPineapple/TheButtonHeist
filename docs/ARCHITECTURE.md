@@ -46,10 +46,10 @@ graph TB
 - `ResponseEnvelope` - Wraps `ServerMessage` echoing the `requestId` back; push broadcasts use `requestId: nil`
 - `ClientMessage` - Messages from client to server (33 cases including 9 touch gestures, 3 scroll commands, text input, edit actions, idle waiting, recording control, status, and watch)
 - `ServerMessage` - Messages from server to client (18 cases including auth challenge/failure/approval, recording events, and interaction broadcasts)
-- `HeistElement` - Flat UI element representation (with traits, hint, activation point, custom content)
+- `HeistElement` - Flat UI element representation (heistId, label, value, traits, frame, custom content)
 - `ElementNode` - Recursive tree structure with containers
 - `Group` - Container metadata (type, label, frame)
-- `Interface` - Container for UI element interface data (flat list + optional tree)
+- `Interface` - Container for UI element interface data (flat list + optional tree + deterministic screenDescription)
 - `ServerInfo` - Device and app metadata (incl. instanceId, listeningPort, simulatorUDID, vendorIdentifier)
 - `ActionResult` - Action outcome with method, optional message, interface delta, animation state, and optional `ScrollSearchResult`
 - `ActionTarget` - Two-strategy element resolution: `heistId` (stable token) or `match: ElementMatcher` (accessibility predicate)

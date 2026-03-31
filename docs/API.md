@@ -1023,6 +1023,7 @@ Container for UI element interface data.
 - `timestamp: Date` - When the hierarchy was captured
 - `elements: [HeistElement]` - Flat list of UI elements
 - `tree: [ElementNode]?` - Optional tree structure with containers
+- `screenDescription: String` - Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
 
 ### ElementNode
 
@@ -1069,7 +1070,6 @@ Represents a single UI element captured from the accessibility hierarchy.
 | Property | Type | Description |
 |----------|------|-------------|
 | `order` | `Int` | VoiceOver reading order (0-based) |
-| `description` | `String` | VoiceOver description |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value |
 | `identifier` | `String?` | Identifier |
@@ -1081,9 +1081,8 @@ Represents a single UI element captured from the accessibility hierarchy.
 | `frameHeight` | `Double` | Frame height |
 | `activationPointX` | `Double` | Activation point X (where VoiceOver would tap) |
 | `activationPointY` | `Double` | Activation point Y |
-| `respondsToUserInteraction` | `Bool` | Whether the element is interactive |
 | `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
-| `actions` | `[ElementAction]` | Available actions (`"activate"`, `"increment"`, `"decrement"`, or custom action names) |
+| `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
 #### Computed Properties
 
@@ -1106,8 +1105,9 @@ public struct ActionResult: Codable, Sendable
 - `value: String?` - Current text field value (populated by `typeText`)
 - `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
-- `screenName: String?` - Label of the first header element in the post-action snapshot (screen name hint)
+- `screenName: String?` - Label of the first header element in the post-action snapshot
 - `scrollSearchResult: ScrollSearchResult?` - Diagnostics from `scrollToVisible` (scroll count, unique elements seen, total items, exhaustive flag, matched element)
+- `exploreResult: ExploreResult?` - Diagnostics from `explore` (elements discovered, scroll count, containers explored)
 
 ### ActionMethod
 
