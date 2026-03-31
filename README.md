@@ -109,11 +109,88 @@ See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
 Button Heist runs **inside your app**, not across a process boundary. This means four things:
 
 - **Full fidelity** — the agent reads live `UIAccessibility` objects directly. Activation points, custom content, custom rotors, available actions — nothing lost in serialization. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
-- **Deltas after every action** — tap a button, get back what changed: elements added, removed, values updated, or screen changed. No re-fetching the full tree to figure out what happened.
+- **Deltas after every action** — tap a button, get back exactly what changed. No re-fetching the full tree.
 - **Animation-aware idle** — `wait_for_idle` watches `CALayer` animations. `wait_for` watches for a specific element. No fixed sleeps.
 - **Batch and expect** — `run_batch` sends multiple commands in one round trip. Each step can carry an `expect` declaring what should happen. The framework checks the delta and reports whether it was met.
 
-These compound. An agent adding a todo item:
+### Interface deltas
+
+Every action returns an `interfaceDelta` — a structured diff of what changed in the hierarchy. Three kinds:
+
+**`elementsChanged`** — elements were added, removed, or updated. The delta carries exactly which ones:
+
+```json
+{
+  "success": true,
+  "method": "activate",
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "removed": ["button_login", "textfield_password", "textfield_email"],
+    "added": [
+      {"heistId": "header_dashboard", "label": "Dashboard", "traits": ["header"]},
+      {"heistId": "button_settings", "label": "Settings", "traits": ["button"]},
+      {"heistId": "text_welcome", "label": "Welcome back", "traits": ["staticText"]}
+    ]
+  },
+  "screenName": "Dashboard"
+}
+```
+
+The agent reads this and knows: login screen dismissed, dashboard appeared, three new elements to work with. No screenshot, no re-fetch.
+
+**`valuesChanged`** — something updated in place. Typing into a field:
+
+```json
+{
+  "success": true,
+  "method": "typeText",
+  "interfaceDelta": {
+    "kind": "elementsChanged",
+    "elementCount": 14,
+    "updated": [
+      {
+        "heistId": "textfield_email",
+        "changes": [
+          {"property": "value", "old": "", "new": "user@example.com"}
+        ]
+      }
+    ]
+  },
+  "value": "user@example.com"
+}
+```
+
+The agent sees the value change confirmed in the delta *and* in the `value` field. No need to read it back.
+
+**`screenChanged`** — a new view controller appeared. The delta includes the full new interface:
+
+```json
+{
+  "success": true,
+  "method": "activate",
+  "interfaceDelta": {
+    "kind": "screenChanged",
+    "elementCount": 8,
+    "newInterface": {
+      "elements": [
+        {"heistId": "header_settings", "label": "Settings", "traits": ["header"]},
+        {"heistId": "switch_darkmode", "label": "Dark Mode", "value": "0", "traits": ["button"]},
+        {"heistId": "button_back", "label": "Back", "traits": ["button", "backButton"]}
+      ]
+    }
+  },
+  "screenName": "Settings"
+}
+```
+
+Complete new screen in the same response as the action. Zero additional calls.
+
+**`noChange`** — nothing moved. The agent knows immediately and can try something else.
+
+### How they compound
+
+An agent adding a todo item with Button Heist:
 
 ```
 → run_batch(steps: [
