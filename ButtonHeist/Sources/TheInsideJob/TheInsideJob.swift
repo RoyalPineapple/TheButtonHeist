@@ -657,8 +657,16 @@ public final class TheInsideJob {
 
     func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping (Data) -> Void) {
         let envelope = ResponseEnvelope(requestId: requestId, message: message)
-        guard let data = try? JSONEncoder().encode(envelope) else {
-            insideJobLogger.error("Failed to encode message")
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(envelope)
+        } catch {
+            insideJobLogger.error("Failed to encode message: \(error)")
+            if let errorData = try? JSONEncoder().encode(
+                ResponseEnvelope(requestId: requestId, message: .error("Encoding failed: \(error.localizedDescription)"))
+            ) {
+                respond(errorData)
+            }
             return
         }
         insideJobLogger.debug("Sending \(data.count) bytes")

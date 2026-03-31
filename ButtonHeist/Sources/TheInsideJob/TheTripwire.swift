@@ -481,6 +481,7 @@ final class TheTripwire {
 
     private static let ignoredAnimationKeyPrefixes: [String] = [
         "_UIParallaxMotionEffect",
+        "match-",
     ]
 }
 
