@@ -4,7 +4,7 @@
 
 Every iOS app already describes itself. The accessibility layer tells VoiceOver — and the millions of blind and low-vision people who depend on it — what every control is, what it does, and how to interact with it. Labels, traits, actions, activation points. A complete semantic interface that lets any intelligence operate an app without seeing it.
 
-Button Heist gives AI agents that same interface. Link one framework into your debug build, and the agent reads controls that describe themselves: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, and knows a button's activation point is offset from center — because the accessibility layer already says so. The agent spends its intelligence on your task, not on translating pixels into meaning.
+Button Heist gives AI agents that same interface. Link one framework into your debug build, and the agent reads controls that describe themselves: `activate(heistId: "button_login")` instead of `tap(x: 187, y: 340)`. It calls `increment` on a stepper, triggers a "Delete" custom action by name, and knows a button's activation point is offset from center — because the accessibility layer already says so. Give the agent the right interface and it gives you better results, because it's thinking about your task instead of figuring out where to tap.
 
 <!-- TODO: terminal GIF showing run_batch with delta response -->
 
