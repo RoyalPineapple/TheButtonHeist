@@ -54,7 +54,7 @@ Expectations follow a "say what you know" design. The agent expresses what it ca
 - `{"valueChanged": {"heistId": "counter", "oldValue": "3", "newValue": "5"}}` — did this specific element transition from "3" to "5"?
 - `{"valueChanged": {}}` — did any value change at all?
 
-Every field in `valueChanged` is optional. Provide more to tighten the check, fewer to loosen it. The same mechanism scales from "did anything change?" to "did this exact element transition from 3 to 5?" — the agent says as much or as little as it knows. The framework scans the interface delta for any match and reports what actually happened on miss, so the agent gets diagnostics without needing a follow-up call.
+Every field in `valueChanged` is optional — omit what you don't care about. On a miss, the framework reports what actually happened, so the agent gets diagnostics without a follow-up call.
 
 This composes with batching. A 5-step batch where each step carries a targeted expectation becomes a verification chain in a single MCP call. If step 3 expected `{"valueChanged": {"newValue": "5"}}` but the value went to "4", the batch stops there with diagnostics — no ambiguity about which action failed or why.
 
