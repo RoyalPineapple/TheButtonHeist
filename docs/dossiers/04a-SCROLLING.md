@@ -26,7 +26,7 @@ A `ScrollableTarget` enum wraps a discovered scrollable container with two tiers
 .swipeable(CGRect, CGSize)             — synthetic swipe gesture (universal)
 ```
 
-`scrollOnePage(_:direction:animated:)` dispatches through these tiers. UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame.
+`scrollOnePageAndSettle(_:direction:animated:)` dispatches through these tiers and waits for layout to settle (one `yieldFrames` + one `refresh`). UIScrollView gets direct `setContentOffset` manipulation. Everything else (e.g. SwiftUI's `PlatformContainer`) gets a synthetic swipe at the container's screen-space frame. Returns a `(moved: Bool, previousOnScreen: Set<String>)` tuple so callers can detect stagnation without a second refresh.
 
 ### Axis-Aware Resolution
 
@@ -58,9 +58,15 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 ### What it does when an element is off-screen
 
-Two paths, tried in order:
+A sequential coarse-then-fine flow:
 
-**Primary path — live object resolved.** The element's `NSObject` is in the current accessibility tree (it's on screen or nearby enough for UIKit to keep it alive):
+**Step 1 — Coarse jump (off-screen heistId only).** If the target is a `.heistId` that is not in `onScreen` but was discovered by a prior full scan (`presentedHeistIds` + `contentSpaceOrigin` + live `scrollView`):
+
+1. Calls `scrollTargetOffset(for:in:)` to compute a clamped content offset that centers the element in the viewport
+2. Sets `scrollView.setContentOffset(targetOffset, animated: false)` directly
+3. Waits for settle via `tripwire.waitForAllClear(timeout: 1.0)`, then `refresh()`
+
+**Step 2 — Fine-tune (any target).** Resolves the target to a live `NSObject` and checks whether the frame needs adjustment:
 
 1. Reads `object.accessibilityFrame` and checks `UIScreen.main.bounds.contains(frame)`
 2. Uses `screenElement.scrollView` to find the nearest `UIScrollView`
@@ -68,22 +74,20 @@ Two paths, tried in order:
 4. Waits for the scroll animation to settle via `tripwire.waitForAllClear(timeout: 1.0)` — presentation-layer diffing, not a fixed sleep
 5. Refreshes the element cache via `refresh()` so subsequent reads reflect post-scroll positions
 
-**Fallback path — full-scan-discovered element, live object not resolvable.** The element was discovered by `get_interface(full: true)` (exhaustive scroll) and is in `screenElements` with a valid `presentedHeistIds` entry, but has since scrolled off screen (cell reuse deallocated the `NSObject`). The stored `contentSpaceOrigin` and weak `scrollView` reference are still available:
-
-1. Checks `target` is a `.heistId`, the heistId is in `presentedHeistIds`, `contentSpaceOrigin` is non-nil, and the weak `scrollView` is still alive
-2. Calls `scrollTargetOffset(for:in:)` to compute a clamped content offset that centers the element in the viewport
-3. Sets `scrollView.setContentOffset(targetOffset, animated: false)` directly
-4. Waits for settle via `tripwire.waitForAllClear(timeout: 1.0)`, then `refresh()`
-5. Re-resolves the target (the element should now be on screen) and fine-tunes with `scrollToMakeVisible` if the frame is still not fully within screen bounds
-
 ```mermaid
 flowchart TD
     Cmd["Any interaction command"]
     Cmd --> HasTarget{element target<br/>or first responder?}
     HasTarget -->|no| Execute["Execute interaction"]
-    HasTarget -->|yes| Resolve["resolveTarget(target)"]
+    HasTarget -->|yes| Coarse{"heistId off-screen<br/>+ contentSpaceOrigin<br/>+ scrollView alive?"}
 
-    Resolve --> Resolved{live object<br/>resolved?}
+    Coarse -->|yes| Jump["scrollTargetOffset(for:in:)<br/>→ setContentOffset (centered, clamped)"]
+    Jump --> Settle1["waitForAllClear(1.0s) + refresh()"]
+    Settle1 --> Fine
+
+    Coarse -->|no| Fine["resolveTarget(target)"]
+    Fine --> Resolved{live object<br/>resolved?}
+    Resolved -->|no| Execute
     Resolved -->|yes| Frame["Read object.accessibilityFrame"]
     Frame --> Valid{non-null,<br/>non-empty?}
     Valid -->|no| Execute
@@ -94,16 +98,9 @@ flowchart TD
     Walk --> ScrollView{found UIScrollView?}
     ScrollView -->|no| Execute
     ScrollView -->|yes| Scroll["scrollToMakeVisible()<br/>minimum contentOffset adjustment"]
-    Scroll --> Settle["waitForAllClear(1.0s)"]
-    Settle --> Refresh["refresh()"]
+    Scroll --> Settle2["waitForAllClear(1.0s)"]
+    Settle2 --> Refresh["refresh()"]
     Refresh --> Execute
-
-    Resolved -->|no| FullScan{"heistId in presentedHeistIds<br/>+ contentSpaceOrigin non-nil<br/>+ scrollView alive?"}
-    FullScan -->|no| Execute
-    FullScan -->|yes| Jump["scrollTargetOffset(for:in:)<br/>→ setContentOffset (centered, clamped)"]
-    Jump --> Settle2["waitForAllClear(1.0s) + refresh()"]
-    Settle2 --> FineTune["Re-resolve → scrollToMakeVisible<br/>(fine-tune if still off-screen)"]
-    FineTune --> Execute
 ```
 
 ### Entry points
@@ -146,7 +143,7 @@ Searches for an element by scrolling through scrollable containers discovered fr
 **Algorithm:**
 
 1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
-2. **Scroll loop.** `findLiveScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePage` scrolls it (UIScrollView → setContentOffset, else → swipe). After each scroll, yield 3 frames, refresh, check for match. If no new elements appeared, mark the container exhausted.
+2. **Scroll loop.** `findLiveScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
 
 ```mermaid
 flowchart TD
@@ -160,15 +157,14 @@ flowchart TD
     SVOK -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
     SVOK -->|Yes| ADAPT["adaptDirection(searchDir, for: target)<br/>down→right for horizontal containers"]
 
-    ADAPT --> SCROLL["scrollOnePage(target, direction)<br/>UIScrollView / swipe"]
+    ADAPT --> SCROLL["scrollOnePageAndSettle(target, direction)<br/>UIScrollView / swipe + yield + refresh"]
     SCROLL --> MOVED{moved?}
     MOVED -->|No| EXHAUST["Mark container exhausted"]
     EXHAUST --> LOOP
 
-    MOVED -->|Yes| SETTLE["yieldFrames(3)<br/>+ refreshAccessibilityData()"]
-    SETTLE --> FM{"resolveFirstMatch(target)"}
-    FM -->|Found| ENS["ensureOnScreenSync(found)"]
-    ENS --> END["Return success<br/>+ ScrollSearchResult"]
+    MOVED -->|Yes| FM{"resolveFirstMatch(target)"}
+    FM -->|Found| FT["fineTuneAndResolve(found)<br/>ensureOnScreenSync + yield + refresh + re-resolve"]
+    FT --> END["Return success<br/>+ ScrollSearchResult"]
     FM -->|Not found| NEW{New elements<br/>appeared?}
     NEW -->|No| EXHAUST
     NEW -->|Yes| LOOP
@@ -203,7 +199,7 @@ After any `setContentOffset(animated: true)` call, the scroll view runs a Core A
 
 The `scroll` command does **not** settle internally — it returns immediately after `setContentOffset`. The settle and delta computation happens in the outer `performInteraction` pipeline.
 
-`scroll_to_visible` and `scroll_to_edge` handle their own frame yielding. `scroll_to_visible` uses `yieldFrames(3)` per step; `scroll_to_edge` uses `yieldFrames(2)` per re-jump. Both use `CATransaction.flush()` + `Task.yield()` per frame — lighter than `waitForSettle`.
+`scroll_to_visible` and `scroll_to_edge` handle their own frame yielding via `scrollOnePageAndSettle`, which uses `yieldFrames(3)` + one `refresh()` per step. Both use `CATransaction.flush()` + `Task.yield()` per frame — lighter than `waitForSettle`.
 
 ## Implementation Notes
 
