@@ -180,34 +180,17 @@ extension Array where Element == AccessibilityElement {
 
 // MARK: - TheBagman Convenience
 
-enum MatchingError: Error, LocalizedError {
-    case heistIdNotSupported
-
-    var errorDescription: String? {
-        switch self {
-        case .heistIdNotSupported:
-            return "findMatch does not resolve heistId — use ActionTarget for heistId-based targeting"
-        }
-    }
-}
-
 extension TheBagman {
 
     /// Search the hierarchy tree for the first match.
     func findMatch(_ matcher: ElementMatcher) -> (element: AccessibilityElement, index: Int)? {
-        guard let found = cachedHierarchy.firstMatch(matcher) else {
-            // Fallback to flat array when hierarchy is empty
-            return cachedElements.firstMatch(matcher)
-        }
+        guard let found = currentHierarchy.firstMatch(matcher) else { return nil }
         return (found.element, found.traversalIndex)
     }
 
-    /// Whether any cached element matches the predicate.
+    /// Whether any element in the current hierarchy matches the predicate.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        if cachedHierarchy.isEmpty {
-            return cachedElements.hasMatch(matcher)
-        }
-        return cachedHierarchy.hasMatch(matcher)
+        currentHierarchy.hasMatch(matcher)
     }
 }
 

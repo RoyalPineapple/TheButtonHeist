@@ -46,28 +46,23 @@ final class TheBagmanResolutionTests: XCTestCase {
         )
     }
 
-    /// Register an element in both cachedElements, screenElements, and presentedHeistIds.
+    /// Accumulated hierarchy nodes for matcher resolution.
+    private var hierarchyNodes: [AccessibilityHierarchy] = []
+
+    /// Register an element in screenElements, currentHierarchy, and presentedHeistIds.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
-        if index >= bagman.cachedElements.count {
-            bagman.cachedElements.append(contentsOf:
-                Array(repeating: element, count: index - bagman.cachedElements.count + 1)
-            )
-        }
-        bagman.cachedElements[index] = element
         bagman.screenElements[heistId] = TheBagman.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
-            lastTraversalIndex: index,
-            wire: HeistElement(
-                heistId: heistId, description: element.description,
-                label: element.label, value: element.value, identifier: element.identifier,
-                hint: nil, traits: [], frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
-                activationPointX: 0, activationPointY: 0, actions: []
-            ),
+            element: element,
             object: nil,
             scrollView: nil
         )
         bagman.presentedHeistIds.insert(heistId)
+        // Add to hierarchy and reverse index for matcher resolution
+        hierarchyNodes.append(.element(element, traversalIndex: index))
+        bagman.currentHierarchy = hierarchyNodes
+        bagman.heistIdByTraversalOrder[index] = heistId
     }
 
     // MARK: - heistId Resolution
@@ -82,7 +77,6 @@ final class TheBagmanResolutionTests: XCTestCase {
             return
         }
         XCTAssertEqual(resolved.element.label, "OK")
-        XCTAssertEqual(resolved.traversalIndex, 0)
     }
 
     func testHeistIdNotFoundReturnsNotFound() {
@@ -216,16 +210,16 @@ final class TheBagmanResolutionTests: XCTestCase {
         XCTAssertEqual(result.diagnostics, "")
     }
 
-    // MARK: - elementNotFoundMessage Delegation
+    // MARK: - Ambiguous Matcher Diagnostics
 
-    func testElementNotFoundMessageDelegatesToResolveTarget() {
+    func testAmbiguousMatcherReturnsDiagnostics() {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let msg = bagman.elementNotFoundMessage(for: .matcher(ElementMatcher(label: "Save")))
-        XCTAssertTrue(msg.contains("2 elements match"), "Should return ambiguous message: \(msg)")
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        XCTAssertTrue(result.diagnostics.contains("2 elements match"), "Should return ambiguous message: \(result.diagnostics)")
     }
 
     func testEmptyScreenReturnsCompactSummary() {

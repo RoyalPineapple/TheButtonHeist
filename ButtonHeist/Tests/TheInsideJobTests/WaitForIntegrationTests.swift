@@ -216,12 +216,12 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         // Refresh the tree so heistIds are assigned
-        insideJob.bagman.refreshAccessibilityData()
+        insideJob.bagman.refresh()
         let elements = insideJob.bagman.snapshot(.visible)
 
         // Find the heistId for our element
         let heistId = elements.first(where: {
-            $0.label == "WaitFor-HeistId"
+            $0.element.label == "WaitFor-HeistId"
         })?.heistId
 
         guard let heistId else {

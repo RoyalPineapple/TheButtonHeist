@@ -85,7 +85,7 @@ extension TheBagman {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
-        refreshAccessibilityData()
+        refresh()
         manifest.recordVisibleElements(onScreen)
 
         // Early exit if target is already visible
@@ -140,7 +140,7 @@ extension TheBagman {
                     guard moved else { break }
                     manifest.scrollCount += 1
                     await tripwire.yieldFrames(2)
-                    refreshAccessibilityData()
+                    refresh()
                     manifest.recordVisibleElements(onScreen, container: container)
 
                     // No new elements = content exhausted
@@ -150,7 +150,7 @@ extension TheBagman {
                     if let target, resolveFirstMatch(target) != nil {
                         scrollView.setContentOffset(savedOffset, animated: false)
                         await tripwire.yieldFrames(2)
-                        refreshAccessibilityData()
+                        refresh()
                         manifest.markExplored(container)
                         manifest.explorationTime = CACurrentMediaTime() - startTime
                         return manifest
@@ -160,7 +160,7 @@ extension TheBagman {
                 // Restore position
                 scrollView.setContentOffset(savedOffset, animated: false)
                 await tripwire.yieldFrames(2)
-                refreshAccessibilityData()
+                refresh()
                 manifest.markExplored(container)
 
                 // Check for newly-revealed inner containers
@@ -178,7 +178,7 @@ extension TheBagman {
 
     private func findScrollableContainers() -> [AccessibilityContainer] {
         var result: [AccessibilityContainer] = []
-        cachedHierarchy.reducedHierarchy(()) { _, node in
+        currentHierarchy.reducedHierarchy(()) { _, node in
             if case .container(let container, _) = node,
                case .scrollable = container.type {
                 result.append(container)
