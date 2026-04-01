@@ -93,18 +93,6 @@ $BH record --output demo.mp4 --fps 8 --scale 0.5         # Record with touch ove
 
 The session REPL accepts both JSON and shorthand: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
 
-### 4. USB devices
-
-USB works the same as WiFi, same API, no extra configuration. Useful when you need lower latency or your network blocks Bonjour.
-
-```bash
-$BH list
-# [0] a1b2c3d4  BH Demo  (WiFi)
-# [1] usb-iPhone  iPhone (USB)
-```
-
-See [USB Connectivity](docs/USB_DEVICE_CONNECTIVITY.md) for the deep dive.
-
 ## What It Can Do
 
 ### Interact
