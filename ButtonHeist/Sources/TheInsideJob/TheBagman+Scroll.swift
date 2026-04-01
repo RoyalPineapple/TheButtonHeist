@@ -331,9 +331,10 @@ extension TheBagman {
             return
         }
 
-        // Off-screen path: element was discovered by a full scan but is not currently
+        // Off-screen path: element was discovered by a full scan but is not currently visible.
         // Use the stored contentSpaceOrigin to scroll it into view.
         if case .heistId(let heistId) = target,
+           !onScreen.contains(heistId),
            let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView,
