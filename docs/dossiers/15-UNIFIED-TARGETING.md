@@ -112,15 +112,16 @@ flowchart TD
     A["resolveTarget(ElementTarget)"] --> B{Target type?}
     B -->|".heistId(id)"| C["screenElements[id] lookup<br/>O(1) dictionary access"]
     C --> D{Entry exists<br/>& presented<br/>& valid index?}
-    D -->|Yes| E["Return ResolvedTarget<br/>(screenElement, element, traversalIndex)"]
-    D -->|No| F["Return nil"]
+    D -->|Yes| E["Return .resolved(ResolvedTarget)"]
+    D -->|No| F["Return .notFound(diagnostics)"]
 
-    B -->|".matcher(m)"| G["Build source from<br/>cachedHierarchy"]
+    B -->|".matcher(m)"| G["Search currentHierarchy"]
     G --> H["uniqueMatch(matcher)<br/>Case-insensitive substring<br/>on label, identifier, value"]
     H --> I{Result?}
-    I -->|Exactly 1 match| J["Find matching screenElement<br/>by traversalIndex"]
+    I -->|Exactly 1 match| J["heistIdByTraversalOrder[index]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
     J --> E
-    I -->|0 or 2+ matches| F
+    I -->|0 matches| F
+    I -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)"]
 ```
 
 ## Error Diagnostics: Progressive Disclosure
@@ -174,7 +175,7 @@ Matching operates on the **canonical `AccessibilityElement` tree**, not wire typ
 | **Hierarchy tree** (`[AccessibilityHierarchy]`) | `resolveTarget`, `get_interface` filtering, `wait_for` | `AccessibilityHierarchy.matches(_:)` — recursive tree walk |
 | **Flat array** (`cachedElements`) | Fallback when hierarchy is empty | `[AccessibilityElement].firstMatch(_:)` — linear scan |
 
-The hierarchy tree is the primary surface. `findMatch(_:)` searches `cachedHierarchy` directly, falling back to a flat `cachedElements` scan when the hierarchy is empty.
+The hierarchy tree is the primary surface. `findMatch(_:)` searches `currentHierarchy` directly.
 
 ### Match evaluation (AccessibilityElement.matches)
 
@@ -249,4 +250,4 @@ These commands use `ElementMatcher` directly (not `ElementTarget`):
 
 `snapshotElements()` reads from `screenElements` and returns the currently visible elements (those in `onScreen`) as `[HeistElement]`. This is the wire-level view used for `get_interface` responses and delta computation.
 
-HeistId resolution via `resolveTarget(.heistId)` is O(1) dictionary lookup into `screenElements`. The `presented` flag ensures only elements that have been sent to clients can be targeted by heistId. Matching always operates on the canonical `cachedHierarchy` / `cachedElements`, never on wire types.
+HeistId resolution via `resolveTarget(.heistId)` is O(1) dictionary lookup into `screenElements`, gated by `presentedHeistIds` (elements sent to clients via `snapshot()`). Matcher resolution walks `currentHierarchy` then uses O(1) `heistIdByTraversalOrder` reverse index to find the corresponding `ScreenElement`. Matching always operates on canonical `AccessibilityElement` types, never on wire types.
