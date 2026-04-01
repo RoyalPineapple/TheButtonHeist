@@ -109,6 +109,12 @@ Specific capability differences:
 
 Batching saves 10-34% of turns with zero accuracy cost. The savings are largest on sequential workflows with predictable outcomes. Expectations help on verification-heavy tasks but add overhead where the agent doesn't need confirmation. Both depend on running in-process — batching needs inline deltas, expectations need the framework to detect state changes without a full tree re-read.
 
+**Why this matters beyond cost:**
+
+The efficiency floor — never worse than 2x fewer turns, often 3-6x — changes what UI interaction *is* for an agent. At 4 turns to verify a fix in the app, checking the UI becomes a subroutine. The agent taps, reads the result, and gets back to the code. At 26 turns, it's the main event — the agent spends its context budget navigating the interface instead of doing the work it was actually asked to do.
+
+This is the whole point. The tool should disappear into the agent's workflow. When an agent can check the UI in seconds and move on, it can run a fix-build-verify loop without the UI step dominating the session. When the UI step takes 60 turns, the agent either hits the turn cap or burns through its context window before it gets back to the editor. Efficiency doesn't just save money — it unlocks complex multi-step workflows where UI verification is one step among many.
+
 ## How It Compares
 
 ### ios-simulator-mcp (idb)
