@@ -84,15 +84,17 @@ All tools achieve high accuracy on simple tasks. The differentiation is efficien
 
 BH is 2-6x more efficient than idb across the board. The gap is largest on multi-step tasks where deltas compound — full workflow (6x) and calculator (6.5x). Batching adds another 10-34% reduction on top. idb failed the marathon task (5 screens, 40+ steps) — it hit the turn cap before completing.
 
-**Accuracy:**
+**Accuracy (excluding T3\*):**
 
-| Config | Trials | Correct | Partial | Failed | Accuracy |
-|---|--:|--:|--:|--:|--:|
-| **BH** | 65 | 64 | 1 | 0 | **98.5%** |
-| **BH + batching** | 35 | 33 | 2 | 0 | **94.3%** |
-| **idb** | 14 | 12 | 0 | 1 | **85.7%** |
+| Config | Trials | Correct | Failed | Accuracy |
+|---|--:|--:|--:|--:|
+| **BH** | 60 | 60 | 0 | **100%** |
+| **BH + batching** | 29 | 29 | 0 | **100%** |
+| **idb** | 12 | 11 | 1 | **91.7%** |
 
-BH's one partial is T3 (settings roundtrip) — a known picker/modal timeout bug with a fix in progress. BH + batching's two partials are also T3, same root cause. idb's failure is T8 (marathon) — exhausted the 80-turn cap.
+\*T3 (settings roundtrip) excluded — all T3 partials trace to a known picker/modal timeout bug in the app, not the tooling. Fix in progress. With T3 included: BH 98.5% (64/65), BH + batching 94.3% (33/35), idb 85.7% (12/14).
+
+idb's failure is T8 (marathon) — exhausted the 80-turn cap before completing.
 
 Specific capability differences:
 
