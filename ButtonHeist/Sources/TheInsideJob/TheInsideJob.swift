@@ -383,9 +383,9 @@ public final class TheInsideJob {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
         stakeout?.noteActivity()
-        bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
-        let beforeCachedElements = bagman.cachedElements
+        let beforeResult = bagman.refresh()
+        let beforeSnapshot = bagman.snapshot(.visible)
+        let beforeElements = beforeResult?.elements ?? []
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let result = await interaction()
@@ -398,7 +398,7 @@ public final class TheInsideJob {
                 message: result.message,
                 value: result.value,
                 beforeSnapshot: beforeSnapshot,
-                beforeCachedElements: beforeCachedElements,
+                beforeElements: beforeElements,
                 beforeVC: beforeVC,
                 target: command.actionTarget
             )
@@ -428,9 +428,9 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
-        let beforeCachedElements = bagman.cachedElements
+        let beforeResult = bagman.refresh()
+        let beforeSnapshot = bagman.snapshot(.visible)
+        let beforeElements = beforeResult?.elements ?? []
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let result = await executeWaitFor(target)
@@ -442,12 +442,12 @@ public final class TheInsideJob {
                 method: .waitFor,
                 message: result.message,
                 beforeSnapshot: beforeSnapshot,
-                beforeCachedElements: beforeCachedElements,
+                beforeElements: beforeElements,
                 beforeVC: beforeVC
             )
         } else {
-            bagman.refreshAccessibilityData()
-            let afterSnapshot = bagman.snapshotElements()
+            bagman.refresh()
+            let afterSnapshot = bagman.snapshot(.visible)
             actionResult = ActionResult(
                 success: false,
                 method: .waitFor,
@@ -469,8 +469,8 @@ public final class TheInsideJob {
         let start = CFAbsoluteTimeGetCurrent()
 
         // Phase 0: immediate check
-        bagman.refreshAccessibilityData()
-        _ = bagman.snapshotElements()
+        bagman.refresh()
+        _ = bagman.snapshot(.visible)
         if target.resolvedAbsent {
             if !bagman.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
@@ -484,8 +484,8 @@ public final class TheInsideJob {
         // Phase 1: settle loop
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            bagman.refreshAccessibilityData()
-            _ = bagman.snapshotElements()
+            bagman.refresh()
+            _ = bagman.snapshot(.visible)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
                 if !bagman.hasTarget(elementTarget) {
@@ -513,9 +513,9 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
-        let beforeCachedElements = bagman.cachedElements
+        let beforeResult = bagman.refresh()
+        let beforeSnapshot = bagman.snapshot(.visible)
+        let beforeElements = beforeResult?.elements ?? []
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let result = await bagman.executeScrollToVisible(target)
@@ -528,7 +528,7 @@ public final class TheInsideJob {
                 message: result.message,
                 value: result.value,
                 beforeSnapshot: beforeSnapshot,
-                beforeCachedElements: beforeCachedElements,
+                beforeElements: beforeElements,
                 beforeVC: beforeVC,
                 target: nil
             )
@@ -546,8 +546,8 @@ public final class TheInsideJob {
                 scrollSearchResult: result.scrollSearchResult
             )
         } else {
-            bagman.refreshAccessibilityData()
-            let afterSnapshot = bagman.snapshotElements()
+            bagman.refresh()
+            let afterSnapshot = bagman.snapshot(.visible)
             actionResult = ActionResult(
                 success: false,
                 method: result.method,
@@ -568,15 +568,15 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        bagman.refreshAccessibilityData()
-        let beforeSnapshot = bagman.snapshotElements()
-        let beforeCachedElements = bagman.cachedElements
+        let beforeResult = bagman.refresh()
+        let beforeSnapshot = bagman.snapshot(.visible)
+        let beforeElements = beforeResult?.elements ?? []
         let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
 
         let manifest = await bagman.exploreScreen()
 
         let exploreResult = ExploreResult(
-            elements: bagman.snapshotAllElements(),
+            elements: bagman.toWire(bagman.snapshot(.all)),
             scrollCount: manifest.scrollCount,
             containersExplored: manifest.exploredContainers.count,
             explorationTime: manifest.explorationTime
@@ -586,7 +586,7 @@ public final class TheInsideJob {
             method: .explore,
             message: "\(manifest.elementCount) elements, \(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s",
             beforeSnapshot: beforeSnapshot,
-            beforeCachedElements: beforeCachedElements,
+            beforeElements: beforeElements,
             beforeVC: beforeVC
         )
         let actionResult = ActionResult(

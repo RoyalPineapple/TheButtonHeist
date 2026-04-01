@@ -77,7 +77,7 @@ graph TB
 ```
 TheInsideJob (singleton, @MainActor) — coordinator split across extension files:
 │   TheInsideJob.swift              — core server lifecycle, client dispatch
-│   TheBagman.swift                 — hierarchy parsing, element cache, delta computation, screen capture
+│   TheBagman.swift + 6 extensions  — parse→apply pipeline, element registry, resolution, actions, scroll, capture
 │   TheTripwire.swift               — persistent pulse for UI settle, transitions, keyboard/focus state
 │   Extensions/AutoStart.swift      — ObjC +load auto-start bridge
 │   Extensions/Pulse.swift          — settle-driven interface updates, broadcasting
@@ -97,8 +97,12 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 │   ├── latestReading / onTransition — single-state pulse snapshot, transitions diffed against previous reading
 │   ├── allClear() — sync gate backed by the latest pulse reading when running
 │   └── waitForSettle(timeout:) / waitForAllClear(timeout:) — per-waiter quiet-frame settle tracking
-├── TheBagman (element cache, hierarchy parsing, weak view references for TheSafecracker)
+├── TheBagman (element registry, parse→apply pipeline, target resolution, action execution)
 │   ├── init(tripwire: TheTripwire) — delegates all timing/window/VC work to TheTripwire
+│   ├── parse() → ParseResult — read-only snapshot of live accessibility tree
+│   ├── apply(ParseResult) — mutates registry (screen change detected before apply)
+│   ├── snapshot(.visible/.all) → [ScreenElement] — gates presentedHeistIds
+│   ├── toWire([ScreenElement]) → [HeistElement] — conversion at serialization boundary only
 │   ├── ScreenManifest — exploration state: element-to-container map, stagnation detection
 │   └── exploreScreen(target:) — scrolls all containers, discovers off-screen elements, restores positions
 ├── TheSafecracker (all interaction dispatch: actions, gestures, text entry)
@@ -551,11 +555,9 @@ flowchart TD
     A["tripwire.waitForAllClear()<br>(settle-driven, not timer-based)"] --> B["broadcastIfChanged()"]
     B --> B1{"hasSubscribers?"}
     B1 -->|No| A
-    B1 -->|Yes| B2["bagman.refreshAccessibilityData()"]
-    B2 --> C["parseAccessibilityHierarchy()<br>elementVisitor captures weak refs"]
-    C --> D["flattenToElements() → AccessibilityMarker[]"]
-    D --> E["Update element cache in TheBagman"]
-    E --> F["snapshotElements() → [HeistElement]"]
+    B1 -->|Yes| B2["bagman.refresh()<br/>(parse → apply)"]
+    B2 --> E["snapshot(.visible) → [ScreenElement]"]
+    E --> F["toWire() → [HeistElement]"]
     F --> G["Compute hash of elements array"]
     G --> H{"Hash changed?"}
     H -->|No| A
@@ -574,9 +576,9 @@ sequenceDiagram
     participant TSC as TheSafecracker
 
     Client->>IJ: activate / increment / decrement / customAction
-    IJ->>IJ: refreshAccessibilityData()
-    IJ->>IJ: Find element by identifier or order
-    IJ->>IJ: Resolve live NSObject from cache
+    IJ->>IJ: bagman.refresh() (parse → apply)
+    IJ->>IJ: bagman.resolveTarget(elementTarget)
+    IJ->>IJ: Resolve live NSObject from ScreenElement
 
     alt activate
         IJ->>IJ: object.accessibilityActivate()

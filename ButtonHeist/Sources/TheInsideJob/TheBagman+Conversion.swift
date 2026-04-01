@@ -31,7 +31,7 @@ extension TheBagman {
 
 extension TheBagman {
 
-    func convertElement(_ element: AccessibilityElement, index: Int) -> HeistElement {
+    func convertElement(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             description: element.description,
@@ -50,20 +50,20 @@ extension TheBagman {
             customContent: element.customContent.isEmpty ? nil : element.customContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
             },
-            actions: buildActions(for: index, element: element)
+            actions: buildActions(for: element, object: object)
         )
     }
 
-    func buildActions(for index: Int, element: AccessibilityElement) -> [ElementAction] {
+    func buildActions(for element: AccessibilityElement, object: NSObject?) -> [ElementAction] {
         var actions: [ElementAction] = []
-        if hasInteractiveObject(at: index) {
+        if isInteractive(element: element, object: object) {
             actions.append(.activate)
         }
-        if element.traits.contains(.adjustable), hasInteractiveObject(at: index) {
+        if element.traits.contains(.adjustable), isInteractive(element: element, object: object) {
             actions.append(.increment)
             actions.append(.decrement)
         }
-        for name in customActionNames(elementAt: index) {
+        for name in customActionNames(from: object) {
             actions.append(.custom(name))
         }
         return actions
@@ -120,93 +120,105 @@ extension TheBagman {
     }
 }
 
-// MARK: - Single Element Conversion
-
-extension TheBagman {
-
-    /// Convert a single AccessibilityElement to a wire HeistElement with heistId assigned.
-    /// Used when we've matched at the hierarchy level and need to project one result for the wire.
-    func convertAndAssignId(_ element: AccessibilityElement, index: Int) -> HeistElement {
-        var wire = convertElement(element, index: index)
-        if let identifier = element.identifier, !identifier.isEmpty {
-            wire.heistId = identifier
-        } else {
-            wire.heistId = synthesizeBaseId(wire)
-        }
-        return wire
-    }
-}
-
 // MARK: - Interface Delta
 
 extension TheBagman {
 
-    /// Return wire elements for the currently visible set and mark them as presented.
-    /// The screen element registry is updated during refreshAccessibilityData() —
-    /// this method is a cheap read that extracts the visible subset.
-    func snapshotElements() -> [HeistElement] {
-        var result: [(Int, HeistElement)] = []
-        for heistId in onScreen {
-            guard var entry = screenElements[heistId] else { continue }
-            if !entry.presented {
-                entry.presented = true
-                screenElements[heistId] = entry
-            }
-            result.append((entry.lastTraversalIndex, entry.wire))
+    /// Single exit point for elements leaving TheBagman.
+    /// Every element returned is added to presentedHeistIds — impossible to send
+    /// an element without marking it, eliminating the class of bug where a code path
+    /// forgets to set a bookkeeping flag.
+    /// Returns ScreenElements sorted by traversal order. Wire conversion happens
+    /// at the serialization boundary via `toWire(_:)`.
+    func snapshot(_ scope: SnapshotScope) -> [ScreenElement] {
+        // Build heistId→order lookup from reverse index for sort ordering
+        let orderByHeistId = Dictionary(
+            heistIdByTraversalOrder.map { ($0.value, $0.key) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var result: [(Int, ScreenElement)] = []
+        let candidates: [String] = switch scope {
+        case .visible: Array(onScreen)
+        case .all: Array(screenElements.keys)
         }
-        return result.sorted { $0.0 < $1.0 }.map(\.1)
+        for heistId in candidates {
+            guard let entry = screenElements[heistId] else { continue }
+            presentedHeistIds.insert(heistId)
+            let order = orderByHeistId[heistId] ?? Int.max
+            result.append((order, entry))
+        }
+        // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
+        // with heistId as tiebreaker for deterministic ordering within that group.
+        return result.sorted {
+            if $0.0 != $1.0 { return $0.0 < $1.0 }
+            return $0.1.heistId < $1.1.heistId
+        }.map(\.1)
     }
 
-    /// Return wire elements for ALL known elements — visible and off-screen.
-    /// Used by get_interface --full to return the complete screen census.
-    func snapshotAllElements() -> [HeistElement] {
-        screenElements.values
-            .sorted { $0.lastTraversalIndex < $1.lastTraversalIndex }
-            .map(\.wire)
+    /// Convert a ScreenElement to its wire representation.
+    func toWire(_ entry: ScreenElement) -> HeistElement {
+        var wire = convertElement(entry.element, object: entry.object)
+        wire.heistId = entry.heistId
+        return wire
+    }
+
+    /// Convert a snapshot to wire format. Use at serialization boundaries.
+    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
+        entries.map { toWire($0) }
     }
 
     // MARK: - Stable ID Synthesis
 
     /// Trait priority for heistId prefix — most descriptive wins.
-    /// Names come from AccessibilitySnapshotParser's knownTraits.
-    private static let traitPriority: [HeistTrait] = [
-        .backButton, .searchField, .textEntry, .switchButton, .adjustable,
-        .button, .link, .image, .header, .tabBar,
+    /// Precomputed bitmasks from AccessibilitySnapshotParser's knownTraits.
+    private static let traitPriority: [(name: String, mask: UIAccessibilityTraits)] = [
+        ("backButton", UIAccessibilityTraits.fromNames(["backButton"])),
+        ("searchField", UIAccessibilityTraits.fromNames(["searchField"])),
+        ("textEntry", UIAccessibilityTraits.fromNames(["textEntry"])),
+        ("switchButton", UIAccessibilityTraits.fromNames(["switchButton"])),
+        ("adjustable", .adjustable),
+        ("button", .button),
+        ("link", .link),
+        ("image", .image),
+        ("header", .header),
+        ("tabBar", UIAccessibilityTraits.fromNames(["tabBar"])),
     ]
 
-    /// Assign deterministic `heistId` to each element.
+    /// Assign deterministic `heistId` to each AccessibilityElement.
     /// Developer-provided identifiers take priority — they become the heistId directly.
     /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
-    func assignHeistIds(_ elements: inout [HeistElement]) {
+    /// Returns the heistId array, parallel to the input elements array.
+    func assignHeistIds(_ elements: [AccessibilityElement]) -> [String] {
         // Phase 1: generate base IDs
-        for i in elements.indices {
-            if let identifier = elements[i].identifier, !identifier.isEmpty {
-                elements[i].heistId = identifier
-            } else {
-                elements[i].heistId = synthesizeBaseId(elements[i])
+        var heistIds = elements.map { element -> String in
+            if let identifier = element.identifier, !identifier.isEmpty {
+                return identifier
             }
+            return synthesizeBaseId(element)
         }
 
         // Phase 2: disambiguate duplicates
         var counts: [String: Int] = [:]
-        for element in elements {
-            counts[element.heistId, default: 0] += 1
+        for heistId in heistIds {
+            counts[heistId, default: 0] += 1
         }
 
         var seen: [String: Int] = [:]
-        for i in elements.indices {
-            let base = elements[i].heistId
+        for i in heistIds.indices {
+            let base = heistIds[i]
             if let count = counts[base], count > 1 {
                 let index = seen[base, default: 0] + 1
                 seen[base] = index
-                elements[i].heistId = "\(base)_\(index)"
+                heistIds[i] = "\(base)_\(index)"
             }
         }
+
+        return heistIds
     }
 
-    func synthesizeBaseId(_ element: HeistElement) -> String {
-        let traitPrefix = Self.traitPriority.first { element.traits.contains($0) }?.rawValue
+    func synthesizeBaseId(_ element: AccessibilityElement) -> String {
+        let traitPrefix = Self.traitPriority.first { element.traits.contains($0.mask) }?.name
             ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
@@ -238,29 +250,44 @@ extension TheBagman {
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
     func computeDelta(
-        before: [HeistElement],
-        after: [HeistElement],
+        before: [ScreenElement],
+        after: [ScreenElement],
         afterTree: [AccessibilityHierarchy]?,
         isScreenChange: Bool
     ) -> InterfaceDelta {
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
+            let afterWire = toWire(after)
             let tree = afterTree?.map { convertHierarchyNode($0) }
-            let fullInterface = Interface(timestamp: Date(), elements: after, tree: tree)
+            let fullInterface = Interface(timestamp: Date(), elements: afterWire, tree: tree)
             return InterfaceDelta(
                 kind: .screenChanged,
-                elementCount: after.count,
+                elementCount: afterWire.count,
                 newInterface: fullInterface
             )
         }
 
-        // Same screen — quick check: if identical, nothing changed
-        if before.hashValue == after.hashValue && before == after {
-            return InterfaceDelta(kind: .noChange, elementCount: after.count)
+        // Fast no-change check on internal types — compares heistId + AccessibilityElement
+        // (both Hashable) without wire conversion. This is the hot path for Pulse polling
+        // where most cycles produce no change.
+        if before.count == after.count {
+            var unchanged = true
+            for index in before.indices {
+                if before[index].heistId != after[index].heistId
+                    || before[index].element != after[index].element {
+                    unchanged = false
+                    break
+                }
+            }
+            if unchanged {
+                return InterfaceDelta(kind: .noChange, elementCount: after.count)
+            }
         }
 
-        // Same screen, something changed — element-level diff
-        return computeElementDelta(beforeEls: before, afterEls: after)
+        // Something changed — convert to wire for property-level diff
+        let beforeWire = toWire(before)
+        let afterWire = toWire(after)
+        return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
     }
 
     /// Semantic element diff — heistId is the sole matching key.
@@ -352,12 +379,19 @@ extension TheBagman {
 
 }
 
-// MARK: - HeistElement Array Helpers
+// MARK: - Array Helpers
 
 extension Array where Element == HeistElement {
     /// Label of the first header-traited element (screen name hint).
     var screenName: String? {
         first { $0.traits.contains(.header) }?.label
+    }
+}
+
+extension Array where Element == TheBagman.ScreenElement {
+    /// Label of the first header-traited element (screen name hint).
+    var screenName: String? {
+        first { $0.element.traits.contains(.header) }?.element.label
     }
 }
 
