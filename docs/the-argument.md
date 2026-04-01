@@ -69,25 +69,25 @@ Both tools achieve high accuracy on simple tasks. The differentiation is efficie
 | Task | idb | BH | BH + batching |
 |---|--:|--:|--:|
 | **Full workflow** (11 steps) | 51 | 14 | **9** |
-| **Calculator** | 24 | 4 | **4** |
+| **Calculator** | 23 | 4 | **4** |
 | **Todo CRUD** | 24 | 9 | **7** |
 | **Settings roundtrip** | 19 | 10 | **10** |
 | **Notes workflow** | 27 | 12 | **10** |
-| **Controls gauntlet** | 52 | 15 | **14** |
+| **Controls gauntlet** | 48 | 15 | **14** |
 | **Scroll hunt** | 36 | 15 | **14** |
-| **Bug verification** | 54 | 20 | **17** |
+| **Bug verification** | 55 | 20 | **17** |
 | **Marathon** (5 screens) | 81 (hit cap) | 71 | **62** |
 | **Swipe actions** | 21 | 7 | **6** |
 | **Scroll to find** | 22 | 9 | **8** |
 | **Stepper increment** | 17 | 5 | **5** |
 | **Search + filter** | 19 | 18 | **19** |
 
-BH uses 2-6x fewer turns than idb on most tasks. The gap is largest on multi-step tasks where deltas compound — calculator (6x) and full workflow (5.7x). Settings roundtrip (1.9x) and search + filter (~1x) are the low end — simple tasks where semantic addressing has less room to help. Batching adds 10-36% reduction on tasks with sequential workflows. idb hit the 80-turn cap on all three marathon trials.
+BH uses 2-6x fewer turns than idb on most tasks. The gap is largest on multi-step tasks where deltas compound — calculator (5.8x) and full workflow (5.7x). Settings roundtrip (1.9x) and search + filter (~1x) are the low end — simple tasks where semantic addressing has less room to help. Batching adds 10-36% reduction on tasks with sequential workflows. idb hit the 80-turn cap on all three marathon trials.
 
 Where the architecture difference shows up most:
 
 - **Swipe actions**: BH calls `perform_custom_action("Add to Order")` — one tool call per row. idb must compute swipe coordinates, reveal the button, re-read, then tap. **6 turns (batched) vs 21.**
-- **Controls gauntlet**: Mixed controls (toggles, steppers, sliders, pickers). BH completes in 14 turns with batching. idb needs 52. Steppers and custom controls are where accessibility-first activation pays off most.
+- **Controls gauntlet**: Mixed controls (toggles, steppers, sliders, pickers). BH completes in 14 turns with batching. idb needs 48. Steppers and custom controls are where accessibility-first activation pays off most.
 - **Marathon**: The endurance test — 5 screens, 40+ steps. BH completes reliably in ~62 batched turns. idb hit the 80-turn cap on every trial.
 
 **What batching buys you:**
