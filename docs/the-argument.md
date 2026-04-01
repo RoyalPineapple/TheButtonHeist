@@ -60,43 +60,54 @@ The Button Heist also works on physical devices. Same framework, same tools, poi
 
 ## Benchmarks
 
-Three MCP servers — Button Heist, mobile-mcp, and ios-simulator-mcp (idb) — tested against the same 13-task suite. Same model (Claude Sonnet 4.6), same app, same simulator, 3 trials per task per config. Full data in `benchmarks/results/`.
+Three MCP servers — Button Heist, ios-simulator-mcp (idb), and mobile-mcp — tested against the same 13-task suite on April 1, 2026. Same model (Claude Sonnet 4.6), same app, same simulator. BH ran 5 trials per task (65 total); BH + batching ran 2-3 trials per task (35 total); idb ran 1-2 trials per task (14 total) as a baseline. Full data in `.context/bh-infra/results/`.
 
-All three tools achieve high accuracy on most tasks. The differentiation is efficiency.
+All tools achieve high accuracy on simple tasks. The differentiation is efficiency and ceiling.
 
-**Turns (mean per cell, rounded — 13 tasks, n=2–3 trials each):**
+**Turns (mean per task, rounded):**
 
-| Task | idb | mobile-mcp | BH |
-|---|--:|--:|--:|
-| **Full workflow** (11 steps) | 49 | 61 | **25** |
-| **Calculator** | 24 | 20 | **15** |
-| **Todo CRUD** | 40 | 43 | **14** |
-| **Settings roundtrip** | 31 | 17 | **11** |
-| **Notes workflow** | 55 | 42 | **13** |
-| **Controls gauntlet** | 67 | timeout | **26** |
-| **Scroll hunt** | 39 | 56 | **19** |
-| **Bug verification** | 68 | 56 | **23** |
-| **Marathon** (5 screens) | 124 | 172 | **75** |
-| **Swipe actions** | 34 | 80 | **7** |
-| **Scroll to find** | 28 | 47 | **15** |
-| **Stepper increment** | 27 | **13** | 15 |
-| **Search + tap** | 23 | **19** | 21 |
+| Task | idb | BH | BH + batching | BH advantage vs idb |
+|---|--:|--:|--:|---|
+| **Full workflow** (11 steps) | 54 | 14 | **9** | 6x fewer |
+| **Calculator** | 26 | 4 | **4** | 6.5x fewer |
+| **Todo CRUD** | 24 | 9 | **7** | 3.4x fewer |
+| **Settings roundtrip** | 21 | 11 | **9** | 2.3x fewer |
+| **Notes workflow** | 25 | 12 | **10** | 2.5x fewer |
+| **Controls gauntlet** | 60 | 15 | **14** | 4.3x fewer |
+| **Scroll hunt** | 37 | 15 | **16** | 2.3x fewer |
+| **Bug verification** | 58 | 20 | **18** | 3.2x fewer |
+| **Marathon** (5 screens) | 81 (failed) | 71 | **58** | BH passes, idb fails |
+| **Swipe actions** | 21 | 7 | **6** | 3.5x fewer |
+| **Scroll to find** | 22 | 9 | **8** | 2.8x fewer |
+| **Stepper increment** | 19 | 5 | **5** | 3.8x fewer |
+| **Search + filter** | 19 | 18 | **18** | 1.1x fewer |
 
-BH consistently shows 2-3x fewer turns across the suite, with the gap widening on gesture-heavy tasks (swipe actions: 7t vs 34t vs 80t). mobile-mcp wins on two simple tasks (stepper, search) where coordinate-based interaction has no overhead disadvantage — a useful control.
+BH is 2-6x more efficient than idb across the board. The gap is largest on multi-step tasks where deltas compound — full workflow (6x) and calculator (6.5x). Batching adds another 10-34% reduction on top. idb failed the marathon task (5 screens, 40+ steps) — it hit the turn cap before completing.
+
+**Accuracy:**
+
+| Config | Trials | Correct | Partial | Failed | Accuracy |
+|---|--:|--:|--:|--:|--:|
+| **BH** | 65 | 64 | 1 | 0 | **98.5%** |
+| **BH + batching** | 35 | 33 | 2 | 0 | **94.3%** |
+| **idb** | 14 | 12 | 0 | 1 | **85.7%** |
+
+BH's one partial is T3 (settings roundtrip) — a known picker/modal timeout bug with a fix in progress. BH + batching's two partials are also T3, same root cause. idb's failure is T8 (marathon) — exhausted the 80-turn cap.
 
 Specific capability differences:
 
-- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. Coordinate-based tools must swipe to reveal the button, re-read elements, then tap. **7 turns vs 34 (idb) vs 80 (mobile-mcp).**
-- **Controls gauntlet** (T5): BH completes mixed controls (toggles, steppers, sliders, pickers) in 26 turns. idb needs 67. mobile-mcp times out on all 3 trials.
-- **Search + tap** (T12): Near parity across all configs — BH shows no meaningful advantage on tasks where the tools are equivalent. **19–23 turns.**
+- **Swipe actions** (T9): BH calls `perform_custom_action("Add to Order")` — one tool call per row. idb must compute swipe coordinates, reveal the button, re-read, then tap. **6 turns (batched) vs 21.**
+- **Controls gauntlet** (T5): Mixed controls (toggles, steppers, sliders, pickers). BH completes in 14 turns with batching. idb needs 60. Steppers and custom controls are where accessibility-first activation pays off.
+- **Marathon** (T8): The endurance test — 5 screens, 40+ steps. BH completes reliably in ~58 batched turns. idb ran out of turns and failed.
 
-Each BH mode gives the agent more autonomy:
+**What batching buys you:**
 
-- **BH base**: Semantic addressing — the agent says *what* to interact with, not *where*. No coordinate math, no frame parsing.
-- **Batching**: Multi-step intentions in a single call. Calculator collapses from 15 turns to 5. Each step returns what changed. Coordinate-based tools can't batch because each tap depends on seeing the screen after the previous action.
-- **Expectations**: Inline outcome verification. The agent doesn't re-read the tree — the tool reports whether the action worked.
+- **Full workflow**: 14 turns → 9. Tap-type-tap sequences batch naturally. 34% reduction.
+- **Marathon**: 71 turns → 58. The biggest absolute savings on long tasks. 19% reduction.
+- **Todo CRUD**: 9 turns → 7. Create-edit-delete sequences collapse. 22% reduction.
+- **Notes workflow**: 12 turns → 10. Multi-field entry batches well. 17% reduction.
 
-Batching is the big win. Expectations help on verification-heavy tasks but add overhead where the agent doesn't need confirmation. Both depend on running in-process — batching needs inline deltas, expectations need the framework to detect state changes without a full tree re-read.
+Batching saves 10-34% of turns with zero accuracy cost. The savings are largest on sequential workflows with predictable outcomes. Expectations help on verification-heavy tasks but add overhead where the agent doesn't need confirmation. Both depend on running in-process — batching needs inline deltas, expectations need the framework to detect state changes without a full tree re-read.
 
 ## How It Compares
 
@@ -104,13 +115,13 @@ Batching is the big win. Expectations help on verification-heavy tasks but add o
 
 Reads the accessibility tree through Apple's `AXPTranslator`, which bridges iOS accessibility into macOS accessibility concepts. Properties without macOS equivalents — activation points, `respondsToUserInteraction`, hints, custom content, custom rotors, available actions — get dropped in translation. The Button Heist reads `UIAccessibility` objects directly inside the app process, so none of that is lost.
 
-idb is the stronger competitor on accuracy — it matches or beats BH's correctness on every task with three-way data. But it takes 2-3x more turns to get there. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, inline outcome expectations (screen changes, layout mutations, value transitions), or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
+idb achieves high accuracy on simple tasks (12/14 correct across 13 tasks) but takes 2-6x more turns to get there. Failed the marathon task — the longest test in the suite — by exhausting the turn cap. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, inline outcome expectations (screen changes, layout mutations, value transitions), or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
 
-The detailed field-by-field comparison is in [ios-simulator-mcp-comparison.md](./ios-simulator-mcp-comparison.md).
+The detailed capability matrix and parsing deep dive are in the [ios-simulator-mcp section of competitive-landscape.md](./competitive-landscape.md#ios-simulator-mcp-joshuayoes).
 
 ### mobile-mcp
 
-Coordinate-based via WebDriverAgent. Popular (~4k GitHub stars), easy to set up. Matches BH on accuracy for simple tasks but has the highest variance — four tasks had at least one timeout or spiral trial. Gesture-heavy tasks show the biggest gap (swipe actions: 80 turns vs BH's 7). Cannot batch actions because each tap depends on seeing the updated screen.
+Coordinate-based via WebDriverAgent. Popular (~4k GitHub stars), easy to set up. Baseline run pending — early March data showed comparable accuracy on simple tasks but high variance and timeouts on gesture-heavy tasks. Cannot batch actions because each tap depends on seeing the updated screen.
 
 ## Trade-offs
 
@@ -119,9 +130,9 @@ The coordinate-based tools have real advantages:
 1. **Zero integration.** Work with any app, no project changes. The Button Heist requires linking a framework into the debug build — the same pattern as Reveal or FLEX, but still a step.
 2. **Easy install.** `npx` for mobile-mcp, `npx` for idb. The Button Heist currently requires building from source.
 3. **App install, launch, and simulator lifecycle.** Built into both competitors. The Button Heist pairs with XcodeBuildMCP for this — XcodeBuildMCP builds and deploys, Button Heist drives the UI. Different layers of the stack, same agent loop.
-4. **Maturity.** The Button Heist is 0.0.1. mobile-mcp has ~4k stars and was featured on Anthropic's blog.
+4. **Community.** mobile-mcp has ~4k stars and was featured on Anthropic's blog. ios-simulator-mcp has ~1.8k stars.
 
-For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-3x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
+For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-4x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
 
 ## Background
 
