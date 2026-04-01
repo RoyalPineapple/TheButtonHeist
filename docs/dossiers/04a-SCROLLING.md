@@ -58,31 +58,52 @@ It only cares whether the element's frame is geometrically within the screen rec
 
 ### What it does when an element is off-screen
 
-1. Checks `screenElement.scrollView` (from the accessibility hierarchy) first, then walks the UIKit ancestor chain via `nextAncestor(of:)` to find the nearest `UIScrollView` with `isScrollEnabled == true`
-2. Calls `scrollToMakeVisible(_:in:)` which converts the element's frame into the scroll view's coordinate space and adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
-3. Waits for the scroll animation to settle via `tripwire.waitForAllClear(timeout: 1.0)` — this uses presentation-layer diffing, not a fixed sleep
-4. Refreshes the element cache via `bagman.refreshAccessibilityData()` so subsequent reads (activation points, frames) reflect post-scroll positions
+Two paths, tried in order:
+
+**Primary path — live object resolved.** The element's `NSObject` is in the current accessibility tree (it's on screen or nearby enough for UIKit to keep it alive):
+
+1. Reads `object.accessibilityFrame` and checks `UIScreen.main.bounds.contains(frame)`
+2. Uses `screenElement.scrollView` to find the nearest `UIScrollView`
+3. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
+4. Waits for the scroll animation to settle via `tripwire.waitForAllClear(timeout: 1.0)` — presentation-layer diffing, not a fixed sleep
+5. Refreshes the element cache via `refresh()` so subsequent reads reflect post-scroll positions
+
+**Fallback path — full-scan-discovered element, live object not resolvable.** The element was discovered by `get_interface(full: true)` (exhaustive scroll) and is in `screenElements` with a valid `presentedHeistIds` entry, but has since scrolled off screen (cell reuse deallocated the `NSObject`). The stored `contentSpaceOrigin` and weak `scrollView` reference are still available:
+
+1. Checks `target` is a `.heistId`, the heistId is in `presentedHeistIds`, `contentSpaceOrigin` is non-nil, and the weak `scrollView` is still alive
+2. Calls `scrollTargetOffset(for:in:)` to compute a clamped content offset that centers the element in the viewport
+3. Sets `scrollView.setContentOffset(targetOffset, animated: false)` directly
+4. Waits for settle via `tripwire.waitForAllClear(timeout: 1.0)`, then `refresh()`
+5. Re-resolves the target (the element should now be on screen) and fine-tunes with `scrollToMakeVisible` if the frame is still not fully within screen bounds
 
 ```mermaid
 flowchart TD
     Cmd["Any interaction command"]
     Cmd --> HasTarget{element target<br/>or first responder?}
     HasTarget -->|no| Execute["Execute interaction"]
-    HasTarget -->|yes| Resolve["Resolve live NSObject"]
+    HasTarget -->|yes| Resolve["resolveTarget(target)"]
 
-    Resolve --> Frame["Read object.accessibilityFrame"]
+    Resolve --> Resolved{live object<br/>resolved?}
+    Resolved -->|yes| Frame["Read object.accessibilityFrame"]
     Frame --> Valid{non-null,<br/>non-empty?}
     Valid -->|no| Execute
     Valid -->|yes| OnScreen{frame within<br/>UIScreen.main.bounds?}
     OnScreen -->|yes| Execute
 
-    OnScreen -->|no| Walk["screenElement.scrollView<br/>?? ancestor walk"]
+    OnScreen -->|no| Walk["screenElement.scrollView"]
     Walk --> ScrollView{found UIScrollView?}
     ScrollView -->|no| Execute
     ScrollView -->|yes| Scroll["scrollToMakeVisible()<br/>minimum contentOffset adjustment"]
-    Scroll --> Settle["tripwire.waitForAllClear(1.0s)<br/>presentation-layer diffing"]
-    Settle --> Refresh["bagman.refreshAccessibilityData()<br/>rebuild element cache"]
+    Scroll --> Settle["waitForAllClear(1.0s)"]
+    Settle --> Refresh["refresh()"]
     Refresh --> Execute
+
+    Resolved -->|no| FullScan{"heistId in presentedHeistIds<br/>+ contentSpaceOrigin non-nil<br/>+ scrollView alive?"}
+    FullScan -->|no| Execute
+    FullScan -->|yes| Jump["scrollTargetOffset(for:in:)<br/>→ setContentOffset (centered, clamped)"]
+    Jump --> Settle2["waitForAllClear(1.0s) + refresh()"]
+    Settle2 --> FineTune["Re-resolve → scrollToMakeVisible<br/>(fine-tune if still off-screen)"]
+    FineTune --> Execute
 ```
 
 ### Entry points

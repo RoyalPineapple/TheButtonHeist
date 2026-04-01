@@ -11,14 +11,14 @@ extension TheInsideJob {
         let timeout = min(target.timeout ?? 5.0, 60.0)
         let settled = await tripwire.waitForAllClear(timeout: timeout)
 
-        guard let hierarchyTree = bagman.refreshAccessibilityData() else {
+        guard let parseResult = bagman.refresh() else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
-        let snapshot = bagman.snapshotElements()
-        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
-        let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
+        let snapshot = bagman.snapshot(.visible)
+        let tree = parseResult.hierarchy.map { bagman.convertHierarchyNode($0) }
+        let payload = Interface(timestamp: Date(), elements: bagman.toWire(snapshot), tree: tree)
 
         let result = ActionResult(
             success: true,

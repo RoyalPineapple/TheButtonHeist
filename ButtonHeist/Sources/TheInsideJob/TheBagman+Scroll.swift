@@ -47,10 +47,6 @@ extension TheBagman {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    func scrollableAxis(of scrollView: UIScrollView) -> ScrollAxis {
-        scrollableAxis(of: .uiScrollView(scrollView))
-    }
-
     func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
         var axis: ScrollAxis = []
         if target.contentSize.width > target.frame.width { axis.insert(.horizontal) }
@@ -97,7 +93,7 @@ extension TheBagman {
             let before = onScreen
             _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
             await tripwire.yieldFrames(2)
-            refreshAccessibilityData()
+            refresh()
             return onScreen != before
         }
     }
@@ -158,7 +154,7 @@ extension TheBagman {
                 if !stepped { break }
                 didMove = true
                 await tripwire.yieldFrames(2)
-                refreshAccessibilityData()
+                refresh()
                 if onScreen == before { break }
             }
             moved = didMove
@@ -187,7 +183,7 @@ extension TheBagman {
         let searchDirection = target.resolvedDirection
 
         // Already visible?
-        refreshAccessibilityData()
+        refresh()
         if let found = resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
             return foundResult(found, scrollCount: 0)
@@ -195,6 +191,32 @@ extension TheBagman {
 
         guard safecracker != nil else {
             return .failure(.scrollToVisible, message: "No gesture engine available")
+        }
+
+        // Fast path: if the element was discovered by a prior full scan, use its
+        // cached content-space position to jump directly instead of page-by-page search.
+        if case .heistId(let heistId) = searchTarget,
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
+           let origin = entry.contentSpaceOrigin,
+           let scrollView = entry.scrollView {
+            let savedOffset = scrollView.contentOffset
+            let targetOffset = scrollTargetOffset(for: origin, in: scrollView)
+            scrollView.setContentOffset(targetOffset, animated: false)
+            await tripwire.yieldFrames(3)
+            refresh()
+            if let found = resolveFirstMatch(searchTarget) {
+                ensureOnScreenSync(found, animated: false)
+                await tripwire.yieldFrames(3)
+                refresh()
+                if let freshFound = resolveFirstMatch(searchTarget) {
+                    return foundResult(freshFound, scrollCount: 1)
+                }
+            }
+            // Fast path failed — restore original scroll position so the slow
+            // page-by-page search starts from where the user left off.
+            scrollView.setContentOffset(savedOffset, animated: false)
+            await tripwire.yieldFrames(3)
+            refresh()
         }
 
         // Walk the hierarchy tree for scrollable containers (outermost first).
@@ -211,7 +233,7 @@ extension TheBagman {
         let maxScrolls = 200
 
         while scrollCount < maxScrolls {
-            guard let (scrollTarget, container) = findLiveScrollTarget(excluding: exhausted) else { break }
+            guard let (scrollTarget, container) = findScrollTarget(excluding: exhausted) else { break }
 
             let dir = adaptDirection(searchDirection, for: scrollTarget)
             let before = onScreen
@@ -221,12 +243,12 @@ extension TheBagman {
 
             await tripwire.yieldFrames(3)
             scrollCount += 1
-            refreshAccessibilityData()
+            refresh()
 
             if let found = resolveFirstMatch(searchTarget) {
                 ensureOnScreenSync(found, animated: false)
                 await tripwire.yieldFrames(3)
-                refreshAccessibilityData()
+                refresh()
                 if let freshFound = resolveFirstMatch(searchTarget) {
                     return foundResult(freshFound, scrollCount: scrollCount)
                 }
@@ -240,28 +262,32 @@ extension TheBagman {
     }
 
     /// Walk the cached hierarchy tree (pre-order = outermost first) and return the
-    /// first non-exhausted scrollable container as a `ScrollableTarget`.
-    /// The parser marks ALL containers where `_accessibilityIsScrollable == true` as
-    /// `.scrollable`, and `containerVisitor` resolves the inner UIScrollView child
-    /// for PlatformContainers. So this is a single tree walk — no fallback needed.
-    private func findLiveScrollTarget(
-        excluding exhausted: Set<AccessibilityContainer>
+    /// first scrollable container matching the criteria as a `ScrollableTarget`.
+    /// Optionally filters by axis and excludes already-exhausted containers.
+    private func findScrollTarget(
+        axis: ScrollAxis? = nil,
+        excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        cachedHierarchy.reducedHierarchy(
+        currentHierarchy.reducedHierarchy(
             nil as (ScrollableTarget, AccessibilityContainer)?
         ) { found, node in
             guard found == nil else { return found }
             guard case .container(let container, _) = node,
                   case .scrollable(let contentSize) = container.type,
                   !exhausted.contains(container) else { return nil }
+            let target: ScrollableTarget
             if let view = scrollableContainerViews[container], view.window != nil {
                 if let sv = view as? UIScrollView {
-                    return (.uiScrollView(sv), container)
+                    target = .uiScrollView(sv)
+                } else {
+                    let screenFrame = view.convert(view.bounds, to: nil)
+                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
                 }
-                let screenFrame = view.convert(view.bounds, to: nil)
-                return (.swipeable(frame: screenFrame, contentSize: contentSize), container)
+            } else {
+                target = .swipeable(frame: container.frame, contentSize: contentSize)
             }
-            return (.swipeable(frame: container.frame, contentSize: contentSize), container)
+            if let axis, !scrollableAxis(of: target).contains(axis) { return nil }
+            return (target, container)
         }
     }
 
@@ -277,12 +303,12 @@ extension TheBagman {
     }
 
     private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
-        let wireElement = convertAndAssignId(found.element, index: found.traversalIndex)
+        let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .scrollToVisible, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
                 scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
-                totalItems: nil, exhaustive: false, foundElement: wireElement
+                totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
     }
@@ -290,16 +316,44 @@ extension TheBagman {
     // MARK: - Ensure On Screen
 
     func ensureOnScreen(for target: ElementTarget) async {
-        guard let resolved = resolveTarget(target).resolved,
-              let object = resolved.screenElement.object else { return }
-        let frame = object.accessibilityFrame
-        guard !frame.isNull, !frame.isEmpty else { return }
-        guard !UIScreen.main.bounds.contains(frame) else { return }
-        guard let scrollView = resolved.screenElement.scrollView,
-              let safecracker else { return }
-        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+        if let resolved = resolveTarget(target).resolved,
+           let object = resolved.screenElement.object {
+            let frame = object.accessibilityFrame
+            guard !frame.isNull, !frame.isEmpty else { return }
+            guard !UIScreen.main.bounds.contains(frame) else { return }
+            guard let scrollView = resolved.screenElement.scrollView,
+                  let safecracker else { return }
+            if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+                _ = await tripwire.waitForAllClear(timeout: 1.0)
+                refresh()
+            }
+            return
+        }
+
+        // Off-screen path: element was discovered by a full scan but is not currently visible.
+        // Use the stored contentSpaceOrigin to scroll it into view.
+        if case .heistId(let heistId) = target,
+           !onScreen.contains(heistId),
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
+           let origin = entry.contentSpaceOrigin,
+           let scrollView = entry.scrollView,
+           let safecracker {
+            let targetOffset = scrollTargetOffset(for: origin, in: scrollView)
+            scrollView.setContentOffset(targetOffset, animated: false)
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            refreshAccessibilityData()
+            refresh()
+
+            // After scrolling, the element should be visible. Fine-tune with scrollToMakeVisible.
+            if let freshResolved = resolveTarget(target).resolved,
+               let freshObject = freshResolved.screenElement.object {
+                let frame = freshObject.accessibilityFrame
+                if !frame.isNull, !frame.isEmpty, !UIScreen.main.bounds.contains(frame) {
+                    if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+                        _ = await tripwire.waitForAllClear(timeout: 1.0)
+                        refresh()
+                    }
+                }
+            }
         }
     }
 
@@ -313,7 +367,7 @@ extension TheBagman {
               let safecracker else { return }
         if safecracker.scrollToMakeVisible(frame, in: scrollView) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            refreshAccessibilityData()
+            refresh()
         }
     }
 
@@ -345,37 +399,13 @@ extension TheBagman {
             if let axis, !scrollableAxis(of: target).contains(axis) {
                 // The stored scroll view can't scroll in the requested axis.
                 // Search the hierarchy tree for a container that can.
-                if let (axisTarget, _) = findScrollTargetForAxis(axis) {
+                if let (axisTarget, _) = findScrollTarget(axis: axis) {
                     return axisTarget
                 }
             }
             return target
         }
         return nil
-    }
-
-    /// Find a scrollable container from the hierarchy tree that can scroll on a given axis.
-    private func findScrollTargetForAxis(
-        _ axis: ScrollAxis
-    ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        cachedHierarchy.reducedHierarchy(nil as (ScrollableTarget, AccessibilityContainer)?) { found, node in
-            guard found == nil else { return found }
-            guard case .container(let container, _) = node,
-                  case .scrollable(let contentSize) = container.type else { return nil }
-            let target: ScrollableTarget
-            if let view = scrollableContainerViews[container], view.window != nil {
-                if let sv = view as? UIScrollView {
-                    target = .uiScrollView(sv)
-                } else {
-                    let screenFrame = view.convert(view.bounds, to: nil)
-                    target = .swipeable(frame: screenFrame, contentSize: contentSize)
-                }
-            } else {
-                target = .swipeable(frame: container.frame, contentSize: contentSize)
-            }
-            guard scrollableAxis(of: target).contains(axis) else { return nil }
-            return (target, container)
-        }
     }
 
     // MARK: - Direction Mapping
@@ -417,6 +447,24 @@ extension TheBagman {
         if axis.contains(.vertical) { return isForward ? .down : .up }
 
         return uiScrollDirection(for: direction)
+    }
+
+    // MARK: - Content-Space Scroll Offset
+
+    /// Compute a contentOffset that centers (or best-effort positions) a content-space
+    /// point within the scroll view's visible bounds, clamped to valid content range.
+    private func scrollTargetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
+        let visibleSize = scrollView.bounds.size
+        let insets = scrollView.adjustedContentInset
+        let contentSize = scrollView.contentSize
+
+        let maxX = max(contentSize.width + insets.right - visibleSize.width, -insets.left)
+        let maxY = max(contentSize.height + insets.bottom - visibleSize.height, -insets.top)
+
+        let targetX = min(max(contentOrigin.x - visibleSize.width / 2, -insets.left), maxX)
+        let targetY = min(max(contentOrigin.y - visibleSize.height / 2, -insets.top), maxY)
+
+        return CGPoint(x: targetX, y: targetY)
     }
 
 }

@@ -38,17 +38,18 @@ extension TheInsideJob {
     /// Single broadcast path: refresh, hash-compare, broadcast only on change.
     private func broadcastIfChanged() {
         guard muscle.hasSubscribers else { return }
-        guard let hierarchyTree = bagman.refreshAccessibilityData() else { return }
+        guard let parseResult = bagman.refresh() else { return }
 
-        let snapshot = bagman.snapshotElements()
-        let currentHash = snapshot.hashValue
+        let snapshot = bagman.snapshot(.visible)
+        let wireElements = bagman.toWire(snapshot)
+        let currentHash = wireElements.hashValue
 
         guard currentHash != bagman.lastHierarchyHash || hierarchyInvalidated else { return }
         hierarchyInvalidated = false
         bagman.lastHierarchyHash = currentHash
 
-        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
-        let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
+        let tree = parseResult.hierarchy.map { bagman.convertHierarchyNode($0) }
+        let payload = Interface(timestamp: Date(), elements: wireElements, tree: tree)
 
         broadcastToSubscribed(.interface(payload))
 
@@ -63,15 +64,15 @@ extension TheInsideJob {
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
-        guard let hierarchyTree = bagman.refreshAccessibilityData() else {
+        guard let parseResult = bagman.refresh() else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
-        let snapshot = bagman.snapshotElements()
-        let tree = hierarchyTree.map { bagman.convertHierarchyNode($0) }
+        let snapshot = bagman.snapshot(.visible)
+        let tree = parseResult.hierarchy.map { bagman.convertHierarchyNode($0) }
 
-        let payload = Interface(timestamp: Date(), elements: snapshot, tree: tree)
+        let payload = Interface(timestamp: Date(), elements: bagman.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
     }
 }
