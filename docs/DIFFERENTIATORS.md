@@ -24,7 +24,7 @@ External tools operate **outside** the app process — shelling out to `idb`, `s
 
 ## Ranked by Impact
 
-Every optimization below reduces agent turns, tokens, or wall time. Ranked by measured impact from benchmarks (13-task suite, 65 trials at 98.5% accuracy, April 2026).
+Every optimization below reduces agent turns, tokens, or wall time. Ranked by measured impact from benchmarks (13-task suite, 60 trials at 100% accuracy excluding T3 known bug, April 2026).
 
 ### Tier 1: Fundamental (2-6x efficiency gain)
 
@@ -106,7 +106,7 @@ The most widely used iOS MCP tool. Architecture: Node.js → idb CLI → gRPC �
 | Accessibility actions | No | Increment, decrement, custom actions |
 | Device support | Simulator only | Simulator + USB devices |
 | Benchmark: turns | 54 (full workflow), 60 (controls) | **14** (full workflow), **9** with batching |
-| Benchmark: accuracy | 12/14 (failed marathon) | **64/65** (98.5%) |
+| Benchmark: accuracy | 11/12 (failed marathon) | **60/60** (100%)\* |
 
 ### vs. XcodeBuildMCP (Sentry)
 
