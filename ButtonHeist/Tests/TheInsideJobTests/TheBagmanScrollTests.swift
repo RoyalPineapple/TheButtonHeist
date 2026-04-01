@@ -63,7 +63,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 200)
 
-        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertFalse(axis.contains(.vertical))
     }
@@ -72,7 +72,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertFalse(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -81,7 +81,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 2000)
 
-        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -90,7 +90,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
-        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.isEmpty)
     }
 
@@ -101,8 +101,8 @@ final class TheBagmanScrollTests: XCTestCase {
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(bagman.adaptDirection(.down, for: target), .down)
-        XCTAssertEqual(bagman.adaptDirection(.up, for: target), .up)
+        XCTAssertEqual(TheBagman.adaptDirection(.down, for: target), .down)
+        XCTAssertEqual(TheBagman.adaptDirection(.up, for: target), .up)
     }
 
     func testAdaptDirectionCrossAxis() {
@@ -110,9 +110,9 @@ final class TheBagmanScrollTests: XCTestCase {
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        XCTAssertEqual(bagman.adaptDirection(.down, for: target), .right,
+        XCTAssertEqual(TheBagman.adaptDirection(.down, for: target), .right,
                        "Forward vertical → forward horizontal")
-        XCTAssertEqual(bagman.adaptDirection(.up, for: target), .left,
+        XCTAssertEqual(TheBagman.adaptDirection(.up, for: target), .left,
                        "Backward vertical → backward horizontal")
     }
 
@@ -121,9 +121,9 @@ final class TheBagmanScrollTests: XCTestCase {
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(bagman.adaptDirection(.right, for: target), .down,
+        XCTAssertEqual(TheBagman.adaptDirection(.right, for: target), .down,
                        "Forward horizontal → forward vertical")
-        XCTAssertEqual(bagman.adaptDirection(.left, for: target), .up,
+        XCTAssertEqual(TheBagman.adaptDirection(.left, for: target), .up,
                        "Backward horizontal → backward vertical")
     }
 
