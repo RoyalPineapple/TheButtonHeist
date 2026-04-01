@@ -409,7 +409,6 @@ extension TheBagman {
         return nil
     }
 
-
     // MARK: - Direction Mapping
 
     func uiScrollDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
