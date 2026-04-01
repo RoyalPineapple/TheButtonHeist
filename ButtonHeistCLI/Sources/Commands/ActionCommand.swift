@@ -12,7 +12,7 @@ struct ActionCommand: AsyncParsableCommand {
             as a custom action name.
 
             Use --custom to force custom action interpretation when the name \
-            collides with a built-in (e.g. action --custom "increment").
+            collides with a built-in (e.g. action --custom increment btn_element).
 
             Examples:
               buttonheist action increment btn_slider
@@ -20,15 +20,15 @@ struct ActionCommand: AsyncParsableCommand {
               buttonheist action "Delete" btn_cell
               buttonheist action copy
               buttonheist action dismiss_keyboard
-              buttonheist action --custom "increment" btn_element
+              buttonheist action --custom increment btn_element
             """
     )
 
     @Argument(help: "Action: increment, decrement, copy, paste, cut, select, select_all, dismiss_keyboard, or custom action name")
     var action: String
 
-    @Option(name: .long, help: "Force custom action interpretation (when name collides with a built-in)")
-    var custom: String?
+    @Flag(name: .long, help: "Force custom action interpretation (when name collides with a built-in)")
+    var custom: Bool = false
 
     @OptionGroup var element: ElementTargetOptions
     @OptionGroup var connection: ConnectionOptions
@@ -43,10 +43,10 @@ struct ActionCommand: AsyncParsableCommand {
         var request: [String: Any]
         let verb: String
 
-        if let customName = custom {
+        if custom {
             _ = try element.requireTarget()
             command = TheFence.Command.performCustomAction.rawValue
-            request = ["command": command, "action": customName]
+            request = ["command": command, "action": action]
             try element.applyTo(&request)
             verb = "Custom action"
         } else {

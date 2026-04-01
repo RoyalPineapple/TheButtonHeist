@@ -9,6 +9,9 @@ struct TypeCommand: AsyncParsableCommand {
             Type text character-by-character and/or delete characters.
             Returns the current text field value after the operation.
 
+            A single positional argument is always interpreted as text, not \
+            as a heistId. Use -id or --heist-id to target without typing.
+
             Examples:
               buttonheist type "Hello" btn_nameField
               buttonheist type "Hello"
