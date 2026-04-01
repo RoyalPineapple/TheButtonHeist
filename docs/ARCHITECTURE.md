@@ -553,10 +553,10 @@ Observers never claim a session lock and cannot send commands. They receive the 
 ```mermaid
 flowchart TD
     A["tripwire.waitForAllClear()<br>(settle-driven, not timer-based)"] --> B["broadcastIfChanged()"]
-    B --> B1{"hasSubscribers?"}
+    B --> B2["bagman.refresh()<br/>(always runs — keeps state fresh)"]
+    B2 --> B1{"hasSubscribers?"}
     B1 -->|No| A
-    B1 -->|Yes| B2["bagman.refresh()<br/>(parse → apply)"]
-    B2 --> E["snapshot(.visible) → [ScreenElement]"]
+    B1 -->|Yes| E["snapshot(.visible) → [ScreenElement]"]
     E --> F["toWire() → [HeistElement]"]
     F --> G["Compute hash of elements array"]
     G --> H{"Hash changed?"}

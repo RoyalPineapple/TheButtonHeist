@@ -35,17 +35,20 @@ extension TheInsideJob {
         }
     }
 
-    /// Single broadcast path: refresh, hash-compare, broadcast only on change.
+    /// Refresh the hierarchy and broadcast to subscribers if it changed.
+    /// The refresh always runs — even without subscribers — so TheBagman's
+    /// state is never stale when a new client connects.
     private func broadcastIfChanged() {
-        guard muscle.hasSubscribers else { return }
         guard let parseResult = bagman.refresh() else { return }
+        hierarchyInvalidated = false
+
+        guard muscle.hasSubscribers else { return }
 
         let snapshot = bagman.snapshot(.visible)
         let wireElements = bagman.toWire(snapshot)
         let currentHash = wireElements.hashValue
 
-        guard currentHash != bagman.lastHierarchyHash || hierarchyInvalidated else { return }
-        hierarchyInvalidated = false
+        guard currentHash != bagman.lastHierarchyHash else { return }
         bagman.lastHierarchyHash = currentHash
 
         let tree = parseResult.hierarchy.map { bagman.convertHierarchyNode($0) }
