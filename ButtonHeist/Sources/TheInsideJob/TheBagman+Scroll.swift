@@ -211,11 +211,6 @@ extension TheBagman {
                 if let freshFound = resolveFirstMatch(searchTarget) {
                     return foundResult(freshFound, scrollCount: 1)
                 }
-                // found is stale after ensureOnScreenSync + refresh; re-resolve
-                // from the current snapshot to avoid returning outdated metadata.
-                if let reResolved = resolveFirstMatch(searchTarget) {
-                    return foundResult(reResolved, scrollCount: 1)
-                }
             }
             // Fast path failed — restore original scroll position so the slow
             // page-by-page search starts from where the user left off.
