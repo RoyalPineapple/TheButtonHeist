@@ -45,18 +45,16 @@ Every action returns an interface delta — elements added, removed, and changed
 
 If an expectation isn't met, the batch stops with diagnostics. The agent doesn't have to re-read the tree to verify outcomes — the tool reports them directly.
 
-Expectations follow a "say what you know" design. The agent expresses what it cares about and omits what it doesn't:
+Expectations say what the agent knows. Omit fields to loosen, add them to tighten:
 
 - `"screen_changed"` — did the view controller change?
 - `"layout_changed"` — were elements added or removed?
 - `{"value": "5"}` — does the target element's value match exactly?
+- `{"valueChanged": {}}` — did any value change at all?
 - `{"valueChanged": {"newValue": "5"}}` — did any element's value change to "5"?
 - `{"valueChanged": {"heistId": "counter", "oldValue": "3", "newValue": "5"}}` — did this specific element transition from "3" to "5"?
-- `{"valueChanged": {}}` — did any value change at all?
 
-Every field in `valueChanged` is optional — omit what you don't care about. On a miss, the framework reports what actually happened, so the agent gets diagnostics without a follow-up call.
-
-This composes with batching. A 5-step batch where each step carries a targeted expectation becomes a verification chain in a single MCP call. If step 3 expected `{"valueChanged": {"newValue": "5"}}` but the value went to "4", the batch stops there with diagnostics — no ambiguity about which action failed or why.
+Each step in a batch can carry an expectation. If step 3 expected `{"valueChanged": {"newValue": "5"}}` but the value went to "4", the batch stops there with diagnostics at the exact point of divergence.
 
 The Button Heist also works on physical devices. Same framework, same tools, pointed at real hardware instead of a simulator — an iPad connected to a Square Stand, for example.
 
