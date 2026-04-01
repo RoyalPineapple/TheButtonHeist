@@ -147,7 +147,12 @@ extension TheBagman {
             let order = orderByHeistId[heistId] ?? Int.max
             result.append((order, entry))
         }
-        return result.sorted { $0.0 < $1.0 }.map(\.1)
+        // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
+        // with heistId as tiebreaker for deterministic ordering within that group.
+        return result.sorted {
+            if $0.0 != $1.0 { return $0.0 < $1.0 }
+            return $0.1.heistId < $1.1.heistId
+        }.map(\.1)
     }
 
     /// Convert a ScreenElement to its wire representation.
@@ -250,10 +255,9 @@ extension TheBagman {
         afterTree: [AccessibilityHierarchy]?,
         isScreenChange: Bool
     ) -> InterfaceDelta {
-        let afterWire = toWire(after)
-
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
+            let afterWire = toWire(after)
             let tree = afterTree?.map { convertHierarchyNode($0) }
             let fullInterface = Interface(timestamp: Date(), elements: afterWire, tree: tree)
             return InterfaceDelta(
@@ -263,14 +267,26 @@ extension TheBagman {
             )
         }
 
-        let beforeWire = toWire(before)
-
-        // Same screen — quick check: if identical, nothing changed
-        if beforeWire.hashValue == afterWire.hashValue && beforeWire == afterWire {
-            return InterfaceDelta(kind: .noChange, elementCount: afterWire.count)
+        // Fast no-change check on internal types — compares heistId + AccessibilityElement
+        // (both Hashable) without wire conversion. This is the hot path for Pulse polling
+        // where most cycles produce no change.
+        if before.count == after.count {
+            var unchanged = true
+            for index in before.indices {
+                if before[index].heistId != after[index].heistId
+                    || before[index].element != after[index].element {
+                    unchanged = false
+                    break
+                }
+            }
+            if unchanged {
+                return InterfaceDelta(kind: .noChange, elementCount: after.count)
+            }
         }
 
-        // Same screen, something changed — element-level diff
+        // Something changed — convert to wire for property-level diff
+        let beforeWire = toWire(before)
+        let afterWire = toWire(after)
         return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
     }
 
