@@ -54,9 +54,9 @@ Expectations follow a "say what you know" design. The agent expresses what it ca
 - `{"valueChanged": {"heistId": "counter", "oldValue": "3", "newValue": "5"}}` — did this specific element transition from "3" to "5"?
 - `{"valueChanged": {}}` — did any value change at all?
 
-Every field in `valueChanged` is optional. Provide more to tighten the check, fewer to loosen it. The same mechanism scales from "did anything change?" to "did this exact element transition from 3 to 5?" — the agent matches its assertion specificity to its confidence level. The framework scans the interface delta for any match and reports what actually happened on miss, so the agent gets diagnostics without needing a follow-up call.
+Every field in `valueChanged` is optional. Provide more to tighten the check, fewer to loosen it. The same mechanism scales from "did anything change?" to "did this exact element transition from 3 to 5?" — the agent says as much or as little as it knows. The framework scans the interface delta for any match and reports what actually happened on miss, so the agent gets diagnostics without needing a follow-up call.
 
-This composes with batching. A 5-step batch where each step carries a targeted expectation gives the agent a full verification chain in a single MCP call. If step 3 expected `{"valueChanged": {"newValue": "5"}}` but the value went to "4", the batch stops there with diagnostics at the exact step that diverged — no ambiguity about which action failed or why.
+This composes with batching. A 5-step batch where each step carries a targeted expectation becomes a verification chain in a single MCP call. If step 3 expected `{"valueChanged": {"newValue": "5"}}` but the value went to "4", the batch stops there with diagnostics — no ambiguity about which action failed or why.
 
 The Button Heist also works on physical devices. Same framework, same tools, pointed at real hardware instead of a simulator — an iPad connected to a Square Stand, for example.
 
