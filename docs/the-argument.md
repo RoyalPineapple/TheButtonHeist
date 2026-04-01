@@ -111,7 +111,7 @@ This is the whole point. The tool should disappear into the agent's workflow. Wh
 
 Reads the accessibility tree through Apple's `AXPTranslator`, which bridges iOS accessibility into macOS accessibility concepts. Properties without macOS equivalents — activation points, `respondsToUserInteraction`, hints, custom content, custom rotors, available actions — get dropped in translation. The Button Heist reads `UIAccessibility` objects directly inside the app process, so none of that is lost.
 
-idb achieves high accuracy on simple tasks (12/14 correct across 13 tasks) but takes 2-6x more turns to get there. Failed the marathon task — the longest test in the suite — by exhausting the turn cap. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, inline outcome expectations (screen changes, layout mutations, value transitions), or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
+idb achieves high accuracy on simple tasks (12 of 14 trials correct across 13 tasks) but takes 2-6x more turns to get there. Failed the marathon task — the longest test in the suite — by exhausting the turn cap. Doesn't have deltas, idle detection, accessibility actions, multi-touch, batching, inline outcome expectations (screen changes, layout mutations, value transitions), or device support. Its dependency on Facebook's `idb` (archived, community-maintained) is a consideration.
 
 The detailed capability matrix and parsing deep dive are in the [ios-simulator-mcp section of competitive-landscape.md](./competitive-landscape.md#ios-simulator-mcp-joshuayoes).
 
@@ -128,7 +128,7 @@ The coordinate-based tools have real advantages:
 3. **App install, launch, and simulator lifecycle.** Built into both competitors. The Button Heist pairs with XcodeBuildMCP for this — XcodeBuildMCP builds and deploys, Button Heist drives the UI. Different layers of the stack, same agent loop.
 4. **Community.** mobile-mcp has ~4k stars and was featured on Anthropic's blog. ios-simulator-mcp has ~1.8k stars.
 
-For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-4x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
+For apps you don't control, mobile-mcp or idb is the right tool. For apps you're building — where you can embed the framework and where the 2-6x efficiency gain, batching, expectations, and real device support matter — The Button Heist is worth trying.
 
 ## Background
 

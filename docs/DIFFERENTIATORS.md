@@ -106,7 +106,6 @@ The most widely used iOS MCP tool. Architecture: Node.js → idb CLI → gRPC �
 | Accessibility actions | No | Increment, decrement, custom actions |
 | Device support | Simulator only | Simulator + USB devices |
 | Benchmark: turns | 54 (full workflow), 60 (controls) | **14** (full workflow), **9** with batching |
-| Benchmark: efficiency | 54 turns (full workflow) | **14 turns**, **9** with batching |
 
 ### vs. XcodeBuildMCP (Sentry)
 
