@@ -109,8 +109,9 @@ extension TheBagman {
     /// Capped at 20 elements to avoid flooding the response.
     func compactElementSummary() -> String {
         let cap = 20
-        let orderByHeistId = Dictionary(uniqueKeysWithValues:
-            heistIdByTraversalOrder.map { ($0.value, $0.key) }
+        let orderByHeistId = Dictionary(
+            heistIdByTraversalOrder.map { ($0.value, $0.key) },
+            uniquingKeysWith: { first, _ in first }
         )
         let visibleElements = screenElements.values
             .filter { onScreen.contains($0.heistId) }

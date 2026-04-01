@@ -132,8 +132,9 @@ extension TheBagman {
     /// at the serialization boundary via `toWire(_:)`.
     func snapshot(_ scope: SnapshotScope) -> [ScreenElement] {
         // Build heistId→order lookup from reverse index for sort ordering
-        let orderByHeistId = Dictionary(uniqueKeysWithValues:
-            heistIdByTraversalOrder.map { ($0.value, $0.key) }
+        let orderByHeistId = Dictionary(
+            heistIdByTraversalOrder.map { ($0.value, $0.key) },
+            uniquingKeysWith: { first, _ in first }
         )
         var result: [(Int, ScreenElement)] = []
         let candidates: [String] = switch scope {

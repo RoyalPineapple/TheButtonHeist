@@ -429,12 +429,19 @@ final class TheBagman {
 
         onScreen = visibleThisRefresh
 
-        // Cache screen name — first header by traversal order
-        lastScreenName = heistIdByTraversalOrder.sorted(by: { $0.key < $1.key })
-            .lazy
-            .compactMap { self.screenElements[$0.value] }
-            .first { $0.element.traits.contains(.header) }?
-            .element.label
+        // Cache screen name — first header by traversal order.
+        // Walk heistIds (already in traversal order) to find the first header in O(n).
+        var firstHeaderName: String?
+        var firstHeaderOrder = Int.max
+        for (order, heistId) in heistIdByTraversalOrder {
+            guard order < firstHeaderOrder,
+                  let entry = screenElements[heistId],
+                  entry.element.traits.contains(.header),
+                  let label = entry.element.label else { continue }
+            firstHeaderName = label
+            firstHeaderOrder = order
+        }
+        lastScreenName = firstHeaderName
     }
 
     /// Parse and apply in one step. Most callers use this.
