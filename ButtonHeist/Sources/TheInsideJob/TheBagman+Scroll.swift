@@ -303,8 +303,7 @@ extension TheBagman {
     }
 
     private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
-        var wire = convertElement(found.element, object: found.screenElement.object)
-        wire.heistId = found.screenElement.heistId
+        let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .scrollToVisible, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(

@@ -126,7 +126,7 @@ flowchart TD
 
 ## Error Diagnostics: Progressive Disclosure
 
-When `resolveTarget` returns nil, the caller invokes `elementNotFoundMessage(for:)` which produces a tiered diagnostic. Three tiers, from most to least specific:
+When `resolveTarget` returns `.notFound`, the `diagnostics` associated value contains a tiered diagnostic message. Three tiers, from most to least specific:
 
 ### Tier 1: Ambiguous — "too many matches"
 
