@@ -89,7 +89,7 @@ idb's companion uses `AXPTranslator` to bridge iOS accessibility into the macOS 
 
 **Known idb limitations**: UITabBar children bug ([idb#767](https://github.com/facebook/idb/issues/767)), WebView blind spot (WKWebView content in separate process), XPC translation loss.
 
-**Benchmark (April 2026, 13-task suite):** BH uses 2-6x fewer turns than idb across all tasks. idb failed the marathon task (81 turns, hit cap). BH accuracy: 100% on 12 tasks (60/60 trials; T3 excluded — known app bug). idb accuracy: 91.7% (11/12 excluding T3). See [the-argument.md](./the-argument.md) for full data.
+**Benchmark (April 2026, 13-task suite):** BH uses 2-6x fewer turns than idb across all tasks. Both tools are reliable — the differentiation is efficiency, not accuracy. See [the-argument.md](./the-argument.md) for full data.
 
 **Key limitations vs us**:
 - Coordinate-only interactions (no element-level `activate`)
