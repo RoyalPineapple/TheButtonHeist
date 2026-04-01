@@ -22,28 +22,27 @@ final class TheBagman {
     /// for synthetic touch when accessibility activation fails.
     weak var safecracker: TheSafecracker?
 
-    // MARK: - Element Storage
+    // MARK: - Parse Result
 
-    /// Parsed accessibility elements from the last hierarchy refresh.
-    /// Internal: read by TheInsideJob.performInteraction for before-snapshots,
-    /// mutated by TheBagman extensions and tests.
-    var cachedElements: [AccessibilityElement] = []
+    /// Everything the parser produces in a single read. Value type — no mutation,
+    /// no instance state. Created by `parse()`, consumed by `apply(_:)`.
+    struct ParseResult {
+        let elements: [AccessibilityElement]
+        let hierarchy: [AccessibilityHierarchy]
+        let objects: [AccessibilityElement: NSObject]
+        let scrollViews: [AccessibilityContainer: UIView]
+    }
 
-    /// Parsed accessibility hierarchy from the last refresh.
-    private(set) var cachedHierarchy: [AccessibilityHierarchy] = []
+    // MARK: - Volatile State (rebuilt each refresh)
+
+    /// Accessibility hierarchy from the last refresh. Used for matcher resolution
+    /// (uniqueMatch tree walk), scroll target discovery, and wire tree construction.
+    /// Set by apply(). Tests inject via @testable.
+    var currentHierarchy: [AccessibilityHierarchy] = []
 
     /// Maps scrollable containers from the hierarchy to their backing UIView.
     /// Rebuilt on each accessibility refresh. Check `as? UIScrollView` at point of use.
     private(set) var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
-
-    /// Weak reference wrapper for accessibility objects.
-    struct WeakObject {
-        weak var object: NSObject?
-    }
-
-    /// Weak references to accessibility objects from the last parse.
-    /// Used by refreshElement() for single-element re-parsing.
-    private var elementObjects: [AccessibilityElement: WeakObject] = [:]
 
     // MARK: - Screen-Lifetime Element Registry
 
@@ -57,12 +56,8 @@ final class TheBagman {
         let heistId: String
         /// Content-space position within nearest scrollable container (nil if not scrollable).
         let contentSpaceOrigin: CGPoint?
-        /// Parent container from the accessibility hierarchy (nil if top-level).
-        var container: AccessibilityContainer?
-        /// Most recent traversal index (updated each refresh if element is visible).
-        var lastTraversalIndex: Int
-        /// Wire representation (updated each refresh if element is visible).
-        var wire: HeistElement
+        /// Parsed accessibility element (updated each refresh if element is visible).
+        var element: AccessibilityElement
         /// Live UIKit object for action dispatch. Weak — nils on cell reuse.
         weak var object: NSObject?
         /// Parent scroll view for coordinate conversion. Weak — outlives children.
@@ -81,7 +76,7 @@ final class TheBagman {
     }
 
     /// Persistent element registry keyed by heistId. Lives for the screen's duration.
-    /// Populated during refreshAccessibilityData(), cleared on screen change.
+    /// Populated during apply(), cleared on screen change.
     /// TheBagman-only: mutated by extensions across files. Tests inject via @testable.
     var screenElements: [String: ScreenElement] = [:]
 
@@ -90,61 +85,51 @@ final class TheBagman {
     /// TheBagman-only: mutated by extensions across files.
     var onScreen: Set<String> = []
 
+    /// Reverse index: traversal order → heistId for the current visible set.
+    /// Rebuilt each refresh in apply(). Enables O(1) matcher resolution and sort ordering.
+    var heistIdByTraversalOrder: [Int: String] = [:]
+
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     /// Read/written by Pulse for change detection.
     var lastHierarchyHash: Int = 0
 
     /// Screen name from the registry (first header element by traversal order).
-    var lastScreenName: String? {
-        screenElements.values
-            .filter { $0.wire.traits.contains(.header) }
-            .min(by: { $0.lastTraversalIndex < $1.lastTraversalIndex })?
-            .wire.label
-    }
+    /// Computed once in `apply()` — avoids sorting heistIdByTraversalOrder on every access.
+    private(set) var lastScreenName: String?
 
     private let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
 
-    // MARK: - Element Access (index-based, for conversion)
+    // MARK: - Element Interactivity (object-based)
 
-    /// Look up the live NSObject by traversal index. Used during wire conversion.
-    func object(at index: Int) -> NSObject? {
-        for heistId in onScreen {
-            if let entry = screenElements[heistId], entry.lastTraversalIndex == index {
-                return entry.object
-            }
-        }
-        return nil
+    /// Check if an element is interactive given its parsed data and live object.
+    func isInteractive(element: AccessibilityElement, object: NSObject?) -> Bool {
+        guard let object else { return false }
+        return element.respondsToUserInteraction
+            || element.traits.contains(.adjustable)
+            || !element.customActions.isEmpty
+            || object.accessibilityRespondsToUserInteraction
     }
 
-    /// Check if an interactive object exists at the given traversal index.
-    func hasInteractiveObject(at index: Int) -> Bool {
-        guard let obj = object(at: index) else { return false }
-        let el = cachedElements[index]
-        return el.respondsToUserInteraction
-            || el.traits.contains(.adjustable)
-            || !el.customActions.isEmpty
-            || obj.accessibilityRespondsToUserInteraction
-    }
-
-    /// Return custom action names for the element at the given index.
-    func customActionNames(elementAt index: Int) -> [String] {
-        object(at: index)?.accessibilityCustomActions?.map { $0.name } ?? []
+    /// Return custom action names from a live NSObject.
+    func customActionNames(from object: NSObject?) -> [String] {
+        object?.accessibilityCustomActions?.map { $0.name } ?? []
     }
 
     // MARK: - Unified Element Resolution
 
     /// Result of resolving an ElementTarget to a concrete element.
+    /// All data lives on `screenElement` — element, wire, spatial, UIKit refs.
     struct ResolvedTarget {
         let screenElement: ScreenElement
-        let element: AccessibilityElement
-        let traversalIndex: Int
+
+        var element: AccessibilityElement { screenElement.element }
     }
 
-    /// Three-case result from `resolveTarget` — eliminates the redundant
-    /// `elementNotFoundMessage` re-scan by producing diagnostics inline.
+    /// Three-case result from `resolveTarget` — diagnostics are produced
+    /// inline during resolution, not via a separate re-scan.
     enum TargetResolution {
         case resolved(ResolvedTarget)
         case notFound(diagnostics: String)
@@ -168,14 +153,7 @@ final class TheBagman {
 
     /// Check if the element supports interaction.
     func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
-        guard let obj = screenElement.object else { return false }
-        let index = screenElement.lastTraversalIndex
-        guard index >= 0, index < cachedElements.count else { return false }
-        let element = cachedElements[index]
-        return element.respondsToUserInteraction
-            || element.traits.contains(.adjustable)
-            || !element.customActions.isEmpty
-            || obj.accessibilityRespondsToUserInteraction
+        isInteractive(element: screenElement.element, object: screenElement.object)
     }
 
     /// Perform accessibilityActivate.
@@ -218,18 +196,13 @@ final class TheBagman {
             guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else {
                 return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
             }
-            let i = entry.lastTraversalIndex
-            guard i >= 0, i < cachedElements.count else {
-                return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
-            }
-            return .resolved(ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i))
+            return .resolved(ResolvedTarget(screenElement: entry))
         case .matcher(let matcher):
-            let source: [AccessibilityHierarchy] = cachedHierarchy.isEmpty
-                ? cachedElements.enumerated().map { .element($0.element, traversalIndex: $0.offset) }
-                : cachedHierarchy
+            let source = currentHierarchy
             if let unique = source.uniqueMatch(matcher) {
-                if let screenElement = screenElements.values.first(where: { $0.lastTraversalIndex == unique.traversalIndex }) {
-                    return .resolved(ResolvedTarget(screenElement: screenElement, element: unique.element, traversalIndex: unique.traversalIndex))
+                if let heistId = heistIdByTraversalOrder[unique.traversalIndex],
+                   let screenElement = screenElements[heistId] {
+                    return .resolved(ResolvedTarget(screenElement: screenElement))
                 }
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
             }
@@ -261,20 +234,19 @@ final class TheBagman {
         switch target {
         case .heistId(let heistId):
             guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else { return nil }
-            let i = entry.lastTraversalIndex
-            guard i >= 0, i < cachedElements.count else { return nil }
-            return ResolvedTarget(screenElement: entry, element: cachedElements[i], traversalIndex: i)
+            return ResolvedTarget(screenElement: entry)
         case .matcher(let matcher):
             guard let found = findMatch(matcher) else { return nil }
-            guard let screenElement = screenElements.values.first(where: { $0.lastTraversalIndex == found.index }) else { return nil }
-            return ResolvedTarget(screenElement: screenElement, element: found.element, traversalIndex: found.index)
+            guard let heistId = heistIdByTraversalOrder[found.index],
+                  let screenElement = screenElements[heistId] else { return nil }
+            return ResolvedTarget(screenElement: screenElement)
         }
     }
 
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
     /// For heistId: checks presentedHeistIds (elements sent to clients).
-    /// For matcher: checks cachedHierarchy/cachedElements.
+    /// For matcher: checks currentHierarchy.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
@@ -305,132 +277,6 @@ final class TheBagman {
         return nil
     }
 
-    /// Build a diagnostic message for a failed element lookup.
-    /// Delegates to `resolveTarget` so diagnostics are computed once.
-    func elementNotFoundMessage(for target: ElementTarget) -> String {
-        resolveTarget(target).diagnostics
-    }
-
-    private func heistIdNotFoundMessage(_ heistId: String) -> String {
-        let similar = screenElements.keys.sorted()
-            .filter { $0.contains(heistId) || heistId.contains($0) }
-        if similar.isEmpty {
-            let count = cachedElements.count
-            return "Element not found: \"\(heistId)\" (\(count) elements on screen)"
-        }
-        return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
-    }
-
-    /// Diagnostics for a matcher that had zero matches (not ambiguous — that's
-    /// handled by `resolveTarget` returning `.ambiguous`).
-    private func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
-        let query = formatMatcher(matcher)
-
-        // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
-        if let nearMiss = findNearMiss(for: matcher) {
-            return "No match for: \(query)\n\(nearMiss)"
-        }
-
-        // Tier 2: Nothing close — dump a compact summary and suggest looking for a search field.
-        return "No match for: \(query)\n\(compactElementSummary())"
-    }
-
-    /// Format a matcher's predicates as a human-readable query string.
-    private func formatMatcher(_ matcher: ElementMatcher) -> String {
-        var fields: [String] = []
-        if let l = matcher.label { fields.append("label=\"\(l)\"") }
-        if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
-        if let v = matcher.value { fields.append("value=\"\(v)\"") }
-        if let t = matcher.traits { fields.append("traits=[\(t.map(\.rawValue).joined(separator: ","))]") }
-        if let e = matcher.excludeTraits { fields.append("excludeTraits=[\(e.map(\.rawValue).joined(separator: ","))]") }
-        return fields.joined(separator: " ")
-    }
-
-    /// Try relaxing one predicate at a time. Value is relaxed first (most likely
-    /// to drift — e.g. slider moved), then traits, label, identifier.
-    /// Only considers relaxations that still have at least one remaining predicate —
-    /// dropping the only predicate matches everything, which isn't a useful near-miss.
-    /// Returns a diagnostic line or nil if no near-miss found.
-    private func findNearMiss(for matcher: ElementMatcher) -> String? {
-        typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
-        var relaxations: [Relaxation] = []
-
-        if matcher.value != nil {
-            relaxations.append((
-                field: "value",
-                relaxed: ElementMatcher(
-                    label: matcher.label, identifier: matcher.identifier,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.value ?? "(nil)" }
-            ))
-        }
-        if matcher.traits != nil {
-            relaxations.append((
-                field: "traits",
-                relaxed: ElementMatcher(
-                    label: matcher.label, identifier: matcher.identifier,
-                    value: matcher.value, excludeTraits: matcher.excludeTraits                ),
-                actual: { el in
-                    UIAccessibilityTraits.knownTraits
-                        .filter { el.traits.contains($0.trait) }
-                        .map(\.name).joined(separator: ", ")
-                }
-            ))
-        }
-        if matcher.label != nil {
-            relaxations.append((
-                field: "label",
-                relaxed: ElementMatcher(
-                    identifier: matcher.identifier, value: matcher.value,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.label ?? "(nil)" }
-            ))
-        }
-        if matcher.identifier != nil {
-            relaxations.append((
-                field: "identifier",
-                relaxed: ElementMatcher(
-                    label: matcher.label, value: matcher.value,
-                    traits: matcher.traits, excludeTraits: matcher.excludeTraits                ),
-                actual: { $0.identifier ?? "(nil)" }
-            ))
-        }
-
-        for r in relaxations where r.relaxed.hasPredicates {
-            if let found = findMatch(r.relaxed) {
-                let actualValue = r.actual(found.element)
-                return "near miss: matched all fields except \(r.field) — actual \(r.field)=\(actualValue)"
-            }
-        }
-        return nil
-    }
-
-    /// Compact summary of on-screen elements for total-miss fallback.
-    /// Capped at 20 elements to avoid flooding the response.
-    private func compactElementSummary() -> String {
-        let cap = 20
-        let elements = cachedElements.prefix(cap)
-        if elements.isEmpty {
-            return "screen is empty (0 elements)"
-        }
-        var lines = ["\(cachedElements.count) elements on screen:"]
-        for el in elements {
-            var parts: [String] = []
-            if let label = el.label, !label.isEmpty { parts.append("label=\"\(label)\"") }
-            if let id = el.identifier, !id.isEmpty { parts.append("id=\"\(id)\"") }
-            if let val = el.value, !val.isEmpty { parts.append("value=\"\(val)\"") }
-            let traitNames = UIAccessibilityTraits.knownTraits
-                .filter { el.traits.contains($0.trait) }
-                .map(\.name)
-            if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
-            lines.append("  \(parts.joined(separator: " "))")
-        }
-        if cachedElements.count > cap {
-            lines.append("  ... and \(cachedElements.count - cap) more")
-        }
-        return lines.joined(separator: "\n")
-    }
-
     /// Resolve a screen point from an element target or explicit coordinates.
     func resolvePoint(
         from elementTarget: ElementTarget?,
@@ -455,66 +301,38 @@ final class TheBagman {
         resolveTarget(elementTarget).resolved?.element.shape.frame
     }
 
-    // Scroll command execution moved to TheBagman+Scroll.swift
-
-    // MARK: - Refresh
+    // MARK: - Refresh Pipeline
 
     /// Trigger a refresh of the accessibility data.
     /// - Returns: true if data was successfully refreshed.
     @discardableResult
     func refreshElements() -> Bool {
-        refreshAccessibilityData() != nil
-    }
-
-    // MARK: - Targeted Element Refresh
-
-    /// Re-parse a single element from its backing NSObject without a full tree refresh.
-    /// Returns the updated AccessibilityElement, or nil if the object has been deallocated.
-    func refreshElement(at index: Int) -> AccessibilityElement? {
-        guard let object = object(at: index) else { return nil }
-        let probe = ButtonHeistHostingView(target: object)
-        let hierarchy = parser.parseAccessibilityHierarchy(in: probe, rotorResultLimit: 0)
-        guard let updated = hierarchy.flattenToElements().first else { return nil }
-
-        // Update the cache in place
-        let stale = cachedElements[index]
-        cachedElements[index] = updated
-        elementObjects[stale] = nil
-        elementObjects[updated] = WeakObject(object: object)
-        return updated
-    }
-
-    /// Re-parse a single element identified by its AccessibilityElement key.
-    func refreshElement(_ element: AccessibilityElement) -> AccessibilityElement? {
-        guard let index = cachedElements.firstIndex(of: element) else { return nil }
-        return refreshElement(at: index)
+        refresh() != nil
     }
 
     /// Clear all cached element data (used on suspend).
     func clearCache() {
-        cachedHierarchy.removeAll()
-        cachedElements.removeAll()
+        currentHierarchy.removeAll()
         screenElements.removeAll()
         presentedHeistIds.removeAll()
         onScreen.removeAll()
+        heistIdByTraversalOrder.removeAll()
         lastHierarchyHash = 0
     }
 
-    // MARK: - Accessibility Data Refresh
+    // MARK: - Parse (read-only)
 
-    /// Refresh the accessibility hierarchy. Provides a visitor closure to the parser
-    /// that captures weak references to interactive objects for action dispatch.
-    /// Returns the hierarchy tree for callers that need it (e.g., sendInterface).
-    @discardableResult
-    func refreshAccessibilityData() -> [AccessibilityHierarchy]? {
+    /// Read the live accessibility tree without mutating any state.
+    /// Returns a ParseResult value that can be inspected (e.g., for topology comparison)
+    /// before deciding whether to apply it.
+    func parse() -> ParseResult? {
         let windows = tripwire.getTraversableWindows()
         guard !windows.isEmpty else { return nil }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var newElementObjects: [AccessibilityElement: WeakObject] = [:]
         var allElements: [AccessibilityElement] = []
-
-        var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
+        var allObjects: [AccessibilityElement: NSObject] = [:]
+        var allScrollViews: [AccessibilityContainer: UIView] = [:]
 
         // Accessibility property reads return autoreleased ObjC objects.
         // Draining per-window keeps high-water mark proportional to one window's tree.
@@ -525,16 +343,11 @@ final class TheBagman {
                     in: rootView,
                     rotorResultLimit: 0,
                     elementVisitor: { element, _, object in
-                        newElementObjects[element] = WeakObject(object: object)
+                        allObjects[element] = object
                     },
                     containerVisitor: { container, object in
                         if case .scrollable = container.type, let view = object as? UIView {
-                            // Store the view as-is. If it's a UIScrollView, we use
-                            // setContentOffset directly. If not (PlatformContainer),
-                            // we try SPI page scroll then fall back to swipe.
-                            // No subview digging — the view the parser gave us is
-                            // the one the accessibility system considers scrollable.
-                            scrollableContainerViews[container] = view
+                            allScrollViews[container] = view
                         }
                     }
                 )
@@ -560,80 +373,54 @@ final class TheBagman {
             }
         }
 
-        elementObjects = newElementObjects
-        cachedHierarchy = allHierarchy
-        cachedElements = allElements
-
-        // Build raw object lookup for updateScreenElements (unwrap WeakObject)
-        var rawObjects: [AccessibilityElement: NSObject] = [:]
-        for (element, weakObj) in newElementObjects {
-            if let obj = weakObj.object { rawObjects[element] = obj }
-        }
-
-        // Update the screen element registry — flows live object refs into ScreenElement
-        updateScreenElements(scrollableContainerViews: scrollableContainerViews, elementObjects: rawObjects)
-
-        return allHierarchy
+        return ParseResult(
+            elements: allElements,
+            hierarchy: allHierarchy,
+            objects: allObjects,
+            scrollViews: allScrollViews
+        )
     }
 
-    /// Rebuild screenElements from current cached data without scroll view context.
-    /// Used after screen change wipe — the next full refresh will add scroll context.
-    private func rebuildScreenElements() {
-        var rawObjects: [AccessibilityElement: NSObject] = [:]
-        for (element, weakObj) in elementObjects {
-            if let obj = weakObj.object { rawObjects[element] = obj }
-        }
-        updateScreenElements(scrollableContainerViews: [:], elementObjects: rawObjects)
-    }
+    // MARK: - Apply (mutates registry)
 
-    /// Per-element context gathered during the hierarchy walk.
-    private struct ElementContext {
-        let contentSpaceOrigin: CGPoint?
-        let container: AccessibilityContainer?
-        weak var scrollView: UIScrollView?
-        weak var object: NSObject?
-    }
+    /// Apply a parse result to the registry. Sets `currentHierarchy`,
+    /// `scrollableContainerViews`, upserts into `screenElements`, rebuilds `onScreen`.
+    func apply(_ result: ParseResult) {
+        currentHierarchy = result.hierarchy
+        scrollableContainerViews = result.scrollViews
 
-    /// Update the screenElements dictionary after a refresh.
-    /// Walks the hierarchy tree to derive per-element context (content-space origins,
-    /// scroll view refs, containers, live objects) — all from the accessibility tree.
-    private func updateScreenElements(
-        scrollableContainerViews newViews: [AccessibilityContainer: UIView],
-        elementObjects: [AccessibilityElement: NSObject]
-    ) {
-        scrollableContainerViews = newViews
         // Track which heistIds are in this refresh's visible set
         var visibleThisRefresh: Set<String> = []
 
-        var wireElements = cachedElements.enumerated().map { convertElement($0.element, index: $0.offset) }
-        assignHeistIds(&wireElements)
-
-        // Walk hierarchy to gather per-element context
+        // Walk hierarchy to gather per-element context (objects, scroll views, content origins)
         var contexts: [Int: ElementContext] = [:]
         walkHierarchy(
-            cachedHierarchy, scrollView: nil, container: nil,
-            scrollableContainerViews: scrollableContainerViews, elementObjects: elementObjects,
+            result.hierarchy, scrollView: nil,
+            scrollableContainerViews: result.scrollViews, elementObjects: result.objects,
             contexts: &contexts
         )
 
-        // Phase 4: upsert into screenElements with live object refs
-        for (index, wire) in wireElements.enumerated() {
-            let ctx = contexts[index]
-            visibleThisRefresh.insert(wire.heistId)
+        // Assign heistIds from AccessibilityElements directly — no wire conversion needed
+        let heistIds = assignHeistIds(result.elements)
 
-            if var existing = screenElements[wire.heistId] {
-                existing.lastTraversalIndex = index
-                existing.wire = wire
+        // Upsert into screenElements and build reverse index
+        heistIdByTraversalOrder.removeAll(keepingCapacity: true)
+        for (index, heistId) in heistIds.enumerated() {
+            let ctx = contexts[index]
+            visibleThisRefresh.insert(heistId)
+            heistIdByTraversalOrder[index] = heistId
+            let parsedElement = result.elements[index]
+
+            if var existing = screenElements[heistId] {
+                existing.element = parsedElement
                 existing.object = ctx?.object
                 existing.scrollView = ctx?.scrollView
-                screenElements[wire.heistId] = existing
+                screenElements[heistId] = existing
             } else {
-                screenElements[wire.heistId] = ScreenElement(
-                    heistId: wire.heistId,
+                screenElements[heistId] = ScreenElement(
+                    heistId: heistId,
                     contentSpaceOrigin: ctx?.contentSpaceOrigin,
-                    container: ctx?.container,
-                    lastTraversalIndex: index,
-                    wire: wire,
+                    element: parsedElement,
                     object: ctx?.object,
                     scrollView: ctx?.scrollView
                 )
@@ -641,15 +428,37 @@ final class TheBagman {
         }
 
         onScreen = visibleThisRefresh
+
+        // Cache screen name — first header by traversal order
+        lastScreenName = heistIdByTraversalOrder.sorted(by: { $0.key < $1.key })
+            .lazy
+            .compactMap { self.screenElements[$0.value] }
+            .first { $0.element.traits.contains(.header) }?
+            .element.label
+    }
+
+    /// Parse and apply in one step. Most callers use this.
+    /// Returns the ParseResult for callers that need the hierarchy tree or elements.
+    @discardableResult
+    func refresh() -> ParseResult? {
+        guard let result = parse() else { return nil }
+        apply(result)
+        return result
+    }
+
+    /// Per-element context gathered during the hierarchy walk.
+    private struct ElementContext {
+        let contentSpaceOrigin: CGPoint?
+        weak var scrollView: UIScrollView?
+        weak var object: NSObject?
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// parent containers, scroll view refs, and live element objects. All derived from
+    /// scroll view refs, and live element objects. All derived from
     /// the accessibility hierarchy — no view hierarchy walking.
     private func walkHierarchy(
         _ nodes: [AccessibilityHierarchy],
         scrollView: UIScrollView?,
-        container: AccessibilityContainer?,
         scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject],
         contexts: inout [Int: ElementContext]
@@ -668,7 +477,6 @@ final class TheBagman {
                 }
                 contexts[traversalIndex] = ElementContext(
                     contentSpaceOrigin: origin,
-                    container: container,
                     scrollView: scrollView,
                     object: elementObjects[element]
                 )
@@ -676,7 +484,7 @@ final class TheBagman {
             case .container(let ctr, let children):
                 let childScrollView = (scrollableContainerViews[ctr] as? UIScrollView) ?? scrollView
                 walkHierarchy(
-                    children, scrollView: childScrollView, container: ctr,
+                    children, scrollView: childScrollView,
                     scrollableContainerViews: scrollableContainerViews, elementObjects: elementObjects,
                     contexts: &contexts
                 )
@@ -726,8 +534,8 @@ final class TheBagman {
         method: ActionMethod,
         message: String? = nil,
         value: String? = nil,
-        beforeSnapshot: [HeistElement],
-        beforeCachedElements: [AccessibilityElement],
+        beforeSnapshot: [ScreenElement],
+        beforeElements: [AccessibilityElement],
         beforeVC: ObjectIdentifier? = nil,
         target: ElementTarget? = nil
     ) async -> ActionResult {
@@ -744,25 +552,27 @@ final class TheBagman {
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
-        // Single read of the post-settle state
-        let afterTree = refreshAccessibilityData()
+        // Parse without mutating — detect screen change before touching the registry.
+        let afterResult = parse()
 
         // Screen change gate: VC identity OR accessibility topology
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: beforeVC, after: afterVC)
-            || isTopologyChanged(before: beforeCachedElements, after: cachedElements)
+            || isTopologyChanged(before: beforeElements, after: afterResult?.elements ?? [])
         if isScreenChange {
-            // Scorched earth — blow away everything from the old screen.
-            // refreshAccessibilityData() above upserted new-screen entries into
-            // the old-screen dictionary. Wipe and rebuild clean.
+            // Clear the old screen's registry before applying new data.
+            // No mixed state — the old registry is gone before new entries arrive.
             screenElements.removeAll()
             presentedHeistIds.removeAll()
-            rebuildScreenElements()
+            heistIdByTraversalOrder.removeAll()
+        }
+        if let afterResult {
+            apply(afterResult)
         }
         let afterSnapshot = snapshot(.visible)
         let delta = computeDelta(
             before: beforeSnapshot, after: afterSnapshot,
-            afterTree: afterTree, isScreenChange: isScreenChange
+            afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
         )
 
         // Capture a recording frame after the action completes
@@ -792,53 +602,6 @@ final class TheBagman {
             elementTraits: elementTraits,
             screenName: afterSnapshot.screenName
         )
-    }
-
-    // MARK: - Screen Capture
-
-    /// Capture the screen by compositing all traversable windows.
-    func captureScreen() -> (image: UIImage, bounds: CGRect)? {
-        let windows = tripwire.getTraversableWindows()
-        guard let background = windows.last else { return nil }
-        let bounds = background.window.bounds
-
-        let renderer = UIGraphicsImageRenderer(bounds: bounds)
-        let image = renderer.image { _ in
-            // Draw windows bottom-to-top (lowest level first) so frontmost paints on top
-            for (window, _) in windows.reversed() {
-                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
-            }
-        }
-        return (image, bounds)
-    }
-
-    /// Capture the screen including the fingerprint overlay (for recordings).
-    /// Unlike captureScreen(), this includes TheFingerprints.FingerprintWindow so
-    /// tap/swipe indicators are visible in the video.
-    func captureScreenForRecording() -> UIImage? {
-        guard let windowScene = UIApplication.shared.connectedScenes
-                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
-            return nil
-        }
-
-        let allWindows = windowScene.windows
-            .filter { !$0.isHidden && $0.bounds.size != .zero }
-            .sorted { $0.windowLevel < $1.windowLevel }
-
-        guard let background = allWindows.first else { return nil }
-        let bounds = background.bounds
-
-        let renderer = UIGraphicsImageRenderer(bounds: bounds)
-        return renderer.image { _ in
-            for window in allWindows {
-                window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
-            }
-        }
-    }
-
-    /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
-    func captureActionFrame() {
-        stakeout?.captureActionFrame()
     }
 }
 

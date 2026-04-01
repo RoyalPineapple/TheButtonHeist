@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import XCTest
+@testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -28,8 +29,8 @@ final class TheBagmanScrollTests: XCTestCase {
         let screenElement = TheBagman.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            lastTraversalIndex: 0,
-            wire: makeWire(heistId: "item"),
+            element: dummyElement(),
+
             object: UILabel(),
             scrollView: scrollView
         )
@@ -46,8 +47,8 @@ final class TheBagmanScrollTests: XCTestCase {
         let screenElement = TheBagman.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            lastTraversalIndex: 0,
-            wire: makeWire(heistId: "item"),
+            element: dummyElement(),
+
             object: UILabel(),
             scrollView: nil
         )
@@ -62,7 +63,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 200)
 
-        let axis = bagman.scrollableAxis(of: scrollView)
+        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertFalse(axis.contains(.vertical))
     }
@@ -71,7 +72,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let axis = bagman.scrollableAxis(of: scrollView)
+        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertFalse(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -80,7 +81,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 2000)
 
-        let axis = bagman.scrollableAxis(of: scrollView)
+        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -89,7 +90,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
-        let axis = bagman.scrollableAxis(of: scrollView)
+        let axis = bagman.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.isEmpty)
     }
 
@@ -128,12 +129,23 @@ final class TheBagmanScrollTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeWire(heistId: String) -> HeistElement {
-        HeistElement(
-            heistId: heistId, description: "", label: nil, value: nil,
-            identifier: nil, hint: nil, traits: [], frameX: 0, frameY: 0,
-            frameWidth: 0, frameHeight: 0, activationPointX: 0, activationPointY: 0,
-            actions: []
+    private func dummyElement() -> AccessibilityElement {
+        AccessibilityElement(
+            description: "",
+            label: nil,
+            value: nil,
+            traits: .none,
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .frame(.zero),
+            activationPoint: .zero,
+            usesDefaultActivationPoint: true,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: false
         )
     }
 }
