@@ -34,9 +34,62 @@ These tools compete directly with Button Heist for the same use case: letting AI
 
 [GitHub](https://github.com/joshuayoes/ios-simulator-mcp) | ~1,800 stars | TypeScript/Node.js
 
-The most widely referenced iOS-only MCP tool. Featured in Anthropic's engineering blog. See [ios-simulator-mcp-comparison.md](./ios-simulator-mcp-comparison.md) for the deep-dive.
+The most widely referenced iOS-only MCP tool. Featured in Anthropic's engineering blog.
 
-**Architecture**: Node.js → idb CLI (Python) → gRPC → idb_companion → AXPTranslator → CoreSimulator XPC → Simulator. Five layers of indirection.
+**Architecture**: Node.js → idb CLI (Python) → gRPC → idb_companion → AXPTranslator → CoreSimulator XPC → Simulator. Six layers of indirection.
+
+```mermaid
+graph LR
+    subgraph ios-simulator-mcp
+        A[MCP Client] --> B[Node.js MCP Server]
+        B -->|spawns| C[idb CLI - Python]
+        C -->|gRPC| D[idb_companion - Swift/ObjC]
+        D -->|private API| E[AXPTranslator]
+        E -->|XPC| F[CoreSimulator]
+        F --> G[Simulator Process]
+    end
+
+    subgraph Button Heist
+        H[MCP Client] --> I[MCP Server]
+        I --> J[Client Library]
+        J -->|TCP / Bonjour| K["Embedded Framework (in-app)"]
+        K --> L[Accessibility Parser]
+        K --> M["Touch Injection (IOHIDEvent)"]
+        K --> N[UIKit internals]
+    end
+```
+
+**Capability matrix:**
+
+| Capability | ios-simulator-mcp | Button Heist |
+|---|---|---|
+| Interface tree | `idb ui describe-all --nested` via AXPTranslator | `get_interface` — in-process parser |
+| Interface deltas | No | Yes — added/removed/changed after every action |
+| Animation detection | No | Yes — watches CALayer animations |
+| Tap | `idb ui tap X Y` (coordinate) | `activate` (element) — calls `accessibilityActivate()` first |
+| Multi-touch | No | Pinch, rotate, two-finger tap, bezier paths, polyline |
+| Scroll | Swipe-based only | `scroll`, `scroll_to_visible`, `scroll_to_edge` |
+| Text input | `idb ui text` (ASCII) | `type_text` — `UIKeyboardImpl.addInputString` with keyboard detection |
+| Accessibility actions | Not exposed | `increment`, `decrement`, `perform_custom_action`, `edit_action` |
+| Physical devices | No | Yes (USB tunnel via `xcrun devicectl`) |
+| Touch injection | Coordinates over XPC to Simulator runtime | Real `IOHIDEvent` objects through full responder chain |
+
+**Interface parsing — what idb loses at the boundary:**
+
+idb's companion uses `AXPTranslator` to bridge iOS accessibility into the macOS AX protocol. Properties without macOS equivalents are dropped: `activationPoint`, `respondsToUserInteraction`, `customContent`, `customRotors`. Live object references are also lost — idb gets dictionaries, not backing `NSObject`s, so it can't call `accessibilityActivate()` or `accessibilityIncrement()`.
+
+| We capture | idb doesn't |
+|---|---|
+| Activation point (actual tap target) | Only frame center |
+| `respondsToUserInteraction` | Not available |
+| Custom content (`AXCustomContent`) | Lost at XPC boundary |
+| Custom rotors with result markers | Lost at XPC boundary |
+| VoiceOver traversal order (explicit index) | Implicit array position |
+| Container types (typed enum) | Role strings |
+
+**Known idb limitations**: UITabBar children bug ([idb#767](https://github.com/facebook/idb/issues/767)), WebView blind spot (WKWebView content in separate process), XPC translation loss.
+
+**Benchmark (April 2026, 13-task suite):** BH uses 2-6x fewer turns than idb across all tasks. idb failed the marathon task (81 turns, hit cap). BH accuracy: 98.5% (65 trials). idb accuracy: 85.7% (14 trials). See [the-argument.md](./the-argument.md) for full data.
 
 **Key limitations vs us**:
 - Coordinate-only interactions (no element-level `activate`)

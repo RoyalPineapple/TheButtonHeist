@@ -24,16 +24,16 @@ External tools operate **outside** the app process — shelling out to `idb`, `s
 
 ## Ranked by Impact
 
-Every optimization below reduces agent turns, tokens, or wall time. Ranked by measured impact from real fuzzing sessions (~500+ actions across the Market Catalog app).
+Every optimization below reduces agent turns, tokens, or wall time. Ranked by measured impact from benchmarks (13-task suite, 65 trials at 98.5% accuracy, April 2026).
 
-### Tier 1: Fundamental (2-3x efficiency gain)
+### Tier 1: Fundamental (2-6x efficiency gain)
 
-These are why the benchmark shows 25 turns vs 49-61. You can't replicate them externally.
+These are why the benchmark shows 4-15 turns where idb needs 19-60. You can't replicate them externally.
 
 | # | Optimization | What it saves | External alternative |
 |---|---|---|---|
-| 1 | **Interface deltas on every action** | Eliminates `get_interface` after every action. Agents read the delta, not the whole tree. Saves 1 tool call per action. | Re-fetch full tree, diff client-side. 2x the calls, 10x the tokens. |
-| 2 | **Batch execution with expectations** | 10 actions in 1 MCP call, 2-4 seconds total. Each step has pass/fail expectations. Short-circuits on failure. | 10 separate MCP round-trips. 10x the latency, 10x the call overhead. |
+| 1 | **Interface deltas on every action** | Eliminates `get_interface` after every action. Agents read the delta, not the whole tree. Saves 1 tool call per action. Benchmark: BH uses 2-6x fewer turns than idb across all 13 tasks. | Re-fetch full tree, diff client-side. 2x the calls, 10x the tokens. |
+| 2 | **Batch execution with expectations** | 10 actions in 1 MCP call, 2-4 seconds total. Each step has pass/fail expectations. Short-circuits on failure. Benchmark: batching saves 10-34% of turns with zero accuracy cost. | 10 separate MCP round-trips. 10x the latency, 10x the call overhead. |
 | 3 | **Stable heistId targeting** | Copy ID from `get_interface`, paste into `activate`. Never breaks across value changes. One field, zero ambiguity. | Coordinate math from frame + offset. Breaks when layout shifts. |
 | 4 | **Accessibility-first activation** | `activate` calls `accessibilityActivate()` — works on every control VoiceOver can reach, including custom components that ignore coordinate taps. | Tap at computed center point. Fails on custom hit-test areas, overlapping elements, and controls behind other views. |
 
@@ -105,8 +105,8 @@ The most widely used iOS MCP tool. Architecture: Node.js → idb CLI → gRPC �
 | Multi-touch | No | Full suite (pinch, rotate, bezier, polyline) |
 | Accessibility actions | No | Increment, decrement, custom actions |
 | Device support | Simulator only | Simulator + USB devices |
-| Benchmark: turns | 49 (full workflow) | **25** (same task) |
-| Benchmark: cost | $0.84 | **$0.43** |
+| Benchmark: turns | 54 (full workflow), 60 (controls) | **14** (full workflow), **9** with batching |
+| Benchmark: accuracy | 12/14 (failed marathon) | **64/65** (98.5%) |
 
 ### vs. XcodeBuildMCP (Sentry)
 
