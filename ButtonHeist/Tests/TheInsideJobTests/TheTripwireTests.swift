@@ -455,7 +455,7 @@ final class TheTripwireTests: XCTestCase {
         testLayer.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
         window.layer.addSublayer(testLayer)
 
-        testLayer.layoutIfNeeded()
+        window.layoutIfNeeded()
         CATransaction.flush()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
 
