@@ -70,9 +70,9 @@ extension TheBagman {
                 relaxed: ElementMatcher(
                     label: matcher.label, identifier: matcher.identifier,
                     value: matcher.value, excludeTraits: matcher.excludeTraits                ),
-                actual: { el in
+                actual: { element in
                     UIAccessibilityTraits.knownTraits
-                        .filter { el.traits.contains($0.trait) }
+                        .filter { element.traits.contains($0.trait) }
                         .map(\.name).joined(separator: ", ")
                 }
             ))
