@@ -12,41 +12,73 @@ private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "r
 @MainActor
 final class TheStakeout {
 
+    // MARK: - State Machine
+
     enum State {
         case idle
         case recording
         case finalizing
     }
 
-    private(set) var state: State = .idle
+    private enum StakeoutState {
+        case idle
+        case recording(RecordingSession)
+        case finalizing(FinalizingSession)
+    }
 
-    // Configuration (with clamped defaults)
-    private var fps: Int = 8
-    private var inactivityTimeout: TimeInterval = 5.0
-    private var maxDuration: TimeInterval = 60.0
-    // AVAssetWriter pipeline
-    private var assetWriter: AVAssetWriter?
-    private var videoInput: AVAssetWriterInput?
-    private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
-    private var outputURL: URL?
+    struct RecordingSession {
+        let assetWriter: AVAssetWriter
+        let videoInput: AVAssetWriterInput
+        let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
+        let outputURL: URL
+        let screenBounds: CGRect
+        let fps: Int
+        let maxDuration: TimeInterval
+        let inactivityTimeout: TimeInterval
+        let startTime: Date
+        var captureTimer: Task<Void, Never>
+        var inactivityCheckTask: Task<Void, Never>
+        var frameCount: Int
+        var lastFrameTime: CMTime
+        var lastActivityTime: Date
+        var interactionLog: [InteractionEvent]
+        var didLogCapWarning: Bool
+    }
 
-    // Frame capture
-    private var captureTimer: Task<Void, Never>?
-    private var frameCount: Int = 0
-    private var startTime: Date?
-    private var lastFrameTime: CMTime = .zero
-    private var screenBounds: CGRect = .zero
+    struct FinalizingSession {
+        let assetWriter: AVAssetWriter
+        let videoInput: AVAssetWriterInput
+        let outputURL: URL
+        let startTime: Date
+        let frameCount: Int
+        let fps: Int
+        let screenBounds: CGRect
+        let interactionLog: [InteractionEvent]
+    }
 
-    // Inactivity tracking
-    private var lastActivityTime: Date = Date()
-    private var inactivityCheckTask: Task<Void, Never>?
+    private var stakeoutState: StakeoutState = .idle
 
-    // Interaction recording — wire-level command/result log
-    private(set) var interactionLog: [InteractionEvent] = []
     /// Maximum number of interaction events to record. Beyond this, events are silently dropped
     /// and the log is capped to prevent unbounded memory growth in long recordings.
     private static let maxInteractionCount = 500
-    private var didLogCapWarning = false
+
+    /// Public state projection for external callers.
+    var state: State {
+        switch stakeoutState {
+        case .idle: return .idle
+        case .recording: return .recording
+        case .finalizing: return .finalizing
+        }
+    }
+
+    /// Interaction log — only meaningful during recording.
+    var interactionLog: [InteractionEvent] {
+        switch stakeoutState {
+        case .idle: return []
+        case .recording(let session): return session.interactionLog
+        case .finalizing(let session): return session.interactionLog
+        }
+    }
 
     // Frame provider closure — set by TheInsideJob to provide captureScreenForRecording()
     var captureFrame: (() -> UIImage?)?
@@ -57,14 +89,14 @@ final class TheStakeout {
     // MARK: - Public API
 
     func startRecording(config: RecordingConfig) throws {
-        guard state == .idle else {
+        guard case .idle = stakeoutState else {
             throw TheStakeoutError.alreadyRecording
         }
 
         // Apply config with clamping
-        fps = max(1, min(15, config.fps ?? 8))
-        inactivityTimeout = max(1.0, config.inactivityTimeout ?? 5.0)
-        maxDuration = max(1.0, config.maxDuration ?? 60.0)
+        let fps = max(1, min(15, config.fps ?? 8))
+        let inactivityTimeout = max(1.0, config.inactivityTimeout ?? 5.0)
+        let maxDuration = max(1.0, config.maxDuration ?? 60.0)
         // Determine output dimensions from screen.
         // Default: 1x point resolution (native pixels / screen scale).
         // If caller provides scale, use that fraction of native resolution.
@@ -84,13 +116,12 @@ final class TheStakeout {
         // and AVAssetWriter will reject odd-dimensioned buffers. Round up to the next even number.
         let evenWidth = width % 2 == 0 ? width : width + 1
         let evenHeight = height % 2 == 0 ? height : height + 1
-        screenBounds = CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight)
+        let screenBounds = CGRect(x: 0, y: 0, width: evenWidth, height: evenHeight)
 
         // Set up temp file
         let tempDir = NSTemporaryDirectory()
         let fileName = "stakeout-\(UUID().uuidString).mp4"
         let url = URL(fileURLWithPath: tempDir).appendingPathComponent(fileName)
-        outputURL = url
 
         // Configure AVAssetWriter
         let writer = try AVAssetWriter(url: url, fileType: .mp4)
@@ -125,99 +156,125 @@ final class TheStakeout {
         }
         writer.startSession(atSourceTime: .zero)
 
-        assetWriter = writer
-        videoInput = input
-        pixelBufferAdaptor = adaptor
-        frameCount = 0
-        startTime = Date()
-        lastFrameTime = .zero
-        lastActivityTime = Date()
-        interactionLog = []
-        state = .recording
+        let now = Date()
+        let session = RecordingSession(
+            assetWriter: writer,
+            videoInput: input,
+            pixelBufferAdaptor: adaptor,
+            outputURL: url,
+            screenBounds: screenBounds,
+            fps: fps,
+            maxDuration: maxDuration,
+            inactivityTimeout: inactivityTimeout,
+            startTime: now,
+            captureTimer: Task { },
+            inactivityCheckTask: Task { },
+            frameCount: 0,
+            lastFrameTime: .zero,
+            lastActivityTime: now,
+            interactionLog: [],
+            didLogCapWarning: false
+        )
 
-        logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(self.fps)fps, effectiveScale=\(effectiveScale)")
+        stakeoutState = .recording(session)
 
-        // Start frame capture timer
+        logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
+
+        // Start frame capture timer and inactivity monitor — these mutate the session
+        // via stakeoutState, so they must be started after the state transition.
         startCaptureTimer()
-
-        // Start inactivity monitor
         startInactivityMonitor()
     }
 
     func stopRecording(reason: RecordingPayload.StopReason = .manual) {
-        guard state == .recording else { return }
-        state = .finalizing
+        guard case .recording(let session) = stakeoutState else { return }
 
-        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(self.frameCount)")
+        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.frameCount)")
 
-        captureTimer?.cancel()
-        captureTimer = nil
-        inactivityCheckTask?.cancel()
-        inactivityCheckTask = nil
+        session.captureTimer.cancel()
+        session.inactivityCheckTask.cancel()
 
-        finalizeRecording(reason: reason)
+        let finalizingSession = FinalizingSession(
+            assetWriter: session.assetWriter,
+            videoInput: session.videoInput,
+            outputURL: session.outputURL,
+            startTime: session.startTime,
+            frameCount: session.frameCount,
+            fps: session.fps,
+            screenBounds: session.screenBounds,
+            interactionLog: session.interactionLog
+        )
+        stakeoutState = .finalizing(finalizingSession)
+
+        finalizeRecording(session: finalizingSession, reason: reason)
     }
 
     /// Call this whenever client activity occurs (commands received, etc.)
     func noteActivity() {
-        lastActivityTime = Date()
+        guard case .recording(var session) = stakeoutState else { return }
+        session.lastActivityTime = Date()
+        stakeoutState = .recording(session)
     }
 
     /// Call this whenever a screen change is detected (hierarchy hash change)
     func noteScreenChange() {
-        lastActivityTime = Date()
+        guard case .recording(var session) = stakeoutState else { return }
+        session.lastActivityTime = Date()
+        stakeoutState = .recording(session)
     }
 
     /// Capture an extra frame outside the regular timer cadence.
     /// Used to ensure actions are represented in the recording.
     func captureActionFrame() {
-        guard state == .recording else { return }
+        guard case .recording = stakeoutState else { return }
         captureAndAppendFrame()
     }
 
     /// Elapsed time since recording started, in seconds.
     var recordingElapsed: Double {
-        guard let start = startTime else { return 0 }
-        return Date().timeIntervalSince(start)
+        guard case .recording(let session) = stakeoutState else { return 0 }
+        return Date().timeIntervalSince(session.startTime)
     }
 
     /// Append an interaction event to the recording log.
     /// Silently drops events beyond `maxInteractionCount` to prevent unbounded growth.
     func recordInteraction(event: InteractionEvent) {
-        guard state == .recording else { return }
-        guard interactionLog.count < Self.maxInteractionCount else {
-            if !didLogCapWarning {
-                didLogCapWarning = true
+        guard case .recording(var session) = stakeoutState else { return }
+        guard session.interactionLog.count < Self.maxInteractionCount else {
+            if !session.didLogCapWarning {
+                session.didLogCapWarning = true
+                stakeoutState = .recording(session)
                 logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
             }
             return
         }
-        interactionLog.append(event)
+        session.interactionLog.append(event)
+        stakeoutState = .recording(session)
     }
 
     // MARK: - Frame Capture
 
     private func startCaptureTimer() {
-        let interval = UInt64(1_000_000_000 / UInt64(fps))
-        captureTimer = Task { @MainActor [weak self] in
+        guard case .recording(var session) = stakeoutState else { return }
+        let interval = UInt64(1_000_000_000 / UInt64(session.fps))
+        session.captureTimer = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 self?.captureAndAppendFrame()
                 try? await Task.sleep(nanoseconds: interval)
             }
         }
+        stakeoutState = .recording(session)
     }
 
     private func captureAndAppendFrame() {
-        guard state == .recording,
-              let input = videoInput, input.isReadyForMoreMediaData,
-              let adaptor = pixelBufferAdaptor,
+        guard case .recording(var session) = stakeoutState,
+              session.videoInput.isReadyForMoreMediaData,
               let image = captureFrame?() else {
             return
         }
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
-        if let url = outputURL,
-           let fileSize = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int,
+        if let fileSize = try? FileManager.default.attributesOfItem(atPath: session.outputURL.path)[.size] as? Int,
            fileSize > 7_000_000 {
             logger.warning("File size limit reached: \(fileSize) bytes")
             stopRecording(reason: .fileSizeLimit)
@@ -225,24 +282,25 @@ final class TheStakeout {
         }
 
         // Check max duration
-        if let start = startTime, Date().timeIntervalSince(start) >= maxDuration {
+        if Date().timeIntervalSince(session.startTime) >= session.maxDuration {
             logger.warning("Max duration reached")
             stopRecording(reason: .maxDuration)
             return
         }
 
         // Create pixel buffer from UIImage
-        guard let pixelBuffer = createPixelBuffer(from: image) else { return }
+        guard let pixelBuffer = createPixelBuffer(from: image, session: session) else { return }
 
-        let frameTime = CMTime(value: Int64(frameCount), timescale: Int32(fps))
-        if adaptor.append(pixelBuffer, withPresentationTime: frameTime) {
-            frameCount += 1
-            lastFrameTime = frameTime
+        let frameTime = CMTime(value: Int64(session.frameCount), timescale: Int32(session.fps))
+        if session.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
+            session.frameCount += 1
+            session.lastFrameTime = frameTime
+            stakeoutState = .recording(session)
         }
     }
 
-    private func createPixelBuffer(from image: UIImage) -> CVPixelBuffer? {
-        guard let pool = pixelBufferAdaptor?.pixelBufferPool else { return nil }
+    private func createPixelBuffer(from image: UIImage, session: RecordingSession) -> CVPixelBuffer? {
+        guard let pool = session.pixelBufferAdaptor.pixelBufferPool else { return nil }
 
         var pixelBuffer: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
@@ -253,8 +311,8 @@ final class TheStakeout {
 
         guard let context = CGContext(
             data: CVPixelBufferGetBaseAddress(buffer),
-            width: Int(screenBounds.width),
-            height: Int(screenBounds.height),
+            width: Int(session.screenBounds.width),
+            height: Int(session.screenBounds.height),
             bitsPerComponent: 8,
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
             space: CGColorSpaceCreateDeviceRGB(),
@@ -266,7 +324,7 @@ final class TheStakeout {
         // Draw the image scaled into the pixel buffer.
         // Fingerprint indicators are rendered by TheFingerprints (on-screen UIView overlay)
         // and captured naturally via drawHierarchy — no CGContext compositing needed.
-        context.draw(cgImage, in: screenBounds)
+        context.draw(cgImage, in: session.screenBounds)
 
         return buffer
     }
@@ -283,55 +341,54 @@ final class TheStakeout {
     // recording when meaningful UI content changes.
 
     private func startInactivityMonitor() {
-        inactivityCheckTask = Task { @MainActor [weak self] in
+        guard case .recording(var session) = stakeoutState else { return }
+        session.inactivityCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // Check every second
-                guard let self, self.state == .recording else { continue }
+                guard let self, case .recording(let currentSession) = self.stakeoutState else { continue }
 
-                let elapsed = Date().timeIntervalSince(self.lastActivityTime)
-                if elapsed >= self.inactivityTimeout {
+                let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
+                if elapsed >= currentSession.inactivityTimeout {
                     logger.info("Inactivity timeout: \(elapsed)s since last activity")
                     self.stopRecording(reason: .inactivity)
                     return
                 }
             }
         }
+        stakeoutState = .recording(session)
     }
 
     // MARK: - Finalization
 
-    private func finalizeRecording(reason: RecordingPayload.StopReason) {
-        guard let writer = assetWriter, let input = videoInput else {
-            deliverError(.finalizationFailed("No active writer"))
-            return
-        }
+    private func finalizeRecording(session: FinalizingSession, reason: RecordingPayload.StopReason) {
+        let writer = session.assetWriter
 
-        input.markAsFinished()
+        session.videoInput.markAsFinished()
 
         let endTime = Date()
-        let startTime = self.startTime ?? endTime
-        let frameCount = self.frameCount
-        let fps = self.fps
-        let width = Int(screenBounds.width)
-        let height = Int(screenBounds.height)
-        let url = outputURL
-        let interactions = self.interactionLog
+        let outputURL = session.outputURL
+        let startTime = session.startTime
+        let frameCount = session.frameCount
+        let fps = session.fps
+        let width = Int(session.screenBounds.width)
+        let height = Int(session.screenBounds.height)
+        let interactions = session.interactionLog
 
         writer.finishWriting { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
-                defer { self.cleanup() }
-                guard let writer = self.assetWriter else {
+                defer { self.cleanup(outputURL: outputURL) }
+                guard let writer = self.currentWriter else {
                     self.deliverError(.finalizationFailed("Writer deallocated"))
                     return
                 }
+
                 if writer.status == .failed {
                     self.deliverError(.finalizationFailed(writer.error?.localizedDescription ?? "Unknown"))
                     return
                 }
 
-                guard let url,
-                      let videoData = try? Data(contentsOf: url) else {
+                guard let videoData = try? Data(contentsOf: outputURL) else {
                     self.deliverError(.finalizationFailed("Could not read output file"))
                     return
                 }
@@ -357,30 +414,22 @@ final class TheStakeout {
         }
     }
 
+    /// Access the writer from the current finalizing state for post-completion checks.
+    private var currentWriter: AVAssetWriter? {
+        guard case .finalizing(let session) = stakeoutState else { return nil }
+        return session.assetWriter
+    }
+
     private func deliverError(_ error: TheStakeoutError) {
         logger.error("Recording error: \(error)")
         onRecordingComplete?(.failure(error))
-        cleanup()
     }
 
-    private func cleanup() {
-        state = .idle
-        captureTimer?.cancel()
-        captureTimer = nil
-        inactivityCheckTask?.cancel()
-        inactivityCheckTask = nil
-        assetWriter = nil
-        videoInput = nil
-        pixelBufferAdaptor = nil
-
-        interactionLog = []
-        didLogCapWarning = false
+    private func cleanup(outputURL: URL) {
+        stakeoutState = .idle
 
         // Clean up temp file
-        if let url = outputURL {
-            try? FileManager.default.removeItem(at: url)
-        }
-        outputURL = nil
+        try? FileManager.default.removeItem(at: outputURL)
     }
 
     enum TheStakeoutError: Error, LocalizedError {

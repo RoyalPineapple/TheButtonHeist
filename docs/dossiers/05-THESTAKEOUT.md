@@ -38,21 +38,15 @@ graph TD
 
 ## Recording State Machine
 
+State is modeled as an enum with associated data — `RecordingSession` and `FinalizingSession` structs carry all fields that are only meaningful in their respective states. `.idle` carries nothing: no stale writer references, no orphaned tasks, no leftover frame counts. The transition from `.recording` to `.finalizing` explicitly drops timer tasks and captures only the data needed for finalization.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Capturing: startRecording
-    Capturing --> Capturing: captureTimer fires
-    Capturing --> SizeCheck: frame appended
-    SizeCheck --> Capturing: under 7MB
-    SizeCheck --> CancelTimers: over 7MB
-    Capturing --> CancelTimers: manual stop
-    Capturing --> CancelTimers: inactivity timeout
-    Capturing --> CancelTimers: max duration reached
-    CancelTimers --> FlushFrames
-    FlushFrames --> Finalizing: finishWriting
-    Finalizing --> Delivering: file written
-    Delivering --> Idle: payload delivered
+    Idle --> Recording: startRecording → .recording(RecordingSession)
+    Recording --> Recording: captureTimer fires / noteActivity / noteScreenChange
+    Recording --> Finalizing: stop → .finalizing(FinalizingSession)
+    Finalizing --> Idle: finishWriting → .idle (all session data dropped)
 ```
 
 ## Frame Capture Pipeline
@@ -111,12 +105,7 @@ flowchart LR
 
 ### HIGH PRIORITY
 
-**`swiftlint:disable file_length` suppression** (`TheStakeout.swift:1`)
-- File is 425 lines covering: config, state machine, capture timer, pixel buffer creation, inactivity monitoring, and finalization
-- All in one `final class` - could benefit from extraction of the AVAssetWriter pipeline into a separate type
-- Not a bug, but the complexity warrants understanding the full state machine
-
-**7MB file size limit is disconnected from 10MB buffer limit** (`TheStakeout.swift:218`)
+**7MB file size limit is disconnected from 10MB buffer limit** (`TheStakeout.swift`)
 ```swift
 if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 ```
