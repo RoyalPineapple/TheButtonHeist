@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00AD4580D4093B2C32B02A43 /* ScrollToVisibleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE246859FDEDCD3B4C5F5E9 /* ScrollToVisibleTests.swift */; };
+		036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */; };
 		0396556B127BB166C42DB438 /* BH Demo.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 5598A55C05BC6726CABD5670 /* BH Demo.app */; };
 		04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
@@ -325,6 +326,7 @@
 		802556A6984BBC74DD6AFE1D /* TripwireIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripwireIntegrationTests.swift; sourceTree = "<group>"; };
 		83137EE544169770435091EA /* TheFence+Handlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Handlers.swift"; sourceTree = "<group>"; };
 		8615682DE7968262317CF9E9 /* TheBagmanConversionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagmanConversionTests.swift; sourceTree = "<group>"; };
+		8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJobStateTests.swift; sourceTree = "<group>"; };
 		886C395B67A91072CBF2A507 /* TheScoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScoreTests-Info.plist"; sourceTree = "<group>"; };
 		88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Elements.swift; sourceTree = "<group>"; };
 		8A1D4EE85FB1349A4CA87816 /* TheScoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheScoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -630,6 +632,7 @@
 				3DF68558C8D801C0880F59B3 /* TheBagmanResolutionTests.swift */,
 				D815B819FCBE81F64B9028EF /* TheBagmanScrollTests.swift */,
 				F22162F87098F2854C31BB74 /* TheBagmanTopologyTests.swift */,
+				8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */,
 				594A7F8340C7B335C8033319 /* TheMuscleTests.swift */,
 				56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */,
 				424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */,
@@ -1074,6 +1077,7 @@
 				08817F353A28D70410522D5B /* TheBagmanResolutionTests.swift in Sources */,
 				7643F9C7DA856F392EB2B1EB /* TheBagmanScrollTests.swift in Sources */,
 				7567958784B5D6C347282E99 /* TheBagmanTopologyTests.swift in Sources */,
+				036A97225C8E6C36CC730DA1 /* TheInsideJobStateTests.swift in Sources */,
 				70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */,
 				4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */,
 				7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */,
