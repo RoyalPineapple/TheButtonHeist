@@ -70,7 +70,7 @@ struct ButtonHeistMCPServer {
 
             let response = try await fence.execute(request: request)
             idleMonitor.resetTimer()
-            return try renderResponse(response, fence: fence)
+            return try renderResponse(response)
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
@@ -115,8 +115,7 @@ struct ButtonHeistMCPServer {
     // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
-    @ButtonHeistActor
-    private static func renderResponse(_ response: FenceResponse, fence: TheFence) throws -> CallTool.Result {
+    private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
         var content: [Tool.Content] = []
 
         // Screenshots: embed as image content
@@ -135,8 +134,7 @@ struct ButtonHeistMCPServer {
             isError = false
         }
 
-        let text = fence.applyTelemetry(to: response.compactFormatted())
-        content.append(.text(text: text, annotations: nil, _meta: nil))
+        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
     }
 }

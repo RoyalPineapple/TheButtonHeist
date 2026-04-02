@@ -32,7 +32,7 @@ enum CLIRunner {
 
         let response = try await fence.execute(request: request)
         let effectiveFormat = format ?? .auto
-        outputResponse(response, format: effectiveFormat, fence: fence)
+        outputResponse(response, format: effectiveFormat)
         exitOnActionFailure(response)
     }
 
@@ -61,26 +61,17 @@ enum CLIRunner {
     // MARK: - Output Formatting
 
     @ButtonHeistActor
-    static func outputResponse(_ response: FenceResponse, format: OutputFormat, fence: TheFence? = nil) {
+    static func outputResponse(_ response: FenceResponse, format: OutputFormat) {
         switch format {
         case .human:
-            let text = response.humanFormatted()
-            writeOutput(fence?.applyTelemetry(to: text) ?? text)
+            writeOutput(response.humanFormatted())
         case .compact:
-            let text = response.compactFormatted()
-            writeOutput(fence?.applyTelemetry(to: text) ?? text)
+            writeOutput(response.compactFormatted())
         case .json:
-            if var dictionary = response.jsonDict() {
-                if let fence,
-                   let serialized = try? JSONSerialization.data(withJSONObject: dictionary, options: []),
-                   let preview = String(data: serialized, encoding: .utf8),
-                   let telemetry = fence.telemetryDict(for: preview) {
-                    dictionary["_telemetry"] = telemetry
-                }
-                if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
-                   let json = String(data: data, encoding: .utf8) {
-                    writeOutput(json)
-                }
+            if let dictionary = response.jsonDict(),
+               let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                writeOutput(json)
             }
         }
     }
