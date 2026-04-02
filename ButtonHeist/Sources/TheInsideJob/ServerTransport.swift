@@ -53,6 +53,9 @@ public final class ServerTransport: NSObject {
         super.init()
     }
 
+    // Fire-and-forget: the Task may not complete before deallocation.
+    // Acceptable because NWListener and NWConnection clean up on their own
+    // when all references are released.
     deinit {
         stop()
     }
@@ -79,7 +82,7 @@ public final class ServerTransport: NSObject {
     /// Stop the TCP server and any Bonjour advertisement.
     public func stop() {
         stopAdvertising()
-        server.stop()
+        Task { [server] in await server.stop() }
     }
 
     // MARK: - Bonjour Advertisement
@@ -174,22 +177,22 @@ public final class ServerTransport: NSObject {
 
     /// Send data to a specific client.
     public func send(_ data: Data, to clientId: Int) {
-        server.send(data, to: clientId)
+        Task { [server] in await server.send(data, to: clientId) }
     }
 
     /// Broadcast data to all authenticated clients.
     public func broadcastToAll(_ data: Data) {
-        server.broadcastToAll(data)
+        Task { [server] in await server.broadcastToAll(data) }
     }
 
     /// Mark a client as authenticated.
     public func markAuthenticated(_ clientId: Int) {
-        server.markAuthenticated(clientId)
+        Task { [server] in await server.markAuthenticated(clientId) }
     }
 
     /// Disconnect a specific client.
     public func disconnect(clientId: Int) {
-        server.disconnect(clientId: clientId)
+        Task { [server] in await server.disconnect(clientId: clientId) }
     }
 }
 
