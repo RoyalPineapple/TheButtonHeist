@@ -348,7 +348,9 @@ extension TheBagman {
             }
         } else {
             guard safecracker.hasActiveTextInput() else {
-                return .failure(.typeText, message: "No active text input. Provide an elementTarget to focus a text field, or ensure a text field is already focused.")
+                let message = "No active text input. Provide an elementTarget to focus a text field, "
+                    + "or ensure a text field is already focused."
+                return .failure(.typeText, message: message)
             }
         }
 
