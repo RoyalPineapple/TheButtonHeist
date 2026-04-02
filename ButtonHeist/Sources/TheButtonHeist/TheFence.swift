@@ -275,7 +275,7 @@ public final class TheFence {
         return .action(result: result)
     }
 
-    func sendAndAwait<T>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
+    func sendAndAwait<T: Sendable>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
         handoff.send(message, requestId: requestId)
