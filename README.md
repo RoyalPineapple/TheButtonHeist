@@ -1,4 +1,11 @@
-<img width="1536" height="1024" alt="ChatGPT Image Mar 3, 2026, 01_47_05 PM" src="https://github.com/user-attachments/assets/ab62f18f-a3bd-480e-906d-3167b90c1d77" />
+<img width="1536" height="1024" alt="A heist crew of geometric robots infiltrating an iOS app through its accessibility layer, rendered in a stylized noir illustration" src="https://github.com/user-attachments/assets/ab62f18f-a3bd-480e-906d-3167b90c1d77" />
+
+[![CI](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RoyalPineapple/TheButtonHeist?label=release)](https://github.com/RoyalPineapple/TheButtonHeist/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)](https://github.com/RoyalPineapple/TheButtonHeist)
+[![Swift](https://img.shields.io/badge/swift-6-orange)](https://github.com/RoyalPineapple/TheButtonHeist)
+[![License](https://img.shields.io/github/license/RoyalPineapple/TheButtonHeist)](LICENSE)
+[![Homebrew](https://img.shields.io/badge/homebrew-RoyalPineapple%2Ftap-blueviolet)](https://github.com/RoyalPineapple/homebrew-tap)
 
 # Interface out. Agents in. Clean escape.
 
