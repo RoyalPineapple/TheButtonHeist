@@ -1,7 +1,7 @@
 import Foundation
 import Network
 import Security
-import Crypto
+import CryptoKit
 import X509
 import SwiftASN1
 import os.log
@@ -152,7 +152,7 @@ public actor TLSIdentity {
     }
 
     static func computeFingerprint(derBytes: [UInt8]) -> String {
-        let hash = Crypto.SHA256.hash(data: derBytes)
+        let hash = SHA256.hash(data: derBytes)
         return "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
     }
 

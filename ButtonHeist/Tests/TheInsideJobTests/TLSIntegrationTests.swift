@@ -1,7 +1,7 @@
 import XCTest
 import Network
 import Security
-import Crypto
+import CryptoKit
 import TheScore
 @testable import TheInsideJob
 
