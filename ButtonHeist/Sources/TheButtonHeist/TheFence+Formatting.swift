@@ -149,6 +149,8 @@ public enum FenceResponse {
     )
     case sessionState(payload: [String: Any])
     case targets([String: TargetConfig], defaultTarget: String?)
+    case sessionLog(manifest: SessionManifest)
+    case archiveResult(path: String, manifest: SessionManifest)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     public var actionResult: ActionResult? {
@@ -207,7 +209,31 @@ public enum FenceResponse {
             return connected ? "Session: connected to \(device)" : "Session: not connected"
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
+        case .sessionLog(let manifest):
+            return formatSessionLogHuman(manifest)
+        case .archiveResult(let path, let manifest):
+            return "Session archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
         }
+    }
+
+    private func formatSessionLogHuman(_ manifest: SessionManifest) -> String {
+        let formatter = ISO8601DateFormatter()
+        var text = "Session: \(manifest.sessionId)\n"
+        text += "  Started: \(formatter.string(from: manifest.startTime))\n"
+        if let endTime = manifest.endTime {
+            text += "  Ended: \(formatter.string(from: endTime))\n"
+        }
+        text += "  Commands: \(manifest.commandCount)"
+        if manifest.errorCount > 0 {
+            text += " (\(manifest.errorCount) errors)"
+        }
+        text += "\n  Artifacts: \(manifest.artifacts.count)"
+        let screenshots = manifest.artifacts.filter { $0.type == .screenshot }.count
+        let recordings = manifest.artifacts.filter { $0.type == .recording }.count
+        if screenshots > 0 { text += " (\(screenshots) screenshots" }
+        if recordings > 0 { text += screenshots > 0 ? ", \(recordings) recordings)" : " (\(recordings) recordings)" }
+        else if screenshots > 0 { text += ")" }
+        return text
     }
 
     private func formatTargetList(_ targets: [String: TargetConfig], defaultTarget: String?) -> String {
@@ -306,7 +332,42 @@ public enum FenceResponse {
             var result: [String: Any] = ["status": "ok", "targets": info]
             if let defaultTarget { result["default"] = defaultTarget }
             return result
+        case .sessionLog(let manifest):
+            return sessionLogJsonDict(manifest)
+        case .archiveResult(let path, let manifest):
+            var dict = sessionLogJsonDict(manifest)
+            dict["path"] = path
+            return dict
         }
+    }
+
+    private func sessionLogJsonDict(_ manifest: SessionManifest) -> [String: Any] {
+        let formatter = ISO8601DateFormatter()
+        var dict: [String: Any] = [
+            "status": "ok",
+            "sessionId": manifest.sessionId,
+            "startTime": formatter.string(from: manifest.startTime),
+            "commandCount": manifest.commandCount,
+            "errorCount": manifest.errorCount,
+            "artifactCount": manifest.artifacts.count,
+        ]
+        if let endTime = manifest.endTime {
+            dict["endTime"] = formatter.string(from: endTime)
+        }
+        dict["artifacts"] = manifest.artifacts.map { artifact -> [String: Any] in
+            var entry: [String: Any] = [
+                "type": artifact.type.rawValue,
+                "path": artifact.path,
+                "size": artifact.size,
+                "timestamp": formatter.string(from: artifact.timestamp),
+                "command": artifact.command,
+            ]
+            if !artifact.metadata.isEmpty {
+                entry["metadata"] = artifact.metadata
+            }
+            return entry
+        }
+        return dict
     }
 
     private func interfaceJsonDict(
@@ -606,6 +667,12 @@ public enum FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(targets[name]!.device)\(isDefault)"
             }.joined(separator: "\n")
+        case .sessionLog(let manifest):
+            var text = "session: \(manifest.sessionId), \(manifest.commandCount) commands, \(manifest.artifacts.count) artifacts"
+            if manifest.errorCount > 0 { text += ", \(manifest.errorCount) errors" }
+            return text
+        case .archiveResult(let path, let manifest):
+            return "archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
         }
     }
 

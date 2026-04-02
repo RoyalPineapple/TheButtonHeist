@@ -95,6 +95,7 @@ public final class TheFence {
 
     var config: Configuration
     let handoff = TheHandoff()
+    let bookKeeper = TheBookKeeper()
     private var isStarted = false
 
     // MARK: - Pending Request Tracking
@@ -173,6 +174,7 @@ public final class TheFence {
 
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
+            command != .getSessionLog && command != .archiveSession &&
             (!isStarted || !handoff.isConnected) {
             try await start()
         }
@@ -248,6 +250,18 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
+        case .getSessionLog:
+            guard let manifest = bookKeeper.manifest else {
+                return .error("No active session")
+            }
+            return .sessionLog(manifest: manifest)
+        case .archiveSession:
+            let deleteSource = boolArg(args, "delete_source") ?? false
+            let archiveURL = try await bookKeeper.archiveSession(deleteSource: deleteSource)
+            guard let manifest = bookKeeper.manifest else {
+                return .error("No session to archive")
+            }
+            return .archiveResult(path: archiveURL.path, manifest: manifest)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
