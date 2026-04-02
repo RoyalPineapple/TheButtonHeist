@@ -10,7 +10,7 @@ final class TheStakeoutTests: XCTestCase {
 
     func testInitialStateIsIdle() {
         let stakeout = TheStakeout()
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
         XCTAssertTrue(stakeout.interactionLog.isEmpty)
         XCTAssertEqual(stakeout.recordingElapsed, 0)
     }
@@ -23,7 +23,7 @@ final class TheStakeoutTests: XCTestCase {
 
         try stakeout.startRecording(config: RecordingConfig())
 
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
         XCTAssertGreaterThan(stakeout.recordingElapsed, 0)
     }
 
@@ -44,7 +44,7 @@ final class TheStakeoutTests: XCTestCase {
         }
 
         // Should still be recording (not corrupted by failed second start)
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
     }
 
     // MARK: - stopRecording
@@ -56,7 +56,7 @@ final class TheStakeoutTests: XCTestCase {
         try stakeout.startRecording(config: RecordingConfig())
         stakeout.stopRecording(reason: .manual)
 
-        XCTAssertEqual(stakeout.state, .finalizing)
+        XCTAssertTrue(stakeout.isFinalizing)
     }
 
     func testStopRecordingWhenIdleIsNoOp() {
@@ -64,7 +64,7 @@ final class TheStakeoutTests: XCTestCase {
 
         stakeout.stopRecording(reason: .manual)
 
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 
     func testStopRecordingPreservesInteractionLog() throws {
@@ -92,13 +92,13 @@ final class TheStakeoutTests: XCTestCase {
     func testNoteActivityWhenIdleIsNoOp() {
         let stakeout = TheStakeout()
         stakeout.noteActivity()
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 
     func testNoteScreenChangeWhenIdleIsNoOp() {
         let stakeout = TheStakeout()
         stakeout.noteScreenChange()
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 
     func testNoteActivityDuringRecordingKeepsRecording() throws {
@@ -108,7 +108,7 @@ final class TheStakeoutTests: XCTestCase {
         try stakeout.startRecording(config: RecordingConfig())
         stakeout.noteActivity()
 
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
     }
 
     func testNoteScreenChangeDuringRecordingKeepsRecording() throws {
@@ -118,7 +118,7 @@ final class TheStakeoutTests: XCTestCase {
         try stakeout.startRecording(config: RecordingConfig())
         stakeout.noteScreenChange()
 
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
     }
 
     // MARK: - recordInteraction
@@ -205,7 +205,7 @@ final class TheStakeoutTests: XCTestCase {
             maxDuration: 60.0
         ))
 
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
 
         // Wait for inactivity timeout to fire + finalization
         await fulfillment(of: [completionExpectation], timeout: 5.0)
@@ -223,7 +223,7 @@ final class TheStakeoutTests: XCTestCase {
         }
 
         // State should be back to idle after cleanup
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 
     // MARK: - Manual stop delivers payload
@@ -262,7 +262,7 @@ final class TheStakeoutTests: XCTestCase {
             XCTFail("No completion result received")
         }
 
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 
     // MARK: - Config clamping verified through payload
@@ -319,18 +319,18 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertEqual(completionPayload?.fps, 15)
     }
 
-    // MARK: - State projection
+    // MARK: - State queries
 
-    func testStateProjectionMatchesInternalState() throws {
+    func testStateQueriesMatchInternalState() throws {
         let stakeout = TheStakeout()
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
 
         stakeout.captureFrame = { nil }
         try stakeout.startRecording(config: RecordingConfig())
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
 
         stakeout.stopRecording(reason: .manual)
-        XCTAssertEqual(stakeout.state, .finalizing)
+        XCTAssertTrue(stakeout.isFinalizing)
     }
 
     // MARK: - Full lifecycle: idle → recording → finalizing → idle
@@ -344,23 +344,23 @@ final class TheStakeoutTests: XCTestCase {
             completionExpectation.fulfill()
         }
 
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
 
         try stakeout.startRecording(config: RecordingConfig(
             inactivityTimeout: 60.0,
             maxDuration: 60.0
         ))
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
 
         stakeout.stopRecording(reason: .manual)
-        XCTAssertEqual(stakeout.state, .finalizing)
+        XCTAssertTrue(stakeout.isFinalizing)
 
         await fulfillment(of: [completionExpectation], timeout: 5.0)
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
 
         // Can start a new recording after full cycle
         try stakeout.startRecording(config: RecordingConfig())
-        XCTAssertEqual(stakeout.state, .recording)
+        XCTAssertTrue(stakeout.isRecording)
     }
 
     // MARK: - noteActivity extends inactivity deadline
@@ -394,7 +394,7 @@ final class TheStakeoutTests: XCTestCase {
         await fulfillment(of: [completionExpectation], timeout: 5.0)
 
         XCTAssertEqual(stopReason, .inactivity)
-        XCTAssertEqual(stakeout.state, .idle)
+        XCTAssertTrue(stakeout.isIdle)
     }
 }
 

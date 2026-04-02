@@ -76,7 +76,7 @@ struct RecordCommand: AsyncParsableCommand {
                 logStatus("  Action log saved: \(actionLogPath) (\(log.count) events)")
             }
         } catch {
-            logStatus("  Failed to save action log: \(error.localizedDescription)")
+            logStatus("  Failed to save action log: \(error.displayMessage)")
         }
     }
 

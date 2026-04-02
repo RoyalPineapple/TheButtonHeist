@@ -58,7 +58,7 @@ public final class DeviceConnection: DeviceConnecting {
     private let device: DiscoveredDevice
     private(set) var token: String?
     private var receiveBuffer = Data()
-    public var isConnected = false
+    public internal(set) var isConnected = false
 
     public var onEvent: ((ConnectionEvent) -> Void)?
     public var autoRespondToAuthRequired = true

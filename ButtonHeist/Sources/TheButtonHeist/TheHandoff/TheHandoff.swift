@@ -66,6 +66,32 @@ public final class TheHandoff {
     public private(set) var recordingPhase: RecordingPhase = .idle
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
 
+    // MARK: - State Transitions
+
+    private func transitionToConnecting(device: DiscoveredDevice) {
+        connectionPhase = .connecting(device: device)
+    }
+
+    private func transitionToConnected(device: DiscoveredDevice) {
+        connectionPhase = .connected(device: device)
+    }
+
+    private func transitionToFailed(_ failure: ConnectionFailure) {
+        connectionPhase = .failed(failure)
+    }
+
+    private func transitionToDisconnected() {
+        connectionPhase = .disconnected
+        serverInfo = nil
+        currentInterface = nil
+        currentScreen = nil
+        recordingPhase = .idle
+    }
+
+    private func transitionRecordingTo(_ phase: RecordingPhase) {
+        recordingPhase = phase
+    }
+
     // MARK: - Derived State
 
     public var isConnected: Bool {
@@ -265,7 +291,7 @@ public final class TheHandoff {
                 }
             }
 
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            try? await Task.sleep(for: .milliseconds(100))
         }
 
         return discoveredDevices.filter { reachableIDs.contains($0.id) }
@@ -275,7 +301,7 @@ public final class TheHandoff {
 
     public func connect(to device: DiscoveredDevice) {
         disconnect()
-        connectionPhase = .connecting(device: device)
+        transitionToConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
         connection?.observeMode = observeMode
@@ -286,18 +312,17 @@ public final class TheHandoff {
             case .transportReady:
                 break
             case .connected:
-                self.connectionPhase = .connected(device: device)
+                self.transitionToConnected(device: device)
                 self.startKeepalive()
             case .disconnected(let reason):
-                self.serverInfo = nil
-                self.currentInterface = nil
-                self.currentScreen = nil
-                self.recordingPhase = .idle
                 // Preserve .failed state (e.g., from sessionLocked)
                 if case .failed = self.connectionPhase {
-                    // keep .failed
+                    self.serverInfo = nil
+                    self.currentInterface = nil
+                    self.currentScreen = nil
+                    self.transitionRecordingTo(.idle)
                 } else {
-                    self.connectionPhase = .disconnected
+                    self.transitionToDisconnected()
                 }
                 self.onDisconnected?(reason)
                 if case .enabled(let filter) = self.reconnectPolicy {
@@ -306,8 +331,8 @@ public final class TheHandoff {
                         await self?.runAutoReconnect(filter: filter)
                     }
                 }
-            case .message(let msg, let requestId):
-                self.handleServerMessage(msg, requestId: requestId)
+            case .message(let message, let requestId):
+                self.handleServerMessage(message, requestId: requestId)
             }
         }
 
@@ -337,25 +362,25 @@ public final class TheHandoff {
             }
             onScreen?(payload, requestId)
         case .recordingStarted:
-            recordingPhase = .recording
+            transitionRecordingTo(.recording)
             onRecordingStarted?()
         case .recording(let payload):
-            recordingPhase = .idle
+            transitionRecordingTo(.idle)
             onRecording?(payload)
-        case .recordingError(let msg):
-            recordingPhase = .idle
-            onRecordingError?(msg)
-        case .error(let msg):
-            connectionPhase = .failed(.error(msg))
-            onError?(msg)
+        case .recordingError(let message):
+            transitionRecordingTo(.idle)
+            onRecordingError?(message)
+        case .error(let message):
+            transitionToFailed(.error(message))
+            onError?(message)
         case .authApproved(let payload):
             token = payload.token
             onAuthApproved?(payload.token)
         case .sessionLocked(let payload):
-            connectionPhase = .failed(.sessionLocked(payload.message))
+            transitionToFailed(.sessionLocked(payload.message))
             onSessionLocked?(payload)
         case .authFailed(let reason):
-            connectionPhase = .failed(.authFailed(reason))
+            transitionToFailed(.authFailed(reason))
             onAuthFailed?(reason)
         case .interaction(let event):
             onInteraction?(event)
@@ -375,11 +400,7 @@ public final class TheHandoff {
         keepaliveTask = nil
         connection?.disconnect()
         connection = nil
-        connectionPhase = .disconnected
-        serverInfo = nil
-        currentInterface = nil
-        currentScreen = nil
-        recordingPhase = .idle
+        transitionToDisconnected()
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection
@@ -409,7 +430,7 @@ public final class TheHandoff {
         keepaliveTask?.cancel()
         keepaliveTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
                 self?.connection?.send(.ping)
             }
@@ -454,7 +475,7 @@ public final class TheHandoff {
             if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
                 throw FenceError.connectionTimeout
             }
-            try await Task.sleep(nanoseconds: 100_000_000)
+            try await Task.sleep(for: .milliseconds(100))
         }
     }
 
@@ -479,10 +500,9 @@ public final class TheHandoff {
 
     private func runAutoReconnect(filter: String?) async {
         onStatus?("Device disconnected — watching for reconnection...")
-        let intervalNanoseconds = UInt64(reconnectInterval * 1_000_000_000)
         for _ in 0..<60 {
             guard !Task.isCancelled else { return }
-            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+            try? await Task.sleep(for: .seconds(reconnectInterval))
             guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 onStatus?("Reconnecting to \(device.name)...")
@@ -490,7 +510,7 @@ public final class TheHandoff {
                 let deadline = Date().addingTimeInterval(10)
                 while !isConnected {
                     if Task.isCancelled || Date() > deadline { break }
-                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    try? await Task.sleep(for: .milliseconds(100))
                 }
                 if Task.isCancelled { return }
                 if isConnected {

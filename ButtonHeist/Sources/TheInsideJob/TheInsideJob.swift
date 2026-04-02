@@ -154,11 +154,11 @@ public final class TheInsideJob {
             identity = try TLSIdentity.createEphemeral()
         }
         self.tlsActive = true
-        let t = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
-        wireTransport(t)
+        let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+        wireTransport(transport)
 
-        let actualPort = try await t.start(port: preferredPort)
-        serverState = .running(transport: t)
+        let actualPort = try await transport.start(port: preferredPort)
+        serverState = .running(transport: transport)
 
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
@@ -240,18 +240,18 @@ public final class TheInsideJob {
 
     // MARK: - Transport Wiring
 
-    private func wireTransport(_ t: ServerTransport) {
-        muscle.sendToClient = { [weak t] data, clientId in t?.send(data, to: clientId) }
-        muscle.markClientAuthenticated = { [weak t] clientId in t?.markAuthenticated(clientId) }
-        muscle.disconnectClient = { [weak t] clientId in t?.disconnect(clientId: clientId) }
+    private func wireTransport(_ transport: ServerTransport) {
+        muscle.sendToClient = { [weak transport] data, clientId in transport?.send(data, to: clientId) }
+        muscle.markClientAuthenticated = { [weak transport] clientId in transport?.markAuthenticated(clientId) }
+        muscle.disconnectClient = { [weak transport] clientId in transport?.disconnect(clientId: clientId) }
         muscle.onClientAuthenticated = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
-        muscle.onSessionActiveChanged = { [weak t] isActive in
-            t?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
+        muscle.onSessionActiveChanged = { [weak transport] isActive in
+            transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
         }
 
-        t.onClientConnected = { [weak self] clientId, remoteAddress in
+        transport.onClientConnected = { [weak self] clientId, remoteAddress in
             Task { @MainActor in
                 insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
                 if let remoteAddress {
@@ -261,20 +261,20 @@ public final class TheInsideJob {
             }
         }
 
-        t.onClientDisconnected = { [weak self] clientId in
+        transport.onClientDisconnected = { [weak self] clientId in
             Task { @MainActor in
                 insideJobLogger.info("Client \(clientId) disconnected")
                 self?.muscle.handleClientDisconnected(clientId)
             }
         }
 
-        t.onDataReceived = { [weak self] clientId, data, respond in
+        transport.onDataReceived = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 await self?.handleClientMessage(clientId, data: data, respond: respond)
             }
         }
 
-        t.onUnauthenticatedData = { [weak self] clientId, data, respond in
+        transport.onUnauthenticatedData = { [weak self] clientId, data, respond in
             Task { @MainActor in
                 guard let self else { return }
                 // Allow status probes after the version handshake, before full authentication.
@@ -661,7 +661,7 @@ public final class TheInsideJob {
         requestId: String?,
         respond: @escaping (Data) -> Void
     ) {
-        if let stakeout, stakeout.state == .recording {
+        if let stakeout, stakeout.isRecording {
             let event = InteractionEvent(
                 timestamp: stakeout.recordingElapsed,
                 command: command,
@@ -900,15 +900,15 @@ public final class TheInsideJob {
 
                 self.tlsActive = true
 
-                let t = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
-                self.wireTransport(t)
-                startedTransport = t
+                let transport = ServerTransport(tlsIdentity: identity, allowedScopes: self.allowedScopes)
+                self.wireTransport(transport)
+                startedTransport = transport
 
-                let actualPort = try await t.start(port: preferredPort)
+                let actualPort = try await transport.start(port: preferredPort)
 
                 try Task.checkCancellation()
 
-                self.serverState = .running(transport: t)
+                self.serverState = .running(transport: transport)
                 startedTransport = nil
 
                 insideJobLogger.info("Server resumed on port \(actualPort)")

@@ -57,11 +57,11 @@ final class TheFingerprints {
             window.frame = windowScene.screen.bounds
             window.backgroundColor = .clear
             window.windowLevel = .statusBar + 100
-            let vc = UIViewController()
-            let v = UIView()
-            v.backgroundColor = .clear
-            vc.view = v
-            window.rootViewController = vc
+            let viewController = UIViewController()
+            let backgroundView = UIView()
+            backgroundView.backgroundColor = .clear
+            viewController.view = backgroundView
+            window.rootViewController = viewController
             window.isUserInteractionEnabled = false
             window.isAccessibilityElement = false
             window.accessibilityElementsHidden = true
@@ -74,7 +74,7 @@ final class TheFingerprints {
 
     // MARK: - Circle Factory
 
-    private func createCircleView(at point: CGPoint) -> UIView {
+    private func makeCircleView(at point: CGPoint) -> UIView {
         let radius = fingerprintDiameter / 2
         let circle = UIView(frame: CGRect(x: point.x - radius, y: point.y - radius,
                                           width: fingerprintDiameter, height: fingerprintDiameter))
@@ -98,7 +98,7 @@ final class TheFingerprints {
         guard !isDisabled else { return }
         guard let rootView = ensureFingerprintRootView() else { return }
 
-        let circle = createCircleView(at: point)
+        let circle = makeCircleView(at: point)
         rootView.addSubview(circle)
 
         UIView.animate(
@@ -126,7 +126,7 @@ final class TheFingerprints {
 
         trackingCircles.forEach { $0.removeFromSuperview() }
         trackingCircles = points.map { point in
-            let circle = createCircleView(at: point)
+            let circle = makeCircleView(at: point)
             circle.transform = CGAffineTransform(scaleX: 0.1, y: 0.1)
             circle.alpha = 0
             rootView.addSubview(circle)
