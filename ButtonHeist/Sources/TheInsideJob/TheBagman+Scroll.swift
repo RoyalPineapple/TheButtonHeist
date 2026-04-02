@@ -84,7 +84,7 @@ extension TheBagman {
     private func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
-        animated: Bool = false
+        animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
         let before = onScreen
         guard let safecracker else { return (false, before) }
@@ -205,7 +205,7 @@ extension TheBagman {
            let scrollView = entry.scrollView {
             let savedOffset = scrollView.contentOffset
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: false)
+            scrollView.setContentOffset(targetOffset, animated: true)
             await tripwire.yieldFrames(3)
             refresh()
             if let found = resolveFirstMatch(searchTarget),
@@ -214,7 +214,7 @@ extension TheBagman {
             }
             // Fast path failed — restore original scroll position so the slow
             // page-by-page search starts from where the user left off.
-            scrollView.setContentOffset(savedOffset, animated: false)
+            scrollView.setContentOffset(savedOffset, animated: true)
             await tripwire.yieldFrames(3)
             refresh()
         }
@@ -263,7 +263,7 @@ extension TheBagman {
         searchTarget: ElementTarget,
         scrollCount: Int
     ) async -> TheSafecracker.InteractionResult? {
-        ensureOnScreenSync(found, animated: false)
+        ensureOnScreenSync(found)
         await tripwire.yieldFrames(3)
         refresh()
         guard let fresh = resolveFirstMatch(searchTarget) else { return nil }
@@ -325,7 +325,7 @@ extension TheBagman {
     // MARK: - Ensure On Screen (Comfort Zone)
 
     /// Fraction of each dimension to inset from each edge. 1/6 on each side = middle 2/3.
-    static let comfortMarginFraction: CGFloat = 1.0 / 6.0
+    private static let comfortMarginFraction: CGFloat = 1.0 / 6.0
 
     /// The middle 2/3 of the screen — activation points should land here before interaction.
     private static var interactionComfortZone: CGRect {
@@ -352,6 +352,10 @@ extension TheBagman {
 
         // Step 2: Fine-tune — scroll until the activation point is in the comfort zone
         // (middle 2/3 of screen), not just barely on screen.
+        // Note: activationPoint is checked in screen coordinates (comfort zone gate),
+        // while scrollToMakeVisible converts the full frame to scroll-view content
+        // coordinates for the actual offset calculation. The two coordinate spaces
+        // are intentionally different.
         guard let resolved = resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
