@@ -980,3 +980,24 @@ public enum FenceResponse {
         return payload
     }
 }
+
+// MARK: - Token Telemetry
+
+extension TheFence {
+
+    public func applyTelemetry(to text: String) -> String {
+        guard telemetryEnabled else { return text }
+        let responseTokens = tokenMeter.record(text)
+        return text + "\n" + tokenMeter.formatFooter(responseTokens: responseTokens)
+    }
+
+    public func telemetryDict(for text: String) -> [String: Any]? {
+        guard telemetryEnabled else { return nil }
+        let responseTokens = tokenMeter.record(text)
+        return [
+            "responseTokens": responseTokens,
+            "cumulativeTokens": tokenMeter.cumulativeTokens,
+            "responseCount": tokenMeter.responseCount,
+        ]
+    }
+}
