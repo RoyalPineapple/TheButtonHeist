@@ -76,6 +76,7 @@ enum ToolDefinitions {
         scroll, scrollToVisible, scrollToEdge,
         runBatch, getSessionState,
         connect, listTargets,
+        getSessionLog, archiveSession,
     ]
 
     // MARK: - Individual Tools
@@ -551,5 +552,37 @@ enum ToolDefinitions {
             "additionalProperties": false,
         ],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
+    )
+
+    static let getSessionLog = Tool(
+        name: "get_session_log",
+        description: """
+            Get the current session manifest showing all commands executed and \
+            artifacts produced during this session.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": .object([:]),
+            "additionalProperties": false,
+        ],
+        annotations: .init(readOnlyHint: true, idempotentHint: true)
+    )
+
+    static let archiveSession = Tool(
+        name: "archive_session",
+        description: """
+            Close and compress the current session into a .tar.gz archive. \
+            Returns the archive file path.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "delete_source": [
+                    "type": "boolean",
+                    "description": "Delete the session directory after archiving (default: false)",
+                ],
+            ],
+            "additionalProperties": false,
+        ]
     )
 }

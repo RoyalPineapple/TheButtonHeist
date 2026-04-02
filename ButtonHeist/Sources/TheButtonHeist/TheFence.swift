@@ -95,6 +95,7 @@ public final class TheFence {
 
     var config: Configuration
     let handoff = TheHandoff()
+    let bookKeeper = TheBookKeeper()
     private var isStarted = false
 
     // MARK: - Pending Request Tracking
@@ -173,11 +174,14 @@ public final class TheFence {
 
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
+            command != .getSessionLog && command != .archiveSession &&
             (!isStarted || !handoff.isConnected) {
             try await start()
         }
 
+        let start = CFAbsoluteTimeGetCurrent()
         let response = try await dispatch(command: command, args: request)
+        lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
 
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {
@@ -236,10 +240,10 @@ public final class TheFence {
             return try await handlePasteboard(command: command, args: args)
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
-        case .startRecording:
-            return try await handleStartRecording(args)
-        case .stopRecording:
-            return try await handleStopRecording(args)
+        case .startRecording, .stopRecording:
+            return command == .startRecording
+                ? try await handleStartRecording(args)
+                : try await handleStopRecording(args)
         case .runBatch:
             return try await handleRunBatch(args)
         case .getSessionState:
@@ -248,6 +252,8 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
+        case .getSessionLog, .archiveSession:
+            return try await handleBookKeeperCommand(command: command, args: args)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
@@ -402,9 +408,10 @@ public final class TheFence {
         )
     }
 
-    // MARK: - Last Action Tracking
+    // MARK: - Last Action / Latency Tracking
 
     var lastActionResult: ActionResult?
+    public private(set) var lastLatencyMs: Int = 0
 
     // MARK: - Batch Execution
 
@@ -570,6 +577,7 @@ public final class TheFence {
                 "method": last.method.rawValue,
                 "success": last.success,
                 "message": last.message as Any,
+                "latency_ms": lastLatencyMs,
             ]
         }
         return payload

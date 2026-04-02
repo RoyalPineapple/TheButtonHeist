@@ -48,6 +48,10 @@ struct ButtonHeistApp: AsyncParsableCommand {
             StopRecordingCommand.self,
             WaitForIdleCommand.self,
             WaitForCommand.self,
+
+            // Session management
+            SessionLogCommand.self,
+            ArchiveSessionCommand.self,
         ]
     )
 }

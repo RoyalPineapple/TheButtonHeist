@@ -53,7 +53,8 @@ struct ButtonHeistMCPServer {
                  "scroll", "scroll_to_visible", "scroll_to_edge",
                  "edit_action", "dismiss_keyboard",
                  "run_batch", "get_session_state",
-                 "connect", "list_targets":
+                 "connect", "list_targets",
+                 "get_session_log", "archive_session":
                 request["command"] = params.name
 
             // Grouped tool — "type" field becomes the command

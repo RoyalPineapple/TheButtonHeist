@@ -551,4 +551,22 @@ extension TheFence {
         }
         return .recordingData(payload: recording)
     }
+
+    // MARK: - Handler: BookKeeper
+
+    func handleBookKeeperCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        switch command {
+        case .getSessionLog:
+            guard let manifest = bookKeeper.manifest else {
+                return .error("No active session")
+            }
+            return .sessionLog(manifest: manifest)
+        case .archiveSession:
+            let deleteSource = boolArg(args, "delete_source") ?? false
+            let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
+            return .archiveResult(path: archiveURL.path, manifest: manifest)
+        default:
+            return .error("Unexpected BookKeeper command: \(command.rawValue)")
+        }
+    }
 }
