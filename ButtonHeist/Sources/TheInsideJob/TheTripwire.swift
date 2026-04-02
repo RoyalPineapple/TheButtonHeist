@@ -133,11 +133,15 @@ final class TheTripwire {
 
     // MARK: - Pulse State
 
+    private enum PulsePhase {
+        case idle
+        case running(link: CADisplayLink, target: PulseTick)
+    }
+
     private(set) var latestReading: PulseReading?
     var onTransition: ((PulseTransition) -> Void)?
 
-    private var displayLink: CADisplayLink?
-    private var pulseTarget: PulseTick?
+    private var pulsePhase: PulsePhase = .idle
     private var tickCount: UInt64 = 0
 
     // Notification-driven flags (set by observers, read by tick and TheSafecracker)
@@ -156,26 +160,27 @@ final class TheTripwire {
 
     // MARK: - Pulse Lifecycle
 
-    var isPulseRunning: Bool { displayLink != nil }
+    var isPulseRunning: Bool {
+        if case .running = pulsePhase { return true }
+        return false
+    }
 
     func startPulse() {
-        guard displayLink == nil else { return }
+        guard case .idle = pulsePhase else { return }
         let target = PulseTick(tripwire: self)
         let link = CADisplayLink(target: target, selector: #selector(PulseTick.handleTick))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
         link.add(to: .main, forMode: .common)
-        displayLink = link
-        pulseTarget = target
+        pulsePhase = .running(link: link, target: target)
         startNotificationObservation()
     }
 
     func stopPulse() {
-        displayLink?.invalidate()
-        displayLink = nil
-        pulseTarget = nil
+        guard case .running(let link, _) = pulsePhase else { return }
+        link.invalidate()
+        pulsePhase = .idle
         stopNotificationObservation()
 
-        // Resolve any pending waiters as timed out
         for waiter in settleWaiters {
             waiter.continuation.resume(returning: false)
         }
@@ -472,9 +477,13 @@ final class TheTripwire {
     /// and active animations — stricter than the pre-pulse check which only
     /// looked at animations.
     func allClear() -> Bool {
-        if let reading = latestReading { return reading.isSettled }
-        let scan = scanLayers()
-        return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+        switch pulsePhase {
+        case .running:
+            return latestReading?.isSettled ?? false
+        case .idle:
+            let scan = scanLayers()
+            return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+        }
     }
 
     // MARK: - Constants
