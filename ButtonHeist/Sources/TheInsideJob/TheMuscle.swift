@@ -32,50 +32,142 @@ final class TheMuscle {
 
     // MARK: - Properties
 
-    /// Tracks failed auth attempts per remote address for brute-force protection.
-    private var failedAuthAttempts: [String: Int] = [:]
-    /// Remote addresses temporarily locked out after too many failed attempts.
-    private var lockedOutAddresses: [String: Date] = [:]
-    /// Maps client IDs to their remote address for lockout tracking across reconnections.
-    private var clientAddresses: [Int: String] = [:]
+    /// Per-address rate limiting state machine for brute-force protection.
+    private enum AddressAuthState {
+        /// Accumulating failures, not yet locked out.
+        case failing(attempts: Int)
+        /// Locked out after exceeding maxFailedAttempts.
+        case lockedOut(until: Date, attempts: Int)
+    }
+
+    /// Rate-limiting state per remote address. Absent = clean (no failures).
+    private var addressAuthStates: [String: AddressAuthState] = [:]
+
+    /// Per-client lifecycle state machine.
+    /// Each client traverses: connected → helloValidated → pendingApproval | authenticated | observer.
+    /// Disconnection removes the entry entirely.
+    private enum ClientPhase {
+        case connected(address: String)
+        case helloValidated(address: String)
+        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, isObserver: Bool)
+        case authenticated(address: String, driverIdentity: String, subscribed: Bool)
+        case observer(address: String, subscribed: Bool)
+
+        var address: String {
+            switch self {
+            case .connected(let address), .helloValidated(let address),
+                 .pendingApproval(let address, _, _),
+                 .authenticated(let address, _, _), .observer(let address, _):
+                return address
+            }
+        }
+
+        var isAuthenticated: Bool {
+            switch self {
+            case .authenticated, .observer: return true
+            default: return false
+            }
+        }
+
+        var isSubscribed: Bool {
+            switch self {
+            case .authenticated(_, _, let subscribed), .observer(_, let subscribed): return subscribed
+            default: return false
+            }
+        }
+
+        var isObserver: Bool {
+            if case .observer = self { return true }
+            return false
+        }
+
+        var hasCompletedHello: Bool {
+            switch self {
+            case .connected: return false
+            default: return true
+            }
+        }
+
+        var driverIdentity: String? {
+            if case .authenticated(_, let identity, _) = self { return identity }
+            return nil
+        }
+    }
+
+    /// Single source of truth for all per-client state. Absent = no such client.
+    private var clients: [Int: ClientPhase] = [:]
 
     private(set) var authToken: String
-    private var pendingApprovalClients: [Int: @Sendable (Data) -> Void] = [:]
-    private(set) var authenticatedClientCount: Int = 0
-    private(set) var authenticatedClientIDs: Set<Int> = []
-    private(set) var helloValidatedClients: Set<Int> = []
     private weak var presentedAlert: UIAlertController?
 
-    // MARK: - Subscription Tracking
+    // MARK: - Computed Client Accessors
 
-    /// Clients that have opted in to receive hierarchy update broadcasts.
-    private(set) var subscribedClients: Set<Int> = []
+    /// IDs of all authenticated clients (drivers + observers).
+    var authenticatedClientIDs: Set<Int> {
+        Set(clients.lazy.filter { $0.value.isAuthenticated }.map(\.key))
+    }
+
+    /// Count of authenticated clients.
+    var authenticatedClientCount: Int {
+        clients.values.lazy.filter(\.isAuthenticated).count
+    }
+
+    /// IDs of all clients that have completed the hello handshake (any phase past connected).
+    var helloValidatedClients: Set<Int> {
+        Set(clients.lazy.filter { $0.value.hasCompletedHello }.map(\.key))
+    }
+
+    /// IDs of clients subscribed to hierarchy broadcasts.
+    var subscribedClients: Set<Int> {
+        Set(clients.lazy.filter { $0.value.isSubscribed }.map(\.key))
+    }
 
     /// True when at least one client is subscribed.
-    var hasSubscribers: Bool { !subscribedClients.isEmpty }
+    var hasSubscribers: Bool { clients.values.contains(where: \.isSubscribed) }
 
-    // MARK: - Observer Tracking
+    /// IDs of clients connected in observe mode.
+    var observerClients: Set<Int> {
+        Set(clients.lazy.filter { $0.value.isObserver }.map(\.key))
+    }
 
-    /// Clients connected in observe mode — not part of any session.
-    private(set) var observerClients: Set<Int> = []
-    /// Pending approval clients that requested observe mode
-    private var pendingObserverClients: Set<Int> = []
     /// Whether observers require token authentication (default: true; override with env: INSIDEJOB_RESTRICT_WATCHERS=0, plist: InsideJobRestrictWatchers=false)
     private let restrictWatchers: Bool
 
     // MARK: - Session Lock State
 
-    /// Driver identity that currently holds the session (nil = no active session).
-    /// This is derived from driverId (when provided) or the auth token (fallback).
-    private(set) var activeSessionDriverId: String?
-    /// Client IDs belonging to the active session
-    private(set) var activeSessionConnections: Set<Int> = []
-    /// Maps each authenticated client to their effective driver identity
-    private var clientDriverIds: [Int: String] = [:]
-    /// Timer that fires to release the session after inactivity (no connections and no heartbeat)
-    private var sessionReleaseTimer: Task<Void, Never>?
+    /// Explicit state machine for the session lifecycle.
+    /// Idle → active (driver claims) → draining (all connections gone, timer running) → idle.
+    private enum SessionState {
+        /// No active session — any driver may claim.
+        case idle
+        /// A driver owns the session with at least one live connection.
+        case active(driverId: String, connections: Set<Int>)
+        /// All connections disconnected; session will release when the timer fires.
+        case draining(driverId: String, releaseTimer: Task<Void, Never>)
+    }
+
+    private var sessionState: SessionState = .idle
     /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
+
+    // Computed accessors — preserve the external read interface.
+
+    /// Driver identity that currently holds the session (nil = no active session).
+    var activeSessionDriverId: String? {
+        switch sessionState {
+        case .idle: return nil
+        case .active(let driverId, _): return driverId
+        case .draining(let driverId, _): return driverId
+        }
+    }
+
+    /// Client IDs belonging to the active session.
+    var activeSessionConnections: Set<Int> {
+        switch sessionState {
+        case .active(_, let connections): return connections
+        case .idle, .draining: return []
+        }
+    }
 
     // MARK: - Callbacks (set by TheInsideJob)
 
@@ -109,7 +201,7 @@ final class TheMuscle {
 
     /// Register the remote address for a client (called when TCP connection is established).
     func registerClientAddress(_ clientId: Int, address: String) {
-        clientAddresses[clientId] = address
+        clients[clientId] = .connected(address: address)
     }
 
     func sendServerHello(clientId: Int) {
@@ -128,19 +220,19 @@ final class TheMuscle {
 
     /// Register a client for hierarchy update broadcasts.
     func subscribe(clientId: Int) {
-        subscribedClients.insert(clientId)
+        setSubscribed(true, for: clientId)
         logger.info("Client \(clientId) subscribed (\(self.subscribedClients.count) subscribers)")
     }
 
     /// Remove a client from hierarchy update broadcasts.
     func unsubscribe(clientId: Int) {
-        subscribedClients.remove(clientId)
+        setSubscribed(false, for: clientId)
         logger.info("Client \(clientId) unsubscribed (\(self.subscribedClients.count) subscribers)")
     }
 
     /// Send data to all subscribed clients.
     func broadcastToSubscribed(_ data: Data) {
-        for clientId in subscribedClients {
+        for (clientId, phase) in clients where phase.isSubscribed {
             sendToClient?(data, clientId)
         }
     }
@@ -170,11 +262,13 @@ final class TheMuscle {
 
         switch envelope.message {
         case .clientHello:
-            helloValidatedClients.insert(clientId)
+            if let phase = clients[clientId] {
+                clients[clientId] = .helloValidated(address: phase.address)
+            }
             sendMessage(.authRequired, respond: respond)
             return
         case .watch(let payload):
-            guard helloValidatedClients.contains(clientId) else {
+            guard clients[clientId]?.hasCompletedHello == true else {
                 logger.warning("Client \(clientId) attempted watch before hello")
                 disconnectClient?(clientId)
                 return
@@ -182,12 +276,12 @@ final class TheMuscle {
             handleWatchRequest(clientId, payload: payload, respond: respond)
             return
         case .authenticate(let payload):
-            guard helloValidatedClients.contains(clientId) else {
+            guard clients[clientId]?.hasCompletedHello == true else {
                 logger.warning("Client \(clientId) attempted auth before hello")
                 disconnectClient?(clientId)
                 return
             }
-            processAuthentication(clientId, payload: payload, address: clientAddresses[clientId], respond: respond)
+            processAuthentication(clientId, payload: payload, respond: respond)
             return
         default:
             logger.warning("Client \(clientId) sent invalid pre-auth message, disconnecting")
@@ -196,8 +290,8 @@ final class TheMuscle {
         }
     }
 
-    private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, address: String?, respond: @escaping @Sendable (Data) -> Void) {
-        guard let address else {
+    private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) {
+        guard let phase = clients[clientId] else {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
             sendMessage(.authFailed("Connection rejected."), respond: respond)
             Task { [weak self] in
@@ -206,7 +300,8 @@ final class TheMuscle {
             }
             return
         }
-        if let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
+        let address = phase.address
+        if isLockedOut(address: address) {
             sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
             logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
             Task { [weak self] in
@@ -215,12 +310,11 @@ final class TheMuscle {
             }
             return
         }
-        lockedOutAddresses.removeValue(forKey: address)
 
         if payload.token.isEmpty {
             // No token → request UI approval (Allow/Deny prompt on device)
             logger.info("Client \(clientId) requesting UI approval (no token)")
-            pendingApprovalClients[clientId] = respond
+            clients[clientId] = .pendingApproval(address: address, respond: respond, isObserver: false)
             showApprovalAlert(
                 clientId: clientId,
                 onAllow: { [weak self] in self?.approveClient(clientId) },
@@ -231,10 +325,8 @@ final class TheMuscle {
 
         guard payload.token == authToken else {
             // Wrong token → reject with guidance to retry without a token
-            let attempts = (failedAuthAttempts[address] ?? 0) + 1
-            failedAuthAttempts[address] = attempts
+            let attempts = recordFailedAttempt(address: address)
             if attempts >= TheMuscle.maxFailedAttempts {
-                lockedOutAddresses[address] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
                 logger.warning("Address \(address) locked out after \(attempts) failed attempts")
             }
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
@@ -247,42 +339,25 @@ final class TheMuscle {
         }
 
         // Token matches → authenticate and acquire session
-        failedAuthAttempts.removeValue(forKey: address)
+        clearFailedAttempts(address: address)
         let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
         }
 
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
         markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) authenticated with token")
-        authenticatedClientIDs.insert(clientId)
-        clientDriverIds[clientId] = driverIdentity
-        updateAuthenticatedCount(delta: 1)
         onClientAuthenticated?(clientId, respond)
     }
 
     func handleClientDisconnected(_ clientId: Int) {
-        pendingApprovalClients.removeValue(forKey: clientId)
-        clientDriverIds.removeValue(forKey: clientId)
-        clientAddresses.removeValue(forKey: clientId)
-        subscribedClients.remove(clientId)
-        observerClients.remove(clientId)
-        pendingObserverClients.remove(clientId)
-        helloValidatedClients.remove(clientId)
-        if authenticatedClientIDs.remove(clientId) != nil {
-            updateAuthenticatedCount(delta: -1)
-        }
-
-        // Session tracking
-        activeSessionConnections.remove(clientId)
-        if activeSessionDriverId != nil && activeSessionConnections.isEmpty {
-            logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
-            startReleaseTimer()
-        }
+        clients.removeValue(forKey: clientId)
+        removeSessionConnection(clientId)
     }
 
     func approveClient(_ clientId: Int) {
-        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
+        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
 
         // UI-approved clients use the server's authToken — session check with that token
         let driverIdentity = effectiveDriverId(driverId: nil, token: authToken)
@@ -290,17 +365,16 @@ final class TheMuscle {
             return
         }
 
+        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
         markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
-        authenticatedClientIDs.insert(clientId)
-        clientDriverIds[clientId] = driverIdentity
         sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
-        updateAuthenticatedCount(delta: 1)
         onClientAuthenticated?(clientId, respond)
     }
 
     func denyClient(_ clientId: Int) {
-        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
+        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
+        clients[clientId] = .helloValidated(address: address)
         sendMessage(.authFailed("Connection denied by user"), respond: respond)
         logger.info("Client \(clientId) denied via UI")
         Task { [weak self] in
@@ -310,14 +384,7 @@ final class TheMuscle {
     }
 
     func tearDown() {
-        pendingApprovalClients.removeAll()
-        authenticatedClientIDs.removeAll()
-        authenticatedClientCount = 0
-        clientDriverIds.removeAll()
-        helloValidatedClients.removeAll()
-        subscribedClients.removeAll()
-        observerClients.removeAll()
-        pendingObserverClients.removeAll()
+        clients.removeAll()
         releaseSession()
         dismissAlert()
     }
@@ -353,7 +420,7 @@ final class TheMuscle {
     /// to allow unauthenticated observers. Observers never claim a session.
     private func handleWatchRequest(_ clientId: Int, payload: WatchPayload, respond: @escaping @Sendable (Data) -> Void) {
         if restrictWatchers {
-            guard let address = clientAddresses[clientId] else {
+            guard let phase = clients[clientId] else {
                 sendMessage(.authFailed("Connection rejected."), respond: respond)
                 Task { [weak self] in
                     try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
@@ -361,7 +428,8 @@ final class TheMuscle {
                 }
                 return
             }
-            if let lockoutExpiry = lockedOutAddresses[address], Date() < lockoutExpiry {
+            let address = phase.address
+            if isLockedOut(address: address) {
                 sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
                 logger.warning("Observer \(clientId) locked out (address: \(address)), rejecting")
                 Task { [weak self] in
@@ -370,7 +438,6 @@ final class TheMuscle {
                 }
                 return
             }
-            lockedOutAddresses.removeValue(forKey: address)
             guard !payload.token.isEmpty else {
                 sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
                 logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
@@ -381,10 +448,8 @@ final class TheMuscle {
                 return
             }
             guard payload.token == authToken else {
-                let attempts = (failedAuthAttempts[address] ?? 0) + 1
-                failedAuthAttempts[address] = attempts
+                let attempts = recordFailedAttempt(address: address)
                 if attempts >= TheMuscle.maxFailedAttempts {
-                    lockedOutAddresses[address] = Date().addingTimeInterval(TheMuscle.lockoutDuration)
                     logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")
                 }
                 sendMessage(.authFailed("Invalid token."), respond: respond)
@@ -395,33 +460,27 @@ final class TheMuscle {
                 }
                 return
             }
-            failedAuthAttempts.removeValue(forKey: address)
+            clearFailedAttempts(address: address)
         }
         approveObserver(clientId, respond: respond)
     }
 
     /// Approve an observer from the pending-approval path (UI prompt)
     private func approveObserver(_ clientId: Int) {
-        guard let respond = pendingApprovalClients.removeValue(forKey: clientId) else { return }
-        pendingObserverClients.remove(clientId)
+        guard case .pendingApproval(let address, let respond, true) = clients[clientId] else { return }
+        clients[clientId] = .observer(address: address, subscribed: true)
         markClientAuthenticated?(clientId)
-        authenticatedClientIDs.insert(clientId)
-        observerClients.insert(clientId)
-        subscribedClients.insert(clientId)
         sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
-        updateAuthenticatedCount(delta: 1)
         logger.info("Observer \(clientId) approved via UI")
         onClientAuthenticated?(clientId, respond)
     }
 
     /// Approve an observer directly (no UI needed)
     private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
+        guard let phase = clients[clientId] else { return }
+        clients[clientId] = .observer(address: phase.address, subscribed: true)
         markClientAuthenticated?(clientId)
-        authenticatedClientIDs.insert(clientId)
-        observerClients.insert(clientId)
-        subscribedClients.insert(clientId)
         sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
-        updateAuthenticatedCount(delta: 1)
         logger.info("Observer \(clientId) approved (no session lock)")
         onClientAuthenticated?(clientId, respond)
     }
@@ -444,60 +503,82 @@ final class TheMuscle {
     /// - Active session, same driver → rejoin (cancel release timer)
     /// - Active session, different driver → busy signal
     private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) -> Bool {
-        if let activeId = activeSessionDriverId {
-            if driverIdentity == activeId {
-                // Same driver — allow, cancel any pending release timer
-                sessionReleaseTimer?.cancel()
-                sessionReleaseTimer = nil
-                activeSessionConnections.insert(clientId)
-                logger.info("Client \(clientId) joined existing session")
-                return true
-            } else {
-                // Different driver — busy signal, no force takeover
-                let payload = SessionLockedPayload(
-                    message: "Session is locked by another driver. Session will time out after \(Int(sessionReleaseTimeout))s of inactivity.",
-                    activeConnections: activeSessionConnections.count
-                )
-                sendMessage(.sessionLocked(payload), respond: respond)
-                logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
-                    self?.disconnectClient?(clientId)
-                }
-                return false
-            }
-        } else {
-            // No active session — claim it
+        switch sessionState {
+        case .idle:
             claimSession(driverIdentity: driverIdentity, clientId: clientId)
             return true
+
+        case .active(let activeId, var connections) where driverIdentity == activeId:
+            connections.insert(clientId)
+            sessionState = .active(driverId: activeId, connections: connections)
+            logger.info("Client \(clientId) joined existing session")
+            return true
+
+        case .draining(let activeId, let timer) where driverIdentity == activeId:
+            timer.cancel()
+            sessionState = .active(driverId: activeId, connections: [clientId])
+            logger.info("Client \(clientId) rejoined session during grace period")
+            return true
+
+        case .active, .draining:
+            let payload = SessionLockedPayload(
+                message: "Session is locked by another driver. Session will time out after \(Int(sessionReleaseTimeout))s of inactivity.",
+                activeConnections: activeSessionConnections.count
+            )
+            sendMessage(.sessionLocked(payload), respond: respond)
+            logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                self?.disconnectClient?(clientId)
+            }
+            return false
         }
     }
 
     private func claimSession(driverIdentity: String, clientId: Int) {
-        activeSessionDriverId = driverIdentity
-        activeSessionConnections = [clientId]
-        sessionReleaseTimer?.cancel()
-        sessionReleaseTimer = nil
+        cancelTimerIfDraining()
+        sessionState = .active(driverId: driverIdentity, connections: [clientId])
         logger.info("Session claimed by client \(clientId)")
         onSessionActiveChanged?(true)
     }
 
     private func releaseSession() {
-        let hadSession = activeSessionDriverId != nil
-        activeSessionDriverId = nil
-        activeSessionConnections.removeAll()
-        sessionReleaseTimer?.cancel()
-        sessionReleaseTimer = nil
+        let hadSession: Bool
+        switch sessionState {
+        case .idle: hadSession = false
+        case .active, .draining: hadSession = true
+        }
+        cancelTimerIfDraining()
+        sessionState = .idle
         if hadSession {
             logger.info("Session released")
             onSessionActiveChanged?(false)
         }
     }
 
-    /// Start the single inactivity timer. Fires after `sessionReleaseTimeout` to release the session.
-    private func startReleaseTimer() {
-        sessionReleaseTimer?.cancel()
-        sessionReleaseTimer = Task { [weak self, sessionReleaseTimeout] in
+    /// Remove a client from the active session. Transitions to draining if no connections remain.
+    private func removeSessionConnection(_ clientId: Int) {
+        guard case .active(let driverId, var connections) = sessionState else { return }
+        connections.remove(clientId)
+        if connections.isEmpty {
+            logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
+            let timer = makeReleaseTimer()
+            sessionState = .draining(driverId: driverId, releaseTimer: timer)
+        } else {
+            sessionState = .active(driverId: driverId, connections: connections)
+        }
+    }
+
+    /// Cancel the release timer if currently draining.
+    private func cancelTimerIfDraining() {
+        if case .draining(_, let timer) = sessionState {
+            timer.cancel()
+        }
+    }
+
+    /// Create a release timer task that fires after `sessionReleaseTimeout`.
+    private func makeReleaseTimer() -> Task<Void, Never> {
+        Task { [weak self, sessionReleaseTimeout] in
             try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.releaseSession()
@@ -506,18 +587,70 @@ final class TheMuscle {
 
     /// Reset the inactivity timer (called on heartbeat/ping from active session client).
     private func resetInactivityTimer() {
-        guard activeSessionDriverId != nil else { return }
-        if activeSessionConnections.isEmpty {
-            // No connections — restart the release countdown
-            startReleaseTimer()
+        switch sessionState {
+        case .idle:
+            return
+        case .active:
+            // Connections exist — no timer needed; timer starts on last disconnect
+            return
+        case .draining(let driverId, let oldTimer):
+            oldTimer.cancel()
+            let timer = makeReleaseTimer()
+            sessionState = .draining(driverId: driverId, releaseTimer: timer)
         }
-        // If there are active connections, no timer needed — timer starts on last disconnect
     }
 
     // MARK: - Private
 
-    private func updateAuthenticatedCount(delta: Int) {
-        authenticatedClientCount = max(0, authenticatedClientCount + delta)
+    /// Toggle the subscribed flag on an authenticated or observer client.
+    private func setSubscribed(_ subscribed: Bool, for clientId: Int) {
+        switch clients[clientId] {
+        case .authenticated(let address, let driverIdentity, _):
+            clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: subscribed)
+        case .observer(let address, _):
+            clients[clientId] = .observer(address: address, subscribed: subscribed)
+        default:
+            logger.debug("Ignoring subscribe(\(subscribed)) for client \(clientId) in phase \(String(describing: self.clients[clientId]))")
+        }
+    }
+
+    // MARK: - Rate Limiting Helpers
+
+    /// Check if an address is currently locked out. Clears expired lockouts automatically.
+    /// Returns true if locked out (caller should reject).
+    private func isLockedOut(address: String) -> Bool {
+        guard case .lockedOut(let expiry, _) = addressAuthStates[address] else { return false }
+        if Date() < expiry {
+            return true
+        }
+        addressAuthStates.removeValue(forKey: address)
+        return false
+    }
+
+    /// Record a failed auth attempt for an address. Returns the new attempt count.
+    @discardableResult
+    private func recordFailedAttempt(address: String) -> Int {
+        let currentAttempts: Int
+        switch addressAuthStates[address] {
+        case .failing(let count): currentAttempts = count
+        case .lockedOut(_, let count): currentAttempts = count
+        case nil: currentAttempts = 0
+        }
+        let newAttempts = currentAttempts + 1
+        if newAttempts >= TheMuscle.maxFailedAttempts {
+            addressAuthStates[address] = .lockedOut(
+                until: Date().addingTimeInterval(TheMuscle.lockoutDuration),
+                attempts: newAttempts
+            )
+        } else {
+            addressAuthStates[address] = .failing(attempts: newAttempts)
+        }
+        return newAttempts
+    }
+
+    /// Clear rate-limiting state for an address after successful auth.
+    private func clearFailedAttempts(address: String) {
+        addressAuthStates.removeValue(forKey: address)
     }
 
     private func showApprovalAlert(
@@ -559,7 +692,9 @@ final class TheMuscle {
     }
 
     func clientIDs(for driverIdentity: String) -> [Int] {
-        clientDriverIds.filter { $0.value == driverIdentity }.map(\.key)
+        clients.compactMap { clientId, phase in
+            phase.driverIdentity == driverIdentity ? clientId : nil
+        }
     }
 
     func encodeEnvelope(_ message: ServerMessage) -> Data? {
