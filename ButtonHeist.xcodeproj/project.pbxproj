@@ -14,7 +14,6 @@
 		08817F353A28D70410522D5B /* TheBagmanResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF68558C8D801C0880F59B3 /* TheBagmanResolutionTests.swift */; };
 		08AC4A9AA192B564B9FFBA5B /* TheFence+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD8ED05F8A920806D4175663 /* TheFence+Formatting.swift */; };
 		0B727DFA33963386D57AA5BD /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */; };
-		10225D3B3C868E82D45D1CAC /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
 		111478ED9DB0CF6CD31A8B06 /* TheBagman+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E81A25DE099E1AE4EC58765 /* TheBagman+Actions.swift */; };
 		172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
@@ -43,7 +42,6 @@
 		461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1308BFFECC16AF7E933839EB /* TheSafecracker.swift */; };
 		462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */; };
 		47556EEB40FCB7D5768C37A1 /* AccessibilityHierarchyFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52EB3108DFAB4DF60AB11A4C /* AccessibilityHierarchyFilterTests.swift */; };
-		47D9445026E958EF6E2326A3 /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
 		4D3FAF8D7AAA5F9F98997531 /* TLSIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD647E6B8282C97B896CBBB8 /* TLSIdentity.swift */; };
 		4E6ACA44E7873AB5F7F3379B /* ClientMessages+WireCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3E63876D513CED21786EC3 /* ClientMessages+WireCoding.swift */; };
 		4FAC2C9357CF29C8B1208BF6 /* TheBagman+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B21D75DFCBE788797264E9D /* TheBagman+Scroll.swift */; };
@@ -53,7 +51,6 @@
 		5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */; };
 		5EF13631934912FD7D933DB1 /* Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6E45285127FD6657C85307 /* Screen.swift */; };
 		6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011FC701399ED6B199815A4C /* AutoStart.swift */; };
-		62DE534419EEF19F9A0C383D /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
 		674F25A2AE43B004B9BD49ED /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		698A3E5AED394552492E2372 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0E22793B929DC48507268C /* DeviceConnection.swift */; };
 		70645F302E2187171D64E958 /* TheMuscleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 594A7F8340C7B335C8033319 /* TheMuscleTests.swift */; };
@@ -62,7 +59,6 @@
 		7567958784B5D6C347282E99 /* TheBagmanTopologyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22162F87098F2854C31BB74 /* TheBagmanTopologyTests.swift */; };
 		7643F9C7DA856F392EB2B1EB /* TheBagmanScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D815B819FCBE81F64B9028EF /* TheBagmanScrollTests.swift */; };
 		78C4C37260D52BD11B794E74 /* PendingRequestTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B563AA9D07BE62B11AAD681D /* PendingRequestTracker.swift */; };
-		7AC5BB6A8C8049B4734E9D87 /* Crypto.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E52AAF089A5FF3332696D2C8 /* Crypto.framework */; };
 		7C171E0C9479C3EAD5757469 /* TheSafecrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424717FB3ECFCCEA52B1971B /* TheSafecrackerTests.swift */; };
 		7C9D2F12AC93C715BE94D816 /* ThePlantAutoStart.m in Sources */ = {isa = PBXBuildFile; fileRef = 376587F2D81DC81C4DE344CD /* ThePlantAutoStart.m */; };
 		7DD042B29F6EA06B23F49451 /* TheTripwire.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA15816DA81341F66436C5 /* TheTripwire.swift */; };
@@ -370,7 +366,6 @@
 		DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		E2EA15816DA81341F66436C5 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
-		E52AAF089A5FF3332696D2C8 /* Crypto.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Crypto.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA2B9DBB624B59914F1B4849 /* ElementMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementMatcherTests.swift; sourceTree = "<group>"; };
 		EA6E45285127FD6657C85307 /* Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screen.swift; sourceTree = "<group>"; };
 		F22162F87098F2854C31BB74 /* TheBagmanTopologyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBagmanTopologyTests.swift; sourceTree = "<group>"; };
@@ -396,7 +391,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				62DE534419EEF19F9A0C383D /* Crypto.framework in Frameworks */,
 				43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */,
 				2F380AD6AE4BB22EF36DA8B6 /* TheScore.framework in Frameworks */,
 			);
@@ -414,7 +408,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				268C0891BC4BD683AA2C806C /* ButtonHeist.framework in Frameworks */,
-				7AC5BB6A8C8049B4734E9D87 /* Crypto.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -422,7 +415,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				10225D3B3C868E82D45D1CAC /* Crypto.framework in Frameworks */,
 				BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -432,7 +424,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */,
-				47D9445026E958EF6E2326A3 /* Crypto.framework in Frameworks */,
 				1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */,
 				C58ABCE1E2EC2AABA74AC5B0 /* X509.framework in Frameworks */,
 			);
@@ -496,7 +487,6 @@
 				5598A55C05BC6726CABD5670 /* BH Demo.app */,
 				5D9A980927A3C00ED36E2929 /* ButtonHeist.framework */,
 				2EB1711D7BADFA08C5ACA515 /* ButtonHeistTests.xctest */,
-				E52AAF089A5FF3332696D2C8 /* Crypto.framework */,
 				6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */,
 				13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */,
 				6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */,
