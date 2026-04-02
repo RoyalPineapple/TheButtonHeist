@@ -12,8 +12,7 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try process.run()
-        process.waitUntilExit()
+        try await runProcess(process)
 
         guard process.terminationStatus == 0 else {
             throw BookKeeperError.compressionFailed(
@@ -40,8 +39,7 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try process.run()
-        process.waitUntilExit()
+        try await runProcess(process)
 
         guard process.terminationStatus == 0 else {
             throw BookKeeperError.archiveFailed(
@@ -54,5 +52,18 @@ extension TheBookKeeper {
             )
         }
         return archivePath
+    }
+
+    private nonisolated func runProcess(_ process: Process) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            process.terminationHandler = { _ in
+                continuation.resume()
+            }
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 }
