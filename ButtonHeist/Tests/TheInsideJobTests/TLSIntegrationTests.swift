@@ -2,6 +2,7 @@ import XCTest
 import Network
 import Security
 import CryptoKit
+import os
 import TheScore
 @testable import TheInsideJob
 
@@ -16,10 +17,10 @@ final class TLSIntegrationTests: XCTestCase {
         server = SimpleSocketServer()
     }
 
-    override func tearDown() {
-        server.stop()
+    override func tearDown() async throws {
+        await server.stop()
         server = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - TLS Handshake
@@ -131,50 +132,51 @@ final class TLSIntegrationTests: XCTestCase {
 
     func testUnauthenticatedStatusProbeRoundTripsOverTLS() async throws {
         let identity = try TLSIdentity.createEphemeral()
-        let transport = ServerTransport(tlsIdentity: identity)
-        let server = transport.server
-        defer { transport.stop() }
+        let tlsParams = await identity.makeTLSParameters()!
 
-        transport.onClientConnected = { clientId, _ in
-            guard let authRequired = try? JSONEncoder().encode(ResponseEnvelope(message: .authRequired)) else {
-                XCTFail("Failed to encode authRequired response")
-                return
-            }
-            server.send(authRequired, to: clientId)
-        }
+        // Use the instance server directly (cleaned up by tearDown) instead of
+        // ServerTransport, which uses fire-and-forget Task cleanup that can
+        // leave lingering state between test runner invocations.
+        let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
+        let clientConnected = expectation(description: "client connected")
 
-        transport.onUnauthenticatedData = { _, data, respond in
-            let decoder = JSONDecoder()
-            guard let envelope = try? decoder.decode(RequestEnvelope.self, from: data) else {
-                XCTFail("Expected RequestEnvelope for unauthenticated status probe")
-                return
-            }
-            guard case .status = envelope.message else {
-                XCTFail("Expected unauthenticated status probe, got \(envelope.message)")
-                return
-            }
+        let callbacks = SimpleSocketServer.Callbacks(
+            onClientConnected: { clientId, _ in
+                capturedClientId.withLock { $0 = clientId }
+                clientConnected.fulfill()
+            },
+            onUnauthenticatedData: { _, data, respond in
+                let decoder = JSONDecoder()
+                guard let envelope = try? decoder.decode(RequestEnvelope.self, from: data) else {
+                    XCTFail("Expected RequestEnvelope for unauthenticated status probe")
+                    return
+                }
+                guard case .status = envelope.message else {
+                    XCTFail("Expected unauthenticated status probe, got \(envelope.message)")
+                    return
+                }
 
-            let payload = StatusPayload(
-                identity: StatusIdentity(
-                    appName: "ReachableApp",
-                    bundleIdentifier: "com.test.reachable",
-                    appBuild: "42",
-                    deviceName: "Loopback Simulator",
-                    systemVersion: "18.0",
-                    buttonHeistVersion: protocolVersion
-                ),
-                session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
-            )
-            guard let response = try? JSONEncoder().encode(
-                ResponseEnvelope(requestId: envelope.requestId, message: .status(payload))
-            ) else {
-                XCTFail("Failed to encode status response")
-                return
+                let payload = StatusPayload(
+                    identity: StatusIdentity(
+                        appName: "ReachableApp",
+                        bundleIdentifier: "com.test.reachable",
+                        appBuild: "42",
+                        deviceName: "Loopback Simulator",
+                        systemVersion: "18.0",
+                        buttonHeistVersion: protocolVersion
+                    ),
+                    session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
+                )
+                guard let response = try? JSONEncoder().encode(
+                    ResponseEnvelope(requestId: envelope.requestId, message: .status(payload))
+                ) else {
+                    XCTFail("Failed to encode status response")
+                    return
+                }
+                respond(response)
             }
-            respond(response)
-        }
-
-        let port = try await transport.start(port: 0, bindToLoopback: true)
+        )
+        let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
 
         let clientParams = Self.makeClientTLSParameters(expectedFingerprint: identity.fingerprint)
         let connection = NWConnection(
@@ -190,7 +192,12 @@ final class TLSIntegrationTests: XCTestCase {
             }
         }
         connection.start(queue: .global())
-        await fulfillment(of: [clientReady], timeout: 5.0)
+        await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
+
+        // Send authRequired from the test's async context (awaited, not fire-and-forget)
+        let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
+        let authRequiredMessage = try JSONEncoder().encode(ResponseEnvelope(message: .authRequired))
+        await server.send(authRequiredMessage, to: clientId)
 
         let authRequiredData = try await receiveData(from: connection)
         let authRequired = try decodeResponseEnvelope(from: authRequiredData)
