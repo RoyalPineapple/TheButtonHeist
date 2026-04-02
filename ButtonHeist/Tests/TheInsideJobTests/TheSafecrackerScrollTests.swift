@@ -170,5 +170,85 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01,
                        "Should not scroll when target is already visible")
     }
+    // MARK: - scrollToMakeVisible: comfort margin
+
+    func testScrollToMakeVisibleComfortMarginScrollsElementOutsideComfortZone() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 3000)
+        )
+        // Comfort zone with 1/6 margin: top ≈ 133, bottom ≈ 667.
+        // Element at y=750 is inside the full visible rect (0..800) but below
+        // the comfort zone bottom (~667), so it should trigger a scroll.
+        let targetFrame = CGRect(x: 50, y: 750, width: 100, height: 44)
+        let result = safecracker.scrollToMakeVisible(
+            targetFrame, in: sv, animated: false,
+            comfortMarginFraction: 1.0 / 6.0
+        )
+        XCTAssertTrue(result)
+        XCTAssertGreaterThan(sv.contentOffset.y, 0,
+                             "Should scroll down to bring element into comfort zone")
+    }
+
+    func testScrollToMakeVisibleComfortMarginNoScrollWhenInsideComfortZone() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 3000)
+        )
+        // Element well within the comfort zone (middle 2/3 = ~133..667).
+        let targetFrame = CGRect(x: 50, y: 300, width: 100, height: 44)
+        let result = safecracker.scrollToMakeVisible(
+            targetFrame, in: sv, animated: false,
+            comfortMarginFraction: 1.0 / 6.0
+        )
+        XCTAssertTrue(result)
+        XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01,
+                       "Should not scroll when element is already in comfort zone")
+    }
+
+    func testScrollToMakeVisibleLargeTargetFallsBackToFullVisibleRect() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 600),
+            contentSize: CGSize(width: 400, height: 3000),
+            contentOffset: CGPoint(x: 0, y: 500)
+        )
+        // Comfort zone with 1/6 margin: height = 600 * (2/3) = 400.
+        // Target is 450pt tall — exceeds the comfort zone, so the method
+        // should fall back to the full visible rect instead.
+        let targetFrame = CGRect(x: 0, y: 200, width: 400, height: 450)
+        let result = safecracker.scrollToMakeVisible(
+            targetFrame, in: sv, animated: false,
+            comfortMarginFraction: 1.0 / 6.0
+        )
+        XCTAssertTrue(result)
+        // With full visible rect fallback (500..1100), the target (200..650 in content space)
+        // needs to scroll up. The key assertion is that it scrolled at all — the fallback
+        // to fullVisibleRect allowed the scroll instead of using the too-small comfort zone.
+        XCTAssertLessThan(sv.contentOffset.y, 500,
+                          "Should fall back to full visible rect and scroll for oversized target")
+    }
+
+    func testScrollToMakeVisibleLargeTargetOnlyOneAxisExceedsComfortZone() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 600),
+            contentSize: CGSize(width: 2000, height: 3000),
+            contentOffset: CGPoint(x: 500, y: 500)
+        )
+        // Comfort zone: width = 400 * 2/3 ≈ 267, height = 600 * 2/3 = 400.
+        // Target width (300) exceeds comfort width (267) but target height (100) fits.
+        // The fallback is all-or-nothing: both axes lose the margin.
+        let targetFrame = CGRect(x: 200, y: 200, width: 300, height: 100)
+        let result = safecracker.scrollToMakeVisible(
+            targetFrame, in: sv, animated: false,
+            comfortMarginFraction: 1.0 / 6.0
+        )
+        XCTAssertTrue(result)
+        // Should use full visible rect (not comfort zone) since one axis exceeds comfort.
+        // Target in content space starts at x: 200+500=700 relative to content,
+        // but the key point is the fallback was applied — no crash, scroll happened.
+        let offsetMoved = sv.contentOffset.x != 500 || sv.contentOffset.y != 500
+        XCTAssertTrue(offsetMoved,
+                      "Should scroll using full visible rect when target exceeds comfort zone on one axis")
+    }
 }
 #endif
