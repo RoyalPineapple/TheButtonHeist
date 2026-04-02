@@ -124,6 +124,7 @@ public final class TheHandoff {
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
     private var keepaliveTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
 
     var hasActiveDiscoverySession: Bool {
         discovery != nil
@@ -298,7 +299,8 @@ public final class TheHandoff {
                 }
                 self.onDisconnected?(reason)
                 if case .enabled(let filter) = self.reconnectPolicy {
-                    Task { [weak self] in
+                    self.reconnectTask?.cancel()
+                    self.reconnectTask = Task { [weak self] in
                         await self?.runAutoReconnect(filter: filter)
                     }
                 }
@@ -365,6 +367,8 @@ public final class TheHandoff {
     }
 
     public func disconnect() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         keepaliveTask?.cancel()
         keepaliveTask = nil
         connection?.disconnect()
@@ -384,7 +388,8 @@ public final class TheHandoff {
         disconnect()
         onDisconnected?(.localDisconnect)
         if case .enabled(let filter) = reconnectPolicy {
-            Task { [weak self] in
+            reconnectTask?.cancel()
+            reconnectTask = Task { [weak self] in
                 await self?.runAutoReconnect(filter: filter)
             }
         }
@@ -473,15 +478,18 @@ public final class TheHandoff {
     private func runAutoReconnect(filter: String?) async {
         onStatus?("Device disconnected — watching for reconnection...")
         for _ in 0..<60 {
+            guard !Task.isCancelled else { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 onStatus?("Reconnecting to \(device.name)...")
                 connect(to: device)
                 let deadline = Date().addingTimeInterval(10)
                 while !isConnected {
-                    if Date() > deadline { break }
+                    if Task.isCancelled || Date() > deadline { break }
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
+                if Task.isCancelled { return }
                 if isConnected {
                     onStatus?("Reconnected to \(device.name)")
                     return
