@@ -1,4 +1,8 @@
-<img width="1536" height="1024" alt="ChatGPT Image Mar 3, 2026, 01_47_05 PM" src="https://github.com/user-attachments/assets/ab62f18f-a3bd-480e-906d-3167b90c1d77" />
+<img width="1536" height="1024" alt="Noir-style heist planning board with an iPhone at center labeled The Vault, connected by red string to crew member dossiers: The Inside Job, The Safecracker, The Mastermind, The Fence, and The Bagman. A whiskey glass and desk lamp sit in the foreground." src="https://github.com/user-attachments/assets/ab62f18f-a3bd-480e-906d-3167b90c1d77" />
+
+[![CI](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RoyalPineapple/TheButtonHeist?label=release)](https://github.com/RoyalPineapple/TheButtonHeist/releases/latest)
+[![License](https://img.shields.io/github/license/RoyalPineapple/TheButtonHeist)](LICENSE)
 
 # Interface out. Agents in. Clean escape.
 
@@ -43,17 +47,19 @@ Same embed pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.c
 
 ### 2. Give the agent eyes and hands
 
-Build the MCP server and add it to your project's `.mcp.json`:
+Install the CLI and MCP server:
 
 ```bash
-cd ButtonHeistMCP && swift build -c release
+brew install RoyalPineapple/tap/buttonheist
 ```
+
+Then add the MCP server to your project's `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "command": "buttonheist-mcp",
       "args": []
     }
   }
