@@ -16,10 +16,10 @@ final class TLSIntegrationTests: XCTestCase {
         server = SimpleSocketServer()
     }
 
-    override func tearDown() {
-        server.stop()
+    override func tearDown() async throws {
+        await server.stop()
         server = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - TLS Handshake
@@ -140,7 +140,7 @@ final class TLSIntegrationTests: XCTestCase {
                 XCTFail("Failed to encode authRequired response")
                 return
             }
-            server.send(authRequired, to: clientId)
+            Task { await server.send(authRequired, to: clientId) }
         }
 
         transport.onUnauthenticatedData = { _, data, respond in
