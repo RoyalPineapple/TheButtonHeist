@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Release script for Button Heist.
 #
-# Performs the full release pipeline from a clean main branch:
+# Performs the local release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across 6 files
 #   3. Build all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
 #   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
 #   5. Commit, tag, push
-#   6. Create GitHub release with CLI and MCP binaries
-#   7. Update RoyalPineapple/homebrew-tap formula with real SHA-256 hashes
+#
+# Pushing the tag triggers .github/workflows/release.yml which:
+#   - Builds universal binaries (arm64 + x86_64)
+#   - Creates the GitHub release with artifacts
+#   - Updates the Homebrew tap with real SHA-256 hashes
 #
 # Usage: ./scripts/release.sh [--dry-run] [<version>]
 # Example: ./scripts/release.sh              # Uses today's date: 2026.04.03
@@ -25,7 +28,6 @@ cd "$REPO_ROOT"
 
 CALVER_REGEX='^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
 GITHUB_REPO="RoyalPineapple/TheButtonHeist"
-HOMEBREW_TAP_REPO="RoyalPineapple/homebrew-tap"
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then
@@ -103,8 +105,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
     echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
-    echo "  5. Create GitHub release with binaries"
-    echo "  6. Update homebrew-tap formula"
+    echo "  5. CI builds universal binaries, creates GitHub release, updates Homebrew tap"
     exit 0
 fi
 
@@ -146,7 +147,7 @@ echo "  ✓ DisclosureGroupingDemo.swift"
 sed -i '' "s/\*\*$CURRENT_ESC\*\*/**$NEW_ESC**/" docs/VERSIONING.md
 echo "  ✓ docs/VERSIONING.md"
 
-# 6. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay)
+# 6. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
 sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
 echo "  ✓ Formula/buttonheist.rb"
 echo ""
@@ -245,111 +246,6 @@ echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
 echo ""
 
 # --------------------------------------------------------------------------
-# Phase 6: GitHub release with binaries
-# --------------------------------------------------------------------------
-
-echo "==> Phase 6: Creating GitHub release"
-
-STAGING=$(mktemp -d)
-trap "rm -rf $STAGING" EXIT
-
-# Package CLI
-mkdir -p "$STAGING/cli"
-cp ButtonHeistCLI/.build/release/buttonheist "$STAGING/cli/"
-(cd "$STAGING/cli" && tar czf "$STAGING/buttonheist-$NEW_VERSION-macos.tar.gz" buttonheist)
-
-# Package MCP
-mkdir -p "$STAGING/mcp"
-cp ButtonHeistMCP/.build/release/buttonheist-mcp "$STAGING/mcp/"
-(cd "$STAGING/mcp" && tar czf "$STAGING/buttonheist-mcp-$NEW_VERSION-macos.tar.gz" buttonheist-mcp)
-
-CLI_SHA=$(shasum -a 256 "$STAGING/buttonheist-$NEW_VERSION-macos.tar.gz" | cut -d' ' -f1)
-MCP_SHA=$(shasum -a 256 "$STAGING/buttonheist-mcp-$NEW_VERSION-macos.tar.gz" | cut -d' ' -f1)
-
-gh release create "v$NEW_VERSION" \
-    --repo "$GITHUB_REPO" \
-    --title "Release $NEW_VERSION" \
-    --notes "## Install
-
-\`\`\`bash
-brew install RoyalPineapple/tap/buttonheist
-\`\`\`
-
-## Binaries
-- \`buttonheist\` CLI (macOS)
-- \`buttonheist-mcp\` MCP server (macOS)" \
-    "$STAGING/buttonheist-$NEW_VERSION-macos.tar.gz" \
-    "$STAGING/buttonheist-mcp-$NEW_VERSION-macos.tar.gz"
-
-echo "  ✓ GitHub release created"
-echo "  CLI SHA-256:  $CLI_SHA"
-echo "  MCP SHA-256:  $MCP_SHA"
-echo ""
-
-# --------------------------------------------------------------------------
-# Phase 7: Update Homebrew tap
-# --------------------------------------------------------------------------
-
-echo "==> Phase 7: Updating Homebrew tap"
-
-TAP_DIR=$(mktemp -d)
-git clone --quiet "https://github.com/$HOMEBREW_TAP_REPO.git" "$TAP_DIR"
-
-RELEASE_URL="https://github.com/$GITHUB_REPO/releases/download/v$NEW_VERSION"
-
-mkdir -p "$TAP_DIR/Formula"
-cat > "$TAP_DIR/Formula/buttonheist.rb" << FORMULA
-class Buttonheist < Formula
-  desc "Give AI agents full programmatic control of iOS apps"
-  homepage "https://github.com/$GITHUB_REPO"
-  version "$NEW_VERSION"
-
-  url "$RELEASE_URL/buttonheist-$NEW_VERSION-macos.tar.gz"
-  sha256 "$CLI_SHA"
-
-  resource "mcp" do
-    url "$RELEASE_URL/buttonheist-mcp-$NEW_VERSION-macos.tar.gz"
-    sha256 "$MCP_SHA"
-  end
-
-  depends_on :macos
-  depends_on macos: :sonoma
-
-  def install
-    bin.install "buttonheist"
-    resource("mcp").stage { bin.install "buttonheist-mcp" }
-  end
-
-  def caveats
-    <<~EOS
-      MCP server is installed at:
-        #{opt_bin}/buttonheist-mcp
-
-      Add to your project's .mcp.json:
-        {
-          "mcpServers": {
-            "buttonheist": {
-              "command": "#{opt_bin}/buttonheist-mcp",
-              "args": []
-            }
-          }
-        }
-    EOS
-  end
-
-  test do
-    assert_match version.to_s, shell_output("#{bin}/buttonheist --version")
-  end
-end
-FORMULA
-
-(cd "$TAP_DIR" && git add -A && git commit -m "Update buttonheist to $NEW_VERSION" && git push --quiet)
-rm -rf "$TAP_DIR"
-
-echo "  ✓ Homebrew tap updated"
-echo ""
-
-# --------------------------------------------------------------------------
 # Done
 # --------------------------------------------------------------------------
 
@@ -357,7 +253,11 @@ echo "========================================="
 echo "  Release $NEW_VERSION complete"
 echo "========================================="
 echo ""
-echo "  Tag:     v$NEW_VERSION"
-echo "  Release: https://github.com/$GITHUB_REPO/releases/tag/v$NEW_VERSION"
-echo "  Install: brew install RoyalPineapple/tap/buttonheist"
+echo "  Tag:      v$NEW_VERSION"
+echo "  CI:       https://github.com/$GITHUB_REPO/actions"
+echo ""
+echo "  The release workflow is now building universal binaries,"
+echo "  creating the GitHub release, and updating the Homebrew tap."
+echo ""
+echo "  Monitor:  gh run watch --repo $GITHUB_REPO"
 echo ""
