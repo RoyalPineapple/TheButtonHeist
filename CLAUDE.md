@@ -454,6 +454,42 @@ Two type families are the currency for referring to UI elements. Use them everyw
 - After making code changes, rebuild and reinstall using those same steps.
 - Verify changes via CLI commands (`buttonheist session`, `buttonheist activate`, `buttonheist action`, `buttonheist screenshot`, etc.) — not manual GUI inspection.
 
+## Benchmark and Validation Harness
+
+The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 13 tasks.
+
+### Quick validation after code changes
+
+```bash
+cd .context/bh-infra
+./pool.sh --validate --workers 3
+```
+
+Runs all 13 tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1 (fail). Use `--min-score 1.0` for strict mode (default 0.5 allows partial credit).
+
+### Full benchmark
+
+```bash
+./pool.sh --workers 3 -c bh -n 3 --save-baseline bh-YYYYMMDD-description
+```
+
+### Reports and comparisons
+
+```bash
+./report.sh results/<run-id>/ --verdict                              # pass/fail gate
+./report.sh results/<run-id>/ --baseline bh-20260402-state-machines  # vs stored baseline
+./report.sh results/<new-run>/ --compare results/<old-run>/          # two runs
+```
+
+### Stored baselines
+
+| Baseline | Commit | Coverage |
+|----------|--------|----------|
+| `bh-main` | `d5dd8dea` | T0-T3, 3 trials |
+| `bh-20260402-state-machines` | `21ccb7de` | T0-T12, 1 trial |
+
+Save a new baseline when landing major changes.
+
 ## Recording and Demo Commands
 
 Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with TheInsideJob embedded.

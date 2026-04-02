@@ -145,6 +145,85 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
     }
 
+    // MARK: - ReconnectPolicy Trigger
+
+    func testDisconnectEventWithEnabledPolicyTriggersReconnect() async throws {
+        let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        let reconnected = expectation(description: "reconnect connection made")
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            if connectionCount == 1 {
+                connection.connectEventsOverride = [
+                    .connected,
+                    .disconnected(.serverClosed),
+                ]
+            } else {
+                connection.serverInfo = ServerInfo(
+                    protocolVersion: "5.0",
+                    appName: "TestApp",
+                    bundleIdentifier: "com.test",
+                    deviceName: "Simulator",
+                    systemVersion: "26.1",
+                    screenWidth: 402,
+                    screenHeight: 874
+                )
+                reconnected.fulfill()
+            }
+            return connection
+        }
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        handoff.makeDiscovery = { mockDiscovery }
+        handoff.startDiscovery()
+
+        handoff.setupAutoReconnect(filter: nil)
+
+        handoff.connect(to: device)
+        XCTAssertEqual(connectionCount, 1)
+
+        await fulfillment(of: [reconnected], timeout: 5)
+
+        XCTAssertGreaterThanOrEqual(connectionCount, 2)
+    }
+
+    func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
+        let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        let disconnected = expectation(description: "disconnect event received")
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            connection.connectEventsOverride = [
+                .connected,
+                .disconnected(.serverClosed),
+            ]
+            return connection
+        }
+        handoff.onDisconnected = { _ in
+            disconnected.fulfill()
+        }
+
+        handoff.connect(to: device)
+        XCTAssertEqual(connectionCount, 1)
+
+        await fulfillment(of: [disconnected], timeout: 5)
+
+        // Give the reconnect loop time to fire if it were going to (it shouldn't)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(connectionCount, 1)
+        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+    }
+
     // MARK: - RecordingPhase
 
     func testRecordingStartedSetsPhaseToRecording() {
