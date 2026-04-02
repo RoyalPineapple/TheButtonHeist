@@ -322,7 +322,18 @@ extension TheBagman {
         )
     }
 
-    // MARK: - Ensure On Screen
+    // MARK: - Ensure On Screen (Comfort Zone)
+
+    /// Fraction of each dimension to inset from each edge. 1/6 on each side = middle 2/3.
+    static let comfortMarginFraction: CGFloat = 1.0 / 6.0
+
+    /// The middle 2/3 of the screen — activation points should land here before interaction.
+    private static var interactionComfortZone: CGRect {
+        UIScreen.main.bounds.insetBy(
+            dx: UIScreen.main.bounds.width * comfortMarginFraction,
+            dy: UIScreen.main.bounds.height * comfortMarginFraction
+        )
+    }
 
     func ensureOnScreen(for target: ElementTarget) async {
         guard let safecracker else { return }
@@ -339,13 +350,19 @@ extension TheBagman {
             refresh()
         }
 
-        // Step 2: Fine-tune — resolve the element and scrollToMakeVisible if needed.
+        // Step 2: Fine-tune — scroll until the activation point is in the comfort zone
+        // (middle 2/3 of screen), not just barely on screen.
         guard let resolved = resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
-        guard !frame.isNull, !frame.isEmpty, !UIScreen.main.bounds.contains(frame),
+        let activationPoint = object.accessibilityActivationPoint
+        guard !frame.isNull, !frame.isEmpty,
+              !Self.interactionComfortZone.contains(activationPoint),
               let scrollView = resolved.screenElement.scrollView else { return }
-        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+        if safecracker.scrollToMakeVisible(
+            frame, in: scrollView,
+            comfortMarginFraction: Self.comfortMarginFraction
+        ) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refresh()
         }
@@ -355,11 +372,15 @@ extension TheBagman {
         guard let responder = tripwire.currentFirstResponder() else { return }
         let frame = responder.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
-        guard !UIScreen.main.bounds.contains(frame) else { return }
+        let activationPoint = responder.accessibilityActivationPoint
+        guard !Self.interactionComfortZone.contains(activationPoint) else { return }
         guard let scrollView = screenElements.values
             .first(where: { $0.object === responder })?.scrollView,
               let safecracker else { return }
-        if safecracker.scrollToMakeVisible(frame, in: scrollView) {
+        if safecracker.scrollToMakeVisible(
+            frame, in: scrollView,
+            comfortMarginFraction: Self.comfortMarginFraction
+        ) {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             refresh()
         }
@@ -371,10 +392,14 @@ extension TheBagman {
         guard let object = resolved.screenElement.object,
               let safecracker else { return }
         let frame = object.accessibilityFrame
+        let activationPoint = object.accessibilityActivationPoint
         guard !frame.isNull, !frame.isEmpty else { return }
-        guard !UIScreen.main.bounds.contains(frame) else { return }
+        guard !Self.interactionComfortZone.contains(activationPoint) else { return }
         guard let scrollView = resolved.screenElement.scrollView else { return }
-        _ = safecracker.scrollToMakeVisible(frame, in: scrollView, animated: animated)
+        _ = safecracker.scrollToMakeVisible(
+            frame, in: scrollView, animated: animated,
+            comfortMarginFraction: Self.comfortMarginFraction
+        )
     }
 
     // MARK: - Scroll Target Resolution (Accessibility Hierarchy)

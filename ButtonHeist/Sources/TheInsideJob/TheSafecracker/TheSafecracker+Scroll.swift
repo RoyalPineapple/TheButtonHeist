@@ -52,18 +52,35 @@ extension TheSafecracker {
         return true
     }
 
-    /// Scroll the minimum distance needed to make a frame visible.
+    /// Scroll the minimum distance needed to make a frame visible within a comfort zone.
     /// Frame is in screen coordinates; converted to scroll view content space internally.
+    /// `comfortMarginFraction` insets the visible rect by that fraction on each side
+    /// (e.g. 1/6 targets the middle 2/3). Falls back to the full visible rect when
+    /// the target is larger than the comfort zone.
     /// Returns true if already visible or if scroll was triggered.
-    func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView, animated: Bool = true) -> Bool {
+    func scrollToMakeVisible(
+        _ targetFrame: CGRect,
+        in scrollView: UIScrollView,
+        animated: Bool = true,
+        comfortMarginFraction: CGFloat = 0
+    ) -> Bool {
         let targetInScrollView = scrollView.convert(targetFrame, from: nil)
 
-        let visibleRect = CGRect(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
-            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
+        let inset = scrollView.adjustedContentInset
+        let fullVisibleRect = CGRect(
+            x: scrollView.contentOffset.x + inset.left,
+            y: scrollView.contentOffset.y + inset.top,
+            width: scrollView.frame.width - inset.left - inset.right,
+            height: scrollView.frame.height - inset.top - inset.bottom
         )
+
+        let comfortRect = fullVisibleRect.insetBy(
+            dx: fullVisibleRect.width * comfortMarginFraction,
+            dy: fullVisibleRect.height * comfortMarginFraction
+        )
+        let visibleRect = (comfortRect.width >= targetInScrollView.width
+            && comfortRect.height >= targetInScrollView.height)
+            ? comfortRect : fullVisibleRect
 
         if visibleRect.contains(targetInScrollView) { return true }
 
