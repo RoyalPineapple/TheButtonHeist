@@ -53,21 +53,13 @@ fi
 
 echo "==> Phase 1: Validating preconditions"
 
-# Must be on main
-CURRENT_BRANCH=$(git branch --show-current)
-if [[ "$CURRENT_BRANCH" != "main" ]]; then
-    echo "Error: must be on main (currently on '$CURRENT_BRANCH')"
-    echo "  git checkout main && git pull origin main"
-    exit 1
-fi
-
-# Fetch latest and verify in sync
+# Must be at the same commit as origin/main
 git fetch origin main --quiet
 LOCAL_SHA=$(git rev-parse HEAD)
 REMOTE_SHA=$(git rev-parse origin/main)
 if [[ "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
-    echo "Error: local main ($LOCAL_SHA) is not in sync with origin/main ($REMOTE_SHA)"
-    echo "  git pull origin main"
+    echo "Error: HEAD ($LOCAL_SHA) is not at origin/main ($REMOTE_SHA)"
+    echo "  git pull origin main   # or: git reset --hard origin/main"
     exit 1
 fi
 
@@ -92,7 +84,7 @@ if [[ -n $(git tag -l "v$NEW_VERSION" 2>/dev/null) ]]; then
     exit 1
 fi
 
-echo "  Branch: main (in sync with origin)"
+echo "  HEAD: in sync with origin/main"
 echo "  Worktree: clean"
 echo "  Version: $CURRENT_VERSION -> $NEW_VERSION"
 echo ""
@@ -239,7 +231,7 @@ git add \
 
 git commit -m "Release $NEW_VERSION"
 git tag "v$NEW_VERSION"
-git push origin main
+git push origin HEAD:main
 git push origin "v$NEW_VERSION"
 
 echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
