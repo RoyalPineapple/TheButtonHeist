@@ -358,6 +358,42 @@ Prefer typed enums (`enum Foo: String`) over raw strings for any value that has 
 - When adding a new command, action type, or option set: define it as a `String`-backed enum with `CaseIterable` in the appropriate module, not as string literals scattered across switch statements.
 - Use `.rawValue` only at serialization boundaries — never compare `.rawValue` against a string literal deeper in the stack.
 
+## Explicit State Machines
+
+Model multi-phase lifecycle as an enum with associated data — not as coordinated optionals and booleans at the class/struct level. The litmus test: if two or more fields co-vary to represent a single "phase", they belong inside an enum case's associated value, not as top-level properties.
+
+**What to watch for:**
+- Optional resources that must be non-nil only during certain phases (e.g. `writer: AVAssetWriter?` that exists only while recording).
+- Task handles paired with a phase flag (`pollingTask: Task? + isPolling: Bool`).
+- Booleans derived from other state (`didLogWarning` that tracks whether an array hit a cap).
+- Parallel collections tracking the same entity through lifecycle stages (e.g. `pendingClients: Set<Int>` + `authenticatedClients: Set<Int>` — a client's phase should be a single enum value in one dictionary, not membership in multiple sets).
+- Cleanup methods that nil out a dozen fields to return to "idle" — a sign the idle state carries no data but the type allows stale data to linger.
+
+**Rules:**
+- Each enum case carries exactly the data valid for that phase. Transitioning between cases is the only way to enter or leave a phase — no partial setup, no stale fields.
+- If a phase needs mutable bookkeeping (frame counts, timestamps), put it in a struct and store the struct as the associated value.
+- Prefer making impossible states unrepresentable over guarding against them at runtime. A `guard` that checks for an impossible combination is a sign the state model is too loose.
+- When an existing type already has a state enum but stores phase-specific data as sibling optionals, refactor the data into associated values on the enum cases.
+
+**Example — before (implicit):**
+```swift
+var state: State = .idle
+var writer: AVAssetWriter?      // non-nil only during .recording/.finalizing
+var captureTimer: Task?          // non-nil only during .recording
+var startTime: Date?             // non-nil only during .recording/.finalizing
+```
+
+**After (explicit):**
+```swift
+enum State {
+    case idle
+    case recording(RecordingSession)
+    case finalizing(FinalizingSession)
+}
+```
+
+Where `RecordingSession` and `FinalizingSession` are structs carrying exactly the fields valid for that phase.
+
 ## Currency Types: Elements and Targets
 
 Two type families are the currency for referring to UI elements. Use them everywhere — never invent new types to represent a subset of their data.
