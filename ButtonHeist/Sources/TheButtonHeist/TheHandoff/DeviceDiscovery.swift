@@ -233,9 +233,9 @@ public final class DeviceDiscovery: DeviceDiscovering {
     private func startReachabilityValidation() {
         reachabilityTask?.cancel()
         reachabilityTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(self.reachabilityValidationInterval * 1_000_000_000))
+                guard let self else { return }
+                try? await Task.sleep(for: .seconds(self.reachabilityValidationInterval))
                 guard !Task.isCancelled else { return }
                 await self.validateVisibleDevicesReachability()
             }

@@ -82,7 +82,7 @@ extension TheInsideJob {
             sendMessage(.recordingError("No recording in progress"), requestId: requestId, respond: respond)
             return
         }
-        if stakeout.state == .recording {
+        if stakeout.isRecording {
             stakeout.stopRecording(reason: .manual)
         }
         sendMessage(.recordingStopped, requestId: requestId, respond: respond)

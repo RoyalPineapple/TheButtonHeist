@@ -25,7 +25,7 @@ final class IdleMonitorTests: XCTestCase {
         monitor.resetTimer()
         try await Task.sleep(for: .seconds(0.1))
         XCTAssertFalse(fired)
-        monitor.cancel()
+        monitor.stop()
     }
 
     @ButtonHeistActor
@@ -46,7 +46,7 @@ final class IdleMonitorTests: XCTestCase {
             fired = true
         }
         monitor.resetTimer()
-        monitor.cancel()
+        monitor.stop()
         try await Task.sleep(for: .seconds(0.2))
         XCTAssertFalse(fired)
     }

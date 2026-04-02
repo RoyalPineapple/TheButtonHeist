@@ -22,7 +22,7 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 final class TheMuscle {
 
     /// Grace period (100ms) before disconnecting a rejected client, giving them time to read the error.
-    private static let disconnectGracePeriod: UInt64 = 100_000_000
+    private static let disconnectGracePeriod: Duration = .milliseconds(100)
 
     /// Maximum consecutive failed auth attempts before temporary lockout.
     private static let maxFailedAttempts = 5
@@ -254,7 +254,7 @@ final class TheMuscle {
             )
             logger.warning("Client \(clientId) protocol mismatch: expected \(protocolVersion), got \(envelope.protocolVersion)")
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return
@@ -295,7 +295,7 @@ final class TheMuscle {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
             sendMessage(.authFailed("Connection rejected."), respond: respond)
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return
@@ -305,7 +305,7 @@ final class TheMuscle {
             sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
             logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return
@@ -332,7 +332,7 @@ final class TheMuscle {
             sendMessage(.authFailed("Invalid token. Retry without a token to request a fresh session."), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return
@@ -378,7 +378,7 @@ final class TheMuscle {
         sendMessage(.authFailed("Connection denied by user"), respond: respond)
         logger.info("Client \(clientId) denied via UI")
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+            try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
             self?.disconnectClient?(clientId)
         }
     }
@@ -423,7 +423,7 @@ final class TheMuscle {
             guard let phase = clients[clientId] else {
                 sendMessage(.authFailed("Connection rejected."), respond: respond)
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return
@@ -433,7 +433,7 @@ final class TheMuscle {
                 sendMessage(.authFailed("Too many failed attempts. Try again later."), respond: respond)
                 logger.warning("Observer \(clientId) locked out (address: \(address)), rejecting")
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return
@@ -442,7 +442,7 @@ final class TheMuscle {
                 sendMessage(.authFailed("Watch mode requires a token."), respond: respond)
                 logger.warning("Observer \(clientId) sent no token with restrictWatchers=true, rejected")
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return
@@ -455,7 +455,7 @@ final class TheMuscle {
                 sendMessage(.authFailed("Invalid token."), respond: respond)
                 logger.warning("Observer \(clientId) sent invalid token, rejected (attempt \(attempts))")
                 Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                    try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                     self?.disconnectClient?(clientId)
                 }
                 return
@@ -528,7 +528,7 @@ final class TheMuscle {
             sendMessage(.sessionLocked(payload), respond: respond)
             logger.warning("Client \(clientId) rejected — session locked (\(self.activeSessionConnections.count) active connection(s))")
             Task { [weak self] in
-                try? await Task.sleep(nanoseconds: TheMuscle.disconnectGracePeriod)
+                try? await Task.sleep(for: TheMuscle.disconnectGracePeriod)
                 self?.disconnectClient?(clientId)
             }
             return false
@@ -579,7 +579,7 @@ final class TheMuscle {
     /// Create a release timer task that fires after `sessionReleaseTimeout`.
     private func makeReleaseTimer() -> Task<Void, Never> {
         Task { [weak self, sessionReleaseTimeout] in
-            try? await Task.sleep(nanoseconds: UInt64(sessionReleaseTimeout * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(sessionReleaseTimeout))
             guard !Task.isCancelled else { return }
             self?.releaseSession()
         }

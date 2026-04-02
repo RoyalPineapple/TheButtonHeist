@@ -1,11 +1,13 @@
 import Foundation
 import TheScore
 
+/// Level of detail for interface responses.
 public enum InterfaceDetail: String, CaseIterable, Sendable {
     case summary
     case full
 }
 
+/// Summary of a single step within a batch execution.
 public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?
@@ -130,6 +132,7 @@ enum NetDeltaAccumulator {
     }
 }
 
+/// Typed response from TheFence command execution.
 public enum FenceResponse {
     case ok(message: String)
     case error(String)
@@ -183,10 +186,8 @@ public enum FenceResponse {
                 if expectation.met {
                     text += "  [expectation met]"
                 } else {
-                    let tier = expectation.expectation
-                        .map(String.init(describing:)) ?? "delivery"
-                    text += "  [expectation FAILED: expected \(tier),"
-                    text += " got \(expectation.actual ?? "nil")]"
+                    let tier = expectation.expectation.map(String.init(describing:)) ?? "delivery"
+                    text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
                 }
             }
             return text

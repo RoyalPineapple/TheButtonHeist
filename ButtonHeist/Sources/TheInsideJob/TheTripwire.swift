@@ -107,10 +107,10 @@ final class TheTripwire {
         for (window, _) in windows {
             var stack: [CALayer] = [window.layer]
             while let layer = stack.popLast() {
-                let p = layer.presentation() ?? layer
-                scan.positionXSum += p.position.x
-                scan.positionYSum += p.position.y
-                scan.opacitySum += CGFloat(p.opacity)
+                let presentationLayer = layer.presentation() ?? layer
+                scan.positionXSum += presentationLayer.position.x
+                scan.positionYSum += presentationLayer.position.y
+                scan.opacitySum += CGFloat(presentationLayer.opacity)
                 scan.layerCount += 1
 
                 if layer.needsLayout() {
@@ -352,38 +352,38 @@ final class TheTripwire {
     // MARK: - Notification Observation
 
     private func startNotificationObservation() {
-        let nc = NotificationCenter.default
+        let notificationCenter = NotificationCenter.default
 
         // Keyboard visibility — frame-based detection matches KIF's approach.
         // The frame check handles edge cases where the keyboard window exists
         // but is off-screen (undocked, floating, or dismissed mid-animation).
-        nc.addObserver(self, selector: #selector(keyboardFrameDidChange),
+        notificationCenter.addObserver(self, selector: #selector(keyboardFrameDidChange),
                        name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        nc.addObserver(self, selector: #selector(keyboardWillShow),
+        notificationCenter.addObserver(self, selector: #selector(keyboardWillShow),
                        name: UIResponder.keyboardWillShowNotification, object: nil)
-        nc.addObserver(self, selector: #selector(keyboardDidHide),
+        notificationCenter.addObserver(self, selector: #selector(keyboardDidHide),
                        name: UIResponder.keyboardDidHideNotification, object: nil)
 
         // Text input (first responder proxy)
-        nc.addObserver(self, selector: #selector(textEditingDidBegin),
+        notificationCenter.addObserver(self, selector: #selector(textEditingDidBegin),
                        name: UITextField.textDidBeginEditingNotification, object: nil)
-        nc.addObserver(self, selector: #selector(textEditingDidEnd),
+        notificationCenter.addObserver(self, selector: #selector(textEditingDidEnd),
                        name: UITextField.textDidEndEditingNotification, object: nil)
-        nc.addObserver(self, selector: #selector(textEditingDidBegin),
+        notificationCenter.addObserver(self, selector: #selector(textEditingDidBegin),
                        name: UITextView.textDidBeginEditingNotification, object: nil)
-        nc.addObserver(self, selector: #selector(textEditingDidEnd),
+        notificationCenter.addObserver(self, selector: #selector(textEditingDidEnd),
                        name: UITextView.textDidEndEditingNotification, object: nil)
     }
 
     private func stopNotificationObservation() {
-        let nc = NotificationCenter.default
-        nc.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        nc.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
-        nc.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
-        nc.removeObserver(self, name: UITextField.textDidBeginEditingNotification, object: nil)
-        nc.removeObserver(self, name: UITextField.textDidEndEditingNotification, object: nil)
-        nc.removeObserver(self, name: UITextView.textDidBeginEditingNotification, object: nil)
-        nc.removeObserver(self, name: UITextView.textDidEndEditingNotification, object: nil)
+        let notificationCenter = NotificationCenter.default
+        notificationCenter.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UITextField.textDidBeginEditingNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UITextField.textDidEndEditingNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UITextView.textDidBeginEditingNotification, object: nil)
+        notificationCenter.removeObserver(self, name: UITextView.textDidEndEditingNotification, object: nil)
     }
 
     @objc private func keyboardFrameDidChange(_ notification: Notification) {

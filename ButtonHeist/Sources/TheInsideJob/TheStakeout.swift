@@ -5,7 +5,7 @@ import AVFoundation
 import os.log
 import TheScore
 
-private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "recording")
+private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "recording")
 
 /// Screen recording engine. Captures frames using TheInsideJob's window compositing
 /// and encodes them as H.264/MP4 using AVAssetWriter.
@@ -13,12 +13,6 @@ private let logger = Logger(subsystem: "com.buttonheist.insidejob", category: "r
 final class TheStakeout {
 
     // MARK: - State Machine
-
-    enum State {
-        case idle
-        case recording
-        case finalizing
-    }
 
     private enum StakeoutState {
         case idle
@@ -62,13 +56,19 @@ final class TheStakeout {
     /// and the log is capped to prevent unbounded memory growth in long recordings.
     private static let maxInteractionCount = 500
 
-    /// Public state projection for external callers.
-    var state: State {
-        switch stakeoutState {
-        case .idle: return .idle
-        case .recording: return .recording
-        case .finalizing: return .finalizing
-        }
+    var isRecording: Bool {
+        if case .recording = stakeoutState { return true }
+        return false
+    }
+
+    var isFinalizing: Bool {
+        if case .finalizing = stakeoutState { return true }
+        return false
+    }
+
+    var isIdle: Bool {
+        if case .idle = stakeoutState { return true }
+        return false
     }
 
     /// Interaction log — only meaningful during recording.
@@ -256,11 +256,11 @@ final class TheStakeout {
 
     private func startCaptureTimer() {
         guard case .recording(var session) = stakeoutState else { return }
-        let interval = UInt64(1_000_000_000 / UInt64(session.fps))
+        let interval = Duration.seconds(1) / session.fps
         session.captureTimer = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 self?.captureAndAppendFrame()
-                try? await Task.sleep(nanoseconds: interval)
+                try? await Task.sleep(for: interval)
             }
         }
         stakeoutState = .recording(session)
@@ -344,7 +344,7 @@ final class TheStakeout {
         guard case .recording(var session) = stakeoutState else { return }
         session.inactivityCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000) // Check every second
+                try? await Task.sleep(for: .seconds(1)) // Check every second
                 guard let self, case .recording(let currentSession) = self.stakeoutState else { continue }
 
                 let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
@@ -440,8 +440,8 @@ final class TheStakeout {
         var errorDescription: String? {
             switch self {
             case .alreadyRecording: return "Recording is already in progress"
-            case .writerSetupFailed(let msg): return "Failed to set up video writer: \(msg)"
-            case .finalizationFailed(let msg): return "Failed to finalize recording: \(msg)"
+            case .writerSetupFailed(let message): return "Failed to set up video writer: \(message)"
+            case .finalizationFailed(let message): return "Failed to finalize recording: \(message)"
             }
         }
     }

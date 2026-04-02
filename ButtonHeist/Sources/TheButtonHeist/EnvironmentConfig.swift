@@ -32,8 +32,8 @@ public struct EnvironmentConfig: Sendable {
         deviceFilter: String? = nil,
         token: String? = nil,
         driverId: String? = nil,
-        sessionTimeout: Double? = nil,
-        connectionTimeout: Double? = nil,
+        sessionTimeout: TimeInterval? = nil,
+        connectionTimeout: TimeInterval? = nil,
         autoReconnect: Bool = true,
         configPath: String? = nil,
         env: [String: String] = ProcessInfo.processInfo.environment
