@@ -69,6 +69,22 @@ enum ToolDefinitions {
         ]),
     ]
 
+    // MARK: - Getting Started
+    //
+    // New to Button Heist? Start with these 5 tools:
+    //   1. connect         — establish a session with the iOS app
+    //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
+    //   3. activate        — interact with elements (covers 80% of interactions)
+    //   4. scroll_to_visible — navigate long lists to find off-screen elements
+    //   5. run_batch       — multi-step sequences with expectations
+    //
+    // Two targeting modes:
+    //   - heistId: copy from get_interface, paste into activate (stable, zero ambiguity)
+    //   - matcher: describe by properties (label, traits, identifier) for dynamic elements
+    //
+    // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
+    // get_screen (screenshots), get_interface(full: true) (full screen census).
+
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, waitFor, startRecording, stopRecording, listDevices,
@@ -273,7 +289,12 @@ enum ToolDefinitions {
 
     static let listDevices = Tool(
         name: "list_devices",
-        description: "List iOS devices discovered via Bonjour that are running TheInsideJob.",
+        description: """
+            List iOS devices discovered via Bonjour that are running TheInsideJob. \
+            Also includes named targets from .buttonheist.json config. \
+            If Bonjour is blocked (e.g. MDM stealth mode) and no config targets exist, \
+            this returns empty — use connect(device:token:) with the known address instead.
+            """,
         inputSchema: ["type": "object", "properties": .object([:]), "additionalProperties": false],
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
@@ -515,9 +536,13 @@ enum ToolDefinitions {
     static let connect = Tool(
         name: "connect",
         description: """
-            Switch the active connection to a different target at runtime without restarting the server. \
-            Accepts either a named target from the config file (.buttonheist.json) or raw device/token \
-            parameters. Tears down any existing session before connecting to the new target.
+            Establish or switch the active connection to an iOS device running TheInsideJob. \
+            Three connection patterns: \
+            (1) Named target: connect(target: "my-sim") — reads from .buttonheist.json config. \
+            (2) Direct address: connect(device: "127.0.0.1:{port}", token: "{token}") — port and token \
+            come from the app's launch env vars (SIMCTL_CHILD_INSIDEJOB_PORT, SIMCTL_CHILD_INSIDEJOB_TOKEN). \
+            (3) Environment: set BUTTONHEIST_DEVICE and BUTTONHEIST_TOKEN before starting the MCP server. \
+            Tears down any existing session before connecting to the new target.
             """,
         inputSchema: [
             "type": "object",
