@@ -6,6 +6,7 @@ import Foundation
 public enum SessionPhase: Sendable {
     case idle
     case active(ActiveSession)
+    case closing(ClosingSession)
     case closed(ClosedSession)
     case archived(ArchivedSession)
 }
@@ -18,6 +19,15 @@ public struct ActiveSession: Sendable {
     public var manifest: SessionManifest
     public let startTime: Date
     public var nextSequenceNumber: Int
+}
+
+@ButtonHeistActor
+public struct ClosingSession: Sendable {
+    public let sessionId: String
+    public let directory: URL
+    public var manifest: SessionManifest
+    public let startTime: Date
+    public let endTime: Date
 }
 
 @ButtonHeistActor
@@ -81,6 +91,8 @@ public final class TheBookKeeper {
             return nil
         case .active(let session):
             return session.manifest
+        case .closing(let session):
+            return session.manifest
         case .closed(let session):
             return session.manifest
         case .archived(let session):
@@ -92,7 +104,7 @@ public final class TheBookKeeper {
 
     public func beginSession(identifier: String) throws {
         switch phase {
-        case .idle, .closed, .archived:
+        case .idle, .closing, .closed, .archived:
             break
         case .active:
             throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: "active")
@@ -131,13 +143,18 @@ public final class TheBookKeeper {
         session.manifest.endTime = endTime
         try flushManifest(session: session)
 
-        // Transition to idle before closing the handle so that concurrent
-        // logCommand/logResponse calls bail out via the guard instead of
-        // writing to a closed FileHandle.
-        phase = .idle
+        let closingSession = ClosingSession(
+            sessionId: session.sessionId,
+            directory: session.directory,
+            manifest: session.manifest,
+            startTime: session.startTime,
+            endTime: endTime
+        )
+        phase = .closing(closingSession)
         session.logHandle.closeFile()
 
-        // If compressLog throws, phase stays .idle — safe for a fresh beginSession.
+        // If compressLog throws, phase stays .closing — session data is
+        // preserved and a fresh beginSession is still allowed.
         let compressedPath = try await compressLog(in: session.directory)
 
         phase = .closed(ClosedSession(
@@ -317,6 +334,7 @@ public final class TheBookKeeper {
         switch phase {
         case .idle: return "idle"
         case .active: return "active"
+        case .closing: return "closing"
         case .closed: return "closed"
         case .archived: return "archived"
         }
