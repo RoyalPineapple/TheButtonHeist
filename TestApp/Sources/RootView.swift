@@ -48,6 +48,10 @@ struct RootView: View {
                     CartView()
                 }
                 .accessibilityIdentifier("buttonheist.root.cart")
+                NavigationLink("Menu") {
+                    MenuOrderView()
+                }
+                .accessibilityIdentifier("buttonheist.root.menu")
                 NavigationLink("Settings") {
                     SettingsView()
                 }
