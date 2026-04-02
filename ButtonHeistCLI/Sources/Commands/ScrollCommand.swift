@@ -7,20 +7,19 @@ struct ScrollCommand: AsyncParsableCommand {
         abstract: "Scroll a scroll view by one page",
         discussion: """
             Scrolls the nearest scroll view ancestor of a target element by
-            approximately one page in the given direction via direct content
-            offset manipulation.
+            approximately one page in the given direction. Defaults to down.
 
             Examples:
-              buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
-              buttonheist scroll --index 3 --direction down
-              buttonheist scroll --identifier "myElement" --direction next
+              buttonheist scroll btn_list
+              buttonheist scroll btn_list -d up
+              buttonheist scroll -id "myElement" -d next
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .long, help: "Scroll direction: up, down, left, right, next, previous")
-    var direction: String
+    @Option(name: .shortAndLong, help: "Scroll direction: up, down, left, right, next, previous (default: down)")
+    var direction: String = "down"
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -41,7 +40,7 @@ struct ScrollCommand: AsyncParsableCommand {
             "direction": direction.lowercased(),
             "timeout": timeout,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
 
         try await CLIRunner.run(
             connection: connection,

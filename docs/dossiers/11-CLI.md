@@ -26,7 +26,7 @@ graph TD
         subgraph Commands["Subcommands"]
             List["list"]
             Activate["activate"]
-            Action["action --type increment/decrement/custom/edit/dismiss_keyboard"]
+            Action["action &lt;name&gt; - smart dispatch: increment/decrement/edit/dismiss/custom"]
             Scroll["scroll / scroll_to_visible / scroll_to_edge"]
             Swipe["swipe (top-level)"]
             Touch["touch - one_finger_tap / long_press / swipe / drag / pinch / rotate / two_finger_tap"]
@@ -95,7 +95,7 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | `activate` | `activate` | Direct match |
 | `swipe` | `swipe` | Top-level in both |
 | `gesture` | `touch` | Grouped gestures |
-| `accessibility_action` | `action --type` | Both group increment/decrement/custom/edit/dismiss_keyboard |
+| `accessibility_action` | `action <name>` | Positional smart dispatch: built-ins recognized, default is custom action |
 | `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
 | `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
 | `connect` | `session` (REPL only) | Switch connection target at runtime |
