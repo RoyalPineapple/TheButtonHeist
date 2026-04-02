@@ -219,7 +219,7 @@ jobs:
 
       - name: Warm binary cache for external dependencies
         if: steps.binaries-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: tuist cache --external-only
 
       - name: Pack Tuist binaries (preserving xattrs)
