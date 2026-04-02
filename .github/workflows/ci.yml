@@ -44,6 +44,10 @@ jobs:
           git submodule update --init --recursive submodules/AccessibilitySnapshot
           echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
+      - name: Capture Xcode version
+        id: xcode
+        run: echo "version=$(xcodebuild -version | head -1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
       - name: Install Tuist
         uses: jdx/mise-action@v2
 
@@ -55,13 +59,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-deps-
 
-      - name: Cache Tuist binaries
+      - name: Cache Tuist binaries archive
+        id: binaries-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/tuist/Binaries
-          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-binaries-
+          path: /tmp/tuist-binaries.tar
+          key: tuist-binaries-macos-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
+
+      - name: Restore Tuist binaries (preserving xattrs)
+        if: steps.binaries-cache.outputs.cache-hit == 'true'
+        run: |
+          mkdir -p ~/.cache/tuist/Binaries
+          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
 
       - name: Install Tuist dependencies
         timeout-minutes: 5
@@ -80,8 +89,13 @@ jobs:
           }
 
       - name: Warm binary cache for external dependencies
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
+
+      - name: Pack Tuist binaries (preserving xattrs)
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        run: /usr/bin/tar -cpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries .
 
       - name: Regenerate project with cached binaries
         timeout-minutes: 3
@@ -111,6 +125,10 @@ jobs:
           git submodule update --init --recursive submodules/AccessibilitySnapshot
           echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
 
+      - name: Capture Xcode version
+        id: xcode
+        run: echo "version=$(xcodebuild -version | head -1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
       - name: Install Tuist
         uses: jdx/mise-action@v2
 
@@ -122,13 +140,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-deps-
 
-      - name: Cache Tuist binaries
+      - name: Cache Tuist binaries archive
+        id: binaries-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/tuist/Binaries
-          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-binaries-
+          path: /tmp/tuist-binaries.tar
+          key: tuist-binaries-ios-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
+
+      - name: Restore Tuist binaries (preserving xattrs)
+        if: steps.binaries-cache.outputs.cache-hit == 'true'
+        run: |
+          mkdir -p ~/.cache/tuist/Binaries
+          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
 
       - name: Boot simulator in background
         run: |
@@ -162,8 +185,13 @@ jobs:
         run: tuist install
 
       - name: Warm binary cache for external dependencies
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
+
+      - name: Pack Tuist binaries (preserving xattrs)
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
+        run: /usr/bin/tar -cpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries .
 
       - name: Wait for simulator boot
         timeout-minutes: 5

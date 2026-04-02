@@ -59,7 +59,6 @@ let project = Project(
                 .target(name: "TheScore"),
                 .external(name: "AccessibilitySnapshotParser"),
                 .external(name: "X509"),
-                .external(name: "Crypto"),
             ]
         ),
 
@@ -75,7 +74,6 @@ let project = Project(
 
             dependencies: [
                 .target(name: "TheScore"),
-                .external(name: "Crypto"),
             ]
         ),
 
@@ -104,7 +102,6 @@ let project = Project(
             sources: ["ButtonHeist/Tests/ButtonHeistTests/**"],
             dependencies: [
                 .target(name: "ButtonHeist"),
-                .external(name: "Crypto"),
             ]
         ),
 
@@ -120,7 +117,6 @@ let project = Project(
             dependencies: [
                 .target(name: "TheInsideJob"),
                 .target(name: "TheScore"),
-                .external(name: "Crypto"),
                 .project(target: "BH Demo", path: "TestApp"),
             ],
             settings: .settings(base: [
