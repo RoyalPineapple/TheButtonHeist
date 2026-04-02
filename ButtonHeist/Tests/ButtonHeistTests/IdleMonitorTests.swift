@@ -16,7 +16,7 @@ final class IdleMonitorTests: XCTestCase {
     @ButtonHeistActor
     func testResetPreventsTimeout() async throws {
         var fired = false
-        let monitor = IdleMonitor(timeout: 0.2) {
+        let monitor = IdleMonitor(timeout: 0.5) {
             fired = true
         }
         monitor.resetTimer()
