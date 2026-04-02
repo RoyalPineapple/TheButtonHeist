@@ -11,9 +11,9 @@ struct WaitForCommand: AsyncParsableCommand {
             Timeout is capped at 30 seconds.
 
             Examples:
-              buttonheist wait_for --label "Loading" --absent --timeout 5
-              buttonheist wait_for --label "Welcome" --traits staticText
-              buttonheist wait_for --heist-id button_login
+              buttonheist wait_for btn_login
+              buttonheist wait_for -l "Loading" -a -t 5
+              buttonheist wait_for -l "Welcome" --traits staticText
             """
     )
 
@@ -25,7 +25,7 @@ struct WaitForCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Maximum wait time in seconds (default: 10, max: 30)")
     var timeout: Double = 10.0
 
-    @Flag(name: .long, help: "Wait for element to NOT exist (disappear)")
+    @Flag(name: .shortAndLong, help: "Wait for element to NOT exist (disappear)")
     var absent: Bool = false
 
     @ButtonHeistActor
@@ -36,7 +36,7 @@ struct WaitForCommand: AsyncParsableCommand {
             "command": TheFence.Command.waitFor.rawValue,
             "timeout": timeout,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
         if absent { request["absent"] = true }
 
         try await CLIRunner.run(

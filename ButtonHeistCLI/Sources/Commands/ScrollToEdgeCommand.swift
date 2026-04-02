@@ -7,18 +7,19 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
         abstract: "Scroll to the edge of a scroll view",
         discussion: """
             Finds the nearest scroll view ancestor of the target element and
-            scrolls it all the way to the specified edge.
+            scrolls it all the way to the specified edge. Defaults to bottom.
 
             Examples:
-              buttonheist scroll_to_edge --identifier "buttonheist.longList.item-5" --edge bottom
-              buttonheist scroll_to_edge --index 3 --edge top
+              buttonheist scroll_to_edge btn_list
+              buttonheist scroll_to_edge btn_list -e top
+              buttonheist scroll_to_edge -id "longList" -e left
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .long, help: "Edge to scroll to: top, bottom, left, right")
-    var edge: String
+    @Option(name: .shortAndLong, help: "Edge to scroll to: top, bottom, left, right (default: bottom)")
+    var edge: String = "bottom"
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -39,7 +40,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
             "edge": edge.lowercased(),
             "timeout": timeout,
         ]
-        element.applyTo(&request)
+        try element.applyTo(&request)
 
         try await CLIRunner.run(
             connection: connection,
