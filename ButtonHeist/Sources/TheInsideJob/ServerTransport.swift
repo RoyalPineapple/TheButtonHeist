@@ -53,6 +53,9 @@ public final class ServerTransport: NSObject {
         super.init()
     }
 
+    // Fire-and-forget: the Task may not complete before deallocation.
+    // Acceptable because NWListener and NWConnection clean up on their own
+    // when all references are released.
     deinit {
         stop()
     }

@@ -364,6 +364,7 @@ public actor SimpleSocketServer {
         notifyClientDisconnected(clientId)
     }
 
+    // ClientPhase is a value type — copy, mutate timestamps, write back.
     private func isRateLimited(_ clientId: Int) -> Bool {
         guard var phase = clients[clientId] else { return true }
         let now = Date()
@@ -470,7 +471,7 @@ public actor SimpleSocketServer {
 
     // MARK: - Errors
 
-    enum ServerError: Error, LocalizedError {
+    enum ServerError: Error, LocalizedError, Equatable {
         case failedToBindPort
         case alreadyRunning
 
