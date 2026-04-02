@@ -1,6 +1,6 @@
 import XCTest
 import Security
-import Crypto
+import CryptoKit
 @testable import TheInsideJob
 
 final class TLSIdentityTests: XCTestCase {
