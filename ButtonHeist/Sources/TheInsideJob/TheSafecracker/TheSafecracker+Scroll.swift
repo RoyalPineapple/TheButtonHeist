@@ -233,6 +233,7 @@ extension TheSafecracker {
         let stepDelay = duration / Double(steps)
 
         fingerprints.beginTrackingFingerprints(at: [start])
+        defer { fingerprints.endTrackingFingerprints() }
         for step in 1...steps {
             let progress = Double(step) / Double(steps)
             let point = CGPoint(
@@ -240,9 +241,12 @@ extension TheSafecracker {
                 y: start.y + progress * (end.y - start.y)
             )
             fingerprints.updateTrackingFingerprints(to: [point])
-            try? await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
+            do {
+                try await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
+            } catch {
+                break
+            }
         }
-        fingerprints.endTrackingFingerprints()
     }
 
     /// Total items in a UITableView or UICollectionView (for exhaustive search).
