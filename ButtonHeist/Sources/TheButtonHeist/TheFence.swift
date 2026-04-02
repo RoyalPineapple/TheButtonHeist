@@ -240,10 +240,10 @@ public final class TheFence {
             return try await handlePasteboard(command: command, args: args)
         case .dismissKeyboard:
             return try await sendAction(.resignFirstResponder)
-        case .startRecording:
-            return try await handleStartRecording(args)
-        case .stopRecording:
-            return try await handleStopRecording(args)
+        case .startRecording, .stopRecording:
+            return command == .startRecording
+                ? try await handleStartRecording(args)
+                : try await handleStopRecording(args)
         case .runBatch:
             return try await handleRunBatch(args)
         case .getSessionState:
@@ -252,18 +252,8 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
-        case .getSessionLog:
-            guard let manifest = bookKeeper.manifest else {
-                return .error("No active session")
-            }
-            return .sessionLog(manifest: manifest)
-        case .archiveSession:
-            let deleteSource = boolArg(args, "delete_source") ?? false
-            let archiveURL = try await bookKeeper.archiveSession(deleteSource: deleteSource)
-            guard let manifest = bookKeeper.manifest else {
-                return .error("No session to archive")
-            }
-            return .archiveResult(path: archiveURL.path, manifest: manifest)
+        case .getSessionLog, .archiveSession:
+            return try await handleBookKeeperCommand(command: command, args: args)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
