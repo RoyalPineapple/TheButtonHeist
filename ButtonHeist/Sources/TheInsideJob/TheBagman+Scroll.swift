@@ -93,7 +93,11 @@ extension TheBagman {
         case .uiScrollView(let sv):
             let moved = safecracker.scrollByPage(sv, direction: direction, animated: animated)
             guard moved else { return (false, before) }
-            await tripwire.yieldFrames(3)
+            if animated {
+                await tripwire.yieldRealFrames(20)
+            } else {
+                await tripwire.yieldFrames(3)
+            }
             refresh()
             return (true, before)
         case .swipeable(let frame, _):
@@ -206,7 +210,7 @@ extension TheBagman {
             let savedOffset = scrollView.contentOffset
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: true)
-            await tripwire.yieldFrames(3)
+            await tripwire.yieldRealFrames(20)
             refresh()
             if let found = resolveFirstMatch(searchTarget),
                let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
@@ -215,7 +219,7 @@ extension TheBagman {
             // Fast path failed — restore original scroll position so the slow
             // page-by-page search starts from where the user left off.
             scrollView.setContentOffset(savedOffset, animated: true)
-            await tripwire.yieldFrames(3)
+            await tripwire.yieldRealFrames(20)
             refresh()
         }
 
@@ -264,7 +268,7 @@ extension TheBagman {
         scrollCount: Int
     ) async -> TheSafecracker.InteractionResult? {
         ensureOnScreenSync(found)
-        await tripwire.yieldFrames(3)
+        await tripwire.yieldRealFrames(20)
         refresh()
         guard let fresh = resolveFirstMatch(searchTarget) else { return nil }
         return foundResult(fresh, scrollCount: scrollCount)
@@ -346,7 +350,7 @@ extension TheBagman {
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: false)
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            await tripwire.yieldFrames(3)
             refresh()
         }
 
@@ -367,7 +371,7 @@ extension TheBagman {
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            await tripwire.yieldFrames(3)
             refresh()
         }
     }
@@ -385,7 +389,7 @@ extension TheBagman {
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            await tripwire.yieldFrames(3)
             refresh()
         }
     }
