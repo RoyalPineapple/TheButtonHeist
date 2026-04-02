@@ -40,5 +40,7 @@ extension TheFence {
         case getSessionState = "get_session_state"
         case connect
         case listTargets = "list_targets"
+        case getSessionLog = "get_session_log"
+        case archiveSession = "archive_session"
     }
 }
