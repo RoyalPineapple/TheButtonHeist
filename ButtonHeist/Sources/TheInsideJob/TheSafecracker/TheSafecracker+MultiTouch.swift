@@ -112,7 +112,7 @@ extension TheSafecracker {
         let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
         let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
         guard touchesDown(at: [p1, p2]) else { return false }
-        try? await Task.sleep(nanoseconds: TheSafecracker.gestureYieldDelay)
+        try? await Task.sleep(for: TheSafecracker.gestureYieldDelay)
         return touchesUp()
     }
 

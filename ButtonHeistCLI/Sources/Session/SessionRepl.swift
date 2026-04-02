@@ -58,7 +58,7 @@ final class ReplSession {
             if shouldExit { break }
         }
 
-        idleMonitor?.cancel()
+        idleMonitor?.stop()
         fence.stop()
     }
 

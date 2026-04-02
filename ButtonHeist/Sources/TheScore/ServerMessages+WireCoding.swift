@@ -1,5 +1,7 @@
 import Foundation
 
+// MARK: - Coding Keys
+
 private enum ServerMessageCodingKeys: String, CodingKey {
     case type
     case payload
@@ -11,6 +13,8 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case type
     case payload
 }
+
+// MARK: - ResponseEnvelope Codable
 
 extension ResponseEnvelope {
     public init(from decoder: Decoder) throws {
@@ -32,6 +36,8 @@ extension ResponseEnvelope {
         }
     }
 }
+
+// MARK: - ServerMessage Wire Type Mapping
 
 extension ServerMessage {
     fileprivate var wireMessageType: WireMessageType {
@@ -65,6 +71,8 @@ extension ServerMessage {
             return true
         }
     }
+
+    // MARK: - Decoding
 
     private static func decodeHandshakeOrAuth(from decoder: Decoder, type: WireMessageType) throws -> ServerMessage? {
         switch type {
@@ -149,6 +157,8 @@ extension ServerMessage {
         ))
     }
 
+    // MARK: - Encoding
+
     private func encodeHandshakeOrAuthPayload(to encoder: Encoder) throws -> Bool {
         switch self {
         case .protocolMismatch(let payload):
@@ -205,6 +215,8 @@ extension ServerMessage {
         if try encodeRecordingPayload(to: encoder) { return }
     }
 
+    // MARK: - Codable Conformance
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ServerMessageCodingKeys.self)
         let type = try container.decode(WireMessageType.self, forKey: .type)
@@ -220,6 +232,8 @@ extension ServerMessage {
         }
     }
 }
+
+// MARK: - Helpers
 
 private func missingServerPayload(_ type: WireMessageType) -> DecodingError {
     DecodingError.keyNotFound(

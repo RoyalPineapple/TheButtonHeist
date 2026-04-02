@@ -448,16 +448,24 @@ final class TheTripwireTests: XCTestCase {
             return
         }
 
-        CATransaction.flush()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-
         let testLayer = CALayer()
         testLayer.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
         window.layer.addSublayer(testLayer)
 
-        window.layoutIfNeeded()
-        CATransaction.flush()
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        // Drain all pending layout from adding the sublayer
+        for _ in 0..<3 {
+            window.layoutIfNeeded()
+            CATransaction.flush()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+        }
+
+        // Verify baseline is clean before testing setNeedsDisplay
+        let baseline = tripwire.hasPendingLayout()
+        guard !baseline else {
+            testLayer.removeFromSuperlayer()
+            XCTFail("Baseline has pending layout — cannot isolate setNeedsDisplay effect")
+            return
+        }
 
         testLayer.setNeedsDisplay()
         XCTAssertFalse(
