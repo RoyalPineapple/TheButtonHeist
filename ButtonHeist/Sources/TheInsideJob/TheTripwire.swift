@@ -133,19 +133,54 @@ final class TheTripwire {
 
     // MARK: - Pulse State
 
-    private(set) var latestReading: PulseReading?
+    /// Mutable context that exists only while the pulse is running.
+    /// Reference type so tick mutations don't require enum reconstruction.
+    private final class RunningContext {
+        let link: CADisplayLink
+        let target: PulseTick
+        var latestReading: PulseReading?
+        var tickCount: UInt64 = 0
+        var keyboardVisibleFlag = false
+        var textInputActiveFlag = false
+        var settleWaiters: [SettleWaiter] = []
+
+        init(link: CADisplayLink, target: PulseTick) {
+            self.link = link
+            self.target = target
+        }
+    }
+
+    private enum PulsePhase {
+        case idle
+        case running(RunningContext)
+    }
+
+    /// The latest pulse reading, if the pulse is running.
+    private(set) var latestReading: PulseReading? {
+        get { runningContext?.latestReading }
+        set { runningContext?.latestReading = newValue }
+    }
+
     var onTransition: ((PulseTransition) -> Void)?
 
-    private var displayLink: CADisplayLink?
-    private var pulseTarget: PulseTick?
-    private var tickCount: UInt64 = 0
+    private var pulsePhase: PulsePhase = .idle
 
-    // Notification-driven flags (set by observers, read by tick and TheSafecracker)
-    private(set) var keyboardVisibleFlag = false
-    private(set) var textInputActiveFlag = false
+    private var runningContext: RunningContext? {
+        if case .running(let context) = pulsePhase { return context }
+        return nil
+    }
 
-    // Settle waiters
-    private var settleWaiters: [SettleWaiter] = []
+    /// Keyboard visibility flag, valid only while pulse is running.
+    private(set) var keyboardVisibleFlag: Bool {
+        get { runningContext?.keyboardVisibleFlag ?? false }
+        set { runningContext?.keyboardVisibleFlag = newValue }
+    }
+
+    /// Text input flag, valid only while pulse is running.
+    private(set) var textInputActiveFlag: Bool {
+        get { runningContext?.textInputActiveFlag ?? false }
+        set { runningContext?.textInputActiveFlag = newValue }
+    }
 
     private struct SettleWaiter {
         var quietFrames: Int
@@ -156,35 +191,28 @@ final class TheTripwire {
 
     // MARK: - Pulse Lifecycle
 
-    var isPulseRunning: Bool { displayLink != nil }
+    var isPulseRunning: Bool { runningContext != nil }
 
     func startPulse() {
-        guard displayLink == nil else { return }
+        guard case .idle = pulsePhase else { return }
         let target = PulseTick(tripwire: self)
         let link = CADisplayLink(target: target, selector: #selector(PulseTick.handleTick))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
         link.add(to: .main, forMode: .common)
-        displayLink = link
-        pulseTarget = target
+        pulsePhase = .running(RunningContext(link: link, target: target))
         startNotificationObservation()
     }
 
     func stopPulse() {
-        displayLink?.invalidate()
-        displayLink = nil
-        pulseTarget = nil
+        guard let context = runningContext else { return }
+        context.link.invalidate()
         stopNotificationObservation()
 
-        // Resolve any pending waiters as timed out
-        for waiter in settleWaiters {
+        for waiter in context.settleWaiters {
             waiter.continuation.resume(returning: false)
         }
-        settleWaiters.removeAll()
 
-        latestReading = nil
-        tickCount = 0
-        keyboardVisibleFlag = false
-        textInputActiveFlag = false
+        pulsePhase = .idle
     }
 
     // MARK: - Settle Waiting
@@ -199,8 +227,9 @@ final class TheTripwire {
     /// Returns true if settled before timeout, false if timed out.
     func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
         startPulse()
+        guard let context = runningContext else { return false }
         return await withCheckedContinuation { continuation in
-            settleWaiters.append(SettleWaiter(
+            context.settleWaiters.append(SettleWaiter(
                 quietFrames: 0,
                 requiredQuietFrames: requiredQuietFrames,
                 deadline: CFAbsoluteTimeGetCurrent() + timeout,
@@ -243,9 +272,10 @@ final class TheTripwire {
     // MARK: - Tick Handler
 
     fileprivate func onTick() {
-        tickCount += 1
+        guard let context = runningContext else { return }
+        context.tickCount += 1
         let now = CFAbsoluteTimeGetCurrent()
-        let prev = latestReading
+        let prev = context.latestReading
 
         // Flush pending implicit transactions so SwiftUI's deferred
         // layout commits before we scan.
@@ -262,19 +292,19 @@ final class TheTripwire {
         let responderId = currentFirstResponder().map(ObjectIdentifier.init)
 
         let reading = PulseReading(
-            tick: tickCount,
+            tick: context.tickCount,
             timestamp: now,
             layoutPending: scan.hasPendingLayout,
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: vcId,
             firstResponder: responderId,
-            keyboardVisible: keyboardVisibleFlag,
-            textInputActive: textInputActiveFlag,
+            keyboardVisible: context.keyboardVisibleFlag,
+            textInputActive: context.textInputActiveFlag,
             windowCount: scan.windowCount,
             quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
         )
-        latestReading = reading
+        context.latestReading = reading
 
         // Diff against previous reading and fire transitions
         if vcId != prev?.topmostVC {
@@ -283,11 +313,11 @@ final class TheTripwire {
         if responderId != prev?.firstResponder {
             onTransition?(.focusChanged(from: prev?.firstResponder, to: responderId))
         }
-        if keyboardVisibleFlag != (prev?.keyboardVisible ?? false) {
-            onTransition?(.keyboardChanged(visible: keyboardVisibleFlag))
+        if context.keyboardVisibleFlag != (prev?.keyboardVisible ?? false) {
+            onTransition?(.keyboardChanged(visible: context.keyboardVisibleFlag))
         }
-        if textInputActiveFlag != (prev?.textInputActive ?? false) {
-            onTransition?(.textInputChanged(active: textInputActiveFlag))
+        if context.textInputActiveFlag != (prev?.textInputActive ?? false) {
+            onTransition?(.textInputChanged(active: context.textInputActiveFlag))
         }
         if reading.isSettled && !(prev?.isSettled ?? false) {
             onTransition?(.settled)
@@ -295,28 +325,26 @@ final class TheTripwire {
             onTransition?(.unsettled)
         }
 
-        resolveSettleWaiters(now: now, isQuiet: isQuiet)
+        resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
     }
 
-    private func resolveSettleWaiters(now: CFAbsoluteTime, isQuiet: Bool) {
-        // Update quiet frames for all waiters
-        for index in settleWaiters.indices {
+    private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {
+        for index in context.settleWaiters.indices {
             if isQuiet {
-                settleWaiters[index].quietFrames += 1
+                context.settleWaiters[index].quietFrames += 1
             } else {
-                settleWaiters[index].quietFrames = 0
+                context.settleWaiters[index].quietFrames = 0
             }
         }
 
-        // Resolve and remove settled/timed-out waiters (reverse for safe removal)
-        for index in settleWaiters.indices.reversed() {
-            let waiter = settleWaiters[index]
+        for index in context.settleWaiters.indices.reversed() {
+            let waiter = context.settleWaiters[index]
             if waiter.quietFrames >= waiter.requiredQuietFrames {
                 waiter.continuation.resume(returning: true)
-                settleWaiters.remove(at: index)
+                context.settleWaiters.remove(at: index)
             } else if now >= waiter.deadline {
                 waiter.continuation.resume(returning: false)
-                settleWaiters.remove(at: index)
+                context.settleWaiters.remove(at: index)
             }
         }
     }
@@ -472,9 +500,13 @@ final class TheTripwire {
     /// and active animations — stricter than the pre-pulse check which only
     /// looked at animations.
     func allClear() -> Bool {
-        if let reading = latestReading { return reading.isSettled }
-        let scan = scanLayers()
-        return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+        switch pulsePhase {
+        case .running(let context):
+            return context.latestReading?.isSettled ?? false
+        case .idle:
+            let scan = scanLayers()
+            return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+        }
     }
 
     // MARK: - Constants
