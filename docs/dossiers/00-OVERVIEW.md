@@ -33,6 +33,7 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 |-------------|-------|-------------|
 | [TheHandoff](02-THEHANDOFF.md) | The Logistics | Device discovery, TLS connection, keepalive, auto-reconnect, session state |
 | [TheFence](10-THEFENCE.md) | The Boss | Centralized command dispatch, request-response correlation, async waits |
+| [TheBookKeeper](16-THEBOOKKEEPER.md) | The Accountant | Session logs, artifact storage, compression, path safety |
 | [ButtonHeistCLI](11-CLI.md) | The CLI | Command-line interface |
 | [ButtonHeistMCP](12-MCP.md) | The MCP Server | AI agent tool interface |
 

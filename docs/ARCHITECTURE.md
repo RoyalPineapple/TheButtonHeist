@@ -351,7 +351,7 @@ flowchart TD
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 16 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 18 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -359,12 +359,12 @@ flowchart TD
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 16 tool schemas, adding `run_batch` and `get_session_state`
+├── ToolDefinitions.swift — 18 tool schemas
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 16 tools dispatch through `fence.execute(request:)`
+- 18 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
@@ -382,6 +382,11 @@ TheFence (@ButtonHeistActor) — command dispatch + request-response correlation
 │   ├── DeviceDiscovery (Bonjour)
 │   ├── USBDeviceDiscovery (CoreDevice tunnels)
 │   └── DeviceConnection (TLS transport + fingerprint verification)
+├── TheBookKeeper — session logs, artifact storage, compression
+│   ├── SessionPhase state machine (idle → active → closed → archived)
+│   ├── Append-only JSONL session logs with binary data exclusion
+│   ├── Artifact storage (screenshots, recordings) with sequence-numbered filenames
+│   └── Session archival (gzip log compression + tar.gz archive)
 ├── Pending request correlation (requestId → continuation dictionaries)
 └── Async wait methods (waitForActionResult, waitForInterface, waitForScreen, waitForRecording)
 ```
