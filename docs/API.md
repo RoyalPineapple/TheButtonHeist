@@ -421,11 +421,13 @@ public enum Command: String, CaseIterable, Sendable {
     case getSessionState = "get_session_state"
     case connect
     case listTargets = "list_targets"
-    // ... 35 total cases
+    case getSessionLog = "get_session_log"
+    case archiveSession = "archive_session"
+    // ... 37 total cases
 }
 ```
 
-Single source of truth for the 35 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for the 37 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 
@@ -455,6 +457,8 @@ Typed response enum with `humanFormatted() -> String` and `jsonDict() -> [String
 | `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
 | `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
 | `targets(_:defaultTarget:)` | Named targets from config file with optional default |
+| `sessionLog(manifest:)` | Current session manifest for `get_session_log` |
+| `archiveResult(path:manifest:)` | Archive path and final manifest for `archive_session` |
 
 ### FenceError
 

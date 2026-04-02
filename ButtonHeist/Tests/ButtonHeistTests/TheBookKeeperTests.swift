@@ -100,9 +100,10 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-archive")
         try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
         try await bookKeeper.closeSession()
-        let archivePath = try await bookKeeper.archiveSession(deleteSource: false)
+        let (archivePath, archiveManifest) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
             XCTAssertEqual(session.archivePath, archivePath)
+            XCTAssertEqual(session.manifest, archiveManifest)
             XCTAssertTrue(archivePath.path.hasSuffix(".tar.gz"))
         } else {
             XCTFail("Expected archived phase")
@@ -134,6 +135,7 @@ final class TheBookKeeperTests: XCTestCase {
         do {
             try bookKeeper.beginSession(identifier: "test")
             _ = try await bookKeeper.archiveSession()
+            // archiveSession() returns (URL, SessionManifest) but we only care about the error here
             XCTFail("Expected error")
         } catch let error as BookKeeperError {
             if case .invalidPhase = error {
@@ -143,6 +145,28 @@ final class TheBookKeeperTests: XCTestCase {
             }
         } catch {
             XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testBeginSessionRejectsPathTraversalIdentifier() {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "../../tmp/evil")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testBeginSessionRejectsSlashInIdentifier() {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "foo/bar")) { error in
+            guard case BookKeeperError.unsafePath = error else {
+                XCTFail("Expected unsafePath error, got \(error)")
+                return
+            }
         }
     }
 

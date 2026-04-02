@@ -540,6 +540,34 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(mockConnection.connectCount, 0)
     }
 
+    // MARK: - BookKeeper Command Dispatch
+
+    @ButtonHeistActor
+    func testExecuteGetSessionLogReturnsErrorWhenIdle() async throws {
+        let fence = TheFence()
+        let response = try await fence.execute(request: ["command": "get_session_log"])
+        if case .error(let message) = response {
+            XCTAssertTrue(message.contains("No active session"))
+        } else {
+            XCTFail("Expected error response when no session active, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testExecuteArchiveSessionReturnsErrorWhenIdle() async throws {
+        let fence = TheFence()
+        do {
+            _ = try await fence.execute(request: ["command": "archive_session"])
+            XCTFail("Expected error for archive_session when idle")
+        } catch let error as BookKeeperError {
+            if case .invalidPhase = error {
+                // expected — archiveSession requires closed phase
+            } else {
+                XCTFail("Expected invalidPhase, got \(error)")
+            }
+        }
+    }
+
     // MARK: - Wait Method Tests
 
     @ButtonHeistActor

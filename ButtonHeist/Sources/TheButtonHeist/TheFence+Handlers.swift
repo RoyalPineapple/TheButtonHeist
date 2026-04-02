@@ -563,10 +563,7 @@ extension TheFence {
             return .sessionLog(manifest: manifest)
         case .archiveSession:
             let deleteSource = boolArg(args, "delete_source") ?? false
-            let archiveURL = try await bookKeeper.archiveSession(deleteSource: deleteSource)
-            guard let manifest = bookKeeper.manifest else {
-                return .error("No session to archive")
-            }
+            let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
         default:
             return .error("Unexpected BookKeeper command: \(command.rawValue)")

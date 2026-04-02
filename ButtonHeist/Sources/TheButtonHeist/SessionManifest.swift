@@ -7,7 +7,7 @@ public enum ArtifactType: String, Codable, Sendable, CaseIterable {
     case recording
 }
 
-public enum ResponseStatus: String, Sendable {
+public enum ResponseStatus: String, Sendable, CaseIterable {
     case ok
     case error
 }
