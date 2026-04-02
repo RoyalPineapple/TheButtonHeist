@@ -29,9 +29,12 @@ jobs:
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
-  macos-tests:
+  setup:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 10
+    outputs:
+      a11y-hash: ${{ steps.submodules.outputs.a11y-hash }}
+      xcode-version: ${{ steps.xcode.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -61,22 +64,54 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-deps-
 
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
+
+      - name: Upload resolved dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuist-deps
+          path: Tuist/.build
+          retention-days: 1
+
+  macos-tests:
+    needs: [setup]
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshot
+
+      - name: Install Tuist
+        uses: jdx/mise-action@v2
+
+      - name: Download resolved dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: tuist-deps
+          path: Tuist/.build
+
       - name: Cache Tuist binaries archive
         id: binaries-cache
         uses: actions/cache@v4
         with:
           path: /tmp/tuist-binaries.tar
-          key: tuist-binaries-macos-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
+          key: tuist-binaries-macos-xcode${{ needs.setup.outputs.xcode-version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ needs.setup.outputs.a11y-hash }}
 
       - name: Restore Tuist binaries (preserving xattrs)
         if: steps.binaries-cache.outputs.cache-hit == 'true'
         run: |
           mkdir -p ~/.cache/tuist/Binaries
           /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
 
       - name: Verify generated project is up to date
         timeout-minutes: 3
@@ -111,6 +146,7 @@ jobs:
           tuist test ButtonHeistTests --no-selective-testing
 
   ios-tests:
+    needs: [setup]
     runs-on: macos-15
     timeout-minutes: 30
 
@@ -121,39 +157,18 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Init required submodules
-        id: submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive submodules/AccessibilitySnapshot
-          echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
-
-      - name: Capture Xcode version
-        id: xcode
-        run: echo "version=$(xcodebuild -version | head -1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
 
       - name: Install Tuist
         uses: jdx/mise-action@v2
 
-      - name: Cache Tuist dependencies
-        uses: actions/cache@v4
+      - name: Download resolved dependencies
+        uses: actions/download-artifact@v4
         with:
+          name: tuist-deps
           path: Tuist/.build
-          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-deps-
-
-      - name: Cache Tuist binaries archive
-        id: binaries-cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/tuist-binaries.tar
-          key: tuist-binaries-ios-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
-
-      - name: Restore Tuist binaries (preserving xattrs)
-        if: steps.binaries-cache.outputs.cache-hit == 'true'
-        run: |
-          mkdir -p ~/.cache/tuist/Binaries
-          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
 
       - name: Boot simulator in background
         run: |
@@ -182,9 +197,18 @@ jobs:
           xcrun simctl boot "$SIM_UDID" || true
           # Boot continues asynchronously — don't wait for bootstatus here
 
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
+      - name: Cache Tuist binaries archive
+        id: binaries-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/tuist-binaries.tar
+          key: tuist-binaries-ios-xcode${{ needs.setup.outputs.xcode-version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ needs.setup.outputs.a11y-hash }}
+
+      - name: Restore Tuist binaries (preserving xattrs)
+        if: steps.binaries-cache.outputs.cache-hit == 'true'
+        run: |
+          mkdir -p ~/.cache/tuist/Binaries
+          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
 
       - name: Warm binary cache for external dependencies
         if: steps.binaries-cache.outputs.cache-hit != 'true'
@@ -195,10 +219,6 @@ jobs:
         if: steps.binaries-cache.outputs.cache-hit != 'true'
         run: /usr/bin/tar -cpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries .
 
-      - name: Wait for simulator boot
-        timeout-minutes: 5
-        run: xcrun simctl bootstatus "$SIM_UDID" -b
-
       - name: Generate project
         timeout-minutes: 3
         run: tuist generate --no-open
@@ -207,12 +227,36 @@ jobs:
         timeout-minutes: 10
         run: |
           set -eo pipefail
-          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
-            echo "Building $scheme for iOS Simulator..."
-            xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
-              -destination "platform=iOS Simulator,id=$SIM_UDID" \
-              build | tail -3
-          done
+          echo "Building BH Demo, UIKitTestApp, and ResearchApp in parallel..."
+
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            build 2>&1 | tail -3 &
+          PID_DEMO=$!
+
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "UIKitTestApp" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            build 2>&1 | tail -3 &
+          PID_UIKIT=$!
+
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "ResearchApp" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            build 2>&1 | tail -3 &
+          PID_RESEARCH=$!
+
+          FAILED=0
+          wait $PID_DEMO || FAILED=1
+          wait $PID_UIKIT || FAILED=1
+          wait $PID_RESEARCH || FAILED=1
+
+          if [ $FAILED -ne 0 ]; then
+            echo "::error::One or more iOS app builds failed"
+            exit 1
+          fi
+
+      - name: Wait for simulator boot
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$SIM_UDID" -b
 
       - name: Run iOS tests
         timeout-minutes: 10
