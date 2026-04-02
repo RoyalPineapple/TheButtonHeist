@@ -149,8 +149,10 @@ final class TheHandoffStateTests: XCTestCase {
 
     func testDisconnectEventWithEnabledPolicyTriggersReconnect() async throws {
         let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
+        let reconnected = expectation(description: "reconnect connection made")
         var connectionCount = 0
         handoff.makeConnection = { _, _, _ in
             connectionCount += 1
@@ -170,6 +172,7 @@ final class TheHandoffStateTests: XCTestCase {
                     screenWidth: 402,
                     screenHeight: 874
                 )
+                reconnected.fulfill()
             }
             return connection
         }
@@ -184,16 +187,17 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.connect(to: device)
         XCTAssertEqual(connectionCount, 1)
 
-        // runAutoReconnect sleeps 1s per iteration before checking discoveredDevices
-        try await Task.sleep(for: .seconds(2))
+        await fulfillment(of: [reconnected], timeout: 5)
 
         XCTAssertGreaterThanOrEqual(connectionCount, 2)
     }
 
     func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
         let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
+        let disconnected = expectation(description: "disconnect event received")
         var connectionCount = 0
         handoff.makeConnection = { _, _, _ in
             connectionCount += 1
@@ -204,11 +208,17 @@ final class TheHandoffStateTests: XCTestCase {
             ]
             return connection
         }
+        handoff.onDisconnected = { _ in
+            disconnected.fulfill()
+        }
 
         handoff.connect(to: device)
         XCTAssertEqual(connectionCount, 1)
 
-        try await Task.sleep(for: .milliseconds(500))
+        await fulfillment(of: [disconnected], timeout: 5)
+
+        // Give the reconnect loop time to fire if it were going to (it shouldn't)
+        try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(connectionCount, 1)
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
