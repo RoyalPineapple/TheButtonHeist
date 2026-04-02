@@ -52,18 +52,35 @@ extension TheSafecracker {
         return true
     }
 
-    /// Scroll the minimum distance needed to make a frame visible.
+    /// Scroll the minimum distance needed to make a frame visible within a comfort zone.
     /// Frame is in screen coordinates; converted to scroll view content space internally.
+    /// `comfortMarginFraction` insets the visible rect by that fraction on each side
+    /// (e.g. 1/6 targets the middle 2/3). Falls back to the full visible rect when
+    /// the target is larger than the comfort zone.
     /// Returns true if already visible or if scroll was triggered.
-    func scrollToMakeVisible(_ targetFrame: CGRect, in scrollView: UIScrollView, animated: Bool = true) -> Bool {
+    func scrollToMakeVisible(
+        _ targetFrame: CGRect,
+        in scrollView: UIScrollView,
+        animated: Bool = true,
+        comfortMarginFraction: CGFloat = 0
+    ) -> Bool {
         let targetInScrollView = scrollView.convert(targetFrame, from: nil)
 
-        let visibleRect = CGRect(
-            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            width: scrollView.frame.width - scrollView.adjustedContentInset.left - scrollView.adjustedContentInset.right,
-            height: scrollView.frame.height - scrollView.adjustedContentInset.top - scrollView.adjustedContentInset.bottom
+        let inset = scrollView.adjustedContentInset
+        let fullVisibleRect = CGRect(
+            x: scrollView.contentOffset.x + inset.left,
+            y: scrollView.contentOffset.y + inset.top,
+            width: scrollView.frame.width - inset.left - inset.right,
+            height: scrollView.frame.height - inset.top - inset.bottom
         )
+
+        let comfortRect = fullVisibleRect.insetBy(
+            dx: fullVisibleRect.width * comfortMarginFraction,
+            dy: fullVisibleRect.height * comfortMarginFraction
+        )
+        let visibleRect = (comfortRect.width >= targetInScrollView.width
+            && comfortRect.height >= targetInScrollView.height)
+            ? comfortRect : fullVisibleRect
 
         if visibleRect.contains(targetInScrollView) { return true }
 
@@ -177,6 +194,59 @@ extension TheSafecracker {
         }
 
         return await swipe(from: start, to: end, duration: duration)
+    }
+
+    // MARK: - Scroll Fingerprint Animation
+
+    /// Animate a fingerprint sweep across a frame in the given scroll direction.
+    /// The finger moves opposite to content — scrolling "down" (content moves up)
+    /// shows a finger sweeping from bottom to top, matching a real swipe gesture.
+    /// Duration matches UIScrollView's animated setContentOffset (~300ms).
+    func animateScrollFingerprint(
+        frame: CGRect,
+        direction: UIAccessibilityScrollDirection,
+        duration: TimeInterval = 0.3
+    ) async {
+        let travel: CGFloat = 0.5
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        let start: CGPoint
+        let end: CGPoint
+
+        switch direction {
+        case .down, .next:
+            start = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+        case .up, .previous:
+            start = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+        case .right:
+            start = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+        case .left:
+            start = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+        @unknown default:
+            return
+        }
+
+        let steps = 15
+        let stepDelay = duration / Double(steps)
+
+        fingerprints.beginTrackingFingerprints(at: [start])
+        defer { fingerprints.endTrackingFingerprints() }
+        for step in 1...steps {
+            let progress = Double(step) / Double(steps)
+            let point = CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+            fingerprints.updateTrackingFingerprints(to: [point])
+            do {
+                try await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
+            } catch {
+                break
+            }
+        }
     }
 
     /// Total items in a UITableView or UICollectionView (for exhaustive search).
