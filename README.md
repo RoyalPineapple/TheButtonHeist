@@ -2,10 +2,7 @@
 
 [![CI](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/RoyalPineapple/TheButtonHeist/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/RoyalPineapple/TheButtonHeist?label=release)](https://github.com/RoyalPineapple/TheButtonHeist/releases/latest)
-[![Platform](https://img.shields.io/badge/platform-iOS%2017%2B%20%7C%20macOS%2014%2B-blue)](https://github.com/RoyalPineapple/TheButtonHeist)
-[![Swift](https://img.shields.io/badge/swift-6-orange)](https://github.com/RoyalPineapple/TheButtonHeist)
 [![License](https://img.shields.io/github/license/RoyalPineapple/TheButtonHeist)](LICENSE)
-[![Homebrew](https://img.shields.io/badge/homebrew-RoyalPineapple%2Ftap-blueviolet)](https://github.com/RoyalPineapple/homebrew-tap)
 
 # Interface out. Agents in. Clean escape.
 
