@@ -98,6 +98,10 @@ public final class TheBookKeeper {
             throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: "active")
         }
 
+        guard !identifier.contains("/"), !identifier.contains("..") else {
+            throw BookKeeperError.unsafePath(identifier)
+        }
+
         let timestamp = Self.timestampString()
         let sessionId = "\(identifier)-\(timestamp)"
         let directory = baseDirectory.appendingPathComponent(sessionId)
@@ -107,13 +111,14 @@ public final class TheBookKeeper {
         FileManager.default.createFile(atPath: logPath.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logPath)
 
-        let manifest = SessionManifest(sessionId: sessionId, startTime: Date())
+        let startTime = Date()
+        let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
         phase = .active(ActiveSession(
             sessionId: sessionId,
             directory: directory,
             logHandle: logHandle,
             manifest: manifest,
-            startTime: Date(),
+            startTime: startTime,
             nextSequenceNumber: 1
         ))
     }
@@ -125,8 +130,14 @@ public final class TheBookKeeper {
         let endTime = Date()
         session.manifest.endTime = endTime
         try flushManifest(session: session)
+
+        // Transition to idle before closing the handle so that concurrent
+        // logCommand/logResponse calls bail out via the guard instead of
+        // writing to a closed FileHandle.
+        phase = .idle
         session.logHandle.closeFile()
 
+        // If compressLog throws, phase stays .idle — safe for a fresh beginSession.
         let compressedPath = try await compressLog(in: session.directory)
 
         phase = .closed(ClosedSession(
@@ -139,12 +150,13 @@ public final class TheBookKeeper {
         ))
     }
 
-    public func archiveSession(deleteSource: Bool = false) async throws -> URL {
+    public func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionManifest) {
         guard case .closed(let session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "closed", actual: phaseName)
         }
 
         let archivePath = try await createArchive(session: session)
+        let manifest = session.manifest
 
         if deleteSource {
             try FileManager.default.removeItem(at: session.directory)
@@ -152,12 +164,12 @@ public final class TheBookKeeper {
 
         phase = .archived(ArchivedSession(
             archivePath: archivePath,
-            manifest: session.manifest,
+            manifest: manifest,
             startTime: session.startTime,
             endTime: session.endTime
         ))
 
-        return archivePath
+        return (archivePath, manifest)
     }
 
     // MARK: - Logging
