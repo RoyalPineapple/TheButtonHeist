@@ -213,6 +213,24 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(markedAuthenticated.contains(2))
     }
 
+    func testDrainingSessionSurvivesForRejoin() {
+        // Authenticate and disconnect — session enters draining, not idle
+        authenticate(clientId: 1, token: "test-token", respond: respondSink())
+        muscle.handleClientDisconnected(1)
+
+        // Session is draining: no connections, but driver still owns it
+        XCTAssertTrue(muscle.activeSessionConnections.isEmpty, "No connections during draining")
+        XCTAssertNotNil(muscle.activeSessionDriverId, "Driver should still own session while draining")
+
+        // Same driver reconnects — should rejoin the draining session, not claim a new one
+        var sessionChanges: [Bool] = []
+        muscle.onSessionActiveChanged = { isActive in sessionChanges.append(isActive) }
+        authenticate(clientId: 2, token: "test-token", respond: respondSink())
+
+        XCTAssertTrue(muscle.activeSessionConnections.contains(2), "New client should be in session")
+        XCTAssertTrue(sessionChanges.isEmpty, "Session should not have been released and reclaimed")
+    }
+
     func testDifferentDriverBlockedDuringGracePeriod() {
         // Driver A connects and disconnects (release timer running)
         authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())

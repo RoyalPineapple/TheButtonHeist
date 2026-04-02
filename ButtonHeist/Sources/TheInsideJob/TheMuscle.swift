@@ -477,8 +477,8 @@ final class TheMuscle {
 
     /// Approve an observer directly (no UI needed)
     private func approveObserver(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
-        let address = clients[clientId]?.address ?? ""
-        clients[clientId] = .observer(address: address, subscribed: true)
+        guard let phase = clients[clientId] else { return }
+        clients[clientId] = .observer(address: phase.address, subscribed: true)
         markClientAuthenticated?(clientId)
         sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
         logger.info("Observer \(clientId) approved (no session lock)")
@@ -610,7 +610,7 @@ final class TheMuscle {
         case .observer(let address, _):
             clients[clientId] = .observer(address: address, subscribed: subscribed)
         default:
-            break
+            logger.debug("Ignoring subscribe(\(subscribed)) for client \(clientId) in phase \(String(describing: self.clients[clientId]))")
         }
     }
 
