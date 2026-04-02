@@ -13,7 +13,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
         XCTAssertFalse(handoff.isDiscovering)
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
     }
 
     func testDisconnectClearsState() {
@@ -24,7 +24,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
     }
 
     func testStopDiscoveryClearsFlag() {
@@ -36,14 +36,14 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
     }
 
-    func testServerErrorSetsConnectionStateFailed() {
+    func testServerErrorSetsConnectionPhaseFailed() {
         let handoff = TheHandoff()
         var receivedError: String?
         handoff.onError = { receivedError = $0 }
 
         handoff.handleServerMessage(.error("something went wrong"), requestId: nil)
 
-        XCTAssertEqual(handoff.connectionState, .failed("something went wrong"))
+        XCTAssertEqual(handoff.connectionPhase, .failed(.error("something went wrong")))
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
@@ -54,7 +54,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.disconnect()
         handoff.disconnect()
 
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
     }
 
     func testDiscoverReachableDevicesPreservesExistingDiscoverySession() async {

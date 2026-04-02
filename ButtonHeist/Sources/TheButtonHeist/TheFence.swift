@@ -135,7 +135,7 @@ public final class TheFence {
     }
 
     public func start() async throws {
-        if isStarted, handoff.connectionState == .connected {
+        if isStarted, handoff.isConnected {
             return
         }
 
@@ -173,7 +173,7 @@ public final class TheFence {
 
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
-            (!isStarted || handoff.connectionState != .connected) {
+            (!isStarted || !handoff.isConnected) {
             try await start()
         }
 
@@ -208,7 +208,7 @@ public final class TheFence {
         switch command {
         case .status:
             return .status(
-                connected: handoff.connectionState == .connected,
+                connected: handoff.isConnected,
                 deviceName: handoff.connectedDevice.map { handoff.displayName(for: $0) }
             )
         case .listDevices:
@@ -264,7 +264,7 @@ public final class TheFence {
     }
 
     func sendAndAwait<T>(_ message: ClientMessage, response: (_ requestId: String) async throws -> T) async throws -> T {
-        guard handoff.connectionState == .connected else { throw FenceError.notConnected }
+        guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
         handoff.send(message, requestId: requestId)
         do {
@@ -550,7 +550,7 @@ public final class TheFence {
     // MARK: - Session State
 
     func currentSessionState() -> [String: Any] {
-        let connected = handoff.connectionState == .connected
+        let connected = handoff.isConnected
         var payload: [String: Any] = [
             "status": "ok",
             "connected": connected,

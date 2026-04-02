@@ -9,12 +9,12 @@
 TheHandoff owns the full lifecycle of communicating with a remote iOS device running TheInsideJob:
 
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
-2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `isConnected` / `connectedDevice` / `connectionState` state
-3. **Session state tracking** — maintains `connectionState` (disconnected/connecting/connected/failed), `currentInterface`, `currentScreen`, `isRecording`
+2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `connectionPhase` (an explicit state machine carrying the device in `.connecting` and `.connected` phases)
+3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionFailure)), `currentInterface`, `currentScreen`, `isRecording`
 4. **Keepalive** — sends `.ping` every 3 seconds over an active connection to keep the channel alive
 5. **Session management** — `connectWithDiscovery(filter:timeout:)` orchestrates discovery → device resolution → connection with timeout tracking
 6. **Reachability probing** — `discoverReachableDevices(timeout:)` discovers and validates each device advertisement via parallel TCP status probes
-7. **Auto-reconnect** — `setupAutoReconnect(filter:)` chains onto `onDisconnected` to attempt re-connection up to 60 times at 1-second intervals
+7. **Auto-reconnect** — `setupAutoReconnect(filter:)` sets `reconnectPolicy = .enabled(filter:)`; the disconnect event handler checks the policy directly instead of wrapping callbacks
 8. **Driver ID persistence** — generates and stores a UUID in `~/.buttonheist/driver-id` used to identify the client across sessions
 
 > **Note:** TheFence owns TheHandoff directly. There is no intermediate wrapper — TheFence talks to TheHandoff for all connection lifecycle and message sending, and owns the request-response correlation (pending continuations and async wait methods) itself.
@@ -25,7 +25,7 @@ TheHandoff owns the full lifecycle of communicating with a remote iOS device run
 graph TD
     subgraph TheHandoff["TheHandoff (@ButtonHeistActor)"]
         DiscState["Discovery State\ndiscoveredDevices, isDiscovering"]
-        ConnState["Connection State\nconnectedDevice, serverInfo, isConnected"]
+        ConnState["Connection State\nconnectionPhase, serverInfo"]
         Callbacks["Typed Callbacks\nonDeviceFound/Lost, onConnected/Disconnected,\nonInterface, onActionResult, onScreen,\nonRecording*, onError, onAuth*,\nonSessionLocked, onInteraction, onStatus"]
         Config["Configuration\ntoken, driverId, observeMode, autoSubscribe"]
 
@@ -222,16 +222,18 @@ Orchestrates discovery → resolution → connection as an `async throws` functi
 
 1. Calls `startDiscovery()` (no-op if already running)
 2. Wraps `DeviceResolver.resolve()` in `resolveReachableDevice`, translating `ResolutionError` into `ConnectionError`
-3. Temporarily overrides `onConnected`, `onDisconnected`, `onAuthFailed`, `onSessionLocked` to capture success/failure
-4. Polls the `connected` / `connectionError` flags every 100ms until one is set or the timeout elapses
-5. Restores all four callbacks before returning or throwing
+3. Calls `connect(to:)` then polls `connectionPhase` every 100ms
+4. Returns on `.connected`, throws on `.failed` (mapping `ConnectionFailure` to the right `FenceError`), `.disconnected`, or timeout
+
+No callback swapping needed — the `ConnectionPhase` state machine carries the outcome directly.
 
 ### `setupAutoReconnect(filter:)`
 
-Installs a one-time `onDisconnected` chain:
+Sets `reconnectPolicy = .enabled(filter:)`. The disconnect event handler in `connect(to:)` checks this policy directly:
 
-- Guards against duplicate installation via `autoReconnectInstalled`
-- On disconnect, starts `runAutoReconnect(filter:)` as a `Task`
+- Guards against duplicate installation via `guard case .disabled = reconnectPolicy`
+- On disconnect, if policy is `.enabled`, starts `runAutoReconnect(filter:)` as a `Task`
+- `forceDisconnect()` also triggers reconnect when the policy is enabled
 - `runAutoReconnect` makes up to 60 attempts: sleep 1s → look for matching device in `discoveredDevices` → call `connect(to:)` → poll `isConnected` for up to 10s
 - Reports progress via `onStatus?` and stops on success or exhaustion
 

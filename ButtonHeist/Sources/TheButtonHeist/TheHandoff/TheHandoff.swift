@@ -11,23 +11,64 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 @ButtonHeistActor
 public final class TheHandoff {
 
+    // MARK: - State Machine Types
+
+    /// Why a connection failed — typed so callers can map to the right FenceError
+    /// without string parsing or callback interception.
+    public enum ConnectionFailure: Equatable {
+        case error(String)
+        case authFailed(String)
+        case sessionLocked(String)
+
+        var asFenceError: FenceError {
+            switch self {
+            case .error(let message): return .connectionFailed(message)
+            case .authFailed(let reason): return .authFailed(reason)
+            case .sessionLocked(let message): return .sessionLocked(message)
+            }
+        }
+    }
+
+    /// Explicit connection lifecycle state machine. The device is carried in
+    /// `.connecting` and `.connected` so `connectedDevice` cannot drift from
+    /// the phase — impossible states like "connected but no device" are
+    /// unrepresentable.
+    public enum ConnectionPhase: Equatable {
+        case disconnected
+        case connecting(device: DiscoveredDevice)
+        case connected(device: DiscoveredDevice)
+        case failed(ConnectionFailure)
+    }
+
+    /// Whether auto-reconnect fires on disconnect. Replaces the old boolean
+    /// guard + callback-wrapping pattern — the disconnect handler checks this
+    /// directly instead of mutating `onDisconnected`.
+    public enum ReconnectPolicy: Equatable {
+        case disabled
+        case enabled(filter: String?)
+    }
+
     // MARK: - State
 
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
     public private(set) var isDiscovering: Bool = false
-    public private(set) var connectedDevice: DiscoveredDevice?
+    public private(set) var connectionPhase: ConnectionPhase = .disconnected
     public private(set) var serverInfo: ServerInfo?
-    public private(set) var isConnected: Bool = false
-    public private(set) var connectionState: ConnectionState = .disconnected
     public private(set) var currentInterface: Interface?
     public private(set) var currentScreen: ScreenPayload?
     public private(set) var isRecording: Bool = false
+    public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
 
-    public enum ConnectionState: Equatable {
-        case disconnected
-        case connecting
-        case connected
-        case failed(String)
+    // MARK: - Derived State
+
+    public var isConnected: Bool {
+        if case .connected = connectionPhase { return true }
+        return false
+    }
+
+    public var connectedDevice: DiscoveredDevice? {
+        if case .connected(let device) = connectionPhase { return device }
+        return nil
     }
 
     // MARK: - Discovery Callbacks
@@ -72,7 +113,6 @@ public final class TheHandoff {
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
     private var keepaliveTask: Task<Void, Never>?
-    private var autoReconnectInstalled = false
 
     var hasActiveDiscoverySession: Bool {
         discovery != nil
@@ -221,7 +261,7 @@ public final class TheHandoff {
 
     public func connect(to device: DiscoveredDevice) {
         disconnect()
-        connectionState = .connecting
+        connectionPhase = .connecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
         connection?.observeMode = observeMode
@@ -232,24 +272,25 @@ public final class TheHandoff {
             case .transportReady:
                 break
             case .connected:
-                self.connectedDevice = device
-                self.isConnected = true
-                self.connectionState = .connected
+                self.connectionPhase = .connected(device: device)
                 self.startKeepalive()
             case .disconnected(let reason):
-                self.isConnected = false
-                self.connectedDevice = nil
                 self.serverInfo = nil
                 self.currentInterface = nil
                 self.currentScreen = nil
                 self.isRecording = false
                 // Preserve .failed state (e.g., from sessionLocked)
-                if case .failed = self.connectionState {
+                if case .failed = self.connectionPhase {
                     // keep .failed
                 } else {
-                    self.connectionState = .disconnected
+                    self.connectionPhase = .disconnected
                 }
                 self.onDisconnected?(reason)
+                if case .enabled(let filter) = self.reconnectPolicy {
+                    Task { [weak self] in
+                        await self?.runAutoReconnect(filter: filter)
+                    }
+                }
             case .message(let msg, let requestId):
                 self.handleServerMessage(msg, requestId: requestId)
             }
@@ -290,16 +331,16 @@ public final class TheHandoff {
             isRecording = false
             onRecordingError?(msg)
         case .error(let msg):
-            connectionState = .failed(msg)
+            connectionPhase = .failed(.error(msg))
             onError?(msg)
         case .authApproved(let payload):
             token = payload.token
             onAuthApproved?(payload.token)
         case .sessionLocked(let payload):
-            connectionState = .failed(payload.message)
+            connectionPhase = .failed(.sessionLocked(payload.message))
             onSessionLocked?(payload)
         case .authFailed(let reason):
-            connectionState = .failed(reason)
+            connectionPhase = .failed(.authFailed(reason))
             onAuthFailed?(reason)
         case .interaction(let event):
             onInteraction?(event)
@@ -317,10 +358,8 @@ public final class TheHandoff {
         keepaliveTask = nil
         connection?.disconnect()
         connection = nil
-        isConnected = false
-        connectedDevice = nil
+        connectionPhase = .disconnected
         serverInfo = nil
-        connectionState = .disconnected
         currentInterface = nil
         currentScreen = nil
         isRecording = false
@@ -333,6 +372,11 @@ public final class TheHandoff {
         logger.warning("Force-disconnecting stale connection")
         disconnect()
         onDisconnected?(.localDisconnect)
+        if case .enabled(let filter) = reconnectPolicy {
+            Task { [weak self] in
+                await self?.runAutoReconnect(filter: filter)
+            }
+        }
     }
 
     // MARK: - Commands
@@ -361,7 +405,8 @@ public final class TheHandoff {
 
     /// Discover a device (optionally matching a filter) and connect to it.
     /// Starts discovery if not already active, polls until a matching device appears
-    /// or the timeout expires.
+    /// or the timeout expires. Polls `connectionPhase` directly instead of
+    /// intercepting callbacks — the state machine carries the outcome.
     public func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
         onStatus?("Searching for iOS devices...")
         startDiscovery()
@@ -372,63 +417,27 @@ public final class TheHandoff {
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
 
-        var connected = false
-        var connectionError: Error?
-
-        let savedOnConnected = onConnected
-        let savedOnDisconnected = onDisconnected
-        let savedOnAuthFailed = onAuthFailed
-        let savedOnSessionLocked = onSessionLocked
-
-        onConnected = { info in
-            connected = true
-            savedOnConnected?(info)
-        }
-        onDisconnected = { reason in
-            if connectionError == nil {
-                connectionError = reason
-            }
-            savedOnDisconnected?(reason)
-        }
-        onAuthFailed = { reason in
-            connectionError = FenceError.authFailed(reason)
-            savedOnAuthFailed?(reason)
-        }
-        onSessionLocked = { payload in
-            connectionError = FenceError.sessionLocked(payload.message)
-            savedOnSessionLocked?(payload)
-        }
-
         connect(to: device)
 
         let connectionStart = DispatchTime.now().uptimeNanoseconds
         let connectionTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
-        while !connected && connectionError == nil {
+        while true {
+            switch connectionPhase {
+            case .connected:
+                onStatus?("Connected to \(displayName(for: device))")
+                return
+            case .failed(let failure):
+                throw failure.asFenceError
+            case .disconnected:
+                throw FenceError.connectionFailed("Disconnected during connection attempt")
+            case .connecting:
+                break
+            }
             if DispatchTime.now().uptimeNanoseconds - connectionStart > connectionTimeout {
-                // Restore callbacks before throwing
-                onConnected = savedOnConnected
-                onDisconnected = savedOnDisconnected
-                onAuthFailed = savedOnAuthFailed
-                onSessionLocked = savedOnSessionLocked
                 throw FenceError.connectionTimeout
             }
             try await Task.sleep(nanoseconds: 100_000_000)
         }
-
-        // Restore callbacks
-        onConnected = savedOnConnected
-        onDisconnected = savedOnDisconnected
-        onAuthFailed = savedOnAuthFailed
-        onSessionLocked = savedOnSessionLocked
-
-        if let connectionError {
-            if let fenceError = connectionError as? FenceError {
-                throw fenceError
-            }
-            throw FenceError.connectionFailed("\(type(of: connectionError)): \(connectionError.localizedDescription)")
-        }
-
-        onStatus?("Connected to \(displayName(for: device))")
     }
 
     private func resolveReachableDevice(
@@ -446,16 +455,8 @@ public final class TheHandoff {
     /// Set up auto-reconnect: when disconnected, poll for the device and reconnect.
     /// Makes 60 attempts at 1s intervals before giving up.
     public func setupAutoReconnect(filter: String?) {
-        guard !autoReconnectInstalled else { return }
-        autoReconnectInstalled = true
-        let savedOnDisconnected = onDisconnected
-        onDisconnected = { [weak self] reason in
-            savedOnDisconnected?(reason)
-            guard let self else { return }
-            Task { [weak self] in
-                await self?.runAutoReconnect(filter: filter)
-            }
-        }
+        guard case .disabled = reconnectPolicy else { return }
+        reconnectPolicy = .enabled(filter: filter)
     }
 
     private func runAutoReconnect(filter: String?) async {
