@@ -196,6 +196,55 @@ extension TheSafecracker {
         return await swipe(from: start, to: end, duration: duration)
     }
 
+    // MARK: - Scroll Fingerprint Animation
+
+    /// Animate a fingerprint sweep across a frame in the given scroll direction.
+    /// The finger moves opposite to content — scrolling "down" (content moves up)
+    /// shows a finger sweeping from bottom to top, matching a real swipe gesture.
+    /// Duration matches UIScrollView's animated setContentOffset (~300ms).
+    func animateScrollFingerprint(
+        frame: CGRect,
+        direction: UIAccessibilityScrollDirection,
+        duration: TimeInterval = 0.3
+    ) async {
+        let travel: CGFloat = 0.5
+        let center = CGPoint(x: frame.midX, y: frame.midY)
+        let start: CGPoint
+        let end: CGPoint
+
+        switch direction {
+        case .down, .next:
+            start = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+        case .up, .previous:
+            start = CGPoint(x: center.x, y: center.y - frame.height * travel / 2)
+            end = CGPoint(x: center.x, y: center.y + frame.height * travel / 2)
+        case .right:
+            start = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+        case .left:
+            start = CGPoint(x: center.x - frame.width * travel / 2, y: center.y)
+            end = CGPoint(x: center.x + frame.width * travel / 2, y: center.y)
+        @unknown default:
+            return
+        }
+
+        let steps = 15
+        let stepDelay = duration / Double(steps)
+
+        fingerprints.beginTrackingFingerprints(at: [start])
+        for step in 1...steps {
+            let progress = Double(step) / Double(steps)
+            let point = CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+            fingerprints.updateTrackingFingerprints(to: [point])
+            try? await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
+        }
+        fingerprints.endTrackingFingerprints()
+    }
+
     /// Total items in a UITableView or UICollectionView (for exhaustive search).
     func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
         if let collectionView = scrollView as? UICollectionView {
