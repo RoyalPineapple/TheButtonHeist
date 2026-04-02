@@ -145,6 +145,75 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .disabled)
     }
 
+    // MARK: - ReconnectPolicy Trigger
+
+    func testDisconnectEventWithEnabledPolicyTriggersReconnect() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            if connectionCount == 1 {
+                connection.connectEventsOverride = [
+                    .connected,
+                    .disconnected(.serverClosed),
+                ]
+            } else {
+                connection.serverInfo = ServerInfo(
+                    protocolVersion: "5.0",
+                    appName: "TestApp",
+                    bundleIdentifier: "com.test",
+                    deviceName: "Simulator",
+                    systemVersion: "26.1",
+                    screenWidth: 402,
+                    screenHeight: 874
+                )
+            }
+            return connection
+        }
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        handoff.makeDiscovery = { mockDiscovery }
+        handoff.startDiscovery()
+
+        handoff.setupAutoReconnect(filter: nil)
+
+        handoff.connect(to: device)
+        XCTAssertEqual(connectionCount, 1)
+
+        // runAutoReconnect sleeps 1s per iteration before checking discoveredDevices
+        try await Task.sleep(for: .seconds(2))
+
+        XCTAssertGreaterThanOrEqual(connectionCount, 2)
+    }
+
+    func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            connection.connectEventsOverride = [
+                .connected,
+                .disconnected(.serverClosed),
+            ]
+            return connection
+        }
+
+        handoff.connect(to: device)
+        XCTAssertEqual(connectionCount, 1)
+
+        try await Task.sleep(for: .milliseconds(500))
+
+        XCTAssertEqual(connectionCount, 1)
+        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+    }
+
     // MARK: - RecordingPhase
 
     func testRecordingStartedSetsPhaseToRecording() {
