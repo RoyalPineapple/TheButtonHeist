@@ -94,7 +94,10 @@ extension TheBagman {
             let moved = safecracker.scrollByPage(sv, direction: direction, animated: animated)
             guard moved else { return (false, before) }
             if animated {
-                await tripwire.yieldRealFrames(20)
+                let screenFrame = sv.convert(sv.bounds, to: nil)
+                await safecracker.animateScrollFingerprint(
+                    frame: screenFrame, direction: direction
+                )
             } else {
                 await tripwire.yieldFrames(3)
             }
