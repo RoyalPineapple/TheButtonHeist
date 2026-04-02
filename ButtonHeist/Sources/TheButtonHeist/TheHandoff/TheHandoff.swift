@@ -111,6 +111,8 @@ public final class TheHandoff {
     /// When nil, a persistent auto-generated ID is used instead.
     public var driverId: String?
     public var autoSubscribe: Bool = true
+    /// Interval between auto-reconnect attempts. Default is 1 second.
+    var reconnectInterval: TimeInterval = 1.0
 
     // MARK: - Injectable Closures
 
@@ -477,9 +479,10 @@ public final class TheHandoff {
 
     private func runAutoReconnect(filter: String?) async {
         onStatus?("Device disconnected — watching for reconnection...")
+        let intervalNanoseconds = UInt64(reconnectInterval * 1_000_000_000)
         for _ in 0..<60 {
             guard !Task.isCancelled else { return }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
             guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 onStatus?("Reconnecting to \(device.name)...")
