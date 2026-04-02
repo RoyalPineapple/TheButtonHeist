@@ -423,7 +423,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
   ./scripts/release.sh 2026.04.03   # Explicit date
   ./scripts/release.sh --dry-run    # Preview only
   ```
-  The script runs the full pipeline: validate (must be on `main`, in sync with origin, clean worktree) → bump 6 files → build all targets → run all tests → commit/tag/push → create GitHub release with binaries → update Homebrew tap.
+  The script runs the full pipeline: validate (must be on `main`, in sync with origin, clean worktree) → bump 6 files → build all targets → run all tests → commit/tag/push. Pushing the tag triggers `.github/workflows/release.yml` which builds universal binaries, creates the GitHub release, and updates the Homebrew tap.
 
 ## CLI-First Development
 
