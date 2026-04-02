@@ -47,17 +47,19 @@ Same embed pattern as [Reveal](https://revealapp.com) or [FLEX](https://github.c
 
 ### 2. Give the agent eyes and hands
 
-Build the MCP server and add it to your project's `.mcp.json`:
+Install the CLI and MCP server:
 
 ```bash
-cd ButtonHeistMCP && swift build -c release
+brew install RoyalPineapple/tap/buttonheist
 ```
+
+Then add the MCP server to your project's `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "buttonheist": {
-      "command": "./ButtonHeistMCP/.build/release/buttonheist-mcp",
+      "command": "buttonheist-mcp",
       "args": []
     }
   }
