@@ -75,14 +75,14 @@ final class TheSafecracker {
 
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".
-    nonisolated static let gestureYieldDelay: UInt64 = 50_000_000
+    nonisolated static let gestureYieldDelay: Duration = .milliseconds(50)
 
     /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
     /// state treats the selection as current before the subsequent delete.
-    nonisolated static let selectionSettleDelay: UInt64 = 50_000_000
+    nonisolated static let selectionSettleDelay: Duration = .milliseconds(50)
 
     /// Poll interval for keyboard readiness after tapping a text field (100ms).
-    nonisolated static let keyboardPollInterval: UInt64 = 100_000_000
+    nonisolated static let keyboardPollInterval: Duration = .milliseconds(100)
 
     /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
     nonisolated static let keyboardPollMaxAttempts: Int = 20
@@ -106,7 +106,7 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard touchDown(at: point) else { return false }
-        try? await Task.sleep(nanoseconds: Self.gestureYieldDelay)
+        try? await Task.sleep(for: Self.gestureYieldDelay)
         return touchUp()
     }
 
@@ -313,7 +313,7 @@ final class TheSafecracker {
         if fullRange.isEmpty { return true }
         textInput.selectedTextRange = fullRange
         // Brief yield so the selection registers before delete
-        try? await Task.sleep(nanoseconds: Self.selectionSettleDelay)
+        try? await Task.sleep(for: Self.selectionSettleDelay)
 
         if let keyboard = KeyboardBridge.shared() {
             keyboard.deleteBackward()

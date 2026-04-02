@@ -24,7 +24,7 @@ public final class IdleMonitor {
         }
     }
 
-    public func cancel() {
+    public func stop() {
         timeoutTask?.cancel()
         timeoutTask = nil
     }

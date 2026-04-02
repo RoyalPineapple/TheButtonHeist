@@ -208,6 +208,7 @@ extension GroupType: Codable {
 
 // MARK: - Interface
 
+/// A snapshot of the current accessibility interface returned by the server.
 public struct Interface: Codable, Sendable {
     public let timestamp: Date
     public let elements: [HeistElement]

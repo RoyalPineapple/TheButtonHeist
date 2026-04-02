@@ -532,8 +532,6 @@ extension TheFence {
         return .targets(fileConfig.targets, defaultTarget: fileConfig.defaultTarget)
     }
 
-    // MARK: - Handler: Recording
-
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
