@@ -96,8 +96,6 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
-    var tokenMeter = TokenMeter()
-    let telemetryEnabled = EnvironmentKey.buttonheistTokenTelemetry.boolValue
     private var isStarted = false
 
     // MARK: - Pending Request Tracking
@@ -181,7 +179,9 @@ public final class TheFence {
             try await start()
         }
 
+        let start = CFAbsoluteTimeGetCurrent()
         let response = try await dispatch(command: command, args: request)
+        lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
 
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {
@@ -408,9 +408,10 @@ public final class TheFence {
         )
     }
 
-    // MARK: - Last Action Tracking
+    // MARK: - Last Action / Latency Tracking
 
     var lastActionResult: ActionResult?
+    public private(set) var lastLatencyMs: Int = 0
 
     // MARK: - Batch Execution
 
@@ -576,6 +577,7 @@ public final class TheFence {
                 "method": last.method.rawValue,
                 "success": last.success,
                 "message": last.message as Any,
+                "latency_ms": lastLatencyMs,
             ]
         }
         return payload
