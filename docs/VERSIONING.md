@@ -66,8 +66,12 @@ The script:
 3. **Builds** all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
 4. **Tests** all suites (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
 5. **Commits, tags, pushes** to `origin/main`
-6. **Creates GitHub release** with CLI and MCP binaries
-7. **Updates Homebrew tap** (`RoyalPineapple/homebrew-tap`) with real SHA-256 hashes
+
+Pushing the tag triggers `.github/workflows/release.yml` which:
+
+6. **Builds universal binaries** (arm64 + x86_64) in CI
+7. **Creates GitHub release** with CLI, MCP, and integrate artifacts
+8. **Updates Homebrew tap** (`RoyalPineapple/homebrew-tap`) with real SHA-256 hashes
 
 Use `--dry-run` to preview without modifying anything.
 
