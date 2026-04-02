@@ -13,7 +13,10 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
         XCTAssertFalse(handoff.isDiscovering)
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+        XCTAssertEqual(handoff.recordingPhase, .idle)
+        XCTAssertFalse(handoff.isRecording)
     }
 
     func testDisconnectClearsState() {
@@ -24,7 +27,8 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.connectedDevice)
         XCTAssertNil(handoff.serverInfo)
         XCTAssertNil(handoff.currentInterface)
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
+        XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
     func testStopDiscoveryClearsFlag() {
@@ -36,14 +40,14 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
     }
 
-    func testServerErrorSetsConnectionStateFailed() {
+    func testServerErrorSetsConnectionPhaseFailed() {
         let handoff = TheHandoff()
         var receivedError: String?
         handoff.onError = { receivedError = $0 }
 
         handoff.handleServerMessage(.error("something went wrong"), requestId: nil)
 
-        XCTAssertEqual(handoff.connectionState, .failed("something went wrong"))
+        XCTAssertEqual(handoff.connectionPhase, .failed(.error("something went wrong")))
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
@@ -54,8 +58,146 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.disconnect()
         handoff.disconnect()
 
-        XCTAssertEqual(handoff.connectionState, .disconnected)
+        XCTAssertEqual(handoff.connectionPhase, .disconnected)
     }
+
+    // MARK: - ReconnectPolicy
+
+    func testSetupAutoReconnectSetsPolicy() {
+        let handoff = TheHandoff()
+
+        handoff.setupAutoReconnect(filter: "MyApp")
+
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp"))
+    }
+
+    func testSetupAutoReconnectWithNilFilter() {
+        let handoff = TheHandoff()
+
+        handoff.setupAutoReconnect(filter: nil)
+
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil))
+    }
+
+    func testSetupAutoReconnectIsIdempotent() {
+        let handoff = TheHandoff()
+
+        handoff.setupAutoReconnect(filter: "FirstFilter")
+        handoff.setupAutoReconnect(filter: "SecondFilter")
+
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter"))
+    }
+
+    func testReconnectPolicyRemainsEnabledAfterDisconnect() {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        handoff.makeDiscovery = { mockDiscovery }
+
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let connection = MockConnection()
+            connection.serverInfo = ServerInfo(
+                protocolVersion: "5.0",
+                appName: "TestApp",
+                bundleIdentifier: "com.test",
+                deviceName: "Simulator",
+                systemVersion: "26.1",
+                screenWidth: 402,
+                screenHeight: 874
+            )
+            return connection
+        }
+
+        handoff.startDiscovery()
+        handoff.setupAutoReconnect(filter: nil)
+        handoff.connect(to: device)
+        XCTAssertEqual(connectionCount, 1)
+
+        // After explicit disconnect, the policy should remain enabled
+        // (disconnect doesn't reset the policy — only the connection)
+        handoff.disconnect()
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil))
+    }
+
+    func testReconnectPolicyStartsDisabled() {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        handoff.makeConnection = { _, _, _ in
+            let connection = MockConnection()
+            connection.serverInfo = ServerInfo(
+                protocolVersion: "5.0",
+                appName: "TestApp",
+                bundleIdentifier: "com.test",
+                deviceName: "Simulator",
+                systemVersion: "26.1",
+                screenWidth: 402,
+                screenHeight: 874
+            )
+            return connection
+        }
+
+        handoff.connect(to: device)
+        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+    }
+
+    // MARK: - RecordingPhase
+
+    func testRecordingStartedSetsPhaseToRecording() {
+        let handoff = TheHandoff()
+
+        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        XCTAssertEqual(handoff.recordingPhase, .recording)
+        XCTAssertTrue(handoff.isRecording)
+    }
+
+    func testRecordingCompletedResetsPhaseToIdle() {
+        let handoff = TheHandoff()
+        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        handoff.handleServerMessage(.recording(RecordingPayload(
+            videoData: "",
+            width: 100,
+            height: 200,
+            duration: 1.0,
+            frameCount: 10,
+            fps: 10,
+            startTime: Date(),
+            endTime: Date(),
+            stopReason: .manual,
+            interactionLog: nil
+        )), requestId: nil)
+
+        XCTAssertEqual(handoff.recordingPhase, .idle)
+        XCTAssertFalse(handoff.isRecording)
+    }
+
+    func testRecordingErrorResetsPhaseToIdle() {
+        let handoff = TheHandoff()
+        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+
+        handoff.handleServerMessage(.recordingError("disk full"), requestId: nil)
+
+        XCTAssertEqual(handoff.recordingPhase, .idle)
+        XCTAssertFalse(handoff.isRecording)
+    }
+
+    func testDisconnectResetsRecordingPhase() {
+        let handoff = TheHandoff()
+        handoff.handleServerMessage(.recordingStarted, requestId: nil)
+        XCTAssertEqual(handoff.recordingPhase, .recording)
+
+        handoff.disconnect()
+
+        XCTAssertEqual(handoff.recordingPhase, .idle)
+    }
+
+    // MARK: - Discovery (existing)
 
     func testDiscoverReachableDevicesPreservesExistingDiscoverySession() async {
         let reachableDevice = DiscoveredDevice(

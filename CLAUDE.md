@@ -392,8 +392,7 @@ enum State {
 }
 ```
 
-Where `RecordingSession` and `FinalizingSession` are structs carrying exactly the fields valid for that phase.
-
+Where `RecordingSession` and `FinalizingSession` are structs carrying exactly the fields valid for that phase. Canonical examples: `ConnectionPhase`, `ReconnectPolicy`, `RecordingPhase` in TheHandoff.
 ## Currency Types: Elements and Targets
 
 Two type families are the currency for referring to UI elements. Use them everywhere — never invent new types to represent a subset of their data.
