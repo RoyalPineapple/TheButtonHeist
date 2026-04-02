@@ -209,10 +209,19 @@ public enum FenceResponse {
             return connected ? "Session: connected to \(device)" : "Session: not connected"
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
+        case .sessionLog, .archiveResult:
+            return formatBookKeeperHuman(self)
+        }
+    }
+
+    private func formatBookKeeperHuman(_ response: FenceResponse) -> String {
+        switch response {
         case .sessionLog(let manifest):
             return formatSessionLogHuman(manifest)
         case .archiveResult(let path, let manifest):
             return "Session archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        default:
+            return ""
         }
     }
 
@@ -230,9 +239,13 @@ public enum FenceResponse {
         text += "\n  Artifacts: \(manifest.artifacts.count)"
         let screenshots = manifest.artifacts.filter { $0.type == .screenshot }.count
         let recordings = manifest.artifacts.filter { $0.type == .recording }.count
-        if screenshots > 0 { text += " (\(screenshots) screenshots" }
-        if recordings > 0 { text += screenshots > 0 ? ", \(recordings) recordings)" : " (\(recordings) recordings)" }
-        else if screenshots > 0 { text += ")" }
+        if screenshots > 0 && recordings > 0 {
+            text += " (\(screenshots) screenshots, \(recordings) recordings)"
+        } else if screenshots > 0 {
+            text += " (\(screenshots) screenshots)"
+        } else if recordings > 0 {
+            text += " (\(recordings) recordings)"
+        }
         return text
     }
 
@@ -667,12 +680,21 @@ public enum FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(targets[name]!.device)\(isDefault)"
             }.joined(separator: "\n")
+        case .sessionLog, .archiveResult:
+            return compactBookKeeper(self)
+        }
+    }
+
+    private func compactBookKeeper(_ response: FenceResponse) -> String {
+        switch response {
         case .sessionLog(let manifest):
             var text = "session: \(manifest.sessionId), \(manifest.commandCount) commands, \(manifest.artifacts.count) artifacts"
             if manifest.errorCount > 0 { text += ", \(manifest.errorCount) errors" }
             return text
         case .archiveResult(let path, let manifest):
             return "archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        default:
+            return ""
         }
     }
 
