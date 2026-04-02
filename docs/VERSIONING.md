@@ -11,7 +11,7 @@ Format: `YYYY.MM.DD` with an optional `.PATCH` suffix for same-day releases (e.g
 
 ### Current version
 
-**2026.04.02** — Pre-CalVer baseline. The first CalVer release will be the date it ships.
+**2026.04.03** — Pre-CalVer baseline. The first CalVer release will be the date it ships.
 
 ### Why CalVer
 

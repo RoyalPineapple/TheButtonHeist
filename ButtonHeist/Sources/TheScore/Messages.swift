@@ -8,7 +8,7 @@ public let protocolVersion = "6.7"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
 /// Update this constant when cutting a new release. See docs/VERSIONING.md.
-public let buttonHeistVersion = "2026.04.02"
+public let buttonHeistVersion = "2026.04.03"
 
 /// Explicit wire message discriminator used at JSON boundaries.
 public enum WireMessageType: String, Codable, CaseIterable, Sendable {
