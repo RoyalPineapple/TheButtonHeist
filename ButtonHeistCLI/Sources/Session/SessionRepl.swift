@@ -347,13 +347,20 @@ final class ReplSession {
     private func outputResponse(_ response: FenceResponse, id: Any?) {
         switch format {
         case .human:
-            writeOutput(response.humanFormatted())
+            let text = response.humanFormatted()
+            writeOutput(fence.applyTelemetry(to: text))
         case .compact:
-            writeOutput(response.compactFormatted())
+            let text = response.compactFormatted()
+            writeOutput(fence.applyTelemetry(to: text))
         case .json:
             if var dictionary = response.jsonDict() {
                 if let id {
                     dictionary["id"] = id
+                }
+                if let serialized = try? JSONSerialization.data(withJSONObject: dictionary, options: []),
+                   let preview = String(data: serialized, encoding: .utf8),
+                   let telemetry = fence.telemetryDict(for: preview) {
+                    dictionary["_telemetry"] = telemetry
                 }
                 if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
                    let json = String(data: data, encoding: .utf8) {

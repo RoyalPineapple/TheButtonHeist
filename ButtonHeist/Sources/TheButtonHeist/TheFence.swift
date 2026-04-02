@@ -96,6 +96,8 @@ public final class TheFence {
     var config: Configuration
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
+    var tokenMeter = TokenMeter()
+    let telemetryEnabled = EnvironmentKey.buttonheistTokenTelemetry.boolValue
     private var isStarted = false
 
     // MARK: - Pending Request Tracking
