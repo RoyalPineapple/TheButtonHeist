@@ -223,13 +223,35 @@ extension TheBagman {
 
         // Value is intentionally excluded — it changes on interaction (toggles,
         // sliders, checkboxes) and must not affect element identity.
-        let slug = slugify(element.label)
+        // Strip leading words that duplicate the trait prefix before slugifying:
+        // "Switch Button Off" with prefix "switchButton" → slug of "Off" → "off"
+        let labelForSlug = stripTraitPrefix(element.label, traitPrefix: traitPrefix)
+            ?? element.label
+        let slug = slugify(labelForSlug)
             ?? slugify(element.description)
 
         if let slug {
             return "\(traitPrefix)_\(slug)"
         }
         return traitPrefix
+    }
+
+    /// Strip leading words from text that duplicate the trait prefix.
+    /// "Switch Button Off" with prefix "switchButton" → "Off"
+    /// Returns nil if stripping would leave nothing (label IS the trait name).
+    func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
+        guard let text else { return nil }
+        let prefixWords = traitPrefix
+            .replacing(/([a-z])([A-Z])/, with: { "\($0.output.1) \($0.output.2)" })
+            .lowercased()
+            .split(separator: " ")
+        let textWords = text.split(separator: " ", omittingEmptySubsequences: true)
+        guard textWords.count > prefixWords.count else { return nil }
+        for (prefixWord, textWord) in zip(prefixWords, textWords) {
+            guard textWord.lowercased() == prefixWord else { return nil }
+        }
+        let remainder = textWords.dropFirst(prefixWords.count).joined(separator: " ")
+        return remainder.isEmpty ? nil : remainder
     }
 
     func slugify(_ text: String?) -> String? {
