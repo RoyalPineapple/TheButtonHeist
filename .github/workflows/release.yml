@@ -51,12 +51,26 @@ jobs:
           echo "Version $TAG_VERSION verified across tag, VERSION, and source."
 
       - name: Build CLI (universal)
-        working-directory: ButtonHeistCLI
-        run: swift build -c release --arch arm64 --arch x86_64
+        run: |
+          cd ButtonHeistCLI
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+          lipo -create \
+            .build/arm64-apple-macosx/release/buttonheist \
+            .build/x86_64-apple-macosx/release/buttonheist \
+            -output .build/buttonheist
+          file .build/buttonheist
 
       - name: Build MCP server (universal)
-        working-directory: ButtonHeistMCP
-        run: swift build -c release --arch arm64 --arch x86_64
+        run: |
+          cd ButtonHeistMCP
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+          lipo -create \
+            .build/arm64-apple-macosx/release/buttonheist-mcp \
+            .build/x86_64-apple-macosx/release/buttonheist-mcp \
+            -output .build/buttonheist-mcp
+          file .build/buttonheist-mcp
 
       - name: Package binaries and scripts
         run: |
@@ -64,12 +78,12 @@ jobs:
           mkdir -p dist
 
           # CLI
-          cp ButtonHeistCLI/.build/apple/Products/Release/buttonheist dist/
+          cp ButtonHeistCLI/.build/buttonheist dist/
           tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist
           rm dist/buttonheist
 
           # MCP
-          cp ButtonHeistMCP/.build/apple/Products/Release/buttonheist-mcp dist/
+          cp ButtonHeistMCP/.build/buttonheist-mcp dist/
           tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
           rm dist/buttonheist-mcp
 
