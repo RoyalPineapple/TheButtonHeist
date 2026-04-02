@@ -27,6 +27,7 @@
 		1D7013159A0E8C97AB2B8B67 /* TextInputDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */; };
 		1E1BF81AC448FD851070F7D5 /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1E4F9858B96961EC977706BA /* DisplayDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1B8E4B0AFCAA03702D3E7E /* DisplayDemo.swift */; };
+		2034653578CB8A03158380D3 /* MenuOrderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */; };
 		2207F605FE5B90CBFAA698BA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 08C502CD65C96FA553FDE94E /* Assets.xcassets */; };
 		29CCAAF777CC31474B45D927 /* swift-crypto_CCryptoBoringSSLShims.bundle in Resources */ = {isa = PBXBuildFile; fileRef = ED4B9F8DAB1D7DE45C567B35 /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		2A639C23AC4A8DFE2E0AAFE9 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D66B5DB457CE2C21836BE34 /* MessagesView.swift */; };
@@ -202,6 +203,7 @@
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1000E4B43B35612CE0CCDBAA /* ResearchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchApp.swift; sourceTree = "<group>"; };
 		10CDD5E500E477B98B606858 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuOrderView.swift; sourceTree = "<group>"; };
 		1607B6B404E9A862D18A0758 /* DemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoApp.swift; sourceTree = "<group>"; };
 		1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto__CryptoExtras.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		26B4D16FE6864A962C9904FD /* ResearchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ResearchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -307,6 +309,7 @@
 				9B56E5A3E3980E2D0BE602F9 /* GridGalleryView.swift */,
 				CC4BA1501628F80409378E6F /* LoginView.swift */,
 				98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */,
+				14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */,
 				2D66B5DB457CE2C21836BE34 /* MessagesView.swift */,
 				792340DE945D6E9BEF960BEA /* NestedScrollView.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
@@ -651,6 +654,7 @@
 				EBCEDB37EF91D97284509567 /* GridGalleryView.swift in Sources */,
 				B01B06C83541BFEF61052AFF /* LoginView.swift in Sources */,
 				8772E72EB5A4058DAD26A05B /* LongListView.swift in Sources */,
+				2034653578CB8A03158380D3 /* MenuOrderView.swift in Sources */,
 				2A639C23AC4A8DFE2E0AAFE9 /* MessagesView.swift in Sources */,
 				A88BD95BD5AC00A80DA7916D /* NestedScrollView.swift in Sources */,
 				7530B8E094B8A238664AAD79 /* NotesView.swift in Sources */,
