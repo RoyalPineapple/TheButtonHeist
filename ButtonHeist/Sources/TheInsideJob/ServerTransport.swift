@@ -82,7 +82,7 @@ public final class ServerTransport: NSObject {
     /// Stop the TCP server and any Bonjour advertisement.
     public func stop() {
         stopAdvertising()
-        Task { await server.stop() }
+        Task { [server] in await server.stop() }
     }
 
     // MARK: - Bonjour Advertisement
@@ -177,22 +177,22 @@ public final class ServerTransport: NSObject {
 
     /// Send data to a specific client.
     public func send(_ data: Data, to clientId: Int) {
-        Task { await server.send(data, to: clientId) }
+        Task { [server] in await server.send(data, to: clientId) }
     }
 
     /// Broadcast data to all authenticated clients.
     public func broadcastToAll(_ data: Data) {
-        Task { await server.broadcastToAll(data) }
+        Task { [server] in await server.broadcastToAll(data) }
     }
 
     /// Mark a client as authenticated.
     public func markAuthenticated(_ clientId: Int) {
-        Task { await server.markAuthenticated(clientId) }
+        Task { [server] in await server.markAuthenticated(clientId) }
     }
 
     /// Disconnect a specific client.
     public func disconnect(clientId: Int) {
-        Task { await server.disconnect(clientId: clientId) }
+        Task { [server] in await server.disconnect(clientId: clientId) }
     }
 }
 
