@@ -235,7 +235,9 @@ public final class TheHandoff
 |----------|------|-------------|
 | `discoveredDevices` | `[DiscoveredDevice]` | Devices found via Bonjour discovery |
 | `connectedDevice` | `DiscoveredDevice?` | Currently connected device |
-| `connectionState` | `ConnectionState` | Current state (disconnected/connecting/connected/failed) |
+| `connectionPhase` | `ConnectionPhase` | Connection lifecycle state machine (disconnected/connecting/connected/failed) |
+| `reconnectPolicy` | `ReconnectPolicy` | Whether auto-reconnect fires on disconnect (disabled/enabled) |
+| `recordingPhase` | `RecordingPhase` | Recording lifecycle state machine (idle/recording) |
 | `serverInfo` | `ServerInfo?` | Server info received after connecting |
 | `currentInterface` | `Interface?` | Most recent UI hierarchy from push broadcasts |
 | `currentScreen` | `ScreenPayload?` | Most recent screenshot from push broadcasts |
@@ -290,7 +292,7 @@ Tests replace these with mock implementations to avoid real Bonjour and NWConnec
 |--------|-------------|
 | `startDiscovery()` | Begin Bonjour discovery |
 | `stopDiscovery()` | Stop discovery |
-| `connect(to:)` | Connect to a device (sets connectionState to .connecting) |
+| `connect(to:)` | Connect to a device (sets connectionPhase to .connecting) |
 | `disconnect()` | Disconnect and clear all state |
 | `forceDisconnect()` | Force-close a stale connection |
 | `send(_:requestId:)` | Send a ClientMessage with optional requestId |
@@ -299,14 +301,42 @@ Tests replace these with mock implementations to avoid real Bonjour and NWConnec
 | `discoverReachableDevices(timeout:probeTimeout:retryInterval:)` | Discover and probe-validate devices |
 | `displayName(for:)` | Disambiguated display name for a device |
 
-#### ConnectionState
+#### ConnectionPhase
 
 ```swift
-public enum ConnectionState: Equatable {
+public enum ConnectionPhase: Equatable {
     case disconnected
-    case connecting
-    case connected
-    case failed(String)
+    case connecting(device: DiscoveredDevice)
+    case connected(device: DiscoveredDevice)
+    case failed(ConnectionFailure)
+}
+```
+
+#### ConnectionFailure
+
+```swift
+public enum ConnectionFailure: Equatable {
+    case error(String)
+    case authFailed(String)
+    case sessionLocked(String)
+}
+```
+
+#### ReconnectPolicy
+
+```swift
+public enum ReconnectPolicy: Equatable {
+    case disabled
+    case enabled(filter: String?)
+}
+```
+
+#### RecordingPhase
+
+```swift
+public enum RecordingPhase: Equatable {
+    case idle
+    case recording
 }
 ```
 
@@ -629,18 +659,52 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 public let protocolVersion = "6.4"  // Protocol v6.4: added ElementProperty.label for label change tracking
 ```
 
-### ConnectionState
+### ConnectionPhase
 
 ```swift
-public enum ConnectionState: Equatable
+public enum ConnectionPhase: Equatable
 ```
 
 #### Cases
 
 - `disconnected` - No active connection
-- `connecting` - Connection in progress
-- `connected` - Connected to a device
-- `failed(String)` - Connection failed with error message
+- `connecting(device: DiscoveredDevice)` - Connection in progress to device
+- `connected(device: DiscoveredDevice)` - Connected to a device
+- `failed(ConnectionFailure)` - Connection failed with typed failure
+
+### ConnectionFailure
+
+```swift
+public enum ConnectionFailure: Equatable
+```
+
+#### Cases
+
+- `error(String)` - General connection error
+- `authFailed(String)` - Authentication rejected
+- `sessionLocked(String)` - Session locked by another driver
+
+### ReconnectPolicy
+
+```swift
+public enum ReconnectPolicy: Equatable
+```
+
+#### Cases
+
+- `disabled` - Auto-reconnect will not fire
+- `enabled(filter: String?)` - Auto-reconnect fires on disconnect with optional device filter
+
+### RecordingPhase
+
+```swift
+public enum RecordingPhase: Equatable
+```
+
+#### Cases
+
+- `idle` - No recording in progress
+- `recording` - Screen recording is active
 
 ### DiscoveredDevice
 
