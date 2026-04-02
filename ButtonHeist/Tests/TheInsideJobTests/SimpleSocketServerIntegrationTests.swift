@@ -1,11 +1,12 @@
+// Integration tests for SimpleSocketServer state machine transitions.
+// Uses real NWListener on loopback and real NWConnection — requires TCP networking.
+
 import XCTest
 import Network
 import os
 @testable import TheInsideJob
 
-/// Tests for SimpleSocketServer state machine transitions:
-/// ServerState (.stopped / .listening) and ClientPhase (.unauthenticated / .authenticated).
-final class SimpleSocketServerTests: XCTestCase {
+final class SimpleSocketServerIntegrationTests: XCTestCase {
 
     private var server: SimpleSocketServer!
 
@@ -14,10 +15,10 @@ final class SimpleSocketServerTests: XCTestCase {
         server = SimpleSocketServer()
     }
 
-    override func tearDown() {
-        server.stop()
+    override func tearDown() async throws {
+        await server.stop()
         server = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - ServerState transitions
@@ -43,14 +44,12 @@ final class SimpleSocketServerTests: XCTestCase {
         _ = try await server.startAsync(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(server.listeningPort, 0)
 
-        server.stop()
-        try await Task.sleep(for: .milliseconds(100))
+        await server.stop()
         XCTAssertEqual(server.listeningPort, 0)
     }
 
     func testStopFromStoppedIsNoOp() async throws {
-        server.stop()
-        try await Task.sleep(for: .milliseconds(50))
+        await server.stop()
         XCTAssertEqual(server.listeningPort, 0)
     }
 
@@ -58,8 +57,7 @@ final class SimpleSocketServerTests: XCTestCase {
         let firstPort = try await server.startAsync(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(firstPort, 0)
 
-        server.stop()
-        try await Task.sleep(for: .milliseconds(100))
+        await server.stop()
 
         let secondPort = try await server.startAsync(port: 0, bindToLoopback: true)
         XCTAssertGreaterThan(secondPort, 0)
@@ -125,8 +123,7 @@ final class SimpleSocketServerTests: XCTestCase {
         await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
 
         let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        server.markAuthenticated(clientId)
-        try await Task.sleep(for: .milliseconds(100))
+        await server.markAuthenticated(clientId)
 
         let isAuthenticated = await server.isAuthenticated(clientId)
         XCTAssertTrue(isAuthenticated, "Client should be authenticated after markAuthenticated")
@@ -160,10 +157,8 @@ final class SimpleSocketServerTests: XCTestCase {
         await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
 
         let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        server.markAuthenticated(clientId)
-        try await Task.sleep(for: .milliseconds(50))
-        server.markAuthenticated(clientId)
-        try await Task.sleep(for: .milliseconds(50))
+        await server.markAuthenticated(clientId)
+        await server.markAuthenticated(clientId)
 
         let isAuthenticated = await server.isAuthenticated(clientId)
         XCTAssertTrue(isAuthenticated)
@@ -201,7 +196,7 @@ final class SimpleSocketServerTests: XCTestCase {
         await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
 
         let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        server.disconnect(clientId: clientId)
+        await server.disconnect(clientId: clientId)
 
         await fulfillment(of: [clientDisconnected], timeout: 5.0)
 
@@ -245,11 +240,10 @@ final class SimpleSocketServerTests: XCTestCase {
         await fulfillment(of: [ready2, secondConnected], timeout: 5.0)
 
         let authenticatedClientId = capturedClientIds.withLock { $0[0] }
-        server.markAuthenticated(authenticatedClientId)
-        try await Task.sleep(for: .milliseconds(100))
+        await server.markAuthenticated(authenticatedClientId)
 
         let testMessage = Data("broadcast-test\n".utf8)
-        server.broadcastToAll(testMessage)
+        await server.broadcastToAll(testMessage)
 
         let received = expectation(description: "authenticated client receives broadcast")
         connection1.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, _ in

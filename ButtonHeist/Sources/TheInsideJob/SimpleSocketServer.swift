@@ -234,8 +234,7 @@ public actor SimpleSocketServer {
         }
     }
 
-    // MARK: - Public API (nonisolated, for synchronous callers)
-    // These dispatch to the actor via Task for fire-and-forget operations.
+    // MARK: - Synchronous start bridge
 
     /// Start the server on the specified port (synchronous version).
     /// Bridges to async start using a semaphore (acceptable for one-time startup).
@@ -266,24 +265,24 @@ public actor SimpleSocketServer {
         }
     }
 
-    /// Stop the server. Dispatches to actor isolation.
-    nonisolated public func stop() {
-        Task { await self._stop() }
+    /// Stop the server.
+    public func stop() {
+        _stop()
     }
 
-    /// Send data to a specific client. Dispatches to actor isolation.
-    nonisolated public func send(_ data: Data, to clientId: Int) {
-        Task { await self._send(data, to: clientId) }
+    /// Send data to a specific client.
+    public func send(_ data: Data, to clientId: Int) {
+        _send(data, to: clientId)
     }
 
-    /// Disconnect a client. Dispatches to actor isolation.
-    nonisolated public func disconnect(clientId: Int) {
-        Task { await self._disconnect(clientId: clientId) }
+    /// Disconnect a client.
+    public func disconnect(clientId: Int) {
+        _disconnect(clientId: clientId)
     }
 
-    /// Mark a client as authenticated. Dispatches to actor isolation.
-    nonisolated public func markAuthenticated(_ clientId: Int) {
-        Task { await self._markAuthenticated(clientId) }
+    /// Mark a client as authenticated.
+    public func markAuthenticated(_ clientId: Int) {
+        _markAuthenticated(clientId)
     }
 
     /// Check if a client is authenticated.
@@ -291,9 +290,9 @@ public actor SimpleSocketServer {
         _isAuthenticated(clientId)
     }
 
-    /// Broadcast data to all authenticated clients. Dispatches to actor isolation.
-    nonisolated public func broadcastToAll(_ data: Data) {
-        Task { await self._broadcastToAll(data) }
+    /// Broadcast data to all authenticated clients.
+    public func broadcastToAll(_ data: Data) {
+        _broadcastToAll(data)
     }
 
     // MARK: - Private
