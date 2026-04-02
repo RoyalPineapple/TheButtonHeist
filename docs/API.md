@@ -1137,12 +1137,12 @@ Represents a single UI element captured from the accessibility hierarchy.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `order` | `Int` | VoiceOver reading order (0-based) |
+| `heistId` | `String` | Stable identifier for targeting (developer identifier or synthesized from traits + label) |
 | `label` | `String?` | Label |
 | `value` | `String?` | Current value |
 | `identifier` | `String?` | Identifier |
 | `hint` | `String?` | Accessibility hint |
-| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`) |
+| `traits` | `[HeistTrait]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`) — see [Trait Reference](#trait-reference) |
 | `frameX` | `Double` | Frame X origin |
 | `frameY` | `Double` | Frame Y origin |
 | `frameWidth` | `Double` | Frame width |
@@ -1158,6 +1158,59 @@ Represents a single UI element captured from the accessibility hierarchy.
 public var frame: CGRect            // Frame as CGRect
 public var activationPoint: CGPoint // Activation point as CGPoint
 ```
+
+### Trait Reference
+
+`HeistTrait` is a `String`-backed enum aligned 1:1 with the AccessibilitySnapshot parser's `knownTraits`. Trait names are used in `traits` and `excludeTraits` fields throughout the API.
+
+#### Standard Traits (Public UIAccessibilityTraits)
+
+| Trait Name | UIKit Constant | Description |
+|------------|---------------|-------------|
+| `button` | `.button` | Interactive button |
+| `link` | `.link` | Hyperlink |
+| `image` | `.image` | Image content |
+| `staticText` | `.staticText` | Non-interactive text |
+| `header` | `.header` | Section header |
+| `adjustable` | `.adjustable` | Slider / stepper (increment/decrement) |
+| `searchField` | `.searchField` | Search input field |
+| `selected` | `.selected` | Currently selected |
+| `notEnabled` | `.notEnabled` | Disabled / non-interactive |
+| `keyboardKey` | `.keyboardKey` | Keyboard key |
+| `summaryElement` | `.summaryElement` | Summary of the app state |
+| `updatesFrequently` | `.updatesFrequently` | Value changes frequently |
+| `playsSound` | `.playsSound` | Plays audio on activation |
+| `startsMediaSession` | `.startsMediaSession` | Starts media playback |
+| `allowsDirectInteraction` | `.allowsDirectInteraction` | VoiceOver passes touches through |
+| `causesPageTurn` | `.causesPageTurn` | Triggers page turn |
+| `tabBar` | `.tabBar` | Tab bar container |
+
+#### Private Traits — Core (Used for Element Classification)
+
+These come from AXRuntime private SPI, surfaced by the AccessibilitySnapshot parser. They are the canonical names used throughout Button Heist.
+
+| Trait Name | Bit | Notes |
+|------------|-----|-------|
+| `textEntry` | 47 | Text input field (UITextField, UITextView) |
+| `isEditing` | 50 | Field is currently being edited |
+| `backButton` | 48 | Navigation back button |
+| `tabBarItem` | 49 | Individual tab bar item |
+| `textArea` | — | Multi-line text area |
+| `switchButton` | 53 | Toggle switch (UISwitch). iOS 17 added the public `UIAccessibilityTraitToggleButton` mapping to the same bit — Button Heist uses `switchButton` as the canonical name. |
+
+#### Private Traits — Extended (AXRuntime Diagnostics)
+
+These are from the full AXRuntime trait space. Marked `isExtendedPrivate = true` on `HeistTrait`. Useful for diagnostics and advanced filtering.
+
+| Trait Name | Trait Name | Trait Name |
+|------------|------------|------------|
+| `webContent` | `pickerElement` | `radioButton` |
+| `launchIcon` | `statusBarElement` | `secureTextField` |
+| `inactive` | `footer` | `autoCorrectCandidate` |
+| `deleteKey` | `selectionDismissesItem` | `visited` |
+| `spacer` | `tableIndex` | `map` |
+| `textOperationsAvailable` | `draggable` | `popupButton` |
+| `menuItem` | `alert` | |
 
 ### ActionResult
 
