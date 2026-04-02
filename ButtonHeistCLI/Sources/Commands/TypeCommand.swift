@@ -9,14 +9,18 @@ struct TypeCommand: AsyncParsableCommand {
             Type text character-by-character and/or delete characters.
             Returns the current text field value after the operation.
 
+            A single positional argument is always interpreted as text, not \
+            as a heistId. Use -id or --heist-id to target without typing.
+
             Examples:
-              buttonheist type --text "Hello" --identifier "nameField"
-              buttonheist type --delete 3 --identifier "nameField"
-              buttonheist type --delete 4 --text "orld" --identifier "nameField"
+              buttonheist type "Hello" btn_nameField
+              buttonheist type "Hello"
+              buttonheist type --delete 3 -id "nameField"
+              buttonheist type --delete 4 "orld" -id "nameField"
             """
     )
 
-    @Option(name: .long, help: "Text to type")
+    @Argument(help: "Text to type")
     var text: String?
 
     @Option(name: .long, help: "Number of characters to delete before typing")
@@ -32,7 +36,7 @@ struct TypeCommand: AsyncParsableCommand {
     @ButtonHeistActor
     mutating func run() async throws {
         guard text != nil || delete != nil else {
-            throw ValidationError("Must specify --text, --delete, or both")
+            throw ValidationError("Must specify text to type, --delete, or both")
         }
 
         var request: [String: Any] = [
@@ -41,7 +45,7 @@ struct TypeCommand: AsyncParsableCommand {
         ]
         if let text { request["text"] = text }
         if let delete { request["deleteCount"] = delete }
-        element.applyTo(&request)
+        try element.applyTo(&request)
 
         try await CLIRunner.run(
             connection: connection,
