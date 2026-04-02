@@ -155,6 +155,46 @@ final class TheBagmanConversionTests: XCTestCase {
         XCTAssertEqual(ids[0], "tabBar_home")
     }
 
+    // MARK: - heistId: Trait Prefix Deduplication
+
+    func testSwitchButtonLabelRedundancyStripped() {
+        let elements = [makeElement(label: "Switch Button Off", traits: [.switchButton])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "switchButton_off")
+    }
+
+    func testButtonLabelRedundancyStripped() {
+        let elements = [makeElement(label: "Button Submit", traits: [.button])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "button_submit")
+    }
+
+    func testNoRedundancyWhenLabelDoesNotOverlap() {
+        let elements = [makeElement(label: "Settings", traits: [.button])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "button_settings")
+    }
+
+    func testRedundancyStrippingKeepsFullIdWhenRemainderEmpty() {
+        let elements = [makeElement(label: "Button", traits: [.button])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "button_button")
+    }
+
+    func testTextEntryLabelRedundancyStripped() {
+        let elements = [makeElement(label: "Text Entry Email", traits: [.textEntry])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "textEntry_email")
+    }
+
+    func testPartialPrefixMatchNotStripped() {
+        // "but" starts with the slug of "button" prefix? No — "button" slug is "button",
+        // "but_more" doesn't start with "button" or "button_"
+        let elements = [makeElement(label: "But More", traits: [.button])]
+        let ids = assignAndGetIds(elements)
+        XCTAssertEqual(ids[0], "button_but_more")
+    }
+
     // MARK: - heistId: Fallbacks
 
     func testStaticTextFallbackWhenLabelPresent() {
