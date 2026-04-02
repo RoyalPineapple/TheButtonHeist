@@ -456,9 +456,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Benchmark and Validation Harness
 
-The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 14 tasks.
-
-**Always use `pool.sh` for benchmarks.** It creates dedicated simulators, installs the app, and runs trials in parallel across workers — each worker gets its own simulator from the pool. `run.sh` exists for single-sim debugging but should not be used for actual benchmark runs. Parallel execution is the default; serial is the exception.
+The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 13 tasks.
 
 ### Quick validation after code changes
 
@@ -467,22 +465,13 @@ cd .context/bh-infra
 ./pool.sh --validate --workers 3
 ```
 
-Runs all tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1 (fail). Use `--min-score 1.0` for strict mode (default 0.5 allows partial credit).
+Runs all 13 tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1 (fail). Use `--min-score 1.0` for strict mode (default 0.5 allows partial credit).
 
 ### Full benchmark
 
 ```bash
-# BH-only benchmark (3 trials, 3 parallel workers)
 ./pool.sh --workers 3 -c bh -n 3 --save-baseline bh-YYYYMMDD-description
-
-# Competitive benchmark (BH vs idb, 3 trials each, 2 parallel workers)
-./pool.sh --workers 2 -c bh,idb -n 3
-
-# Single task across configs
-./pool.sh --workers 2 -t T13-menu-order -c bh,idb -n 3
 ```
-
-Workers claim trials atomically from a shared queue. With 2 workers and 2 configs, both configs run simultaneously on separate simulators — no serialization overhead.
 
 ### Reports and comparisons
 
