@@ -22,14 +22,14 @@ extension TheInsideJob {
 
     // MARK: - Pulse (settle-driven)
 
-    func startPollingLoop() {
-        pollingTask?.cancel()
-        pollingTask = Task { @MainActor in
-            while isPollingEnabled && !Task.isCancelled {
-                let settled = await tripwire.waitForAllClear(timeout: pollingTimeoutSeconds)
-                guard !Task.isCancelled, isPollingEnabled else { break }
+    func makePollingTask(interval: TimeInterval) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            while self.isPollingEnabled && !Task.isCancelled {
+                let settled = await self.tripwire.waitForAllClear(timeout: interval)
+                guard !Task.isCancelled, self.isPollingEnabled else { break }
                 if settled {
-                    broadcastIfChanged()
+                    self.broadcastIfChanged()
                 }
             }
         }

@@ -47,7 +47,7 @@ extension TheInsideJob {
     // MARK: - Screen Recording
 
     func handleStartRecording(_ config: RecordingConfig, requestId: String? = nil, respond: @escaping (Data) -> Void) {
-        if stakeout?.state == .recording {
+        if case .recording = recordingState {
             sendMessage(.recordingError("Recording already in progress"), requestId: requestId, respond: respond)
             return
         }
@@ -63,19 +63,17 @@ extension TheInsideJob {
             case .failure(let error):
                 self?.broadcastToAll(.recordingError(error.localizedDescription))
             }
-            self?.stakeout = nil
+            self?.recordingState = .idle
             self?.bagman.stakeout = nil
         }
 
-        stakeout = recorder
-        bagman.stakeout = recorder
         do {
             try recorder.startRecording(config: config)
+            recordingState = .recording(stakeout: recorder)
+            bagman.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             sendMessage(.recordingError(error.localizedDescription), requestId: requestId, respond: respond)
-            stakeout = nil
-            bagman.stakeout = nil
         }
     }
 
