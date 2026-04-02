@@ -441,7 +441,7 @@ extension TheFence {
     // MARK: - Handler: Recording
 
     func handleStartRecording(_ args: [String: Any]) async throws -> FenceResponse {
-        guard handoff.connectionState == .connected else { throw FenceError.notConnected }
+        guard handoff.isConnected else { throw FenceError.notConnected }
         let config = RecordingConfig(
             fps: intArg(args, "fps"),
             scale: doubleArg(args, "scale"),

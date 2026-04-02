@@ -504,7 +504,7 @@ sequenceDiagram
         end
     end
 
-    Note over HC: connectionState = .connected
+    Note over HC: connectionPhase = .connected
     HC->>IJ: subscribe
     HC->>IJ: requestInterface
     HC->>IJ: requestScreen
