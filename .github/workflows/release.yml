@@ -17,6 +17,8 @@ jobs:
   build-and-release:
     runs-on: macos-15
     timeout-minutes: 20
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
     steps:
       - name: Checkout repository
@@ -123,7 +125,7 @@ jobs:
             dist/checksums.txt
 
       - name: Update Homebrew tap
-        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        if: env.HAS_TAP_TOKEN == 'true'
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
