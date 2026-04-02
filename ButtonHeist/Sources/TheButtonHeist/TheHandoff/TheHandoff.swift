@@ -48,6 +48,13 @@ public final class TheHandoff {
         case enabled(filter: String?)
     }
 
+    /// Recording lifecycle state machine. Replaces the old `isRecording: Bool`
+    /// so the type system distinguishes idle from active recording.
+    public enum RecordingPhase: Equatable {
+        case idle
+        case recording
+    }
+
     // MARK: - State
 
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
@@ -56,7 +63,7 @@ public final class TheHandoff {
     public private(set) var serverInfo: ServerInfo?
     public private(set) var currentInterface: Interface?
     public private(set) var currentScreen: ScreenPayload?
-    public private(set) var isRecording: Bool = false
+    public private(set) var recordingPhase: RecordingPhase = .idle
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
 
     // MARK: - Derived State
@@ -69,6 +76,10 @@ public final class TheHandoff {
     public var connectedDevice: DiscoveredDevice? {
         if case .connected(let device) = connectionPhase { return device }
         return nil
+    }
+
+    public var isRecording: Bool {
+        recordingPhase == .recording
     }
 
     // MARK: - Discovery Callbacks
@@ -278,7 +289,7 @@ public final class TheHandoff {
                 self.serverInfo = nil
                 self.currentInterface = nil
                 self.currentScreen = nil
-                self.isRecording = false
+                self.recordingPhase = .idle
                 // Preserve .failed state (e.g., from sessionLocked)
                 if case .failed = self.connectionPhase {
                     // keep .failed
@@ -322,13 +333,13 @@ public final class TheHandoff {
             }
             onScreen?(payload, requestId)
         case .recordingStarted:
-            isRecording = true
+            recordingPhase = .recording
             onRecordingStarted?()
         case .recording(let payload):
-            isRecording = false
+            recordingPhase = .idle
             onRecording?(payload)
         case .recordingError(let msg):
-            isRecording = false
+            recordingPhase = .idle
             onRecordingError?(msg)
         case .error(let msg):
             connectionPhase = .failed(.error(msg))
@@ -362,7 +373,7 @@ public final class TheHandoff {
         serverInfo = nil
         currentInterface = nil
         currentScreen = nil
-        isRecording = false
+        recordingPhase = .idle
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection

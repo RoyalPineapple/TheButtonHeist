@@ -10,7 +10,7 @@ TheHandoff owns the full lifecycle of communicating with a remote iOS device run
 
 1. **Device discovery** — starts and stops Bonjour (`DeviceDiscovery`) and USB (`USBDeviceDiscovery`) discovery sessions; maintains `discoveredDevices`
 2. **Connection management** — creates `DeviceConnection` instances, routes `ConnectionEvent`s from the transport layer to named callbacks, and manages `connectionPhase` (an explicit state machine carrying the device in `.connecting` and `.connected` phases)
-3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionFailure)), `currentInterface`, `currentScreen`, `isRecording`
+3. **Session state tracking** — maintains `connectionPhase` (disconnected/connecting(device)/connected(device)/failed(ConnectionFailure)), `currentInterface`, `currentScreen`, `recordingPhase` (idle/recording)
 4. **Keepalive** — sends `.ping` every 3 seconds over an active connection to keep the channel alive
 5. **Session management** — `connectWithDiscovery(filter:timeout:)` orchestrates discovery → device resolution → connection with timeout tracking
 6. **Reachability probing** — `discoverReachableDevices(timeout:)` discovers and validates each device advertisement via parallel TCP status probes
