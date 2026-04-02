@@ -2,6 +2,7 @@ import Foundation
 
 // MARK: - Event Enums
 
+/// Events emitted by a device connection during its lifecycle.
 public enum ConnectionEvent {
     case transportReady
     case connected
@@ -9,6 +10,7 @@ public enum ConnectionEvent {
     case message(ServerMessage, requestId: String?)
 }
 
+/// Events emitted by a device discovery session as services appear and disappear.
 public enum DiscoveryEvent {
     case found(DiscoveredDevice)
     case lost(DiscoveredDevice)
@@ -17,6 +19,7 @@ public enum DiscoveryEvent {
 
 // MARK: - Protocols
 
+/// Manages a single connection to a discovered device, sending and receiving messages.
 @ButtonHeistActor
 public protocol DeviceConnecting: AnyObject {
     var isConnected: Bool { get }
@@ -33,6 +36,7 @@ extension DeviceConnecting {
     }
 }
 
+/// Discovers Button Heist services on the local network via Bonjour or direct address.
 @ButtonHeistActor
 public protocol DeviceDiscovering: AnyObject {
     var discoveredDevices: [DiscoveredDevice] { get }

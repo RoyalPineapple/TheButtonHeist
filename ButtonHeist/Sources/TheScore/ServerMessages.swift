@@ -23,6 +23,7 @@ public struct ResponseEnvelope: Codable, Sendable {
 
 // MARK: - Server -> Client Messages
 
+/// Messages sent from the Inside Job server to connected clients.
 public enum ServerMessage: Codable, Sendable {
     /// Version-negotiation hello sent immediately on connection.
     case serverHello
@@ -84,6 +85,7 @@ public enum ServerMessage: Codable, Sendable {
     case status(StatusPayload)
 }
 
+/// Sent when the client's protocol version does not match the server's expected version.
 public struct ProtocolMismatchPayload: Codable, Sendable {
     public let expectedProtocolVersion: String
     public let receivedProtocolVersion: String
@@ -572,6 +574,7 @@ public struct InteractionEvent: Codable, Sendable {
     }
 }
 
+/// Identifies which action handler produced an ActionResult.
 public enum ActionMethod: String, Codable, Sendable {
     case activate
     case increment
@@ -606,6 +609,7 @@ public struct AuthApprovedPayload: Codable, Sendable {
     public init(token: String? = nil) { self.token = token }
 }
 
+/// Server identity and capabilities sent after a successful handshake.
 public struct ServerInfo: Codable, Sendable {
     public let protocolVersion: String
     public let appName: String

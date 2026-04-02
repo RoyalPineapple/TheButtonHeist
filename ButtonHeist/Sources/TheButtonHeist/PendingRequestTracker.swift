@@ -26,7 +26,7 @@ final class PendingRequestTracker<T: Sendable> {
             let didResume = OSAllocatedUnfairLock(initialState: false)
 
             let timeoutTask = Task {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                try await Task.sleep(for: .seconds(timeout))
                 let shouldResume = didResume.withLock { flag -> Bool in
                     guard !flag else { return false }
                     flag = true

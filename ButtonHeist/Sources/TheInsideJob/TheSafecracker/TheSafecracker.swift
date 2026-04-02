@@ -82,7 +82,7 @@ final class TheSafecracker {
     nonisolated static let selectionSettleDelay: UInt64 = 50_000_000
 
     /// Poll interval for keyboard readiness after tapping a text field (100ms).
-    nonisolated static let keyboardPollInterval: UInt64 = 100_000_000
+    nonisolated static let keyboardPollInterval: Duration = .milliseconds(100)
 
     /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
     nonisolated static let keyboardPollMaxAttempts: Int = 20

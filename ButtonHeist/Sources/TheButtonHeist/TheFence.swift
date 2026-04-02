@@ -1,5 +1,6 @@
 import Foundation
 
+/// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
     case invalidRequest(String)
     case noDeviceFound
@@ -55,15 +56,17 @@ public enum FenceError: Error, LocalizedError {
 /// Named timeout constants for TheFence operations.
 public enum Timeouts {
     /// Standard action timeout (15 seconds)
-    static let actionSeconds: TimeInterval = 15
+    public static let actionSeconds: TimeInterval = 15
     /// Long action timeout (30 seconds)
-    static let longActionSeconds: TimeInterval = 30
+    public static let longActionSeconds: TimeInterval = 30
     /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
-    static let exploreSeconds: TimeInterval = 60
+    public static let exploreSeconds: TimeInterval = 60
 }
 
+/// Centralized command dispatch layer. Both the CLI and MCP server are thin wrappers over TheFence.
 @ButtonHeistActor
 public final class TheFence {
+    /// Connection and session configuration for TheFence.
     public struct Configuration {
         public var deviceFilter: String?
         public var connectionTimeout: TimeInterval
@@ -135,6 +138,7 @@ public final class TheFence {
         }
     }
 
+    /// Connect to a device and optionally enable auto-reconnect.
     public func start() async throws {
         if isStarted, handoff.isConnected {
             return
@@ -148,6 +152,7 @@ public final class TheFence {
         isStarted = true
     }
 
+    /// Disconnect and cancel all pending requests.
     public func stop() {
         cancelAllPendingRequests()
         handoff.disconnect()
@@ -155,6 +160,7 @@ public final class TheFence {
         isStarted = false
     }
 
+    /// Execute a command from a dictionary request. Auto-connects if not already connected.
     public func execute(request: [String: Any]) async throws -> FenceResponse {
         guard let commandString = request["command"] as? String else {
             throw FenceError.invalidRequest("Invalid JSON or missing 'command' field")
@@ -464,7 +470,7 @@ public final class TheFence {
                 }
 
                 // Build step summary from the typed response
-                stepSummaries.append(buildStepSummary(
+                stepSummaries.append(makeStepSummary(
                     command: commandName, response: response, expectationMet: stepExpectationMet
                 ))
 
@@ -521,9 +527,9 @@ public final class TheFence {
         }
     }
 
-    // MARK: - Batch Step Summary
+    // MARK: - Make Step Summary
 
-    private func buildStepSummary(
+    private func makeStepSummary(
         command: String, response: FenceResponse, expectationMet: Bool?
     ) -> BatchStepSummary {
         switch response {

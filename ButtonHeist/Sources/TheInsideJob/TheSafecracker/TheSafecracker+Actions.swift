@@ -51,8 +51,8 @@ extension TheSafecracker {
 
     func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
         let result: Double
-        if let d = duration {
-            result = d
+        if let resolvedDuration = duration {
+            result = resolvedDuration
         } else if let velocity = velocity, velocity > 0 {
             var totalLength: Double = 0
             for i in 1..<points.count {

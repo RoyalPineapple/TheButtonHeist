@@ -336,7 +336,7 @@ extension TheBagman {
             // Wait for keyboard
             var inputReady = false
             for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
-                try? await Task.sleep(nanoseconds: TheSafecracker.keyboardPollInterval)
+                try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
                 if safecracker.hasActiveTextInput() {
                     inputReady = true
                     break
@@ -348,9 +348,7 @@ extension TheBagman {
             }
         } else {
             guard safecracker.hasActiveTextInput() else {
-                let msg = "No active text input. Provide an elementTarget to focus a text field, " +
-                    "or ensure a text field is already focused."
-                return .failure(.typeText, message: msg)
+                return .failure(.typeText, message: "No active text input. Provide an elementTarget to focus a text field, or ensure a text field is already focused.")
             }
         }
 
@@ -377,7 +375,7 @@ extension TheBagman {
         }
 
         // Step 4: Refresh and read back value
-        try? await Task.sleep(nanoseconds: TheSafecracker.keyboardPollInterval)
+        try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
         refreshElements()
 
         var fieldValue: String?
@@ -402,8 +400,8 @@ extension TheBagman {
 
     func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
         let result: Double
-        if let d = duration {
-            result = d
+        if let resolvedDuration = duration {
+            result = resolvedDuration
         } else if let velocity = velocity, velocity > 0 {
             var totalLength: Double = 0
             for i in 1..<points.count {
