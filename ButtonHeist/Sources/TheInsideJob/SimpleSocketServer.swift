@@ -15,13 +15,54 @@ public actor SimpleSocketServer {
     private static let maxConnections = 5
     private static let maxMessagesPerSecond = 30
 
-    // Actor-isolated mutable state — no locks needed
-    private var listener: NWListener?
-    private var connections: [Int: NWConnection] = [:]
+    // MARK: - State Machines
+
+    private enum ServerState {
+        case stopped
+        case listening(listener: NWListener, port: UInt16)
+    }
+
+    private enum ClientPhase {
+        case unauthenticated(connection: NWConnection, timestamps: [Date])
+        case authenticated(connection: NWConnection, timestamps: [Date])
+
+        var connection: NWConnection {
+            switch self {
+            case .unauthenticated(let connection, _),
+                 .authenticated(let connection, _):
+                return connection
+            }
+        }
+
+        var timestamps: [Date] {
+            get {
+                switch self {
+                case .unauthenticated(_, let timestamps),
+                     .authenticated(_, let timestamps):
+                    return timestamps
+                }
+            }
+            set {
+                switch self {
+                case .unauthenticated(let connection, _):
+                    self = .unauthenticated(connection: connection, timestamps: newValue)
+                case .authenticated(let connection, _):
+                    self = .authenticated(connection: connection, timestamps: newValue)
+                }
+            }
+        }
+
+        var isAuthenticated: Bool {
+            if case .authenticated = self { return true }
+            return false
+        }
+    }
+
+    // MARK: - Actor-isolated mutable state
+
+    private var serverState: ServerState = .stopped
+    private var clients: [Int: ClientPhase] = [:]
     private var clientCounter = 0
-    private var _listeningPort: UInt16 = 0
-    private var authenticatedClients: Set<Int> = []
-    private var clientMessageTimestamps: [Int: [Date]] = [:]
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
@@ -76,6 +117,10 @@ public actor SimpleSocketServer {
         tlsParameters: NWParameters? = nil,
         callbacks: Callbacks? = nil
     ) async throws -> UInt16 {
+        guard case .stopped = serverState else {
+            throw ServerError.alreadyRunning
+        }
+
         if let callbacks { self.callbacks = callbacks }
         let parameters: NWParameters = tlsParameters ?? NWParameters.tcp
         if tlsParameters != nil {
@@ -128,8 +173,7 @@ public actor SimpleSocketServer {
             newListener.start(queue: self.queue)
         }
 
-        self.listener = newListener
-        self._listeningPort = actualPort
+        self.serverState = .listening(listener: newListener, port: actualPort)
         self._syncListeningPort.withLock { $0 = actualPort }
 
         return actualPort
@@ -137,30 +181,30 @@ public actor SimpleSocketServer {
 
     /// Stop the server (actor-isolated).
     private func _stop() {
-        let conns = connections
-        connections.removeAll()
-        authenticatedClients.removeAll()
-        clientMessageTimestamps.removeAll()
-        let l = listener
-        listener = nil
+        guard case .listening(let listener, _) = serverState else { return }
 
-        for (_, conn) in conns {
-            conn.cancel()
+        let allClients = clients
+        clients.removeAll()
+        serverState = .stopped
+        _syncListeningPort.withLock { $0 = 0 }
+
+        for (_, phase) in allClients {
+            phase.connection.cancel()
         }
-        l?.cancel()
+        listener.cancel()
         logger.info("Server stopped")
     }
 
     /// Send data to a specific client (actor-isolated).
     private func _send(_ data: Data, to clientId: Int) {
-        guard let connection = connections[clientId] else { return }
+        guard let phase = clients[clientId] else { return }
 
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
             dataToSend.append(0x0A)
         }
 
-        connection.send(content: dataToSend, completion: .contentProcessed { error in
+        phase.connection.send(content: dataToSend, completion: .contentProcessed { error in
             if let error {
                 logger.error("Send error to client \(clientId): \(error)")
             }
@@ -174,24 +218,23 @@ public actor SimpleSocketServer {
 
     /// Mark a client as authenticated (actor-isolated).
     private func _markAuthenticated(_ clientId: Int) {
-        authenticatedClients.insert(clientId)
+        guard case .unauthenticated(let connection, let timestamps) = clients[clientId] else { return }
+        clients[clientId] = .authenticated(connection: connection, timestamps: timestamps)
     }
 
     /// Check if a client is authenticated (actor-isolated).
     private func _isAuthenticated(_ clientId: Int) -> Bool {
-        authenticatedClients.contains(clientId)
+        clients[clientId]?.isAuthenticated ?? false
     }
 
     /// Broadcast data to all authenticated clients (actor-isolated).
     private func _broadcastToAll(_ data: Data) {
-        let clientIds = Array(connections.keys).filter { authenticatedClients.contains($0) }
-        for clientId in clientIds {
+        for (clientId, phase) in clients where phase.isAuthenticated {
             _send(data, to: clientId)
         }
     }
 
-    // MARK: - Public API (nonisolated, for synchronous callers)
-    // These dispatch to the actor via Task for fire-and-forget operations.
+    // MARK: - Synchronous start bridge
 
     /// Start the server on the specified port (synchronous version).
     /// Bridges to async start using a semaphore (acceptable for one-time startup).
@@ -222,24 +265,24 @@ public actor SimpleSocketServer {
         }
     }
 
-    /// Stop the server. Dispatches to actor isolation.
-    nonisolated public func stop() {
-        Task { await self._stop() }
+    /// Stop the server.
+    public func stop() {
+        _stop()
     }
 
-    /// Send data to a specific client. Dispatches to actor isolation.
-    nonisolated public func send(_ data: Data, to clientId: Int) {
-        Task { await self._send(data, to: clientId) }
+    /// Send data to a specific client.
+    public func send(_ data: Data, to clientId: Int) {
+        _send(data, to: clientId)
     }
 
-    /// Disconnect a client. Dispatches to actor isolation.
-    nonisolated public func disconnect(clientId: Int) {
-        Task { await self._disconnect(clientId: clientId) }
+    /// Disconnect a client.
+    public func disconnect(clientId: Int) {
+        _disconnect(clientId: clientId)
     }
 
-    /// Mark a client as authenticated. Dispatches to actor isolation.
-    nonisolated public func markAuthenticated(_ clientId: Int) {
-        Task { await self._markAuthenticated(clientId) }
+    /// Mark a client as authenticated.
+    public func markAuthenticated(_ clientId: Int) {
+        _markAuthenticated(clientId)
     }
 
     /// Check if a client is authenticated.
@@ -247,15 +290,15 @@ public actor SimpleSocketServer {
         _isAuthenticated(clientId)
     }
 
-    /// Broadcast data to all authenticated clients. Dispatches to actor isolation.
-    nonisolated public func broadcastToAll(_ data: Data) {
-        Task { await self._broadcastToAll(data) }
+    /// Broadcast data to all authenticated clients.
+    public func broadcastToAll(_ data: Data) {
+        _broadcastToAll(data)
     }
 
     // MARK: - Private
 
     private func handleNewConnection(_ connection: NWConnection) {
-        let currentCount = connections.count
+        let currentCount = clients.count
 
         if currentCount >= Self.maxConnections {
             logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
@@ -265,7 +308,7 @@ public actor SimpleSocketServer {
 
         clientCounter += 1
         let clientId = clientCounter
-        connections[clientId] = connection
+        clients[clientId] = .unauthenticated(connection: connection, timestamps: [])
         let scopeFilter = allowedScopes != ConnectionScope.all ? allowedScopes : nil
 
         connection.stateUpdateHandler = { [weak self] state in
@@ -316,23 +359,22 @@ public actor SimpleSocketServer {
     }
 
     private func removeClient(_ clientId: Int) {
-        let conn = connections.removeValue(forKey: clientId)
-        authenticatedClients.remove(clientId)
-        clientMessageTimestamps.removeValue(forKey: clientId)
-
-        conn?.cancel()
+        guard let phase = clients.removeValue(forKey: clientId) else { return }
+        phase.connection.cancel()
         notifyClientDisconnected(clientId)
     }
 
+    // ClientPhase is a value type — copy, mutate timestamps, write back.
     private func isRateLimited(_ clientId: Int) -> Bool {
+        guard var phase = clients[clientId] else { return true }
         let now = Date()
-        var timestamps = clientMessageTimestamps[clientId] ?? []
-        timestamps = timestamps.filter { now.timeIntervalSince($0) < 1.0 }
+        var timestamps = phase.timestamps.filter { now.timeIntervalSince($0) < 1.0 }
         let limited = timestamps.count >= Self.maxMessagesPerSecond
         if !limited {
             timestamps.append(now)
         }
-        clientMessageTimestamps[clientId] = timestamps
+        phase.timestamps = timestamps
+        clients[clientId] = phase
         return limited
     }
 
@@ -429,13 +471,16 @@ public actor SimpleSocketServer {
 
     // MARK: - Errors
 
-    enum ServerError: Error, LocalizedError {
+    enum ServerError: Error, LocalizedError, Equatable {
         case failedToBindPort
+        case alreadyRunning
 
         var errorDescription: String? {
             switch self {
             case .failedToBindPort:
                 return "Server failed to bind to a port"
+            case .alreadyRunning:
+                return "Server is already running"
             }
         }
     }
