@@ -89,6 +89,7 @@ jobs:
           }
 
       - name: Warm binary cache for external dependencies
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
 
@@ -184,6 +185,7 @@ jobs:
         run: tuist install
 
       - name: Warm binary cache for external dependencies
+        if: steps.binaries-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
 
