@@ -68,12 +68,7 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
-      - name: Upload resolved dependencies
-        uses: actions/upload-artifact@v4
-        with:
-          name: tuist-deps
-          path: Tuist/.build
-          retention-days: 1
+      # Cache is shared across jobs — no artifact needed
 
   macos-tests:
     needs: [setup]
@@ -94,11 +89,17 @@ jobs:
       - name: Install Tuist
         uses: jdx/mise-action@v2
 
-      - name: Download resolved dependencies
-        uses: actions/download-artifact@v4
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
         with:
-          name: tuist-deps
           path: Tuist/.build
+          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-deps-
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
 
       - name: Cache Tuist binaries archive
         id: binaries-cache
@@ -164,11 +165,17 @@ jobs:
       - name: Install Tuist
         uses: jdx/mise-action@v2
 
-      - name: Download resolved dependencies
-        uses: actions/download-artifact@v4
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
         with:
-          name: tuist-deps
           path: Tuist/.build
+          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-deps-
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
 
       - name: Boot simulator in background
         run: |
