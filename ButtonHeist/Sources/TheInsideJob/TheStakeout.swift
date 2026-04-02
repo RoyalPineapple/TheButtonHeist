@@ -47,6 +47,7 @@ final class TheStakeout {
 
     struct FinalizingSession {
         let assetWriter: AVAssetWriter
+        let videoInput: AVAssetWriterInput
         let outputURL: URL
         let startTime: Date
         let frameCount: Int
@@ -195,6 +196,7 @@ final class TheStakeout {
 
         let finalizingSession = FinalizingSession(
             assetWriter: session.assetWriter,
+            videoInput: session.videoInput,
             outputURL: session.outputURL,
             startTime: session.startTime,
             frameCount: session.frameCount,
@@ -360,9 +362,8 @@ final class TheStakeout {
 
     private func finalizeRecording(session: FinalizingSession, reason: RecordingPayload.StopReason) {
         let writer = session.assetWriter
-        let input = writer.inputs.first
 
-        input?.markAsFinished()
+        session.videoInput.markAsFinished()
 
         let endTime = Date()
         let outputURL = session.outputURL
