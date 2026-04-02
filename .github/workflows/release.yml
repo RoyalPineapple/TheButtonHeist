@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
 
@@ -72,6 +72,20 @@ jobs:
             -output .build/buttonheist-mcp
           file .build/buttonheist-mcp
 
+      - name: Install Tuist
+        uses: jdx/mise-action@v2
+
+      - name: Build BH Demo for iOS Simulator
+        run: |
+          tuist install
+          tuist generate --no-open
+          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+            -destination "generic/platform=iOS Simulator" \
+            build | tail -5
+          APP_PATH=$(ls -td ~/Library/Developer/Xcode/DerivedData/ButtonHeist*/Build/Products/Debug-iphonesimulator/BH\ Demo.app | head -1)
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "Built: $APP_PATH"
+
       - name: Package binaries and scripts
         run: |
           VERSION="${{ steps.version.outputs.version }}"
@@ -120,9 +134,12 @@ jobs:
           BAKE_SCRIPT
           chmod +x dist/buttonheist-integrate
 
+          # Simulator app
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/bh-demo-${VERSION}-iphonesimulator.zip"
+
           # Checksums
           cd dist
-          shasum -a 256 *.tar.gz buttonheist-integrate > checksums.txt
+          shasum -a 256 *.tar.gz *.zip buttonheist-integrate > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -135,6 +152,7 @@ jobs:
             --generate-notes \
             dist/buttonheist-${VERSION}-macos.tar.gz \
             dist/buttonheist-mcp-${VERSION}-macos.tar.gz \
+            dist/bh-demo-${VERSION}-iphonesimulator.zip \
             dist/buttonheist-integrate \
             dist/checksums.txt
 
