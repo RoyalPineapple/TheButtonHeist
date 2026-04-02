@@ -51,19 +51,25 @@ If no version argument is given, the script defaults to today's date.
 
 ### Release workflow
 
+The release script performs the full pipeline from a clean `main` branch:
+
 ```bash
 ./scripts/release.sh              # Uses today's date
-./scripts/release.sh 2026.03.27   # Explicit date
+./scripts/release.sh 2026.04.03   # Explicit date
 ./scripts/release.sh --dry-run    # Preview only
 ```
 
-The script updates all version references. Then:
+The script:
 
-1. Run full build and tests (see CLAUDE.md Pre-Commit Checklist)
-2. Commit: `git add -A && git commit -m 'Release 2026.03.27'`
-3. Tag: `git tag v2026.03.27`
+1. **Validates** — must be on `main`, in sync with `origin/main`, clean worktree
+2. **Bumps version** across 6 files
+3. **Builds** all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
+4. **Tests** all suites (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
+5. **Commits, tags, pushes** to `origin/main`
+6. **Creates GitHub release** with CLI and MCP binaries
+7. **Updates Homebrew tap** (`RoyalPineapple/homebrew-tap`) with real SHA-256 hashes
 
-Use `--dry-run` to preview changes without modifying files.
+Use `--dry-run` to preview without modifying anything.
 
 ## Protocol version (SemVer)
 
