@@ -417,13 +417,13 @@ Two type families are the currency for referring to UI elements. Use them everyw
 - **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `docs/VERSIONING.md`.
 - **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
 - **Canonical product version** lives in `ButtonHeist/Sources/TheScore/Messages.swift` (`buttonHeistVersion`). CLI, MCP, and iOS server all read it via TheScore.
-- **Releasing**: Use the release script — never bump version manually in multiple files:
+- **Releasing**: Use the release script from a clean `main` branch — never bump version manually:
   ```bash
   ./scripts/release.sh              # Uses today's date
-  ./scripts/release.sh 2026.03.27   # Explicit date
+  ./scripts/release.sh 2026.04.03   # Explicit date
   ./scripts/release.sh --dry-run    # Preview only
   ```
-  The script updates all 6 version references. Then run the Pre-Commit Checklist (build + tests), commit, and tag: `git tag v2026.03.27`.
+  The script runs the full pipeline: validate (must be on `main`, in sync with origin, clean worktree) → bump 6 files → build all targets → run all tests → commit/tag/push → create GitHub release with binaries → update Homebrew tap.
 
 ## CLI-First Development
 
