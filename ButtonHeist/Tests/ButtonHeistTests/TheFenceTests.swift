@@ -90,9 +90,9 @@ final class TheFenceTests: XCTestCase {
             .listTargets: "list_targets",
             .getSessionLog: "get_session_log",
             .archiveSession: "archive_session",
-            .startScript: "start_script",
-            .stopScript: "stop_script",
-            .playScript: "play_script",
+            .startHeist: "start_heist",
+            .stopHeist: "stop_heist",
+            .playHeist: "play_heist",
         ]
         XCTAssertEqual(expected.count, TheFence.Command.allCases.count)
         for (command, wire) in expected {

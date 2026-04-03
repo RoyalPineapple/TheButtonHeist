@@ -1,11 +1,11 @@
 import Foundation
 
-// MARK: - Playback Script
+// MARK: - Heist Playback
 
 /// A recorded session that can be played back against the same (or similar) app.
 /// Each step is a command dictionary compatible with TheFence.execute(request:),
 /// with element targets expressed as ElementMatcher fields — never heistIds.
-public struct PlaybackScript: Codable, Sendable, Equatable {
+public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
     public static let currentVersion = 1
 
@@ -15,13 +15,13 @@ public struct PlaybackScript: Codable, Sendable, Equatable {
     /// Bundle identifier of the app that was running during recording.
     public let app: String
     /// Ordered list of commands to replay.
-    public var steps: [PlaybackStep]
+    public var steps: [HeistEvidence]
 
     public init(
-        version: Int = PlaybackScript.currentVersion,
+        version: Int = HeistPlayback.currentVersion,
         recorded: Date = Date(),
         app: String,
-        steps: [PlaybackStep] = []
+        steps: [HeistEvidence] = []
     ) {
         self.version = version
         self.recorded = recorded
@@ -30,29 +30,29 @@ public struct PlaybackScript: Codable, Sendable, Equatable {
     }
 }
 
-// MARK: - Playback Step
+// MARK: - Heist Step
 
-/// A single command in a playback script. Contains the command name, matcher-based
+/// A single command in a heist playback. Contains the command name, matcher-based
 /// element targeting fields, command-specific arguments, and optional recording metadata.
 ///
 /// The step is structured so that dropping `_recorded` yields a valid
 /// TheFence.execute(request:) dictionary — matcher fields sit at the top level
 /// alongside command-specific args, exactly as TheFence expects.
-public struct PlaybackStep: Codable, Sendable, Equatable {
+public struct HeistEvidence: Codable, Sendable, Equatable {
     /// The TheFence.Command raw value (e.g. "activate", "type_text", "swipe").
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
     public let target: ElementMatcher?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
-    public let arguments: [String: PlaybackValue]
+    public let arguments: [String: HeistValue]
     /// Recording-time metadata for debugging. Not used during playback.
     public let recorded: RecordedMetadata?
 
     public init(
         command: String,
         target: ElementMatcher? = nil,
-        arguments: [String: PlaybackValue] = [:],
+        arguments: [String: HeistValue] = [:],
         recorded: RecordedMetadata? = nil
     ) {
         self.command = command
@@ -91,11 +91,11 @@ public struct PlaybackStep: Codable, Sendable, Equatable {
 
         // Everything else in the flat object is a command argument.
         let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        var extraArguments: [String: PlaybackValue] = [:]
+        var extraArguments: [String: HeistValue] = [:]
         for key in dynamicContainer.allKeys {
             guard !Self.reservedKeys.contains(key.stringValue) else { continue }
             extraArguments[key.stringValue] = try dynamicContainer.decode(
-                PlaybackValue.self, forKey: key
+                HeistValue.self, forKey: key
             )
         }
         arguments = extraArguments
@@ -156,17 +156,17 @@ public struct PlaybackStep: Codable, Sendable, Equatable {
     }
 }
 
-// MARK: - PlaybackValue
+// MARK: - Heist Value
 
 /// A JSON-compatible value type for command arguments.
 /// Supports the value types that TheFence.execute(request:) expects.
-public enum PlaybackValue: Codable, Sendable, Equatable {
+public enum HeistValue: Codable, Sendable, Equatable {
     case string(String)
     case int(Int)
     case double(Double)
     case bool(Bool)
-    case array([PlaybackValue])
-    case object([String: PlaybackValue])
+    case array([HeistValue])
+    case object([String: HeistValue])
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -178,14 +178,14 @@ public enum PlaybackValue: Codable, Sendable, Equatable {
             self = .double(doubleValue)
         } else if let stringValue = try? container.decode(String.self) {
             self = .string(stringValue)
-        } else if let arrayValue = try? container.decode([PlaybackValue].self) {
+        } else if let arrayValue = try? container.decode([HeistValue].self) {
             self = .array(arrayValue)
-        } else if let objectValue = try? container.decode([String: PlaybackValue].self) {
+        } else if let objectValue = try? container.decode([String: HeistValue].self) {
             self = .object(objectValue)
         } else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
-                debugDescription: "PlaybackValue: unsupported JSON type"
+                debugDescription: "HeistValue: unsupported JSON type"
             ))
         }
     }
@@ -215,7 +215,7 @@ public enum PlaybackValue: Codable, Sendable, Equatable {
     }
 
     /// Create from an untyped value. Returns nil for unsupported types.
-    public static func from(_ value: Any) -> PlaybackValue? {
+    public static func from(_ value: Any) -> HeistValue? {
         switch value {
         case let boolValue as Bool: return .bool(boolValue)
         case let intValue as Int: return .int(intValue)
@@ -223,7 +223,7 @@ public enum PlaybackValue: Codable, Sendable, Equatable {
         case let stringValue as String: return .string(stringValue)
         case let arrayValue as [Any]: return .array(arrayValue.compactMap { from($0) })
         case let objectValue as [String: Any]:
-            var result: [String: PlaybackValue] = [:]
+            var result: [String: HeistValue] = [:]
             for (key, nestedValue) in objectValue {
                 guard let converted = from(nestedValue) else { continue }
                 result[key] = converted
