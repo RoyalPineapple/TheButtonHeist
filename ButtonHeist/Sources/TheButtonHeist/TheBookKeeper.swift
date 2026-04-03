@@ -21,15 +21,15 @@ public struct ActiveSession: Sendable {
     public let startTime: Date
     public var nextSequenceNumber: Int
 
-    // Script recording state (nil when not recording a script)
-    public var scriptRecording: ScriptRecording?
+    // Heist recording state (nil when not recording a heist)
+    public var heistRecording: HeistRecording?
 }
 
 @ButtonHeistActor
-public struct ScriptRecording: Sendable {
+public struct HeistRecording: Sendable {
     public let app: String
     public let startTime: Date
-    public var steps: [PlaybackStep]
+    public var steps: [HeistEvidence]
     /// Cached interface snapshot from the most recent get_interface response.
     /// Used to look up heistId → element properties for matcher construction.
     public var interfaceCache: [String: HeistElement]
@@ -71,7 +71,7 @@ public enum BookKeeperError: Error, LocalizedError {
     case compressionFailed(String)
     case archiveFailed(String)
     case noStepsRecorded
-    case notRecordingScript
+    case notRecordingHeist
 
     public var errorDescription: String? {
         switch self {
@@ -86,9 +86,9 @@ public enum BookKeeperError: Error, LocalizedError {
         case .archiveFailed(let reason):
             return "Archive failed: \(reason)"
         case .noStepsRecorded:
-            return "No steps were recorded during the script session"
-        case .notRecordingScript:
-            return "No script recording is in progress"
+            return "No steps were recorded during the heist session"
+        case .notRecordingHeist:
+            return "No heist recording is in progress"
         }
     }
 }
@@ -339,21 +339,21 @@ public final class TheBookKeeper {
         return resolvedURL
     }
 
-    // MARK: - Script Recording
+    // MARK: - Heist Recording
 
-    public var isRecordingScript: Bool {
+    public var isRecordingHeist: Bool {
         guard case .active(let session) = phase else { return false }
-        return session.scriptRecording != nil
+        return session.heistRecording != nil
     }
 
-    public func startScriptRecording(app: String) throws {
+    public func startHeistRecording(app: String) throws {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
-        guard session.scriptRecording == nil else {
-            throw BookKeeperError.invalidPhase(expected: "not recording script", actual: "recording script")
+        guard session.heistRecording == nil else {
+            throw BookKeeperError.invalidPhase(expected: "not recording heist", actual: "recording heist")
         }
-        session.scriptRecording = ScriptRecording(
+        session.heistRecording = HeistRecording(
             app: app,
             startTime: Date(),
             steps: [],
@@ -362,60 +362,60 @@ public final class TheBookKeeper {
         phase = .active(session)
     }
 
-    public func stopScriptRecording() throws -> PlaybackScript {
+    public func stopHeistRecording() throws -> HeistPlayback {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
         }
-        guard let recording = session.scriptRecording else {
-            throw BookKeeperError.notRecordingScript
+        guard let recording = session.heistRecording else {
+            throw BookKeeperError.notRecordingHeist
         }
         guard !recording.steps.isEmpty else {
             throw BookKeeperError.noStepsRecorded
         }
-        let script = PlaybackScript(
+        let script = HeistPlayback(
             recorded: recording.startTime,
             app: recording.app,
             steps: recording.steps
         )
-        session.scriptRecording = nil
+        session.heistRecording = nil
         phase = .active(session)
         return script
     }
 
-    /// Update the cached interface snapshot for script recording.
+    /// Update the cached interface snapshot for heist recording.
     public func updateInterfaceCache(_ elements: [HeistElement]) {
         guard case .active(var session) = phase,
-              var recording = session.scriptRecording else { return }
+              var recording = session.heistRecording else { return }
         recording.interfaceCache = Dictionary(
             elements.map { ($0.heistId, $0) },
             uniquingKeysWith: { _, latest in latest }
         )
-        session.scriptRecording = recording
+        session.heistRecording = recording
         phase = .active(session)
     }
 
-    /// Commands that should not appear in playback scripts.
-    private static let excludedScriptCommands: Set<String> = [
+    /// Commands that should not appear in heist playbacks.
+    private static let excludedHeistCommands: Set<String> = [
         "help", "status", "quit", "exit",
         "list_devices", "get_interface", "get_screen",
         "get_session_state", "connect", "list_targets",
         "get_session_log", "archive_session",
         "start_recording", "stop_recording",
         "run_batch",
-        "start_script", "stop_script", "play_script",
+        "start_heist", "stop_heist", "play_heist",
     ]
 
-    /// Record a successfully executed command for script playback.
+    /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
-    public func recordScriptStep(
+    public func recordHeistEvidence(
         command: String,
         args: [String: Any],
         response: FenceResponse? = nil,
         interfaceElements: [HeistElement]? = nil
     ) {
         guard case .active(var session) = phase,
-              var recording = session.scriptRecording else { return }
-        guard !Self.excludedScriptCommands.contains(command) else { return }
+              var recording = session.heistRecording else { return }
+        guard !Self.excludedHeistCommands.contains(command) else { return }
 
         // Skip failed actions — only record successful outcomes
         if let response {
@@ -439,7 +439,7 @@ public final class TheBookKeeper {
                 allElements: allElements
             )
             if let expect {
-                step = PlaybackStep(
+                step = HeistEvidence(
                     command: step.command,
                     target: step.target,
                     arguments: step.arguments.merging(
@@ -452,11 +452,11 @@ public final class TheBookKeeper {
         }
 
         recording.steps.append(step)
-        session.scriptRecording = recording
+        session.heistRecording = recording
         phase = .active(session)
     }
 
-    // MARK: - Script Step Construction
+    // MARK: - Heist Step Construction
 
     private static let elementKeys: Set<String> = [
         "heistId", "label", "identifier", "value", "traits", "excludeTraits",
@@ -472,7 +472,7 @@ public final class TheBookKeeper {
         args: [String: Any],
         cache: [HeistElement],
         interfaceCache: [String: HeistElement]
-    ) -> PlaybackStep {
+    ) -> HeistEvidence {
         let heistId = args["heistId"] as? String
         let hasMatcherFields = Self.elementKeys.subtracting(["heistId"]).contains { key in
             args[key] != nil
@@ -505,14 +505,14 @@ public final class TheBookKeeper {
             metadata = RecordedMetadata(coordinateOnly: true)
         }
 
-        var arguments: [String: PlaybackValue] = [:]
+        var arguments: [String: HeistValue] = [:]
         for (key, argValue) in args where !Self.stripKeys.contains(key) {
-            if let playbackValue = PlaybackValue.from(argValue) {
+            if let playbackValue = HeistValue.from(argValue) {
                 arguments[key] = playbackValue
             }
         }
 
-        return PlaybackStep(
+        return HeistEvidence(
             command: command,
             target: target,
             arguments: arguments,
@@ -650,10 +650,10 @@ public final class TheBookKeeper {
         args: [String: Any],
         interfaceCache: [String: HeistElement],
         allElements: [HeistElement]
-    ) -> PlaybackValue? {
+    ) -> HeistValue? {
         guard let delta = actionResult.interfaceDelta else { return nil }
 
-        var expectations: [PlaybackValue] = []
+        var expectations: [HeistValue] = []
 
         switch delta.kind {
         case .screenChanged:
@@ -703,7 +703,7 @@ public final class TheBookKeeper {
         delta: InterfaceDelta,
         args: [String: Any],
         interfaceCache: [String: HeistElement]
-    ) -> PlaybackValue? {
+    ) -> HeistValue? {
         guard let updates = delta.updated, !updates.isEmpty else { return nil }
 
         let targetHeistId = args["heistId"] as? String
@@ -721,7 +721,7 @@ public final class TheBookKeeper {
         let semanticChanges = update.changes.filter { !$0.property.isGeometry }
         for priority in Self.propertyPriority {
             if let change = semanticChanges.first(where: { $0.property == priority }) {
-                var expectDict: [String: PlaybackValue] = [
+                var expectDict: [String: HeistValue] = [
                     "property": .string(change.property.rawValue),
                 ]
                 if let newValue = change.new {
@@ -734,8 +734,8 @@ public final class TheBookKeeper {
         return nil
     }
 
-    private func matcherExpectation(key: String, matcher: ElementMatcher) -> PlaybackValue {
-        var matcherDict: [String: PlaybackValue] = [:]
+    private func matcherExpectation(key: String, matcher: ElementMatcher) -> HeistValue {
+        var matcherDict: [String: HeistValue] = [:]
         if let label = matcher.label { matcherDict["label"] = .string(label) }
         if let matcherIdentifier = matcher.identifier { matcherDict["identifier"] = .string(matcherIdentifier) }
         if let matcherValue = matcher.value { matcherDict["value"] = .string(matcherValue) }
@@ -745,9 +745,9 @@ public final class TheBookKeeper {
         return .object([key: .object(matcherDict)])
     }
 
-    // MARK: - Script File I/O
+    // MARK: - Heist File I/O
 
-    public static func writeScript(_ script: PlaybackScript, to path: URL) throws {
+    public static func writeHeist(_ script: HeistPlayback, to path: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -755,11 +755,11 @@ public final class TheBookKeeper {
         try data.write(to: path, options: .atomic)
     }
 
-    public static func readScript(from path: URL) throws -> PlaybackScript {
+    public static func readHeist(from path: URL) throws -> HeistPlayback {
         let data = try Data(contentsOf: path)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(PlaybackScript.self, from: data)
+        return try decoder.decode(HeistPlayback.self, from: data)
     }
 
     // MARK: - Path Safety
