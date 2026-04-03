@@ -19,18 +19,21 @@ TheTripwire never reads the accessibility tree. It reads UIKit timing signals (l
 | `PresentationFingerprint` | `struct` | Sum of all presentation layer positions and opacities |
 | `LayerScan` | `struct` | Accumulator filled during `scanLayers()` |
 | `SettleWaiter` | `private struct` | Per-caller state for `waitForSettle` |
-| `PulseTick` | `private class` | `NSObject` target for `CADisplayLink` (weak-ref indirection) |
+| `RunningContext` | `private class` | Mutable context that exists only while the pulse is running — holds link, tick count, keyboard/text flags, settle waiters |
+| `PulsePhase` | `private enum` | State machine: `.idle` or `.running(RunningContext)` |
+| `PulseTick` | file-private top-level `class` | `NSObject` target for `CADisplayLink` (weak-ref indirection) |
 
 ## Pulse Architecture
 
-TheTripwire runs a single `CADisplayLink` at ~10 Hz. Every tick runs the full set of checks in one pass:
+TheTripwire runs a single `CADisplayLink` at ~10 Hz. Every tick runs the full set of checks in one pass — there is no tiered cadence; all signals are sampled on every tick:
 
 1. `CATransaction.flush()` — commit deferred SwiftUI layout
 2. `scanLayers()` — single layer-tree walk for fingerprint, animations, layout, window count
-3. Sample VC identity and first responder
-4. Build a `PulseReading` snapshot with all signals + derived quiet-frame count
-5. Diff against the previous `latestReading` and fire `PulseTransition` callbacks for any changes
-6. Resolve settle waiters
+3. Sample VC identity (`topmostViewController`) and first responder (`currentFirstResponder`)
+4. Read keyboard/text-input flags (set by notification observers)
+5. Build a `PulseReading` snapshot with all signals + derived quiet-frame count
+6. Diff against the previous `latestReading` and fire `PulseTransition` callbacks for any changes
+7. Resolve settle waiters
 
 **`latestReading` is the single source of truth.** There are no shadow variables — the new reading is diffed directly against the previous one for transition detection.
 
@@ -52,17 +55,17 @@ graph TD
             WinCount["windowCount"]
         end
 
-        subgraph VCIdentity["View Controller Identity (every 3rd tick)"]
+        subgraph VCIdentity["View Controller Identity (every tick)"]
             TopVC["topmostViewController()"]
             DeepVC["deepestViewController(from:)"]
             ScreenChange["isScreenChange(before:after:)"]
         end
 
-        subgraph Focus["First Responder (every 3rd tick)"]
+        subgraph Focus["First Responder (every tick)"]
             FirstResp["currentFirstResponder()"]
         end
 
-        subgraph Keyboard["Keyboard & Text Input (notification-driven)"]
+        subgraph Keyboard["Keyboard & Text Input (notification-driven, read every tick)"]
             KBFlag["keyboardVisibleFlag"]
             TextFlag["textInputActiveFlag"]
         end
@@ -85,9 +88,9 @@ graph TD
     DisplayLink --> PulseTick
     PulseTick -->|"weak ref"| OnTick
     OnTick -->|"every tick"| Scan
-    OnTick -->|"every 3rd tick"| VCIdentity
-    OnTick -->|"every 3rd tick"| Focus
-    OnTick -->|"every 5th tick"| Keyboard
+    OnTick -->|"every tick"| VCIdentity
+    OnTick -->|"every tick"| Focus
+    OnTick -->|"every tick"| Keyboard
     OnTick -->|"every tick"| Settle
 
     subgraph Consumers["Consumers"]
@@ -117,39 +120,31 @@ graph TD
 
 ### Tick Cadence
 
-Signals are sampled at three frequencies to balance responsiveness against cost:
+All signals are sampled on every tick (~10 Hz). There is no tiered cadence — `onTick()` runs all checks unconditionally:
 
 ```mermaid
 flowchart LR
     subgraph EveryTick["Every Tick (~10 Hz)"]
         SL["scanLayers()"]
+        VC["topmostViewController()"]
+        FR["currentFirstResponder()"]
+        KB["keyboard/text-input flags"]
         QF["quietFrameCount update"]
         SW["resolveSettleWaiters()"]
     end
-
-    subgraph Every3rd["Every 3rd Tick (~3.3 Hz)"]
-        VC["topmostViewController()"]
-        FR["currentFirstResponder()"]
-    end
-
-    subgraph Every5th["Every 5th Tick (~2 Hz)"]
-        WC["windowCount"]
-        KB["keyboard visibility"]
-        TI["text input active"]
-    end
 ```
 
-Every tick builds a `PulseReading` that carries forward the most recent moderate/slow signal values unchanged.
+Every tick builds a complete `PulseReading` snapshot from all current signal values.
 
 ### Tick Processing (`onTick()`)
 
 1. **`CATransaction.flush()`** — commits SwiftUI's deferred implicit layout before sampling.
 2. **`scanLayers()`** — single DFS walk of every layer in every traversable window. Returns `LayerScan` with fingerprint, animation flag, layout flag, window count.
 3. **Quiet frame logic** — a tick is quiet if: no pending layout, no relevant animations, AND fingerprint matches previous. Quiet increments `quietFrameCount`; not quiet resets to 0.
-4. **VC identity (every 3rd)** — `topmostViewController()` wrapped in `ObjectIdentifier`. Change fires `.screenChanged(from:to:)`.
-5. **First responder (every 3rd)** — `currentFirstResponder()` wrapped in `ObjectIdentifier`. Change fires `.focusChanged(from:to:)`.
-6. **Slow signals (every 5th)** — window count, keyboard, text input. Changes fire `.keyboardChanged(visible:)` and `.textInputChanged(active:)`.
-7. **Build `PulseReading`** from all current + carried-forward values.
+4. **VC identity** — `topmostViewController()` wrapped in `ObjectIdentifier`. Change fires `.screenChanged(from:to:)`.
+5. **First responder** — `currentFirstResponder()` wrapped in `ObjectIdentifier`. Change fires `.focusChanged(from:to:)`.
+6. **Keyboard/text-input flags** — read from notification-driven flags on `RunningContext`. Changes fire `.keyboardChanged(visible:)` and `.textInputChanged(active:)`.
+7. **Build `PulseReading`** from all current signal values.
 8. **Settle edge detection** — fires `.settled` on false→true, `.unsettled` on true→false.
 9. **`resolveSettleWaiters()`** — increments or resets each waiter's quiet count, resumes those that are done.
 
@@ -180,7 +175,7 @@ flowchart TD
     Push --> Pop
 ```
 
-**Ignored animation prefixes:** `["_UIParallaxMotionEffect"]` — parallax motion effects are persistent system animations that would permanently block settlement.
+**Ignored animation prefixes:** `["_UIParallaxMotionEffect", "match-"]` — parallax motion effects and matchedGeometryEffect transitions are persistent/transient system animations that would block settlement.
 
 ## `PresentationFingerprint` — Structure and Comparison
 
@@ -254,6 +249,10 @@ This is used by `TheBagman`'s scroll scan loop and scroll-to-edge re-jump loop. 
 | `executeScrollToEdge()` | 2 | Let lazy content grow `contentSize` between re-jumps |
 | `executeScrollToVisible()` Phase 2 | 2 | Let layout settle after jumping to opposite edge |
 
+### `yieldRealFrames(_:intervalMs:)`
+
+A heavier variant of `yieldFrames` that uses `Task.sleep` instead of `Task.yield()` to give `CADisplayLink` animations time to process. Required for accessibility SPI scroll methods that queue animated scrolls — `Task.yield()` alone doesn't advance the animation. Default interval is 16ms (one display frame).
+
 ## Keyboard and Text Input Tracking
 
 ### Keyboard (notification-driven)
@@ -270,13 +269,13 @@ Three notifications → `keyboardVisibleFlag`:
 
 ### Promotion to pulse
 
-These flags are set synchronously when the notification fires, but only promoted to `PulseTransition` events every 5th tick. TheSafecracker reads `keyboardVisibleFlag` directly for immediate queries outside the tick cadence.
+These flags are set synchronously when the notification fires and read into the `PulseReading` on every tick. Changes fire `PulseTransition` events immediately on the next tick. TheSafecracker reads `keyboardVisibleFlag` directly for immediate queries outside the tick cadence.
 
 ## First Responder Tracking
 
 `currentFirstResponder()` walks every subview in every traversable window (frontmost first), depth-first, calling `view.isFirstResponder`. Returns the first match.
 
-Sampled every 3rd tick (~3.3 Hz). Identity change (via `ObjectIdentifier`) fires `.focusChanged(from:to:)`.
+Sampled every tick (~10 Hz). Identity change (via `ObjectIdentifier`) fires `.focusChanged(from:to:)`.
 
 ## View Controller Walk
 
@@ -293,7 +292,7 @@ flowchart TD
     Children --> Deepest["Return VC"]
 ```
 
-Sampled every 3rd tick. Identity change fires `.screenChanged(from:to:)`.
+Sampled every tick. Identity change fires `.screenChanged(from:to:)`.
 
 ### Topology supplement (TheBagman)
 
@@ -310,10 +309,10 @@ tripwire.isScreenChange(before:after:) || isTopologyChanged(before:after:)
 
 | Transition | Trigger | Cadence |
 |-----------|---------|---------|
-| `.screenChanged(from:to:)` | VC identity change | Every 3rd tick |
-| `.focusChanged(from:to:)` | First responder change | Every 3rd tick |
-| `.keyboardChanged(visible:)` | Keyboard flag change | Every 5th tick |
-| `.textInputChanged(active:)` | Text input flag change | Every 5th tick |
+| `.screenChanged(from:to:)` | VC identity change | Every tick |
+| `.focusChanged(from:to:)` | First responder change | Every tick |
+| `.keyboardChanged(visible:)` | Keyboard flag change | Every tick |
+| `.textInputChanged(active:)` | Text input flag change | Every tick |
 | `.settled` | quiet → settled edge | Every tick |
 | `.unsettled` | settled → not-quiet edge | Every tick |
 
@@ -350,7 +349,7 @@ graph LR
 ## Design Decisions
 
 - **Persistent pulse over on-demand sampling**: A single ~10 Hz clock replaces ad-hoc polling loops and per-settle display links. Lower overhead, better timing coherence, and the pulse detects transitions even when no one is actively waiting.
-- **Tiered cadence**: Layer scanning (every tick) is cheap and latency-sensitive. VC walks and first responder searches (every 3rd) are more expensive. Keyboard/window count (every 5th) change rarely. The tiers balance responsiveness against CPU cost.
+- **Flat cadence**: All signals are sampled on every tick. The simplicity of running all checks unconditionally outweighs the marginal CPU savings of tiered sampling — VC walks and first responder searches are cheap at ~10 Hz.
 - **Weak-ref indirection via PulseTick**: `CADisplayLink` retains its target. If TheTripwire were the target, deallocating it would leave a dangling display link. The `PulseTick` intermediary checks a weak ref and self-invalidates.
 - **`CATransaction.flush()` before scanning**: SwiftUI batches layout commits. Without the flush, `scanLayers()` would see stale layer positions and report false "quiet" readings.
 - **Per-waiter quiet frames**: Global quiet-frame count can't serve multiple concurrent callers with different start times. Each waiter tracks its own count from registration, preventing false positives from stale settle state.
