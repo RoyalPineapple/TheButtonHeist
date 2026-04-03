@@ -18,7 +18,7 @@ struct DisclosureGroupingDemo: View {
                 // Note: Do NOT set accessibilityIdentifier on DisclosureGroup —
                 // SwiftUI propagates it to children, overriding their own identifiers.
 
-                LabeledContent("Version", value: "2026.04.03.1")
+                LabeledContent("Version", value: "2026.04.03.2")
                     .accessibilityIdentifier("buttonheist.disclosure.versionLabel")
 
                 LabeledContent("Build", value: "42")
