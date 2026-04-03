@@ -17,7 +17,7 @@ public actor SimpleSocketServer {
 
     // MARK: - State Machines
 
-    private enum ServerState {
+    private enum ServerPhase {
         case stopped
         case listening(listener: NWListener, port: UInt16)
     }
@@ -60,7 +60,7 @@ public actor SimpleSocketServer {
 
     // MARK: - Actor-isolated mutable state
 
-    private var serverState: ServerState = .stopped
+    private var serverPhase: ServerPhase = .stopped
     private var clients: [Int: ClientPhase] = [:]
     private var clientCounter = 0
 
@@ -117,7 +117,7 @@ public actor SimpleSocketServer {
         tlsParameters: NWParameters? = nil,
         callbacks: Callbacks? = nil
     ) async throws -> UInt16 {
-        guard case .stopped = serverState else {
+        guard case .stopped = serverPhase else {
             throw ServerError.alreadyRunning
         }
 
@@ -173,7 +173,7 @@ public actor SimpleSocketServer {
             newListener.start(queue: self.queue)
         }
 
-        self.serverState = .listening(listener: newListener, port: actualPort)
+        self.serverPhase = .listening(listener: newListener, port: actualPort)
         self._syncListeningPort.withLock { $0 = actualPort }
 
         return actualPort
@@ -181,11 +181,11 @@ public actor SimpleSocketServer {
 
     /// Stop the server (actor-isolated).
     private func _stop() {
-        guard case .listening(let listener, _) = serverState else { return }
+        guard case .listening(let listener, _) = serverPhase else { return }
 
         let allClients = clients
         clients.removeAll()
-        serverState = .stopped
+        serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
         for (_, phase) in allClients {

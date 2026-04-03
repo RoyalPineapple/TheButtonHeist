@@ -38,29 +38,29 @@ public final class TheInsideJob {
 
     // MARK: - State Machines
 
-    enum ServerState {
+    enum ServerPhase {
         case stopped
         case running(transport: ServerTransport)
         case suspended
         case resuming(task: Task<Void, Never>)
     }
 
-    enum PollingState {
+    enum PollingPhase {
         case disabled
         case active(task: Task<Void, Never>, interval: TimeInterval)
         case paused(interval: TimeInterval)
     }
 
-    enum RecordingState {
+    enum RecordingPhase {
         case idle
         case recording(stakeout: TheStakeout)
     }
 
     // MARK: - Properties
 
-    var serverState: ServerState = .stopped
-    var pollingState: PollingState = .disabled
-    var recordingState: RecordingState = .idle
+    var serverPhase: ServerPhase = .stopped
+    var pollingPhase: PollingPhase = .disabled
+    var recordingPhase: RecordingPhase = .idle
     private var tlsActive = false
 
     let muscle: TheMuscle
@@ -77,33 +77,33 @@ public final class TheInsideJob {
     // MARK: - Computed State Accessors
 
     private var isRunning: Bool {
-        switch serverState {
+        switch serverPhase {
         case .running, .suspended, .resuming: return true
         case .stopped: return false
         }
     }
 
     private var transport: ServerTransport? {
-        if case .running(let transport) = serverState { return transport }
+        if case .running(let transport) = serverPhase { return transport }
         return nil
     }
 
     var isPollingEnabled: Bool {
-        switch pollingState {
+        switch pollingPhase {
         case .active, .paused: return true
         case .disabled: return false
         }
     }
 
     var pollingTimeoutSeconds: TimeInterval {
-        switch pollingState {
+        switch pollingPhase {
         case .active(_, let interval), .paused(let interval): return interval
         case .disabled: return Self.defaultPollingTimeout
         }
     }
 
     var stakeout: TheStakeout? {
-        if case .recording(let stakeout) = recordingState { return stakeout }
+        if case .recording(let stakeout) = recordingPhase { return stakeout }
         return nil
     }
 
@@ -141,7 +141,7 @@ public final class TheInsideJob {
 
     /// Start the server
     public func start() async throws {
-        guard case .stopped = serverState else { return }
+        guard case .stopped = serverPhase else { return }
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
@@ -158,7 +158,7 @@ public final class TheInsideJob {
         wireTransport(transport)
 
         let actualPort = try await transport.start(port: preferredPort)
-        serverState = .running(transport: transport)
+        serverPhase = .running(transport: transport)
 
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
@@ -186,17 +186,17 @@ public final class TheInsideJob {
     /// Stop the server
     public func stop() {
         // Cancel any in-flight resume task
-        if case .resuming(let task) = serverState {
+        if case .resuming(let task) = serverPhase {
             task.cancel()
         }
 
         // Tear down active transport if running
-        if case .running(let activeTransport) = serverState {
+        if case .running(let activeTransport) = serverPhase {
             activeTransport.stopAdvertising()
             activeTransport.stop()
         }
 
-        serverState = .stopped
+        serverPhase = .stopped
         hierarchyInvalidated = false
         stopPolling()
 
@@ -221,21 +221,21 @@ public final class TheInsideJob {
     /// Enable settle-driven polling for automatic hierarchy updates.
     /// - Parameter timeout: Maximum seconds between settle checks (default 2.0, minimum 0.5)
     public func startPolling(interval timeout: TimeInterval = 2.0) {
-        if case .active(let existingTask, _) = pollingState {
+        if case .active(let existingTask, _) = pollingPhase {
             existingTask.cancel()
         }
         let interval = max(0.5, timeout)
         let task = makePollingTask(interval: interval)
-        pollingState = .active(task: task, interval: interval)
+        pollingPhase = .active(task: task, interval: interval)
         insideJobLogger.info("Polling enabled (settle timeout: \(interval)s)")
     }
 
     /// Disable polling for automatic updates
     public func stopPolling() {
-        if case .active(let task, _) = pollingState {
+        if case .active(let task, _) = pollingPhase {
             task.cancel()
         }
-        pollingState = .disabled
+        pollingPhase = .disabled
     }
 
     // MARK: - Transport Wiring
@@ -846,7 +846,7 @@ public final class TheInsideJob {
     }
 
     func suspend() {
-        switch serverState {
+        switch serverPhase {
         case .running(let activeTransport):
             activeTransport.stopAdvertising()
             activeTransport.stop()
@@ -857,9 +857,9 @@ public final class TheInsideJob {
         }
 
         // Pause polling if active, preserving the interval for resume
-        if case .active(let pollingTask, let interval) = pollingState {
+        if case .active(let pollingTask, let interval) = pollingPhase {
             pollingTask.cancel()
-            pollingState = .paused(interval: interval)
+            pollingPhase = .paused(interval: interval)
         }
 
         hierarchyInvalidated = false
@@ -872,13 +872,13 @@ public final class TheInsideJob {
 
         bagman.clearCache()
 
-        serverState = .suspended
+        serverPhase = .suspended
 
         insideJobLogger.info("Server suspended")
     }
 
     private func resume() {
-        guard case .suspended = serverState else { return }
+        guard case .suspended = serverPhase else { return }
 
         insideJobLogger.info("Resuming server...")
 
@@ -908,7 +908,7 @@ public final class TheInsideJob {
 
                 try Task.checkCancellation()
 
-                self.serverState = .running(transport: transport)
+                self.serverPhase = .running(transport: transport)
                 startedTransport = nil
 
                 insideJobLogger.info("Server resumed on port \(actualPort)")
@@ -922,9 +922,9 @@ public final class TheInsideJob {
                 self.tripwire.startPulse()
 
                 // Resume polling if it was active before suspend
-                if case .paused(let interval) = self.pollingState {
+                if case .paused(let interval) = self.pollingPhase {
                     let pollingTask = self.makePollingTask(interval: interval)
-                    self.pollingState = .active(task: pollingTask, interval: interval)
+                    self.pollingPhase = .active(task: pollingTask, interval: interval)
                 }
 
                 insideJobLogger.info("Server resume complete")
@@ -934,12 +934,12 @@ public final class TheInsideJob {
             } catch {
                 startedTransport?.stop()
                 insideJobLogger.error("Failed to resume server: \(error)")
-                if case .resuming = self.serverState {
-                    self.serverState = .suspended
+                if case .resuming = self.serverPhase {
+                    self.serverPhase = .suspended
                 }
             }
         }
-        serverState = .resuming(task: task)
+        serverPhase = .resuming(task: task)
     }
 }
 
