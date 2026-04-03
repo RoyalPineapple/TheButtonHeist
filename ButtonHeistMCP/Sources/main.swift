@@ -37,7 +37,7 @@ struct ButtonHeistMCPServer {
         VoiceOver uses. You interact with live UI elements by identity and traits, not \
         screen coordinates. Every control knows what it is, what state it's in, and how \
         to activate it. A coordinate that worked on one device is wrong on another; \
-        an element's heistId or label works everywhere.
+        an element's label or traits work everywhere.
 
         ## Core Loop
 
