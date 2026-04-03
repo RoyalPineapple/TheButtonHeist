@@ -48,6 +48,10 @@ struct RootView: View {
                     CartView()
                 }
                 .accessibilityIdentifier("buttonheist.root.cart")
+                NavigationLink("Menu") {
+                    MenuOrderView()
+                }
+                .accessibilityIdentifier("buttonheist.root.menu")
                 NavigationLink("Settings") {
                     SettingsView()
                 }
@@ -65,10 +69,10 @@ struct RootView: View {
                         CornerScrollView()
                     }
                     .accessibilityIdentifier("buttonheist.root.cornerScroll")
-                    NavigationLink("Nested Scrolls") {
-                        NestedScrollView()
+                    NavigationLink("Albums") {
+                        AlbumFlowView()
                     }
-                    .accessibilityIdentifier("buttonheist.root.nestedScrolls")
+                    .accessibilityIdentifier("buttonheist.root.albums")
                 }
             }
             .navigationTitle("ButtonHeist Demo")

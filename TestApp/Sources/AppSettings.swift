@@ -48,7 +48,7 @@ class AppSettings {
             switch self {
             case .small: return .small
             case .medium: return .medium
-            case .large: return .xxxLarge
+            case .large: return .xLarge
             }
         }
     }
