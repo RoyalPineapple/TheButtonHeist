@@ -235,7 +235,6 @@ Before pushing any commit, verify the following:
   - `README.md` - Quick start, features, usage examples
   - `docs/API.md` - Public API documentation
   - `docs/ARCHITECTURE.md` - System design and component interaction
-  - `.context/internal-docs/VERSIONING.md` - CalVer strategy and release workflow
   - `docs/WIRE-PROTOCOL.md` - Message format and protocol details
   - `docs/USB_DEVICE_CONNECTIVITY.md` - USB connection guide
 - When changing behavior, ports, message formats, or configuration:
@@ -414,7 +413,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Versioning and Releases
 
-- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `.context/internal-docs/VERSIONING.md`.
+- **Product version**: [CalVer](https://calver.org/) `YYYY.MM.DD` (e.g. `2026.03.27`). Same-day patches append `.N` (e.g. `2026.03.27.1`). See `VERSIONING.md` in bh-infra.
 - **Protocol version**: SemVer, lives in `protocolVersion` in `Messages.swift`. Bump only when the wire format or handshake changes. The release script does not touch it.
 - **Canonical product version** lives in `ButtonHeist/Sources/TheScore/Messages.swift` (`buttonHeistVersion`). CLI, MCP, and iOS server all read it via TheScore.
 - **Releasing**: Use the release script from a clean `main` branch — never bump version manually:
