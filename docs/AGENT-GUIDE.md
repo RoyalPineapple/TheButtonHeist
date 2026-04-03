@@ -56,97 +56,27 @@ Every agent session follows the same rhythm:
 
 That's it. The entire API exists to make this loop fast and reliable.
 
-## Configuration
+## Connecting
 
-Before you can interact with an app, Button Heist needs to know where it is and how to authenticate. There are three ways to provide this, layered in precedence order.
+Connect to the running app by named target or direct address:
 
-### Config files
+```json
+{"tool": "connect", "arguments": {"target": "sim"}}
+{"tool": "connect", "arguments": {"device": "127.0.0.1:1455", "token": "my-task-slug"}}
+```
 
-A config file defines named targets — saved connections with a device address and optional token. Two locations are checked, in order:
-
-1. **`.buttonheist.json`** in the current working directory (project-level)
-2. **`~/.config/buttonheist/config.json`** (user-level, applies across projects)
-
-Both use the same schema. The first file that parses successfully wins — they are not merged.
+Named targets come from a `.buttonheist.json` config file (in the working directory or `~/.config/buttonheist/config.json`):
 
 ```json
 {
   "targets": {
-    "sim": {
-      "device": "127.0.0.1:1455",
-      "token": "my-workspace-token"
-    },
-    "device": {
-      "device": "192.168.1.42:27183",
-      "token": "usb-session"
-    }
+    "sim": { "device": "127.0.0.1:1455", "token": "my-workspace-token" }
   },
   "default": "sim"
 }
 ```
 
-Each target needs:
-- `device` — a `host:port` string pointing to the running app
-- `token` — optional auth token (if the app was launched with `INSIDEJOB_TOKEN`)
-
-The `default` field names which target to use when no target is specified. Once you have a config file, connecting is just:
-
-```json
-{"tool": "connect", "arguments": {"target": "sim"}}
-```
-
-Or if a default is set, the first command that needs a connection will auto-connect to it — no explicit `connect` call required.
-
-Use `.buttonheist.json` for project-specific targets (a simulator tied to this workspace, a specific test app). Use `~/.config/buttonheist/config.json` for targets you use across projects (a physical device on your desk, a shared test rig).
-
-### Environment variables
-
-Environment variables override config file values. Set these on the process running the CLI or MCP server:
-
-| Variable | Effect |
-|----------|--------|
-| `BUTTONHEIST_DEVICE` | Device address (`host:port`) — overrides config file target |
-| `BUTTONHEIST_TOKEN` | Auth token — overrides config file token |
-| `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout in seconds (default: 60) |
-| `BUTTONHEIST_DRIVER_ID` | Driver identity label for session locking |
-
-When `BUTTONHEIST_DEVICE` is set, the config file is ignored entirely for connection resolution — the env var is treated as the device address. When only `BUTTONHEIST_TOKEN` is set (no `BUTTONHEIST_DEVICE`), the token overrides whatever's in the config file target, but the device address still comes from config.
-
-### Explicit connect
-
-The most direct approach — pass device and token in the connect call:
-
-```json
-{"tool": "connect", "arguments": {"device": "127.0.0.1:1455", "token": "my-task-slug"}}
-```
-
-This overrides everything. Use it for one-off connections or when the config doesn't know about the target yet.
-
-### Discovery
-
-If you don't know the address at all, `list_devices` discovers running apps via Bonjour and also shows any targets from your config file:
-
-```json
-{"tool": "list_devices"}
-```
-
-Config targets always appear in the list even if the app isn't running — they're just address entries. Bonjour-discovered devices show up when the app is live and advertising on the network. On managed machines where Bonjour is blocked (MDM stealth mode), only config targets and explicit addresses work.
-
-`list_targets` shows just the config file targets without doing any network discovery:
-
-```json
-{"tool": "list_targets"}
-```
-
-### Precedence summary
-
-From highest to lowest priority:
-
-1. Explicit arguments in a `connect` call
-2. `BUTTONHEIST_DEVICE` / `BUTTONHEIST_TOKEN` environment variables
-3. Named target from `.buttonheist.json` (current directory)
-4. Named target from `~/.config/buttonheist/config.json` (home directory)
-5. Bonjour auto-discovery (first device found)
+If a default target is set, the first command that needs a connection will auto-connect — no explicit `connect` call required.
 
 ## Reading the Screen
 
@@ -313,16 +243,6 @@ Three flavors:
 
 // Jump to an edge
 {"tool": "scroll_to_edge", "arguments": {"heistId": "list-container", "edge": "bottom"}}
-```
-
-### Gestures
-
-For coordinate-level interactions (maps, canvases, custom controls):
-
-```json
-{"tool": "gesture", "arguments": {"type": "long_press", "heistId": "map-pin", "duration": 1.5}}
-{"tool": "gesture", "arguments": {"type": "pinch", "x": 200, "y": 400, "scale": 2.0}}
-{"tool": "gesture", "arguments": {"type": "drag", "x": 100, "y": 300, "endX": 100, "endY": 100}}
 ```
 
 ### Wait for state
@@ -503,26 +423,6 @@ Each step shows its command, delta kind, and expectation result (`✓`/`✗`). T
 
 Any interaction command: `activate`, `type_text`, `scroll`, `scroll_to_visible`, `scroll_to_edge`, `swipe`, gesture commands, `edit_action`, `set_pasteboard`, `get_pasteboard`, `dismiss_keyboard`. You can also include `get_interface` and `get_screen` as steps.
 
-## Screenshots
-
-```json
-{"tool": "get_screen"}
-```
-
-Returns a PNG screenshot. Use it to verify visual state that isn't captured in the accessibility tree (colors, images, layout).
-
-## Recording
-
-Capture video of a sequence of interactions:
-
-```json
-{"tool": "start_recording", "arguments": {"fps": 8, "scale": 0.5}}
-// ... do your work ...
-{"tool": "stop_recording", "arguments": {"output": "demos/login-flow.mp4"}}
-```
-
-The recording captures frames on each UI interaction automatically. `inactivity_timeout` auto-stops if no interactions happen for N seconds (default 5).
-
 ## Efficient Agent Patterns
 
 ### Don't over-fetch
@@ -557,6 +457,5 @@ Start with `get_interface` (visible only). If you need more, filter by traits or
 | Scroll | `scroll` | `heistId`, `direction` |
 | Wait for element | `wait_for` | `label`/`heistId`, `absent`, `timeout` |
 | Run multiple actions | `run_batch` | `steps`, `policy` |
-| Screenshot | `get_screen` | `output` |
 | Check what changed | *(read the delta in any action response)* | |
 | Verify an outcome | *(add `expect` to any action)* | |
