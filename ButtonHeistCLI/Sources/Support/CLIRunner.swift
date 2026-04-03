@@ -48,14 +48,24 @@ enum CLIRunner {
     ) async throws -> (fence: TheFence, response: FenceResponse) {
         let fence = makeFence(connection: connection)
 
-        try await fence.start()
+        do {
+            try await fence.start()
+        } catch {
+            fence.stop()
+            throw error
+        }
 
         if let statusMessage, !connection.quiet {
             logStatus(statusMessage)
         }
 
-        let response = try await fence.execute(request: request)
-        return (fence, response)
+        do {
+            let response = try await fence.execute(request: request)
+            return (fence, response)
+        } catch {
+            fence.stop()
+            throw error
+        }
     }
 
     // MARK: - Output Formatting
@@ -72,6 +82,8 @@ enum CLIRunner {
                let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
                let json = String(data: data, encoding: .utf8) {
                 writeOutput(json)
+            } else {
+                logStatus("Failed to serialize response as JSON")
             }
         }
     }

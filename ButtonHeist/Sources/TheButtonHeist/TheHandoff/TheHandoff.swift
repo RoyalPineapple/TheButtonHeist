@@ -320,13 +320,10 @@ public final class TheHandoff {
                 let keepaliveTask = self.makeKeepaliveTask()
                 self.transitionToConnected(device: device, keepaliveTask: keepaliveTask)
             case .disconnected(let reason):
-                // Preserve .failed state (e.g., from sessionLocked)
-                // keepaliveTask was already cancelled by transitionToFailed
+                // .failed phase already cancelled keepalive; clean up remaining state
+                // via transitionToDisconnected rather than manual field clearing
                 if case .failed = self.connectionPhase {
-                    self.serverInfo = nil
-                    self.currentInterface = nil
-                    self.currentScreen = nil
-                    self.transitionRecordingTo(.idle)
+                    self.transitionToDisconnected()
                 } else {
                     self.transitionToDisconnected()
                 }
@@ -456,10 +453,17 @@ public final class TheHandoff {
     /// intercepting callbacks — the state machine carries the outcome.
     public func connectWithDiscovery(filter: String?, timeout: TimeInterval = 30) async throws {
         onStatus?("Searching for iOS devices...")
-        startDiscovery()
+        let startedDiscovery = !hasActiveDiscoverySession
+        if startedDiscovery { startDiscovery() }
 
         let discoveryTimeout = UInt64(max(timeout, 5) * 1_000_000_000)
-        let device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
+        let device: DiscoveredDevice
+        do {
+            device = try await resolveReachableDevice(filter: filter, discoveryTimeout: discoveryTimeout)
+        } catch {
+            if startedDiscovery { stopDiscovery() }
+            throw error
+        }
 
         onStatus?("Found: \(displayName(for: device))")
         onStatus?("Connecting...")
@@ -528,6 +532,7 @@ public final class TheHandoff {
             }
         }
         onStatus?("Auto-reconnect gave up after 60 attempts")
+        reconnectPolicy = .disabled
     }
 
     // MARK: - Display Names

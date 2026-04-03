@@ -159,6 +159,7 @@ public actor SimpleSocketServer {
                     }
                     guard shouldResume else { return }
                     logger.error("Listener failed: \(error)")
+                    newListener.cancel()
                     continuation.resume(throwing: error)
                 default:
                     break
@@ -259,7 +260,10 @@ public actor SimpleSocketServer {
             semaphore.signal()
         }
         semaphore.wait()
-        switch resultBox.withLock({ $0 })! {
+        guard let result = resultBox.withLock({ $0 }) else {
+            throw ServerError.failedToBindPort
+        }
+        switch result {
         case .success(let port): return port
         case .failure(let error): throw error
         }

@@ -191,7 +191,7 @@ final class TheMuscle {
         }
         if let envTimeout = EnvironmentKey.insideJobSessionTimeout.value,
            let parsed = TimeInterval(envTimeout) {
-            self.sessionReleaseTimeout = max(1.0, parsed)
+            self.sessionReleaseTimeout = min(max(1.0, parsed), 3600.0)
         } else {
             self.sessionReleaseTimeout = 30.0
         }
@@ -352,7 +352,10 @@ final class TheMuscle {
     }
 
     func handleClientDisconnected(_ clientId: Int) {
-        clients.removeValue(forKey: clientId)
+        let removed = clients.removeValue(forKey: clientId)
+        if case .pendingApproval = removed {
+            dismissAlert()
+        }
         removeSessionConnection(clientId)
     }
 
@@ -463,16 +466,6 @@ final class TheMuscle {
             clearFailedAttempts(address: address)
         }
         approveObserver(clientId, respond: respond)
-    }
-
-    /// Approve an observer from the pending-approval path (UI prompt)
-    private func approveObserver(_ clientId: Int) {
-        guard case .pendingApproval(let address, let respond, true) = clients[clientId] else { return }
-        clients[clientId] = .observer(address: address, subscribed: true)
-        markClientAuthenticated?(clientId)
-        sendMessage(.authApproved(AuthApprovedPayload()), respond: respond)
-        logger.info("Observer \(clientId) approved via UI")
-        onClientAuthenticated?(clientId, respond)
     }
 
     /// Approve an observer directly (no UI needed)
@@ -668,7 +661,11 @@ final class TheMuscle {
         alert.addAction(UIAlertAction(title: "Deny", style: .destructive) { _ in onDeny() })
         alert.addAction(UIAlertAction(title: "Allow", style: .default) { _ in onAllow() })
 
-        guard let vc = Self.topViewController() else { return }
+        guard let vc = Self.topViewController() else {
+            logger.warning("No foreground view controller for approval alert — disconnecting client \(clientId)")
+            onDeny()
+            return
+        }
         vc.present(alert, animated: true)
         presentedAlert = alert
     }

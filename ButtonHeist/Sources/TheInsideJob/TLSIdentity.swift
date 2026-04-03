@@ -187,7 +187,10 @@ public actor TLSIdentity {
         }
 
         // SecItemCopyMatching returns CFTypeRef; bridge to SecIdentity
-        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+        guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
+            throw TLSIdentityError.keychainError(errSecParam)
+        }
+        let secIdentity = (identityRef as! SecIdentity)
         var certRef: SecCertificate?
         let certStatus = SecIdentityCopyCertificate(secIdentity, &certRef)
         guard certStatus == errSecSuccess, let cert = certRef else {
@@ -259,7 +262,10 @@ public actor TLSIdentity {
         guard identityStatus == errSecSuccess, let identityRef = identityResult else {
             throw TLSIdentityError.keychainError(identityStatus)
         }
-        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+        guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
+            throw TLSIdentityError.keychainError(errSecParam)
+        }
+        return (identityRef as! SecIdentity)
     }
 
     private static func createInMemoryIdentity(
@@ -326,7 +332,10 @@ public actor TLSIdentity {
             throw TLSIdentityError.keychainError(identityStatus)
         }
 
-        return unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
+        guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
+            throw TLSIdentityError.keychainError(errSecParam)
+        }
+        return (identityRef as! SecIdentity)
     }
 }
 

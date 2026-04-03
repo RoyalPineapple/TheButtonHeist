@@ -31,7 +31,8 @@ extension ElementAction: Codable {
 
     public init(from decoder: Decoder) throws {
         if let keyed = try? decoder.container(keyedBy: CodingKeys.self),
-           let name = try? keyed.decode(String.self, forKey: .custom) {
+           keyed.contains(.custom) {
+            let name = try keyed.decode(String.self, forKey: .custom)
             self = .custom(name)
             return
         }
