@@ -18,7 +18,7 @@
 #          ./scripts/release.sh 2026.04.03   # Explicit CalVer
 #          ./scripts/release.sh --dry-run    # Preview only
 #
-# See .context/internal-docs/VERSIONING.md for versioning rules.
+# See VERSIONING.md for versioning rules.
 
 set -euo pipefail
 
