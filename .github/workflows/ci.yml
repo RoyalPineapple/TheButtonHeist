@@ -234,32 +234,13 @@ jobs:
         timeout-minutes: 10
         run: |
           set -eo pipefail
-          echo "Building BH Demo, UIKitTestApp, and ResearchApp in parallel..."
+          DEST="platform=iOS Simulator,id=$SIM_UDID"
 
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
-            -destination "platform=iOS Simulator,id=$SIM_UDID" \
-            build 2>&1 | tail -3 &
-          PID_DEMO=$!
-
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "UIKitTestApp" \
-            -destination "platform=iOS Simulator,id=$SIM_UDID" \
-            build 2>&1 | tail -3 &
-          PID_UIKIT=$!
-
-          xcodebuild -workspace ButtonHeist.xcworkspace -scheme "ResearchApp" \
-            -destination "platform=iOS Simulator,id=$SIM_UDID" \
-            build 2>&1 | tail -3 &
-          PID_RESEARCH=$!
-
-          FAILED=0
-          wait $PID_DEMO || FAILED=1
-          wait $PID_UIKIT || FAILED=1
-          wait $PID_RESEARCH || FAILED=1
-
-          if [ $FAILED -ne 0 ]; then
-            echo "::error::One or more iOS app builds failed"
-            exit 1
-          fi
+          for scheme in "BH Demo" "UIKitTestApp" "ResearchApp"; do
+            echo "Building $scheme..."
+            xcodebuild -workspace ButtonHeist.xcworkspace -scheme "$scheme" \
+              -destination "$DEST" build
+          done
 
       - name: Wait for simulator boot
         timeout-minutes: 5
