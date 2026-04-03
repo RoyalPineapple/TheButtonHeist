@@ -1,6 +1,6 @@
 # ThePlant - The Advance Man
 
-> **Files:** `ButtonHeist/Sources/ThePlant/ThePlantAutoStart.m`, `ButtonHeist/Sources/TheInsideJob/TheInsideJob+AutoStart.swift`
+> **Files:** `ButtonHeist/Sources/ThePlant/ThePlantAutoStart.m`, `ButtonHeist/Sources/TheInsideJob/Extensions/AutoStart.swift`
 > **Platform:** iOS 17.0+ (ObjC + Swift)
 > **Role:** Zero-configuration auto-initialization - starts TheInsideJob before any app code runs
 

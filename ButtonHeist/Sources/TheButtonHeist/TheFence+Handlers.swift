@@ -136,7 +136,7 @@ extension TheFence {
         if let directionValue {
             direction = SwipeDirection(rawValue: directionValue.lowercased())
             if direction == nil {
-                return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right")
+                return .error("Invalid direction '\(directionValue)'. Valid: \(SwipeDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
         }
 
@@ -273,10 +273,10 @@ extension TheFence {
         switch command {
         case .scroll:
             guard let directionValue = stringArg(args, "direction") else {
-                return .error("direction is required for scroll. Valid: up, down, left, right, next, previous")
+                return .error("direction is required for scroll. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
-                return .error("Invalid direction '\(directionValue)'. Valid: up, down, left, right, next, previous")
+                return .error("Invalid direction '\(directionValue)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll")
@@ -307,10 +307,10 @@ extension TheFence {
             return .action(result: result)
         case .scrollToEdge:
             guard let edgeValue = stringArg(args, "edge") else {
-                return .error("edge is required for scroll_to_edge. Valid: top, bottom, left, right")
+                return .error("edge is required for scroll_to_edge. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let edge = ScrollEdge(rawValue: edgeValue.lowercased()) else {
-                return .error("Invalid edge '\(edgeValue)'. Valid: top, bottom, left, right")
+                return .error("Invalid edge '\(edgeValue)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let target = try elementTarget(args) else {
                 return .error("Must specify element (heistId or matcher) for scroll_to_edge")

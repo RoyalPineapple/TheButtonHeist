@@ -703,7 +703,7 @@ public struct RecordingConfig: Codable, Sendable {
 }
 
 /// Direction for swipe gestures
-public enum SwipeDirection: String, Codable, Sendable {
+public enum SwipeDirection: String, Codable, Sendable, CaseIterable {
     case up, down, left, right
 
     /// Default unit-point start for this cardinal direction
@@ -728,7 +728,7 @@ public enum SwipeDirection: String, Codable, Sendable {
 }
 
 /// Direction for scroll actions
-public enum ScrollDirection: String, Codable, Sendable {
+public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
     case up, down, left, right, next, previous
 }
 
@@ -787,7 +787,7 @@ extension ScrollToVisibleTarget: Codable {
 }
 
 /// Edge for scroll-to-edge commands
-public enum ScrollEdge: String, Codable, Sendable {
+public enum ScrollEdge: String, Codable, Sendable, CaseIterable {
     case top, bottom, left, right
 }
 

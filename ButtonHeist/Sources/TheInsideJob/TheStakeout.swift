@@ -14,7 +14,7 @@ final class TheStakeout {
 
     // MARK: - State Machine
 
-    private enum StakeoutState {
+    private enum StakeoutPhase {
         case idle
         case recording(RecordingSession)
         case finalizing(FinalizingSession)
@@ -50,30 +50,30 @@ final class TheStakeout {
         let interactionLog: [InteractionEvent]
     }
 
-    private var stakeoutState: StakeoutState = .idle
+    private var stakeoutPhase: StakeoutPhase = .idle
 
     /// Maximum number of interaction events to record. Beyond this, events are silently dropped
     /// and the log is capped to prevent unbounded memory growth in long recordings.
     private static let maxInteractionCount = 500
 
     var isRecording: Bool {
-        if case .recording = stakeoutState { return true }
+        if case .recording = stakeoutPhase { return true }
         return false
     }
 
     var isFinalizing: Bool {
-        if case .finalizing = stakeoutState { return true }
+        if case .finalizing = stakeoutPhase { return true }
         return false
     }
 
     var isIdle: Bool {
-        if case .idle = stakeoutState { return true }
+        if case .idle = stakeoutPhase { return true }
         return false
     }
 
     /// Interaction log — only meaningful during recording.
     var interactionLog: [InteractionEvent] {
-        switch stakeoutState {
+        switch stakeoutPhase {
         case .idle: return []
         case .recording(let session): return session.interactionLog
         case .finalizing(let session): return session.interactionLog
@@ -89,7 +89,7 @@ final class TheStakeout {
     // MARK: - Public API
 
     func startRecording(config: RecordingConfig) throws {
-        guard case .idle = stakeoutState else {
+        guard case .idle = stakeoutPhase else {
             throw TheStakeoutError.alreadyRecording
         }
 
@@ -176,18 +176,18 @@ final class TheStakeout {
             didLogCapWarning: false
         )
 
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
 
         logger.info("Recording started: \(evenWidth)x\(evenHeight) @ \(fps)fps, effectiveScale=\(effectiveScale)")
 
         // Start frame capture timer and inactivity monitor — these mutate the session
-        // via stakeoutState, so they must be started after the state transition.
+        // via stakeoutPhase, so they must be started after the state transition.
         startCaptureTimer()
         startInactivityMonitor()
     }
 
     func stopRecording(reason: RecordingPayload.StopReason = .manual) {
-        guard case .recording(let session) = stakeoutState else { return }
+        guard case .recording(let session) = stakeoutPhase else { return }
 
         logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.frameCount)")
 
@@ -204,58 +204,58 @@ final class TheStakeout {
             screenBounds: session.screenBounds,
             interactionLog: session.interactionLog
         )
-        stakeoutState = .finalizing(finalizingSession)
+        stakeoutPhase = .finalizing(finalizingSession)
 
         finalizeRecording(session: finalizingSession, reason: reason)
     }
 
     /// Call this whenever client activity occurs (commands received, etc.)
     func noteActivity() {
-        guard case .recording(var session) = stakeoutState else { return }
+        guard case .recording(var session) = stakeoutPhase else { return }
         session.lastActivityTime = Date()
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
     }
 
     /// Call this whenever a screen change is detected (hierarchy hash change)
     func noteScreenChange() {
-        guard case .recording(var session) = stakeoutState else { return }
+        guard case .recording(var session) = stakeoutPhase else { return }
         session.lastActivityTime = Date()
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
     }
 
     /// Capture an extra frame outside the regular timer cadence.
     /// Used to ensure actions are represented in the recording.
     func captureActionFrame() {
-        guard case .recording = stakeoutState else { return }
+        guard case .recording = stakeoutPhase else { return }
         captureAndAppendFrame()
     }
 
     /// Elapsed time since recording started, in seconds.
     var recordingElapsed: Double {
-        guard case .recording(let session) = stakeoutState else { return 0 }
+        guard case .recording(let session) = stakeoutPhase else { return 0 }
         return Date().timeIntervalSince(session.startTime)
     }
 
     /// Append an interaction event to the recording log.
     /// Silently drops events beyond `maxInteractionCount` to prevent unbounded growth.
     func recordInteraction(event: InteractionEvent) {
-        guard case .recording(var session) = stakeoutState else { return }
+        guard case .recording(var session) = stakeoutPhase else { return }
         guard session.interactionLog.count < Self.maxInteractionCount else {
             if !session.didLogCapWarning {
                 session.didLogCapWarning = true
-                stakeoutState = .recording(session)
+                stakeoutPhase = .recording(session)
                 logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
             }
             return
         }
         session.interactionLog.append(event)
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
     }
 
     // MARK: - Frame Capture
 
     private func startCaptureTimer() {
-        guard case .recording(var session) = stakeoutState else { return }
+        guard case .recording(var session) = stakeoutPhase else { return }
         let interval = Duration.seconds(1) / session.fps
         session.captureTimer = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -263,11 +263,11 @@ final class TheStakeout {
                 try? await Task.sleep(for: interval)
             }
         }
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
     }
 
     private func captureAndAppendFrame() {
-        guard case .recording(var session) = stakeoutState,
+        guard case .recording(var session) = stakeoutPhase,
               session.videoInput.isReadyForMoreMediaData,
               let image = captureFrame?() else {
             return
@@ -295,7 +295,7 @@ final class TheStakeout {
         if session.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
             session.frameCount += 1
             session.lastFrameTime = frameTime
-            stakeoutState = .recording(session)
+            stakeoutPhase = .recording(session)
         }
     }
 
@@ -341,11 +341,11 @@ final class TheStakeout {
     // recording when meaningful UI content changes.
 
     private func startInactivityMonitor() {
-        guard case .recording(var session) = stakeoutState else { return }
+        guard case .recording(var session) = stakeoutPhase else { return }
         session.inactivityCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1)) // Check every second
-                guard let self, case .recording(let currentSession) = self.stakeoutState else { continue }
+                guard let self, case .recording(let currentSession) = self.stakeoutPhase else { continue }
 
                 let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
                 if elapsed >= currentSession.inactivityTimeout {
@@ -355,7 +355,7 @@ final class TheStakeout {
                 }
             }
         }
-        stakeoutState = .recording(session)
+        stakeoutPhase = .recording(session)
     }
 
     // MARK: - Finalization
@@ -416,7 +416,7 @@ final class TheStakeout {
 
     /// Access the writer from the current finalizing state for post-completion checks.
     private var currentWriter: AVAssetWriter? {
-        guard case .finalizing(let session) = stakeoutState else { return nil }
+        guard case .finalizing(let session) = stakeoutPhase else { return nil }
         return session.assetWriter
     }
 
@@ -426,7 +426,7 @@ final class TheStakeout {
     }
 
     private func cleanup(outputURL: URL) {
-        stakeoutState = .idle
+        stakeoutPhase = .idle
 
         // Clean up temp file
         try? FileManager.default.removeItem(at: outputURL)

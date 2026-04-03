@@ -45,7 +45,8 @@ stateDiagram-v2
     [*] --> Idle
     Idle --> Active : beginSession(identifier:)
     Active --> Active : logCommand / logResponse / writeArtifact
-    Active --> Closed : closeSession → flush + gzip log
+    Active --> Closing : closeSession → flush + gzip log
+    Closing --> Closed : compression complete
     Closed --> Archived : archiveSession → tar.gz bundle
     Closed --> Active : beginSession (new session)
     Archived --> Active : beginSession (new session)
@@ -55,6 +56,7 @@ stateDiagram-v2
 enum SessionPhase {
     case idle
     case active(ActiveSession)
+    case closing(ClosingSession)
     case closed(ClosedSession)
     case archived(ArchivedSession)
 }
@@ -66,6 +68,14 @@ struct ActiveSession {
     var manifest: SessionManifest      // in-memory, flushed on each artifact write
     let startTime: Date
     var nextSequenceNumber: Int        // monotonic counter for artifact filenames
+}
+
+struct ClosingSession {
+    let sessionId: String
+    let directory: URL
+    var manifest: SessionManifest
+    let startTime: Date
+    let endTime: Date
 }
 
 struct ClosedSession {

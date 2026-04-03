@@ -32,7 +32,7 @@ struct ScrollCommand: AsyncParsableCommand {
         _ = try element.requireTarget()
 
         guard ScrollDirection(rawValue: direction.lowercased()) != nil else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: up, down, left, right, next, previous")
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
         var request: [String: Any] = [

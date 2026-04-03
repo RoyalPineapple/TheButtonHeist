@@ -95,7 +95,7 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | `activate` | `activate` | Direct match |
 | `swipe` | `swipe` | Top-level in both |
 | `gesture` | `touch` | Grouped gestures |
-| `accessibility_action` | `action <name>` | Positional smart dispatch: built-ins recognized, default is custom action |
+| `activate` (with `action` param) | `action <name>` | Positional smart dispatch: built-ins recognized, default is custom action |
 | `wait_for` | `wait_for` | Direct match; matcher-only (no --heist-id) |
 | `run_batch`, `get_session_state` | `session` (REPL only) | Available via JSON input in session mode |
 | `connect` | `session` (REPL only) | Switch connection target at runtime |

@@ -304,7 +304,7 @@ TheFence (@ButtonHeistActor)
 ├── Device discovery + connection with configurable timeouts
 ├── Auto-reconnect (up to 60 attempts, 1s interval)
 ├── Command dispatch via execute(request:) → FenceResponse
-└── Command.allCases (35 supported commands)
+└── Command.allCases (38 supported commands)
 ```
 
 **Key Types**:
@@ -312,7 +312,7 @@ TheFence (@ButtonHeistActor)
 - `TheFence.Configuration` - Connection settings (device filter, timeout, token, auto-reconnect)
 - `FenceResponse` - Typed enum for all response kinds (ok, error, help, status, devices, interface, action, screenshot, screenshotData, recording, recordingData) with `humanFormatted()` and `jsonDict()` serialization
 - `FenceError` - Error enum with human-readable `LocalizedError` descriptions
-- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 31 supported commands
+- `TheFence.Command` - `String`-backed `CaseIterable` enum, single source of truth for the 38 supported commands
 
 **Command Flow**:
 1. Consumer calls `execute(request:)` with a `[String: Any]` dictionary containing a `command` field
@@ -351,7 +351,7 @@ flowchart TD
 
 ### ButtonHeistMCP (MCP Server)
 
-**Purpose**: Standalone MCP server that exposes 18 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
+**Purpose**: Standalone MCP server that exposes 24 purpose-built tools backed by TheFence. Allows AI agents to drive iOS apps via MCP tool calls.
 
 **Location**: `ButtonHeistMCP/`
 
@@ -359,12 +359,12 @@ flowchart TD
 ```
 ButtonHeistMCP (Swift executable, macOS 14+)
 ├── main.swift — Server setup, tool handler, response rendering
-├── ToolDefinitions.swift — 18 tool schemas
+├── ToolDefinitions.swift — 24 tool schemas
 └── Package.swift — Dependencies: ButtonHeist + swift-sdk (MCP)
 ```
 
 **Key Behaviors**:
-- 18 tools dispatch through `fence.execute(request:)`
+- 24 tools dispatch through `fence.execute(request:)`
 - Screenshots are returned as inline MCP image content items
 - Recording video data is replaced with a size summary to keep responses readable
 - Environment variables: `BUTTONHEIST_DEVICE`, `BUTTONHEIST_TOKEN`, `BUTTONHEIST_SESSION_TIMEOUT`
