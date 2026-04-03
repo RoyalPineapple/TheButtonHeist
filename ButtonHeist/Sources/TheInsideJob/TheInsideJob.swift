@@ -163,10 +163,8 @@ public final class TheInsideJob {
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .sensitive)")
-        if let instanceId {
-            insideJobLogger.info("Instance ID: \(instanceId)")
-        }
+        insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .public)")
+        insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
         advertiseService(port: actualPort)
 
         // Prevent the screen from locking while TheInsideJob is running

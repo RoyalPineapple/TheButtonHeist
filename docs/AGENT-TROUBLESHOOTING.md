@@ -28,11 +28,42 @@ The control may not be on this screen, may be conditionally hidden, or may requi
 
 **Fix:** Use `wait_for` if you expect it to appear after an async operation. Otherwise, call `get_interface` to see what's actually on screen and adjust your plan.
 
+### Reading "element not found" diagnostics
+
+The error message itself contains the recovery signal — read it carefully before retrying.
+
+- **heistId miss with similar IDs:** `Element not found: "submit-btn"\nsimilar: submit-button, submit-label` — the ID you used is close but wrong. Use the suggested similar ID.
+- **Matcher near-miss:** `No match for: label="Submit" traits=[button]\nnear miss: matched all fields except value — actual value=Disabled` — the element exists but one predicate is wrong. Fix the named field.
+- **Total miss with screen dump:** `No match for: label="Submit"\n12 elements on screen:\n  label="Cancel" [button]\n  ...` — the element isn't on screen. Use the listed elements to reformulate your query.
+- **Ambiguous match:** `3 elements match: label="OK"\n  "OK" id=ok-button\n  "OK" id=dialog-ok` — multiple elements match your predicate. Add `identifier` or `traits` to disambiguate.
+
+These diagnostics give you enough to self-correct without calling `get_interface` again.
+
+## "Element is disabled"
+
+The element was found but has the `notEnabled` trait. The full message is `"Element is disabled (has 'notEnabled' trait)"`.
+
+**Fix:** The element exists but isn't interactive in its current state. A prior action may be needed to enable it (filling required fields, accepting terms, etc.). Check the surrounding UI for prerequisites.
+
 ## "Auth mismatch" or "session locked"
 
-This means you're talking to the wrong simulator. Another agent (or a previous session) owns that connection. You haven't failed to authenticate — you've connected to someone else's app instance.
+### Session locked by another driver
+
+`"Session is locked by another driver. Session will time out after Ns of inactivity."` — another agent owns this app instance. The message includes the exact timeout duration.
 
 **Fix:** Don't change the token. Find *your* simulator. Check which simulators are running with `xcrun simctl list devices booted`. Connect to the one matching your task slug. If you don't have a dedicated simulator, create one.
+
+### Invalid token
+
+`"Invalid token. Retry without a token to request a fresh session."` — the token doesn't match the app's configured token.
+
+**Fix:** If you launched the app with `SIMCTL_CHILD_INSIDEJOB_TOKEN`, use that exact value. If you're hitting a simulator you didn't launch, find yours instead.
+
+### Too many failed attempts
+
+`"Too many failed attempts. Try again later."` — after 5 failed auth attempts, the server locks out for 30 seconds. The message doesn't include the duration.
+
+**Fix:** Wait 30 seconds, then retry. Don't loop — each failed retry during lockout extends nothing but wastes time. If you're repeatedly hitting this, you're connecting to the wrong app instance.
 
 ## "No devices found"
 
@@ -53,15 +84,63 @@ The iOS app with TheInsideJob embedded must be running in the simulator or on a 
 
 **Fix:** Build and launch the app first. Check with `xcrun simctl list devices booted` that the simulator is up.
 
+### Recovering port and token from logs
+
+If the app is running but you don't know the port or token (e.g., launched without explicit env vars), read them from the simulator logs:
+
+```bash
+xcrun simctl spawn $SIM_UDID log show \
+  --predicate 'subsystem == "com.buttonheist.theinsidejob" AND category == "server"' \
+  --last 5m --style compact 2>&1 | grep -E "listening on port|Auth token|Instance ID"
+```
+
+This shows three lines:
+- `Server listening on port 23456` — the TCP port
+- `Auth token: abc123...` — the token to pass as `BUTTONHEIST_TOKEN`
+- `Instance ID: accra-task` (or an 8-char hex fallback if none was set)
+
+Then connect directly:
+```bash
+BUTTONHEIST_DEVICE="127.0.0.1:<port>" BUTTONHEIST_TOKEN="<token>" buttonheist session
+```
+
+## Text input failures
+
+### "No active text input after tapping element"
+
+The element was tapped to focus it, but no keyboard appeared. The element may not actually be a text field — it could be a label or button that looks like an input.
+
+**Fix:** Check the element's traits in `get_interface`. A real text field has the `textEntry` trait. If the element lacks this trait, look for a sibling or child that is the actual input.
+
+### "No keyboard or focused text input available"
+
+No text field is focused. Either the keyboard dismissed between actions, or no text field was ever tapped.
+
+**Fix:** Provide an `elementTarget` to `type_text` so it taps the field first. Don't assume a previous activation kept the keyboard open — animations, alerts, or screen changes can dismiss it.
+
+## Scroll failures
+
+### "No scrollable ancestor found for element"
+
+The element you targeted for scroll isn't inside a scroll view. Static content and fixed headers can't be scrolled.
+
+**Fix:** Target a different element that's actually inside the scrollable area, or use `get_interface` with `full: true` to see the hierarchy and identify the scrollable container.
+
+### "Already at edge"
+
+The scroll view is already at the boundary you're scrolling toward. Further scrolling in that direction has no effect.
+
+**Fix:** This is informational, not a failure. If you're searching for content, it's not in this scroll direction. Try the opposite direction, or use `scroll_to_visible` which handles bidirectional search automatically.
+
 ## Action succeeded but nothing changed
 
-The delta says `no change` after your action.
+The delta kind is `noChange` after your action.
 
 ### The element didn't respond
 
 Some elements look tappable but don't have an accessibility activation path. Static text, decorative images, and container views won't respond to `activate`.
 
-**Fix:** Check the element's traits and actions in the `get_interface` output. If it has no `{tap}` action and no interactive traits (`[button]`, `[link]`, `[textField]`), it's not a control. Look for the actual interactive element nearby — it may be a parent or sibling.
+**Fix:** Check the element's traits and actions in the `get_interface` output. If it has no `activate` action and no interactive traits (`button`, `link`, `textEntry`), it's not a control. Look for the actual interactive element nearby — it may be a parent or sibling.
 
 ### The action is too fast
 
@@ -77,11 +156,13 @@ With matchers, a substring match might hit a different element than intended. `"
 
 ## Expectation failed
 
-### "expected screen_changed, got elementsChanged"
+Expectation input uses snake_case (`screen_changed`, `elements_changed`), but the output in error messages uses camelCase (`screenChanged`, `elementsChanged`, `noChange`). Both refer to the same delta kinds.
+
+### "expected screenChanged, got elementsChanged"
 
 The action changed elements on the current screen but didn't navigate. The button may update in-place rather than pushing a new screen (e.g., an inline form validation, a disclosure toggle, a state change).
 
-**Fix:** Read the delta to see what actually changed. If the behavior is correct, adjust your expectation to `"elements_changed"` or use `elementUpdated` to check the specific change.
+**Fix:** Read the delta to see what actually changed. If the behavior is correct, adjust your expectation to `"elements_changed"` or use `elementUpdated` to check the specific change. Note: `screen_changed` is strict — `elements_changed` is more lenient because a `screenChanged` delta also satisfies `elements_changed`.
 
 ### "expected elementUpdated, got no element updates"
 
@@ -89,7 +170,7 @@ The screen may have changed (navigation) rather than individual elements updatin
 
 **Fix:** Check the delta kind. If it's `screenChanged`, the entire interface was replaced — individual element updates aren't tracked across screen transitions. If it's `noChange`, the action may not have had the expected effect.
 
-### "expected elements_changed, got noChange"
+### "expected elementsChanged, got noChange"
 
 The action completed successfully but nothing in the accessibility tree changed. This can happen with actions that affect non-accessible state (analytics, logging, background tasks) or when an animation is still in progress.
 
@@ -125,12 +206,26 @@ Sessions expire after 60 seconds of inactivity by default. If you go too long be
 
 **Fix:** This is intentional — it prevents stale sessions from blocking other agents. Reconnect and continue. If you need longer idle windows, the `BUTTONHEIST_SESSION_TIMEOUT` environment variable controls the timeout.
 
+## "Protocol mismatch"
+
+`"Protocol mismatch: expected 1.2, got 1.1"` — the CLI/MCP version doesn't match the app version. This happens when you rebuild one side but not the other.
+
+**Fix:** Rebuild both sides from the same commit. Rebuild the CLI (`cd ButtonHeistCLI && swift build -c release`), rebuild the app (`xcodebuild ... build`), and reinstall. The two version strings in the error tell you which side is behind.
+
+## "Action timed out — connection lost"
+
+The connection dropped mid-action. Different from initial connection timeout — this means a previously working connection broke.
+
+**Fix:** The app may have crashed, been killed by the OS, or the simulator was shut down. Check `xcrun simctl list devices booted` to see if the simulator is still up. If it is, check if the app process is running. Relaunch if needed. TheFence will attempt to reconnect automatically if `autoReconnect` is enabled (the MCP server default).
+
 ## General debugging strategy
 
 When something goes wrong:
 
-1. **Read the delta.** It tells you what actually happened, not what you expected.
-2. **Call `get_interface`.** See what's actually on screen right now.
-3. **Check the heistId lifetime.** Did a screen change invalidate your IDs?
-4. **Check element traits and actions.** Is the element actually interactive?
-5. **Check which simulator you're connected to.** Auth errors mean wrong target, not wrong credentials.
+1. **Read the error message.** Diagnostic messages include near-misses, similar IDs, screen dumps, and exact field mismatches. The recovery signal is in the error text itself.
+2. **Read the delta.** It tells you what actually happened, not what you expected.
+3. **Call `get_interface`.** See what's actually on screen right now.
+4. **Check the heistId lifetime.** Did a screen change invalidate your IDs?
+5. **Check element traits and actions.** Is the element actually interactive? Does it have the `textEntry` trait for text input? The `notEnabled` trait for disabled state?
+6. **Check which simulator you're connected to.** Auth errors mean wrong target, not wrong credentials.
+7. **Don't retry blindly.** If an action failed, the same action will fail again. Read the error, adjust, then retry.
