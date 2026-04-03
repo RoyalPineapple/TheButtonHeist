@@ -2,13 +2,13 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct StopScriptCommand: AsyncParsableCommand {
+struct StopHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "stop-script",
-        abstract: "Stop recording and save the playback script"
+        commandName: "stop-heist",
+        abstract: "Stop recording and save the heist playback"
     )
 
-    @Option(name: .shortAndLong, help: "Output file path for the .heist script")
+    @Option(name: .shortAndLong, help: "Output file path for the .heist file")
     var output: String
 
     @OptionGroup var connection: ConnectionOptions
@@ -19,7 +19,7 @@ struct StopScriptCommand: AsyncParsableCommand {
     @ButtonHeistActor
     func run() async throws {
         let request: [String: Any] = [
-            "command": TheFence.Command.stopScript.rawValue,
+            "command": TheFence.Command.stopHeist.rawValue,
             "output": output,
         ]
         try await CLIRunner.run(

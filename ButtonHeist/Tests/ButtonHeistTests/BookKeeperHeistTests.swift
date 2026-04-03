@@ -1,14 +1,14 @@
 import XCTest
 @testable import ButtonHeist
 
-final class BookKeeperScriptTests: XCTestCase {
+final class BookKeeperHeistTests: XCTestCase {
 
     private var tempDirectory: URL!
 
     override func setUp() {
         super.setUp()
         tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("bookkeeper-script-tests-\(UUID().uuidString)")
+            .appendingPathComponent("bookkeeper-heist-tests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
     }
 
@@ -17,77 +17,77 @@ final class BookKeeperScriptTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Script Recording Lifecycle
+    // MARK: - Heist Recording Lifecycle
 
     @ButtonHeistActor
     func testNotRecordingByDefault() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        XCTAssertFalse(bookKeeper.isRecordingScript)
+        XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
-    func testStartScriptRecording() throws {
+    func testStartHeistRecording() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        XCTAssertTrue(bookKeeper.isRecordingScript)
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        XCTAssertTrue(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
-    func testStartScriptWhileAlreadyRecordingThrows() throws {
+    func testStartHeistWhileAlreadyRecordingThrows() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        XCTAssertThrowsError(try bookKeeper.startScriptRecording(app: "com.example.app"))
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        XCTAssertThrowsError(try bookKeeper.startHeistRecording(app: "com.example.app"))
     }
 
     @ButtonHeistActor
-    func testStartScriptWithoutSessionThrows() {
+    func testStartHeistWithoutSessionThrows() {
         let bookKeeper = makeBookKeeper()
-        XCTAssertThrowsError(try bookKeeper.startScriptRecording(app: "com.example.app"))
+        XCTAssertThrowsError(try bookKeeper.startHeistRecording(app: "com.example.app"))
     }
 
     @ButtonHeistActor
-    func testStopScriptWithoutRecordingThrows() throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.beginSession(identifier: "test")
-        XCTAssertThrowsError(try bookKeeper.stopScriptRecording())
-    }
-
-    @ButtonHeistActor
-    func testStopScriptWithNoStepsThrows() throws {
+    func testStopHeistWithoutRecordingThrows() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        XCTAssertThrowsError(try bookKeeper.stopScriptRecording())
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording())
     }
 
     @ButtonHeistActor
-    func testRecordAndStopProducesScript() throws {
+    func testStopHeistWithNoStepsThrows() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "activate", args: ["command": "activate", "label": "Go", "traits": ["button"]])
-        let script = try bookKeeper.stopScriptRecording()
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording())
+    }
+
+    @ButtonHeistActor
+    func testRecordAndStopProducesHeist() throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go", "traits": ["button"]])
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.version, 1)
         XCTAssertEqual(script.app, "com.example.app")
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
         XCTAssertEqual(script.steps[0].target?.label, "Go")
-        XCTAssertFalse(bookKeeper.isRecordingScript)
+        XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
-    func testCanStartNewScriptAfterStop() throws {
+    func testCanStartNewHeistAfterStop() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "activate", args: ["command": "activate", "label": "Go"])
-        _ = try bookKeeper.stopScriptRecording()
-        try bookKeeper.startScriptRecording(app: "com.example.second")
-        XCTAssertTrue(bookKeeper.isRecordingScript)
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        _ = try bookKeeper.stopHeistRecording()
+        try bookKeeper.startHeistRecording(app: "com.example.second")
+        XCTAssertTrue(bookKeeper.isRecordingHeist)
     }
 
     // MARK: - Recording Behavior
@@ -96,19 +96,19 @@ final class BookKeeperScriptTests: XCTestCase {
     func testExcludedCommandsAreNotRecorded() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
 
         let excluded = [
             "help", "status", "quit", "exit", "list_devices",
             "get_interface", "get_screen", "get_session_state",
-            "connect", "list_targets", "start_script", "stop_script",
+            "connect", "list_targets", "start_heist", "stop_heist",
         ]
         for command in excluded {
-            bookKeeper.recordScriptStep(command: command, args: ["command": command])
+            bookKeeper.recordHeistEvidence(command: command, args: ["command": command])
         }
 
-        bookKeeper.recordScriptStep(command: "activate", args: ["command": "activate", "label": "Go"])
-        let script = try bookKeeper.stopScriptRecording()
+        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
     }
@@ -117,21 +117,21 @@ final class BookKeeperScriptTests: XCTestCase {
     func testRecordingIgnoredWhenNotRecording() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        bookKeeper.recordScriptStep(command: "activate", args: ["command": "activate", "label": "Go"])
-        XCTAssertFalse(bookKeeper.isRecordingScript)
+        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
     func testRecordsMatcherFromArgs() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "activate", args: [
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "activate", args: [
             "command": "activate",
             "label": "Submit",
             "traits": ["button"],
         ])
-        let script = try bookKeeper.stopScriptRecording()
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target?.label, "Submit")
         XCTAssertEqual(script.steps[0].target?.traits, [.button])
@@ -141,13 +141,13 @@ final class BookKeeperScriptTests: XCTestCase {
     func testRecordsCommandArguments() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "type_text", args: [
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "type_text", args: [
             "command": "type_text",
             "text": "hello world",
             "clearFirst": true,
         ])
-        let script = try bookKeeper.stopScriptRecording()
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].target)
         XCTAssertEqual(script.steps[0].arguments["text"], .string("hello world"))
@@ -158,16 +158,16 @@ final class BookKeeperScriptTests: XCTestCase {
     func testHeistIdResolvedToMatcher() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
 
         let elements = [makeElement(heistId: "button_submit", label: "Submit", traits: [.button])]
         bookKeeper.updateInterfaceCache(elements)
 
-        bookKeeper.recordScriptStep(command: "activate", args: [
+        bookKeeper.recordHeistEvidence(command: "activate", args: [
             "command": "activate",
             "heistId": "button_submit",
         ])
-        let script = try bookKeeper.stopScriptRecording()
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target?.label, "Submit")
         XCTAssertEqual(script.steps[0].target?.traits, [.button])
@@ -178,13 +178,13 @@ final class BookKeeperScriptTests: XCTestCase {
     func testCoordinateOnlyFlagged() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "one_finger_tap", args: [
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "one_finger_tap", args: [
             "command": "one_finger_tap",
             "x": 100.0,
             "y": 200.0,
         ])
-        let script = try bookKeeper.stopScriptRecording()
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].target)
         XCTAssertEqual(script.steps[0].recorded?.coordinateOnly, true)
@@ -194,14 +194,14 @@ final class BookKeeperScriptTests: XCTestCase {
     func testBinaryDataStripped() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        try bookKeeper.startScriptRecording(app: "com.example.app")
-        bookKeeper.recordScriptStep(command: "activate", args: [
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+        bookKeeper.recordHeistEvidence(command: "activate", args: [
             "command": "activate",
             "label": "Save",
             "pngData": "base64binarydata",
             "videoData": "morebinarydata",
         ])
-        let script = try bookKeeper.stopScriptRecording()
+        let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].arguments["pngData"])
         XCTAssertNil(script.steps[0].arguments["videoData"])
@@ -329,7 +329,7 @@ final class BookKeeperScriptTests: XCTestCase {
             interfaceCache: [:],
             allElements: []
         )
-        let expected = PlaybackValue.object([
+        let expected = HeistValue.object([
             "elementUpdated": .object([
                 "property": .string("value"),
                 "newValue": .string("50%"),
@@ -469,23 +469,23 @@ final class BookKeeperScriptTests: XCTestCase {
         )
     }
 
-    // MARK: - Script File I/O
+    // MARK: - Heist File I/O
 
     @ButtonHeistActor
-    func testWriteAndReadScript() throws {
-        let script = PlaybackScript(
+    func testWriteAndReadHeist() throws {
+        let script = HeistPlayback(
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                PlaybackStep(command: "activate", target: ElementMatcher(label: "Go", traits: [.button])),
-                PlaybackStep(command: "type_text", arguments: ["text": .string("test")]),
+                HeistEvidence(command: "activate", target: ElementMatcher(label: "Go", traits: [.button])),
+                HeistEvidence(command: "type_text", arguments: ["text": .string("test")]),
             ]
         )
 
         let filePath = tempDirectory.appendingPathComponent("test.heist")
-        try TheBookKeeper.writeScript(script, to: filePath)
+        try TheBookKeeper.writeHeist(script, to: filePath)
 
-        let loaded = try TheBookKeeper.readScript(from: filePath)
+        let loaded = try TheBookKeeper.readHeist(from: filePath)
         XCTAssertEqual(loaded.version, 1)
         XCTAssertEqual(loaded.app, "com.example.app")
         XCTAssertEqual(loaded.steps.count, 2)
