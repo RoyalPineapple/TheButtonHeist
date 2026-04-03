@@ -569,6 +569,8 @@ extension TheFence {
             let deleteSource = boolArg(args, "delete_source") ?? false
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
+        case .startScript, .stopScript, .playScript:
+            return try await handleScriptCommand(command: command, args: args)
         default:
             return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
@@ -598,12 +600,14 @@ extension TheFence {
             let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             try TheBookKeeper.writeScript(script, to: resolvedURL)
             return .scriptStopped(path: resolvedURL.path, stepCount: script.steps.count)
+        case .playScript:
+            return try await handlePlayScript(args)
         default:
             return .error("Unexpected script command: \(command.rawValue)")
         }
     }
 
-    func handlePlayScript(_ args: [String: Any]) async throws -> FenceResponse {
+    private func handlePlayScript(_ args: [String: Any]) async throws -> FenceResponse {
         guard let inputPath = stringArg(args, "input") else {
             throw FenceError.invalidRequest("play_script requires an 'input' path")
         }

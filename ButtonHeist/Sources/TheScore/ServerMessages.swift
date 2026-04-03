@@ -485,35 +485,11 @@ extension ActionExpectation {
                 actual: kind?.rawValue ?? "noChange"
             )
         case .elementUpdated(let heistId, let property, let oldValue, let newValue):
-            guard let updates = result.interfaceDelta?.updated, !updates.isEmpty else {
-                return ExpectationResult(met: false, expectation: self, actual: "no element updates")
-            }
-            let match = updates.contains { update in
-                if let heistId, update.heistId != heistId { return false }
-                let targetChanges: [PropertyChange]
-                if let property {
-                    targetChanges = update.changes.filter { $0.property == property }
-                    if targetChanges.isEmpty { return false }
-                } else {
-                    targetChanges = update.changes
-                }
-                if oldValue != nil || newValue != nil {
-                    guard targetChanges.contains(where: { change in
-                        if let oldValue, change.old != oldValue { return false }
-                        if let newValue, change.new != newValue { return false }
-                        return true
-                    }) else { return false }
-                }
-                return true
-            }
-            if match {
-                return ExpectationResult(met: true, expectation: self, actual: nil)
-            }
-            let observed = updates.map { u in
-                let props = u.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
-                return "\(u.heistId): \(props.joined(separator: ", "))"
-            }.joined(separator: "; ")
-            return ExpectationResult(met: false, expectation: self, actual: observed)
+            return Self.validateElementUpdated(
+                heistId: heistId, property: property,
+                oldValue: oldValue, newValue: newValue,
+                expectation: self, result: result
+            )
 
         case .elementAppeared(let matcher):
             guard let added = result.interfaceDelta?.added, !added.isEmpty else {
@@ -564,6 +540,42 @@ extension ActionExpectation {
                 actual: failures.joined(separator: "; ")
             )
         }
+    }
+
+    private static func validateElementUpdated(
+        heistId: String?, property: ElementProperty?,
+        oldValue: String?, newValue: String?,
+        expectation: ActionExpectation, result: ActionResult
+    ) -> ExpectationResult {
+        guard let updates = result.interfaceDelta?.updated, !updates.isEmpty else {
+            return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
+        }
+        let match = updates.contains { update in
+            if let heistId, update.heistId != heistId { return false }
+            let targetChanges: [PropertyChange]
+            if let property {
+                targetChanges = update.changes.filter { $0.property == property }
+                if targetChanges.isEmpty { return false }
+            } else {
+                targetChanges = update.changes
+            }
+            if oldValue != nil || newValue != nil {
+                guard targetChanges.contains(where: { change in
+                    if let oldValue, change.old != oldValue { return false }
+                    if let newValue, change.new != newValue { return false }
+                    return true
+                }) else { return false }
+            }
+            return true
+        }
+        if match {
+            return ExpectationResult(met: true, expectation: expectation, actual: nil)
+        }
+        let observed = updates.map { update in
+            let props = update.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+            return "\(update.heistId): \(props.joined(separator: ", "))"
+        }.joined(separator: "; ")
+        return ExpectationResult(met: false, expectation: expectation, actual: observed)
     }
 
     /// Baseline delivery check — always run for every action.
