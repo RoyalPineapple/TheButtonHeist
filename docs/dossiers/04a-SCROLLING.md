@@ -15,7 +15,7 @@ Scrollable containers are discovered from the **accessibility hierarchy tree**, 
 |--------|-----|-------|----------|
 | `scrollableContainerViews` | `AccessibilityContainer` | `UIView` | Cast to `UIScrollView` for direct `setContentOffset`, else synthetic swipe |
 
-Rebuilt on every `refreshAccessibilityData()` call via the `containerVisitor` callback.
+Rebuilt on every `refresh()` call via the `containerVisitor` callback.
 
 ### ScrollableTarget
 
@@ -64,14 +64,14 @@ A sequential coarse-then-fine flow:
 
 1. Calls `scrollTargetOffset(for:in:)` to compute a clamped content offset that centers the element in the viewport
 2. Sets `scrollView.setContentOffset(targetOffset, animated: false)` directly
-3. Waits for settle via `tripwire.waitForAllClear(timeout: 1.0)`, then `refresh()`
+3. Waits for settle via `yieldFrames(3)`, then `refresh()`
 
 **Step 2 — Fine-tune (any target).** Resolves the target to a live `NSObject` and checks whether the frame needs adjustment:
 
 1. Reads `object.accessibilityFrame` and checks `UIScreen.main.bounds.contains(frame)`
 2. Uses `screenElement.scrollView` to find the nearest `UIScrollView`
 3. Calls `scrollToMakeVisible(_:in:)` — adjusts `contentOffset` by the minimum amount needed to bring the element fully within the scroll view's visible rect
-4. Waits for the scroll animation to settle via `tripwire.waitForAllClear(timeout: 1.0)` — presentation-layer diffing, not a fixed sleep
+4. Waits for the scroll to settle via `yieldFrames(3)` — CATransaction flush + Task.yield per frame
 5. Refreshes the element cache via `refresh()` so subsequent reads reflect post-scroll positions
 
 ```mermaid
@@ -82,7 +82,7 @@ flowchart TD
     HasTarget -->|yes| Coarse{"heistId off-screen<br/>+ contentSpaceOrigin<br/>+ scrollView alive?"}
 
     Coarse -->|yes| Jump["scrollTargetOffset(for:in:)<br/>→ setContentOffset (centered, clamped)"]
-    Jump --> Settle1["waitForAllClear(1.0s) + refresh()"]
+    Jump --> Settle1["yieldFrames(3) + refresh()"]
     Settle1 --> Fine
 
     Coarse -->|no| Fine["resolveTarget(target)"]
@@ -98,7 +98,7 @@ flowchart TD
     Walk --> ScrollView{found UIScrollView?}
     ScrollView -->|no| Execute
     ScrollView -->|yes| Scroll["scrollToMakeVisible()<br/>minimum contentOffset adjustment"]
-    Scroll --> Settle2["waitForAllClear(1.0s)"]
+    Scroll --> Settle2["yieldFrames(3)"]
     Settle2 --> Refresh["refresh()"]
     Refresh --> Execute
 ```
@@ -143,16 +143,16 @@ Searches for an element by scrolling through scrollable containers discovered fr
 **Algorithm:**
 
 1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
-2. **Scroll loop.** `findLiveScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
+2. **Scroll loop.** `findScrollTarget(excluding: exhausted)` walks the hierarchy tree and returns the first non-exhausted scrollable container. `adaptDirection` maps the caller's direction to the container's natural axis. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
 
 ```mermaid
 flowchart TD
-    S["executeScrollToVisible(target)"] --> REF["refreshAccessibilityData()"]
+    S["executeScrollToVisible(target)"] --> REF["refresh()"]
     REF --> CHK{"resolveFirstMatch(target)<br/>Already visible?"}
     CHK -->|Yes| DONE["Return success<br/>(scrollCount: 0)"]
     CHK -->|No| LOOP["while containers remain"]
 
-    LOOP --> FIND["findLiveScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
+    LOOP --> FIND["findScrollTarget(excluding: exhausted)<br/>(reducedHierarchy, outermost first)"]
     FIND --> SVOK{Found<br/>container?}
     SVOK -->|No| FAILN["Return failure:<br/>'not found after N scrolls'"]
     SVOK -->|Yes| ADAPT["adaptDirection(searchDir, for: target)<br/>down→right for horizontal containers"]
@@ -181,25 +181,25 @@ Jumps the content offset to the absolute edge of the content. Uses axis-aware re
 | `.left` | `x = -insets.left` |
 | `.right` | `x = contentSize.width + insets.right - frame.width` |
 
-**Re-jump iteration:** Content may grow after the initial jump (lazy containers materialize on scroll). After a successful edge jump, `executeScrollToEdge` yields frames and re-jumps in a loop (up to 20 iterations), exiting when both `contentSize` stabilizes and `scrollToEdge` reports no movement.
+**Two paths:** For `UIScrollView` instances, `scrollToEdge` sets `contentOffset` directly to the computed edge in a single call — no iteration. For swipeable containers (no `UIScrollView` ref), `executeScrollToEdge` falls back to repeated page scrolling via `scrollOnePageAndSettle` in a loop (up to 50 iterations), exiting when a scroll reports no movement or the on-screen element set stabilizes.
 
-## Ancestor Walk
+## Scrollable Container Lookup
 
-The UIKit ancestor walk via `nextAncestor(of:)` handles three cases:
+Scrollable container discovery uses the **accessibility hierarchy tree** exclusively — there is no UIKit ancestor walk. The hierarchy parser's `containerVisitor` callback tags containers as `.scrollable(contentSize:)` and maps them to live `UIView` references in the `scrollableContainerViews` dictionary during each `refresh()`.
 
-1. **UIView** → `view.superview` — standard UIKit view hierarchy
-2. **UIAccessibilityElement** → `element.accessibilityContainer` cast to `NSObject` — VoiceOver container elements that aren't UIViews
-3. **Other NSObject** → KVO `value(forKey: "accessibilityContainer")` — covers custom accessibility containers
+Two resolution paths use this data:
 
-The walk finds `UIScrollView` subclasses with `isScrollEnabled == true`. For containers where the UIKit walk fails (SwiftUI's `PlatformContainer` is not a `UIScrollView`), `resolveScrollTarget` falls back to `screenElement.scrollView` — the scroll view reference stored from the accessibility hierarchy's `containerVisitor` during parsing.
+1. **`resolveScrollTarget(screenElement:axis:)`** — for `scroll` and `scroll_to_edge`. Returns the element's stored `screenElement.scrollView` (set by the hierarchy tree during parsing). If the stored scroll view can't scroll in the requested axis, falls back to `findScrollTarget(axis:)` to search the full hierarchy for a container that can.
+
+2. **`findScrollTarget(excluding:)`** — for `scroll_to_visible`. Walks `currentHierarchy.reducedHierarchy` (pre-order = outermost first) and returns the first non-exhausted `.scrollable` container. Looks up the container in `scrollableContainerViews` — if the backing view is a `UIScrollView`, returns `.uiScrollView`; otherwise returns `.swipeable` with the container's screen frame and content size.
 
 ## Settle After Scroll
 
-After any `setContentOffset(animated: true)` call, the scroll view runs a Core Animation animation (~300ms). The auto-scroll path waits for this using `tripwire.waitForAllClear(timeout: 1.0)` — presentation-layer diffing that returns when all animations complete.
+After any `setContentOffset(animated: true)` call, the scroll view runs a Core Animation animation (~300ms). For animated UIScrollView scrolls via `scrollOnePageAndSettle`, the settle path uses `animateScrollFingerprint` — a visual fingerprint overlay that matches the animation duration. For non-animated scrolls, `yieldFrames(3)` is used — `CATransaction.flush()` + `Task.yield()` per frame.
 
-The `scroll` command does **not** settle internally — it returns immediately after `setContentOffset`. The settle and delta computation happens in the outer `performInteraction` pipeline.
+The `scroll` command settles via `scrollOnePageAndSettle` which handles both yield and refresh internally.
 
-`scroll_to_visible` and `scroll_to_edge` handle their own frame yielding via `scrollOnePageAndSettle`, which uses `yieldFrames(3)` + one `refresh()` per step. Both use `CATransaction.flush()` + `Task.yield()` per frame — lighter than `waitForSettle`.
+`scroll_to_visible` and `scroll_to_edge` also settle via `scrollOnePageAndSettle` per step. The auto-scroll path (`ensureOnScreen`) uses `yieldFrames(3)` + `refresh()` after each `setContentOffset` or `scrollToMakeVisible` call.
 
 ## Implementation Notes
 

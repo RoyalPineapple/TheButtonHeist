@@ -13,7 +13,7 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 3. **Provides server transport** (`ServerTransport`) — protocol abstraction for server-side networking
 4. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
 5. **Drives hierarchy updates** via TheTripwire's pulse-based settle detection (no debounce timer)
-6. **Polls for UI changes** at configurable intervals (default 1s, min 0.5s) as a supplementary mechanism
+6. **Polls for UI changes** at configurable intervals (default 2.0s, min 0.5s) as a supplementary mechanism
 7. **Dispatches all commands** to crew members via a two-level dispatch structure
 8. **Manages client subscriptions** and broadcasts hierarchy/screen updates
 9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection
@@ -120,7 +120,7 @@ flowchart TD
 `touchTap`, `touchLongPress`, `touchSwipe`, `touchDrag`, `touchPinch`, `touchRotate`, `touchTwoFingerTap`, `touchDrawPath` (≤10,000 points), `touchDrawBezier` (≤1,000 segments)
 
 ### `dispatchTextAndScrollInteraction`
-`typeText`, `scroll`, `scrollToVisible` (→ dedicated path), `scrollToEdge`
+`typeText`, `scroll`, `scrollToVisible` (→ dedicated path), `scrollToEdge`, `waitFor`, `explore`
 
 ## `performInteraction` Pipeline
 
@@ -145,7 +145,7 @@ flowchart TD
     S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
 ```
 
-`performScrollToVisibleSearch` is structurally identical but calls `theSafecracker.executeScrollToVisible` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response.
+`performScrollToVisibleSearch` is structurally identical but calls `bagman.executeScrollToVisible` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response.
 
 ## Status Message Handling
 
@@ -182,12 +182,11 @@ There is **no debounce timer**. The mechanism is entirely pulse-driven:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Idle: TheInsideJob.shared (lazy)
-    Idle --> Configured: configure(token, instanceId)
-    Configured --> Running: start() [async throws]
-    Idle --> Running: start() [with defaults]
+    [*] --> Stopped: TheInsideJob.shared (lazy)
+    Stopped --> Running: start() [async throws]
     Running --> Suspended: didEnterBackground
-    Suspended --> Running: willEnterForeground
+    Suspended --> Resuming: willEnterForeground
+    Resuming --> Running: resume task completes
     Running --> Stopped: stop()
     Stopped --> [*]
 
@@ -204,6 +203,8 @@ stateDiagram-v2
         TearDown --> Waiting: wait for foreground
     }
 ```
+
+`ServerState` is an enum with four cases: `.stopped`, `.running(transport: ServerTransport)`, `.suspended`, `.resuming(task: Task<Void, Never>)`. There is no `Configured` state -- `configure()` sets the singleton but does not change `ServerState`.
 
 `suspend()` tears down the entire TCP server, Bonjour, pulse, and observation. `resume()` recreates everything from scratch on a potentially new port — any connected clients are silently disconnected.
 
@@ -223,10 +224,6 @@ Inbound data paths:
 ## Items Flagged for Review
 
 ### MEDIUM PRIORITY
-
-**`shouldBindToLoopback` always returns `false`** (`TheInsideJob.swift`)
-- Dead computed property. The server always binds to all interfaces.
-- Connection scope filtering (`INSIDEJOB_SCOPE`) provides the proper mechanism to restrict connection sources.
 
 **No unit tests for TheInsideJob itself**
 - Delta computation logic in TheBagman is pure data transformation and could be tested without UIKit

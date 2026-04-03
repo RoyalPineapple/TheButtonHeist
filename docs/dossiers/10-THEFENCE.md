@@ -1,6 +1,6 @@
 # TheFence - The Boss
 
-> **File:** `ButtonHeist/Sources/TheButtonHeist/TheFence.swift`
+> **Files:** `ButtonHeist/Sources/TheButtonHeist/TheFence.swift`, `TheFence+CommandCatalog.swift`, `TheFence+Handlers.swift`, `TheFence+Formatting.swift`
 > **Platform:** macOS 14.0+
 > **Role:** Centralized command dispatch for CLI and MCP - the single orchestration layer
 
@@ -12,7 +12,7 @@ TheFence is the brain of the outside operation:
 2. **Auto-discovery and connection** - finds and connects to devices automatically
 3. **Auto-reconnect** - retries connection on disconnect via TheHandoff
 4. **Session bookkeeping** - delegates session logs, artifact storage, and archival to TheBookKeeper
-5. **Request-response correlation** - tracks pending requests via requestId-keyed continuation dictionaries, matches responses to waiting async callers
+5. **Request-response correlation** - tracks pending requests via `PendingRequestTracker<T>` (generic, requestId-keyed continuation tracker with timeout support), matches responses to waiting async callers
 6. **Async wait methods** - `waitForActionResult`, `waitForInterface`, `waitForScreen`, `waitForRecording` with timeout handling
 7. **Argument parsing** - extracts typed args from JSON dictionaries
 8. **Response formatting** - produces both human-readable and JSON responses (`FenceResponse`)
@@ -51,7 +51,7 @@ graph TD
             Help["help([String])"]
             Status["status(connected, deviceName)"]
             DevList["devices([DiscoveredDevice])"]
-            IFResp["interface(Interface, detail, filteredFrom?)"]
+            IFResp["interface(Interface, detail, filteredFrom?, explore?)"]
             Action["action(result: ActionResult, expectation: ExpectationResult?)"]
             Screenshot["screenshot(path, width, height) / screenshotData(pngData, width, height)"]
             Recording["recording(path, payload) / recordingData(payload)"]
@@ -139,11 +139,12 @@ stateDiagram-v2
 | Operation | Timeout | Source |
 |-----------|---------|--------|
 | Connection (discovery) | configurable (default 30s) | `TheFence.Configuration.connectionTimeout` |
-| Action result (general) | 15s | `TheFence.Timeouts.actionSeconds` |
-| Action result (type_text) | 30s | `TheFence.Timeouts.longActionSeconds` |
-| Screenshot | 30s | `TheFence.Timeouts.longActionSeconds` |
+| Action result (general) | 15s | `Timeouts.actionSeconds` |
+| Action result (type_text) | 30s | `Timeouts.longActionSeconds` |
+| Screenshot | 30s | `Timeouts.longActionSeconds` |
 | Recording | 30s | `TheFence.handleStopRecording` |
 | Interface request | 10s | `TheFence.handleGetInterface` |
+| Explore (full interface) | 60s | `Timeouts.exploreSeconds` |
 
 ## Items Flagged for Review
 

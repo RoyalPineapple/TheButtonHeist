@@ -135,7 +135,7 @@ server → info(ServerInfo)               [triggers .connected event]
 
 `DeviceResolver` encapsulates the stabilize-then-probe algorithm shared by TheHandoff and the CLI's `DeviceConnector`.
 
-**Direct connect shortcut**: If `filter` is a loopback host:port string (e.g. `localhost:8080`, `[::1]:8080`, `127.0.0.1:8080`), `DiscoveredDevice.directConnectTarget` returns a `DiscoveredDevice` immediately without any discovery.
+**Direct connect shortcut**: If `filter` is a loopback host:port string (e.g. `127.0.0.1:8080`, `[::1]:8080`), `DiscoveredDevice.directConnectTarget` returns a `DiscoveredDevice` immediately without any discovery. Note: `isLoopbackHost` only accepts IP addresses (`127.*` and `::1`), not `localhost` (rejected as spoofable via `/etc/hosts`).
 
 **Stabilize-then-probe loop**:
 
