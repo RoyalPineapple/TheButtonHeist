@@ -45,6 +45,7 @@ extension TheSafecracker {
                 x: center.x - cos(angle) * currentSpread,
                 y: center.y - sin(angle) * currentSpread
             )
+            if Task.isCancelled { break }
             moveTouches(to: [p1, p2])
             fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])
@@ -92,6 +93,7 @@ extension TheSafecracker {
                 x: center.x + cos(currentAngle + .pi) * radius,
                 y: center.y + sin(currentAngle + .pi) * radius
             )
+            if Task.isCancelled { break }
             moveTouches(to: [p1, p2])
             fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])

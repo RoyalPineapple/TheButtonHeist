@@ -28,6 +28,12 @@ struct WaitForCommand: AsyncParsableCommand {
     @Flag(name: .shortAndLong, help: "Wait for element to NOT exist (disappear)")
     var absent: Bool = false
 
+    func validate() throws {
+        guard timeout > 0 && timeout <= 30 else {
+            throw ValidationError("timeout must be between 0 and 30 seconds, got \(timeout)")
+        }
+    }
+
     @ButtonHeistActor
     mutating func run() async throws {
         _ = try element.requireTarget()

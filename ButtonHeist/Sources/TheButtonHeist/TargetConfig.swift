@@ -61,7 +61,15 @@ public enum TargetConfigResolver {
                     .appendingPathComponent(expanded)
             }
 
-            guard let data = try? Data(contentsOf: url) else { continue }
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                if explicitPath != nil {
+                    logger.error("Failed to read config at \(url.path): \(error)")
+                }
+                continue
+            }
             let config: ButtonHeistFileConfig
             do {
                 config = try JSONDecoder().decode(ButtonHeistFileConfig.self, from: data)

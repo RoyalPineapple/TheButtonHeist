@@ -141,7 +141,10 @@ public final class TheInsideJob {
 
     /// Start the server
     public func start() async throws {
-        guard case .stopped = serverPhase else { return }
+        guard case .stopped = serverPhase else {
+            insideJobLogger.info("start() called while already running — ignoring")
+            return
+        }
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 

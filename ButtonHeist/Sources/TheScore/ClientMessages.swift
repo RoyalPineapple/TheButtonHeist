@@ -676,7 +676,7 @@ public struct WatchPayload: Codable, Sendable {
 }
 
 /// Configuration for screen recording
-public struct RecordingConfig: Codable, Sendable {
+public struct RecordingConfig: Sendable {
     /// Frames per second (default: 8, range: 1-15)
     public let fps: Int?
     /// Resolution scale relative to native pixels (0.25-1.0).
@@ -699,6 +699,36 @@ public struct RecordingConfig: Codable, Sendable {
         self.scale = scale
         self.inactivityTimeout = inactivityTimeout
         self.maxDuration = maxDuration
+    }
+}
+
+extension RecordingConfig: Codable {
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(RawRecordingConfig.self)
+        if let fps = raw.fps, fps < 1 || fps > 15 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "fps must be between 1 and 15, got \(fps)"
+            ))
+        }
+        if let scale = raw.scale, scale < 0.25 || scale > 1.0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "scale must be between 0.25 and 1.0, got \(scale)"
+            ))
+        }
+        self.fps = raw.fps
+        self.scale = raw.scale
+        self.inactivityTimeout = raw.inactivityTimeout
+        self.maxDuration = raw.maxDuration
+    }
+
+    private struct RawRecordingConfig: Decodable {
+        let fps: Int?
+        let scale: Double?
+        let inactivityTimeout: Double?
+        let maxDuration: Double?
     }
 }
 
@@ -774,8 +804,14 @@ extension ScrollToVisibleTarget: Codable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.elementTarget = try? ElementTarget(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let hasTargetFields = container.contains(.heistId)
+            || container.contains(.label)
+            || container.contains(.identifier)
+            || container.contains(.value)
+            || container.contains(.traits)
+            || container.contains(.excludeTraits)
+        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
     }
 

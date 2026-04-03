@@ -22,7 +22,9 @@ extension RequestEnvelope {
         protocolVersion = try container.decode(String.self, forKey: .protocolVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
         let type = try container.decode(WireMessageType.self, forKey: .type)
-        let payloadDecoder = try? container.superDecoder(forKey: .payload)
+        let payloadDecoder: Decoder? = container.contains(.payload)
+            ? try container.superDecoder(forKey: .payload)
+            : nil
         message = try ClientMessage.decode(from: payloadDecoder, type: type)
     }
 
@@ -288,7 +290,9 @@ extension ClientMessage {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ClientMessageCodingKeys.self)
         let type = try container.decode(WireMessageType.self, forKey: .type)
-        let payloadDecoder = try? container.superDecoder(forKey: .payload)
+        let payloadDecoder: Decoder? = container.contains(.payload)
+            ? try container.superDecoder(forKey: .payload)
+            : nil
         self = try ClientMessage.decode(from: payloadDecoder, type: type)
     }
 
@@ -303,9 +307,9 @@ extension ClientMessage {
 
 // MARK: - Helpers
 
-private func missingClientPayload(_ type: WireMessageType) -> DecodingError {
+private func missingClientPayload(_ type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     DecodingError.keyNotFound(
         ClientMessageCodingKeys.payload,
-        .init(codingPath: [], debugDescription: "Missing payload for client message type \(type.rawValue)")
+        .init(codingPath: codingPath, debugDescription: "Missing payload for client message type \(type.rawValue)")
     )
 }

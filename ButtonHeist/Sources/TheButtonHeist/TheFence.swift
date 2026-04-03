@@ -44,7 +44,7 @@ public enum FenceError: Error, LocalizedError {
                   Retry without --token to request a fresh session.
                 """
         case .notConnected:
-            return "Not connected to device"
+            return "Not connected to device. Is the app running? Check 'buttonheist list' to see available devices."
         case .actionTimeout:
             return "Action timed out — connection lost, reconnecting..."
         case .actionFailed(let message):
@@ -282,8 +282,11 @@ public final class TheFence {
         do {
             return try await response(requestId)
         } catch {
-            handoff.forceDisconnect()
-            throw mapCaughtError(error)
+            let mapped = mapCaughtError(error)
+            if case .actionTimeout = mapped {
+                handoff.forceDisconnect()
+            }
+            throw mapped
         }
     }
 

@@ -123,7 +123,7 @@ final class TheSafecracker {
 
         let stepDelay: TimeInterval = 0.01
         var elapsed: TimeInterval = 0
-        while elapsed < duration {
+        while elapsed < duration && !Task.isCancelled {
             try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
             elapsed += stepDelay
             sendStationary()
@@ -157,6 +157,7 @@ final class TheSafecracker {
         onGestureMove?([start])
 
         for point in waypoints {
+            if Task.isCancelled { break }
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
@@ -190,6 +191,7 @@ final class TheSafecracker {
         onGestureMove?([start])
 
         for point in waypoints {
+            if Task.isCancelled { break }
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
@@ -255,6 +257,7 @@ final class TheSafecracker {
         onGestureMove?([points[0]])
 
         for point in waypoints {
+            if Task.isCancelled { break }
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
