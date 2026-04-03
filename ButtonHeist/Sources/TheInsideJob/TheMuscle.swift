@@ -33,7 +33,7 @@ final class TheMuscle {
     // MARK: - Properties
 
     /// Per-address rate limiting state machine for brute-force protection.
-    private enum AddressAuthState {
+    private enum AddressAuthPhase {
         /// Accumulating failures, not yet locked out.
         case failing(attempts: Int)
         /// Locked out after exceeding maxFailedAttempts.
@@ -41,7 +41,7 @@ final class TheMuscle {
     }
 
     /// Rate-limiting state per remote address. Absent = clean (no failures).
-    private var addressAuthStates: [String: AddressAuthState] = [:]
+    private var addressAuthStates: [String: AddressAuthPhase] = [:]
 
     /// Per-client lifecycle state machine.
     /// Each client traverses: connected → helloValidated → pendingApproval | authenticated | observer.
@@ -137,7 +137,7 @@ final class TheMuscle {
 
     /// Explicit state machine for the session lifecycle.
     /// Idle → active (driver claims) → draining (all connections gone, timer running) → idle.
-    private enum SessionState {
+    private enum SessionPhase {
         /// No active session — any driver may claim.
         case idle
         /// A driver owns the session with at least one live connection.
@@ -146,7 +146,7 @@ final class TheMuscle {
         case draining(driverId: String, releaseTimer: Task<Void, Never>)
     }
 
-    private var sessionState: SessionState = .idle
+    private var sessionPhase: SessionPhase = .idle
     /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
 
@@ -154,7 +154,7 @@ final class TheMuscle {
 
     /// Driver identity that currently holds the session (nil = no active session).
     var activeSessionDriverId: String? {
-        switch sessionState {
+        switch sessionPhase {
         case .idle: return nil
         case .active(let driverId, _): return driverId
         case .draining(let driverId, _): return driverId
@@ -163,7 +163,7 @@ final class TheMuscle {
 
     /// Client IDs belonging to the active session.
     var activeSessionConnections: Set<Int> {
-        switch sessionState {
+        switch sessionPhase {
         case .active(_, let connections): return connections
         case .idle, .draining: return []
         }
@@ -503,20 +503,20 @@ final class TheMuscle {
     /// - Active session, same driver → rejoin (cancel release timer)
     /// - Active session, different driver → busy signal
     private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) -> Bool {
-        switch sessionState {
+        switch sessionPhase {
         case .idle:
             claimSession(driverIdentity: driverIdentity, clientId: clientId)
             return true
 
         case .active(let activeId, var connections) where driverIdentity == activeId:
             connections.insert(clientId)
-            sessionState = .active(driverId: activeId, connections: connections)
+            sessionPhase = .active(driverId: activeId, connections: connections)
             logger.info("Client \(clientId) joined existing session")
             return true
 
         case .draining(let activeId, let timer) where driverIdentity == activeId:
             timer.cancel()
-            sessionState = .active(driverId: activeId, connections: [clientId])
+            sessionPhase = .active(driverId: activeId, connections: [clientId])
             logger.info("Client \(clientId) rejoined session during grace period")
             return true
 
@@ -537,19 +537,19 @@ final class TheMuscle {
 
     private func claimSession(driverIdentity: String, clientId: Int) {
         cancelTimerIfDraining()
-        sessionState = .active(driverId: driverIdentity, connections: [clientId])
+        sessionPhase = .active(driverId: driverIdentity, connections: [clientId])
         logger.info("Session claimed by client \(clientId)")
         onSessionActiveChanged?(true)
     }
 
     private func releaseSession() {
         let hadSession: Bool
-        switch sessionState {
+        switch sessionPhase {
         case .idle: hadSession = false
         case .active, .draining: hadSession = true
         }
         cancelTimerIfDraining()
-        sessionState = .idle
+        sessionPhase = .idle
         if hadSession {
             logger.info("Session released")
             onSessionActiveChanged?(false)
@@ -558,20 +558,20 @@ final class TheMuscle {
 
     /// Remove a client from the active session. Transitions to draining if no connections remain.
     private func removeSessionConnection(_ clientId: Int) {
-        guard case .active(let driverId, var connections) = sessionState else { return }
+        guard case .active(let driverId, var connections) = sessionPhase else { return }
         connections.remove(clientId)
         if connections.isEmpty {
             logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
             let timer = makeReleaseTimer()
-            sessionState = .draining(driverId: driverId, releaseTimer: timer)
+            sessionPhase = .draining(driverId: driverId, releaseTimer: timer)
         } else {
-            sessionState = .active(driverId: driverId, connections: connections)
+            sessionPhase = .active(driverId: driverId, connections: connections)
         }
     }
 
     /// Cancel the release timer if currently draining.
     private func cancelTimerIfDraining() {
-        if case .draining(_, let timer) = sessionState {
+        if case .draining(_, let timer) = sessionPhase {
             timer.cancel()
         }
     }
@@ -587,7 +587,7 @@ final class TheMuscle {
 
     /// Reset the inactivity timer (called on heartbeat/ping from active session client).
     private func resetInactivityTimer() {
-        switch sessionState {
+        switch sessionPhase {
         case .idle:
             return
         case .active:
@@ -596,7 +596,7 @@ final class TheMuscle {
         case .draining(let driverId, let oldTimer):
             oldTimer.cancel()
             let timer = makeReleaseTimer()
-            sessionState = .draining(driverId: driverId, releaseTimer: timer)
+            sessionPhase = .draining(driverId: driverId, releaseTimer: timer)
         }
     }
 

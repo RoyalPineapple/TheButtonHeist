@@ -194,7 +194,7 @@ struct SwipeSubcommand: AsyncParsableCommand {
 
         if let dir = direction {
             guard SwipeDirection(rawValue: dir.lowercased()) != nil else {
-                throw ValidationError("Invalid direction: \(dir). Valid: up, down, left, right")
+                throw ValidationError("Invalid direction: \(dir). Valid: \(SwipeDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
         }
 
