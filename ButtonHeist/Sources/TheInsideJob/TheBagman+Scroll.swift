@@ -359,15 +359,16 @@ extension TheBagman {
 
         // Step 2: Fine-tune — scroll until the activation point is in the comfort zone
         // (middle 2/3 of screen), not just barely on screen.
-        // Note: activationPoint is checked in screen coordinates (comfort zone gate),
-        // while scrollToMakeVisible converts the full frame to scroll-view content
-        // coordinates for the actual offset calculation. The two coordinate spaces
-        // are intentionally different.
+        // Skip comfort-zone scrolling when the element is already fully visible on
+        // screen. Scrolling a fully-visible element (e.g. a NavigationStack list row)
+        // before activation causes mid-transition accessibility snapshots that blend
+        // elements from the departing and arriving screens.
         guard let resolved = resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
         guard !frame.isNull, !frame.isEmpty,
+              !UIScreen.main.bounds.contains(frame),
               !Self.interactionComfortZone.contains(activationPoint),
               let scrollView = resolved.screenElement.scrollView else { return }
         if safecracker.scrollToMakeVisible(
@@ -383,6 +384,7 @@ extension TheBagman {
         guard let responder = tripwire.currentFirstResponder() else { return }
         let frame = responder.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
+        guard !UIScreen.main.bounds.contains(frame) else { return }
         let activationPoint = responder.accessibilityActivationPoint
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
         guard let scrollView = screenElements.values
@@ -405,6 +407,7 @@ extension TheBagman {
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
         guard !frame.isNull, !frame.isEmpty else { return }
+        guard !UIScreen.main.bounds.contains(frame) else { return }
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
         guard let scrollView = resolved.screenElement.scrollView else { return }
         _ = safecracker.scrollToMakeVisible(
