@@ -42,5 +42,8 @@ extension TheFence {
         case listTargets = "list_targets"
         case getSessionLog = "get_session_log"
         case archiveSession = "archive_session"
+        case startScript = "start_script"
+        case stopScript = "stop_script"
+        case playScript = "play_script"
     }
 }
