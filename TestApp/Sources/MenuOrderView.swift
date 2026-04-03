@@ -358,6 +358,11 @@ private struct MenuItemRow: View {
                                 }
                             }
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(option.label)
+                        .accessibilityValue(option.extraPrice > 0
+                            ? "+\(option.extraPrice.formatted(.currency(code: "USD")))"
+                            : "")
                         .accessibilityIdentifier("buttonheist.menu.option-\(item.id)-\(option.id)")
                     }
                 }
