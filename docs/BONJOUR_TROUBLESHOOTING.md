@@ -54,6 +54,25 @@ log show --predicate 'process == "mDNSResponder"' --last 5m --style compact 2>&1
 - [Microsoft Intune — macOS stealth mode known issue](https://techcommunity.microsoft.com/blog/intunecustomersuccess/known-issue-macos-devices-using-stealth-mode-turn-non-compliant-after-upgrading-/4250583)
 - [LuLu issue #355 — mDNSResponder broken pipe](https://github.com/objective-see/LuLu/issues/355)
 
+## Recovering Connection Info from Logs
+
+If the app launched without explicit env vars, the port and token are logged at startup. Read them from the simulator:
+
+```bash
+xcrun simctl spawn $SIM_UDID log show \
+  --predicate 'subsystem == "com.buttonheist.theinsidejob" AND category == "server"' \
+  --last 5m --style compact 2>&1 | grep -E "listening on port|Auth token|Instance ID"
+```
+
+Output:
+```
+Server listening on port 23456
+Auth token: E4F7A2B1-...
+Instance ID: a1b2c3d4
+```
+
+Then connect directly: `BUTTONHEIST_DEVICE="127.0.0.1:23456" BUTTONHEIST_TOKEN="E4F7A2B1-..." buttonheist session`
+
 ## Workaround: Fixed Port Direct Connection
 
 When Bonjour is broken, bypass discovery entirely by pinning the server to a known port.
@@ -122,7 +141,7 @@ sudo killall -9 mDNSResponder
 `ServerTransport` implements `NetServiceDelegate` to log publish failures. Check the simulator logs:
 
 ```bash
-xcrun simctl spawn $SIM log show \
+xcrun simctl spawn $SIM_UDID log show \
   --predicate 'subsystem == "com.buttonheist.thehandoff" AND category == "transport"' \
   --last 10m --style compact
 ```
@@ -133,7 +152,7 @@ Look for:
 
 ### Simulator Local Network permission
 
-iOS 14+ requires Local Network permission for Bonjour. In the simulator, this is usually auto-granted but can be checked/set in the TCC database:
+iOS requires Local Network permission for Bonjour (since iOS 14; all supported deployment targets include this). In the simulator, this is usually auto-granted but can be checked in the TCC database:
 
 ```bash
 SIM_UDID=<your-simulator-udid>
