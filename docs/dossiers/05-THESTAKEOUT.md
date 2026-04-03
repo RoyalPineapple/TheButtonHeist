@@ -15,7 +15,7 @@ TheStakeout handles all screen recording operations:
 5. **Fingerprint inclusion** — recordings include the FingerprintWindow overlay because captureScreenForRecording() draws all windows
 6. **Size limiting** caps at 7MB to stay under 10MB wire protocol buffer limit
 7. **Max duration** caps at configurable limit (default 60s)
-8. **Interaction logging** records wire-level command/result pairs alongside video (NEW)
+8. **Interaction logging** records wire-level command/result pairs alongside video
 
 ## Architecture Diagram
 
@@ -75,19 +75,18 @@ flowchart TD
 | Parameter | Default | Range | Notes |
 |-----------|---------|-------|-------|
 | `fps` | 8 | 1-15 | Frames per second |
-| `scale` | 1.0 | 0.25-1.0 | Resolution multiplier |
+| `scale` | `1.0 / screen.scale` (~0.33 on 3x Retina) | 0.25-1.0 | Resolution multiplier applied to native pixels. When omitted, defaults to 1x point size (native / screen.scale) |
 | `inactivityTimeout` | 5.0s | >0 | Auto-stop after no changes |
 | `maxDuration` | 60.0s | >0 | Hard cap on recording length |
 
-## Interaction Recording (NEW)
+## Interaction Recording
 
 During an active recording, `TheInsideJob.performInteraction()` now captures each command as an `InteractionEvent` and appends it to Stakeout's in-memory log via `recordInteraction(event:)`.
 
 Each `InteractionEvent` contains:
-- `timestamp` (seconds since recording start, from `recordingElapsed`)
-- `command` (the original `ClientMessage`)
-- `result` (the `ActionResult`)
-- `interfaceDelta: InterfaceDelta?` (compact delta describing what changed in the hierarchy)
+- `timestamp: Double` (seconds since recording start, from `recordingElapsed`)
+- `command: ClientMessage` (the command that triggered the interaction)
+- `result: ActionResult` (the result returned to the client, which itself carries an `interfaceDelta` inside)
 
 On recording completion, the log is included in `RecordingPayload.interactionLog` (nil if empty).
 
@@ -116,10 +115,10 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 
 ### MEDIUM PRIORITY
 
-**Inactivity detection uses screen hash, not pixel comparison** (`TheStakeout.swift`)
-- Hashes the captured screen image to detect changes
-- Subtle pixel changes (animations, blinking cursors) will keep recording active
-- This is the intended behavior but means recordings can be longer than expected
+**Inactivity detection uses accessibility hierarchy hash, not pixel comparison** (`TheStakeout.swift`)
+- Activity is tracked via `noteScreenChange()` (called when TheBagman detects a hierarchy hash change) and `noteActivity()` (called on each incoming client command)
+- Subtle pixel-only animations (e.g. spinner rotation) do NOT count as activity, so they won't prevent inactivity timeout
+- This is intentional — recording only extends when meaningful UI content changes
 
 **Output dimensions rounded to even** (H.264 requirement)
 - `nativePixels * effectiveScale` rounded to nearest even number

@@ -9,7 +9,7 @@
 This is the public face of the outfit. The CLI is what you hand to a human operator who wants to work the scene directly:
 
 1. **Subcommand routing** via `swift-argument-parser`
-2. **Direct commands** through `DeviceConnector` for one-shot operations
+2. **Direct commands** through `CLIRunner` — creates a `TheFence`, connects, executes, disconnects
 3. **Persistent sessions** through `ReplSession` and `TheFence`
 4. **Output auto-detection**: human for TTY, JSON for piped input/output. Also supports `compact` format for terse machine-readable output.
 5. **Access to both high-level commands and raw JSON session requests**
@@ -21,7 +21,7 @@ graph TD
     subgraph CLI["ButtonHeistCLI"]
         Main["main.swift - AsyncParsableCommand"]
         Options["ConnectionOptions - --device, --token, --quiet"]
-        Format["OutputFormat - auto / human / json / compact"]
+        Format["OutputFormat - human / json / compact (.auto is computed)"]
 
         subgraph Commands["Subcommands"]
             List["list"]
@@ -41,7 +41,7 @@ graph TD
         end
 
         subgraph Patterns["Connection Patterns"]
-            Direct["DeviceConnector - discover -> connect -> request -> disconnect"]
+            Direct["CLIRunner - TheFence → connect → execute → disconnect"]
             REPL["ReplSession -> TheFence - persistent JSON/human command loop"]
         end
     end
@@ -61,8 +61,8 @@ graph TD
     Pasteboard --> Direct
     Session --> REPL
 
-    Direct --> TheHandoff["TheHandoff"]
-    REPL --> TheFence["TheFence"]
+    Direct --> TheFence["TheFence"]
+    REPL --> TheFence
 ```
 
 ## Connection Patterns
@@ -70,10 +70,10 @@ graph TD
 ```mermaid
 flowchart LR
     subgraph Direct["Direct Commands"]
-        D1["DeviceConnector"] --> D2["discover + connect"]
-        D2 --> D3["send one request"]
-        D3 --> D4["wait for typed response"]
-        D4 --> D5["disconnect"]
+        D1["CLIRunner"] --> D2["makeFence + start"]
+        D2 --> D3["fence.execute(request:)"]
+        D3 --> D4["outputResponse"]
+        D4 --> D5["fence.stop()"]
     end
 
     subgraph Session["Session Mode"]
@@ -112,13 +112,8 @@ The CLI is designed to mirror the MCP tool surface. Key mappings:
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Connection failed |
-| 2 | No device found |
-| 3 | Timeout |
-| 4 | Authentication failed |
-| 99 | Unexpected error |
+| 1 | Action failed (explicit `Darwin.exit(1)` in `CLIRunner.exitOnActionFailure`) or unhandled error (swift-argument-parser default) |
 
 ## Risks / Gaps
 
-- Direct commands duplicate some timeout behavior instead of routing everything through `TheFence`
 - Session mode exposes more raw power than the top-level flags, so documentation needs to keep both surfaces aligned

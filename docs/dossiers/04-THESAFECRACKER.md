@@ -25,10 +25,11 @@ TheSafecracker is the hands of the operation:
 
 | File | Purpose |
 |------|---------|
-| `TheSafecracker.swift` | Core class, single-finger primitives, keyboard wrappers, `InteractionResult`, `PointResolution`, first responder utilities, N-finger primitives |
-| `TheSafecracker+Actions.swift` | All `execute*` command methods, scroll infrastructure, duration helpers, `ensureOnScreen` |
+| `TheSafecracker.swift` | Core class, single-finger primitives, keyboard wrappers, `InteractionResult`, `PointResolution`, first responder utilities, N-finger primitives, `onGestureMove` callback |
+| `TheSafecracker+Actions.swift` | Pure gesture execution: `executeDrawPath`, `executeDrawBezier`, duration/velocity helpers (most `execute*` methods moved to `TheBagman+Actions.swift`) |
+| `TheSafecracker+Scroll.swift` | Scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, `scrollBySwipe` |
 | `TheSafecracker+MultiTouch.swift` | `pinch`, `rotate`, `twoFingerTap` |
-| `TheSafecracker+TextEntry.swift` | `executeTypeText` — full tap-to-focus, poll-for-keyboard, clear/delete/type sequence |
+| `TheSafecracker+TextEntry.swift` | Redirect stub only — `executeTypeText` moved to `TheBagman+Actions.swift`; raw keyboard methods remain in `TheSafecracker.swift` |
 | `TheSafecracker+Bezier.swift` | `BezierSampler` — cubic bezier sampling into polylines |
 | `TheSafecracker+IOHIDEventBuilder.swift` | `IOHIDEventBuilder` + `FingerTouchData`; IOKit dlopen/dlsym loader |
 | `KeyboardBridge.swift` | `UIKeyboardImpl` wrapper: `shared()`, `type(_:)`, `deleteBackward()`, `drainTaskQueue()`, `hasActiveInput` |
@@ -184,6 +185,10 @@ graph LR
     end
 ```
 
+## Gesture Move Callback
+
+`var onGestureMove: (([CGPoint]) -> Void)?` — called during every continuous gesture step (swipe, drag, long press, draw path, pinch, rotate) with the current finger positions. Set by TheInsideJob to update recording overlays during gesture execution. Fires alongside `fingerprints.updateTrackingFingerprints` at each 10ms step.
+
 ## Timing Constants
 
 | Constant | Value | Purpose |
@@ -227,14 +232,14 @@ TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md))
 
 > Full targeting system documentation: [15-UNIFIED-TARGETING.md](../dossiers/15-UNIFIED-TARGETING.md)
 
-All action executors resolve elements via `TheBagman.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget(element, traversalIndex)`.
+All action executors resolve elements via `TheBagman.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget` wrapping a `ScreenElement`. The live NSObject is accessed via `screenElement.object` (a weak reference).
 
 ```mermaid
 flowchart TD
     Target["ActionTarget - (heistId? / match?)"]
     Target --> Resolve["bagman.resolveTarget(target)"]
     Resolve --> Found{resolved?}
-    Found -->|yes| WeakRef["bagman.object(at: traversalIndex) - → live NSObject via weak ref"]
+    Found -->|yes| WeakRef["screenElement.object - → live NSObject via weak ref"]
     Found -->|no| Fail["elementNotFound + diagnostic message"]
     WeakRef --> Alive{still alive?}
     Alive -->|yes| UseElement["Return element + live object"]
