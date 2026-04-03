@@ -32,20 +32,21 @@ public final class TheHandoff {
     /// Explicit connection lifecycle state machine. The device is carried in
     /// `.connecting` and `.connected` so `connectedDevice` cannot drift from
     /// the phase — impossible states like "connected but no device" are
-    /// unrepresentable.
-    public enum ConnectionPhase: Equatable {
+    /// unrepresentable. The keepalive task lives in `.connected` because it
+    /// only runs while connected — transitioning out cancels it implicitly.
+    public enum ConnectionPhase {
         case disconnected
         case connecting(device: DiscoveredDevice)
-        case connected(device: DiscoveredDevice)
+        case connected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>)
         case failed(ConnectionFailure)
     }
 
-    /// Whether auto-reconnect fires on disconnect. Replaces the old boolean
-    /// guard + callback-wrapping pattern — the disconnect handler checks this
-    /// directly instead of mutating `onDisconnected`.
-    public enum ReconnectPolicy: Equatable {
+    /// Whether auto-reconnect fires on disconnect. The reconnect task lives
+    /// inside `.enabled` because it only runs when the policy is active and
+    /// a disconnect has occurred.
+    public enum ReconnectPolicy {
         case disabled
-        case enabled(filter: String?)
+        case enabled(filter: String?, reconnectTask: Task<Void, Never>?)
     }
 
     /// Recording lifecycle state machine. Replaces the old `isRecording: Bool`
@@ -58,7 +59,7 @@ public final class TheHandoff {
     // MARK: - State
 
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
-    public private(set) var isDiscovering: Bool = false
+    public var isDiscovering: Bool { discovery != nil }
     public private(set) var connectionPhase: ConnectionPhase = .disconnected
     public private(set) var serverInfo: ServerInfo?
     public private(set) var currentInterface: Interface?
@@ -72,15 +73,21 @@ public final class TheHandoff {
         connectionPhase = .connecting(device: device)
     }
 
-    private func transitionToConnected(device: DiscoveredDevice) {
-        connectionPhase = .connected(device: device)
+    private func transitionToConnected(device: DiscoveredDevice, keepaliveTask: Task<Void, Never>) {
+        connectionPhase = .connected(device: device, keepaliveTask: keepaliveTask)
     }
 
     private func transitionToFailed(_ failure: ConnectionFailure) {
+        if case .connected(_, let keepaliveTask) = connectionPhase {
+            keepaliveTask.cancel()
+        }
         connectionPhase = .failed(failure)
     }
 
     private func transitionToDisconnected() {
+        if case .connected(_, let keepaliveTask) = connectionPhase {
+            keepaliveTask.cancel()
+        }
         connectionPhase = .disconnected
         serverInfo = nil
         currentInterface = nil
@@ -100,7 +107,7 @@ public final class TheHandoff {
     }
 
     public var connectedDevice: DiscoveredDevice? {
-        if case .connected(let device) = connectionPhase { return device }
+        if case .connected(let device, _) = connectionPhase { return device }
         return nil
     }
 
@@ -151,8 +158,6 @@ public final class TheHandoff {
 
     private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
-    private var keepaliveTask: Task<Void, Never>?
-    private var reconnectTask: Task<Void, Never>?
 
     var hasActiveDiscoverySession: Bool {
         discovery != nil
@@ -217,7 +222,6 @@ public final class TheHandoff {
                 self.onDeviceLost?(device)
             case .stateChanged(let isReady):
                 logger.info("Discovery state changed: isReady=\(isReady)")
-                self.isDiscovering = isReady
             }
         }
         discovery?.start()
@@ -227,7 +231,6 @@ public final class TheHandoff {
     public func stopDiscovery() {
         discovery?.stop()
         discovery = nil
-        isDiscovering = false
         discoveredDevices = []
     }
 
@@ -312,10 +315,11 @@ public final class TheHandoff {
             case .transportReady:
                 break
             case .connected:
-                self.transitionToConnected(device: device)
-                self.startKeepalive()
+                let keepaliveTask = self.makeKeepaliveTask()
+                self.transitionToConnected(device: device, keepaliveTask: keepaliveTask)
             case .disconnected(let reason):
                 // Preserve .failed state (e.g., from sessionLocked)
+                // keepaliveTask was already cancelled by transitionToFailed
                 if case .failed = self.connectionPhase {
                     self.serverInfo = nil
                     self.currentInterface = nil
@@ -325,11 +329,12 @@ public final class TheHandoff {
                     self.transitionToDisconnected()
                 }
                 self.onDisconnected?(reason)
-                if case .enabled(let filter) = self.reconnectPolicy {
-                    self.reconnectTask?.cancel()
-                    self.reconnectTask = Task { [weak self] in
+                if case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
+                    existingReconnectTask?.cancel()
+                    let reconnectTask = Task<Void, Never> { [weak self] in
                         await self?.runAutoReconnect(filter: filter)
                     }
+                    self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
             case .message(let message, let requestId):
                 self.handleServerMessage(message, requestId: requestId)
@@ -394,10 +399,11 @@ public final class TheHandoff {
     }
 
     public func disconnect() {
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        keepaliveTask?.cancel()
-        keepaliveTask = nil
+        if case .enabled(let filter, let reconnectTask) = reconnectPolicy {
+            reconnectTask?.cancel()
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
+        }
+        // keepaliveTask cancellation handled by transitionToDisconnected
         connection?.disconnect()
         connection = nil
         transitionToDisconnected()
@@ -410,11 +416,12 @@ public final class TheHandoff {
         logger.warning("Force-disconnecting stale connection")
         disconnect()
         onDisconnected?(.localDisconnect)
-        if case .enabled(let filter) = reconnectPolicy {
-            reconnectTask?.cancel()
-            reconnectTask = Task { [weak self] in
+        if case .enabled(let filter, let existingReconnectTask) = reconnectPolicy {
+            existingReconnectTask?.cancel()
+            let reconnectTask = Task<Void, Never> { [weak self] in
                 await self?.runAutoReconnect(filter: filter)
             }
+            reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
         }
     }
 
@@ -426,9 +433,8 @@ public final class TheHandoff {
 
     // MARK: - Keepalive
 
-    private func startKeepalive() {
-        keepaliveTask?.cancel()
-        keepaliveTask = Task { [weak self] in
+    private func makeKeepaliveTask() -> Task<Void, Never> {
+        Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3))
                 guard !Task.isCancelled else { break }
@@ -495,7 +501,7 @@ public final class TheHandoff {
     /// Makes 60 attempts at 1s intervals before giving up.
     public func setupAutoReconnect(filter: String?) {
         guard case .disabled = reconnectPolicy else { return }
-        reconnectPolicy = .enabled(filter: filter)
+        reconnectPolicy = .enabled(filter: filter, reconnectTask: nil)
     }
 
     private func runAutoReconnect(filter: String?) async {
@@ -538,6 +544,38 @@ public final class TheHandoff {
             return "\(appName) (\(device.deviceName))"
         } else {
             return appName
+        }
+    }
+}
+
+// MARK: - Custom Equatable (tasks excluded from comparison)
+
+extension TheHandoff.ConnectionPhase: Equatable {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected):
+            return true
+        case (.connecting(let lhsDevice), .connecting(let rhsDevice)):
+            return lhsDevice == rhsDevice
+        case (.connected(let lhsDevice, _), .connected(let rhsDevice, _)):
+            return lhsDevice == rhsDevice
+        case (.failed(let lhsFailure), .failed(let rhsFailure)):
+            return lhsFailure == rhsFailure
+        default:
+            return false
+        }
+    }
+}
+
+extension TheHandoff.ReconnectPolicy: Equatable {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.disabled, .disabled):
+            return true
+        case (.enabled(let lhsFilter, _), .enabled(let rhsFilter, _)):
+            return lhsFilter == rhsFilter
+        default:
+            return false
         }
     }
 }

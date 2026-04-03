@@ -22,7 +22,7 @@ final class SessionLockTests: XCTestCase {
     @ButtonHeistActor
     func testSessionLockedDisconnectsClient() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         var disconnectReason: DisconnectReason?
         conn.onEvent = { event in
@@ -45,7 +45,7 @@ final class SessionLockTests: XCTestCase {
     @ButtonHeistActor
     func testSessionLockedCallbackFires() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         var receivedPayload: SessionLockedPayload?
         conn.onEvent = { event in
@@ -65,7 +65,7 @@ final class SessionLockTests: XCTestCase {
     @ButtonHeistActor
     func testAuthRequiredSendsDriverId() {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token", driverId: "test-driver-id")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         // handleMessage will call send(.authenticate(...)) internally,
         // which requires a real connection. We just verify it doesn't crash
@@ -76,7 +76,7 @@ final class SessionLockTests: XCTestCase {
     @ButtonHeistActor
     func testNilDriverIdIsNil() {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         XCTAssertNil(conn.driverId)
     }

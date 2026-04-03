@@ -86,14 +86,22 @@ struct DiscoveryRegistry {
 @ButtonHeistActor
 public final class DeviceDiscovery: DeviceDiscovering {
 
-    private var browser: NWBrowser?
-    private var registry = DiscoveryRegistry()
-    private var reachabilityTask: Task<Void, Never>?
+    private enum DiscoveryPhase {
+        case idle
+        case active(browser: NWBrowser, registry: DiscoveryRegistry, reachabilityTask: Task<Void, Never>?)
+    }
+
+    private var discoveryPhase: DiscoveryPhase = .idle
     private let browserQueue = DispatchQueue(label: "com.buttonheist.thehandoff.discovery.browser")
     private let reachabilityValidationInterval: TimeInterval
 
     public var discoveredDevices: [DiscoveredDevice] {
-        registry.devices
+        switch discoveryPhase {
+        case .idle:
+            return []
+        case .active(_, let registry, _):
+            return registry.devices
+        }
     }
 
     public var onEvent: ((DiscoveryEvent) -> Void)?
@@ -108,36 +116,36 @@ public final class DeviceDiscovery: DeviceDiscovering {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
 
-        browser = NWBrowser(
+        let browser = NWBrowser(
             for: .bonjourWithTXTRecord(type: buttonHeistServiceType, domain: "local."),
             using: parameters
         )
 
-        browser?.browseResultsChangedHandler = { [weak self] results, changes in
+        browser.browseResultsChangedHandler = { [weak self] results, changes in
             Task { [weak self] in
                 logger.info("Results changed: \(results.count) results, \(changes.count) changes")
                 await self?.handleResults(results, changes: changes)
             }
         }
 
-        browser?.stateUpdateHandler = { [weak self] state in
+        browser.stateUpdateHandler = { [weak self] state in
             Task { [weak self] in
                 logger.info("Browser state: \(String(describing: state))")
                 await self?.handleStateUpdate(state)
             }
         }
 
-        browser?.start(queue: browserQueue)
+        discoveryPhase = .active(browser: browser, registry: DiscoveryRegistry(), reachabilityTask: nil)
+        browser.start(queue: browserQueue)
         startReachabilityValidation()
         logger.info("Browser started")
     }
 
     public func stop() {
+        guard case .active(let browser, _, let reachabilityTask) = discoveryPhase else { return }
         reachabilityTask?.cancel()
-        reachabilityTask = nil
-        browser?.cancel()
-        browser = nil
-        registry = DiscoveryRegistry()
+        browser.cancel()
+        discoveryPhase = .idle
     }
 
     private func handleStateUpdate(_ state: NWBrowser.State) {
@@ -145,6 +153,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>, changes: Set<NWBrowser.Result.Change>) {
+        guard case .active(let browser, var registry, let reachabilityTask) = discoveryPhase else { return }
         for change in changes {
             switch change {
             case .added(let result):
@@ -174,6 +183,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
                 logger.warning("Unknown change type")
             }
         }
+        discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
     }
 
     private func makeDevice(from result: NWBrowser.Result) -> DiscoveredDevice? {
@@ -231,8 +241,9 @@ public final class DeviceDiscovery: DeviceDiscovering {
     }
 
     private func startReachabilityValidation() {
-        reachabilityTask?.cancel()
-        reachabilityTask = Task { [weak self] in
+        guard case .active(let browser, let registry, let existingTask) = discoveryPhase else { return }
+        existingTask?.cancel()
+        let task = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 try? await Task.sleep(for: .seconds(self.reachabilityValidationInterval))
@@ -240,9 +251,11 @@ public final class DeviceDiscovery: DeviceDiscovering {
                 await self.validateVisibleDevicesReachability()
             }
         }
+        discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: task)
     }
 
     private func validateVisibleDevicesReachability() async {
+        guard case .active(let browser, var registry, let reachabilityTask) = discoveryPhase else { return }
         let visibleDevices = registry.devices
         guard !visibleDevices.isEmpty else { return }
 
@@ -266,5 +279,6 @@ public final class DeviceDiscovery: DeviceDiscovering {
             logger.info("Evicting unreachable device advertisement: \(serviceName)")
             apply(registry.recordLost(serviceName: serviceName))
         }
+        discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
     }
 }
