@@ -124,6 +124,119 @@ public final class TheBookKeeper {
         }
     }
 
+    // MARK: - Recovery
+
+    /// A session that was recovered from an abandoned state.
+    public struct RecoveredSession: Sendable {
+        public let sessionId: String
+        public let directory: URL
+        /// Number of heist evidence entries found, or nil if no heist was in progress.
+        public let heistEvidenceCount: Int?
+        /// Path to the heist evidence file, if one exists.
+        public let heistFilePath: URL?
+    }
+
+    /// Scan for abandoned sessions and recover them.
+    /// An abandoned session has `session.jsonl` (uncompressed) — meaning it was
+    /// never properly closed. Recovery: write a recovery manifest, compress the log.
+    /// Abandoned heist evidence (heist.jsonl) is preserved and surfaced in the result.
+    @discardableResult
+    public func recoverAbandonedSessions() -> [RecoveredSession] {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: baseDirectory.path) else { return [] }
+
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: baseDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        var recovered: [RecoveredSession] = []
+        for directoryURL in contents {
+            guard (try? directoryURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+                continue
+            }
+            let rawLog = directoryURL.appendingPathComponent("session.jsonl")
+            let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
+
+            // Abandoned = has raw log but no compressed log
+            let hasRawLog = fileManager.fileExists(atPath: rawLog.path)
+            let hasCompressedLog = fileManager.fileExists(atPath: compressedLog.path)
+            guard hasRawLog, !hasCompressedLog else { continue }
+
+            let sessionId = directoryURL.lastPathComponent
+            let heistInfo = recoverSession(directory: directoryURL, sessionId: sessionId)
+            recovered.append(RecoveredSession(
+                sessionId: sessionId,
+                directory: directoryURL,
+                heistEvidenceCount: heistInfo.evidenceCount,
+                heistFilePath: heistInfo.filePath
+            ))
+        }
+        return recovered
+    }
+
+    private func recoverSession(
+        directory: URL,
+        sessionId: String
+    ) -> (evidenceCount: Int?, filePath: URL?) {
+        let fileManager = FileManager.default
+        let manifestPath = directory.appendingPathComponent("manifest.json")
+
+        // Read existing manifest or create a minimal one
+        var manifest: SessionManifest
+        let jsonDecoder = JSONDecoder()
+        jsonDecoder.dateDecodingStrategy = .iso8601
+        if let manifestData = try? Data(contentsOf: manifestPath),
+           let decoded = try? jsonDecoder.decode(SessionManifest.self, from: manifestData) {
+            manifest = decoded
+        } else {
+            manifest = SessionManifest(sessionId: sessionId, startTime: Date())
+        }
+
+        // Mark as recovered with an endTime if missing
+        if manifest.endTime == nil {
+            manifest.endTime = Date()
+        }
+
+        // Write updated manifest
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let manifestData = try? encoder.encode(manifest) {
+            try? manifestData.write(to: manifestPath, options: .atomic)
+        }
+
+        // Compress the raw log
+        let rawLog = directory.appendingPathComponent("session.jsonl")
+        let gzipProcess = Process()
+        gzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+        gzipProcess.arguments = [rawLog.path]
+        gzipProcess.standardOutput = FileHandle.nullDevice
+        gzipProcess.standardError = FileHandle.nullDevice
+        try? gzipProcess.run()
+        gzipProcess.waitUntilExit()
+
+        // Check for abandoned heist evidence
+        let heistLog = directory.appendingPathComponent("heist.jsonl")
+        var heistEvidenceCount: Int?
+        var heistFilePath: URL?
+        if fileManager.fileExists(atPath: heistLog.path),
+           let heistData = try? Data(contentsOf: heistLog),
+           !heistData.isEmpty {
+            let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
+            heistEvidenceCount = lineCount
+            heistFilePath = heistLog
+            NSLog(
+                "[BookKeeper] ⚠️ Abandoned heist in session %@ — %d evidence entries preserved at %@",
+                sessionId, lineCount, heistLog.path
+            )
+        }
+
+        NSLog("[BookKeeper] Recovered abandoned session: %@", sessionId)
+        return (heistEvidenceCount, heistFilePath)
+    }
+
     // MARK: - Lifecycle
 
     public func beginSession(identifier: String) throws {

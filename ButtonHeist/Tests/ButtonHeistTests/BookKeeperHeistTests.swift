@@ -494,6 +494,75 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(loaded.steps[1].arguments["text"], .string("test"))
     }
 
+    // MARK: - Recovery
+
+    @ButtonHeistActor
+    func testRecoverAbandonedSessionCompressesLog() throws {
+        let sessionDir = tempDirectory.appendingPathComponent("abandoned-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertEqual(recovered.count, 1)
+        XCTAssertEqual(recovered[0].sessionId, "abandoned-2026-04-03-120000")
+        XCTAssertNil(recovered[0].heistEvidenceCount)
+        XCTAssertNil(recovered[0].heistFilePath)
+        // Raw log should be compressed
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl").path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("session.jsonl.gz").path
+        ))
+        // Recovery manifest should exist with endTime
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let manifestData = try Data(contentsOf: sessionDir.appendingPathComponent("manifest.json"))
+        let manifest = try decoder.decode(SessionManifest.self, from: manifestData)
+        XCTAssertNotNil(manifest.endTime)
+    }
+
+    @ButtonHeistActor
+    func testRecoverSkipsCleanSessions() throws {
+        let sessionDir = tempDirectory.appendingPathComponent("clean-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data().write(to: sessionDir.appendingPathComponent("session.jsonl.gz"))
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertTrue(recovered.isEmpty)
+    }
+
+    @ButtonHeistActor
+    func testRecoverPreservesHeistEvidence() throws {
+        let sessionDir = tempDirectory.appendingPathComponent("heist-abandoned-2026-04-03-120000")
+        try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
+        let heistLine = "{\"command\":\"activate\",\"label\":\"Go\"}\n"
+        try Data(heistLine.utf8).write(to: sessionDir.appendingPathComponent("heist.jsonl"))
+
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+
+        XCTAssertEqual(recovered.count, 1)
+        XCTAssertEqual(recovered[0].heistEvidenceCount, 1)
+        XCTAssertNotNil(recovered[0].heistFilePath)
+        // heist.jsonl should still exist — partial evidence preserved
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: sessionDir.appendingPathComponent("heist.jsonl").path
+        ))
+    }
+
+    @ButtonHeistActor
+    func testRecoverEmptyBaseDirectory() {
+        let bookKeeper = makeBookKeeper()
+        let recovered = bookKeeper.recoverAbandonedSessions()
+        XCTAssertTrue(recovered.isEmpty)
+    }
+
     // MARK: - Helpers
 
     @ButtonHeistActor
