@@ -202,16 +202,27 @@ struct TodoListView: View {
     // stores). Same legitimate task names across categories — a VoiceOver user
     // uses section context to distinguish them, the flat matcher cannot.
     static let sampleItems: [TodoItem] = [
+        // Work — mix of active, completed, and duplicates at different priorities
         TodoItem(id: UUID(), title: "Review PR", isCompleted: false, category: .work, priority: .high, notes: "Backend API changes"),
         TodoItem(id: UUID(), title: "Fix bug", isCompleted: false, category: .work, priority: .high, notes: "Login crash on iOS 17"),
-        TodoItem(id: UUID(), title: "Write tests", isCompleted: true, category: .work, priority: .medium, notes: ""),
+        TodoItem(id: UUID(), title: "Write tests", isCompleted: true, category: .work, priority: .medium, notes: "Unit tests for auth module"),
         TodoItem(id: UUID(), title: "Fix bug", isCompleted: false, category: .work, priority: .low, notes: "Dark mode color issue"),
+        TodoItem(id: UUID(), title: "Update docs", isCompleted: true, category: .work, priority: .low, notes: "API migration guide"),
+        TodoItem(id: UUID(), title: "Review PR", isCompleted: true, category: .work, priority: .medium, notes: "Frontend refactor"),
+
+        // Personal — "Review PR" and "Buy groceries" also appear here
         TodoItem(id: UUID(), title: "Review PR", isCompleted: false, category: .personal, priority: .medium, notes: "Friend's open source project"),
         TodoItem(id: UUID(), title: "Buy groceries", isCompleted: false, category: .personal, priority: .high, notes: "Trader Joe's list"),
-        TodoItem(id: UUID(), title: "Call dentist", isCompleted: true, category: .personal, priority: .low, notes: ""),
+        TodoItem(id: UUID(), title: "Call dentist", isCompleted: true, category: .personal, priority: .low, notes: "Schedule cleaning"),
+        TodoItem(id: UUID(), title: "Fix bug", isCompleted: false, category: .personal, priority: .medium, notes: "Home automation script"),
+        TodoItem(id: UUID(), title: "Buy groceries", isCompleted: true, category: .personal, priority: .low, notes: "Farmer's market haul"),
+
+        // Errands — more duplicates, mix of states
         TodoItem(id: UUID(), title: "Buy groceries", isCompleted: false, category: .errands, priority: .medium, notes: "Costco run"),
         TodoItem(id: UUID(), title: "Pick up dry cleaning", isCompleted: false, category: .errands, priority: .low, notes: ""),
         TodoItem(id: UUID(), title: "Fix bug", isCompleted: true, category: .errands, priority: .medium, notes: "Garage door opener"),
+        TodoItem(id: UUID(), title: "Return package", isCompleted: false, category: .errands, priority: .high, notes: "Amazon return before Friday"),
+        TodoItem(id: UUID(), title: "Pick up dry cleaning", isCompleted: true, category: .errands, priority: .low, notes: "Already picked up suits"),
     ]
 }
 
