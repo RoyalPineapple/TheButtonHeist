@@ -23,7 +23,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testAuthRequiredTriggersAuthenticate() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-secret-token")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         // Feeding authRequired should trigger send(.authenticate(...)) internally.
         // Without a real NWConnection, send() is a no-op (guards on connection != nil).
@@ -38,7 +38,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         // When token is empty, DeviceConnection still sends .authenticate
         // (this triggers the UI approval flow on the server side)
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         try conn.handleMessage(encode(.authRequired))
 
@@ -49,7 +49,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testAuthApprovedUpdatesToken() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         var approvedToken: String?
         conn.onEvent = { event in
@@ -68,7 +68,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testAuthApprovedFollowedByInfo() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         var connectedFired = false
         var receivedInfo: ServerInfo?
@@ -104,7 +104,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testAuthDeniedFiresCallbackAndDisconnects() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.isConnected = true
+        conn.simulateConnected()
 
         var authFailedReason: String?
         var disconnectReason: DisconnectReason?
@@ -133,7 +133,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testObserveModeUsesWatch() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
-        conn.isConnected = true
+        conn.simulateConnected()
         conn.observeMode = true
 
         // send() will be a no-op without real connection, but we verify
@@ -146,7 +146,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
     @ButtonHeistActor
     func testPassiveModeDoesNotAutoAuthenticateOnAuthRequired() throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.isConnected = true
+        conn.simulateConnected()
         conn.autoRespondToAuthRequired = false
 
         var receivedAuthRequired = false

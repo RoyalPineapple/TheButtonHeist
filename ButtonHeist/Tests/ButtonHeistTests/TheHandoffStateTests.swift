@@ -68,7 +68,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.setupAutoReconnect(filter: "MyApp")
 
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp"))
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp", reconnectTask: nil))
     }
 
     func testSetupAutoReconnectWithNilFilter() {
@@ -76,7 +76,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.setupAutoReconnect(filter: nil)
 
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil))
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
     func testSetupAutoReconnectIsIdempotent() {
@@ -85,7 +85,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.setupAutoReconnect(filter: "FirstFilter")
         handoff.setupAutoReconnect(filter: "SecondFilter")
 
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter"))
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter", reconnectTask: nil))
     }
 
     func testReconnectPolicyRemainsEnabledAfterDisconnect() {
@@ -120,7 +120,7 @@ final class TheHandoffStateTests: XCTestCase {
         // After explicit disconnect, the policy should remain enabled
         // (disconnect doesn't reset the policy — only the connection)
         handoff.disconnect()
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil))
+        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
     func testReconnectPolicyStartsDisabled() {

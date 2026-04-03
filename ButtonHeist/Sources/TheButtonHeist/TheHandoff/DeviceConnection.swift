@@ -54,11 +54,26 @@ public final class DeviceConnection: DeviceConnecting {
 
     private static let maxBufferSize = 10_000_000 // 10 MB
 
-    private var connection: NWConnection?
+    struct ActiveConnection {
+        let connection: NWConnection
+        var receiveBuffer: Data = Data()
+    }
+
+    enum ConnectionState {
+        case disconnected
+        case connecting(connection: NWConnection)
+        case connected(ActiveConnection)
+    }
+
+    // Internal for testing (tests use @testable import to set state directly)
+    var connectionState: ConnectionState = .disconnected
     private let device: DiscoveredDevice
     private(set) var token: String?
-    private var receiveBuffer = Data()
-    public internal(set) var isConnected = false
+
+    public var isConnected: Bool {
+        if case .connected = connectionState { return true }
+        return false
+    }
 
     public var onEvent: ((ConnectionEvent) -> Void)?
     public var autoRespondToAuthRequired = true
@@ -102,20 +117,25 @@ public final class DeviceConnection: DeviceConnecting {
             }
         }
 
-        self.connection = conn
+        connectionState = .connecting(connection: conn)
         conn.start(queue: .global())
     }
 
     public func disconnect() {
-        isConnected = false
-        connection?.cancel()
-        connection = nil
-        receiveBuffer = Data()
+        switch connectionState {
+        case .connecting(let connection):
+            connection.cancel()
+        case .connected(let active):
+            active.connection.cancel()
+        case .disconnected:
+            break
+        }
+        connectionState = .disconnected
     }
 
     public func send(_ message: ClientMessage, requestId: String? = nil) {
         onSend?(message, requestId)
-        guard let connection, isConnected else { return }
+        guard case .connected(let active) = connectionState else { return }
         let envelope = RequestEnvelope(requestId: requestId, message: message)
         let data: Data
         do {
@@ -127,7 +147,7 @@ public final class DeviceConnection: DeviceConnecting {
             return
         }
 
-        connection.send(content: data, completion: .contentProcessed { error in
+        active.connection.send(content: data, completion: .contentProcessed { error in
             if let error {
                 logger.error("Send error: \(error)")
             }
@@ -139,25 +159,26 @@ public final class DeviceConnection: DeviceConnecting {
     private func handleStateChange(_ state: NWConnection.State) {
         switch state {
         case .ready:
+            guard case .connecting(let connection) = connectionState else { return }
             logger.info("Connected")
-            isConnected = true
+            connectionState = .connected(ActiveConnection(connection: connection))
             onEvent?(.transportReady)
             startReceiving()
         case .failed(let error):
             logger.error("Connection failed: \(error)")
-            isConnected = false
+            connectionState = .disconnected
             onEvent?(.disconnected(.networkError(error)))
         case .cancelled:
             logger.info("Connection cancelled")
-            isConnected = false
+            connectionState = .disconnected
         default:
             break
         }
     }
 
     private func startReceiving() {
-        guard let connection else { return }
-        receiveNext(connection: connection)
+        guard case .connected(let active) = connectionState else { return }
+        receiveNext(connection: active.connection)
     }
 
     private func receiveNext(connection: NWConnection) {
@@ -176,37 +197,43 @@ public final class DeviceConnection: DeviceConnecting {
     ) {
         if let error {
             logger.error("Receive error: \(error)")
-            isConnected = false
+            connectionState = .disconnected
             onEvent?(.disconnected(.networkError(error)))
             return
         }
 
         if let content {
-            receiveBuffer.append(content)
+            guard case .connected(var active) = connectionState else { return }
+            active.receiveBuffer.append(content)
 
-            if receiveBuffer.count > Self.maxBufferSize {
+            if active.receiveBuffer.count > Self.maxBufferSize {
                 logger.error("Server exceeded max buffer size, disconnecting")
                 disconnect()
                 onEvent?(.disconnected(.bufferOverflow))
                 return
             }
 
+            connectionState = .connected(active)
             processBuffer()
         }
 
         if isComplete {
             logger.info("Connection closed by server")
-            isConnected = false
+            connectionState = .disconnected
             onEvent?(.disconnected(.serverClosed))
         } else {
-            receiveNext(connection: connection)
+            guard case .connected(let active) = connectionState else { return }
+            receiveNext(connection: active.connection)
         }
     }
 
     private func processBuffer() {
-        while let newlineIndex = receiveBuffer.firstIndex(of: 0x0A) {
-            let messageData = receiveBuffer.prefix(upTo: newlineIndex)
-            receiveBuffer = Data(receiveBuffer.suffix(from: receiveBuffer.index(after: newlineIndex)))
+        while true {
+            guard case .connected(var active) = connectionState else { return }
+            guard let newlineIndex = active.receiveBuffer.firstIndex(of: 0x0A) else { return }
+            let messageData = active.receiveBuffer.prefix(upTo: newlineIndex)
+            active.receiveBuffer = Data(active.receiveBuffer.suffix(from: active.receiveBuffer.index(after: newlineIndex)))
+            connectionState = .connected(active)
 
             if !messageData.isEmpty {
                 handleMessage(Data(messageData))
