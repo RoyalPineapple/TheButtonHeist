@@ -42,7 +42,7 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 ```mermaid
 graph TD
     TheScore["TheScore — Shared Protocol"]
-    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheBagman, TheTripwire,<br/>TheSafecracker, TheMuscle, ThePlant</i>"]
+    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheBagman, TheTripwire, TheStakeout,<br/>TheFingerprints, TheSafecracker, TheMuscle, ThePlant</i>"]
     ButtonHeist["ButtonHeist — macOS Client Framework"]
     CLI["ButtonHeistCLI — CLI"]
     MCP["ButtonHeistMCP — MCP Server"]

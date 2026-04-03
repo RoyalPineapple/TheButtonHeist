@@ -35,7 +35,8 @@ sequenceDiagram
         AS->>AS: Read INSIDEJOB_TOKEN
         AS->>AS: Read INSIDEJOB_ID
         AS->>AS: Read INSIDEJOB_POLLING_INTERVAL
-        AS->>IJ: TheInsideJob.configure(token:instanceId:)
+        AS->>AS: Read INSIDEJOB_PORT
+        AS->>IJ: TheInsideJob.configure(token:instanceId:port:)
         AS->>IJ: TheInsideJob.shared.start()
         AS->>IJ: TheInsideJob.shared.startPolling(interval:)
     end
@@ -75,9 +76,17 @@ flowchart TD
         PlistPoll -->|fallback| PollVal
     end
 
+    subgraph Port["Port Resolution"]
+        EnvPort["env: INSIDEJOB_PORT"]
+        PlistPort["plist: InsideJobPort"]
+        EnvPort -->|priority| PortVal["port (default 0 = any available)"]
+        PlistPort -->|fallback| PortVal
+    end
+
     Continue --> Token
     Continue --> ID
     Continue --> Poll
+    Continue --> Port
 ```
 
 ## Items Flagged for Review
@@ -91,7 +100,7 @@ flowchart TD
 - In practice this is fine - the async dispatch runs as soon as the main run loop processes its queue
 
 **`@_cdecl` usage**
-- `TheInsideJob+AutoStart.swift` uses `@_cdecl("TheInsideJob_autoStartFromLoad")` to expose a Swift function to ObjC
+- `Extensions/AutoStart.swift` uses `@_cdecl("TheInsideJob_autoStartFromLoad")` to expose a Swift function to ObjC
 - This is a stable Swift attribute but not officially documented for public use
 - Alternative: could use `@objc` class method, but `@_cdecl` avoids needing an ObjC-visible class
 

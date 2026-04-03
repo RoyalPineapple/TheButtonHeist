@@ -95,7 +95,7 @@ struct ArchivedSession {
 }
 ```
 
-Transitioning from `.active` to `.closed` flushes the manifest, closes the FileHandle, and compresses the log to `.gz` via `/usr/bin/gzip`. Transitioning from `.closed` to `.archived` bundles the directory via `/usr/bin/tar czf`. No phase carries stale handles or open resources from a prior phase.
+Transitioning from `.active` to `.closing` flushes the manifest and closes the FileHandle. The `.closing` phase then compresses the log to `.gz` via `/usr/bin/gzip`; on success, the phase advances to `.closed`. If compression fails, the phase stays `.closing` — session data is preserved and a fresh `beginSession` is still allowed. Transitioning from `.closed` to `.archived` bundles the directory via `/usr/bin/tar czf`. No phase carries stale handles or open resources from a prior phase.
 
 Invalid transitions throw `BookKeeperError.invalidPhase` — you cannot close an idle session, archive an active session, or begin a second session while one is active.
 
@@ -326,15 +326,15 @@ MP4 (H.264) is already compressed. Gzipping an MP4 saves <1%.
 
 ## Tests
 
-25 tests in `TheBookKeeperTests.swift`, using real filesystem I/O against a temp directory that is created in `setUp` and deleted in `tearDown`.
+34 tests in `TheBookKeeperTests.swift`, using real filesystem I/O against a temp directory that is created in `setUp` and deleted in `tearDown`.
 
 | Group | Tests | What they verify |
 |-------|-------|-----------------|
-| Session phase | 9 | idle→active→closed→archived transitions, invalid transitions throw, new session from closed/archived |
+| Session phase | 14 | idle→active→closing→closed→archived transitions, invalid transitions throw, new session from closed/archived, directory/log file creation, path traversal/slash rejection in identifiers |
 | Session log | 6 | JSONL line format, command/response fields, error count, command count, binary data exclusion, silent no-op when idle |
 | Manifest | 2 | Starts empty with zero counts, Codable round-trip equality |
 | Path validation | 5 | `..` rejection, empty path, simple relative, absolute, embedded traversal |
-| Artifact storage | 6 | Screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard |
+| Artifact storage | 7 | Screenshot/recording file creation, manifest updates, sequence numbering, base64 failure, `writeToPath` traversal guard, `writeToPath` success |
 
 TheFenceTests also updated: command count assertion (36→38), new raw value entries for `get_session_log` and `archive_session`.
 
@@ -346,6 +346,6 @@ TheFenceTests also updated: command count assertion (36→38), new raw value ent
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper+Logging.swift` | JSONL log writing, binary data exclusion, command/response serialization |
 | `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper+Compression.swift` | `/usr/bin/gzip` for logs, `/usr/bin/tar czf` for archives |
 | `ButtonHeist/Sources/TheButtonHeist/SessionManifest.swift` | `SessionManifest`, `ArtifactEntry`, `ArtifactType`, `ScreenshotMetadata`, `RecordingMetadata`, `ResponseStatus` |
-| `ButtonHeist/Tests/ButtonHeistTests/TheBookKeeperTests.swift` | 25 unit tests |
+| `ButtonHeist/Tests/ButtonHeistTests/TheBookKeeperTests.swift` | 34 unit tests |
 | `ButtonHeistCLI/Sources/Commands/SessionLogCommand.swift` | CLI: `buttonheist session-log` |
 | `ButtonHeistCLI/Sources/Commands/ArchiveSessionCommand.swift` | CLI: `buttonheist archive-session` |

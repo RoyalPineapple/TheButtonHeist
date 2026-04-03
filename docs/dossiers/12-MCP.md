@@ -19,9 +19,10 @@ This is the clean handshake between an AI agent and the rest of the crew:
 
 | File | Contents |
 |------|----------|
-| `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse`, `IdleMonitor` |
+| `main.swift` | `ButtonHeistMCPServer` entry point, `setUp()`, `handleToolCall`, `renderResponse` |
 | `ToolDefinitions.swift` | 24 tool schemas with `expectProperty` shared across action tools |
 
+`IdleMonitor` lives in the ButtonHeist framework (`ButtonHeist/Sources/TheButtonHeist/IdleMonitor.swift`), not in the MCP package.
 `TargetConfigResolver` lives in the ButtonHeist framework (`TargetConfig.swift`), not in the MCP package.
 
 ## Architecture Diagram
@@ -60,28 +61,28 @@ graph TD
 |---|-----------|------|---------------|
 | 1 | `get_interface` | direct | `detail` (`"summary"`/`"full"`), `elements` (heistId filter array) |
 | 2 | `activate` | direct | element target, optional `action` for increment/decrement/custom |
-| 3 | `type_text` | direct | `text`, `clearFirst`, `deleteCount`, `interKeyDelay` |
+| 3 | `type_text` | direct | `text`, `clearFirst`, `deleteCount` |
 | 4 | `swipe` | direct | element target, `direction`, `start`/`end` (UnitPoint), `duration` |
-| 5 | `get_screen` | direct | (no params) |
+| 5 | `get_screen` | direct | `output` (file path, optional) |
 | 6 | `wait_for_idle` | direct | `timeout` |
-| 7 | `start_recording` | direct | `fps`, `scale`, `inactivityTimeout`, `maxDuration` |
-| 8 | `stop_recording` | direct | `output` (file path) |
-| 9 | `list_devices` | direct | (no params) |
-| 10 | `gesture` | grouped | `type` enum → underlying command |
-| 11 | `edit_action` | direct | `action` (copy/paste/cut/select/selectAll) |
-| 12 | `dismiss_keyboard` | direct | (no params beyond `expect`) |
-| 13 | `set_pasteboard` | direct | `text` |
-| 14 | `get_pasteboard` | direct | (no params) |
-| 15 | `scroll` | direct | element target, `direction` |
-| 16 | `scroll_to_visible` | direct | match fields, `scope`, `direction` |
-| 17 | `scroll_to_edge` | direct | element target, `edge` |
-| 18 | `run_batch` | direct | `commands` array |
-| 19 | `get_session_state` | direct | (no params) |
-| 20 | `connect` | direct | `device`, `token` |
-| 21 | `list_targets` | direct | (no params) |
-| 22 | `wait_for` | direct | element match fields, `absent`, `timeout` |
+| 7 | `wait_for` | direct | element match fields, `absent`, `timeout` |
+| 8 | `start_recording` | direct | `fps`, `scale`, `inactivity_timeout`, `max_duration` |
+| 9 | `stop_recording` | direct | `output` (file path) |
+| 10 | `list_devices` | direct | (no params) |
+| 11 | `gesture` | grouped | `type` enum → underlying command |
+| 12 | `edit_action` | direct | `action` (copy/paste/cut/select/selectAll) |
+| 13 | `dismiss_keyboard` | direct | (no params beyond `expect`) |
+| 14 | `set_pasteboard` | direct | `text` |
+| 15 | `get_pasteboard` | direct | (no params) |
+| 16 | `scroll` | direct | element target, `direction` |
+| 17 | `scroll_to_visible` | direct | match fields, `direction` |
+| 18 | `scroll_to_edge` | direct | element target, `edge` |
+| 19 | `run_batch` | direct | `steps` array, `policy` |
+| 20 | `get_session_state` | direct | (no params) |
+| 21 | `connect` | direct | `target`, `device`, `token` |
+| 22 | `list_targets` | direct | (no params) |
 | 23 | `get_session_log` | direct | (no params) |
-| 24 | `archive_session` | direct | `deleteSource` |
+| 24 | `archive_session` | direct | `delete_source` |
 
 ### Gesture subtypes
 
@@ -97,14 +98,13 @@ graph TD
 - `readOnlyHint: true`, `idempotentHint: true`
 
 ### `swipe`
-- Element targeting: `heistId` / `identifier` / `order`
+- Element targeting: `heistId` / `identifier` / `label` / `value` / `traits` / `excludeTraits`
 - `direction`: `up`, `down`, `left`, `right`
 - `start` / `end`: `{x: number, y: number}` — UnitPoint relative to element frame where `(0,0)` = top-left, `(1,1)` = bottom-right; values outside 0–1 extend beyond frame
 - `duration`: seconds
 
 ### `scroll_to_visible`
 - Match fields: `heistId`, `identifier`, `label`, `value`, `traits`, `excludeTraits` — all specified fields must match (AND logic)
-- `scope`: `"elements"` (leaves only, default), `"containers"`, `"both"`
 - `direction`: `"down"` (default), `"up"`, `"left"`, `"right"`
 
 ### Shared `expect` property
@@ -119,7 +119,7 @@ flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
     Decode --> Switch{"tool name?"}
 
-    Switch -->|"21 direct tools"| Direct["request['command'] = toolName"]
+    Switch -->|"23 direct tools"| Direct["request['command'] = toolName"]
     Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
 
     Direct --> Execute["fence.execute(request:)"]
@@ -141,8 +141,8 @@ flowchart TD
 
 ## IdleMonitor
 
-`@ButtonHeistActor private final class` with a simple timer pattern:
-- `resetTimer()` cancels any existing timeout task, then spawns a detached `Task` that sleeps for `timeout` seconds and calls `fence.stop()`
+`@ButtonHeistActor public final class` (lives in `ButtonHeist/Sources/TheButtonHeist/IdleMonitor.swift`, not in the MCP package) with a simple timer pattern:
+- `resetTimer()` cancels any existing timeout task, then spawns a `Task` that sleeps for `timeout` seconds and calls the `onTimeout` closure
 - Called after every tool call (success or failure)
 - `timeout <= 0` disables idle disconnect
 - Default: 60 seconds (from `BUTTONHEIST_SESSION_TIMEOUT` env var)

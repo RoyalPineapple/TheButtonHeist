@@ -13,8 +13,8 @@ TheMuscle controls who gets access and enforces single-driver exclusivity:
 3. **Session locking** - ensures only one "driver" controls the app at a time
 4. **Single-timer session release** - inactivity timer for cleanup when all connections drop
 5. **Observer management** - tracks read-only observer connections (`observerClients`), routes `watch` messages, validates token by default (`restrictWatchers` defaults to `true`). Set `INSIDEJOB_RESTRICT_WATCHERS=0` (env) or `InsideJobRestrictWatchers=false` (plist) to allow unauthenticated observers
-6. **Brute-force protection** - tracks failed auth attempts per remote IP address (`failedAuthAttempts`, `lockedOutAddresses`). After 5 consecutive failures from the same address, that address is locked out for 30 seconds. Lockout persists across TCP reconnections since it's keyed on IP, not client ID. Successful authentication clears the counter for that address
-7. **Address-required auth gate** - clients must have a registered remote address (via `clientAddresses`) before auth is processed. Clients with no registered address are immediately rejected and disconnected, preventing lockout counter resets via reconnection
+6. **Brute-force protection** - tracks per-address rate-limiting state via `addressAuthStates: [String: AddressAuthState]`. `AddressAuthState` is an enum with two cases: `.failing(attempts: Int)` for accumulating failures and `.lockedOut(until: Date, attempts: Int)` for lockout after 5 consecutive failures. Lockout lasts 30 seconds, persists across TCP reconnections (keyed on IP, not client ID), and clears automatically on expiry. Successful authentication removes the entry for that address
+7. **Per-client lifecycle tracking** - each client traverses a `ClientPhase` enum stored in `clients: [Int: ClientPhase]`. The five phases are: `.connected(address:)`, `.helloValidated(address:)`, `.pendingApproval(address:respond:isObserver:)`, `.authenticated(address:driverIdentity:subscribed:)`, and `.observer(address:subscribed:)`. Disconnection removes the entry entirely. Clients must reach `.helloValidated` before auth is processed; clients still in `.connected` are rejected and disconnected
 
 ## Architecture Diagram
 
@@ -141,10 +141,10 @@ stateDiagram-v2
 - Documented behavior, but potential for annoyance/DoS in shared network environments
 - Consider: should there be a way to disable UI approval flow entirely?
 
-**Hello validation is tracked separately from auth/session state** (`TheMuscle.swift`)
-- `helloValidatedClients` is now a distinct pre-auth gate before `authenticate`, `watch`, or pre-auth `status`
-- This is the right behavior, but it means three connection states now exist: connected, hello-complete, authenticated
-- Any future auth changes need to preserve those distinctions or disconnections will get subtle
+**Client lifecycle is a 5-phase state machine** (`TheMuscle.swift`)
+- `ClientPhase` tracks each client through: connected, helloValidated, pendingApproval, authenticated, observer
+- `helloValidatedClients` is a computed property derived from `clients` (any phase past `.connected`)
+- Any future auth changes need to preserve these phase distinctions or disconnections will get subtle
 
 ### MEDIUM PRIORITY
 
@@ -164,6 +164,6 @@ stateDiagram-v2
 ### LOW PRIORITY
 
 **Session connections tracked by client ID integers**
-- `activeSessionConnections: Set<Int>` stores client IDs
+- `activeSessionConnections` is a computed property derived from the `SessionState` enum: returns `connections` from `.active(driverId:, connections:)`, empty set otherwise
+- Session state is modeled as `SessionState` enum with three cases: `.idle`, `.active(driverId: String, connections: Set<Int>)`, `.draining(driverId: String, releaseTimer: Task<Void, Never>)`
 - Client IDs come from `SimpleSocketServer` connection tracking (incrementing `Int` counter)
-- If IDs were reused (unlikely but possible), stale entries could accumulate

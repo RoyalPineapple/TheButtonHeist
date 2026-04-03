@@ -9,10 +9,11 @@
 Fingerprints provides visual feedback for all touch interactions:
 
 1. **Passthrough overlay window** at window level `statusBar + 100`
-2. **Instant fingerprints** for taps - 40pt white circle, scales 1.5x and fades over 0.8s
-3. **Continuous tracking** for swipes/drags/pinches - multi-finger circles that follow touch
+2. **Instant fingerprints** for taps - 40pt white circle, holds for 0.5s then fades out over 0.5s
+3. **Continuous tracking** for swipes/drags/pinches - multi-finger circles that follow touch; on end, scales 1.5x and fades out over 0.5s
 4. **Recording integration** - FingerprintWindow is drawn with all windows in captureScreenForRecording(), so recordings include the overlay
 5. **Accessibility exclusion** - window excluded from hierarchy traversal
+6. **DEBUG-only** - entire class is inside `#if DEBUG` (and `#if canImport(UIKit)`)
 
 ## Architecture Diagram
 
@@ -25,9 +26,9 @@ graph TD
     end
 
     subgraph Visual["Visual Properties"]
-        Circle["40pt white circle - cornerRadius: 20 - alpha: 0.8"]
+        Circle["40pt white circle - cornerRadius: 20 - alpha: 0.5"]
         AnimIn["Animate in: 0.12s - scale 0.1 → 1.0"]
-        AnimOut["Animate out: 0.6-0.8s - scale 1.0 → 1.5, alpha → 0"]
+        AnimOut["Fade out: 0.5s - alpha → 0 (instant)\nScale 1.0 → 1.5 + fade 0.5s (continuous end)"]
     end
 
     subgraph Consumers["Consumers"]
@@ -50,7 +51,7 @@ graph TD
 flowchart LR
     subgraph Instant["Instant (Tap/Activate)"]
         TapShow["showFingerprint(at:)"]
-        TapAnim["Scale 1.0→1.5 - Alpha 1.0→0 - Duration: 0.8s"]
+        TapAnim["Hold 0.5s then fade - Alpha 1.0→0 - Duration: 0.5s"]
         TapShow --> TapAnim
     end
 
