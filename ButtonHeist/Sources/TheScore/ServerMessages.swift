@@ -433,6 +433,13 @@ public enum ActionExpectation: Codable, Sendable, Equatable {
         heistId: String? = nil, property: ElementProperty? = nil,
         oldValue: String? = nil, newValue: String? = nil
     )
+    /// Expected an element matching this predicate to appear in the delta's added list.
+    case elementAppeared(ElementMatcher)
+    /// Expected an element matching this predicate to disappear from the delta's removed list.
+    /// Validation requires a pre-action element cache to resolve removed heistIds to matchers.
+    case elementDisappeared(ElementMatcher)
+    /// Compound: all sub-expectations must be met.
+    case compound([ActionExpectation])
 }
 
 /// The outcome of checking an ActionExpectation against an ActionResult.
@@ -453,7 +460,13 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
 
 extension ActionExpectation {
     /// Check this expectation against an ActionResult.
-    public func validate(against result: ActionResult) -> ExpectationResult {
+    /// - Parameter preActionElements: Cached elements from before the action, keyed by heistId.
+    ///   Required for `elementDisappeared` validation (resolves removed heistIds to matchers).
+    ///   Pass an empty dictionary if unavailable.
+    public func validate(
+        against result: ActionResult,
+        preActionElements: [String: HeistElement] = [:]
+    ) -> ExpectationResult {
         switch self {
         case .screenChanged:
             let kind = result.interfaceDelta?.kind
@@ -501,6 +514,55 @@ extension ActionExpectation {
                 return "\(u.heistId): \(props.joined(separator: ", "))"
             }.joined(separator: "; ")
             return ExpectationResult(met: false, expectation: self, actual: observed)
+
+        case .elementAppeared(let matcher):
+            guard let added = result.interfaceDelta?.added, !added.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no elements added")
+            }
+            if added.contains(where: { $0.matches(matcher) }) {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            let labels = added.compactMap(\.label).prefix(5).joined(separator: ", ")
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: "added: [\(labels)]"
+            )
+
+        case .elementDisappeared(let matcher):
+            guard let removed = result.interfaceDelta?.removed, !removed.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no elements removed")
+            }
+            let matched = removed.contains { heistId in
+                guard let element = preActionElements[heistId] else { return false }
+                return element.matches(matcher)
+            }
+            if matched {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            let removedIds = removed.prefix(5).joined(separator: ", ")
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: "removed: [\(removedIds)]"
+            )
+
+        case .compound(let expectations):
+            var failures: [String] = []
+            for expectation in expectations {
+                let subResult = expectation.validate(
+                    against: result, preActionElements: preActionElements
+                )
+                if !subResult.met {
+                    let description = String(describing: expectation)
+                    failures.append("\(description): \(subResult.actual ?? "failed")")
+                }
+            }
+            if failures.isEmpty {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: failures.joined(separator: "; ")
+            )
         }
     }
 

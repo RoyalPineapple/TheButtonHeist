@@ -128,6 +128,7 @@ enum ToolDefinitions {
         runBatch, getSessionState,
         connect, listTargets,
         getSessionLog, archiveSession,
+        startScript, stopScript, playScript,
     ]
 
     // MARK: - Individual Tools
@@ -644,6 +645,66 @@ enum ToolDefinitions {
                     "description": "Delete the session directory after archiving (default: false)",
                 ],
             ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let startScript = Tool(
+        name: "start_script",
+        description: """
+            Start recording a playback script. All subsequent commands (actions, gestures, \
+            text input) are captured as steps in a .heist file. Element targets are recorded \
+            as matchers (label, traits, identifier) rather than heistIds so the script can be \
+            replayed against any session. Call get_interface before acting to ensure element \
+            data is cached for matcher construction.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "app": [
+                    "type": "string",
+                    "description": "Bundle ID of the app being recorded (default: com.buttonheist.testapp)",
+                ],
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let stopScript = Tool(
+        name: "stop_script",
+        description: """
+            Stop recording and save the playback script to a .heist file. \
+            Returns the file path and number of steps recorded.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "output": [
+                    "type": "string",
+                    "description": "File path to write the .heist script",
+                ],
+            ],
+            "required": .array(["output"]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let playScript = Tool(
+        name: "play_script",
+        description: """
+            Play back a recorded .heist script. Each step is executed sequentially. \
+            Playback stops on the first error. Returns the number of completed steps \
+            and total timing.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "input": [
+                    "type": "string",
+                    "description": "Path to the .heist script file to play back",
+                ],
+            ],
+            "required": .array(["input"]),
             "additionalProperties": false,
         ]
     )

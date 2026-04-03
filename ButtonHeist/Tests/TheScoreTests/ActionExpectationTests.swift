@@ -246,7 +246,130 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertFalse(hintResult.met)
     }
 
+    // MARK: - elementAppeared
+
+    func testElementAppearedCodableRoundTrip() throws {
+        let expectation = ActionExpectation.elementAppeared(
+            ElementMatcher(label: "New Task", traits: [.staticText])
+        )
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testElementAppearedMetWhenMatchFound() {
+        let added = [makeElement(label: "New Task", traits: [.staticText])]
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.elementAppeared(
+            ElementMatcher(label: "New Task", traits: [.staticText])
+        ).validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testElementAppearedNotMetWhenNoMatch() {
+        let added = [makeElement(label: "Other Item", traits: [.staticText])]
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.elementAppeared(
+            ElementMatcher(label: "New Task")
+        ).validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
+    func testElementAppearedNotMetWhenNoAdded() {
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5)
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.elementAppeared(
+            ElementMatcher(label: "New Task")
+        ).validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
+    // MARK: - elementDisappeared
+
+    func testElementDisappearedCodableRoundTrip() throws {
+        let expectation = ActionExpectation.elementDisappeared(
+            ElementMatcher(label: "Old Item", traits: [.button])
+        )
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testElementDisappearedMetWhenMatchFound() {
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 3, removed: ["button_old"])
+        let action = makeResult(success: true, delta: delta)
+        let preAction: [String: HeistElement] = [
+            "button_old": makeElement(label: "Old Item", traits: [.button]),
+        ]
+        let result = ActionExpectation.elementDisappeared(
+            ElementMatcher(label: "Old Item", traits: [.button])
+        ).validate(against: action, preActionElements: preAction)
+        XCTAssertTrue(result.met)
+    }
+
+    func testElementDisappearedNotMetWithoutCache() {
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 3, removed: ["button_old"])
+        let action = makeResult(success: true, delta: delta)
+        // No pre-action cache — can't resolve removed heistIds
+        let result = ActionExpectation.elementDisappeared(
+            ElementMatcher(label: "Old Item")
+        ).validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
+    // MARK: - compound
+
+    func testCompoundCodableRoundTrip() throws {
+        let expectation = ActionExpectation.compound([
+            .elementsChanged,
+            .elementAppeared(ElementMatcher(label: "New", traits: [.staticText])),
+        ])
+        let data = try JSONEncoder().encode(expectation)
+        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
+        XCTAssertEqual(decoded, expectation)
+    }
+
+    func testCompoundAllMet() {
+        let added = [makeElement(label: "New Task", traits: [.staticText])]
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.compound([
+            .elementsChanged,
+            .elementAppeared(ElementMatcher(label: "New Task", traits: [.staticText])),
+        ]).validate(against: action)
+        XCTAssertTrue(result.met)
+    }
+
+    func testCompoundFailsIfAnyUnmet() {
+        let added = [makeElement(label: "New Task", traits: [.staticText])]
+        let delta = InterfaceDelta(kind: .elementsChanged, elementCount: 5, added: added)
+        let action = makeResult(success: true, delta: delta)
+        let result = ActionExpectation.compound([
+            .elementsChanged,
+            .elementAppeared(ElementMatcher(label: "Missing Element")),
+        ]).validate(against: action)
+        XCTAssertFalse(result.met)
+    }
+
     // MARK: - Helpers
+
+    private func makeElement(
+        label: String? = nil,
+        traits: [HeistTrait] = []
+    ) -> HeistElement {
+        HeistElement(
+            heistId: "",
+            description: label ?? "",
+            label: label,
+            value: nil,
+            identifier: nil,
+            traits: traits,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: []
+        )
+    }
 
     private func makeResult(
         success: Bool,
