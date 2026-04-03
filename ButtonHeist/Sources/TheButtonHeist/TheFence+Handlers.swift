@@ -611,4 +611,67 @@ extension TheFence {
             return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
     }
+
+    // MARK: - Handler: Script Recording & Playback
+
+    func handleScriptCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        switch command {
+        case .startScript:
+            let app = stringArg(args, "app") ?? "com.buttonheist.testapp"
+            // Ensure a BookKeeper session is active — script recording is a session artifact
+            if bookKeeper.manifest == nil {
+                let identifier = stringArg(args, "identifier") ?? "script"
+                try bookKeeper.beginSession(identifier: identifier)
+            }
+            try bookKeeper.startScriptRecording(app: app)
+            return .scriptStarted
+        case .stopScript:
+            let script = try bookKeeper.stopScriptRecording()
+            guard let outputPath = stringArg(args, "output") else {
+                throw FenceError.invalidRequest("stop_script requires an 'output' path")
+            }
+            guard !outputPath.split(separator: "/").contains("..") else {
+                throw FenceError.invalidRequest("Invalid output path: must not contain '..' components")
+            }
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
+            try TheBookKeeper.writeScript(script, to: resolvedURL)
+            return .scriptStopped(path: resolvedURL.path, stepCount: script.steps.count)
+        default:
+            return .error("Unexpected script command: \(command.rawValue)")
+        }
+    }
+
+    func handlePlayScript(_ args: [String: Any]) async throws -> FenceResponse {
+        guard let inputPath = stringArg(args, "input") else {
+            throw FenceError.invalidRequest("play_script requires an 'input' path")
+        }
+        guard !inputPath.split(separator: "/").contains("..") else {
+            throw FenceError.invalidRequest("Invalid input path: must not contain '..' components")
+        }
+
+        let resolvedURL = URL(fileURLWithPath: inputPath).standardized
+        let script = try TheBookKeeper.readScript(from: resolvedURL)
+
+        let playbackStart = CFAbsoluteTimeGetCurrent()
+        var completedSteps = 0
+        var failedIndex: Int?
+
+        for (index, step) in script.steps.enumerated() {
+            let request = step.toRequestDictionary()
+            do {
+                _ = try await execute(request: request)
+                completedSteps += 1
+            } catch {
+                failedIndex = index
+                break
+            }
+        }
+
+        let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
+        return .scriptPlayback(
+            completedSteps: completedSteps,
+            failedIndex: failedIndex,
+            totalTimingMs: totalTimingMs
+        )
+    }
 }

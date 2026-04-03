@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 // MARK: - Session Phase State Machine
 
@@ -19,6 +20,19 @@ public struct ActiveSession: Sendable {
     public var manifest: SessionManifest
     public let startTime: Date
     public var nextSequenceNumber: Int
+
+    // Script recording state (nil when not recording a script)
+    public var scriptRecording: ScriptRecording?
+}
+
+@ButtonHeistActor
+public struct ScriptRecording: Sendable {
+    public let app: String
+    public let startTime: Date
+    public var steps: [PlaybackStep]
+    /// Cached interface snapshot from the most recent get_interface response.
+    /// Used to look up heistId → element properties for matcher construction.
+    public var interfaceCache: [String: HeistElement]
 }
 
 @ButtonHeistActor
@@ -56,6 +70,8 @@ public enum BookKeeperError: Error, LocalizedError {
     case base64DecodingFailed
     case compressionFailed(String)
     case archiveFailed(String)
+    case noStepsRecorded
+    case notRecordingScript
 
     public var errorDescription: String? {
         switch self {
@@ -69,6 +85,10 @@ public enum BookKeeperError: Error, LocalizedError {
             return "Compression failed: \(reason)"
         case .archiveFailed(let reason):
             return "Archive failed: \(reason)"
+        case .noStepsRecorded:
+            return "No steps were recorded during the script session"
+        case .notRecordingScript:
+            return "No script recording is in progress"
         }
     }
 }
@@ -324,6 +344,425 @@ public final class TheBookKeeper {
         }
         try data.write(to: resolvedURL)
         return resolvedURL
+    }
+
+    // MARK: - Script Recording
+
+    public var isRecordingScript: Bool {
+        guard case .active(let session) = phase else { return false }
+        return session.scriptRecording != nil
+    }
+
+    public func startScriptRecording(app: String) throws {
+        guard case .active(var session) = phase else {
+            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
+        }
+        guard session.scriptRecording == nil else {
+            throw BookKeeperError.invalidPhase(expected: "not recording script", actual: "recording script")
+        }
+        session.scriptRecording = ScriptRecording(
+            app: app,
+            startTime: Date(),
+            steps: [],
+            interfaceCache: [:]
+        )
+        phase = .active(session)
+    }
+
+    public func stopScriptRecording() throws -> PlaybackScript {
+        guard case .active(var session) = phase else {
+            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
+        }
+        guard let recording = session.scriptRecording else {
+            throw BookKeeperError.notRecordingScript
+        }
+        guard !recording.steps.isEmpty else {
+            throw BookKeeperError.noStepsRecorded
+        }
+        let script = PlaybackScript(
+            recorded: recording.startTime,
+            app: recording.app,
+            steps: recording.steps
+        )
+        session.scriptRecording = nil
+        phase = .active(session)
+        return script
+    }
+
+    /// Update the cached interface snapshot for script recording.
+    public func updateInterfaceCache(_ elements: [HeistElement]) {
+        guard case .active(var session) = phase,
+              var recording = session.scriptRecording else { return }
+        recording.interfaceCache = Dictionary(
+            elements.map { ($0.heistId, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+        session.scriptRecording = recording
+        phase = .active(session)
+    }
+
+    /// Commands that should not appear in playback scripts.
+    private static let excludedScriptCommands: Set<String> = [
+        "help", "status", "quit", "exit",
+        "list_devices", "get_interface", "get_screen",
+        "get_session_state", "connect", "list_targets",
+        "get_session_log", "archive_session",
+        "start_recording", "stop_recording",
+        "run_batch",
+        "start_script", "stop_script", "play_script",
+    ]
+
+    /// Record a successfully executed command for script playback.
+    /// Only records commands that succeeded — failed actions are skipped.
+    public func recordScriptStep(
+        command: String,
+        args: [String: Any],
+        response: FenceResponse? = nil,
+        interfaceElements: [HeistElement]? = nil
+    ) {
+        guard case .active(var session) = phase,
+              var recording = session.scriptRecording else { return }
+        guard !Self.excludedScriptCommands.contains(command) else { return }
+
+        // Skip failed actions — only record successful outcomes
+        if let response {
+            if case .error = response { return }
+            if let actionResult = response.actionResult, !actionResult.success { return }
+        }
+
+        let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
+        var step = buildStep(
+            command: command,
+            args: args,
+            cache: allElements,
+            interfaceCache: recording.interfaceCache
+        )
+
+        if let response, let actionResult = response.actionResult {
+            let expect = generateExpectation(
+                actionResult: actionResult,
+                args: args,
+                interfaceCache: recording.interfaceCache,
+                allElements: allElements
+            )
+            if let expect {
+                step = PlaybackStep(
+                    command: step.command,
+                    target: step.target,
+                    arguments: step.arguments.merging(
+                        ["expect": expect],
+                        uniquingKeysWith: { _, new in new }
+                    ),
+                    recorded: step.recorded
+                )
+            }
+        }
+
+        recording.steps.append(step)
+        session.scriptRecording = recording
+        phase = .active(session)
+    }
+
+    // MARK: - Script Step Construction
+
+    private static let elementKeys: Set<String> = [
+        "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+    ]
+
+    private static let stripKeys: Set<String> = [
+        "command", "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+        "pngData", "videoData",
+    ]
+
+    private func buildStep(
+        command: String,
+        args: [String: Any],
+        cache: [HeistElement],
+        interfaceCache: [String: HeistElement]
+    ) -> PlaybackStep {
+        let heistId = args["heistId"] as? String
+        let hasMatcherFields = Self.elementKeys.subtracting(["heistId"]).contains { key in
+            args[key] != nil
+        }
+
+        var target: ElementMatcher?
+        var metadata: RecordedMetadata?
+
+        if let heistId, let element = interfaceCache[heistId] {
+            target = buildMinimalMatcher(element: element, allElements: cache)
+            metadata = RecordedMetadata(
+                heistId: heistId,
+                frame: RecordedFrame(
+                    x: element.frameX, y: element.frameY,
+                    width: element.frameWidth, height: element.frameHeight
+                )
+            )
+        } else if hasMatcherFields {
+            target = ElementMatcher(
+                label: args["label"] as? String,
+                identifier: args["identifier"] as? String,
+                value: args["value"] as? String,
+                traits: (args["traits"] as? [String])?.compactMap { HeistTrait(rawValue: $0) },
+                excludeTraits: (args["excludeTraits"] as? [String])?.compactMap { HeistTrait(rawValue: $0) }
+            ).nonEmpty
+            if let heistId {
+                metadata = RecordedMetadata(heistId: heistId)
+            }
+        } else if hasCoordinateArgs(args) {
+            metadata = RecordedMetadata(coordinateOnly: true)
+        }
+
+        var arguments: [String: PlaybackValue] = [:]
+        for (key, argValue) in args where !Self.stripKeys.contains(key) {
+            if let playbackValue = PlaybackValue.from(argValue) {
+                arguments[key] = playbackValue
+            }
+        }
+
+        return PlaybackStep(
+            command: command,
+            target: target,
+            arguments: arguments,
+            recorded: metadata
+        )
+    }
+
+    private func hasCoordinateArgs(_ args: [String: Any]) -> Bool {
+        args["x"] != nil || args["startX"] != nil || args["centerX"] != nil || args["points"] != nil
+    }
+
+    // MARK: - Minimal Matcher
+
+    /// Traits that represent mutable state, not element identity.
+    static let stateTraits: Set<HeistTrait> = [
+        .selected, .notEnabled, .isEditing, .inactive, .visited,
+    ]
+
+    private func identityTraits(_ traits: [HeistTrait]) -> [HeistTrait]? {
+        let filtered = traits.filter { !Self.stateTraits.contains($0) }
+        return filtered.isEmpty ? nil : filtered
+    }
+
+    /// UUID pattern — identifiers containing UUIDs are runtime-generated and not stable.
+    private static let uuidPattern = try! NSRegularExpression(
+        pattern: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+    )
+
+    /// Check whether an identifier is stable (developer-assigned) vs runtime-generated (contains UUID).
+    private func isStableIdentifier(_ identifier: String) -> Bool {
+        let range = NSRange(identifier.startIndex..., in: identifier)
+        return Self.uuidPattern.firstMatch(in: identifier, range: range) == nil
+    }
+
+    /// Build the smallest ElementMatcher that uniquely identifies the element
+    /// among all currently visible elements. Uses only identity fields —
+    /// never value (mutable state) or state traits (selected, notEnabled, etc.).
+    /// Skips identifiers that contain UUIDs (runtime-generated, not stable across sessions).
+    public func buildMinimalMatcher(
+        element: HeistElement,
+        allElements: [HeistElement]
+    ) -> ElementMatcher {
+        let traits = identityTraits(element.traits)
+        let stableIdentifier = element.identifier.flatMap { isStableIdentifier($0) ? $0 : nil }
+
+        if let stableIdentifier {
+            let candidate = ElementMatcher(identifier: stableIdentifier)
+            if uniquelyMatches(candidate, element: element, in: allElements) {
+                return candidate
+            }
+        }
+
+        if let elementLabel = element.label {
+            let candidate = ElementMatcher(label: elementLabel, traits: traits)
+            if uniquelyMatches(candidate, element: element, in: allElements) {
+                return candidate
+            }
+
+            if let stableIdentifier {
+                let candidate = ElementMatcher(
+                    label: elementLabel, identifier: stableIdentifier, traits: traits
+                )
+                if uniquelyMatches(candidate, element: element, in: allElements) {
+                    return candidate
+                }
+            }
+        }
+
+        return ElementMatcher(
+            label: element.label,
+            identifier: stableIdentifier,
+            traits: traits
+        )
+    }
+
+    /// Build a matcher for expectations — starts from identity, enriches with
+    /// notable state traits and value when present.
+    public func buildExpectationMatcher(
+        element: HeistElement,
+        allElements: [HeistElement]
+    ) -> ElementMatcher {
+        let identity = buildMinimalMatcher(element: element, allElements: allElements)
+        let elementStateTraits = element.traits.filter { Self.stateTraits.contains($0) }
+        let notableStateTraits = elementStateTraits.isEmpty ? nil : elementStateTraits
+        let notableValue = element.value
+
+        if notableStateTraits == nil && notableValue == nil {
+            return identity
+        }
+
+        let mergedTraits: [HeistTrait]?
+        if let identityTraits = identity.traits, let notable = notableStateTraits {
+            mergedTraits = identityTraits + notable
+        } else {
+            mergedTraits = identity.traits ?? notableStateTraits
+        }
+
+        return ElementMatcher(
+            label: identity.label,
+            identifier: identity.identifier,
+            value: notableValue,
+            traits: mergedTraits
+        )
+    }
+
+    private func uniquelyMatches(
+        _ matcher: ElementMatcher,
+        element: HeistElement,
+        in allElements: [HeistElement]
+    ) -> Bool {
+        var matchCount = 0
+        for candidate in allElements {
+            if candidate.matches(matcher) {
+                matchCount += 1
+                if matchCount > 1 { return false }
+            }
+        }
+        return matchCount == 1
+    }
+
+    // MARK: - Expectation Generation
+
+    private static let insertionRemovalCap = 5
+
+    private static let propertyPriority: [ElementProperty] = [
+        .value, .label, .traits, .hint, .actions,
+    ]
+
+    func generateExpectation(
+        actionResult: ActionResult,
+        args: [String: Any],
+        interfaceCache: [String: HeistElement],
+        allElements: [HeistElement]
+    ) -> PlaybackValue? {
+        guard let delta = actionResult.interfaceDelta else { return nil }
+
+        var expectations: [PlaybackValue] = []
+
+        switch delta.kind {
+        case .screenChanged:
+            expectations.append(.string("screen_changed"))
+
+        case .elementsChanged:
+            if let propertyExpect = buildPropertyExpectation(
+                delta: delta, args: args, interfaceCache: interfaceCache
+            ) {
+                expectations.append(propertyExpect)
+            }
+
+            if let added = delta.added {
+                let postActionElements = allElements + added
+                for element in added.prefix(Self.insertionRemovalCap) {
+                    let matcher = buildExpectationMatcher(
+                        element: element, allElements: postActionElements
+                    )
+                    expectations.append(matcherExpectation(key: "elementAppeared", matcher: matcher))
+                }
+            }
+
+            if let removed = delta.removed {
+                let preActionElements = Array(interfaceCache.values)
+                for heistId in removed.prefix(Self.insertionRemovalCap) {
+                    guard let element = interfaceCache[heistId] else { continue }
+                    let matcher = buildExpectationMatcher(
+                        element: element, allElements: preActionElements
+                    )
+                    expectations.append(matcherExpectation(key: "elementDisappeared", matcher: matcher))
+                }
+            }
+
+            if expectations.isEmpty {
+                expectations.append(.string("elements_changed"))
+            }
+
+        case .noChange:
+            return nil
+        }
+
+        guard !expectations.isEmpty else { return nil }
+        return expectations.count == 1 ? expectations[0] : .array(expectations)
+    }
+
+    private func buildPropertyExpectation(
+        delta: InterfaceDelta,
+        args: [String: Any],
+        interfaceCache: [String: HeistElement]
+    ) -> PlaybackValue? {
+        guard let updates = delta.updated, !updates.isEmpty else { return nil }
+
+        let targetHeistId = args["heistId"] as? String
+        let targetUpdate: ElementUpdate?
+        if let targetHeistId {
+            targetUpdate = updates.first { $0.heistId == targetHeistId }
+        } else {
+            targetUpdate = updates.first { update in
+                update.changes.contains { !$0.property.isGeometry }
+            }
+        }
+
+        guard let update = targetUpdate else { return nil }
+
+        let semanticChanges = update.changes.filter { !$0.property.isGeometry }
+        for priority in Self.propertyPriority {
+            if let change = semanticChanges.first(where: { $0.property == priority }) {
+                var expectDict: [String: PlaybackValue] = [
+                    "property": .string(change.property.rawValue),
+                ]
+                if let newValue = change.new {
+                    expectDict["newValue"] = .string(newValue)
+                }
+                return .object(["elementUpdated": .object(expectDict)])
+            }
+        }
+
+        return nil
+    }
+
+    private func matcherExpectation(key: String, matcher: ElementMatcher) -> PlaybackValue {
+        var matcherDict: [String: PlaybackValue] = [:]
+        if let label = matcher.label { matcherDict["label"] = .string(label) }
+        if let matcherIdentifier = matcher.identifier { matcherDict["identifier"] = .string(matcherIdentifier) }
+        if let matcherValue = matcher.value { matcherDict["value"] = .string(matcherValue) }
+        if let traits = matcher.traits {
+            matcherDict["traits"] = .array(traits.map { .string($0.rawValue) })
+        }
+        return .object([key: .object(matcherDict)])
+    }
+
+    // MARK: - Script File I/O
+
+    public static func writeScript(_ script: PlaybackScript, to path: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(script)
+        try data.write(to: path, options: .atomic)
+    }
+
+    public static func readScript(from path: URL) throws -> PlaybackScript {
+        let data = try Data(contentsOf: path)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(PlaybackScript.self, from: data)
     }
 
     // MARK: - Path Safety

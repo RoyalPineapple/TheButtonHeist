@@ -54,6 +54,11 @@ struct ButtonHeistApp: AsyncParsableCommand {
             SessionLogCommand.self,
             ArchiveSessionCommand.self,
 
+            // Script recording & playback
+            StartScriptCommand.self,
+            StopScriptCommand.self,
+            PlayScriptCommand.self,
+
             // Setup
             IntegrateCommand.self,
         ]
