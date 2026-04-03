@@ -3,7 +3,7 @@
 #
 # Performs the local release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
-#   2. Bump version across 6 files
+#   2. Bump version across 5 files
 #   3. Build all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
 #   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
 #   5. Commit, tag, push
@@ -18,7 +18,7 @@
 #          ./scripts/release.sh 2026.04.03   # Explicit CalVer
 #          ./scripts/release.sh --dry-run    # Preview only
 #
-# See docs/VERSIONING.md for versioning rules.
+# See .context/internal-docs/VERSIONING.md for versioning rules.
 
 set -euo pipefail
 
@@ -93,7 +93,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "(dry run — stopping after validation)"
     echo ""
     echo "Would perform:"
-    echo "  1. Bump version in 6 files"
+    echo "  1. Bump version in 5 files"
     echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
     echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
@@ -135,11 +135,7 @@ sed -i '' "s/LabeledContent(\"Version\", value: \"$CURRENT_ESC\")/LabeledContent
     TestApp/Sources/DisclosureGroupingDemo.swift
 echo "  ✓ DisclosureGroupingDemo.swift"
 
-# 5. docs/VERSIONING.md
-sed -i '' "s/\*\*$CURRENT_ESC\*\*/**$NEW_ESC**/" docs/VERSIONING.md
-echo "  ✓ docs/VERSIONING.md"
-
-# 6. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
+# 5. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
 sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
 echo "  ✓ Formula/buttonheist.rb"
 echo ""
@@ -226,7 +222,6 @@ git add \
     VERSION \
     docs/API.md \
     TestApp/Sources/DisclosureGroupingDemo.swift \
-    docs/VERSIONING.md \
     Formula/buttonheist.rb
 
 git commit -m "Release $NEW_VERSION"
