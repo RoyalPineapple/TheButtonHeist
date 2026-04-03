@@ -308,7 +308,20 @@ extension TheBagman {
 
         // Something changed — convert to wire for property-level diff
         let beforeWire = toWire(before)
-        let afterWire = toWire(after)
+        var afterWire = toWire(after)
+
+        // Recover elements that scrolled off screen during a layout shift.
+        // If an element was visible before the action but is no longer in the
+        // visible after-snapshot, check the full registry. If it still exists
+        // (just off-screen), include its current state so the delta reports it
+        // as "updated" rather than "removed."
+        let afterHeistIds = Set(afterWire.map(\.heistId))
+        for beforeElement in beforeWire where !afterHeistIds.contains(beforeElement.heistId) {
+            if let entry = screenElements[beforeElement.heistId] {
+                afterWire.append(toWire(entry))
+            }
+        }
+
         return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
     }
 

@@ -70,7 +70,7 @@ struct RootView: View {
                     }
                     .accessibilityIdentifier("buttonheist.root.cornerScroll")
                     NavigationLink("Albums") {
-                        NestedScrollView()
+                        AlbumFlowView()
                     }
                     .accessibilityIdentifier("buttonheist.root.albums")
                 }
