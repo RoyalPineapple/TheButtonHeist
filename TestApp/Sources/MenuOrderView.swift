@@ -7,7 +7,8 @@ struct MenuItem: Identifiable, Equatable {
     let name: String
     let detail: String
     let price: Decimal
-    let icon: String
+    let emoji: String
+    let color: Color
     let customization: String?
     var quantity: Int = 0
     var isCustomized: Bool = false
@@ -17,14 +18,16 @@ struct MenuItem: Identifiable, Equatable {
         name: String,
         detail: String,
         price: Decimal,
-        icon: String,
+        emoji: String,
+        color: Color = .secondary,
         customization: String? = nil
     ) {
         self.id = id
         self.name = name
         self.detail = detail
         self.price = price
-        self.icon = icon
+        self.emoji = emoji
+        self.color = color
         self.customization = customization
     }
 
@@ -66,6 +69,7 @@ struct MenuOrderView: View {
     var body: some View {
         List {
             summarySection
+
             ForEach($categories) { $category in
                 Section {
                     ForEach($category.items) { $item in
@@ -76,8 +80,10 @@ struct MenuOrderView: View {
                         .accessibilityIdentifier("buttonheist.menu.section-\(category.id)")
                 }
             }
+
             orderActions
         }
+        .listStyle(.insetGrouped)
         .navigationTitle("Menu")
     }
 
@@ -90,6 +96,7 @@ struct MenuOrderView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(totalQuantity)")
+                    .fontWeight(.medium)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("buttonheist.menu.itemCount")
@@ -109,6 +116,7 @@ struct MenuOrderView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(formatPrice(tax))
+                    .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(tax))
@@ -120,6 +128,7 @@ struct MenuOrderView: View {
                 Spacer()
                 Text(formatPrice(total))
                     .fontWeight(.semibold)
+                    .font(.title3)
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(total))
@@ -138,7 +147,7 @@ struct MenuOrderView: View {
             } label: {
                 HStack {
                     Spacer()
-                    Text("Place Order")
+                    Label("Place Order", systemImage: "cart.fill")
                         .fontWeight(.semibold)
                     Spacer()
                 }
@@ -178,28 +187,52 @@ private struct MenuItemRow: View {
     @Binding var item: MenuItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                Text(item.icon)
-                    .font(.title2)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                // Emoji badge
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(item.color.opacity(0.15))
+                        .frame(width: 44, height: 44)
+                    Text(item.emoji)
+                        .font(.title2)
+                }
+
+                // Name, description, price
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name)
-                        .font(.headline)
+                    HStack {
+                        Text(item.name)
+                            .font(.body.weight(.medium))
+                        Spacer()
+                        Text(item.price.formatted(.currency(code: "USD")))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
                     Text(item.detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
-                Spacer()
-                Text(item.price.formatted(.currency(code: "USD")))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("buttonheist.menu.item-\(item.id)")
 
+            // Stepper
             Stepper(value: $item.quantity, in: 0...10) {
-                Text("Qty: \(item.quantity)")
-                    .monospacedDigit()
+                HStack {
+                    Text("Qty")
+                        .foregroundStyle(.secondary)
+                    Text("\(item.quantity)")
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                    if item.quantity > 0 {
+                        Text("·")
+                            .foregroundStyle(.tertiary)
+                        Text(item.lineTotal.formatted(.currency(code: "USD")))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .accessibilityIdentifier("buttonheist.menu.qty-\(item.id)")
             .accessibilityLabel("\(item.name) quantity")
@@ -211,15 +244,19 @@ private struct MenuItemRow: View {
                 }
             }
 
+            // Customization toggle (appears when qty > 0)
             if item.quantity > 0, let customization = item.customization {
                 Toggle(customization, isOn: $item.isCustomized)
+                    .font(.subheadline)
                     .accessibilityIdentifier("buttonheist.menu.custom-\(item.id)")
                     .onChange(of: item.isCustomized) { _, newValue in
                         NSLog("[Menu] %@ %@: %@", item.name, customization, newValue ? "on" : "off")
                     }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .padding(.vertical, 4)
+        .animation(.easeInOut(duration: 0.2), value: item.quantity)
     }
 }
 
@@ -234,20 +271,20 @@ extension MenuCategory {
             items: [
                 MenuItem(id: "hummus-pita", name: "Hummus & Pita",
                          detail: "Creamy chickpea dip with warm flatbread",
-                         price: Decimal(string: "8.50") ?? 0, icon: "\u{1FAD3}"),
+                         price: Decimal(string: "8.50") ?? 0, emoji: "\u{1FAD3}", color: .orange),
                 MenuItem(id: "falafel-plate", name: "Falafel Plate",
                          detail: "Crispy chickpea fritters with tahini",
-                         price: Decimal(string: "10.00") ?? 0, icon: "\u{1F9C6}",
+                         price: Decimal(string: "10.00") ?? 0, emoji: "\u{1F9C6}", color: .brown,
                          customization: "Extra tahini"),
                 MenuItem(id: "greek-salad", name: "Greek Salad",
                          detail: "Tomato, cucumber, olives, and feta",
-                         price: Decimal(string: "9.50") ?? 0, icon: "\u{1F957}"),
+                         price: Decimal(string: "9.50") ?? 0, emoji: "\u{1F957}", color: .green),
                 MenuItem(id: "bruschetta", name: "Bruschetta",
                          detail: "Toasted bread with tomato and basil",
-                         price: Decimal(string: "8.00") ?? 0, icon: "\u{1F35E}"),
+                         price: Decimal(string: "8.00") ?? 0, emoji: "\u{1F35E}", color: .red),
                 MenuItem(id: "soup-of-the-day", name: "Soup of the Day",
                          detail: "Ask your server for today's selection",
-                         price: Decimal(string: "7.00") ?? 0, icon: "\u{1F372}"),
+                         price: Decimal(string: "7.00") ?? 0, emoji: "\u{1F372}", color: .orange),
             ]
         ),
         MenuCategory(
@@ -257,25 +294,25 @@ extension MenuCategory {
             items: [
                 MenuItem(id: "margherita-pizza", name: "Margherita Pizza",
                          detail: "San Marzano tomato, mozzarella, basil",
-                         price: Decimal(string: "14.00") ?? 0, icon: "\u{1F355}",
+                         price: Decimal(string: "14.00") ?? 0, emoji: "\u{1F355}", color: .red,
                          customization: "Add extra basil"),
                 MenuItem(id: "grilled-salmon", name: "Grilled Salmon",
                          detail: "Atlantic salmon with lemon herb butter",
-                         price: Decimal(string: "22.00") ?? 0, icon: "\u{1F41F}"),
+                         price: Decimal(string: "22.00") ?? 0, emoji: "\u{1F41F}", color: .pink),
                 MenuItem(id: "lamb-kebab", name: "Lamb Kebab",
                          detail: "Seasoned lamb skewers with yogurt sauce",
-                         price: Decimal(string: "18.50") ?? 0, icon: "\u{1F362}",
+                         price: Decimal(string: "18.50") ?? 0, emoji: "\u{1F362}", color: .brown,
                          customization: "Extra spicy"),
                 MenuItem(id: "chicken-shawarma", name: "Chicken Shawarma",
                          detail: "Slow-roasted chicken with pickled turnip",
-                         price: Decimal(string: "16.00") ?? 0, icon: "\u{1F32F}",
+                         price: Decimal(string: "16.00") ?? 0, emoji: "\u{1F32F}", color: .yellow,
                          customization: "Extra garlic sauce"),
                 MenuItem(id: "eggplant-parmesan", name: "Eggplant Parmesan",
                          detail: "Breaded eggplant with marinara and cheese",
-                         price: Decimal(string: "15.00") ?? 0, icon: "\u{1F346}"),
+                         price: Decimal(string: "15.00") ?? 0, emoji: "\u{1F346}", color: .purple),
                 MenuItem(id: "seafood-pasta", name: "Seafood Pasta",
                          detail: "Linguine with shrimp, mussels, and clam",
-                         price: Decimal(string: "20.00") ?? 0, icon: "\u{1F990}"),
+                         price: Decimal(string: "20.00") ?? 0, emoji: "\u{1F990}", color: .orange),
             ]
         ),
         MenuCategory(
@@ -285,16 +322,16 @@ extension MenuCategory {
             items: [
                 MenuItem(id: "garlic-bread", name: "Garlic Bread",
                          detail: "Oven-baked with herb butter",
-                         price: Decimal(string: "5.00") ?? 0, icon: "\u{1F9C4}"),
+                         price: Decimal(string: "5.00") ?? 0, emoji: "\u{1F9C4}", color: .yellow),
                 MenuItem(id: "sweet-potato-fries", name: "Sweet Potato Fries",
                          detail: "Crispy with chipotle aioli",
-                         price: Decimal(string: "6.50") ?? 0, icon: "\u{1F360}"),
+                         price: Decimal(string: "6.50") ?? 0, emoji: "\u{1F360}", color: .orange),
                 MenuItem(id: "rice-pilaf", name: "Rice Pilaf",
                          detail: "Fluffy basmati with toasted almonds",
-                         price: Decimal(string: "4.50") ?? 0, icon: "\u{1F35A}"),
+                         price: Decimal(string: "4.50") ?? 0, emoji: "\u{1F35A}", color: .brown),
                 MenuItem(id: "roasted-vegetables", name: "Roasted Vegetables",
                          detail: "Seasonal medley with olive oil",
-                         price: Decimal(string: "7.00") ?? 0, icon: "\u{1F955}"),
+                         price: Decimal(string: "7.00") ?? 0, emoji: "\u{1F955}", color: .green),
             ]
         ),
         MenuCategory(
@@ -304,20 +341,20 @@ extension MenuCategory {
             items: [
                 MenuItem(id: "tiramisu", name: "Tiramisu",
                          detail: "Espresso-soaked ladyfingers with mascarpone",
-                         price: Decimal(string: "9.00") ?? 0, icon: "\u{1F370}"),
+                         price: Decimal(string: "9.00") ?? 0, emoji: "\u{1F370}", color: .brown),
                 MenuItem(id: "baklava", name: "Baklava",
                          detail: "Honey-walnut phyllo pastry",
-                         price: Decimal(string: "7.50") ?? 0, icon: "\u{1F36F}"),
+                         price: Decimal(string: "7.50") ?? 0, emoji: "\u{1F36F}", color: .yellow),
                 MenuItem(id: "chocolate-lava-cake", name: "Chocolate Lava Cake",
                          detail: "Warm dark chocolate with molten center",
-                         price: Decimal(string: "10.00") ?? 0, icon: "\u{1F36B}",
+                         price: Decimal(string: "10.00") ?? 0, emoji: "\u{1F36B}", color: .brown,
                          customization: "Add ice cream"),
                 MenuItem(id: "creme-brulee", name: "Crème Brûlée",
                          detail: "Vanilla custard with caramelized sugar",
-                         price: Decimal(string: "8.50") ?? 0, icon: "\u{1F36E}"),
+                         price: Decimal(string: "8.50") ?? 0, emoji: "\u{1F36E}", color: .yellow),
                 MenuItem(id: "fruit-sorbet", name: "Fruit Sorbet",
                          detail: "Rotating seasonal fruit flavors",
-                         price: Decimal(string: "6.00") ?? 0, icon: "\u{1F367}"),
+                         price: Decimal(string: "6.00") ?? 0, emoji: "\u{1F367}", color: .pink),
             ]
         ),
         MenuCategory(
@@ -327,20 +364,20 @@ extension MenuCategory {
             items: [
                 MenuItem(id: "sparkling-water", name: "Sparkling Water",
                          detail: "San Pellegrino 500ml",
-                         price: Decimal(string: "3.00") ?? 0, icon: "\u{1F4A7}"),
+                         price: Decimal(string: "3.00") ?? 0, emoji: "\u{1F4A7}", color: .cyan),
                 MenuItem(id: "fresh-lemonade", name: "Fresh Lemonade",
                          detail: "House-squeezed with honey",
-                         price: Decimal(string: "4.50") ?? 0, icon: "\u{1F34B}",
+                         price: Decimal(string: "4.50") ?? 0, emoji: "\u{1F34B}", color: .yellow,
                          customization: "Add mint"),
                 MenuItem(id: "espresso", name: "Espresso",
                          detail: "Double shot, single origin",
-                         price: Decimal(string: "3.50") ?? 0, icon: "\u{2615}"),
+                         price: Decimal(string: "3.50") ?? 0, emoji: "\u{2615}", color: .brown),
                 MenuItem(id: "mint-tea", name: "Mint Tea",
                          detail: "Fresh Moroccan-style mint tea",
-                         price: Decimal(string: "4.00") ?? 0, icon: "\u{1F375}"),
+                         price: Decimal(string: "4.00") ?? 0, emoji: "\u{1F375}", color: .green),
                 MenuItem(id: "house-red-wine", name: "House Red Wine",
                          detail: "Mediterranean blend, by the glass",
-                         price: Decimal(string: "9.00") ?? 0, icon: "\u{1F377}"),
+                         price: Decimal(string: "9.00") ?? 0, emoji: "\u{1F377}", color: .red),
             ]
         ),
     ]

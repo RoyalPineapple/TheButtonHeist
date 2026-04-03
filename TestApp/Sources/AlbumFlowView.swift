@@ -19,9 +19,10 @@ struct Genre: Identifiable {
 
 // MARK: - Albums View
 
-struct NestedScrollView: View {
+struct AlbumFlowView: View {
     @State private var selectedAlbum: Album?
     @State private var queue: [Album] = []
+    @State private var favorites: Set<String> = []
     @State private var isPlaying = false
 
     var body: some View {
@@ -138,14 +139,57 @@ struct NestedScrollView: View {
                         .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 3)
                 )
 
-                Text(album.title)
-                    .font(.caption.bold())
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(album.artist)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(album.title)
+                            .font(.caption.bold())
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(album.artist)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Menu {
+                        Button {
+                            if isQueued {
+                                queue.removeAll { $0.id == album.id }
+                                NSLog("[Albums] Removed from queue: %@", album.title)
+                            } else {
+                                queue.append(album)
+                                NSLog("[Albums] Added to queue: %@", album.title)
+                            }
+                        } label: {
+                            Label(
+                                isQueued ? "Remove from Queue" : "Add to Queue",
+                                systemImage: isQueued ? "minus.circle" : "text.badge.plus"
+                            )
+                        }
+                        Button {
+                            if favorites.contains(album.id) {
+                                favorites.remove(album.id)
+                                NSLog("[Albums] Unfavorited: %@", album.title)
+                            } else {
+                                favorites.insert(album.id)
+                                NSLog("[Albums] Favorited: %@", album.title)
+                            }
+                        } label: {
+                            Label(
+                                favorites.contains(album.id) ? "Remove from Favorites" : "Add to Favorites",
+                                systemImage: favorites.contains(album.id) ? "heart.slash" : "heart"
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .accessibilityHidden(true)
+                }
             }
             .frame(width: 150)
         }
@@ -159,6 +203,15 @@ struct NestedScrollView: View {
             } else {
                 queue.append(album)
                 NSLog("[Albums] Added to queue: %@", album.title)
+            }
+        }
+        .accessibilityAction(named: favorites.contains(album.id) ? "Remove from Favorites" : "Add to Favorites") {
+            if favorites.contains(album.id) {
+                favorites.remove(album.id)
+                NSLog("[Albums] Unfavorited: %@", album.title)
+            } else {
+                favorites.insert(album.id)
+                NSLog("[Albums] Favorited: %@", album.title)
             }
         }
     }
@@ -379,6 +432,6 @@ extension Genre {
 
 #Preview {
     NavigationStack {
-        NestedScrollView()
+        AlbumFlowView()
     }
 }
