@@ -5,23 +5,23 @@ import XCTest
 @MainActor
 final class TheInsideJobStateTests: XCTestCase {
 
-    // MARK: - ServerState: Initial
+    // MARK: - ServerPhase: Initial
 
-    func testInitialServerStateIsStopped() {
+    func testInitialServerPhaseIsStopped() {
         let job = TheInsideJob()
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped, got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped, got \(job.serverPhase)")
             return
         }
     }
 
-    // MARK: - ServerState: stop()
+    // MARK: - ServerPhase: stop()
 
     func testStopFromStoppedIsNoOp() {
         let job = TheInsideJob()
         job.stop()
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped after stop(), got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped after stop(), got \(job.serverPhase)")
             return
         }
     }
@@ -29,24 +29,24 @@ final class TheInsideJobStateTests: XCTestCase {
     func testStopFromRunningTransitionsToStopped() {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverState = .running(transport: transport)
+        job.serverPhase = .running(transport: transport)
 
         job.stop()
 
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped after stop(), got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped after stop(), got \(job.serverPhase)")
             return
         }
     }
 
     func testStopFromSuspendedTransitionsToStopped() {
         let job = TheInsideJob()
-        job.serverState = .suspended
+        job.serverPhase = .suspended
 
         job.stop()
 
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped after stop(), got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped after stop(), got \(job.serverPhase)")
             return
         }
     }
@@ -58,28 +58,28 @@ final class TheInsideJobStateTests: XCTestCase {
             do { try await Task.sleep(for: .seconds(60)) } catch {}
             if Task.isCancelled { cancellationExpectation.fulfill() }
         }
-        job.serverState = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(task: resumeTask)
 
         job.stop()
 
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped after stop(), got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped after stop(), got \(job.serverPhase)")
             return
         }
         wait(for: [cancellationExpectation], timeout: 1.0)
     }
 
-    // MARK: - ServerState: suspend()
+    // MARK: - ServerPhase: suspend()
 
     func testSuspendFromRunningTransitionsToSuspended() {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverState = .running(transport: transport)
+        job.serverPhase = .running(transport: transport)
 
         job.suspend()
 
-        guard case .suspended = job.serverState else {
-            XCTFail("Expected .suspended, got \(job.serverState)")
+        guard case .suspended = job.serverPhase else {
+            XCTFail("Expected .suspended, got \(job.serverPhase)")
             return
         }
     }
@@ -91,12 +91,12 @@ final class TheInsideJobStateTests: XCTestCase {
             do { try await Task.sleep(for: .seconds(60)) } catch {}
             if Task.isCancelled { cancellationExpectation.fulfill() }
         }
-        job.serverState = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(task: resumeTask)
 
         job.suspend()
 
-        guard case .suspended = job.serverState else {
-            XCTFail("Expected .suspended after suspend during resume, got \(job.serverState)")
+        guard case .suspended = job.serverPhase else {
+            XCTFail("Expected .suspended after suspend during resume, got \(job.serverPhase)")
             return
         }
         wait(for: [cancellationExpectation], timeout: 1.0)
@@ -107,29 +107,29 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.suspend()
 
-        guard case .stopped = job.serverState else {
-            XCTFail("Expected .stopped (no-op), got \(job.serverState)")
+        guard case .stopped = job.serverPhase else {
+            XCTFail("Expected .stopped (no-op), got \(job.serverPhase)")
             return
         }
     }
 
     func testSuspendFromSuspendedIsNoOp() {
         let job = TheInsideJob()
-        job.serverState = .suspended
+        job.serverPhase = .suspended
 
         job.suspend()
 
-        guard case .suspended = job.serverState else {
-            XCTFail("Expected .suspended (no-op), got \(job.serverState)")
+        guard case .suspended = job.serverPhase else {
+            XCTFail("Expected .suspended (no-op), got \(job.serverPhase)")
             return
         }
     }
 
-    // MARK: - ServerState: Impossible states eliminated
+    // MARK: - ServerPhase: Impossible states eliminated
 
     func testRunningStateCarriesTransport() {
         let transport = ServerTransport()
-        let state = TheInsideJob.ServerState.running(transport: transport)
+        let state = TheInsideJob.ServerPhase.running(transport: transport)
         if case .running(let carried) = state {
             XCTAssertTrue(carried === transport)
         } else {
@@ -139,33 +139,33 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testResumingStateCarriesTask() {
         let task = Task { @MainActor in }
-        let state = TheInsideJob.ServerState.resuming(task: task)
+        let state = TheInsideJob.ServerPhase.resuming(task: task)
         guard case .resuming = state else {
             XCTFail("Expected .resuming")
             return
         }
     }
 
-    // MARK: - PollingState: Initial
+    // MARK: - PollingPhase: Initial
 
-    func testInitialPollingStateIsDisabled() {
+    func testInitialPollingPhaseIsDisabled() {
         let job = TheInsideJob()
-        guard case .disabled = job.pollingState else {
-            XCTFail("Expected .disabled, got \(job.pollingState)")
+        guard case .disabled = job.pollingPhase else {
+            XCTFail("Expected .disabled, got \(job.pollingPhase)")
             return
         }
         XCTAssertFalse(job.isPollingEnabled)
     }
 
-    // MARK: - PollingState: startPolling / stopPolling
+    // MARK: - PollingPhase: startPolling / stopPolling
 
     func testStartPollingTransitionsToActive() {
         let job = TheInsideJob()
 
         job.startPolling(interval: 3.0)
 
-        guard case .active(_, let interval) = job.pollingState else {
-            XCTFail("Expected .active, got \(job.pollingState)")
+        guard case .active(_, let interval) = job.pollingPhase else {
+            XCTFail("Expected .active, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 3.0)
@@ -180,8 +180,8 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.startPolling(interval: 0.1)
 
-        guard case .active(_, let interval) = job.pollingState else {
-            XCTFail("Expected .active, got \(job.pollingState)")
+        guard case .active(_, let interval) = job.pollingPhase else {
+            XCTFail("Expected .active, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 0.5)
@@ -195,8 +195,8 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.stopPolling()
 
-        guard case .disabled = job.pollingState else {
-            XCTFail("Expected .disabled, got \(job.pollingState)")
+        guard case .disabled = job.pollingPhase else {
+            XCTFail("Expected .disabled, got \(job.pollingPhase)")
             return
         }
         XCTAssertFalse(job.isPollingEnabled)
@@ -207,36 +207,36 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.stopPolling()
 
-        guard case .disabled = job.pollingState else {
-            XCTFail("Expected .disabled, got \(job.pollingState)")
+        guard case .disabled = job.pollingPhase else {
+            XCTFail("Expected .disabled, got \(job.pollingPhase)")
             return
         }
     }
 
     func testStopPollingFromPausedTransitionsToDisabled() {
         let job = TheInsideJob()
-        job.pollingState = .paused(interval: 2.0)
+        job.pollingPhase = .paused(interval: 2.0)
 
         job.stopPolling()
 
-        guard case .disabled = job.pollingState else {
-            XCTFail("Expected .disabled, got \(job.pollingState)")
+        guard case .disabled = job.pollingPhase else {
+            XCTFail("Expected .disabled, got \(job.pollingPhase)")
             return
         }
     }
 
-    // MARK: - PollingState: suspend pauses active polling
+    // MARK: - PollingPhase: suspend pauses active polling
 
     func testSuspendPausesActivePollingPreservingInterval() {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverState = .running(transport: transport)
+        job.serverPhase = .running(transport: transport)
         job.startPolling(interval: 5.0)
 
         job.suspend()
 
-        guard case .paused(let interval) = job.pollingState else {
-            XCTFail("Expected .paused, got \(job.pollingState)")
+        guard case .paused(let interval) = job.pollingPhase else {
+            XCTFail("Expected .paused, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 5.0)
@@ -248,13 +248,13 @@ final class TheInsideJobStateTests: XCTestCase {
         let resumeTask = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(60)) } catch {}
         }
-        job.serverState = .resuming(task: resumeTask)
+        job.serverPhase = .resuming(task: resumeTask)
         job.startPolling(interval: 4.0)
 
         job.suspend()
 
-        guard case .paused(let interval) = job.pollingState else {
-            XCTFail("Expected .paused, got \(job.pollingState)")
+        guard case .paused(let interval) = job.pollingPhase else {
+            XCTFail("Expected .paused, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 4.0)
@@ -262,7 +262,7 @@ final class TheInsideJobStateTests: XCTestCase {
         job.stopPolling()
     }
 
-    // MARK: - PollingState: Computed properties
+    // MARK: - PollingPhase: Computed properties
 
     func testPollingTimeoutReturnsDefaultWhenDisabled() {
         let job = TheInsideJob()
@@ -280,35 +280,35 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testPollingTimeoutReturnsIntervalWhenPaused() {
         let job = TheInsideJob()
-        job.pollingState = .paused(interval: 3.5)
+        job.pollingPhase = .paused(interval: 3.5)
         XCTAssertEqual(job.pollingTimeoutSeconds, 3.5)
     }
 
-    // MARK: - RecordingState
+    // MARK: - RecordingPhase
 
-    func testInitialRecordingStateIsIdle() {
+    func testInitialRecordingPhaseIsIdle() {
         let job = TheInsideJob()
-        guard case .idle = job.recordingState else {
-            XCTFail("Expected .idle, got \(job.recordingState)")
+        guard case .idle = job.recordingPhase else {
+            XCTFail("Expected .idle, got \(job.recordingPhase)")
             return
         }
         XCTAssertNil(job.stakeout)
     }
 
-    func testRecordingStateExposesStakeout() {
+    func testRecordingPhaseExposesStakeout() {
         let job = TheInsideJob()
         let recorder = TheStakeout()
-        job.recordingState = .recording(stakeout: recorder)
+        job.recordingPhase = .recording(stakeout: recorder)
 
         XCTAssertTrue(job.stakeout === recorder)
     }
 
-    func testIdleRecordingStateHidesStakeout() {
+    func testIdleRecordingPhaseHidesStakeout() {
         let job = TheInsideJob()
         let recorder = TheStakeout()
-        job.recordingState = .recording(stakeout: recorder)
+        job.recordingPhase = .recording(stakeout: recorder)
 
-        job.recordingState = .idle
+        job.recordingPhase = .idle
 
         XCTAssertNil(job.stakeout)
     }

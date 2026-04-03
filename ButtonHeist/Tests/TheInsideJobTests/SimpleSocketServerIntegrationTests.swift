@@ -21,7 +21,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - ServerState transitions
+    // MARK: - ServerPhase transitions
 
     func testStartTransitionsToListening() async throws {
         let port = try await server.startAsync(port: 0, bindToLoopback: true)
