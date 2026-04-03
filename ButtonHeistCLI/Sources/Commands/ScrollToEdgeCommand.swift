@@ -32,7 +32,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand {
         _ = try element.requireTarget()
 
         guard ScrollEdge(rawValue: edge.lowercased()) != nil else {
-            throw ValidationError("Invalid edge '\(edge)'. Valid: top, bottom, left, right")
+            throw ValidationError("Invalid edge '\(edge)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
         }
 
         var request: [String: Any] = [
