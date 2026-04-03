@@ -203,7 +203,7 @@ An agent that trusts its feedback loop can commit to a whole sequence at once. `
 
 Two actions, two assertions, one round trip. If the email field doesn't update, the batch stops there.
 
-Deltas, expectations, and batching, each one enabling the next. That's the compound advantage. For the full breakdown with benchmarks and per-task comparisons, see [The Argument](docs/the-argument.md).
+Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
 ## Meet the Crew
 
@@ -348,9 +348,7 @@ ButtonHeist/
 
 **Understanding the architecture?** Read [Architecture](docs/ARCHITECTURE.md) and [Crew Dossiers](docs/dossiers/).
 
-**Evaluating the approach?** Read [The Argument](docs/the-argument.md) and [Competitive Landscape](docs/competitive-landscape.md).
-
-All docs: [API](docs/API.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire Protocol](docs/WIRE-PROTOCOL.md) ・ [Auth](docs/AUTH.md) ・ [USB](docs/USB_DEVICE_CONNECTIVITY.md) ・ [Versioning](docs/VERSIONING.md) ・ [Bonjour Troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) ・ [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) ・ [Differentiators](docs/DIFFERENTIATORS.md) ・ [Crew Dossiers](docs/dossiers/)
+All docs: [API](docs/API.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire Protocol](docs/WIRE-PROTOCOL.md) ・ [Auth](docs/AUTH.md) ・ [USB](docs/USB_DEVICE_CONNECTIVITY.md) ・ [Bonjour Troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) ・ [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) ・ [Crew Dossiers](docs/dossiers/)
 
 ## License
 
