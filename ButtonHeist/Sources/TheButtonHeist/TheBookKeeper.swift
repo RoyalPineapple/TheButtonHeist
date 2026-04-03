@@ -544,9 +544,15 @@ public final class TheBookKeeper {
     }
 
     /// UUID pattern — identifiers containing UUIDs are runtime-generated and not stable.
-    private static let uuidPattern = try! NSRegularExpression(
-        pattern: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
-    )
+    private static let uuidPattern: NSRegularExpression = {
+        do {
+            return try NSRegularExpression(
+                pattern: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+            )
+        } catch {
+            fatalError("Invalid UUID regex pattern: \(error)")
+        }
+    }()
 
     /// Check whether an identifier is stable (developer-assigned) vs runtime-generated (contains UUID).
     private func isStableIdentifier(_ identifier: String) -> Bool {
@@ -631,11 +637,9 @@ public final class TheBookKeeper {
         in allElements: [HeistElement]
     ) -> Bool {
         var matchCount = 0
-        for candidate in allElements {
-            if candidate.matches(matcher) {
-                matchCount += 1
-                if matchCount > 1 { return false }
-            }
+        for candidate in allElements where candidate.matches(matcher) {
+            matchCount += 1
+            if matchCount > 1 { return false }
         }
         return matchCount == 1
     }
