@@ -59,7 +59,7 @@ public final class TheHandoff {
     // MARK: - State
 
     public private(set) var discoveredDevices: [DiscoveredDevice] = []
-    public var isDiscovering: Bool { discovery != nil }
+    public private(set) var isDiscovering: Bool = false
     public private(set) var connectionPhase: ConnectionPhase = .disconnected
     public private(set) var serverInfo: ServerInfo?
     public private(set) var currentInterface: Interface?
@@ -222,6 +222,7 @@ public final class TheHandoff {
                 self.onDeviceLost?(device)
             case .stateChanged(let isReady):
                 logger.info("Discovery state changed: isReady=\(isReady)")
+                self.isDiscovering = isReady
             }
         }
         discovery?.start()
@@ -231,6 +232,7 @@ public final class TheHandoff {
     public func stopDiscovery() {
         discovery?.stop()
         discovery = nil
+        isDiscovering = false
         discoveredDevices = []
     }
 

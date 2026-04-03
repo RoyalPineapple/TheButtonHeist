@@ -160,22 +160,30 @@ public final class DeviceDiscovery: DeviceDiscovering {
                 logger.info("Service added: \(String(describing: result.endpoint))")
                 if let device = makeDevice(from: result) {
                     logger.info("Device found: \(device.name)")
-                    apply(registry.recordFound(device))
+                    let mutations = registry.recordFound(device)
+                    discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
+                    apply(mutations)
                 }
             case .removed(let result):
                 logger.info("Service removed: \(String(describing: result.endpoint))")
                 if case let .service(name, _, _, _) = result.endpoint {
-                    apply(registry.recordLost(serviceName: name))
+                    let mutations = registry.recordLost(serviceName: name)
+                    discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
+                    apply(mutations)
                 }
             case .changed(let old, let new, _):
                 logger.info("Service changed: \(String(describing: old.endpoint)) -> \(String(describing: new.endpoint))")
                 if case let .service(oldName, _, _, _) = old.endpoint,
                    case let .service(newName, _, _, _) = new.endpoint,
                    oldName != newName {
-                    apply(registry.recordLost(serviceName: oldName))
+                    let mutations = registry.recordLost(serviceName: oldName)
+                    discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
+                    apply(mutations)
                 }
                 if let device = makeDevice(from: new) {
-                    apply(registry.recordFound(device))
+                    let mutations = registry.recordFound(device)
+                    discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
+                    apply(mutations)
                 }
             case .identical:
                 break
@@ -183,7 +191,6 @@ public final class DeviceDiscovery: DeviceDiscovering {
                 logger.warning("Unknown change type")
             }
         }
-        discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
     }
 
     private func makeDevice(from result: NWBrowser.Result) -> DiscoveredDevice? {
@@ -255,7 +262,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
     }
 
     private func validateVisibleDevicesReachability() async {
-        guard case .active(let browser, var registry, let reachabilityTask) = discoveryPhase else { return }
+        guard case .active(_, let registry, _) = discoveryPhase else { return }
         let visibleDevices = registry.devices
         guard !visibleDevices.isEmpty else { return }
 
@@ -275,10 +282,12 @@ public final class DeviceDiscovery: DeviceDiscovering {
             return unreachable
         }
 
+        guard case .active(let currentBrowser, var currentRegistry, let currentReachabilityTask) = discoveryPhase else { return }
         for serviceName in unreachableServiceNames {
             logger.info("Evicting unreachable device advertisement: \(serviceName)")
-            apply(registry.recordLost(serviceName: serviceName))
+            let mutations = currentRegistry.recordLost(serviceName: serviceName)
+            discoveryPhase = .active(browser: currentBrowser, registry: currentRegistry, reachabilityTask: currentReachabilityTask)
+            apply(mutations)
         }
-        discoveryPhase = .active(browser: browser, registry: registry, reachabilityTask: reachabilityTask)
     }
 }
