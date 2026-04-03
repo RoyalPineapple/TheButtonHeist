@@ -456,7 +456,7 @@ Two type families are the currency for referring to UI elements. Use them everyw
 
 ## Benchmark and Validation Harness
 
-The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 13 tasks.
+The `bh-infra` repo (`.context/bh-infra/`, clone via `/setup-context bh-infra`) contains an agent-driven benchmark and validation harness. It launches Claude with the BH MCP server against the BH Demo app and scores results against expected values across 15 tasks.
 
 ### Quick validation after code changes
 
@@ -465,7 +465,7 @@ cd .context/bh-infra
 ./pool.sh --validate --workers 3
 ```
 
-Runs all 13 tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1 (fail). Use `--min-score 1.0` for strict mode (default 0.5 allows partial credit).
+Runs all tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1 (fail). Use `--min-score 1.0` for strict mode (default 0.5 allows partial credit).
 
 ### Full benchmark
 
@@ -480,13 +480,6 @@ Runs all 13 tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) o
 ./report.sh results/<run-id>/ --baseline bh-20260402-state-machines  # vs stored baseline
 ./report.sh results/<new-run>/ --compare results/<old-run>/          # two runs
 ```
-
-### Stored baselines
-
-| Baseline | Commit | Coverage |
-|----------|--------|----------|
-| `bh-main` | `d5dd8dea` | T0-T3, 3 trials |
-| `bh-20260402-state-machines` | `21ccb7de` | T0-T12, 1 trial |
 
 Save a new baseline when landing major changes.
 
