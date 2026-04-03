@@ -29,7 +29,11 @@ public struct ActiveSession: Sendable {
 public struct HeistRecording: Sendable {
     public let app: String
     public let startTime: Date
-    public var steps: [HeistEvidence]
+    public var evidenceCount: Int
+    /// Append-only file handle for durable evidence storage.
+    /// Each HeistEvidence is written as a JSON line as it's recorded.
+    public let fileHandle: FileHandle
+    public let filePath: URL
     /// Cached interface snapshot from the most recent get_interface response.
     /// Used to look up heistId → element properties for matcher construction.
     public var interfaceCache: [String: HeistElement]
@@ -179,6 +183,9 @@ public final class TheBookKeeper {
         )
         phase = .closing(closingSession)
         session.logHandle.closeFile()
+
+        // Close heist recording handle if still open (abandoned recording)
+        session.heistRecording?.fileHandle.closeFile()
 
         // If compressLog throws, phase stays .closing — session data is
         // preserved and a fresh beginSession is still allowed.
@@ -360,10 +367,17 @@ public final class TheBookKeeper {
         guard session.heistRecording == nil else {
             throw BookKeeperError.invalidPhase(expected: "not recording heist", actual: "recording heist")
         }
+
+        let heistPath = session.directory.appendingPathComponent("heist.jsonl")
+        FileManager.default.createFile(atPath: heistPath.path, contents: nil)
+        let heistHandle = try FileHandle(forWritingTo: heistPath)
+
         session.heistRecording = HeistRecording(
             app: app,
             startTime: Date(),
-            steps: [],
+            evidenceCount: 0,
+            fileHandle: heistHandle,
+            filePath: heistPath,
             interfaceCache: [:]
         )
         phase = .active(session)
@@ -376,17 +390,34 @@ public final class TheBookKeeper {
         guard let recording = session.heistRecording else {
             throw BookKeeperError.notRecordingHeist
         }
-        guard !recording.steps.isEmpty else {
+        guard recording.evidenceCount > 0 else {
             throw BookKeeperError.noStepsRecorded
         }
-        let script = HeistPlayback(
+
+        recording.fileHandle.closeFile()
+
+        // Read evidence back from the durable file
+        let steps = try readEvidenceFromFile(recording.filePath)
+
+        let heist = HeistPlayback(
             recorded: recording.startTime,
             app: recording.app,
-            steps: recording.steps
+            steps: steps
         )
         session.heistRecording = nil
         phase = .active(session)
-        return script
+        return heist
+    }
+
+    /// Read HeistEvidence entries from a JSONL file.
+    private func readEvidenceFromFile(_ path: URL) throws -> [HeistEvidence] {
+        let data = try Data(contentsOf: path)
+        let lines = data.split(separator: 0x0A)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try lines.map { lineData in
+            try decoder.decode(HeistEvidence.self, from: Data(lineData))
+        }
     }
 
     /// Update the cached interface snapshot for heist recording.
@@ -458,7 +489,18 @@ public final class TheBookKeeper {
             }
         }
 
-        recording.steps.append(step)
+        // Write evidence to durable file (append-only JSONL)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        do {
+            var lineData = try encoder.encode(step)
+            lineData.append(contentsOf: [0x0A])
+            recording.fileHandle.write(lineData)
+        } catch {
+            return
+        }
+        recording.evidenceCount += 1
         session.heistRecording = recording
         phase = .active(session)
     }
