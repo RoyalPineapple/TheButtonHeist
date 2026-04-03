@@ -150,24 +150,54 @@ jobs:
           MCP_SHA=$(grep "buttonheist-mcp-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
           INT_SHA=$(grep "buttonheist-integrate" dist/checksums.txt | awk '{print $1}')
 
-          # Generate formula from template — replace PLACEHOLDERs in order:
-          # 1st = CLI tarball, 2nd = MCP resource, 3rd = integrate resource
-          awk -v cli="$CLI_SHA" -v mcp="$MCP_SHA" -v intg="$INT_SHA" -v ver="$VERSION" '
-            /version "/ { sub(/"[^"]+"/, "\"" ver "\"") }
-            /sha256 "PLACEHOLDER"/ {
-              count++
-              if (count == 1) sub(/PLACEHOLDER/, cli)
-              else if (count == 2) sub(/PLACEHOLDER/, mcp)
-              else if (count == 3) sub(/PLACEHOLDER/, intg)
-            }
-            { print }
-          ' Formula/buttonheist.rb > /tmp/buttonheist-final.rb
+          # Generate formula with hardcoded version and SHA-256 values
+          RELEASE_URL="https://github.com/RoyalPineapple/TheButtonHeist/releases/download/v${VERSION}"
+          cat > /tmp/buttonheist-final.rb << FORMULA
+          class Buttonheist < Formula
+            desc "Give AI agents full programmatic control of iOS apps"
+            homepage "https://github.com/RoyalPineapple/TheButtonHeist"
+            version "${VERSION}"
 
-          # Verify no PLACEHOLDER values remain
-          if grep -q 'PLACEHOLDER' /tmp/buttonheist-final.rb; then
-            echo "::error::Homebrew formula still contains PLACEHOLDER values after SHA substitution"
-            exit 1
-          fi
+            url "${RELEASE_URL}/buttonheist-${VERSION}-macos.tar.gz"
+            sha256 "${CLI_SHA}"
+
+            resource "mcp" do
+              url "${RELEASE_URL}/buttonheist-mcp-${VERSION}-macos.tar.gz"
+              sha256 "${MCP_SHA}"
+            end
+
+            depends_on :macos
+            depends_on macos: :sonoma
+
+            def install
+              bin.install "buttonheist"
+              resource("mcp").stage { bin.install "buttonheist-mcp" }
+            end
+
+            def caveats
+              <<~EOS
+                MCP server is installed at:
+                  #{opt_bin}/buttonheist-mcp
+
+                Add to your project's .mcp.json:
+                  {
+                    "mcpServers": {
+                      "buttonheist": {
+                        "command": "#{opt_bin}/buttonheist-mcp",
+                        "args": []
+                      }
+                    }
+                  }
+              EOS
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/buttonheist --version")
+            end
+          end
+          FORMULA
+          # Remove leading whitespace from heredoc
+          sed -i '' 's/^          //' /tmp/buttonheist-final.rb
 
           # Push to tap repo
           TAP_REPO="RoyalPineapple/homebrew-tap"
