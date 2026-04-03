@@ -11,7 +11,7 @@ TheBagman handles all the goods during TheInsideJob:
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
 2. **Parse/apply pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value; `apply()` mutates the registry. Screen change detection happens between these two steps — no mixed old/new state.
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
-4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup + `presentedHeistIds` gate, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `heistIdByTraversalOrder`. Returns `ResolvedTarget(screenElement)`. See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
+4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup + `presentedHeistIds` gate, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `heistIdByTraversalOrder`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
 6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `reducedHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
@@ -233,6 +233,7 @@ struct ScreenElement {
 | `heistIdByTraversalOrder` | Refresh | O(1) reverse index: traversal order → heistId |
 | `presentedHeistIds` | Screen | Gate: elements sent to clients. Only `snapshot()` writes it. |
 | `lastHierarchyHash` | Screen | Pulse polling dedup memo |
+| `lastScreenName` | Screen | First header element label, computed once in `apply()` |
 
 **Data flows down through three tiers:**
 - **Tier 1 (tree)**: `currentHierarchy`, `scrollableContainerViews` — volatile, rebuilt each refresh
@@ -248,7 +249,7 @@ No store writes to another store. No circular dependencies.
 | `TheBagman.swift` | ~640 | Core: ParseResult, parse/apply pipeline, resolution, interactivity, topology, action result assembly |
 | `TheBagman+Actions.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
 | `TheBagman+Scroll.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
-| `TheBagman+Conversion.swift` | ~370 | snapshot(), toWire(), heistId synthesis, delta computation, tree conversion |
+| `TheBagman+Conversion.swift` | ~445 | snapshot(), toWire(), heistId synthesis, delta computation, tree conversion |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
 | `TheBagman+Diagnostics.swift` | ~140 | Resolution error formatting: near-miss, similar heistIds, compact summary |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |

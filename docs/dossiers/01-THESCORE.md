@@ -8,7 +8,7 @@
 
 TheScore is the shared playbook. It defines:
 
-1. **All client-to-server messages** (`ClientMessage` — 34 cases)
+1. **All client-to-server messages** (`ClientMessage` — 35 cases)
 2. **All server-to-client messages** (`ServerMessage` — 18 cases, including `status(StatusPayload)`)
 3. **Request/response envelopes** (`RequestEnvelope`, `ResponseEnvelope`) for correlation
 4. **UI element types** (`HeistElement`, `Interface`, `ElementNode`, `ElementAction`, `Group`, `HeistCustomContent`)
@@ -29,10 +29,10 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.5"), `WireMessageType` (50 cases), `ButtonHeistActor` |
-| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (34 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
-| `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
-| `Elements.swift` | `HeistElement`, `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
+| `Messages.swift` | `buttonHeistServiceType`, `protocolVersion` ("6.7"), `WireMessageType` (51 cases), `ButtonHeistActor` |
+| `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (35 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
+| `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `InterfaceDelta`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
+| `Elements.swift` | `HeistElement`, `HeistTrait` (43 known cases + `unknown(String)`), `GroupType` (6 known cases + `unknown(String)`), `Interface`, `ElementNode`, `Group`, `ElementAction`, `HeistCustomContent`, `ElementTarget`, `ElementMatcher` |
 | `ClientMessages+WireCoding.swift` | Custom flat envelope encoding for client messages |
 | `ServerMessages+WireCoding.swift` | Custom flat envelope encoding for server messages |
 | `ConnectionScope.swift` | `ConnectionScope` enum, `NetworkInterfaceNaming` protocol |
@@ -42,8 +42,8 @@ TheScore is the shared playbook. It defines:
 ```mermaid
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
-        Messages["Messages.swift — serviceType, protocolVersion, WireMessageType (50 cases)"]
-        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (34 cases), UnitPoint"]
+        Messages["Messages.swift — serviceType, protocolVersion, WireMessageType (51 cases)"]
+        Client["ClientMessages.swift — RequestEnvelope, ClientMessage (35 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
         ConnScope["ConnectionScope.swift — ConnectionScope, NetworkInterfaceNaming"]
@@ -62,7 +62,7 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph ClientMessages["ClientMessage (34 cases)"]
+    subgraph ClientMessages["ClientMessage (35 cases)"]
         Hello["clientHello"]
         Auth["authenticate(AuthenticatePayload)"]
         Sub["subscribe / unsubscribe"]
@@ -75,6 +75,7 @@ graph TD
         Pasteboard["setPasteboard / getPasteboard"]
         Recording["startRecording / stopRecording"]
         Watch["watch(WatchPayload)"]
+        Explore["explore"]
         WaitFor["waitFor"]
     end
 
@@ -110,7 +111,7 @@ classDiagram
         +String? value
         +String? identifier
         +String? hint
-        +[String] traits
+        +[HeistTrait] traits
         +Double frameX
         +Double frameY
         +Double frameWidth
@@ -130,7 +131,7 @@ classDiagram
     }
 
     class Group {
-        +String type
+        +GroupType type
         +String? label
         +String? value
         +String? identifier
@@ -172,16 +173,14 @@ classDiagram
         +String? label
         +String? identifier
         +String? value
-        +[String]? traits
-        +[String]? excludeTraits
-        +Bool? absent
-        +isAbsent: Bool (computed)
+        +[HeistTrait]? traits
+        +[HeistTrait]? excludeTraits
     }
 
     ElementTarget --> ElementMatcher
 ```
 
-All specified fields must match (AND logic). `isAbsent` defaults to `false` — when `true`, the match succeeds when no element is found. `ElementTarget` is an enum with `.heistId(String)` for stable ID lookup and `.matcher(ElementMatcher)` for predicate-based search.
+All specified fields must match (AND logic). `ElementTarget` is an enum with `.heistId(String)` for stable ID lookup and `.matcher(ElementMatcher)` for predicate-based search. The `absent` flag lives on `WaitForTarget` (in ClientMessages.swift), not on `ElementMatcher`.
 
 ## Action Results and Deltas
 
@@ -191,11 +190,16 @@ classDiagram
         +Bool success
         +ActionMethod method
         +String? message
+        +ErrorKind? errorKind
         +String? value
         +InterfaceDelta? interfaceDelta
         +Bool? animating
+        +String? elementLabel
+        +String? elementValue
+        +[HeistTrait]? elementTraits
         +String? screenName
         +ScrollSearchResult? scrollSearchResult
+        +ExploreResult? exploreResult
     }
 
     class InterfaceDelta {
@@ -239,8 +243,23 @@ classDiagram
         +isGeometry: Bool (computed)
     }
 
+    class ErrorKind {
+        <<enum>>
+        elementNotFound / timeout / unsupported / inputError / validationError / actionFailed
+    }
+
+    class ExploreResult {
+        +[HeistElement] elements
+        +Int scrollCount
+        +Int containersExplored
+        +Double explorationTime
+        +elementCount: Int (computed)
+    }
+
+    ActionResult --> ErrorKind
     ActionResult --> InterfaceDelta
     ActionResult --> ScrollSearchResult
+    ActionResult --> ExploreResult
     InterfaceDelta --> DeltaKind
     InterfaceDelta --> ElementUpdate
     ElementUpdate --> PropertyChange
@@ -311,14 +330,14 @@ classDiagram
 ## Wire Protocol
 
 - **Framing:** Newline-delimited JSON (each message is JSON + `0x0A`)
-- **Protocol version:** `"6.5"` (explicit `type` / `payload` envelopes + exact hello/version matching)
+- **Protocol version:** `"6.7"` (explicit `type` / `payload` envelopes + exact hello/version matching)
 - **Service type:** `_buttonheist._tcp`
 - **Encoding:** `Codable` with custom top-level envelope coding at the wire boundary
 - **All types:** `Codable` + `Sendable` for Swift 6 concurrency
 
 ## Action Method Catalog
 
-`ActionMethod` (23 cases): `activate`, `increment`, `decrement`, `syntheticTap`, `syntheticLongPress`, `syntheticSwipe`, `syntheticDrag`, `syntheticPinch`, `syntheticRotate`, `syntheticTwoFingerTap`, `syntheticDrawPath`, `typeText`, `customAction`, `editAction`, `resignFirstResponder`, `setPasteboard`, `getPasteboard`, `waitForIdle`, `scroll`, `scrollToVisible`, `scrollToEdge`, `elementNotFound`, `elementDeallocated`
+`ActionMethod` (25 cases): `activate`, `increment`, `decrement`, `syntheticTap`, `syntheticLongPress`, `syntheticSwipe`, `syntheticDrag`, `syntheticPinch`, `syntheticRotate`, `syntheticTwoFingerTap`, `syntheticDrawPath`, `typeText`, `customAction`, `editAction`, `resignFirstResponder`, `setPasteboard`, `getPasteboard`, `waitForIdle`, `scroll`, `scrollToVisible`, `scrollToEdge`, `waitFor`, `explore`, `elementNotFound`, `elementDeallocated`
 
 ## Items Flagged for Review
 
@@ -328,7 +347,7 @@ classDiagram
 - Known actions encode as plain strings: `"activate"`, `"increment"`, `"decrement"`
 - Custom actions encode as `{"custom":"name"}` objects
 - Decoding: tries `{"custom":"name"}` keyed form first, falls back to plain string
-- A plain string that isn't one of the known three is treated as `.custom(name)` for backward compatibility
+- A plain string that isn't one of the known three throws a `DecodingError` (custom actions must use `{"custom":"name"}` keyed form)
 
 ### LOW PRIORITY
 

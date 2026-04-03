@@ -12,7 +12,7 @@ There are exactly **two targeting strategies**, encoded as cases of the `Element
 1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. O(1) lookup via `screenElements` dictionary.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with case-insensitive substring matching. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
-A single method, `TheBagman.resolveTarget(_:)`, implements this and returns `ResolvedTarget(screenElement, element, traversalIndex)`. Every action executor calls this method — there are no alternative resolution paths.
+A single method, `TheBagman.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
 
 ### What was removed/changed
 
@@ -53,25 +53,25 @@ sequenceDiagram
 
 `TheFence.swift` — called from every action handler. Reads raw args and builds an `ElementTarget`.
 
-**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ElementTarget` directly. Both can coexist — heistId takes priority in resolution.
+**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ElementTarget` directly. `ElementTarget` is an enum — cases are mutually exclusive. The convenience `init?(heistId:matcher:)` picks `.heistId` when a heistId is present, otherwise `.matcher`.
 
 ```
 args: {"identifier":"btn", "traits":["button"]}
-  → ElementTarget(match: ElementMatcher(identifier:"btn", traits:["button"]))
+  → ElementTarget.matcher(ElementMatcher(identifier:"btn", traits:[.button]))
 
 args: {"identifier":"btn"}
-  → ElementTarget(match: ElementMatcher(identifier:"btn"))
+  → ElementTarget.matcher(ElementMatcher(identifier:"btn"))
 
 args: {"heistId":"button-Submit-0"}
-  → ElementTarget(heistId: "button-Submit-0")
+  → ElementTarget.heistId("button-Submit-0")
 
 args: {"heistId":"button-Submit-0", "label":"Submit"}
-  → ElementTarget(heistId: "button-Submit-0", match: ElementMatcher(label:"Submit"))
+  → ElementTarget.heistId("button-Submit-0")  // heistId wins, matcher ignored
 ```
 
 There are two builder methods:
 - **`elementTarget(_:)`** — used by all action commands. Produces `ElementTarget`.
-- **`elementMatcher(_:)`** — used by `get_interface`, `scroll_to_visible`, `wait_for`. Produces `ElementMatcher` directly (includes `absent` flag).
+- **`elementMatcher(_:)`** — used by `get_interface`, `scroll_to_visible`, `wait_for`. Produces `ElementMatcher` directly. (`absent` is a separate field on `WaitForTarget`, not on `ElementMatcher`.)
 
 ## Wire Types
 
@@ -90,22 +90,23 @@ Exactly one strategy per target — no invalid states. Custom flat-wire Codable 
 
 ```swift
 struct ElementMatcher: Codable, Sendable, Equatable {
-    let label: String?           // exact match on element label
-    let identifier: String?      // exact match on accessibility identifier
-    let value: String?           // exact match on element value
-    let traits: [String]?        // all must be present (AND)
-    let excludeTraits: [String]? // none may be present
-    let absent: Bool?            // caller asserts no match exists
+    let label: String?              // case-insensitive substring match on element label
+    let identifier: String?         // case-insensitive substring match on accessibility identifier
+    let value: String?              // case-insensitive substring match on element value
+    let traits: [HeistTrait]?       // all must be present (AND)
+    let excludeTraits: [HeistTrait]? // none may be present
 }
 ```
 
+`HeistTrait` is a `String`-backed enum with `CaseIterable` (defined in `TheScore/Elements.swift`) covering standard `UIAccessibilityTraits`, private core traits (textEntry, backButton, etc.), and extended AXRuntime traits. Unknown trait strings decode as `.unknown(String)` for forward compatibility.
+
 All non-nil fields must match — **AND semantics**. This is intentional: callers encode expectations into the search. If you expect a slider at value "6" and want to increment to "7", embed `value="6"` in the matcher — stale state fails early instead of acting on the wrong element.
 
-Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via `AccessibilitySnapshotParser.knownTraits`. Unknown trait names cause an automatic miss (no silent degradation).
+Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via `UIAccessibilityTraits.knownTraitNames`. Unknown trait names cause an automatic miss (no silent degradation).
 
 ## Resolution: TheBagman.resolveTarget()
 
-`TheBagman.swift` — the single resolution method. Returns `ResolvedTarget(screenElement, element, traversalIndex)` or nil.
+`TheBagman.swift` — the single resolution method. Returns `TargetResolution` enum: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, or `.ambiguous(candidates:diagnostics:)`. `ResolvedTarget` has a single field (`screenElement: ScreenElement`) with a computed `element` property.
 
 ```mermaid
 flowchart TD
