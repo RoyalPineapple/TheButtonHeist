@@ -283,12 +283,8 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
-        case .getSessionLog, .archiveSession:
+        case .getSessionLog, .archiveSession, .startScript, .stopScript, .playScript:
             return try await handleBookKeeperCommand(command: command, args: args)
-        case .startScript, .stopScript:
-            return try await handleScriptCommand(command: command, args: args)
-        case .playScript:
-            return try await handlePlayScript(args)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
         }
