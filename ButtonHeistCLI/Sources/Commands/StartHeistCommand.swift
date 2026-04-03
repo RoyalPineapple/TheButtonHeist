@@ -2,10 +2,10 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-struct StartScriptCommand: AsyncParsableCommand {
+struct StartHeistCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "start-script",
-        abstract: "Start recording a playback script (.heist file)"
+        commandName: "start-heist",
+        abstract: "Start recording a heist playback (.heist file)"
     )
 
     @Option(name: .long, help: "Bundle ID of the app being recorded")
@@ -19,7 +19,7 @@ struct StartScriptCommand: AsyncParsableCommand {
     @ButtonHeistActor
     func run() async throws {
         let request: [String: Any] = [
-            "command": TheFence.Command.startScript.rawValue,
+            "command": TheFence.Command.startHeist.rawValue,
             "app": app,
         ]
         try await CLIRunner.run(

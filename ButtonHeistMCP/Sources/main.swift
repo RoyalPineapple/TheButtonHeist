@@ -140,7 +140,7 @@ struct ButtonHeistMCPServer {
                  "run_batch", "get_session_state",
                  "connect", "list_targets",
                  "get_session_log", "archive_session",
-                 "start_script", "stop_script", "play_script":
+                 "start_heist", "stop_heist", "play_heist":
                 request["command"] = params.name
 
             // Grouped tool — "type" field becomes the command

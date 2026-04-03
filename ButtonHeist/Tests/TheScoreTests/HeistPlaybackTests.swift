@@ -1,18 +1,18 @@
 import XCTest
 @testable import TheScore
 
-final class PlaybackScriptTests: XCTestCase {
+final class HeistPlaybackTests: XCTestCase {
 
-    // MARK: - PlaybackScript Round-Trip
+    // MARK: - Heist Playback Round-Trip
 
     func testScriptRoundTrip() throws {
-        let script = PlaybackScript(
+        let script = HeistPlayback(
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.buttonheist.testapp",
             steps: [
-                PlaybackStep(command: "activate", target: ElementMatcher(label: "Login", traits: [.button])),
-                PlaybackStep(command: "type_text", arguments: ["text": .string("user@example.com")]),
-                PlaybackStep(command: "activate", target: ElementMatcher(label: "Submit", traits: [.button])),
+                HeistEvidence(command: "activate", target: ElementMatcher(label: "Login", traits: [.button])),
+                HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
+                HeistEvidence(command: "activate", target: ElementMatcher(label: "Submit", traits: [.button])),
             ]
         )
 
@@ -23,7 +23,7 @@ final class PlaybackScriptTests: XCTestCase {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(PlaybackScript.self, from: data)
+        let decoded = try decoder.decode(HeistPlayback.self, from: data)
 
         XCTAssertEqual(decoded.version, 1)
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
@@ -36,10 +36,10 @@ final class PlaybackScriptTests: XCTestCase {
         XCTAssertNil(decoded.steps[1].target)
     }
 
-    // MARK: - PlaybackStep Flat Encoding
+    // MARK: - Heist Step Flat Encoding
 
     func testStepEncodesFlat() throws {
-        let step = PlaybackStep(
+        let step = HeistEvidence(
             command: "swipe",
             target: ElementMatcher(label: "List", traits: [.adjustable]),
             arguments: ["direction": .string("up")]
@@ -63,7 +63,7 @@ final class PlaybackScriptTests: XCTestCase {
             "traits": ["button"],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
-        let step = try JSONDecoder().decode(PlaybackStep.self, from: data)
+        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
         XCTAssertEqual(step.target?.label, "Submit")
@@ -77,7 +77,7 @@ final class PlaybackScriptTests: XCTestCase {
             "text": "hello",
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
-        let step = try JSONDecoder().decode(PlaybackStep.self, from: data)
+        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "type_text")
         XCTAssertNil(step.target)
@@ -85,7 +85,7 @@ final class PlaybackScriptTests: XCTestCase {
     }
 
     func testStepWithRecordedMetadata() throws {
-        let step = PlaybackStep(
+        let step = HeistEvidence(
             command: "activate",
             target: ElementMatcher(label: "Save", traits: [.button]),
             recorded: RecordedMetadata(
@@ -95,7 +95,7 @@ final class PlaybackScriptTests: XCTestCase {
         )
 
         let data = try JSONEncoder().encode(step)
-        let decoded = try JSONDecoder().decode(PlaybackStep.self, from: data)
+        let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(decoded.recorded?.heistId, "button_save")
         XCTAssertEqual(decoded.recorded?.frame?.x, 20)
@@ -103,10 +103,10 @@ final class PlaybackScriptTests: XCTestCase {
         XCTAssertNil(decoded.recorded?.coordinateOnly)
     }
 
-    // MARK: - PlaybackStep toRequestDictionary
+    // MARK: - Heist Step toRequestDictionary
 
     func testToRequestDictionary() {
-        let step = PlaybackStep(
+        let step = HeistEvidence(
             command: "swipe",
             target: ElementMatcher(label: "List", traits: [.staticText]),
             arguments: ["direction": .string("up"), "duration": .double(0.5)]
@@ -124,7 +124,7 @@ final class PlaybackScriptTests: XCTestCase {
     }
 
     func testToRequestDictionaryNoTarget() {
-        let step = PlaybackStep(
+        let step = HeistEvidence(
             command: "dismiss_keyboard",
             arguments: [:]
         )
@@ -136,10 +136,10 @@ final class PlaybackScriptTests: XCTestCase {
         XCTAssertNil(dictionary["heistId"])
     }
 
-    // MARK: - PlaybackValue
+    // MARK: - Heist Value
 
-    func testPlaybackValueRoundTrips() throws {
-        let values: [PlaybackValue] = [
+    func testHeistValueRoundTrips() throws {
+        let values: [HeistValue] = [
             .string("hello"),
             .int(42),
             .double(3.14),
@@ -150,24 +150,24 @@ final class PlaybackScriptTests: XCTestCase {
 
         for original in values {
             let data = try JSONEncoder().encode(original)
-            let decoded = try JSONDecoder().decode(PlaybackValue.self, from: data)
+            let decoded = try JSONDecoder().decode(HeistValue.self, from: data)
             XCTAssertEqual(decoded, original)
         }
     }
 
-    func testPlaybackValueFromAny() {
-        XCTAssertEqual(PlaybackValue.from("hello"), .string("hello"))
-        XCTAssertEqual(PlaybackValue.from(42 as Int), .int(42))
-        XCTAssertEqual(PlaybackValue.from(3.14), .double(3.14))
-        XCTAssertEqual(PlaybackValue.from(true), .bool(true))
-        XCTAssertNil(PlaybackValue.from(Data()))
+    func testHeistValueFromAny() {
+        XCTAssertEqual(HeistValue.from("hello"), .string("hello"))
+        XCTAssertEqual(HeistValue.from(42 as Int), .int(42))
+        XCTAssertEqual(HeistValue.from(3.14), .double(3.14))
+        XCTAssertEqual(HeistValue.from(true), .bool(true))
+        XCTAssertNil(HeistValue.from(Data()))
     }
 
-    func testPlaybackValueToAny() {
-        XCTAssertEqual(PlaybackValue.string("hello").toAny() as? String, "hello")
-        XCTAssertEqual(PlaybackValue.int(42).toAny() as? Int, 42)
-        XCTAssertEqual(PlaybackValue.double(3.14).toAny() as? Double, 3.14)
-        XCTAssertEqual(PlaybackValue.bool(true).toAny() as? Bool, true)
+    func testHeistValueToAny() {
+        XCTAssertEqual(HeistValue.string("hello").toAny() as? String, "hello")
+        XCTAssertEqual(HeistValue.int(42).toAny() as? Int, 42)
+        XCTAssertEqual(HeistValue.double(3.14).toAny() as? Double, 3.14)
+        XCTAssertEqual(HeistValue.bool(true).toAny() as? Bool, true)
     }
 
     // MARK: - RecordedMetadata
@@ -197,14 +197,14 @@ final class PlaybackScriptTests: XCTestCase {
         XCTAssertEqual(decoded.coordinateOnly, true)
     }
 
-    // MARK: - Full Script JSON Shape
+    // MARK: - Full Heist JSON Shape
 
     func testFullScriptJsonShape() throws {
-        let script = PlaybackScript(
+        let script = HeistPlayback(
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                PlaybackStep(
+                HeistEvidence(
                     command: "activate",
                     target: ElementMatcher(label: "Go", traits: [.button]),
                     recorded: RecordedMetadata(heistId: "button_go")
