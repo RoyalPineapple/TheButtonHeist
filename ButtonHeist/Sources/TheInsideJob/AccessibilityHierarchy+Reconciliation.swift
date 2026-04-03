@@ -324,12 +324,12 @@ extension Array where Element == AccessibilityHierarchy {
     ) -> StitchResult {
         let accElements = self.flattenToElements()
         let pageElements = page.flattenToElements()
-        return ButtonHeist_stitchPage(accumulated: accElements, page: pageElements)
+        return buttonHeistStitchPage(accumulated: accElements, page: pageElements)
     }
 }
 
 // Module-level function to avoid ambiguity with the extension method
-private func ButtonHeist_stitchPage(
+private func buttonHeistStitchPage(
     accumulated: [AccessibilityElement],
     page: [AccessibilityElement]
 ) -> StitchResult {
