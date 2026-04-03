@@ -102,7 +102,7 @@ public final class TheFence {
     private var isStarted = false
 
     /// Cached interface elements from the most recent get_interface response.
-    /// Used by TheBookKeeper to resolve heistIds to element properties for script recording.
+    /// Used by TheBookKeeper to resolve heistIds to element properties for heist recording.
     private var lastInterfaceElements: [HeistElement] = []
 
     // MARK: - Pending Request Tracking
@@ -185,7 +185,7 @@ public final class TheFence {
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
             command != .getSessionLog && command != .archiveSession &&
-            command != .startScript && command != .stopScript &&
+            command != .startHeist && command != .stopHeist &&
             (!isStarted || !handoff.isConnected) {
             try await start()
         }
@@ -194,14 +194,14 @@ public final class TheFence {
         let response = try await dispatch(command: command, args: request)
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
 
-        // Update interface cache for script recording when get_interface returns elements
+        // Update interface cache for heist recording when get_interface returns elements
         if case .interface(let iface, _, _, _) = response {
             lastInterfaceElements = iface.elements
             bookKeeper.updateInterfaceCache(iface.elements)
         }
 
-        // Record the command for script playback (no-ops when not recording)
-        bookKeeper.recordScriptStep(
+        // Record the command for heist playback (no-ops when not recording)
+        bookKeeper.recordHeistEvidence(
             command: command.rawValue,
             args: request,
             response: response,
@@ -283,7 +283,7 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
-        case .getSessionLog, .archiveSession, .startScript, .stopScript, .playScript:
+        case .getSessionLog, .archiveSession, .startHeist, .stopHeist, .playHeist:
             return try await handleBookKeeperCommand(command: command, args: args)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")

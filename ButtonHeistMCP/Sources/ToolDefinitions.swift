@@ -128,7 +128,7 @@ enum ToolDefinitions {
         runBatch, getSessionState,
         connect, listTargets,
         getSessionLog, archiveSession,
-        startScript, stopScript, playScript,
+        startHeist, stopHeist, playHeist,
     ]
 
     // MARK: - Individual Tools
@@ -649,12 +649,12 @@ enum ToolDefinitions {
         ]
     )
 
-    static let startScript = Tool(
-        name: "start_script",
+    static let startHeist = Tool(
+        name: "start_heist",
         description: """
-            Start recording a playback script. All subsequent commands (actions, gestures, \
+            Start recording a heist playback. All subsequent commands (actions, gestures, \
             text input) are captured as steps in a .heist file. Element targets are recorded \
-            as matchers (label, traits, identifier) rather than heistIds so the script can be \
+            as matchers (label, traits, identifier) rather than heistIds so the heist can be \
             replayed against any session. Call get_interface before acting to ensure element \
             data is cached for matcher construction.
             """,
@@ -670,10 +670,10 @@ enum ToolDefinitions {
         ]
     )
 
-    static let stopScript = Tool(
-        name: "stop_script",
+    static let stopHeist = Tool(
+        name: "stop_heist",
         description: """
-            Stop recording and save the playback script to a .heist file. \
+            Stop recording and save the heist playback to a .heist file. \
             Returns the file path and number of steps recorded.
             """,
         inputSchema: [
@@ -681,7 +681,7 @@ enum ToolDefinitions {
             "properties": [
                 "output": [
                     "type": "string",
-                    "description": "File path to write the .heist script",
+                    "description": "File path to write the .heist file",
                 ],
             ],
             "required": .array(["output"]),
@@ -689,10 +689,10 @@ enum ToolDefinitions {
         ]
     )
 
-    static let playScript = Tool(
-        name: "play_script",
+    static let playHeist = Tool(
+        name: "play_heist",
         description: """
-            Play back a recorded .heist script. Each step is executed sequentially. \
+            Play back a recorded .heist file. Each step is executed sequentially. \
             Playback stops on the first error. Returns the number of completed steps \
             and total timing.
             """,
@@ -701,7 +701,7 @@ enum ToolDefinitions {
             "properties": [
                 "input": [
                     "type": "string",
-                    "description": "Path to the .heist script file to play back",
+                    "description": "Path to the .heist file to play back",
                 ],
             ],
             "required": .array(["input"]),

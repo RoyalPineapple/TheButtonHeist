@@ -569,60 +569,60 @@ extension TheFence {
             let deleteSource = boolArg(args, "delete_source") ?? false
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
-        case .startScript, .stopScript, .playScript:
-            return try await handleScriptCommand(command: command, args: args)
+        case .startHeist, .stopHeist, .playHeist:
+            return try await handleHeistCommand(command: command, args: args)
         default:
             return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
     }
 
-    // MARK: - Handler: Script Recording & Playback
+    // MARK: - Handler: Heist Recording & Playback
 
-    func handleScriptCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
+    func handleHeistCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
-        case .startScript:
+        case .startHeist:
             let app = stringArg(args, "app") ?? "com.buttonheist.testapp"
-            // Ensure a BookKeeper session is active — script recording is a session artifact
+            // Ensure a BookKeeper session is active — heist recording is a session artifact
             if bookKeeper.manifest == nil {
-                let identifier = stringArg(args, "identifier") ?? "script"
+                let identifier = stringArg(args, "identifier") ?? "heist"
                 try bookKeeper.beginSession(identifier: identifier)
             }
-            try bookKeeper.startScriptRecording(app: app)
-            return .scriptStarted
-        case .stopScript:
-            let script = try bookKeeper.stopScriptRecording()
+            try bookKeeper.startHeistRecording(app: app)
+            return .heistStarted
+        case .stopHeist:
+            let heist = try bookKeeper.stopHeistRecording()
             guard let outputPath = stringArg(args, "output") else {
-                throw FenceError.invalidRequest("stop_script requires an 'output' path")
+                throw FenceError.invalidRequest("stop_heist requires an 'output' path")
             }
             guard !outputPath.split(separator: "/").contains("..") else {
                 throw FenceError.invalidRequest("Invalid output path: must not contain '..' components")
             }
             let resolvedURL = URL(fileURLWithPath: outputPath).standardized
-            try TheBookKeeper.writeScript(script, to: resolvedURL)
-            return .scriptStopped(path: resolvedURL.path, stepCount: script.steps.count)
-        case .playScript:
-            return try await handlePlayScript(args)
+            try TheBookKeeper.writeHeist(heist, to: resolvedURL)
+            return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        case .playHeist:
+            return try await handlePlayHeist(args)
         default:
-            return .error("Unexpected script command: \(command.rawValue)")
+            return .error("Unexpected heist command: \(command.rawValue)")
         }
     }
 
-    private func handlePlayScript(_ args: [String: Any]) async throws -> FenceResponse {
+    private func handlePlayHeist(_ args: [String: Any]) async throws -> FenceResponse {
         guard let inputPath = stringArg(args, "input") else {
-            throw FenceError.invalidRequest("play_script requires an 'input' path")
+            throw FenceError.invalidRequest("play_heist requires an 'input' path")
         }
         guard !inputPath.split(separator: "/").contains("..") else {
             throw FenceError.invalidRequest("Invalid input path: must not contain '..' components")
         }
 
         let resolvedURL = URL(fileURLWithPath: inputPath).standardized
-        let script = try TheBookKeeper.readScript(from: resolvedURL)
+        let heist = try TheBookKeeper.readHeist(from: resolvedURL)
 
         let playbackStart = CFAbsoluteTimeGetCurrent()
         var completedSteps = 0
         var failedIndex: Int?
 
-        for (index, step) in script.steps.enumerated() {
+        for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
             do {
                 _ = try await execute(request: request)
@@ -634,7 +634,7 @@ extension TheFence {
         }
 
         let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
-        return .scriptPlayback(
+        return .heistPlayback(
             completedSteps: completedSteps,
             failedIndex: failedIndex,
             totalTimingMs: totalTimingMs
