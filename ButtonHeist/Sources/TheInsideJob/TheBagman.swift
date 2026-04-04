@@ -135,12 +135,15 @@ final class TheBagman {
     /// Elements discovered via scroll exploration but not in the current viewport
     /// won't appear in currentHierarchy — they get Int.max.
     func buildTraversalOrderIndex() -> [String: Int] {
-        var index: [String: Int] = [:]
-        for (element, traversalIndex) in currentHierarchy.elements {
-            guard let heistId = elementToHeistId[element] else { continue }
-            index[heistId] = traversalIndex
-        }
-        return index
+        Dictionary(
+            uniqueKeysWithValues: currentHierarchy.compactMap(
+                context: (),
+                container: { _, _ in () },
+                element: { [elementToHeistId] element, traversalIndex, _ in
+                    elementToHeistId[element].map { ($0, traversalIndex) }
+                }
+            )
+        )
     }
 
     // MARK: - Element Interactivity (object-based)
@@ -494,37 +497,37 @@ final class TheBagman {
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// scroll view refs, and live element objects. Uses forEach(context:container:element:)
+    /// scroll view refs, and live element objects. Uses compactMap(context:container:element:)
     /// to propagate the nearest scroll view from parent containers to child elements.
     private func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
     ) -> [AccessibilityElement: ElementContext] {
-        var contexts: [AccessibilityElement: ElementContext] = [:]
-        hierarchy.forEach(
-            context: nil as UIScrollView?,
-            container: { parentScrollView, accessibilityContainer in
-                (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
-            },
-            element: { element, _, scrollView in
-                let origin: CGPoint?
-                if let scrollView {
-                    let frame = element.shape.frame
-                    origin = (!frame.isNull && !frame.isEmpty)
-                        ? scrollView.convert(frame.origin, from: nil)
-                        : nil
-                } else {
-                    origin = nil
+        Dictionary(
+            uniqueKeysWithValues: hierarchy.compactMap(
+                context: nil as UIScrollView?,
+                container: { parentScrollView, accessibilityContainer in
+                    (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
+                },
+                element: { element, _, scrollView in
+                    let origin: CGPoint? = scrollView.flatMap { scrollView in
+                        let frame = element.shape.frame
+                        return (!frame.isNull && !frame.isEmpty)
+                            ? scrollView.convert(frame.origin, from: nil)
+                            : nil
+                    }
+                    return (
+                        element,
+                        ElementContext(
+                            contentSpaceOrigin: origin,
+                            scrollView: scrollView,
+                            object: elementObjects[element]
+                        )
+                    )
                 }
-                contexts[element] = ElementContext(
-                    contentSpaceOrigin: origin,
-                    scrollView: scrollView,
-                    object: elementObjects[element]
-                )
-            }
+            )
         )
-        return contexts
     }
 
     /// TheTripwire handles window access and animation detection.

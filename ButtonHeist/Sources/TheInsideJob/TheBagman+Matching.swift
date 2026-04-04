@@ -82,8 +82,8 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// All leaf elements in the tree that satisfy the property predicates.
     func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
-        matchingHierarchy(matcher).elements.map { element, _ in
-            .init(element: element)
+        compactMap(context: (), container: { _, _ in () }) { element, _, _ in
+            element.matches(matcher) ? .init(element: element) : nil
         }
     }
 
