@@ -377,6 +377,15 @@ final class TheBagman {
         let windows = tripwire.getTraversableWindows()
         guard !windows.isEmpty else { return nil }
 
+        // Temporarily reveal search bars hidden by `hidesSearchBarWhenScrolling`.
+        // The navigation bar collapses the search bar when the scroll view is not
+        // at the very top, making it invisible to the accessibility snapshot parser
+        // (zero frame). Toggling the flag + forcing layout expands the bar for the
+        // duration of the parse. Restoring `true` re-arms hide-on-scroll without
+        // snapping the bar closed — it stays visible until the next scroll event.
+        let revealedSearchBars = Self.revealHiddenSearchBars()
+        defer { Self.restoreSearchBarHiding(revealedSearchBars) }
+
         var allHierarchy: [AccessibilityHierarchy] = []
         var allElements: [AccessibilityElement] = []
         var allObjects: [AccessibilityElement: NSObject] = [:]
@@ -425,6 +434,62 @@ final class TheBagman {
             objects: allObjects,
             scrollViews: allScrollViews
         )
+    }
+
+    // MARK: - Search Bar Reveal
+
+    /// Temporarily disable `hidesSearchBarWhenScrolling` on all visible navigation
+    /// items that have a search controller, forcing the search bar into its expanded
+    /// layout. Returns the navigation items that were toggled so they can be restored.
+    private static func revealHiddenSearchBars() -> [UINavigationItem] {
+        var revealed: [UINavigationItem] = []
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else { return revealed }
+
+        for window in windowScene.windows where !window.isHidden {
+            guard let rootViewController = window.rootViewController else { continue }
+            for viewController in Self.allVisibleViewControllers(from: rootViewController) {
+                let item = viewController.navigationItem
+                guard item.searchController != nil, item.hidesSearchBarWhenScrolling else { continue }
+                UIView.performWithoutAnimation {
+                    item.hidesSearchBarWhenScrolling = false
+                    viewController.navigationController?.navigationBar.layoutIfNeeded()
+                }
+                revealed.append(item)
+            }
+        }
+        return revealed
+    }
+
+    /// Re-arm hide-on-scroll for navigation items that were temporarily revealed.
+    /// The search bar stays visible until the next scroll event — no snap-back.
+    private static func restoreSearchBarHiding(_ items: [UINavigationItem]) {
+        guard !items.isEmpty else { return }
+        UIView.performWithoutAnimation {
+            for item in items {
+                item.hidesSearchBarWhenScrolling = true
+            }
+        }
+    }
+
+    /// Collect all visible view controllers from a root (presented, nav stack, tab children).
+    private static func allVisibleViewControllers(from root: UIViewController) -> [UIViewController] {
+        var result: [UIViewController] = []
+        var stack: [UIViewController] = [root]
+        while let viewController = stack.popLast() {
+            if let presented = viewController.presentedViewController {
+                stack.append(presented)
+            }
+            if let nav = viewController as? UINavigationController {
+                if let top = nav.topViewController { stack.append(top) }
+            } else if let tab = viewController as? UITabBarController {
+                if let selected = tab.selectedViewController { stack.append(selected) }
+            } else {
+                result.append(viewController)
+            }
+        }
+        return result
     }
 
     // MARK: - Apply (mutates registry)

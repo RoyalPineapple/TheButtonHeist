@@ -152,7 +152,13 @@ extension TheBagman {
                     continue
                 }
 
-                let savedOffset = scrollView.contentOffset
+                // Save the visual scroll position — the content point at the top-left of
+                // the visible area. Raw contentOffset drifts when adjustedContentInset
+                // changes during explore (nav bar collapse, search bar hide).
+                let savedVisualOrigin = CGPoint(
+                    x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+                    y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+                )
                 let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
 
                 // O(1) origin lookup — rebuilt after each refresh() to reflect new elements.
@@ -189,7 +195,7 @@ extension TheBagman {
 
                     // Early exit if target found
                     if let target, resolveFirstMatch(target) != nil {
-                        scrollView.setContentOffset(savedOffset, animated: false)
+                        Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
                         await tripwire.yieldFrames(2)
                         refresh()
                         containerFingerprints = currentHierarchy.containerFingerprints
@@ -201,8 +207,8 @@ extension TheBagman {
                     }
                 }
 
-                // Restore position
-                scrollView.setContentOffset(savedOffset, animated: false)
+                // Restore the visual scroll position, accounting for any inset changes
+                Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
                 await tripwire.yieldFrames(2)
                 refresh()
                 containerFingerprints = currentHierarchy.containerFingerprints
@@ -256,6 +262,26 @@ extension TheBagman {
             screenElements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
+    }
+
+    // MARK: - Scroll Position Restore
+
+    /// Restore a scroll view to the same visual position, compensating for any
+    /// `adjustedContentInset` changes that occurred during explore (nav bar
+    /// collapse, search bar hide, safe area shifts).
+    private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
+        let insets = scrollView.adjustedContentInset
+        let restoredOffset = CGPoint(
+            x: visualOrigin.x - insets.left,
+            y: visualOrigin.y - insets.top
+        )
+        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
+        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
+        let clampedOffset = CGPoint(
+            x: max(-insets.left, min(restoredOffset.x, maxX)),
+            y: max(-insets.top, min(restoredOffset.y, maxY))
+        )
+        scrollView.setContentOffset(clampedOffset, animated: false)
     }
 
     /// Cache a container's explore state using a pre-computed fingerprint.
