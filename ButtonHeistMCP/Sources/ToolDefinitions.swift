@@ -24,6 +24,7 @@ enum ToolDefinitions {
         ],
         "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Exclude elements with any of these traits"],
         "identifier": ["type": "string", "description": "Target by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
+        "ordinal": ["type": "integer", "description": "0-based index to select among multiple matches (in tree traversal order). Omit to require a unique match."],
     ]
 
     // Shared element filter properties — 5-property block used by get_interface (no heistId, uses "Filter" descriptions)
