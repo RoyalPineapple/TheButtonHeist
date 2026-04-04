@@ -190,7 +190,7 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        let secIdentity = (identityRef as! SecIdentity)
+        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
         var certRef: SecCertificate?
         let certStatus = SecIdentityCopyCertificate(secIdentity, &certRef)
         guard certStatus == errSecSuccess, let cert = certRef else {
@@ -265,7 +265,8 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        return (identityRef as! SecIdentity)
+        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        return secIdentity
     }
 
     private static func createInMemoryIdentity(
@@ -335,7 +336,8 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        return (identityRef as! SecIdentity)
+        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        return secIdentity
     }
 }
 

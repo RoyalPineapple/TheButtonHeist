@@ -148,7 +148,8 @@ final class TheFenceSecurityTests: XCTestCase {
             // Trigger recording so handoff.isRecording becomes true
             _ = try await fence.execute(request: ["command": "start_recording"])
             // Yield to let the mock's Task-dispatched recordingStarted message arrive
-            try await Task.sleep(for: .milliseconds(50))
+            await Task.yield()
+            await Task.yield()
             let response = try await fence.execute(request: [
                 "command": "stop_recording", "output": "/tmp/../etc/passwd",
             ])
