@@ -103,6 +103,7 @@ classDiagram
         +[HeistElement] elements
         +[ElementNode]? tree
         +screenDescription: String (computed)
+        +screenId: String? (computed)
     }
 
     class HeistElement {
@@ -198,6 +199,7 @@ classDiagram
         +String? elementValue
         +[HeistTrait]? elementTraits
         +String? screenName
+        +String? screenId
         +ScrollSearchResult? scrollSearchResult
         +ExploreResult? exploreResult
     }

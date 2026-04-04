@@ -1092,6 +1092,7 @@ Container for UI element interface data.
 - `elements: [HeistElement]` - Flat list of UI elements
 - `tree: [ElementNode]?` - Optional tree structure with containers
 - `screenDescription: String` - Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`)
+- `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`), derived from the first header element's label
 
 ### ElementNode
 
@@ -1227,6 +1228,7 @@ public struct ActionResult: Codable, Sendable
 - `interfaceDelta: InterfaceDelta?` - Compact delta describing what changed after the action
 - `animating: Bool?` - `true` if UI was still animating when result was produced; `nil` means idle
 - `screenName: String?` - Label of the first header element in the post-action snapshot
+- `screenId: String?` - Slugified screen name for machine use (e.g. `"controls_demo"`)
 - `scrollSearchResult: ScrollSearchResult?` - Diagnostics from `scrollToVisible` (scroll count, unique elements seen, total items, exhaustive flag, matched element)
 - `exploreResult: ExploreResult?` - Diagnostics from `explore` (elements discovered, scroll count, containers explored)
 
