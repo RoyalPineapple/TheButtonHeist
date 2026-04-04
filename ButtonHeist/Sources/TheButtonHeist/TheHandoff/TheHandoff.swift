@@ -271,7 +271,7 @@ public final class TheHandoff {
             }
 
             if !dueDevices.isEmpty {
-                let probed = await withTaskGroup(of: (String, Bool).self, returning: [(String, Bool)].self) { group in
+                let probed = await withTaskGroup(of: (String, Bool).self) { group in
                     for device in dueDevices {
                         group.addTask {
                             (device.id, await device.isReachable(timeout: probeTimeout))
