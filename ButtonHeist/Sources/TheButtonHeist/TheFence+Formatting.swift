@@ -12,6 +12,7 @@ public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?
     public let screenName: String?
+    public let screenId: String?
     public let expectationMet: Bool?
     public let elementCount: Int?
     public let error: String?
@@ -448,6 +449,7 @@ public enum FenceResponse {
         var entry: [String: Any] = ["index": index, "command": s.command]
         if let kind = s.deltaKind { entry["deltaKind"] = kind }
         if let screen = s.screenName { entry["screenName"] = screen }
+        if let screenId = s.screenId { entry["screenId"] = screenId }
         if let met = s.expectationMet { entry["expectationMet"] = met }
         if let count = s.elementCount { entry["elementCount"] = count }
         if let error = s.error { entry["error"] = error }
@@ -482,6 +484,7 @@ public enum FenceResponse {
         }
 
         if let screenName = result.screenName { payload["screenName"] = screenName }
+        if let screenId = result.screenId { payload["screenId"] = screenId }
 
         if let explore = result.exploreResult {
             payload["explore"] = [
@@ -707,7 +710,7 @@ public enum FenceResponse {
     private func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
         guard result.success else {
             if let search = result.scrollSearchResult {
-                return Self.compactScrollSearchNotFound(search, screenName: result.screenName)
+                return Self.compactScrollSearchNotFound(search, screenId: result.screenId)
             }
             return "error: \(result.message ?? result.method.rawValue)"
         }
@@ -720,8 +723,8 @@ public enum FenceResponse {
         } else {
             text = "\(result.method.rawValue): ok"
         }
-        if let screenName = result.screenName {
-            text = "\(screenName) | \(text)"
+        if let screenId = result.screenId {
+            text = "\(screenId) | \(text)"
         }
         if let value = result.value {
             text += "\nvalue: \"\(value)\""
@@ -748,7 +751,7 @@ public enum FenceResponse {
         return header
     }
 
-    private static func compactScrollSearchNotFound(_ search: ScrollSearchResult, screenName: String?) -> String {
+    private static func compactScrollSearchNotFound(_ search: ScrollSearchResult, screenId: String?) -> String {
         var text: String
         if search.exhaustive {
             let itemInfo = scrollSearchItemInfo(search)
@@ -759,8 +762,8 @@ public enum FenceResponse {
         } else {
             text = "scroll_to_visible: not found"
         }
-        if let screenName {
-            text = "\(screenName) | \(text)"
+        if let screenId {
+            text = "\(screenId) | \(text)"
         }
         return text
     }
@@ -783,8 +786,8 @@ public enum FenceResponse {
         var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
         if let idx = failedIndex { text += " (failed at \(idx))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
-        if let lastScreen = stepSummaries.last(where: { $0.screenName != nil })?.screenName {
-            text = "\(lastScreen) | \(text)"
+        if let lastScreenId = stepSummaries.last(where: { $0.screenId != nil })?.screenId {
+            text = "\(lastScreenId) | \(text)"
         }
         for (index, step) in stepSummaries.enumerated() {
             var line = "  [\(index)] \(step.command)"
@@ -890,6 +893,7 @@ public enum FenceResponse {
             payload["tree"] = tree.map(elementNodeDictionary)
         }
         payload["screenDescription"] = interface.screenDescription
+        if let screenId = interface.screenId { payload["screenId"] = screenId }
         return payload
     }
 

@@ -380,7 +380,8 @@ public final class TheInsideJob {
                     method: .activate,
                     message: "Watch mode is read-only",
                     errorKind: .unsupported,
-                    screenName: bagman.lastScreenName
+                    screenName: bagman.lastScreenName,
+                    screenId: bagman.lastScreenId
                 )), requestId: requestId, respond: respond)
                 return
             }

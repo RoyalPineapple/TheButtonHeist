@@ -226,6 +226,15 @@ public struct Interface: Codable, Sendable {
         Self.buildScreenDescription(from: elements)
     }
 
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    /// Derived from the first header element's label.
+    public var screenId: String? {
+        let screenName = elements
+            .first(where: { $0.traits.contains(.header) })
+            .flatMap(\.label)
+        return slugify(screenName)
+    }
+
     public init(timestamp: Date, elements: [HeistElement], tree: [ElementNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
@@ -288,6 +297,20 @@ public struct Interface: Codable, Sendable {
             return "\(elements.count) elements"
         }
     }
+}
+
+// MARK: - Slugify
+
+/// Slugify a string for use as a machine-readable identifier.
+/// Lowercase, replace non-alphanumeric runs with `_`, trim underscores, cap at 24 characters.
+/// Shared by heistId synthesis (TheBagman) and screenId derivation (Interface, ActionResult).
+public func slugify(_ text: String?) -> String? {
+    guard let text, !text.isEmpty else { return nil }
+    let slug = text.lowercased()
+        .replacing(/[^a-z0-9]+/, with: "_")
+        .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+    guard !slug.isEmpty else { return nil }
+    return String(slug.prefix(24))
 }
 
 /// A container group in the element tree
