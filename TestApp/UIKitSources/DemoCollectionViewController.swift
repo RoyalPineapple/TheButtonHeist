@@ -61,7 +61,6 @@ class DemoCollectionViewController: UICollectionViewController {
         super.viewDidLoad()
         title = "UICollectionView Demo"
         collectionView.backgroundColor = .systemGroupedBackground
-        collectionView.accessibilityIdentifier = "demoCollectionView"
         collectionView.register(AccessibilityCell.self, forCellWithReuseIdentifier: "Cell")
     }
 
@@ -72,10 +71,11 @@ class DemoCollectionViewController: UICollectionViewController {
     }
 
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! AccessibilityCell
+        guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as? AccessibilityCell else {
+            return collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath)
+        }
         let item = items[indexPath.item]
         cell.configure(symbol: item.symbol, title: item.title, color: item.color)
-        cell.accessibilityIdentifier = "collectionCell_\(indexPath.item)"
         return cell
     }
 
@@ -98,11 +98,11 @@ class DemoCollectionViewController: UICollectionViewController {
 class AccessibilityCell: UICollectionViewCell {
 
     private let symbolView: UIImageView = {
-        let iv = UIImageView()
-        iv.contentMode = .scaleAspectFit
-        iv.tintColor = .white
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
+        let imageView = UIImageView()
+        imageView.contentMode = .scaleAspectFit
+        imageView.tintColor = .white
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        return imageView
     }()
 
     private let titleLabel: UILabel = {

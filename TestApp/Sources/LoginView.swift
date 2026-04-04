@@ -3,10 +3,29 @@ import SwiftUI
 struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
-    @State private var emailError: String?
-    @State private var passwordError: String?
-    @State private var generalError: String?
-    @State private var isLoading = false
+    @State private var submission: SubmissionState = .idle
+
+    enum SubmissionState {
+        case idle
+        case submitting
+        case failed(FieldErrors)
+
+        struct FieldErrors {
+            var email: String?
+            var password: String?
+            var general: String?
+        }
+    }
+
+    private var isSubmitting: Bool {
+        if case .submitting = submission { return true }
+        return false
+    }
+
+    private var fieldErrors: SubmissionState.FieldErrors? {
+        if case .failed(let errors) = submission { return errors }
+        return nil
+    }
 
     var body: some View {
         ScrollView {
@@ -14,7 +33,6 @@ struct LoginView: View {
                 Spacer()
                     .frame(height: 40)
 
-                // App icon and title
                 VStack(spacing: 12) {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 56))
@@ -23,21 +41,18 @@ struct LoginView: View {
                         .font(.largeTitle.bold())
                 }
 
-                // General error banner
-                if let generalError {
+                if let general = fieldErrors?.general {
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                        Text(generalError)
+                        Text(general)
                     }
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(.red.gradient, in: RoundedRectangle(cornerRadius: 10))
-                    .accessibilityIdentifier("buttonheist.login.generalError")
                 }
 
-                // Form fields
                 VStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         TextField("Email", text: $email)
@@ -47,14 +62,12 @@ struct LoginView: View {
                             .autocorrectionDisabled()
                             .padding()
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                            .disabled(isLoading)
-                            .accessibilityIdentifier("buttonheist.login.email")
+                            .disabled(isSubmitting)
 
-                        if let emailError {
+                        if let emailError = fieldErrors?.email {
                             Text(emailError)
                                 .font(.caption)
                                 .foregroundStyle(.red)
-                                .accessibilityIdentifier("buttonheist.login.emailError")
                         }
                     }
 
@@ -63,27 +76,23 @@ struct LoginView: View {
                             .textContentType(.password)
                             .padding()
                             .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                            .disabled(isLoading)
-                            .accessibilityIdentifier("buttonheist.login.password")
+                            .disabled(isSubmitting)
 
-                        if let passwordError {
+                        if let passwordError = fieldErrors?.password {
                             Text(passwordError)
                                 .font(.caption)
                                 .foregroundStyle(.red)
-                                .accessibilityIdentifier("buttonheist.login.passwordError")
                         }
                     }
                 }
 
-                // Sign In button
                 Button {
                     signIn()
                 } label: {
                     Group {
-                        if isLoading {
+                        if isSubmitting {
                             ProgressView()
                                 .tint(.white)
-                                .accessibilityIdentifier("buttonheist.login.spinner")
                         } else {
                             Text("Sign In")
                                 .fontWeight(.semibold)
@@ -93,22 +102,18 @@ struct LoginView: View {
                     .padding()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isLoading)
-                .accessibilityIdentifier("buttonheist.login.signIn")
+                .disabled(isSubmitting)
 
-                // Secondary actions
                 VStack(spacing: 12) {
                     Button("Forgot Password?") {
                         NSLog("[Login] Forgot password tapped")
                     }
                     .font(.subheadline)
-                    .accessibilityIdentifier("buttonheist.login.forgotPassword")
 
                     Button("Create Account") {
                         NSLog("[Login] Create account tapped")
                     }
                     .font(.subheadline)
-                    .accessibilityIdentifier("buttonheist.login.createAccount")
                 }
 
                 Spacer()
@@ -122,43 +127,46 @@ struct LoginView: View {
 
     // MARK: - Validation
 
-    private func validate() -> Bool {
-        emailError = nil
-        passwordError = nil
-        generalError = nil
-        var valid = true
+    private func validate() -> SubmissionState.FieldErrors? {
+        var errors = SubmissionState.FieldErrors()
+        var hasError = false
 
         if email.trimmingCharacters(in: .whitespaces).isEmpty {
-            emailError = "Email is required"
-            valid = false
+            errors.email = "Email is required"
+            hasError = true
         } else if !email.contains("@") {
-            emailError = "Enter a valid email address"
-            valid = false
+            errors.email = "Enter a valid email address"
+            hasError = true
         }
 
         if password.isEmpty {
-            passwordError = "Password is required"
-            valid = false
+            errors.password = "Password is required"
+            hasError = true
         }
 
-        return valid
+        return hasError ? errors : nil
     }
 
     // MARK: - Sign In
 
     private func signIn() {
-        guard validate() else {
+        if let errors = validate() {
+            submission = .failed(errors)
             NSLog("[Login] Validation failed")
             return
         }
 
         NSLog("[Login] Attempting sign in: %@", email)
-        isLoading = true
+        submission = .submitting
 
         Task {
-            try? await Task.sleep(for: .seconds(2))
-            isLoading = false
-            generalError = "Invalid email or password"
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                NSLog("[Login] Sign in cancelled")
+                return
+            }
+            submission = .failed(SubmissionState.FieldErrors(general: "Invalid email or password"))
             NSLog("[Login] Sign in failed (demo — always fails)")
         }
     }

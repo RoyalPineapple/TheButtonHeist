@@ -3,7 +3,6 @@ import SwiftUI
 struct MessagesView: View {
     @State private var messages: [ChatMessage] = []
     @State private var inputText = ""
-    @State private var isBotTyping = false
 
     private static let botReplies = [
         "That's a great point!",
@@ -26,7 +25,6 @@ struct MessagesView: View {
                     systemImage: "bubble.left.and.bubble.right",
                     description: Text("Start a conversation")
                 )
-                .accessibilityIdentifier("buttonheist.messages.empty")
                 .frame(maxHeight: .infinity)
             } else {
                 messageList
@@ -44,7 +42,6 @@ struct MessagesView: View {
                 } label: {
                     Image(systemName: "trash")
                 }
-                .accessibilityIdentifier("buttonheist.messages.clear")
                 .disabled(messages.isEmpty)
             }
         }
@@ -61,7 +58,6 @@ struct MessagesView: View {
                             timestamp: message.timestamp
                         )
                         .id(message.id)
-                        .accessibilityIdentifier("buttonheist.messages.bubble-\(message.id.uuidString)")
                     }
                 }
                 .padding(.horizontal, 12)
@@ -81,7 +77,6 @@ struct MessagesView: View {
         HStack(spacing: 8) {
             TextField("Message...", text: $inputText)
                 .textFieldStyle(.roundedBorder)
-                .accessibilityIdentifier("buttonheist.messages.input")
 
             Button {
                 sendMessage()
@@ -89,7 +84,6 @@ struct MessagesView: View {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title2)
             }
-            .accessibilityIdentifier("buttonheist.messages.send")
             .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, 12)
@@ -112,14 +106,16 @@ struct MessagesView: View {
     }
 
     private func scheduleBotReply() {
-        isBotTyping = true
         Task {
-            try? await Task.sleep(for: .seconds(1))
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
             let reply = Self.botReplies.randomElement() ?? "..."
             let botMessage = ChatMessage(text: reply, sender: .bot, timestamp: Date())
             withAnimation {
                 messages.append(botMessage)
-                isBotTyping = false
             }
             NSLog("[Messages] Bot replied: %@ (total: %d)", reply, messages.count)
         }

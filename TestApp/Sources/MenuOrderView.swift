@@ -127,7 +127,6 @@ struct MenuOrderView: View {
                     }
                 } header: {
                     Label(category.name, systemImage: category.icon)
-                        .accessibilityIdentifier("buttonheist.menu.section-\(category.id)")
                 }
             }
 
@@ -149,7 +148,6 @@ struct MenuOrderView: View {
                     .fontWeight(.medium)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("buttonheist.menu.itemCount")
 
             HStack {
                 Text("Subtotal")
@@ -159,7 +157,6 @@ struct MenuOrderView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(subtotal))
-            .accessibilityIdentifier("buttonheist.menu.subtotal")
 
             HStack {
                 Text("Tax (8%)")
@@ -170,7 +167,6 @@ struct MenuOrderView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(tax))
-            .accessibilityIdentifier("buttonheist.menu.tax")
 
             HStack {
                 Text("Total")
@@ -182,7 +178,6 @@ struct MenuOrderView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(total))
-            .accessibilityIdentifier("buttonheist.menu.total")
         } header: {
             Text("Order Summary")
         }
@@ -202,7 +197,6 @@ struct MenuOrderView: View {
                     Spacer()
                 }
             }
-            .accessibilityIdentifier("buttonheist.menu.placeOrder")
             .disabled(totalQuantity == 0)
 
             if totalQuantity > 0 {
@@ -219,7 +213,6 @@ struct MenuOrderView: View {
                     }
                     NSLog("[Menu] Order cleared")
                 }
-                .accessibilityIdentifier("buttonheist.menu.clearOrder")
             }
         }
     }
@@ -286,7 +279,6 @@ private struct MenuItemRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("buttonheist.menu.item-\(item.id)")
             .accessibilityHint(isExpanded ? "Double tap to collapse" : "Double tap to configure")
             .accessibilityAddTraits(isExpanded ? .isSelected : [])
 
@@ -314,7 +306,6 @@ private struct MenuItemRow: View {
                 Text("Size")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("buttonheist.menu.sizeLabel-\(item.id)")
 
                 Picker("Size", selection: $item.selectedSize) {
                     ForEach(PortionSize.allCases) { size in
@@ -322,7 +313,6 @@ private struct MenuItemRow: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("buttonheist.menu.size-\(item.id)")
                 .onChange(of: item.selectedSize) { _, newValue in
                     NSLog("[Menu] %@ size: %@", item.name, newValue.rawValue)
                 }
@@ -334,7 +324,6 @@ private struct MenuItemRow: View {
                     Text("Options")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("buttonheist.menu.optionsLabel-\(item.id)")
 
                     ForEach(item.options) { option in
                         Toggle(isOn: Binding(
@@ -363,7 +352,6 @@ private struct MenuItemRow: View {
                         .accessibilityValue(option.extraPrice > 0
                             ? "+\(option.extraPrice.formatted(.currency(code: "USD")))"
                             : "")
-                        .accessibilityIdentifier("buttonheist.menu.option-\(item.id)-\(option.id)")
                     }
                 }
             }
@@ -385,7 +373,6 @@ private struct MenuItemRow: View {
                     .padding(.vertical, 8)
                     .background(item.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 }
-                .accessibilityIdentifier("buttonheist.menu.addToCart-\(item.id)")
                 .transition(.opacity.combined(with: .scale))
             } else {
                 VStack(spacing: 8) {
@@ -403,7 +390,6 @@ private struct MenuItemRow: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityIdentifier("buttonheist.menu.qty-\(item.id)")
                     .accessibilityLabel("\(item.name) quantity")
                     .accessibilityValue(String(item.quantity))
                     .onChange(of: item.quantity) { _, newValue in
@@ -423,7 +409,6 @@ private struct MenuItemRow: View {
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
-                        .accessibilityIdentifier("buttonheist.menu.remove-\(item.id)")
                     }
                 }
                 .transition(.opacity.combined(with: .scale))

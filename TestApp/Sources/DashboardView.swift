@@ -19,7 +19,6 @@ struct DashboardView: View {
             }
             .pickerStyle(.segmented)
             .padding()
-            .accessibilityIdentifier("buttonheist.dashboard.tabPicker")
 
             switch selectedTab {
             case .activity:
@@ -53,7 +52,6 @@ struct DashboardView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityIdentifier("buttonheist.dashboard.activity.item-\(index)")
         }
     }
 
@@ -79,7 +77,6 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .accessibilityIdentifier("buttonheist.dashboard.stats.card-\(stat.identifier)")
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -97,7 +94,6 @@ struct DashboardView: View {
                     systemImage: "checkmark.shield.fill",
                     description: Text("No active alerts")
                 )
-                .accessibilityIdentifier("buttonheist.dashboard.alerts.empty")
             } else {
                 List {
                     ForEach(alerts) { alert in
@@ -122,10 +118,8 @@ struct DashboardView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityIdentifier("buttonheist.dashboard.alerts.dismiss-\(alert.id.uuidString)")
                             .accessibilityLabel("Dismiss")
                         }
-                        .accessibilityIdentifier("buttonheist.dashboard.alerts.item-\(alert.id.uuidString)")
                     }
                 }
             }
@@ -167,15 +161,14 @@ private struct StatCard: Identifiable {
     let value: String
     let trendUp: Bool
     let trendText: String
-    let identifier: String
 
     static let defaults: [StatCard] = [
-        StatCard(label: "Open PRs", value: "12", trendUp: true, trendText: "+3 this week", identifier: "openPRs"),
-        StatCard(label: "Build Time", value: "4:32", trendUp: false, trendText: "+12s avg", identifier: "buildTime"),
-        StatCard(label: "Test Coverage", value: "94%", trendUp: true, trendText: "+2.1%", identifier: "testCoverage"),
-        StatCard(label: "Deploys Today", value: "7", trendUp: true, trendText: "+2 vs yesterday", identifier: "deploysToday"),
-        StatCard(label: "Open Issues", value: "23", trendUp: false, trendText: "+5 this week", identifier: "openIssues"),
-        StatCard(label: "Uptime", value: "99.9%", trendUp: true, trendText: "30-day avg", identifier: "uptime"),
+        StatCard(label: "Open PRs", value: "12", trendUp: true, trendText: "+3 this week"),
+        StatCard(label: "Build Time", value: "4:32", trendUp: false, trendText: "+12s avg"),
+        StatCard(label: "Test Coverage", value: "94%", trendUp: true, trendText: "+2.1%"),
+        StatCard(label: "Deploys Today", value: "7", trendUp: true, trendText: "+2 vs yesterday"),
+        StatCard(label: "Open Issues", value: "23", trendUp: false, trendText: "+5 this week"),
+        StatCard(label: "Uptime", value: "99.9%", trendUp: true, trendText: "30-day avg"),
     ]
 }
 
