@@ -63,82 +63,97 @@ struct CalculatorView: View {
 
     private func handleButton(_ button: CalcButton) {
         switch button {
-        case .digit(let number):
-            switch entryState {
-            case .operatorPending(let accumulated, let operation):
+        case .digit(let number): handleDigit(number)
+        case .decimal: handleDecimal()
+        case .clear: handleClear()
+        case .negate: handleNegate()
+        case .percent: handlePercent()
+        case .op(let operation): handleOperator(operation)
+        case .equals: handleEquals()
+        }
+    }
+
+    private func handleDigit(_ number: Int) {
+        switch entryState {
+        case .operatorPending(let accumulated, let operation):
+            display = "\(number)"
+            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+        case .clean, .enteringOperand:
+            if display == "0" {
                 display = "\(number)"
-                entryState = .enteringOperand(accumulated: accumulated, operation: operation)
-            case .clean, .enteringOperand:
-                if display == "0" {
-                    display = "\(number)"
-                } else {
-                    display += "\(number)"
-                }
+            } else {
+                display += "\(number)"
             }
-            NSLog("[Calc] Digit: %d, display: %@", number, display)
+        }
+        NSLog("[Calc] Digit: %d, display: %@", number, display)
+    }
 
-        case .decimal:
+    private func handleDecimal() {
+        switch entryState {
+        case .operatorPending(let accumulated, let operation):
+            display = "0."
+            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+        case .clean, .enteringOperand:
+            if !display.contains(".") {
+                display += "."
+            }
+        }
+    }
+
+    private func handleClear() {
+        display = "0"
+        entryState = .clean
+        NSLog("[Calc] Clear")
+    }
+
+    private func handleNegate() {
+        if display != "0" {
+            if display.hasPrefix("-") {
+                display.removeFirst()
+            } else {
+                display = "-" + display
+            }
+        }
+    }
+
+    private func handlePercent() {
+        if let value = Double(display) {
+            let result = value / 100
+            display = formatNumber(result)
+        }
+    }
+
+    private func handleOperator(_ operation: Operation) {
+        if let displayValue = Double(display) {
+            let accumulated: Double
             switch entryState {
-            case .operatorPending(let accumulated, let operation):
-                display = "0."
-                entryState = .enteringOperand(accumulated: accumulated, operation: operation)
-            case .clean, .enteringOperand:
-                if !display.contains(".") {
-                    display += "."
-                }
+            case .enteringOperand(let current, let pending):
+                accumulated = calculate(current, displayValue, pending)
+                display = formatNumber(accumulated)
+            case .clean, .operatorPending:
+                accumulated = displayValue
             }
+            entryState = .operatorPending(accumulated: accumulated, operation: operation)
+        }
+        NSLog("[Calc] Operation: %@", operation.rawValue)
+    }
 
-        case .clear:
-            display = "0"
-            entryState = .clean
-            NSLog("[Calc] Clear")
-
-        case .negate:
-            if display != "0" {
-                if display.hasPrefix("-") {
-                    display.removeFirst()
-                } else {
-                    display = "-" + display
-                }
-            }
-
-        case .percent:
-            if let value = Double(display) {
-                let result = value / 100
-                display = formatNumber(result)
-            }
-
-        case .op(let operation):
+    private func handleEquals() {
+        switch entryState {
+        case .enteringOperand(let accumulated, let pending):
             if let displayValue = Double(display) {
-                let accumulated: Double
-                switch entryState {
-                case .enteringOperand(let current, let pending):
-                    accumulated = calculate(current, displayValue, pending)
-                    display = formatNumber(accumulated)
-                case .clean, .operatorPending:
-                    accumulated = displayValue
-                }
-                entryState = .operatorPending(accumulated: accumulated, operation: operation)
-            }
-            NSLog("[Calc] Operation: %@", operation.rawValue)
-
-        case .equals:
-            switch entryState {
-            case .enteringOperand(let accumulated, let pending):
-                if let displayValue = Double(display) {
-                    let result = calculate(accumulated, displayValue, pending)
-                    display = formatNumber(result)
-                    entryState = .clean
-                    NSLog("[Calc] Equals: %@", display)
-                }
-            case .operatorPending(let accumulated, let pending):
-                let result = calculate(accumulated, accumulated, pending)
+                let result = calculate(accumulated, displayValue, pending)
                 display = formatNumber(result)
                 entryState = .clean
                 NSLog("[Calc] Equals: %@", display)
-            case .clean:
-                break
             }
+        case .operatorPending(let accumulated, let pending):
+            let result = calculate(accumulated, accumulated, pending)
+            display = formatNumber(result)
+            entryState = .clean
+            NSLog("[Calc] Equals: %@", display)
+        case .clean:
+            break
         }
     }
 

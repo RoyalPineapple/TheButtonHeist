@@ -5,16 +5,16 @@ struct LoginView: View {
     @State private var password = ""
     @State private var submission: SubmissionState = .idle
 
+    struct FieldErrors {
+        var email: String?
+        var password: String?
+        var general: String?
+    }
+
     enum SubmissionState {
         case idle
         case submitting
         case failed(FieldErrors)
-
-        struct FieldErrors {
-            var email: String?
-            var password: String?
-            var general: String?
-        }
     }
 
     private var isSubmitting: Bool {
@@ -22,7 +22,7 @@ struct LoginView: View {
         return false
     }
 
-    private var fieldErrors: SubmissionState.FieldErrors? {
+    private var fieldErrors: FieldErrors? {
         if case .failed(let errors) = submission { return errors }
         return nil
     }
@@ -127,8 +127,8 @@ struct LoginView: View {
 
     // MARK: - Validation
 
-    private func validate() -> SubmissionState.FieldErrors? {
-        var errors = SubmissionState.FieldErrors()
+    private func validate() -> FieldErrors? {
+        var errors = FieldErrors()
         var hasError = false
 
         if email.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -166,7 +166,7 @@ struct LoginView: View {
                 NSLog("[Login] Sign in cancelled")
                 return
             }
-            submission = .failed(SubmissionState.FieldErrors(general: "Invalid email or password"))
+            submission = .failed(FieldErrors(general: "Invalid email or password"))
             NSLog("[Login] Sign in failed (demo — always fails)")
         }
     }

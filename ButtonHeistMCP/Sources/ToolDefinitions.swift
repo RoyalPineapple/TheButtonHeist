@@ -18,7 +18,10 @@ enum ToolDefinitions {
         "heistId": ["type": "string", "description": "Target element by stable heistId from get_interface (preferred for known elements)"],
         "label": ["type": "string", "description": "Target by accessibility label — the text VoiceOver reads aloud (e.g. \"Sign In\", \"Mountain Sunset\")"],
         "value": ["type": "string", "description": "Target by accessibility value — current state or placeholder (e.g. \"Email\", \"50%\", \"selected\")"],
-        "traits": ["type": "array", "items": ["type": "string"], "description": "Target by traits — role qualifiers like button, header, selected, textEntry. All listed traits must match."],
+        "traits": [
+            "type": "array", "items": ["type": "string"],
+            "description": "Target by traits — role qualifiers like button, header, selected, textEntry. All must match.",
+        ],
         "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Exclude elements with any of these traits"],
         "identifier": ["type": "string", "description": "Target by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
     ]
