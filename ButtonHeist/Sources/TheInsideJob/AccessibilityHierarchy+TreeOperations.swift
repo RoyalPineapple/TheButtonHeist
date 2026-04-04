@@ -144,14 +144,15 @@ extension Array where Element == AccessibilityHierarchy {
 
 extension AccessibilityHierarchy {
     /// The accessibility elements in this subtree, preserving traversal index.
-    /// Sorted by traversal index (VoiceOver order).
+    /// Order follows the tree's depth-first traversal (children visited left-to-right).
+    /// The array-level `elements` property handles cross-root sorting.
     public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         folded(
             onElement: { element, traversalIndex in [(element, traversalIndex)] },
             onContainer: { _, childLeaves in
                 childLeaves.reduce(into: []) { result, leaves in result.append(contentsOf: leaves) }
             }
-        ).sorted { $0.traversalIndex < $1.traversalIndex }
+        )
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).
@@ -160,6 +161,30 @@ extension AccessibilityHierarchy {
             onElement: { _, _ in [] },
             onContainer: { container, childContainers in [container] + childContainers.flatMap { $0 } }
         )
+    }
+
+    /// Bottom-up fingerprint for container fingerprint computation.
+    /// Combines element content fingerprints and container identity into a Merkle hash.
+    /// Records each container's fingerprint into the shared dictionary.
+    @discardableResult
+    func computeFingerprint(into result: inout [AccessibilityContainer: Int]) -> Int {
+        switch self {
+        case .element(let element, _):
+            var hasher = Hasher()
+            hasher.combine(0)
+            hasher.combine(element.contentFingerprint)
+            return hasher.finalize()
+        case .container(let container, let children):
+            var hasher = Hasher()
+            hasher.combine(1)
+            hasher.combine(container)
+            for child in children {
+                hasher.combine(child.computeFingerprint(into: &result))
+            }
+            let fingerprint = hasher.finalize()
+            result[container] = fingerprint
+            return fingerprint
+        }
     }
 }
 
@@ -205,30 +230,13 @@ extension Array where Element == AccessibilityHierarchy {
     }
 
     /// Each container mapped to its subtree content fingerprint.
-    /// Computed in a single bottom-up pass — child fingerprints feed into parent fingerprints.
+    /// Uses a direct recursive walk with a single shared dictionary —
+    /// no intermediate allocations at leaf nodes or dictionary merges.
     var containerFingerprints: [AccessibilityContainer: Int] {
-        foldedHierarchy(
-            onElement: { element, _ in
-                var hasher = Hasher()
-                hasher.combine(0)
-                hasher.combine(element.contentFingerprint)
-                return (fingerprint: hasher.finalize(), dict: [:] as [AccessibilityContainer: Int])
-            },
-            onContainer: { container, children in
-                var hasher = Hasher()
-                hasher.combine(1)
-                hasher.combine(container)
-                var dict: [AccessibilityContainer: Int] = [:]
-                for child in children {
-                    hasher.combine(child.fingerprint)
-                    dict.merge(child.dict) { _, new in new }
-                }
-                let fingerprint = hasher.finalize()
-                dict[container] = fingerprint
-                return (fingerprint: fingerprint, dict: dict)
-            }
-        ).reduce(into: [:]) { result, root in
-            result.merge(root.dict) { _, new in new }
+        var result: [AccessibilityContainer: Int] = [:]
+        for root in self {
+            _ = root.computeFingerprint(into: &result)
         }
+        return result
     }
 }
