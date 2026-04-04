@@ -821,6 +821,176 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         XCTAssertEqual(uppercased, "A,B")
     }
 
+    // MARK: - ForEach with Context
+
+    // MARK: - CompactMap with Context
+
+    func testCompactMapCollectsTransformedElements() {
+        let tree = group(children: [
+            element(label: "A", index: 0),
+            element(label: "B", index: 1),
+            element(label: "C", index: 2),
+        ])
+
+        let result: [String] = tree.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { element, _, _ in element.label }
+        )
+
+        XCTAssertEqual(result, ["A", "B", "C"])
+    }
+
+    func testCompactMapFiltersNilResults() {
+        let tree = group(children: [
+            element(label: "Keep", traits: .button, index: 0),
+            element(label: "Drop", index: 1),
+            element(label: "Also Keep", traits: .button, index: 2),
+        ])
+
+        let result: [String] = tree.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { element, _, _ in
+                element.traits.contains(.button) ? element.label : nil
+            }
+        )
+
+        XCTAssertEqual(result, ["Keep", "Also Keep"])
+    }
+
+    func testCompactMapPropagatesContainerContext() {
+        let tree = scrollable(children: [
+            element(label: "Row", index: 0),
+        ])
+
+        let result: [(String, Bool)] = tree.compactMap(
+            context: false,
+            container: { _, container in container.isScrollable },
+            element: { element, _, isScrollable in
+                (element.label ?? "?", isScrollable)
+            }
+        )
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].0, "Row")
+        XCTAssertTrue(result[0].1, "Element should inherit scrollable context")
+    }
+
+    func testCompactMapChainsContextThroughNestedContainers() {
+        let tree = group(label: "Root", children: [
+            group(label: "Section", children: [
+                element(label: "Item", index: 0),
+            ]),
+        ])
+
+        let result: [String] = tree.compactMap(
+            context: "",
+            container: { context, container in
+                if case let .semanticGroup(label, _, _) = container.type {
+                    return context.isEmpty ? (label ?? "") : context + "/" + (label ?? "")
+                }
+                return context
+            },
+            element: { element, _, context in
+                context + "/" + (element.label ?? "?")
+            }
+        )
+
+        XCTAssertEqual(result, ["Root/Section/Item"])
+    }
+
+    func testCompactMapOnSingleElement() {
+        let node = element(label: "Solo", index: 5)
+
+        let result: [String] = node.compactMap(
+            context: "ctx",
+            container: { context, _ in context },
+            element: { element, traversalIndex, context in
+                "\(context):\(element.label ?? "?"):\(traversalIndex)"
+            }
+        )
+
+        XCTAssertEqual(result, ["ctx:Solo:5"])
+    }
+
+    func testCompactMapOnSingleElementReturningNil() {
+        let node = element(label: "Solo", index: 0)
+
+        let result: [String] = node.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { _, _, _ in nil }
+        )
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testCompactMapOnEmptyContainer() {
+        let tree = group(label: "Empty", children: [])
+
+        let result: [String] = tree.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { element, _, _ in element.label }
+        )
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testCompactMapOnArrayCollectsAcrossRoots() {
+        let roots: [AccessibilityHierarchy] = [
+            group(children: [element(label: "A", index: 0)]),
+            group(children: [element(label: "B", index: 1)]),
+            element(label: "C", index: 2),
+        ]
+
+        let result: [String] = roots.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { element, _, _ in element.label }
+        )
+
+        XCTAssertEqual(result, ["A", "B", "C"])
+    }
+
+    func testCompactMapOnEmptyArray() {
+        let roots: [AccessibilityHierarchy] = []
+
+        let result: [String] = roots.compactMap(
+            context: "ignored",
+            container: { context, _ in context },
+            element: { element, _, _ in element.label }
+        )
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testCompactMapContextIsolatedPerBranch() {
+        let tree = group(children: [
+            scrollable(children: [
+                element(label: "Scrolled", index: 0),
+            ]),
+            group(label: "Static", children: [
+                element(label: "Fixed", index: 1),
+            ]),
+        ])
+
+        let result: [(String, Bool)] = tree.compactMap(
+            context: false,
+            container: { _, container in container.isScrollable },
+            element: { element, _, isScrollable in
+                (element.label ?? "?", isScrollable)
+            }
+        )
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0].0, "Scrolled")
+        XCTAssertTrue(result[0].1)
+        XCTAssertEqual(result[1].0, "Fixed")
+        XCTAssertFalse(result[1].1)
+    }
+
     // MARK: - Composition: Filter + Map + Elements
 
     func testFilterMapElements() {
