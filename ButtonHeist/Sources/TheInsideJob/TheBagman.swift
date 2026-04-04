@@ -494,20 +494,20 @@ final class TheBagman {
     }
 
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// scroll view refs, and live element objects. Uses walkedHierarchy to propagate
-    /// the nearest scroll view from parent containers to child elements.
+    /// scroll view refs, and live element objects. Uses forEach(context:container:element:)
+    /// to propagate the nearest scroll view from parent containers to child elements.
     private func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
     ) -> [AccessibilityElement: ElementContext] {
         var contexts: [AccessibilityElement: ElementContext] = [:]
-        hierarchy.walkedHierarchy(
+        hierarchy.forEach(
             context: nil as UIScrollView?,
-            deriveContext: { parentScrollView, container in
-                (scrollableContainerViews[container] as? UIScrollView) ?? parentScrollView
+            container: { parentScrollView, accessibilityContainer in
+                (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
             },
-            visit: { element, _, scrollView in
+            element: { element, _, scrollView in
                 let origin: CGPoint?
                 if let scrollView {
                     let frame = element.shape.frame
