@@ -136,9 +136,10 @@ final class TheBagman {
     /// won't appear in currentHierarchy — they get Int.max.
     func buildTraversalOrderIndex() -> [String: Int] {
         Dictionary(
-            uniqueKeysWithValues: currentHierarchy.compactMap { [elementToHeistId] element, traversalIndex in
+            currentHierarchy.compactMap { [elementToHeistId] element, traversalIndex in
                 elementToHeistId[element].map { ($0, traversalIndex) }
-            }
+            },
+            uniquingKeysWith: { _, latest in latest }
         )
     }
 
@@ -497,7 +498,7 @@ final class TheBagman {
         elementObjects: [AccessibilityElement: NSObject]
     ) -> [AccessibilityElement: ElementContext] {
         Dictionary(
-            uniqueKeysWithValues: hierarchy.compactMap(
+            hierarchy.compactMap(
                 context: nil as UIScrollView?,
                 container: { parentScrollView, accessibilityContainer in
                     (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
@@ -518,7 +519,8 @@ final class TheBagman {
                         )
                     )
                 }
-            )
+            ),
+            uniquingKeysWith: { _, latest in latest }
         )
     }
 

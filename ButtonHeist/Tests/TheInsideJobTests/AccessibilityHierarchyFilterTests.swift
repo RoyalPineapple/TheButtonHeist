@@ -145,17 +145,16 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         XCTAssertEqual(depth, 4, "Root > group > group > element")
     }
 
-    func testFilteredElementsChecksAnyButton() {
+    func testCompactMapFindsButtonElements() {
         let tree = group(children: [
             element(label: "Title", traits: .header),
             element(label: "OK", traits: .button),
         ])
 
-        let hasButton = tree.filtered { node in
-            guard case .element(let element, _) = node else { return false }
-            return element.traits.contains(.button)
-        } != nil
-        XCTAssertTrue(hasButton)
+        let buttons: [String] = tree.compactMap { element, _ in
+            element.traits.contains(.button) ? element.label : nil
+        }
+        XCTAssertEqual(buttons, ["OK"])
     }
 
     func testElementsChecksAllInteractive() {

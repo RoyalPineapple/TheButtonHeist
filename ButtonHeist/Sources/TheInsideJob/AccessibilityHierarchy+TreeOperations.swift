@@ -149,8 +149,7 @@ extension Array where Element == AccessibilityHierarchy {
     }
 
     /// The accessibility elements across all roots, sorted by traversal index, without the index tuple.
-    /// Use when you need `[AccessibilityElement]` in traversal order (avoids the intermediate tuple array
-    /// that `.elements.map(\.element)` would allocate).
+    /// Convenience for `.elements.map(\.element)` when you only need the elements in traversal order.
     public var sortedElements: [AccessibilityElement] {
         elements.map(\.element)
     }
