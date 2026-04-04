@@ -696,8 +696,7 @@ public enum FenceResponse {
             return connected ? "session: connected" : "session: not connected"
         case .targets(let targets, let defaultTarget):
             if targets.isEmpty { return "no targets configured" }
-            return targets.keys.sorted().compactMap { name in
-                guard let target = targets[name] else { return nil }
+            return targets.sorted(by: { $0.key < $1.key }).map { name, target in
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
