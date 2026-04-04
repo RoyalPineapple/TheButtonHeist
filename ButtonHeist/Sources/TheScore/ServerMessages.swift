@@ -187,6 +187,8 @@ public struct ActionResult: Codable, Sendable {
     public let elementTraits: [HeistTrait]?
     /// Label of the first header element in the post-action snapshot (screen name hint)
     public let screenName: String?
+    /// Slugified screen name for machine use (e.g. "controls_demo")
+    public let screenId: String?
     /// Diagnostics from a scroll_to_visible search operation
     public let scrollSearchResult: ScrollSearchResult?
     /// Diagnostics from an explore (full screen census) operation
@@ -204,6 +206,7 @@ public struct ActionResult: Codable, Sendable {
         elementValue: String? = nil,
         elementTraits: [HeistTrait]? = nil,
         screenName: String? = nil,
+        screenId: String? = nil,
         scrollSearchResult: ScrollSearchResult? = nil,
         exploreResult: ExploreResult? = nil
     ) {
@@ -218,8 +221,41 @@ public struct ActionResult: Codable, Sendable {
         self.elementValue = elementValue
         self.elementTraits = elementTraits
         self.screenName = screenName
+        self.screenId = screenId
         self.scrollSearchResult = scrollSearchResult
         self.exploreResult = exploreResult
+    }
+}
+
+extension ActionResult {
+    /// Return a copy with the scrollSearchResult field set.
+    public func adding(scrollSearchResult: ScrollSearchResult?) -> ActionResult {
+        ActionResult(
+            success: success, method: method, message: message, errorKind: errorKind,
+            value: value, interfaceDelta: interfaceDelta, animating: animating,
+            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
+            screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
+            exploreResult: exploreResult
+        )
+    }
+
+    /// Return a copy with the exploreResult's elements populated.
+    /// Used by the explicit explore command which needs the full element list.
+    public func adding(exploreElements: [HeistElement]) -> ActionResult {
+        guard let explore = exploreResult else { return self }
+        let fullExplore = ExploreResult(
+            elements: exploreElements,
+            scrollCount: explore.scrollCount,
+            containersExplored: explore.containersExplored,
+            explorationTime: explore.explorationTime
+        )
+        return ActionResult(
+            success: success, method: method, message: message, errorKind: errorKind,
+            value: value, interfaceDelta: interfaceDelta, animating: animating,
+            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
+            screenName: screenName, screenId: screenId, scrollSearchResult: scrollSearchResult,
+            exploreResult: fullExplore
+        )
     }
 }
 

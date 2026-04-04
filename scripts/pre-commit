@@ -34,13 +34,9 @@ if ! command -v swiftlint >/dev/null 2>&1; then
     exit 0
 fi
 
-# Lint only staged Swift files
-staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.swift')
-if [[ -z "$staged" ]]; then
-    exit 0
-fi
-
-swiftlint lint --strict --quiet -- $staged
+# Lint the entire repo — matches CI behavior.
+# Staged-only lint misses pre-existing violations in unmodified files.
+swiftlint lint --strict --quiet
 
 # If Tuist config files are staged, regenerate and verify no drift
 tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift' '*/Project.swift' 'Workspace.swift' 'Tuist.swift' 'Tuist/Package.swift' 'Tuist/ProjectDescriptionHelpers/*.swift')

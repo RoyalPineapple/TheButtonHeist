@@ -356,32 +356,6 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
                        "Should detect new elements")
     }
 
-    // MARK: - LCS
-
-    func testLCSEmptySequences() {
-        let result = longestCommonSubsequence([Int](), [Int]())
-        XCTAssertTrue(result.isEmpty)
-    }
-
-    func testLCSIdenticalSequences() {
-        let result = longestCommonSubsequence([1, 2, 3], [1, 2, 3])
-        XCTAssertEqual(result.count, 3)
-    }
-
-    func testLCSWithInsertion() {
-        let result = longestCommonSubsequence([1, 3], [1, 2, 3])
-        XCTAssertEqual(result.count, 2)
-        XCTAssertEqual(result[0].oldIndex, 0)
-        XCTAssertEqual(result[0].newIndex, 0)
-        XCTAssertEqual(result[1].oldIndex, 1)
-        XCTAssertEqual(result[1].newIndex, 2)
-    }
-
-    func testLCSCompletelyDifferent() {
-        let result = longestCommonSubsequence([1, 2, 3], [4, 5, 6])
-        XCTAssertTrue(result.isEmpty)
-    }
-
     // MARK: - Hierarchy Convenience
 
     func testHierarchyStitchPage() {
