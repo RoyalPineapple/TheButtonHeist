@@ -206,7 +206,7 @@ final class RecordingPayloadTests: XCTestCase {
         let decoded = try JSONDecoder().decode(InteractionEvent.self, from: data)
 
         XCTAssertEqual(decoded.timestamp, 1.5)
-        guard case .activate(.matcher(let matcher)) = decoded.command else {
+        guard case .activate(.matcher(let matcher, _)) = decoded.command else {
             return XCTFail("Expected activate with matcher")
         }
         XCTAssertEqual(matcher.identifier, "loginButton")

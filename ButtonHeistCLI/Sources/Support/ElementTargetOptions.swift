@@ -24,6 +24,9 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .customLong("exclude-traits"), parsing: .upToNextOption, help: "Excluded traits (none may be present)")
     var excludeTraits: [String] = []
 
+    @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
+    var ordinal: Int?
+
     /// Merges positional `target` and `--heist-id`, rejecting both at once.
     var resolvedHeistId: String? {
         get throws {
@@ -60,7 +63,7 @@ struct ElementTargetOptions: ParsableArguments {
     }
 
     func actionTarget() throws -> ElementTarget? {
-        ElementTarget(heistId: try resolvedHeistId, matcher: try parsedMatcher() ?? ElementMatcher())
+        ElementTarget(heistId: try resolvedHeistId, matcher: try parsedMatcher() ?? ElementMatcher(), ordinal: ordinal)
     }
 
     func requireTarget() throws -> ElementTarget {
@@ -79,6 +82,7 @@ struct ElementTargetOptions: ParsableArguments {
         if let value { request["value"] = value }
         if !traits.isEmpty { request["traits"] = traits }
         if !excludeTraits.isEmpty { request["excludeTraits"] = excludeTraits }
+        if let ordinal { request["ordinal"] = ordinal }
     }
 
     /// Returns true if any targeting option is specified.
