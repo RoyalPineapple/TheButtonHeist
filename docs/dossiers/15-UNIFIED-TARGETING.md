@@ -79,12 +79,12 @@ There are two builder methods:
 
 ```swift
 enum ElementTarget: Codable, Sendable {
-    case heistId(String)          // assigned token from get_interface
-    case matcher(ElementMatcher)  // describe by accessibility properties
+    case heistId(String)                              // assigned token from get_interface
+    case matcher(ElementMatcher, ordinal: Int? = nil) // describe by accessibility properties
 }
 ```
 
-Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves backward compatibility with JSON like `{"heistId": "btn"}` or `{"label": "Submit", "traits": ["button"]}`.
+Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves backward compatibility with JSON like `{"heistId": "btn"}` or `{"label": "Submit", "traits": ["button"]}`. The optional `ordinal` (0-based) selects among multiple matches; without it, multiple matches return an ambiguity error.
 
 ### ElementMatcher (TheScore/Elements.swift)
 
@@ -116,13 +116,18 @@ flowchart TD
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
 
-    B -->|".matcher(m)"| G["Search currentHierarchy"]
-    G --> H["uniqueMatch(matcher)<br/>Case-insensitive substring<br/>on label, identifier, value"]
-    H --> I{Result?}
-    I -->|Exactly 1 match| J["heistIdByTraversalOrder[index]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
+    B -->|".matcher(m, ordinal)"| G{ordinal set?}
+    G -->|Yes| ORD["matches(matcher, limit: ordinal+1)<br/>Early-exit collection"]
+    ORD --> ORDCHK{ordinal < hits.count?}
+    ORDCHK -->|Yes| J["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
     J --> E
+    ORDCHK -->|No| F
+
+    G -->|No| H["matches(matcher, limit: 2)<br/>Case-insensitive substring<br/>on label, identifier, value"]
+    H --> I{Result?}
+    I -->|Exactly 1 match| J
     I -->|0 matches| F
-    I -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)"]
+    I -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)<br/>Hint: use ordinal 0–N to select one"]
 ```
 
 ## Error Diagnostics: Progressive Disclosure
@@ -222,7 +227,7 @@ These commands use `ElementMatcher` directly (not `ElementTarget`):
 
 ## Design Principles
 
-1. **Two strategies, nothing else.** heistId (you got this token) or matcher (describe what you want). No positional indices, no guessing.
+1. **Two strategies, nothing else.** heistId (you got this token) or matcher (describe what you want). Optional ordinal disambiguates when multiple elements match the same predicate.
 2. **Single resolution path** — `resolveTarget()` is the only way to go from `ElementTarget` to a live element. No alternative code paths that could fall out of sync.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
@@ -242,6 +247,7 @@ These commands use `ElementMatcher` directly (not `ElementTarget`):
 | `--value` | `ElementMatcher.value` |
 | `--traits` | `ElementMatcher.traits` |
 | `--exclude-traits` | `ElementMatcher.excludeTraits` |
+| `--ordinal` | `ElementTarget` ordinal (0-based index among matches) |
 
 `WaitForCommand` is the exception: it builds an `ElementMatcher` directly (no `--heist-id`, since `wait_for` polls by predicate, not by assigned token).
 

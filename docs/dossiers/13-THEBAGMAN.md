@@ -177,12 +177,18 @@ flowchart TD
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
 
-    B -->|".matcher(m)"| G["currentHierarchy<br/>.uniqueMatch(matcher)"]
-    G --> H{Result?}
-    H -->|Exactly 1| I["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
+    B -->|".matcher(m, ordinal)"| G{ordinal set?}
+    G -->|Yes| ORD["matches(matcher, limit: ordinal+1)<br/>Early-exit collection"]
+    ORD --> ORDCHK{ordinal < hits.count?}
+    ORDCHK -->|Yes| I["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
     I --> E
-    H -->|0 matches| F
-    H -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)"]
+    ORDCHK -->|No| F
+
+    G -->|No| H["matches(matcher, limit: 2)"]
+    H --> K{Result?}
+    K -->|Exactly 1| I
+    K -->|0 matches| F
+    K -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)<br/>Hint: use ordinal 0–N"]
 ```
 
 ## Post-Action Delta Flow

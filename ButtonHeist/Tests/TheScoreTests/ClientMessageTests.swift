@@ -393,6 +393,16 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertNil(ordinal)
     }
 
+    func testElementTargetNegativeOrdinalThrows() {
+        let json = #"{"label":"Save","ordinal":-1}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("non-negative"))
+        }
+    }
+
     func testElementTargetHeistIdIgnoresOrdinal() throws {
         let json = #"{"heistId":"button_save","ordinal":2}"#
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))

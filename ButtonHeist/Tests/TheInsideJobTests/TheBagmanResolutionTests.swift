@@ -290,6 +290,18 @@ final class TheBagmanResolutionTests: XCTestCase {
         XCTAssertEqual(result.resolved?.element.label, "Save")
     }
 
+    func testNegativeOrdinalReturnsNotFound() {
+        let element = element(label: "Save", traits: .button)
+        register(element, heistId: "button_save", index: 0)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: -1))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("non-negative"))
+    }
+
     func testOrdinalZeroOnNoMatchReturnsNotFound() {
         let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Nonexistent"), ordinal: 0))
         guard case .notFound(let diagnostics) = result else {

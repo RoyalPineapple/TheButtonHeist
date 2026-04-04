@@ -204,6 +204,7 @@ public enum ElementTarget: Sendable, Equatable {
     /// Returns nil if both are empty.
     public init?(heistId: String? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
+            assert(ordinal == nil, "ordinal is ignored when heistId is present — pass one or the other")
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
@@ -236,6 +237,12 @@ extension ElementTarget: Codable {
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
         let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "ordinal must be non-negative, got \(ordinal)"
+            ))
+        }
         if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
         } else {

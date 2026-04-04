@@ -240,6 +240,9 @@ final class TheBagman {
         case .matcher(let matcher, let ordinal):
             let source = currentHierarchy
             if let ordinal {
+                guard ordinal >= 0 else {
+                    return .notFound(diagnostics: "ordinal must be non-negative, got \(ordinal)")
+                }
                 // Ordinal selection: collect matches up to ordinal+1, return the Nth
                 let hits = source.matches(matcher, limit: ordinal + 1)
                 guard ordinal < hits.count else {
@@ -263,9 +266,10 @@ final class TheBagman {
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
             }
             if hits.count > 1 {
-                // Need full count for the diagnostic message
-                let allHits = source.allMatches(matcher)
-                let candidates = allHits.prefix(10).map { match -> String in
+                // Cap at 11 to avoid a full tree scan — we show 10 candidates
+                // and indicate "more" if the 11th exists
+                let capped = source.matches(matcher, limit: 11)
+                let candidates = capped.prefix(10).map { match -> String in
                     var parts: [String] = []
                     if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
                     if let id = match.element.identifier, !id.isEmpty { parts.append("id=\(id)") }
@@ -273,10 +277,12 @@ final class TheBagman {
                     return parts.joined(separator: " ")
                 }
                 let query = formatMatcher(matcher)
-                var lines = ["\(allHits.count) elements match: \(query) — use ordinal 0–\(allHits.count - 1) to select one"]
+                let countLabel = capped.count > 10 ? "10+" : "\(capped.count)"
+                let rangeLabel = capped.count > 10 ? "0, 1, 2, ..." : "0–\(capped.count - 1)"
+                var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
                 lines.append(contentsOf: candidates.map { "  \($0)" })
-                if allHits.count > 10 {
-                    lines.append("  ... and \(allHits.count - 10) more")
+                if capped.count > 10 {
+                    lines.append("  ... and more")
                 }
                 return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
             }
