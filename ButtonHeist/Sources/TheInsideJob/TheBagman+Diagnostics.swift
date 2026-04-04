@@ -15,7 +15,7 @@ extension TheBagman {
         let similar = screenElements.keys.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
-            let count = onScreen.count
+            let count = viewportHeistIds.count
             return "Element not found: \"\(heistId)\" (\(count) elements on screen)"
         }
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
@@ -96,11 +96,11 @@ extension TheBagman {
             ))
         }
 
-        for r in relaxations where r.relaxed.hasPredicates {
-            if let found = findMatch(r.relaxed) {
-                let actualValue = r.actual(found.element)
-                return "near miss: matched all fields except \(r.field) — actual \(r.field)=\(actualValue)"
-            }
+        for relaxation in relaxations {
+            guard relaxation.relaxed.hasPredicates,
+                  let found = findMatch(relaxation.relaxed) else { continue }
+            let actualValue = relaxation.actual(found)
+            return "near miss: matched all fields except \(relaxation.field) — actual \(relaxation.field)=\(actualValue)"
         }
         return nil
     }
@@ -109,12 +109,9 @@ extension TheBagman {
     /// Capped at 20 elements to avoid flooding the response.
     func compactElementSummary() -> String {
         let cap = 20
-        let orderByHeistId = Dictionary(
-            heistIdByTraversalOrder.map { ($0.value, $0.key) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let orderByHeistId = buildTraversalOrderIndex()
         let visibleElements = screenElements.values
-            .filter { onScreen.contains($0.heistId) }
+            .filter { viewportHeistIds.contains($0.heistId) }
             .sorted { (orderByHeistId[$0.heistId] ?? Int.max) < (orderByHeistId[$1.heistId] ?? Int.max) }
         if visibleElements.isEmpty {
             return "screen is empty (0 elements)"

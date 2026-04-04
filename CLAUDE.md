@@ -400,6 +400,33 @@ enum State {
 ```
 
 Where `RecordingSession` and `FinalizingSession` are structs carrying exactly the fields valid for that phase. Canonical examples: `ConnectionPhase`, `ReconnectPolicy`, `RecordingPhase` in TheHandoff.
+
+## Functional Over Imperative
+
+Swift has first-class support for a functional style — value types, enums with associated data, `map`/`compactMap`/`reduce`, `lazy` sequences, result builders, and strong generics. Use them. The goal is code where correctness is structural: if it compiles and the types line up, it's hard to get wrong.
+
+**Use the language:**
+
+- **`map`/`compactMap`/`filter`/`reduce` over `for` loops with mutable accumulators.** A `for` loop that appends to a `var array` is an imperative encoding of a transform. Use the functional version — it's shorter, the compiler can reason about it, and there's no intermediate mutable state to get wrong. Reserve `for` loops for side-effectful iteration (UI updates, network calls).
+- **`lazy` sequences for multi-step pipelines.** When chaining `filter`/`map`/`compactMap`, use `lazy` to avoid allocating intermediate arrays. This is especially relevant for element pipelines where we filter thousands of accessibility elements.
+- **Enums with associated data as result types.** Instead of returning a tuple of optionals or a struct with fields that are only valid in certain states, return an enum where each case carries exactly its data. `Result<T, E>` is the simplest case; domain-specific enums (like `ResolutionResult`) are better when there are more than two outcomes.
+- **`folded()` / recursive enum traversal over switch-and-recurse.** When walking a recursive enum like `AccessibilityHierarchy`, define a `folded(onElement:onContainer:)` method that does the recursion once. Callers supply closures for each case. This eliminates the repeated `switch` + manual recursion pattern.
+- **Struct tokens over parameter sprawl.** When a function needs to capture a snapshot of state (for before/after comparison, deferred processing, etc.), bundle it into a struct. The struct is the proof that state was captured; its type prevents mixing up arguments. Canonical example: `captureBeforeState()` returns a `BeforeState` struct consumed by `actionResultWithDelta(before:)`, replacing four loose parameters.
+- **Computed properties over synchronized state.** If a value can be derived from other state, make it a computed property. A cache is acceptable when profiling justifies it — but key the cache on source data (fingerprints, hashes), not imperative "dirty" flags.
+
+**Design principles:**
+
+- **One codepath, not two.** When success and failure need different data in the result, make that difference a parameter (a flag, an optional error kind), not a structural fork. Two codepaths assembling the same result type will inevitably drift.
+- **Separate pure reads from side effects.** If a function both queries state and mutates it, split it. Pure reads are testable without setup, composable without ordering constraints, and safe to call speculatively. Canonical example: `selectElements()` (pure read) + `markPresented()` (side effect), replacing `snapshot()` which did both.
+- **Declarative predicates over imperative decisions.** Express skip/include/transform decisions as value comparisons (fingerprint equality, set membership), not as stateful flags set at an earlier point. The decision should be auditable from the values alone.
+
+**What to watch for:**
+- A `for` loop building a result array that could be a single `map`/`compactMap`/`reduce` expression.
+- Two branches assembling the same return type with overlapping but slightly different logic.
+- Functions that take more than 3-4 parameters of "context" that are really a snapshot of state at a point in time — bundle them into a struct.
+- A `var didX: Bool` that exists only to prevent doing X twice — derive the need from whether X's precondition still holds.
+- Ad-hoc recovery code that patches up inconsistencies created by an earlier imperative step. If you need recovery, the pipeline has a structural gap — fix the pipeline.
+
 ## Currency Types: Elements and Targets
 
 Two type families are the currency for referring to UI elements. Use them everywhere — never invent new types to represent a subset of their data.

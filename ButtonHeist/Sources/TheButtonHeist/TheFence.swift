@@ -497,7 +497,7 @@ public final class TheFence {
                 ]
                 results.append(errorDict)
                 stepSummaries.append(BatchStepSummary(
-                    command: commandName, deltaKind: nil, screenName: nil,
+                    command: commandName, deltaKind: nil, screenName: nil, screenId: nil,
                     expectationMet: nil, elementCount: nil, error: error.localizedDescription
                 ))
                 if policy == .stopOnError {
@@ -541,23 +541,24 @@ public final class TheFence {
                 command: command,
                 deltaKind: result.interfaceDelta?.kind.rawValue,
                 screenName: result.screenName,
+                screenId: result.screenId,
                 expectationMet: expectationMet,
                 elementCount: nil,
                 error: result.success ? nil : result.message
             )
         case .interface(let iface, _, _, _):
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil,
+                command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
             )
         case .error(let msg):
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil,
+                command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: nil, error: msg
             )
         default:
             return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil,
+                command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: nil, error: nil
             )
         }

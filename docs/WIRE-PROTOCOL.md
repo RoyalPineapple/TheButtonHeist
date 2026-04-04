@@ -1257,6 +1257,7 @@ A point in unit coordinates (0–1) relative to an element's accessibility frame
 | `interfaceDelta` | `InterfaceDelta?` | Compact delta describing what changed after the action |
 | `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
 | `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
+| `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
 | `scrollSearchResult` | `ScrollSearchResult?` | Diagnostics from `scrollToVisible` — scroll count, unique elements seen, total items, exhaustive flag, matched element |
 
 ### ActionExpectation (Fence-level)
