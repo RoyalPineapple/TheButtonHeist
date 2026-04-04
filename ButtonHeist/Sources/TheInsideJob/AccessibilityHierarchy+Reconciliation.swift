@@ -337,8 +337,8 @@ extension Array where Element == AccessibilityHierarchy {
     public func stitchPage(
         from page: [AccessibilityHierarchy]
     ) -> StitchResult {
-        let accElements = self.elements.map(\.element)
-        let pageElements = page.elements.map(\.element)
+        let accElements = self.sortedElements
+        let pageElements = page.sortedElements
         return buttonHeistStitchPage(accumulated: accElements, page: pageElements)
     }
 }

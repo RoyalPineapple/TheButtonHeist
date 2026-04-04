@@ -284,12 +284,8 @@ extension TheBagman {
         axis: ScrollAxis? = nil,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        let candidates = currentHierarchy.filteredHierarchy { node in
-            guard case .container(let container, _) = node,
-                  case .scrollable = container.type,
-                  !exhausted.contains(container) else { return false }
-            return true
-        }.containers
+        let candidates = currentHierarchy.scrollableContainers
+            .filter { !exhausted.contains($0) }
 
         for container in candidates {
             guard case .scrollable(let contentSize) = container.type else { continue }
