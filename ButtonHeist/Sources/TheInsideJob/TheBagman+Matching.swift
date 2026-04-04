@@ -48,77 +48,57 @@ extension AccessibilityElement {
 
 extension AccessibilityHierarchy {
 
-    /// Match result: the leaf element that matched, plus its traversal index.
+    /// Match result: the leaf element that matched.
     struct MatchResult {
         let element: AccessibilityElement
-        let traversalIndex: Int
     }
+}
 
-    /// Check if a leaf element at this position satisfies the matcher.
-    /// Containers are walked recursively to find leaf elements inside them.
+extension AccessibilityHierarchy {
+    /// Match a single node against a matcher. For leaf elements, returns the match
+    /// if the element satisfies the predicate. For containers, returns the first
+    /// matching leaf descendant.
     func matches(_ matcher: ElementMatcher) -> MatchResult? {
-        switch self {
-        case .element(let element, let traversalIndex):
-            if element.matches(matcher) {
-                return MatchResult(element: element, traversalIndex: traversalIndex)
-            }
-            return nil
-        case .container(_, let children):
-            for child in children {
-                if let result = child.matches(matcher) {
-                    return result
-                }
-            }
-            return nil
-        }
+        [self].firstMatch(matcher)
     }
 }
 
 extension Array where Element == AccessibilityHierarchy {
 
+    /// Filter the hierarchy to leaf elements satisfying the matcher predicate.
+    /// Container structure is preserved for branches with matching descendants.
+    private func matchingHierarchy(_ matcher: ElementMatcher) -> [AccessibilityHierarchy] {
+        filteredHierarchy { node in
+            guard case .element(let element, _) = node else { return false }
+            return element.matches(matcher)
+        }
+    }
+
     /// First leaf element in the tree that satisfies all property predicates.
     func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        for node in self {
-            if let result = node.matches(matcher) {
-                return result
-            }
-        }
-        return nil
+        guard let first = matchingHierarchy(matcher).elements.first else { return nil }
+        return .init(element: first.element)
     }
 
     /// All leaf elements in the tree that satisfy the property predicates.
     func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
-        flattenToElements()
-            .enumerated()
-            .filter { $0.element.matches(matcher) }
-            .map { AccessibilityHierarchy.MatchResult(element: $0.element, traversalIndex: $0.offset) }
+        matchingHierarchy(matcher).elements.map { element, _ in
+            .init(element: element)
+        }
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        firstMatch(matcher) != nil
+        !matchingHierarchy(matcher).isEmpty
     }
 
     /// Returns the match only if exactly one leaf element satisfies the predicate.
-    /// Returns nil on zero matches or ambiguity (2+). Early-exits at 2.
+    /// Returns nil on zero matches or ambiguity (2+).
     func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        var found: AccessibilityHierarchy.MatchResult?
-        func walk(_ nodes: [AccessibilityHierarchy]) -> Bool {
-            for node in nodes {
-                switch node {
-                case .element(let element, let traversalIndex):
-                    if element.matches(matcher) {
-                        if found != nil { return true }
-                        found = .init(element: element, traversalIndex: traversalIndex)
-                    }
-                case .container(_, let children):
-                    if walk(children) { return true }
-                }
-            }
-            return false
-        }
-        if walk(self) { return nil }
-        return found
+        let matching = matchingHierarchy(matcher).elements
+        guard matching.count == 1,
+              let only = matching.first else { return nil }
+        return .init(element: only.element)
     }
 }
 
@@ -160,32 +140,13 @@ extension AccessibilityElement {
     }
 }
 
-// MARK: - Flat Element Array Matching
-
-extension Array where Element == AccessibilityElement {
-
-    /// First element in the flat array that satisfies the matcher.
-    func firstMatch(_ matcher: ElementMatcher) -> (element: AccessibilityElement, index: Int)? {
-        for (index, element) in enumerated() where element.matches(matcher) {
-            return (element, index)
-        }
-        return nil
-    }
-
-    /// Whether any element in the flat array satisfies the matcher.
-    func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        contains { $0.matches(matcher) }
-    }
-}
-
 // MARK: - TheBagman Convenience
 
 extension TheBagman {
 
     /// Search the hierarchy tree for the first match.
-    func findMatch(_ matcher: ElementMatcher) -> (element: AccessibilityElement, index: Int)? {
-        guard let found = currentHierarchy.firstMatch(matcher) else { return nil }
-        return (found.element, found.traversalIndex)
+    func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {
+        currentHierarchy.firstMatch(matcher)?.element
     }
 
     /// Whether any element in the current hierarchy matches the predicate.

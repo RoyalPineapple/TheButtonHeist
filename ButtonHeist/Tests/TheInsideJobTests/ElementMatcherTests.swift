@@ -446,62 +446,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(element.matches(ElementMatcher(value: "anything")))
     }
 
-    // MARK: - Array Matching: firstMatch
-
-    func testFirstMatchFindsFirst() {
-        let elements = [
-            element(label: "Alpha", traits: .button),
-            element(label: "Beta", traits: .button),
-            element(label: "Gamma", traits: .header),
-        ]
-        let matcher = ElementMatcher(traits: [.button])
-        let result = elements.firstMatch(matcher)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.element.label, "Alpha")
-        XCTAssertEqual(result?.index, 0)
-    }
-
-    func testFirstMatchFindsSecond() {
-        let elements = [
-            element(label: "Alpha", traits: .header),
-            element(label: "Beta", traits: .button),
-            element(label: "Gamma", traits: .button),
-        ]
-        let matcher = ElementMatcher(traits: [.button])
-        let result = elements.firstMatch(matcher)
-        XCTAssertEqual(result?.element.label, "Beta")
-        XCTAssertEqual(result?.index, 1)
-    }
-
-    func testFirstMatchReturnsNilWhenNoMatch() {
-        let elements = [element(label: "Alpha"), element(label: "Beta")]
-        let matcher = ElementMatcher(label: "Gamma")
-        XCTAssertNil(elements.firstMatch(matcher))
-    }
-
-    func testFirstMatchOnEmptyArray() {
-        let elements: [AccessibilityElement] = []
-        let matcher = ElementMatcher(label: "Anything")
-        XCTAssertNil(elements.firstMatch(matcher))
-    }
-
-    // MARK: - Array Matching: hasMatch
-
-    func testHasMatchTrue() {
-        let elements = [element(label: "Alpha"), element(label: "Beta")]
-        XCTAssertTrue(elements.hasMatch(ElementMatcher(label: "Beta")))
-    }
-
-    func testHasMatchFalse() {
-        let elements = [element(label: "Alpha"), element(label: "Beta")]
-        XCTAssertFalse(elements.hasMatch(ElementMatcher(label: "Gamma")))
-    }
-
-    func testHasMatchEmptyArray() {
-        let elements: [AccessibilityElement] = []
-        XCTAssertFalse(elements.hasMatch(ElementMatcher()))
-    }
-
     // MARK: - Hierarchy Matching
 
     private func group(children: [AccessibilityHierarchy]) -> AccessibilityHierarchy {
@@ -514,10 +458,9 @@ final class ElementMatcherTests: XCTestCase {
     func testHierarchyMatchFindsLeaf() {
         let leaf = AccessibilityHierarchy.element(element(label: "Target", traits: .button), traversalIndex: 3)
         let matcher = ElementMatcher(label: "Target")
-        let result = leaf.matches(matcher)
+        let result = [leaf].firstMatch(matcher)
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.element.label, "Target")
-        XCTAssertEqual(result?.traversalIndex, 3)
     }
 
     func testHierarchyMatchSkipsContainer() {
@@ -525,7 +468,7 @@ final class ElementMatcherTests: XCTestCase {
             .element(element(label: "Child", traits: .button), traversalIndex: 0)
         ])
         let matcher = ElementMatcher(label: "Child")
-        let result = container.matches(matcher)
+        let result = [container].firstMatch(matcher)
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.element.label, "Child")
     }
@@ -533,7 +476,7 @@ final class ElementMatcherTests: XCTestCase {
     func testHierarchyMatchReturnsNilWhenNoMatch() {
         let leaf = AccessibilityHierarchy.element(element(label: "Other"), traversalIndex: 0)
         let matcher = ElementMatcher(label: "Target")
-        XCTAssertNil(leaf.matches(matcher))
+        XCTAssertNil([leaf].firstMatch(matcher))
     }
 
     func testHierarchyArrayFirstMatch() {
@@ -545,7 +488,6 @@ final class ElementMatcherTests: XCTestCase {
         let matcher = ElementMatcher(traits: [.button])
         let result = tree.firstMatch(matcher)
         XCTAssertEqual(result?.element.label, "Second")
-        XCTAssertEqual(result?.traversalIndex, 1)
     }
 
     func testHierarchyArrayAllMatches() {
@@ -571,7 +513,6 @@ final class ElementMatcherTests: XCTestCase {
         let result = tree.firstMatch(ElementMatcher(identifier: "deep"))
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.element.label, "Deep Target")
-        XCTAssertEqual(result?.traversalIndex, 5)
     }
 
     func testHierarchyContainerLabelDoesNotMatch() {

@@ -61,24 +61,23 @@ extension AccessibilityHierarchy {
     /// This is the identity used for sliding alignment — two nodes with the same
     /// content fingerprint represent the same UI element regardless of position.
     public var contentFingerprint: Int {
-        var hasher = Hasher()
-        feedContentFingerprint(into: &hasher)
-        return hasher.finalize()
-    }
-
-    private func feedContentFingerprint(into hasher: inout Hasher) {
-        switch self {
-        case let .element(element, _):
-            hasher.combine(0)
-            hasher.combine(element.contentFingerprint)
-
-        case let .container(container, children):
-            hasher.combine(1)
-            hasher.combine(container)
-            for child in children {
-                hasher.combine(child.contentFingerprint)
+        folded(
+            onElement: { element, _ in
+                var hasher = Hasher()
+                hasher.combine(0)
+                hasher.combine(element.contentFingerprint)
+                return hasher.finalize()
+            },
+            onContainer: { container, childFingerprints in
+                var hasher = Hasher()
+                hasher.combine(1)
+                hasher.combine(container)
+                for childFingerprint in childFingerprints {
+                    hasher.combine(childFingerprint)
+                }
+                return hasher.finalize()
             }
-        }
+        )
     }
 }
 
@@ -313,6 +312,22 @@ public func stitchPage(
     )
 }
 
+// MARK: - Accumulated Fingerprint
+
+/// Hash all accumulated elements into a single fingerprint using content-space origins.
+/// Used to verify that a container skip was valid — if the accumulated fingerprint matches
+/// the cached value, the container's full content hasn't changed.
+public func accumulatedContentFingerprint(
+    elements: [AccessibilityElement],
+    origins: [CGPoint?]
+) -> Int {
+    var hasher = Hasher()
+    for (element, origin) in zip(elements, origins) {
+        hasher.combine(element.fingerprint(contentSpaceOrigin: origin))
+    }
+    return hasher.finalize()
+}
+
 // MARK: - Hierarchy Stitching
 
 extension Array where Element == AccessibilityHierarchy {
@@ -322,8 +337,8 @@ extension Array where Element == AccessibilityHierarchy {
     public func stitchPage(
         from page: [AccessibilityHierarchy]
     ) -> StitchResult {
-        let accElements = self.flattenToElements()
-        let pageElements = page.flattenToElements()
+        let accElements = self.elements.map(\.element)
+        let pageElements = page.elements.map(\.element)
         return buttonHeistStitchPage(accumulated: accElements, page: pageElements)
     }
 }
@@ -336,48 +351,3 @@ private func buttonHeistStitchPage(
     stitchPage(accumulated: accumulated, page: page)
 }
 
-// MARK: - LCS (Longest Common Subsequence)
-
-/// Standard LCS on two sequences of equatable values.
-/// Returns matched index pairs `(oldIndex, newIndex)` in order.
-///
-/// O(m·n) time and space where m, n are the sequence lengths.
-/// For typical accessibility containers (5–30 children), this is sub-microsecond.
-func longestCommonSubsequence<T: Equatable>(
-    _ old: [T],
-    _ new: [T]
-) -> [(oldIndex: Int, newIndex: Int)] {
-    let m = old.count
-    let n = new.count
-    guard m > 0, n > 0 else { return [] }
-
-    // Build DP table
-    var table = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
-    for i in 1...m {
-        for j in 1...n {
-            if old[i - 1] == new[j - 1] {
-                table[i][j] = table[i - 1][j - 1] + 1
-            } else {
-                table[i][j] = max(table[i - 1][j], table[i][j - 1])
-            }
-        }
-    }
-
-    // Backtrack to find the actual subsequence
-    var pairs: [(oldIndex: Int, newIndex: Int)] = []
-    var i = m
-    var j = n
-    while i > 0 && j > 0 {
-        if old[i - 1] == new[j - 1] {
-            pairs.append((oldIndex: i - 1, newIndex: j - 1))
-            i -= 1
-            j -= 1
-        } else if table[i - 1][j] > table[i][j - 1] {
-            i -= 1
-        } else {
-            j -= 1
-        }
-    }
-
-    return pairs.reversed()
-}

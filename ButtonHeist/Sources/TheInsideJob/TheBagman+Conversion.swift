@@ -75,14 +75,14 @@ extension TheBagman {
 extension TheBagman {
 
     func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
-        switch node {
-        case let .element(_, traversalIndex):
-            return .element(order: traversalIndex)
-        case let .container(container, children):
-            let containerData = convertContainer(container)
-            let childNodes = children.map { convertHierarchyNode($0) }
-            return .container(containerData, children: childNodes)
-        }
+        node.folded(
+            onElement: { _, traversalIndex in
+                .element(order: traversalIndex)
+            },
+            onContainer: { container, childNodes in
+                .container(convertContainer(container), children: childNodes)
+            }
+        )
     }
 
     private func convertContainer(_ container: AccessibilityContainer) -> Group {
@@ -124,35 +124,31 @@ extension TheBagman {
 
 extension TheBagman {
 
-    /// Single exit point for elements leaving TheBagman.
-    /// Every element returned is added to presentedHeistIds — impossible to send
-    /// an element without marking it, eliminating the class of bug where a code path
-    /// forgets to set a bookkeeping flag.
-    /// Returns ScreenElements sorted by traversal order. Wire conversion happens
-    /// at the serialization boundary via `toWire(_:)`.
-    func snapshot(_ scope: SnapshotScope) -> [ScreenElement] {
-        // Build heistId→order lookup from reverse index for sort ordering
-        let orderByHeistId = Dictionary(
-            heistIdByTraversalOrder.map { ($0.value, $0.key) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        var result: [(Int, ScreenElement)] = []
+    /// Select elements from the registry by scope, sorted by traversal order.
+    /// Pure read — no side effects. Call `markPresented(_:)` separately when
+    /// sending elements to a client.
+    func selectElements(_ scope: SnapshotScope) -> [ScreenElement] {
+        let orderByHeistId = buildTraversalOrderIndex()
+
         let candidates: [String] = switch scope {
-        case .visible: Array(onScreen)
+        case .viewport: Array(viewportHeistIds)
         case .all: Array(screenElements.keys)
-        }
-        for heistId in candidates {
-            guard let entry = screenElements[heistId] else { continue }
-            presentedHeistIds.insert(heistId)
-            let order = orderByHeistId[heistId] ?? Int.max
-            result.append((order, entry))
         }
         // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
         // with heistId as tiebreaker for deterministic ordering within that group.
-        return result.sorted {
+        return candidates.compactMap { heistId in
+            screenElements[heistId].map { (orderByHeistId[heistId] ?? Int.max, $0) }
+        }.sorted {
             if $0.0 != $1.0 { return $0.0 < $1.0 }
             return $0.1.heistId < $1.1.heistId
         }.map(\.1)
+    }
+
+    /// Mark heistIds as having been sent to a client. Call when elements are
+    /// actually leaving TheBagman — this gates `resolveTarget` (callers can only
+    /// target elements they've seen).
+    func markPresented(_ elements: [ScreenElement]) {
+        presentedHeistIds.formUnion(elements.map(\.heistId))
     }
 
     /// Convert a ScreenElement to its wire representation.
@@ -199,10 +195,7 @@ extension TheBagman {
         }
 
         // Phase 2: disambiguate duplicates
-        var counts: [String: Int] = [:]
-        for heistId in heistIds {
-            counts[heistId, default: 0] += 1
-        }
+        let counts = heistIds.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
 
         var seen: [String: Int] = [:]
         for i in heistIds.indices {
@@ -306,21 +299,12 @@ extension TheBagman {
             }
         }
 
-        // Something changed — convert to wire for property-level diff
+        // Something changed — convert to wire for property-level diff.
+        // Both snapshots are .all (full registry), so every known element is
+        // represented in both. The reconciliation produces a clean diff without
+        // needing off-screen recovery hacks.
         let beforeWire = toWire(before)
-        var afterWire = toWire(after)
-
-        // Recover elements that scrolled off screen during a layout shift.
-        // If an element was visible before the action but is no longer in the
-        // visible after-snapshot, check the full registry. If it still exists
-        // (just off-screen), include its current state so the delta reports it
-        // as "updated" rather than "removed."
-        let afterHeistIds = Set(afterWire.map(\.heistId))
-        for beforeElement in beforeWire where !afterHeistIds.contains(beforeElement.heistId) {
-            if let entry = screenElements[beforeElement.heistId] {
-                afterWire.append(toWire(entry))
-            }
-        }
+        let afterWire = toWire(after)
 
         return computeElementDelta(beforeEls: beforeWire, afterEls: afterWire)
     }
@@ -340,25 +324,16 @@ extension TheBagman {
         let newByHeistId = Dictionary(grouping: afterEls, by: \.heistId)
         let allHeistIds = Set(oldByHeistId.keys).union(newByHeistId.keys)
 
-        var updated: [ElementUpdate] = []
-        var added: [HeistElement] = []
-        var removed: [String] = []
-
-        for hid in allHeistIds {
+        let (updated, added, removed) = allHeistIds.reduce(
+            into: ([ElementUpdate](), [HeistElement](), [String]())
+        ) { accumulator, hid in
             let oldEls = oldByHeistId[hid] ?? []
             let newEls = newByHeistId[hid] ?? []
             let pairCount = min(oldEls.count, newEls.count)
-            for i in 0..<pairCount {
-                if let update = buildElementUpdate(old: oldEls[i], new: newEls[i]) {
-                    updated.append(update)
-                }
-            }
-            for i in pairCount..<oldEls.count {
-                removed.append(oldEls[i].heistId)
-            }
-            for i in pairCount..<newEls.count {
-                added.append(newEls[i])
-            }
+            accumulator.0 += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
+                .compactMap { buildElementUpdate(old: $0, new: $1) }
+            accumulator.2 += oldEls.suffix(from: pairCount).map(\.heistId)
+            accumulator.1 += newEls.suffix(from: pairCount)
         }
 
         if added.isEmpty && removed.isEmpty && updated.isEmpty {
