@@ -151,6 +151,9 @@ public enum FenceResponse {
     case targets([String: TargetConfig], defaultTarget: String?)
     case sessionLog(manifest: SessionManifest)
     case archiveResult(path: String, manifest: SessionManifest)
+    case heistStarted
+    case heistStopped(path: String, stepCount: Int)
+    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     public var actionResult: ActionResult? {
@@ -207,7 +210,7 @@ public enum FenceResponse {
             return connected ? "Session: connected to \(device)" : "Session: not connected"
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
-        case .sessionLog, .archiveResult:
+        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
             return formatBookKeeperHuman(self)
         }
     }
@@ -218,6 +221,14 @@ public enum FenceResponse {
             return formatSessionLogHuman(manifest)
         case .archiveResult(let path, let manifest):
             return "Session archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        case .heistStarted:
+            return "Heist recording started"
+        case .heistStopped(let path, let stepCount):
+            return "Heist saved: \(path) (\(stepCount) steps)"
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+            var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
+            if let index = failedIndex { text += " (failed at step \(index))" }
+            return text
         default:
             return ""
         }
@@ -342,12 +353,33 @@ public enum FenceResponse {
             var result: [String: Any] = ["status": "ok", "targets": info]
             if let defaultTarget { result["default"] = defaultTarget }
             return result
+        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
+            return bookKeeperJsonDict(self)
+        }
+    }
+
+    private func bookKeeperJsonDict(_ response: FenceResponse) -> [String: Any] {
+        switch response {
         case .sessionLog(let manifest):
             return sessionLogJsonDict(manifest)
         case .archiveResult(let path, let manifest):
             var dict = sessionLogJsonDict(manifest)
             dict["path"] = path
             return dict
+        case .heistStarted:
+            return ["status": "ok", "recording": true]
+        case .heistStopped(let path, let stepCount):
+            return ["status": "ok", "path": path, "stepCount": stepCount]
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+            var dict: [String: Any] = [
+                "status": failedIndex == nil ? "ok" : "error",
+                "completedSteps": completedSteps,
+                "totalTimingMs": totalTimingMs,
+            ]
+            if let failedIndex { dict["failedIndex"] = failedIndex }
+            return dict
+        default:
+            return ["status": "ok"]
         }
     }
 
@@ -688,7 +720,7 @@ public enum FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(targets[name]!.device)\(isDefault)"
             }.joined(separator: "\n")
-        case .sessionLog, .archiveResult:
+        case .sessionLog, .archiveResult, .heistStarted, .heistStopped, .heistPlayback:
             return compactBookKeeper(self)
         }
     }
@@ -701,6 +733,14 @@ public enum FenceResponse {
             return text
         case .archiveResult(let path, let manifest):
             return "archived: \(path) (\(manifest.artifacts.count) artifacts, \(manifest.commandCount) commands)"
+        case .heistStarted:
+            return "heist recording started"
+        case .heistStopped(let path, let stepCount):
+            return "saved: \(path) (\(stepCount) steps)"
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+            var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
+            if let index = failedIndex { text += " (failed at \(index))" }
+            return text
         default:
             return ""
         }

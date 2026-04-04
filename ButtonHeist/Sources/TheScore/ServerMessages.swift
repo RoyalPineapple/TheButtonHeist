@@ -433,6 +433,13 @@ public enum ActionExpectation: Codable, Sendable, Equatable {
         heistId: String? = nil, property: ElementProperty? = nil,
         oldValue: String? = nil, newValue: String? = nil
     )
+    /// Expected an element matching this predicate to appear in the delta's added list.
+    case elementAppeared(ElementMatcher)
+    /// Expected an element matching this predicate to disappear from the delta's removed list.
+    /// Validation requires a pre-action element cache to resolve removed heistIds to matchers.
+    case elementDisappeared(ElementMatcher)
+    /// Compound: all sub-expectations must be met.
+    case compound([ActionExpectation])
 }
 
 /// The outcome of checking an ActionExpectation against an ActionResult.
@@ -453,7 +460,13 @@ public struct ExpectationResult: Codable, Sendable, Equatable {
 
 extension ActionExpectation {
     /// Check this expectation against an ActionResult.
-    public func validate(against result: ActionResult) -> ExpectationResult {
+    /// - Parameter preActionElements: Cached elements from before the action, keyed by heistId.
+    ///   Required for `elementDisappeared` validation (resolves removed heistIds to matchers).
+    ///   Pass an empty dictionary if unavailable.
+    public func validate(
+        against result: ActionResult,
+        preActionElements: [String: HeistElement] = [:]
+    ) -> ExpectationResult {
         switch self {
         case .screenChanged:
             let kind = result.interfaceDelta?.kind
@@ -472,36 +485,97 @@ extension ActionExpectation {
                 actual: kind?.rawValue ?? "noChange"
             )
         case .elementUpdated(let heistId, let property, let oldValue, let newValue):
-            guard let updates = result.interfaceDelta?.updated, !updates.isEmpty else {
-                return ExpectationResult(met: false, expectation: self, actual: "no element updates")
+            return Self.validateElementUpdated(
+                heistId: heistId, property: property,
+                oldValue: oldValue, newValue: newValue,
+                expectation: self, result: result
+            )
+
+        case .elementAppeared(let matcher):
+            guard let added = result.interfaceDelta?.added, !added.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no elements added")
             }
-            let match = updates.contains { update in
-                if let heistId, update.heistId != heistId { return false }
-                let targetChanges: [PropertyChange]
-                if let property {
-                    targetChanges = update.changes.filter { $0.property == property }
-                    if targetChanges.isEmpty { return false }
-                } else {
-                    targetChanges = update.changes
-                }
-                if oldValue != nil || newValue != nil {
-                    guard targetChanges.contains(where: { change in
-                        if let oldValue, change.old != oldValue { return false }
-                        if let newValue, change.new != newValue { return false }
-                        return true
-                    }) else { return false }
-                }
-                return true
-            }
-            if match {
+            if added.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: self, actual: nil)
             }
-            let observed = updates.map { u in
-                let props = u.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
-                return "\(u.heistId): \(props.joined(separator: ", "))"
-            }.joined(separator: "; ")
-            return ExpectationResult(met: false, expectation: self, actual: observed)
+            let labels = added.compactMap(\.label).prefix(5).joined(separator: ", ")
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: "added: [\(labels)]"
+            )
+
+        case .elementDisappeared(let matcher):
+            guard let removed = result.interfaceDelta?.removed, !removed.isEmpty else {
+                return ExpectationResult(met: false, expectation: self, actual: "no elements removed")
+            }
+            let matched = removed.contains { heistId in
+                guard let element = preActionElements[heistId] else { return false }
+                return element.matches(matcher)
+            }
+            if matched {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            let removedIds = removed.prefix(5).joined(separator: ", ")
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: "removed: [\(removedIds)]"
+            )
+
+        case .compound(let expectations):
+            var failures: [String] = []
+            for expectation in expectations {
+                let subResult = expectation.validate(
+                    against: result, preActionElements: preActionElements
+                )
+                if !subResult.met {
+                    let description = String(describing: expectation)
+                    failures.append("\(description): \(subResult.actual ?? "failed")")
+                }
+            }
+            if failures.isEmpty {
+                return ExpectationResult(met: true, expectation: self, actual: nil)
+            }
+            return ExpectationResult(
+                met: false, expectation: self,
+                actual: failures.joined(separator: "; ")
+            )
         }
+    }
+
+    private static func validateElementUpdated(
+        heistId: String?, property: ElementProperty?,
+        oldValue: String?, newValue: String?,
+        expectation: ActionExpectation, result: ActionResult
+    ) -> ExpectationResult {
+        guard let updates = result.interfaceDelta?.updated, !updates.isEmpty else {
+            return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
+        }
+        let match = updates.contains { update in
+            if let heistId, update.heistId != heistId { return false }
+            let targetChanges: [PropertyChange]
+            if let property {
+                targetChanges = update.changes.filter { $0.property == property }
+                if targetChanges.isEmpty { return false }
+            } else {
+                targetChanges = update.changes
+            }
+            if oldValue != nil || newValue != nil {
+                guard targetChanges.contains(where: { change in
+                    if let oldValue, change.old != oldValue { return false }
+                    if let newValue, change.new != newValue { return false }
+                    return true
+                }) else { return false }
+            }
+            return true
+        }
+        if match {
+            return ExpectationResult(met: true, expectation: expectation, actual: nil)
+        }
+        let observed = updates.map { update in
+            let props = update.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+            return "\(update.heistId): \(props.joined(separator: ", "))"
+        }.joined(separator: "; ")
+        return ExpectationResult(met: false, expectation: expectation, actual: observed)
     }
 
     /// Baseline delivery check — always run for every action.
