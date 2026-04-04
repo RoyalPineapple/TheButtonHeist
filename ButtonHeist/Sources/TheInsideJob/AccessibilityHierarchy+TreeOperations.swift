@@ -256,13 +256,7 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// Scrollable containers in pre-order (outermost first).
     var scrollableContainers: [AccessibilityContainer] {
-        foldedHierarchy(
-            onElement: { _, _ in [] },
-            onContainer: { container, childResults in
-                let descendants = childResults.flatMap { $0 }
-                return container.isScrollable ? [container] + descendants : descendants
-            }
-        ).flatMap { $0 }
+        containers.filter(\.isScrollable)
     }
 
     /// Each container mapped to its subtree content fingerprint.
