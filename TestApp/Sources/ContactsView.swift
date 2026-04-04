@@ -39,16 +39,12 @@ struct ContactsView: View {
         Group {
             if filteredContacts.isEmpty {
                 ContentUnavailableView.search(text: searchText)
-                    .accessibilityIdentifier("buttonheist.contacts.empty")
             } else {
                 List {
                     ForEach(groupedContacts, id: \.department) { group in
                         Section {
                             ForEach(group.contacts) { contact in
                                 ContactRow(contact: contact)
-                                    .accessibilityIdentifier(
-                                        "buttonheist.contacts.row-\(contact.id.uuidString)"
-                                    )
                             }
                         } header: {
                             Text(group.department.rawValue)
@@ -58,7 +54,6 @@ struct ContactsView: View {
                         Text("Showing \(filteredContacts.count) of \(contacts.count) contacts")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("buttonheist.contacts.resultCount")
                     }
                 }
             }
@@ -72,7 +67,6 @@ struct ContactsView: View {
                         Text(dept.rawValue).tag(dept)
                     }
                 }
-                .accessibilityIdentifier("buttonheist.contacts.departmentFilter")
             }
         }
         .onChange(of: filteredContacts.count) { _, newCount in
@@ -119,7 +113,7 @@ private struct Contact: Identifiable {
     var initials: String {
         let parts = name.split(separator: " ")
         let first = parts.first?.prefix(1) ?? ""
-        let last = parts.count > 1 ? parts.last!.prefix(1) : ""
+        let last = parts.count > 1 ? (parts.last?.prefix(1) ?? "") : ""
         return "\(first)\(last)"
     }
 

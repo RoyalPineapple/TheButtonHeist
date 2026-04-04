@@ -8,26 +8,26 @@ class FormViewController: UIViewController {
     private let contentStack = UIStackView()
 
     private let nameTextField: UITextField = {
-        let tf = UITextField()
-        tf.placeholder = "Name"
-        tf.borderStyle = .roundedRect
-        tf.accessibilityIdentifier = "nameField"
-        return tf
+        let textField = UITextField()
+        textField.placeholder = "Name"
+        textField.borderStyle = .roundedRect
+        textField.accessibilityLabel = "Name"
+        return textField
     }()
 
     private let emailTextField: UITextField = {
-        let tf = UITextField()
-        tf.placeholder = "Email"
-        tf.borderStyle = .roundedRect
-        tf.keyboardType = .emailAddress
-        tf.accessibilityIdentifier = "emailField"
-        return tf
+        let textField = UITextField()
+        textField.placeholder = "Email"
+        textField.borderStyle = .roundedRect
+        textField.keyboardType = .emailAddress
+        textField.accessibilityLabel = "Email"
+        return textField
     }()
 
     private let subscribeSwitch: UISwitch = {
-        let sw = UISwitch()
-        sw.accessibilityIdentifier = "subscribeToggle"
-        return sw
+        let toggle = UISwitch()
+        toggle.accessibilityLabel = "Subscribe to newsletter"
+        return toggle
     }()
 
     private let subscribeSwitchLabel: UILabel = {
@@ -37,10 +37,10 @@ class FormViewController: UIViewController {
     }()
 
     private let frequencySegment: UISegmentedControl = {
-        let sc = UISegmentedControl(items: ["Daily", "Weekly", "Monthly"])
-        sc.selectedSegmentIndex = 0
-        sc.accessibilityIdentifier = "frequencyPicker"
-        return sc
+        let segmentedControl = UISegmentedControl(items: ["Daily", "Weekly", "Monthly"])
+        segmentedControl.selectedSegmentIndex = 0
+        segmentedControl.accessibilityLabel = "Notification frequency"
+        return segmentedControl
     }()
 
     private let frequencyLabel: UILabel = {
@@ -52,27 +52,24 @@ class FormViewController: UIViewController {
     }()
 
     private let submitButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Submit", for: .normal)
-        btn.accessibilityIdentifier = "submitButton"
-        return btn
+        let button = UIButton(type: .system)
+        button.setTitle("Submit", for: .normal)
+        return button
     }()
 
     private let cancelButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Cancel", for: .normal)
-        btn.setTitleColor(.systemRed, for: .normal)
-        btn.accessibilityIdentifier = "cancelButton"
-        return btn
+        let button = UIButton(type: .system)
+        button.setTitle("Cancel", for: .normal)
+        button.setTitleColor(.systemRed, for: .normal)
+        return button
     }()
 
     private let infoLabel: UILabel = {
         let label = UILabel()
-        label.text = "ℹ️ This is a UIKit demo app for testing accessibility inspection."
+        label.text = "This is a UIKit demo app for testing accessibility inspection."
         label.numberOfLines = 0
         label.font = .preferredFont(forTextStyle: .footnote)
         label.textColor = .secondaryLabel
-        label.accessibilityIdentifier = "infoLabel"
         return label
     }()
 
@@ -88,24 +85,20 @@ class FormViewController: UIViewController {
     // MARK: - Setup
 
     private func setupUI() {
-        // Scroll view
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
 
-        // Content stack
         contentStack.axis = .vertical
         contentStack.spacing = 16
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         scrollView.addSubview(contentStack)
 
-        // Personal info section
         let personalSection = createSection(title: "Personal Information", views: [
             nameTextField,
             emailTextField
         ])
         contentStack.addArrangedSubview(personalSection)
 
-        // Preferences section
         let switchStack = UIStackView(arrangedSubviews: [subscribeSwitchLabel, subscribeSwitch])
         switchStack.distribution = .equalSpacing
 
@@ -119,18 +112,15 @@ class FormViewController: UIViewController {
         ])
         contentStack.addArrangedSubview(preferencesSection)
 
-        // Actions section
         let actionsSection = createSection(title: "Actions", views: [
             submitButton,
             cancelButton
         ])
         contentStack.addArrangedSubview(actionsSection)
 
-        // Info section
         let infoSection = createSection(title: "Information", views: [infoLabel])
         contentStack.addArrangedSubview(infoSection)
 
-        // Constraints
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),

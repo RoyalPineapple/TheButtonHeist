@@ -24,7 +24,6 @@ struct GridGalleryView: View {
                     ) {
                         toggleSelection(item.index)
                     }
-                    .accessibilityIdentifier("buttonheist.grid.item-\(item.index)")
                 }
             }
             .padding(.horizontal, 12)
@@ -34,7 +33,6 @@ struct GridGalleryView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 8)
-                .accessibilityIdentifier("buttonheist.grid.count")
         }
         .navigationTitle("Grid Gallery")
         .toolbar {
@@ -43,7 +41,6 @@ struct GridGalleryView: View {
                     selectedItems.removeAll()
                 }
                 .disabled(selectedItems.isEmpty)
-                .accessibilityIdentifier("buttonheist.grid.clearButton")
             }
         }
     }

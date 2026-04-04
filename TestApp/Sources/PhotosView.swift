@@ -2,15 +2,29 @@ import SwiftUI
 
 struct PhotosView: View {
     @State private var photos: [Photo] = Photo.defaultPhotos
-    @State private var isSelecting = false
-    @State private var selectedIDs: Set<UUID> = []
+    @State private var mode: BrowseMode = .browsing
+
+    enum BrowseMode {
+        case browsing
+        case selecting(Set<UUID>)
+
+        var isSelecting: Bool {
+            if case .selecting = self { return true }
+            return false
+        }
+
+        var selectedIDs: Set<UUID> {
+            if case .selecting(let ids) = self { return ids }
+            return []
+        }
+    }
 
     private var selectedCount: Int {
-        selectedIDs.count
+        mode.selectedIDs.count
     }
 
     private var allSelected: Bool {
-        !photos.isEmpty && selectedIDs.count == photos.count
+        !photos.isEmpty && mode.selectedIDs.count == photos.count
     }
 
     var body: some View {
@@ -21,21 +35,19 @@ struct PhotosView: View {
                 } description: {
                     Text("Your photo library is empty.")
                 }
-                .accessibilityIdentifier("buttonheist.photos.empty")
             } else {
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                         ForEach(photos) { photo in
                             PhotoCell(
                                 photo: photo,
-                                isSelecting: isSelecting,
-                                isSelected: selectedIDs.contains(photo.id),
+                                isSelecting: mode.isSelecting,
+                                isSelected: mode.selectedIDs.contains(photo.id),
                                 onTap: { cellTapped(photo) }
                             )
-                            .accessibilityIdentifier("buttonheist.photos.cell-\(photo.id.uuidString)")
                             .accessibilityLabel(cellLabel(for: photo))
-                            .accessibilityAddTraits(isSelecting && selectedIDs.contains(photo.id) ? .isSelected : [])
-                            .accessibilityRemoveTraits(isSelecting && !selectedIDs.contains(photo.id) ? .isSelected : [])
+                            .accessibilityAddTraits(mode.isSelecting && mode.selectedIDs.contains(photo.id) ? .isSelected : [])
+                            .accessibilityRemoveTraits(mode.isSelecting && !mode.selectedIDs.contains(photo.id) ? .isSelected : [])
                         }
                     }
                     .padding(8)
@@ -45,74 +57,73 @@ struct PhotosView: View {
         .navigationTitle("Photos")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                if isSelecting {
+                if mode.isSelecting {
                     Button(allSelected ? "Deselect All" : "Select All") {
                         toggleSelectAll()
                     }
-                    .accessibilityIdentifier("buttonheist.photos.selectAll")
 
                     if selectedCount > 0 {
                         Button("Delete Selected (\(selectedCount))", role: .destructive) {
                             deleteSelected()
                         }
-                        .accessibilityIdentifier("buttonheist.photos.deleteSelected")
                     }
                 }
 
-                Button(isSelecting ? "Cancel" : "Select") {
+                Button(mode.isSelecting ? "Cancel" : "Select") {
                     toggleSelectMode()
                 }
-                .accessibilityIdentifier("buttonheist.photos.selectToggle")
             }
         }
         .animation(.default, value: photos.map(\.id))
-        .animation(.default, value: isSelecting)
+        .animation(.default, value: mode.isSelecting)
     }
 
     private func cellTapped(_ photo: Photo) {
-        if isSelecting {
-            if selectedIDs.contains(photo.id) {
-                selectedIDs.remove(photo.id)
-                NSLog("[Photos] Deselected: \"%@\" (selected: %d)", photo.name, selectedIDs.count)
-            } else {
-                selectedIDs.insert(photo.id)
-                NSLog("[Photos] Selected: \"%@\" (selected: %d)", photo.name, selectedIDs.count)
-            }
-        } else {
+        switch mode {
+        case .browsing:
             NSLog("[Photos] Opened: \"%@\"", photo.name)
+        case .selecting(var selected):
+            if selected.contains(photo.id) {
+                selected.remove(photo.id)
+                NSLog("[Photos] Deselected: \"%@\" (selected: %d)", photo.name, selected.count)
+            } else {
+                selected.insert(photo.id)
+                NSLog("[Photos] Selected: \"%@\" (selected: %d)", photo.name, selected.count)
+            }
+            mode = .selecting(selected)
         }
     }
 
     private func toggleSelectMode() {
-        if isSelecting {
-            selectedIDs.removeAll()
-            NSLog("[Photos] Exited select mode")
-        } else {
+        switch mode {
+        case .browsing:
+            mode = .selecting([])
             NSLog("[Photos] Entered select mode")
+        case .selecting:
+            mode = .browsing
+            NSLog("[Photos] Exited select mode")
         }
-        isSelecting.toggle()
     }
 
     private func toggleSelectAll() {
         if allSelected {
-            selectedIDs.removeAll()
+            mode = .selecting([])
             NSLog("[Photos] Deselected all")
         } else {
-            selectedIDs = Set(photos.map(\.id))
+            mode = .selecting(Set(photos.map(\.id)))
             NSLog("[Photos] Selected all (total: %d)", photos.count)
         }
     }
 
     private func deleteSelected() {
         let count = selectedCount
-        photos.removeAll { selectedIDs.contains($0.id) }
-        selectedIDs.removeAll()
-        isSelecting = false
+        photos.removeAll { mode.selectedIDs.contains($0.id) }
+        mode = .browsing
         NSLog("[Photos] Deleted %d photos (remaining: %d)", count, photos.count)
     }
 
     private func cellLabel(for photo: Photo) -> String {
-        if isSelecting && selectedIDs.contains(photo.id) {
+        if mode.isSelecting && mode.selectedIDs.contains(photo.id) {
             return "\(photo.name), selected"
         }
         return photo.name

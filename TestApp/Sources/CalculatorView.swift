@@ -3,9 +3,13 @@ import UIKit
 
 struct CalculatorView: View {
     @State private var display = "0"
-    @State private var currentValue: Double = 0
-    @State private var pendingOperation: Operation?
-    @State private var shouldResetDisplay = false
+    @State private var entryState: EntryState = .clean
+
+    enum EntryState {
+        case clean
+        case operatorPending(accumulated: Double, operation: Operation)
+        case enteringOperand(accumulated: Double, operation: Operation)
+    }
 
     enum Operation: String {
         case add = "+"
@@ -32,7 +36,6 @@ struct CalculatorView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 24)
-                .accessibilityIdentifier("buttonheist.calc.display")
 
             ForEach(Array(buttons.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 12) {
@@ -49,82 +52,114 @@ struct CalculatorView: View {
     }
 
     private func isActive(_ button: CalcButton) -> Bool {
-        if case .op(let op) = button, pendingOperation == op, shouldResetDisplay {
-            return true
+        guard case .op(let operation) = button else { return false }
+        switch entryState {
+        case .operatorPending(_, let pending), .enteringOperand(_, let pending):
+            return pending == operation
+        case .clean:
+            return false
         }
-        return false
     }
 
     private func handleButton(_ button: CalcButton) {
         switch button {
-        case .digit(let n):
-            if shouldResetDisplay {
-                display = "\(n)"
-                shouldResetDisplay = false
-            } else if display == "0" {
-                display = "\(n)"
+        case .digit(let number): handleDigit(number)
+        case .decimal: handleDecimal()
+        case .clear: handleClear()
+        case .negate: handleNegate()
+        case .percent: handlePercent()
+        case .op(let operation): handleOperator(operation)
+        case .equals: handleEquals()
+        }
+    }
+
+    private func handleDigit(_ number: Int) {
+        switch entryState {
+        case .operatorPending(let accumulated, let operation):
+            display = "\(number)"
+            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+        case .clean, .enteringOperand:
+            if display == "0" {
+                display = "\(number)"
             } else {
-                display += "\(n)"
+                display += "\(number)"
             }
-            NSLog("[Calc] Digit: %d, display: %@", n, display)
+        }
+        NSLog("[Calc] Digit: %d, display: %@", number, display)
+    }
 
-        case .decimal:
-            if shouldResetDisplay {
-                display = "0."
-                shouldResetDisplay = false
-            } else if !display.contains(".") {
+    private func handleDecimal() {
+        switch entryState {
+        case .operatorPending(let accumulated, let operation):
+            display = "0."
+            entryState = .enteringOperand(accumulated: accumulated, operation: operation)
+        case .clean, .enteringOperand:
+            if !display.contains(".") {
                 display += "."
-            }
-
-        case .clear:
-            display = "0"
-            currentValue = 0
-            pendingOperation = nil
-            shouldResetDisplay = false
-            NSLog("[Calc] Clear")
-
-        case .negate:
-            if display != "0" {
-                if display.hasPrefix("-") {
-                    display.removeFirst()
-                } else {
-                    display = "-" + display
-                }
-            }
-
-        case .percent:
-            if let value = Double(display) {
-                let result = value / 100
-                display = formatNumber(result)
-            }
-
-        case .op(let op):
-            if let displayValue = Double(display) {
-                if let pending = pendingOperation, !shouldResetDisplay {
-                    currentValue = calculate(currentValue, displayValue, pending)
-                    display = formatNumber(currentValue)
-                } else {
-                    currentValue = displayValue
-                }
-            }
-            pendingOperation = op
-            shouldResetDisplay = true
-            NSLog("[Calc] Operation: %@", op.rawValue)
-
-        case .equals:
-            if let pending = pendingOperation, let displayValue = Double(display) {
-                let result = calculate(currentValue, displayValue, pending)
-                display = formatNumber(result)
-                currentValue = result
-                pendingOperation = nil
-                shouldResetDisplay = true
-                NSLog("[Calc] Equals: %@", display)
             }
         }
     }
 
-    private func calculate(_ a: Double, _ b: Double, _ op: Operation) -> Double {
-        switch op {
+    private func handleClear() {
+        display = "0"
+        entryState = .clean
+        NSLog("[Calc] Clear")
+    }
+
+    private func handleNegate() {
+        if display != "0" {
+            if display.hasPrefix("-") {
+                display.removeFirst()
+            } else {
+                display = "-" + display
+            }
+        }
+    }
+
+    private func handlePercent() {
+        if let value = Double(display) {
+            let result = value / 100
+            display = formatNumber(result)
+        }
+    }
+
+    private func handleOperator(_ operation: Operation) {
+        if let displayValue = Double(display) {
+            let accumulated: Double
+            switch entryState {
+            case .enteringOperand(let current, let pending):
+                accumulated = calculate(current, displayValue, pending)
+                display = formatNumber(accumulated)
+            case .clean, .operatorPending:
+                accumulated = displayValue
+            }
+            entryState = .operatorPending(accumulated: accumulated, operation: operation)
+        }
+        NSLog("[Calc] Operation: %@", operation.rawValue)
+    }
+
+    private func handleEquals() {
+        switch entryState {
+        case .enteringOperand(let accumulated, let pending):
+            if let displayValue = Double(display) {
+                let result = calculate(accumulated, displayValue, pending)
+                display = formatNumber(result)
+                entryState = .clean
+                NSLog("[Calc] Equals: %@", display)
+            }
+        case .operatorPending(let accumulated, let pending):
+            // "5 + =" repeats the operand: 5 + 5 = 10 (matches iOS Calculator)
+            let result = calculate(accumulated, accumulated, pending)
+            display = formatNumber(result)
+            entryState = .clean
+            NSLog("[Calc] Equals: %@", display)
+        case .clean:
+            break
+        }
+    }
+
+    private func calculate(_ a: Double, _ b: Double, _ operation: Operation) -> Double {
+        switch operation {
         case .add: return a + b
         case .subtract: return a - b
         case .multiply: return a * b
@@ -153,31 +188,13 @@ enum CalcButton: Hashable {
 
     var label: String {
         switch self {
-        case .digit(let n): return "\(n)"
+        case .digit(let number): return "\(number)"
         case .decimal: return "."
-        case .op(let op): return op.rawValue
+        case .op(let operation): return operation.rawValue
         case .equals: return "="
         case .clear: return "AC"
         case .negate: return "±"
         case .percent: return "%"
-        }
-    }
-
-    var accessibilityId: String {
-        switch self {
-        case .digit(let n): return "buttonheist.calc.digit\(n)"
-        case .decimal: return "buttonheist.calc.decimal"
-        case .op(let op):
-            switch op {
-            case .add: return "buttonheist.calc.add"
-            case .subtract: return "buttonheist.calc.subtract"
-            case .multiply: return "buttonheist.calc.multiply"
-            case .divide: return "buttonheist.calc.divide"
-            }
-        case .equals: return "buttonheist.calc.equals"
-        case .clear: return "buttonheist.calc.clear"
-        case .negate: return "buttonheist.calc.negate"
-        case .percent: return "buttonheist.calc.percent"
         }
     }
 }
@@ -216,16 +233,15 @@ struct CalcButtonView: View {
                 .foregroundStyle(foregroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
         }
-        .accessibilityIdentifier(button.accessibilityId)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private var accessibilityLabel: String {
         switch button {
-        case .digit(let n): return "\(n)"
+        case .digit(let number): return "\(number)"
         case .decimal: return "decimal point"
-        case .op(let op): return op.rawValue
+        case .op(let operation): return operation.rawValue
         case .equals: return "equals"
         case .clear: return "all clear"
         case .negate: return "plus minus"
