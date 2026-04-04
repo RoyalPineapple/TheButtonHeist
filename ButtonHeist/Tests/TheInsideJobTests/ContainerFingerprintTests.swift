@@ -480,11 +480,9 @@ final class ContainerFingerprintTests: XCTestCase {
 
         var found: AccessibilityElement?
         var ambiguous = false
-        for root in roots {
-            if root.hasSecondLeaf(found: &found) {
-                ambiguous = true
-                break
-            }
+        for root in roots where root.hasSecondLeaf(found: &found) {
+            ambiguous = true
+            break
         }
 
         XCTAssertTrue(ambiguous, "Second leaf across different roots should be detected")

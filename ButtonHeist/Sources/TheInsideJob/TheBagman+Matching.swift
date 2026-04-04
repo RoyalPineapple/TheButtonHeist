@@ -98,8 +98,8 @@ extension Array where Element == AccessibilityHierarchy {
         let filtered = matchingHierarchy(matcher)
         guard !filtered.isEmpty else { return nil }
         var found: AccessibilityElement?
-        for root in filtered {
-            if root.hasSecondLeaf(found: &found) { return nil }
+        for root in filtered where root.hasSecondLeaf(found: &found) {
+            return nil
         }
         guard let element = found else { return nil }
         return .init(element: element)
@@ -118,8 +118,8 @@ extension AccessibilityHierarchy {
             found = element
             return false
         case .container(_, let children):
-            for child in children {
-                if child.hasSecondLeaf(found: &found) { return true }
+            for child in children where child.hasSecondLeaf(found: &found) {
+                return true
             }
             return false
         }
