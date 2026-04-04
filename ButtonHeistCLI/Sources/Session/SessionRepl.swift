@@ -77,11 +77,19 @@ final class ReplSession {
 
         if line.hasPrefix("{") {
             // JSON mode — machine interface
-            guard
-                let data = line.data(using: .utf8),
-                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                object["command"] is String
-            else {
+            guard let data = line.data(using: .utf8) else {
+                return (.error("Invalid JSON or missing 'command' field"), nil)
+            }
+            let object: [String: Any]
+            do {
+                guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    return (.error("Invalid JSON or missing 'command' field"), nil)
+                }
+                object = parsed
+            } catch {
+                return (.error("Invalid JSON: \(error.localizedDescription)"), nil)
+            }
+            guard object["command"] is String else {
                 return (.error("Invalid JSON or missing 'command' field"), nil)
             }
             request = object
@@ -126,11 +134,15 @@ final class ReplSession {
                 if let id {
                     dictionary["id"] = id
                 }
-                if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
-                   let json = String(data: data, encoding: .utf8) {
-                    writeOutput(json)
-                } else {
-                    logStatus("Failed to serialize response as JSON")
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
+                    if let json = String(data: data, encoding: .utf8) {
+                        writeOutput(json)
+                    } else {
+                        logStatus("Failed to encode JSON data as UTF-8")
+                    }
+                } catch {
+                    logStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
                 }
             } else {
                 logStatus("Failed to serialize response as JSON")

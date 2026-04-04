@@ -394,8 +394,11 @@ final class TheStakeout {
                     return
                 }
 
-                guard let videoData = try? Data(contentsOf: outputURL) else {
-                    self.deliverError(.finalizationFailed("Could not read output file"))
+                let videoData: Data
+                do {
+                    videoData = try Data(contentsOf: outputURL)
+                } catch {
+                    self.deliverError(.finalizationFailed("Could not read output file: \(error.localizedDescription)"))
                     return
                 }
 

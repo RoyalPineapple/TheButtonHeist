@@ -134,8 +134,15 @@ nonisolated extension USBDeviceDiscovery {
         }
 
         let pattern = #"\[(fd[0-9a-f:]+)::[12]\]"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
+        let regex: NSRegularExpression
+        do {
+            regex = try NSRegularExpression(pattern: pattern)
+        } catch {
+            logger.error("Invalid IPv6 tunnel regex: \(error.localizedDescription)")
+            return nil
+        }
+
+        guard let match = regex.firstMatch(in: output, range: NSRange(output.startIndex..., in: output)),
               let prefixRange = Range(match.range(at: 1), in: output) else {
             return nil
         }

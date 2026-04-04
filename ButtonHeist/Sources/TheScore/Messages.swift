@@ -7,7 +7,7 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 public let protocolVersion = "6.7"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
-/// Update this constant when cutting a new release. See docs/VERSIONING.md.
+/// Update this constant when cutting a new release. See VERSIONING.md in bh-infra.
 public let buttonHeistVersion = "2026.04.03.2"
 
 /// Explicit wire message discriminator used at JSON boundaries.

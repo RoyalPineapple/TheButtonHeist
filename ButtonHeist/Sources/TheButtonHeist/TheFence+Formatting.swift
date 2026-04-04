@@ -1,5 +1,8 @@
 import Foundation
+import os.log
 import TheScore
+
+private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "formatting")
 
 /// Level of detail for interface responses.
 public enum InterfaceDetail: String, CaseIterable, Sendable {
@@ -504,10 +507,13 @@ public enum FenceResponse {
     static func expectationResultDict(_ result: ExpectationResult) -> [String: Any] {
         var dict: [String: Any] = ["met": result.met]
         if let actual = result.actual { dict["actual"] = actual }
-        let encoder = JSONEncoder()
-        if let data = try? encoder.encode(result.expectation),
-           let obj = try? JSONSerialization.jsonObject(with: data) {
-            dict["expected"] = obj
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(result.expectation)
+            let object = try JSONSerialization.jsonObject(with: data)
+            dict["expected"] = object
+        } catch {
+            logger.warning("Failed to encode expectation result: \(error.localizedDescription)")
         }
         return dict
     }
@@ -554,13 +560,19 @@ public enum FenceResponse {
 
     private func encodeInteractionLog(_ events: [InteractionEvent]?) -> [[String: Any]]? {
         guard let events, !events.isEmpty else { return nil }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(events),
-              let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(events)
+            guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                logger.warning("Interaction log serialized to non-array JSON")
+                return nil
+            }
+            return array
+        } catch {
+            logger.warning("Failed to encode interaction log: \(error.localizedDescription)")
             return nil
         }
-        return array
     }
 
     // MARK: - Human Format Helpers
@@ -684,9 +696,9 @@ public enum FenceResponse {
             return connected ? "session: connected" : "session: not connected"
         case .targets(let targets, let defaultTarget):
             if targets.isEmpty { return "no targets configured" }
-            return targets.keys.sorted().map { name in
+            return targets.sorted(by: { $0.key < $1.key }).map { name, target in
                 let isDefault = name == defaultTarget ? " *" : ""
-                return "\(name): \(targets[name]!.device)\(isDefault)"
+                return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
         case .sessionLog, .archiveResult:
             return compactBookKeeper(self)
