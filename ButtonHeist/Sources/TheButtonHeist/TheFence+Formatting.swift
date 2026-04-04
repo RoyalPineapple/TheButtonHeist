@@ -184,7 +184,7 @@ public enum FenceResponse {
                     text += "  [expectation met]"
                 } else {
                     let tier = expectation.expectation.map(String.init(describing:)) ?? "delivery"
-                    text += "  [expectation FAILED: expected \(tier), got \(expectation.actual, default: "nil")]"
+                    text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
                 }
             }
             return text
@@ -730,7 +730,7 @@ public enum FenceResponse {
         }
         if let expectation {
             if !expectation.met {
-                text += "\n[expectation FAILED: got \(expectation.actual, default: "nil")]"
+                text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
             }
         }
         return text
@@ -865,7 +865,7 @@ public enum FenceResponse {
                 for update in updates {
                     let meaningful = update.changes.filter { !$0.property.isGeometry }
                     for change in meaningful {
-                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old, default: "nil")\" → \"\(change.new, default: "nil")\"")
+                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
                     }
                 }
             }
