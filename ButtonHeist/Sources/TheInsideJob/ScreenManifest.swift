@@ -181,6 +181,8 @@ extension TheBagman {
                         pageOrigins: page.origins
                     )
                     accumulated = result.elements
+                    // originByElement values are CGPoint? — subscript returns CGPoint??,
+                    // so ?? nil flattens to CGPoint? (missing element → nil origin).
                     accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
 
                     if result.inserted.isEmpty { break }
