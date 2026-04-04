@@ -44,7 +44,8 @@ extension TheInsideJob {
 
         guard muscle.hasSubscribers else { return }
 
-        let snapshot = bagman.snapshot(.visible)
+        let snapshot = bagman.selectElements(.viewport)
+        bagman.markPresented(snapshot)
         let wireElements = bagman.toWire(snapshot)
         let currentHash = wireElements.hashValue
 
@@ -67,14 +68,24 @@ extension TheInsideJob {
     func sendInterface(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
-        guard let parseResult = bagman.refresh() else {
+        guard bagman.refresh() != nil else {
             sendMessage(.error("Could not access root view"), requestId: requestId, respond: respond)
             return
         }
 
-        let snapshot = bagman.snapshot(.visible)
-        let tree = parseResult.hierarchy.map { bagman.convertHierarchyNode($0) }
+        // First request seeds the registry with a full explore. After that,
+        // every action runs exploreScreen so the registry stays current.
+        // Either way, return .all — the caller may filter to off-screen elements
+        // and expects stable traversal order across the full registry.
+        if !bagman.hasServedInterface {
+            let manifest = await bagman.exploreAndPrune()
+            bagman.hasServedInterface = true
+            insideJobLogger.info("Initial explore: \(self.bagman.screenElements.count) elements (\(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s)")
+        }
 
+        let snapshot = bagman.selectElements(.all)
+        bagman.markPresented(snapshot)
+        let tree = bagman.currentHierarchy.isEmpty ? nil : bagman.currentHierarchy.map { bagman.convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: bagman.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
     }

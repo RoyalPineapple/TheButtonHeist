@@ -223,6 +223,38 @@ public struct ActionResult: Codable, Sendable {
     }
 }
 
+extension ActionResult {
+    /// Return a copy with the scrollSearchResult field set.
+    public func adding(scrollSearchResult: ScrollSearchResult?) -> ActionResult {
+        ActionResult(
+            success: success, method: method, message: message, errorKind: errorKind,
+            value: value, interfaceDelta: interfaceDelta, animating: animating,
+            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
+            screenName: screenName, scrollSearchResult: scrollSearchResult,
+            exploreResult: exploreResult
+        )
+    }
+
+    /// Return a copy with the exploreResult's elements populated.
+    /// Used by the explicit explore command which needs the full element list.
+    public func adding(exploreElements: [HeistElement]) -> ActionResult {
+        guard let explore = exploreResult else { return self }
+        let fullExplore = ExploreResult(
+            elements: exploreElements,
+            scrollCount: explore.scrollCount,
+            containersExplored: explore.containersExplored,
+            explorationTime: explore.explorationTime
+        )
+        return ActionResult(
+            success: success, method: method, message: message, errorKind: errorKind,
+            value: value, interfaceDelta: interfaceDelta, animating: animating,
+            elementLabel: elementLabel, elementValue: elementValue, elementTraits: elementTraits,
+            screenName: screenName, scrollSearchResult: scrollSearchResult,
+            exploreResult: fullExplore
+        )
+    }
+}
+
 /// Diagnostics from a scroll_to_visible search operation.
 public struct ScrollSearchResult: Codable, Sendable {
     /// Number of scroll operations performed

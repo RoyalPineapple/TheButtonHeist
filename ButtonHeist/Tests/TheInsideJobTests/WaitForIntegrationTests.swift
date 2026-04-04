@@ -217,7 +217,8 @@ final class WaitForIntegrationTests: XCTestCase {
 
         // Refresh the tree so heistIds are assigned
         insideJob.bagman.refresh()
-        let elements = insideJob.bagman.snapshot(.visible)
+        let elements = insideJob.bagman.selectElements(.viewport)
+        insideJob.bagman.markPresented(elements)
 
         // Find the heistId for our element
         let heistId = elements.first(where: {

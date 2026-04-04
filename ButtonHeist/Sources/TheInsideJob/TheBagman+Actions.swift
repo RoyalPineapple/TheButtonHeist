@@ -378,7 +378,7 @@ extension TheBagman {
 
         // Step 4: Refresh and read back value
         try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
-        refreshElements()
+        refresh()
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {

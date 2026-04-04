@@ -587,9 +587,9 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         XCTAssertEqual(label(of: result), "Only")
     }
 
-    // MARK: - Reduce: Count
+    // MARK: - Elements & Containers Extraction
 
-    func testReduceCountsElements() {
+    func testElementsCountsLeaves() {
         let tree = group(children: [
             element(label: "A", index: 0),
             group(children: [
@@ -598,29 +598,19 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        let count = tree.reduced(0) { acc, node in
-            if case .element = node { return acc + 1 }
-            return acc
-        }
-        XCTAssertEqual(count, 3)
+        XCTAssertEqual(tree.elements.count, 3)
     }
 
-    func testReduceCountsContainers() {
+    func testContainersCountsAllContainers() {
         let tree = group(children: [
             group(children: [element(label: "A")]),
             group(children: []),
         ])
 
-        let count = tree.reduced(0) { acc, node in
-            if case .container = node { return acc + 1 }
-            return acc
-        }
-        XCTAssertEqual(count, 3, "Root + 2 inner containers")
+        XCTAssertEqual(tree.containers.count, 3, "Root + 2 inner containers")
     }
 
-    // MARK: - Reduce: Collect
-
-    func testReduceCollectsLabels() {
+    func testElementsCollectsLabelsInTraversalOrder() {
         let tree = group(children: [
             element(label: "A", index: 0),
             element(label: "B", index: 1),
@@ -629,41 +619,11 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        let labels = tree.reduced([String]()) { acc, node in
-            if case let .element(e, _) = node, let lbl = e.label {
-                return acc + [lbl]
-            }
-            return acc
-        }
+        let labels = tree.elements.compactMap(\.element.label)
         XCTAssertEqual(labels, ["A", "B", "C"])
     }
 
-    func testReducePreOrderVisitOrder() {
-        // Verify visit order is pre-order: parent before children, left before right.
-        let tree = group(label: "R", children: [
-            element(label: "1", index: 0),
-            group(label: "G", children: [
-                element(label: "2", index: 1),
-            ]),
-        ])
-
-        var order: [String] = []
-        tree.reduced(()) { _, node in
-            switch node {
-            case let .element(e, _):
-                order.append(e.label ?? "?")
-            case let .container(c, _):
-                if case let .semanticGroup(label, _, _) = c.type {
-                    order.append(label ?? "?")
-                }
-            }
-        }
-        XCTAssertEqual(order, ["R", "1", "G", "2"])
-    }
-
-    // MARK: - Reduce: Numeric
-
-    func testReduceComputesMaxTraversalIndex() {
+    func testFoldedComputesMaxTraversalIndex() {
         let tree = group(children: [
             element(label: "A", index: 3),
             group(children: [
@@ -672,14 +632,14 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        let maxIndex = tree.reduced(Int.min) { acc, node in
-            if case let .element(_, idx) = node { return max(acc, idx) }
-            return acc
-        }
+        let maxIndex = tree.folded(
+            onElement: { _, traversalIndex in traversalIndex },
+            onContainer: { _, childMaxes in childMaxes.max() ?? Int.min }
+        )
         XCTAssertEqual(maxIndex, 7)
     }
 
-    func testReduceComputesTreeDepth() {
+    func testFoldedComputesTreeDepth() {
         let tree = group(children: [
             element(label: "shallow", index: 0),
             group(children: [
@@ -689,61 +649,42 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        // Use a tuple of (currentDepth, maxDepth)
-        func depth(of node: AccessibilityHierarchy) -> Int {
-            switch node {
-            case .element:
-                return 1
-            case let .container(_, children):
-                let childMax = children.map { depth(of: $0) }.max() ?? 0
-                return 1 + childMax
-            }
-        }
-
-        XCTAssertEqual(depth(of: tree), 4, "Root > group > group > element")
+        let depth: Int = tree.folded(
+            onElement: { _, _ in 1 },
+            onContainer: { _, childDepths in 1 + (childDepths.max() ?? 0) }
+        )
+        XCTAssertEqual(depth, 4, "Root > group > group > element")
     }
 
-    // MARK: - Reduce: Boolean
-
-    func testReduceChecksAnyButton() {
+    func testFilteredElementsChecksAnyButton() {
         let tree = group(children: [
             element(label: "Title", traits: .header),
             element(label: "OK", traits: .button),
         ])
 
-        let hasButton = tree.reduced(false) { acc, node in
-            if acc { return true }
-            if case let .element(e, _) = node { return e.traits.contains(.button) }
-            return false
-        }
+        let hasButton = tree.filtered { node in
+            guard case .element(let element, _) = node else { return false }
+            return element.traits.contains(.button)
+        } != nil
         XCTAssertTrue(hasButton)
     }
 
-    func testReduceChecksAllInteractive() {
+    func testElementsChecksAllInteractive() {
         let tree = group(children: [
             element(label: "A"),
             element(label: "B"),
         ])
 
-        let allInteractive = tree.reduced(true) { acc, node in
-            if !acc { return false }
-            if case let .element(e, _) = node { return e.respondsToUserInteraction }
-            return acc
-        }
+        let allInteractive = tree.elements.allSatisfy(\.element.respondsToUserInteraction)
         XCTAssertTrue(allInteractive)
     }
 
-    // MARK: - Reduce: Single Element
-
-    func testReduceOnSingleElement() {
+    func testElementsOnSingleElement() {
         let node = element(label: "Solo", index: 0)
-        let count = node.reduced(0) { acc, _ in acc + 1 }
-        XCTAssertEqual(count, 1)
+        XCTAssertEqual(node.elements.count, 1)
     }
 
-    // MARK: - Reduce: Array
-
-    func testReducedHierarchyOnArray() {
+    func testElementsOnArray() {
         let roots: [AccessibilityHierarchy] = [
             element(label: "A", index: 0),
             group(children: [
@@ -751,41 +692,28 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ]
 
-        let count = roots.reducedHierarchy(0) { acc, node in
-            if case .element = node { return acc + 1 }
-            return acc
-        }
-        XCTAssertEqual(count, 2)
+        XCTAssertEqual(roots.elements.count, 2)
     }
 
-    func testReducedHierarchyEmptyArray() {
+    func testElementsOnEmptyArray() {
         let roots: [AccessibilityHierarchy] = []
-        let count = roots.reducedHierarchy(0) { acc, _ in acc + 1 }
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(roots.elements.count, 0)
     }
 
-    func testReducedHierarchyVisitsAllRoots() {
+    func testElementsVisitsAllRoots() {
         let roots: [AccessibilityHierarchy] = [
             group(children: [element(label: "A")]),
             group(children: [element(label: "B")]),
             group(children: [element(label: "C")]),
         ]
 
-        let labels = roots.reducedHierarchy([String]()) { acc, node in
-            if case let .element(e, _) = node, let lbl = e.label {
-                return acc + [lbl]
-            }
-            return acc
-        }
+        let labels = roots.elements.compactMap(\.element.label)
         XCTAssertEqual(labels, ["A", "B", "C"])
     }
 
-    // MARK: - Reduce: Edge Cases
-
-    func testReduceEmptyContainer() {
+    func testContainersOnEmptyContainer() {
         let tree = group(children: [])
-        let count = tree.reduced(0) { acc, _ in acc + 1 }
-        XCTAssertEqual(count, 1, "Just the container itself")
+        XCTAssertEqual(tree.containers.count, 1, "Just the container itself")
     }
 
     // MARK: - Composition: Filter + Map
@@ -834,9 +762,9 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         XCTAssertEqual(label(of: children[1]), "ALSO KEEP")
     }
 
-    // MARK: - Composition: Filter + Reduce
+    // MARK: - Composition: Filter + Elements
 
-    func testFilterThenReduce() {
+    func testFilterThenElements() {
         let tree = group(children: [
             element(label: "Header", traits: .header, index: 0),
             element(label: "Body", index: 1),
@@ -844,65 +772,58 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
         ])
 
         let headerLabels = tree
-            .filtered { n in
-                if case let .element(e, _) = n { return e.traits.contains(.header) }
-                return true
+            .filtered { node in
+                if case let .element(element, _) = node { return element.traits.contains(.header) }
+                return false
             }?
-            .reduced([String]()) { acc, node in
-                if case let .element(e, _) = node, let lbl = e.label {
-                    return acc + [lbl]
-                }
-                return acc
-            }
+            .elements
+            .compactMap(\.element.label)
 
         XCTAssertEqual(headerLabels, ["Header", "Footer"])
     }
 
-    // MARK: - Composition: Map + Reduce
+    // MARK: - Composition: Map + Elements
 
-    func testMapThenReduce() {
+    func testMapThenElements() {
         let tree = group(children: [
             element(label: "a", index: 0),
             element(label: "b", index: 1),
         ])
 
         let uppercased = tree
-            .mapped { n in
-                guard case let .element(e, idx) = n else { return n }
+            .mapped { node in
+                guard case let .element(element, index) = node else { return node }
                 return .element(
                     AccessibilityElement(
-                        description: e.description,
-                        label: e.label?.uppercased(),
-                        value: e.value,
-                        traits: e.traits,
-                        identifier: e.identifier,
-                        hint: e.hint,
-                        userInputLabels: e.userInputLabels,
-                        shape: e.shape,
-                        activationPoint: e.activationPoint,
-                        usesDefaultActivationPoint: e.usesDefaultActivationPoint,
-                        customActions: e.customActions,
-                        customContent: e.customContent,
-                        customRotors: e.customRotors,
-                        accessibilityLanguage: e.accessibilityLanguage,
-                        respondsToUserInteraction: e.respondsToUserInteraction
+                        description: element.description,
+                        label: element.label?.uppercased(),
+                        value: element.value,
+                        traits: element.traits,
+                        identifier: element.identifier,
+                        hint: element.hint,
+                        userInputLabels: element.userInputLabels,
+                        shape: element.shape,
+                        activationPoint: element.activationPoint,
+                        usesDefaultActivationPoint: element.usesDefaultActivationPoint,
+                        customActions: element.customActions,
+                        customContent: element.customContent,
+                        customRotors: element.customRotors,
+                        accessibilityLanguage: element.accessibilityLanguage,
+                        respondsToUserInteraction: element.respondsToUserInteraction
                     ),
-                    traversalIndex: idx
+                    traversalIndex: index
                 )
             }
-            .reduced("") { acc, node in
-                if case let .element(e, _) = node, let lbl = e.label {
-                    return acc.isEmpty ? lbl : acc + "," + lbl
-                }
-                return acc
-            }
+            .elements
+            .compactMap(\.element.label)
+            .joined(separator: ",")
 
         XCTAssertEqual(uppercased, "A,B")
     }
 
-    // MARK: - Composition: All Three
+    // MARK: - Composition: Filter + Map + Elements
 
-    func testFilterMapReduce() {
+    func testFilterMapElements() {
         let tree = group(children: [
             element(label: "Settings", traits: .button, index: 0),
             element(label: "Info", index: 1),
@@ -910,40 +831,38 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "Help", index: 3),
         ])
 
-        let result = tree
-            .filtered { n in
-                if case let .element(e, _) = n { return e.traits.contains(.button) }
-                return true
+        let count = tree
+            .filtered { node in
+                if case let .element(element, _) = node { return element.traits.contains(.button) }
+                return false
             }?
-            .mapped { n in
-                guard case let .element(e, idx) = n else { return n }
+            .mapped { node in
+                guard case let .element(element, index) = node else { return node }
                 return .element(
                     AccessibilityElement(
-                        description: e.description,
-                        label: "[" + (e.label ?? "") + "]",
-                        value: e.value,
-                        traits: e.traits,
-                        identifier: e.identifier,
-                        hint: e.hint,
-                        userInputLabels: e.userInputLabels,
-                        shape: e.shape,
-                        activationPoint: e.activationPoint,
-                        usesDefaultActivationPoint: e.usesDefaultActivationPoint,
-                        customActions: e.customActions,
-                        customContent: e.customContent,
-                        customRotors: e.customRotors,
-                        accessibilityLanguage: e.accessibilityLanguage,
-                        respondsToUserInteraction: e.respondsToUserInteraction
+                        description: element.description,
+                        label: "[" + (element.label ?? "") + "]",
+                        value: element.value,
+                        traits: element.traits,
+                        identifier: element.identifier,
+                        hint: element.hint,
+                        userInputLabels: element.userInputLabels,
+                        shape: element.shape,
+                        activationPoint: element.activationPoint,
+                        usesDefaultActivationPoint: element.usesDefaultActivationPoint,
+                        customActions: element.customActions,
+                        customContent: element.customContent,
+                        customRotors: element.customRotors,
+                        accessibilityLanguage: element.accessibilityLanguage,
+                        respondsToUserInteraction: element.respondsToUserInteraction
                     ),
-                    traversalIndex: idx
+                    traversalIndex: index
                 )
             }
-            .reduced(0) { acc, node in
-                if case .element = node { return acc + 1 }
-                return acc
-            }
+            .elements
+            .count
 
-        XCTAssertEqual(result, 2)
+        XCTAssertEqual(count, 2)
     }
 }
 #endif

@@ -52,35 +52,102 @@ extension AccessibilityHierarchy {
     }
 }
 
-// MARK: - Reduce
+// MARK: - Fold (catamorphism — transform tree to a different type)
 
 extension AccessibilityHierarchy {
-    /// Folds the tree into a single value via pre-order depth-first traversal.
+    /// Transforms the tree into a value of a different type, bottom-up.
     ///
-    /// Each node is combined into the accumulator before its children, left to right.
-    /// This mirrors `forEach` order — parent first, then children.
-    public func reduced<Result>(
-        _ initialResult: Result,
-        _ combine: (Result, AccessibilityHierarchy) -> Result
+    /// For leaf elements: `onElement` receives the element and its traversal index.
+    /// For containers: children are folded first, then `onContainer` receives the
+    /// container metadata and the already-folded children.
+    ///
+    /// This is the general-purpose tree destructor — `mapped` and `convertHierarchyNode`
+    /// are both special cases. Use it when the output type differs from `AccessibilityHierarchy`.
+    public func folded<Result>(
+        onElement: (AccessibilityElement, Int) -> Result,
+        onContainer: (AccessibilityContainer, [Result]) -> Result
     ) -> Result {
-        var result = combine(initialResult, self)
-        for child in children {
-            result = child.reduced(result, combine)
+        switch self {
+        case let .element(element, traversalIndex):
+            return onElement(element, traversalIndex)
+        case let .container(container, children):
+            let foldedChildren = children.map {
+                $0.folded(onElement: onElement, onContainer: onContainer)
+            }
+            return onContainer(container, foldedChildren)
         }
-        return result
+    }
+}
+
+extension Array where Element == AccessibilityHierarchy {
+    /// Folds each root into a different type, bottom-up.
+    public func foldedHierarchy<Result>(
+        onElement: (AccessibilityElement, Int) -> Result,
+        onContainer: (AccessibilityContainer, [Result]) -> Result
+    ) -> [Result] {
+        map { $0.folded(onElement: onElement, onContainer: onContainer) }
+    }
+}
+
+// MARK: - Walk with Context (top-down context propagation)
+
+extension AccessibilityHierarchy {
+    /// Walks the tree top-down, threading a context value from parent to child.
+    ///
+    /// For containers: `deriveContext` produces the child context from the current context
+    /// and the container metadata. For elements: `visit` receives the element and the
+    /// context inherited from its nearest container ancestor.
+    ///
+    /// Use this when parent nodes establish context that child nodes need — e.g., a scroll
+    /// view reference that propagates from a `.scrollable` container to its descendant elements.
+    public func walked<Context>(
+        context: Context,
+        deriveContext: (Context, AccessibilityContainer) -> Context,
+        visit: (AccessibilityElement, Int, Context) -> Void
+    ) {
+        switch self {
+        case let .element(element, traversalIndex):
+            visit(element, traversalIndex, context)
+        case let .container(container, children):
+            let childContext = deriveContext(context, container)
+            for child in children {
+                child.walked(context: childContext, deriveContext: deriveContext, visit: visit)
+            }
+        }
+    }
+}
+
+extension Array where Element == AccessibilityHierarchy {
+    /// Walks all roots top-down with inherited context.
+    public func walkedHierarchy<Context>(
+        context: Context,
+        deriveContext: (Context, AccessibilityContainer) -> Context,
+        visit: (AccessibilityElement, Int, Context) -> Void
+    ) {
+        for root in self {
+            root.walked(context: context, deriveContext: deriveContext, visit: visit)
+        }
+    }
+}
+
+// MARK: - Leaf Extraction
+
+extension AccessibilityHierarchy {
+    /// The accessibility elements in this subtree, preserving traversal index.
+    /// Sorted by traversal index (VoiceOver order).
+    public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+        folded(
+            onElement: { element, traversalIndex in [(element, traversalIndex)] },
+            onContainer: { _, childLeaves in childLeaves.flatMap { $0 }.sorted { $0.traversalIndex < $1.traversalIndex } }
+        )
     }
 
-    /// Folds the tree into a single value via pre-order depth-first traversal,
-    /// with a throwing combine closure.
-    public func reduced<Result>(
-        _ initialResult: Result,
-        _ combine: (Result, AccessibilityHierarchy) throws -> Result
-    ) rethrows -> Result {
-        var result = try combine(initialResult, self)
-        for child in children {
-            result = try child.reduced(result, combine)
-        }
-        return result
+    /// The container nodes in this subtree, depth-first (outermost first).
+    public var containers: [AccessibilityContainer] {
+        folded(
+            onElement: { _, _ in [] },
+            onContainer: { container, childContainers in [container] + childContainers.flatMap { $0 } }
+        )
     }
 }
 
@@ -102,15 +169,51 @@ extension Array where Element == AccessibilityHierarchy {
         map { $0.mapped(transform) }
     }
 
-    /// Reduces all roots into a single value, visiting each tree left-to-right in pre-order.
-    public func reducedHierarchy<Result>(
-        _ initialResult: Result,
-        _ combine: (Result, AccessibilityHierarchy) -> Result
-    ) -> Result {
-        var result = initialResult
-        for root in self {
-            result = root.reduced(result, combine)
+    /// The accessibility elements across all roots, sorted by traversal index.
+    public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+        flatMap(\.elements).sorted { $0.traversalIndex < $1.traversalIndex }
+    }
+
+    /// All container nodes across all roots, depth-first (outermost first).
+    public var containers: [AccessibilityContainer] {
+        flatMap(\.containers)
+    }
+
+    // MARK: - Container Queries
+
+    /// Scrollable containers in pre-order (outermost first).
+    var scrollableContainers: [AccessibilityContainer] {
+        filteredHierarchy { node in
+            guard case .container(let container, _) = node else { return false }
+            return container.isScrollable
+        }.containers
+    }
+
+    /// Each container mapped to its subtree content fingerprint.
+    /// Computed in a single bottom-up pass — child fingerprints feed into parent fingerprints.
+    var containerFingerprints: [AccessibilityContainer: Int] {
+        foldedHierarchy(
+            onElement: { element, _ in
+                var hasher = Hasher()
+                hasher.combine(0)
+                hasher.combine(element.contentFingerprint)
+                return (fingerprint: hasher.finalize(), dict: [:] as [AccessibilityContainer: Int])
+            },
+            onContainer: { container, children in
+                var hasher = Hasher()
+                hasher.combine(1)
+                hasher.combine(container)
+                var dict: [AccessibilityContainer: Int] = [:]
+                for child in children {
+                    hasher.combine(child.fingerprint)
+                    dict.merge(child.dict) { _, new in new }
+                }
+                let fingerprint = hasher.finalize()
+                dict[container] = fingerprint
+                return (fingerprint: fingerprint, dict: dict)
+            }
+        ).reduce(into: [:]) { result, root in
+            result.merge(root.dict) { _, new in new }
         }
-        return result
     }
 }

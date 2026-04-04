@@ -437,37 +437,18 @@ public final class TheInsideJob {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async {
         stakeout?.noteActivity()
-        let beforeResult = bagman.refresh()
-        let beforeSnapshot = bagman.snapshot(.visible)
-        let beforeElements = beforeResult?.elements ?? []
-        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-
+        bagman.refresh()
+        let before = bagman.captureBeforeState()
         let result = await interaction()
 
-        let actionResult: ActionResult
-        if result.success {
-            actionResult = await bagman.actionResultWithDelta(
-                success: true,
-                method: result.method,
-                message: result.message,
-                value: result.value,
-                beforeSnapshot: beforeSnapshot,
-                beforeElements: beforeElements,
-                beforeVC: beforeVC,
-                target: command.actionTarget
-            )
-        } else {
-            let kind: ErrorKind = (result.method == .elementNotFound || result.method == .elementDeallocated)
-                ? .elementNotFound : .actionFailed
-            actionResult = ActionResult(
-                success: false,
-                method: result.method,
-                message: result.message,
-                errorKind: kind,
-                value: result.value,
-                screenName: beforeSnapshot.screenName
-            )
-        }
+        let actionResult = await bagman.actionResultWithDelta(
+            success: result.success,
+            method: result.method,
+            message: result.message,
+            value: result.value,
+            before: before,
+            target: command.actionTarget
+        )
 
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
@@ -482,34 +463,17 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        let beforeResult = bagman.refresh()
-        let beforeSnapshot = bagman.snapshot(.visible)
-        let beforeElements = beforeResult?.elements ?? []
-        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-
+        bagman.refresh()
+        let before = bagman.captureBeforeState()
         let result = await executeWaitFor(target)
 
-        let actionResult: ActionResult
-        if result.success {
-            actionResult = await bagman.actionResultWithDelta(
-                success: true,
-                method: .waitFor,
-                message: result.message,
-                beforeSnapshot: beforeSnapshot,
-                beforeElements: beforeElements,
-                beforeVC: beforeVC
-            )
-        } else {
-            bagman.refresh()
-            let afterSnapshot = bagman.snapshot(.visible)
-            actionResult = ActionResult(
-                success: false,
-                method: .waitFor,
-                message: result.message,
-                errorKind: .timeout,
-                screenName: afterSnapshot.screenName
-            )
-        }
+        let actionResult = await bagman.actionResultWithDelta(
+            success: result.success,
+            method: .waitFor,
+            message: result.message,
+            errorKind: result.success ? nil : .timeout,
+            before: before
+        )
 
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
     }
@@ -522,9 +486,9 @@ public final class TheInsideJob {
         let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
         let start = CFAbsoluteTimeGetCurrent()
 
-        // Phase 0: immediate check
+        // Phase 0: immediate check — refresh only, no snapshot needed.
+        // hasTarget uses presentedHeistIds (already populated) or walks the hierarchy directly.
         bagman.refresh()
-        _ = bagman.snapshot(.visible)
         if target.resolvedAbsent {
             if !bagman.hasTarget(elementTarget) {
                 return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
@@ -539,7 +503,6 @@ public final class TheInsideJob {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             bagman.refresh()
-            _ = bagman.snapshot(.visible)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             if target.resolvedAbsent {
                 if !bagman.hasTarget(elementTarget) {
@@ -567,51 +530,18 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        let beforeResult = bagman.refresh()
-        let beforeSnapshot = bagman.snapshot(.visible)
-        let beforeElements = beforeResult?.elements ?? []
-        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-
+        bagman.refresh()
+        let before = bagman.captureBeforeState()
         let result = await bagman.executeScrollToVisible(target)
 
-        var actionResult: ActionResult
-        if result.success {
-            let baseResult = await bagman.actionResultWithDelta(
-                success: true,
-                method: result.method,
-                message: result.message,
-                value: result.value,
-                beforeSnapshot: beforeSnapshot,
-                beforeElements: beforeElements,
-                beforeVC: beforeVC,
-                target: nil
-            )
-            actionResult = ActionResult(
-                success: baseResult.success,
-                method: baseResult.method,
-                message: baseResult.message,
-                value: baseResult.value,
-                interfaceDelta: baseResult.interfaceDelta,
-                animating: baseResult.animating,
-                elementLabel: baseResult.elementLabel,
-                elementValue: baseResult.elementValue,
-                elementTraits: baseResult.elementTraits,
-                screenName: baseResult.screenName,
-                scrollSearchResult: result.scrollSearchResult
-            )
-        } else {
-            bagman.refresh()
-            let afterSnapshot = bagman.snapshot(.visible)
-            actionResult = ActionResult(
-                success: false,
-                method: result.method,
-                message: result.message,
-                errorKind: .elementNotFound,
-                value: result.value,
-                screenName: afterSnapshot.screenName,
-                scrollSearchResult: result.scrollSearchResult
-            )
-        }
+        let actionResult = await bagman.actionResultWithDelta(
+            success: result.success,
+            method: result.method,
+            message: result.message,
+            value: result.value,
+            errorKind: result.success ? nil : .elementNotFound,
+            before: before
+        ).adding(scrollSearchResult: result.scrollSearchResult)
 
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
@@ -622,36 +552,20 @@ public final class TheInsideJob {
         respond: @escaping (Data) -> Void
     ) async {
         stakeout?.noteActivity()
-        let beforeResult = bagman.refresh()
-        let beforeSnapshot = bagman.snapshot(.visible)
-        let beforeElements = beforeResult?.elements ?? []
-        let beforeVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        bagman.refresh()
+        let before = bagman.captureBeforeState()
 
-        let manifest = await bagman.exploreScreen()
-
-        let exploreResult = ExploreResult(
-            elements: bagman.toWire(bagman.snapshot(.all)),
-            scrollCount: manifest.scrollCount,
-            containersExplored: manifest.exploredContainers.count,
-            explorationTime: manifest.explorationTime
-        )
+        // actionResultWithDelta runs exploreScreen and marks all elements as presented.
+        // Reuse the registry state it already computed — selectElements is a pure read
+        // so this is not a redundant snapshot, just a wire conversion of the same data.
         let baseResult = await bagman.actionResultWithDelta(
             success: true,
             method: .explore,
-            message: "\(manifest.elementCount) elements, \(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s",
-            beforeSnapshot: beforeSnapshot,
-            beforeElements: beforeElements,
-            beforeVC: beforeVC
+            before: before
         )
-        let actionResult = ActionResult(
-            success: baseResult.success,
-            method: baseResult.method,
-            message: baseResult.message,
-            interfaceDelta: baseResult.interfaceDelta,
-            animating: baseResult.animating,
-            screenName: baseResult.screenName,
-            exploreResult: exploreResult
-        )
+        let elements = bagman.toWire(bagman.selectElements(.all))
+        let actionResult = baseResult.adding(exploreElements: elements)
+
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 

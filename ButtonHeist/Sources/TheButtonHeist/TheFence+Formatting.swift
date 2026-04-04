@@ -105,13 +105,9 @@ enum NetDeltaAccumulator {
         }
 
         // Filter out updates where old == new (property changed and changed back)
-        for (hid, changes) in netUpdated {
+        netUpdated = netUpdated.compactMapValues { changes in
             let meaningful = changes.filter { $0.old != $0.new }
-            if meaningful.isEmpty {
-                netUpdated.removeValue(forKey: hid)
-            } else {
-                netUpdated[hid] = meaningful
-            }
+            return meaningful.isEmpty ? nil : meaningful
         }
 
         let addedList = netAdded.values.sorted { $0.heistId < $1.heistId }
@@ -486,6 +482,15 @@ public enum FenceResponse {
         }
 
         if let screenName = result.screenName { payload["screenName"] = screenName }
+
+        if let explore = result.exploreResult {
+            payload["explore"] = [
+                "elementCount": explore.elementCount,
+                "scrollCount": explore.scrollCount,
+                "containersExplored": explore.containersExplored,
+                "explorationTime": String(format: "%.2f", explore.explorationTime),
+            ] as [String: Any]
+        }
 
         if !result.success {
             payload["errorClass"] = Self.actionErrorClass(result)
