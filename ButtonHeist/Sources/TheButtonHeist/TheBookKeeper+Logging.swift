@@ -61,7 +61,7 @@ extension TheBookKeeper {
         let jsonData = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
         var lineData = jsonData
         lineData.append(contentsOf: [0x0A]) // newline
-        handle.write(lineData)
+        try handle.write(contentsOf: lineData)
     }
 
     // MARK: - Private Helpers

@@ -31,6 +31,17 @@ struct RecordCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Connection timeout in seconds")
     var timeout: Double = 10.0
 
+    func validate() throws {
+        guard fps >= 1 && fps <= 15 else {
+            throw ValidationError("fps must be between 1 and 15, got \(fps)")
+        }
+        if let scale {
+            guard scale >= 0.25 && scale <= 1.0 else {
+                throw ValidationError("scale must be between 0.25 and 1.0, got \(scale)")
+            }
+        }
+    }
+
     @ButtonHeistActor
     func run() async throws {
         // Step 1: Start recording

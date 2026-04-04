@@ -25,6 +25,7 @@ public enum DisconnectReason: Error, LocalizedError {
     case protocolMismatch(String)
     case localDisconnect
     case certificateMismatch
+    case missingFingerprint
 
     public var errorDescription: String? {
         switch self {
@@ -44,6 +45,8 @@ public enum DisconnectReason: Error, LocalizedError {
             return "Disconnected by client"
         case .certificateMismatch:
             return "Server certificate fingerprint does not match expected value"
+        case .missingFingerprint:
+            return "No TLS fingerprint available for non-loopback device — cannot establish secure connection"
         }
     }
 }
@@ -105,7 +108,7 @@ public final class DeviceConnection: DeviceConnecting {
             logger.warning("No TLS fingerprint available for loopback endpoint, allowing direct simulator connection")
         } else {
             logger.error("No TLS fingerprint available — refusing plain TCP connection")
-            onEvent?(.disconnected(.certificateMismatch))
+            onEvent?(.disconnected(.missingFingerprint))
             return
         }
 
@@ -248,7 +251,8 @@ public final class DeviceConnection: DeviceConnecting {
             if let str = String(data: data, encoding: .utf8) {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
-            onEvent?(.message(.error("Failed to decode server message"), requestId: nil))
+            let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
+            onEvent?(.message(.error("Failed to decode server message: \(detail)"), requestId: nil))
             return
         }
 

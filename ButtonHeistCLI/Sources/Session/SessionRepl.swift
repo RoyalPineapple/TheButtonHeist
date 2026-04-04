@@ -358,7 +358,11 @@ final class ReplSession {
                 if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
                    let json = String(data: data, encoding: .utf8) {
                     writeOutput(json)
+                } else {
+                    logStatus("Failed to serialize response as JSON")
                 }
+            } else {
+                logStatus("Failed to serialize response as JSON")
             }
         }
     }
