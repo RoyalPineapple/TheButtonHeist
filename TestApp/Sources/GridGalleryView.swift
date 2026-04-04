@@ -5,8 +5,17 @@ import SwiftUI
 /// accessibility element discovery and scroll-to-visible operations.
 struct GridGalleryView: View {
     @State private var selectedItems: Set<Int> = []
+    @State private var searchText = ""
 
     private let items: [GalleryItem] = (0..<120).map { GalleryItem(index: $0) }
+
+    private var filteredItems: [GalleryItem] {
+        if searchText.isEmpty { return items }
+        return items.filter { item in
+            item.title.localizedCaseInsensitiveContains(searchText)
+            || item.category.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -17,7 +26,7 @@ struct GridGalleryView: View {
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(items) { item in
+                ForEach(filteredItems) { item in
                     GridCell(
                         item: item,
                         isSelected: selectedItems.contains(item.index)
@@ -29,12 +38,13 @@ struct GridGalleryView: View {
             .padding(.horizontal, 12)
 
             // Footer with count
-            Text("\(items.count) items · \(selectedItems.count) selected")
+            Text("\(filteredItems.count) items · \(selectedItems.count) selected")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 8)
         }
         .navigationTitle("Grid Gallery")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Filter photos")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Clear") {

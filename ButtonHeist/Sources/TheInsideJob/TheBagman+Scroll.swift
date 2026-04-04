@@ -345,22 +345,25 @@ extension TheBagman {
     func ensureOnScreen(for target: ElementTarget) async {
         guard let safecracker else { return }
 
-        // Step 1: Coarse jump — if element is off-screen but has a cached position, jump there.
+        // If the element is off-screen but has a cached content-space position from
+        // a prior explore, use it to scroll directly to the right area. The cached
+        // origin survives cell recycling (unlike the live accessibilityFrame which
+        // goes stale when UIKit recycles the cell). Animated so the user sees the
+        // scroll and UIKit updates nav bar state (large title, search bar) naturally.
         if case .heistId(let heistId) = target,
            !viewportHeistIds.contains(heistId),
            let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
-            scrollView.setContentOffset(targetOffset, animated: false)
-            await tripwire.yieldFrames(3)
+            scrollView.setContentOffset(targetOffset, animated: true)
+            await tripwire.yieldFrames(20)
             refresh()
         }
 
-        // Step 2: Fine-tune — scroll until the activation point is in the comfort zone
-        // (middle 2/3 of screen), not just barely on screen.
-        // Skip comfort-zone scrolling when the element is already fully visible on
-        // screen. Scrolling a fully-visible element (e.g. a NavigationStack list row)
+        // Fine-tune into the comfort zone (middle 2/3 of screen). After the animated
+        // jump above, the element should be materialized and have a valid frame.
+        // Skip when the element is already fully visible — scrolling a visible element
         // before activation causes mid-transition accessibility snapshots that blend
         // elements from the departing and arriving screens.
         guard let resolved = resolveTarget(target).resolved,
@@ -368,7 +371,6 @@ extension TheBagman {
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
         guard !frame.isNull, !frame.isEmpty,
-              !UIScreen.main.bounds.contains(frame),
               !Self.interactionComfortZone.contains(activationPoint),
               let scrollView = resolved.screenElement.scrollView else { return }
         if safecracker.scrollToMakeVisible(
