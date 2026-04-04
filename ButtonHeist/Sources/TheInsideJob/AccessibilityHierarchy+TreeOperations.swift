@@ -99,29 +99,56 @@ extension Array where Element == AccessibilityHierarchy {
     }
 }
 
-// MARK: - Walk with Context (top-down context propagation)
+// MARK: - Top-Down Context Propagation
 
 extension AccessibilityHierarchy {
-    /// Walks the tree top-down, threading a context value from parent to child.
+    /// Walks the tree top-down, propagating a context value through containers to elements.
     ///
-    /// For containers: `deriveContext` produces the child context from the current context
-    /// and the container metadata. For elements: `visit` receives the element and the
-    /// context inherited from its nearest container ancestor.
+    /// - `context`: the initial value at the root.
+    /// - `container`: transforms the context at each container boundary (parent context + container → child context).
+    /// - `element`: called at each leaf with the element, its traversal index, and the inherited context.
     ///
     /// Use this when parent nodes establish context that child nodes need — e.g., a scroll
     /// view reference that propagates from a `.scrollable` container to its descendant elements.
-    public func walked<Context>(
+    public func forEach<Context>(
         context: Context,
-        deriveContext: (Context, AccessibilityContainer) -> Context,
-        visit: (AccessibilityElement, Int, Context) -> Void
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Void
     ) {
         switch self {
-        case let .element(element, traversalIndex):
-            visit(element, traversalIndex, context)
-        case let .container(container, children):
-            let childContext = deriveContext(context, container)
+        case let .element(accessibilityElement, traversalIndex):
+            element(accessibilityElement, traversalIndex, context)
+        case let .container(accessibilityContainer, children):
+            let childContext = container(context, accessibilityContainer)
             for child in children {
-                child.walked(context: childContext, deriveContext: deriveContext, visit: visit)
+                child.forEach(context: childContext, container: container, element: element)
+            }
+        }
+    }
+
+    /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
+    ///
+    /// - `context`: the initial value at the root.
+    /// - `container`: transforms the context at each container boundary.
+    /// - `element`: transforms each leaf element into an optional result. Nil values are dropped.
+    ///
+    /// Combines `compactMap` with top-down context propagation — filter, transform, and
+    /// inherit container context in a single pass.
+    public func compactMap<Context, Result>(
+        context: Context,
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Result?
+    ) -> [Result] {
+        switch self {
+        case let .element(accessibilityElement, traversalIndex):
+            if let result = element(accessibilityElement, traversalIndex, context) {
+                return [result]
+            }
+            return []
+        case let .container(accessibilityContainer, children):
+            let childContext = container(context, accessibilityContainer)
+            return children.flatMap {
+                $0.compactMap(context: childContext, container: container, element: element)
             }
         }
     }
@@ -129,14 +156,23 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
     /// Walks all roots top-down with inherited context.
-    public func walkedHierarchy<Context>(
+    public func forEach<Context>(
         context: Context,
-        deriveContext: (Context, AccessibilityContainer) -> Context,
-        visit: (AccessibilityElement, Int, Context) -> Void
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Void
     ) {
         for root in self {
-            root.walked(context: context, deriveContext: deriveContext, visit: visit)
+            root.forEach(context: context, container: container, element: element)
         }
+    }
+
+    /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
+    public func compactMap<Context, Result>(
+        context: Context,
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Result?
+    ) -> [Result] {
+        flatMap { $0.compactMap(context: context, container: container, element: element) }
     }
 }
 
