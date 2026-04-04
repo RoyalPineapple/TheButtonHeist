@@ -29,69 +29,7 @@ jobs:
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
-  setup:
-    runs-on: macos-15
-    timeout-minutes: 25
-    outputs:
-      a11y-hash: ${{ steps.submodules.outputs.a11y-hash }}
-      xcode-version: ${{ steps.xcode.outputs.version }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Init required submodules
-        id: submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshot
-          echo "a11y-hash=$(git rev-parse HEAD:submodules/AccessibilitySnapshot)" >> "$GITHUB_OUTPUT"
-
-      - name: Capture Xcode version
-        id: xcode
-        run: echo "version=$(xcodebuild -version | head -1 | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-
-      - name: Install Tuist
-        uses: jdx/mise-action@v2
-
-      - name: Cache Tuist dependencies
-        uses: actions/cache@v4
-        with:
-          path: Tuist/.build
-          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-deps-
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
-
-      - name: Cache Tuist binaries archive
-        id: binaries-cache
-        uses: actions/cache@v4
-        with:
-          path: /tmp/tuist-binaries.tar
-          key: tuist-binaries-xcode${{ steps.xcode.outputs.version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ steps.submodules.outputs.a11y-hash }}
-
-      - name: Restore Tuist binaries (preserving xattrs)
-        if: steps.binaries-cache.outputs.cache-hit == 'true'
-        run: |
-          mkdir -p ~/.cache/tuist/Binaries
-          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
-
-      - name: Warm binary cache for external dependencies
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 20
-        run: tuist cache --external-only
-
-      - name: Pack Tuist binaries (preserving xattrs)
-        if: steps.binaries-cache.outputs.cache-hit != 'true'
-        run: /usr/bin/tar -cpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries .
-
   macos-tests:
-    needs: [setup]
     runs-on: macos-15
     timeout-minutes: 15
 
@@ -121,17 +59,6 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
-      - name: Cache Tuist binaries archive
-        uses: actions/cache@v4
-        with:
-          path: /tmp/tuist-binaries.tar
-          key: tuist-binaries-xcode${{ needs.setup.outputs.xcode-version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ needs.setup.outputs.a11y-hash }}
-
-      - name: Restore Tuist binaries (preserving xattrs)
-        run: |
-          mkdir -p ~/.cache/tuist/Binaries
-          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
-
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
@@ -144,10 +71,6 @@ jobs:
             exit 1
           }
 
-      - name: Regenerate project with cached binaries
-        timeout-minutes: 3
-        run: tuist generate --no-open
-
       - name: Run macOS tests
         timeout-minutes: 10
         run: |
@@ -156,7 +79,6 @@ jobs:
           tuist test ButtonHeistTests --no-selective-testing
 
   ios-tests:
-    needs: [setup]
     runs-on: macos-15
     timeout-minutes: 30
 
@@ -213,20 +135,9 @@ jobs:
           xcrun simctl boot "$SIM_UDID" || true
           # Boot continues asynchronously — don't wait for bootstatus here
 
-      - name: Cache Tuist binaries archive
-        uses: actions/cache@v4
-        with:
-          path: /tmp/tuist-binaries.tar
-          key: tuist-binaries-xcode${{ needs.setup.outputs.xcode-version }}-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}-${{ needs.setup.outputs.a11y-hash }}
-
-      - name: Restore Tuist binaries (preserving xattrs)
-        run: |
-          mkdir -p ~/.cache/tuist/Binaries
-          /usr/bin/tar -xpf /tmp/tuist-binaries.tar -C ~/.cache/tuist/Binaries
-
       - name: Generate project
         timeout-minutes: 3
-        run: tuist generate --no-open
+        run: tuist generate --no-binary-cache --no-open
 
       - name: Build iOS app targets
         timeout-minutes: 10
