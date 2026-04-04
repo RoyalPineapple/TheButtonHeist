@@ -74,20 +74,81 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// First leaf element in the tree that satisfies all property predicates.
     func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        allMatches(matcher).first
+        matches(matcher, limit: 1).first
+    }
+
+    /// Leaf elements matching the predicate, stopping after `limit` results.
+    /// Results are in tree traversal order. Use this for early-exit resolution:
+    /// limit 1 for first-match, limit 2 for unique-match, limit N+1 for ordinal N.
+    func matches(
+        _ matcher: ElementMatcher,
+        limit: Int
+    ) -> [AccessibilityHierarchy.MatchResult] {
+        guard limit > 0 else { return [] }
+        var results: [AccessibilityHierarchy.MatchResult] = []
+        for root in self {
+            if root.collectMatches(matcher, limit: limit, into: &results) {
+                break
+            }
+        }
+        return results
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        firstMatch(matcher) != nil
+        !matches(matcher, limit: 1).isEmpty
     }
 
     /// Returns the match only if exactly one leaf element satisfies the predicate.
     /// Returns nil on zero matches or ambiguity (2+).
     func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        let matches = allMatches(matcher)
-        guard matches.count == 1 else { return nil }
-        return matches[0]
+        let hits = matches(matcher, limit: 2)
+        guard hits.count == 1 else { return nil }
+        return hits[0]
+    }
+}
+
+// MARK: - Early-Exit Collection
+
+extension AccessibilityHierarchy {
+    /// Collects matching leaf elements into `results`, stopping when `limit` is reached.
+    /// Returns true when the limit has been hit (early exit signal for callers).
+    func collectMatches(
+        _ matcher: ElementMatcher,
+        limit: Int,
+        into results: inout [MatchResult]
+    ) -> Bool {
+        switch self {
+        case .element(let element, _):
+            if element.matches(matcher) {
+                results.append(MatchResult(element: element))
+                if results.count >= limit { return true }
+            }
+            return false
+        case .container(_, let children):
+            for child in children {
+                if child.collectMatches(matcher, limit: limit, into: &results) {
+                    return true
+                }
+            }
+            return false
+        }
+    }
+
+    /// Walks the tree looking for a second leaf element. Returns true (early exit)
+    /// as soon as a second leaf is found. The first leaf is stored in `found`.
+    func hasSecondLeaf(found: inout AccessibilityElement?) -> Bool {
+        switch self {
+        case .element(let element, _):
+            if found != nil { return true }
+            found = element
+            return false
+        case .container(_, let children):
+            for child in children where child.hasSecondLeaf(found: &found) {
+                return true
+            }
+            return false
+        }
     }
 }
 

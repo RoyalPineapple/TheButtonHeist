@@ -237,18 +237,34 @@ final class TheBagman {
                 return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
-        case .matcher(let matcher):
+        case .matcher(let matcher, let ordinal):
             let source = currentHierarchy
-            if let unique = source.uniqueMatch(matcher) {
-                if let heistId = elementToHeistId[unique.element],
+            if let ordinal {
+                // Ordinal selection: collect matches up to ordinal+1, return the Nth
+                let hits = source.matches(matcher, limit: ordinal + 1)
+                guard ordinal < hits.count else {
+                    let total = hits.count
+                    return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
+                }
+                let selected = hits[ordinal]
+                if let heistId = elementToHeistId[selected.element],
                    let screenElement = screenElements[heistId] {
                     return .resolved(ResolvedTarget(screenElement: screenElement))
                 }
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
             }
-            // uniqueMatch failed — check if ambiguous or truly not found
-            let allHits = source.allMatches(matcher)
-            if allHits.count > 1 {
+            // No ordinal — require unique match
+            let hits = source.matches(matcher, limit: 2)
+            if hits.count == 1 {
+                if let heistId = elementToHeistId[hits[0].element],
+                   let screenElement = screenElements[heistId] {
+                    return .resolved(ResolvedTarget(screenElement: screenElement))
+                }
+                return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+            }
+            if hits.count > 1 {
+                // Need full count for the diagnostic message
+                let allHits = source.allMatches(matcher)
                 let candidates = allHits.prefix(10).map { match -> String in
                     var parts: [String] = []
                     if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
@@ -257,7 +273,7 @@ final class TheBagman {
                     return parts.joined(separator: " ")
                 }
                 let query = formatMatcher(matcher)
-                var lines = ["\(allHits.count) elements match: \(query)"]
+                var lines = ["\(allHits.count) elements match: \(query) — use ordinal 0–\(allHits.count - 1) to select one"]
                 lines.append(contentsOf: candidates.map { "  \($0)" })
                 if allHits.count > 10 {
                     lines.append("  ... and \(allHits.count - 10) more")
@@ -270,17 +286,16 @@ final class TheBagman {
 
     /// Resolve a target using first-match semantics (no ambiguity check).
     /// Used by scroll_to_visible where finding ANY match is success.
+    /// Thin wrapper over resolveTarget that forces ordinal 0 for matchers.
     func resolveFirstMatch(_ target: ElementTarget) -> ResolvedTarget? {
+        let effectiveTarget: ElementTarget
         switch target {
-        case .heistId(let heistId):
-            guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else { return nil }
-            return ResolvedTarget(screenElement: entry)
-        case .matcher(let matcher):
-            guard let found = findMatch(matcher) else { return nil }
-            guard let heistId = elementToHeistId[found],
-                  let screenElement = screenElements[heistId] else { return nil }
-            return ResolvedTarget(screenElement: screenElement)
+        case .heistId:
+            effectiveTarget = target
+        case .matcher(let matcher, _):
+            effectiveTarget = .matcher(matcher, ordinal: 0)
         }
+        return resolveTarget(effectiveTarget).resolved
     }
 
     /// Existence check — does any element match this target?
@@ -291,7 +306,7 @@ final class TheBagman {
         switch target {
         case .heistId(let heistId):
             return presentedHeistIds.contains(heistId)
-        case .matcher(let matcher):
+        case .matcher(let matcher, _):
             return hasMatch(matcher)
         }
     }
