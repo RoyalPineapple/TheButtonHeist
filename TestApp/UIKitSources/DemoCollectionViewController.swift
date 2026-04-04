@@ -72,7 +72,7 @@ class DemoCollectionViewController: UICollectionViewController {
 
     override func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as? AccessibilityCell else {
-            return collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath)
+            fatalError("Expected AccessibilityCell for reuse identifier \"Cell\"")
         }
         let item = items[indexPath.item]
         cell.configure(symbol: item.symbol, title: item.title, color: item.color)
