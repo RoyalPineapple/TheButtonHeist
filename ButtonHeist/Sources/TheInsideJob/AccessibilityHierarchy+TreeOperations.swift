@@ -40,6 +40,30 @@ extension AccessibilityHierarchy {
 // MARK: - Top-Down Context Propagation
 
 extension AccessibilityHierarchy {
+    /// Walks the tree top-down, threading a context value from parent to child.
+    ///
+    /// - `context`: the initial value at the root.
+    /// - `container`: transforms the context at each container boundary.
+    /// - `element`: visits each leaf element with the inherited context.
+    ///
+    /// Use this for side-effectful traversal where parent containers establish context
+    /// that child elements need — e.g., propagating a scroll view reference.
+    public func forEach<Context>(
+        context: Context,
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Void
+    ) {
+        switch self {
+        case let .element(accessibilityElement, traversalIndex):
+            element(accessibilityElement, traversalIndex, context)
+        case let .container(accessibilityContainer, children):
+            let childContext = container(context, accessibilityContainer)
+            for child in children {
+                child.forEach(context: childContext, container: container, element: element)
+            }
+        }
+    }
+
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
     /// - `context`: the initial value at the root.
@@ -79,6 +103,17 @@ extension AccessibilityHierarchy {
 }
 
 extension Array where Element == AccessibilityHierarchy {
+    /// Walks all roots top-down with inherited context.
+    public func forEach<Context>(
+        context: Context,
+        container: (Context, AccessibilityContainer) -> Context,
+        element: (AccessibilityElement, Int, Context) -> Void
+    ) {
+        for root in self {
+            root.forEach(context: context, container: container, element: element)
+        }
+    }
+
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
     public func compactMap<Context, Result>(
         context: Context,
