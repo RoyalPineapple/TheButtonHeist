@@ -80,13 +80,13 @@ extension TheBagman {
     /// Scroll a target by one page, wait for layout to settle, and refresh
     /// the accessibility tree. Both UIScrollView and swipeable paths end in
     /// a consistent settled state — one yield + one refresh.
-    /// Returns whether the scroll moved and the onScreen set from before the scroll.
+    /// Returns whether the scroll moved and the viewportHeistIds set from before the scroll.
     private func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = onScreen
+        let before = viewportHeistIds
         guard let safecracker else { return (false, before) }
 
         switch target {
@@ -107,7 +107,7 @@ extension TheBagman {
             _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
             await tripwire.yieldFrames(3)
             refresh()
-            return (onScreen != before, before)
+            return (viewportHeistIds != before, before)
         }
     }
 
@@ -166,7 +166,7 @@ extension TheBagman {
                 )
                 if !stepped { break }
                 didMove = true
-                if onScreen == before { break }
+                if viewportHeistIds == before { break }
             }
             moved = didMove
         }
@@ -236,7 +236,7 @@ extension TheBagman {
         var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
         // Hard cap prevents infinite loops on swipeable containers (which always
-        // report moved=true) with infinite/paginated content (onScreen always changes).
+        // report moved=true) with infinite/paginated content (viewportHeistIds always changes).
         let maxScrolls = 200
 
         while scrollCount < maxScrolls {
@@ -258,7 +258,7 @@ extension TheBagman {
                 return foundResult(found, scrollCount: scrollCount)
             }
 
-            if onScreen == before { exhausted.insert(container) }
+            if viewportHeistIds == before { exhausted.insert(container) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -284,17 +284,19 @@ extension TheBagman {
         axis: ScrollAxis? = nil,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        currentHierarchy.reducedHierarchy(
-            nil as (ScrollableTarget, AccessibilityContainer)?
-        ) { found, node in
-            guard found == nil else { return found }
+        let candidates = currentHierarchy.filteredHierarchy { node in
             guard case .container(let container, _) = node,
-                  case .scrollable(let contentSize) = container.type,
-                  !exhausted.contains(container) else { return nil }
+                  case .scrollable = container.type,
+                  !exhausted.contains(container) else { return false }
+            return true
+        }.containers
+
+        for container in candidates {
+            guard case .scrollable(let contentSize) = container.type else { continue }
             let target: ScrollableTarget
             if let view = scrollableContainerViews[container], view.window != nil {
-                if let sv = view as? UIScrollView {
-                    target = .uiScrollView(sv)
+                if let scrollView = view as? UIScrollView {
+                    target = .uiScrollView(scrollView)
                 } else {
                     let screenFrame = view.convert(view.bounds, to: nil)
                     target = .swipeable(frame: screenFrame, contentSize: contentSize)
@@ -302,9 +304,10 @@ extension TheBagman {
             } else {
                 target = .swipeable(frame: container.frame, contentSize: contentSize)
             }
-            if let axis, !Self.scrollableAxis(of: target).contains(axis) { return nil }
+            if let axis, !Self.scrollableAxis(of: target).contains(axis) { continue }
             return (target, container)
         }
+        return nil
     }
 
     private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
@@ -319,6 +322,7 @@ extension TheBagman {
     }
 
     private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
+        markPresented([found.screenElement])
         let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .scrollToVisible, message: nil, value: nil,
@@ -347,7 +351,7 @@ extension TheBagman {
 
         // Step 1: Coarse jump — if element is off-screen but has a cached position, jump there.
         if case .heistId(let heistId) = target,
-           !onScreen.contains(heistId),
+           !viewportHeistIds.contains(heistId),
            let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
