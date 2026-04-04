@@ -8,10 +8,8 @@ struct ButtonsActionsDemo: View {
         Form {
             Section("Buttons & Actions") {
                 Text("Tap count: \(tapCount)")
-                    .accessibilityIdentifier("buttonheist.actions.tapCountLabel")
 
                 Text("Last action: \(lastAction)")
-                    .accessibilityIdentifier("buttonheist.actions.lastActionLabel")
 
                 Button("Primary Button") {
                     tapCount += 1
@@ -19,7 +17,6 @@ struct ButtonsActionsDemo: View {
                     NSLog("[ControlsDemo] Primary button tapped, count: %d", tapCount)
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("buttonheist.actions.primaryButton")
 
                 Button("Bordered Button") {
                     tapCount += 1
@@ -27,17 +24,14 @@ struct ButtonsActionsDemo: View {
                     NSLog("[ControlsDemo] Bordered button tapped")
                 }
                 .buttonStyle(.bordered)
-                .accessibilityIdentifier("buttonheist.actions.borderedButton")
 
                 Button("Destructive Button", role: .destructive) {
                     lastAction = "Destructive tapped"
                     NSLog("[ControlsDemo] Destructive button tapped")
                 }
-                .accessibilityIdentifier("buttonheist.actions.destructiveButton")
 
                 Button("Disabled Button") { }
                     .disabled(true)
-                    .accessibilityIdentifier("buttonheist.actions.disabledButton")
 
                 // Menu temporarily replaced with a Button that shows a confirmation dialog
                 // to work around AccessibilitySnapshotParser hanging on SwiftUI Menu internals
@@ -45,7 +39,6 @@ struct ButtonsActionsDemo: View {
                     lastAction = "Menu tapped"
                     NSLog("[ControlsDemo] Options menu tapped")
                 }
-                .accessibilityIdentifier("buttonheist.actions.optionsMenu")
                 .contextMenu {
                     Button("Option A") {
                         lastAction = "Menu: Option A"
@@ -62,7 +55,6 @@ struct ButtonsActionsDemo: View {
                 }
 
                 Text("Swipe actions item")
-                    .accessibilityIdentifier("buttonheist.actions.customActionsItem")
                     .accessibilityAction(named: "Favorite") {
                         lastAction = "Custom action: Favorite"
                         NSLog("[ControlsDemo] Custom action: Favorite")

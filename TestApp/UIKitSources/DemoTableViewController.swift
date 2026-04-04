@@ -40,7 +40,6 @@ class DemoTableViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "UITableView Demo"
-        tableView.accessibilityIdentifier = "demoTableView"
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
     }
 
@@ -67,8 +66,6 @@ class DemoTableViewController: UITableViewController {
         config.secondaryText = item.subtitle
         cell.contentConfiguration = config
         cell.accessoryType = item.accessoryType
-        cell.accessibilityIdentifier = "tableCell_\(indexPath.section)_\(indexPath.row)"
-
         return cell
     }
 

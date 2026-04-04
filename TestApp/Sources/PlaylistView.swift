@@ -3,9 +3,18 @@ import SwiftUI
 struct PlaylistView: View {
     @State private var songs: [Song] = []
     @State private var nextTrack = 1
-    @State private var autoplayTimer: Timer?
-    @State private var autoplayOn = false
+    @State private var autoplay: AutoplayState = .off
     @State private var nowPlayingID: Song.ID?
+
+    enum AutoplayState {
+        case off
+        case running(Timer)
+
+        var isOn: Bool {
+            if case .running = self { return true }
+            return false
+        }
+    }
 
     private var nowPlaying: Song? { songs.first { $0.id == nowPlayingID } }
 
@@ -14,7 +23,6 @@ struct PlaylistView: View {
             if let playing = nowPlaying {
                 Section {
                     NowPlayingRow(song: playing)
-                        .accessibilityIdentifier("buttonheist.playlist.nowPlaying")
                 }
             }
 
@@ -23,29 +31,27 @@ struct PlaylistView: View {
                     Button { addSong() } label: {
                         Label("Add Song", systemImage: "plus.circle.fill")
                     }
-                    .accessibilityIdentifier("buttonheist.playlist.addSong")
 
                     Spacer()
 
                     Button { addAlbum() } label: {
                         Label("Add Album", systemImage: "rectangle.stack.badge.plus")
                     }
-                    .accessibilityIdentifier("buttonheist.playlist.addAlbum")
                 }
 
                 if !songs.isEmpty {
                     Button(role: .destructive) { clearPlaylist() } label: {
                         Label("Clear Playlist", systemImage: "trash")
                     }
-                    .accessibilityIdentifier("buttonheist.playlist.clear")
                 }
 
-                Toggle(isOn: $autoplayOn) {
+                Toggle(isOn: Binding(
+                    get: { autoplay.isOn },
+                    set: { newValue in
+                        if newValue { startAutoplay() } else { stopAutoplay() }
+                    }
+                )) {
                     Label("Autoplay", systemImage: "infinity")
-                }
-                .accessibilityIdentifier("buttonheist.playlist.autoplay")
-                .onChange(of: autoplayOn) { _, on in
-                    if on { startAutoplay() } else { stopAutoplay() }
                 }
             }
 
@@ -56,7 +62,6 @@ struct PlaylistView: View {
                     } description: {
                         Text("Add some songs to get started.")
                     }
-                    .accessibilityIdentifier("buttonheist.playlist.empty")
                 } else {
                     ForEach(songs) { song in
                         SongRow(song: song, isPlaying: song.id == nowPlayingID) {
@@ -65,7 +70,6 @@ struct PlaylistView: View {
                         } onLike: {
                             toggleLike(song)
                         }
-                        .accessibilityIdentifier("buttonheist.playlist.song-\(song.track)")
                         .accessibilityAction(named: "Remove from playlist") {
                             removeSong(song)
                         }
@@ -92,10 +96,8 @@ struct PlaylistView: View {
                     Image(systemName: "shuffle")
                 }
                 .disabled(songs.count < 2)
-                .accessibilityIdentifier("buttonheist.playlist.shuffle")
 
                 EditButton()
-                    .accessibilityIdentifier("buttonheist.playlist.edit")
             }
         }
         .onDisappear { stopAutoplay() }
@@ -153,7 +155,7 @@ struct PlaylistView: View {
     // MARK: - Autoplay
 
     private func startAutoplay() {
-        autoplayTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             Task { @MainActor in
                 if songs.count >= 12 {
                     if let first = songs.first {
@@ -164,13 +166,15 @@ struct PlaylistView: View {
                 }
             }
         }
+        autoplay = .running(timer)
         NSLog("[Playlist] Autoplay started")
     }
 
     private func stopAutoplay() {
-        autoplayTimer?.invalidate()
-        autoplayTimer = nil
-        autoplayOn = false
+        if case .running(let timer) = autoplay {
+            timer.invalidate()
+        }
+        autoplay = .off
         NSLog("[Playlist] Autoplay stopped")
     }
 }

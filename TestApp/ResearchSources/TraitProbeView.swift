@@ -99,8 +99,10 @@ struct TraitProbeView: View {
                         .textFieldStyle(.roundedBorder)
                         .accessibilityIdentifier("traitProbe.textField")
 
-                    Link("Example Link", destination: URL(string: "https://example.com")!)
-                        .accessibilityIdentifier("traitProbe.link")
+                    if let exampleURL = URL(string: "https://example.com") {
+                        Link("Example Link", destination: exampleURL)
+                            .accessibilityIdentifier("traitProbe.link")
+                    }
 
                     Button("Show Alert") { showingAlert = true }
                         .accessibilityIdentifier("traitProbe.alertButton")

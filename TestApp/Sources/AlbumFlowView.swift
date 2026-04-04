@@ -20,10 +20,27 @@ struct Genre: Identifiable {
 // MARK: - Albums View
 
 struct AlbumFlowView: View {
-    @State private var selectedAlbum: Album?
+    @State private var playback: PlaybackState = .idle
     @State private var queue: [Album] = []
     @State private var favorites: Set<String> = []
-    @State private var isPlaying = false
+
+    enum PlaybackState {
+        case idle
+        case playing(Album)
+        case paused(Album)
+
+        var currentAlbum: Album? {
+            switch self {
+            case .idle: return nil
+            case .playing(let album), .paused(let album): return album
+            }
+        }
+
+        var isPlaying: Bool {
+            if case .playing = self { return true }
+            return false
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,7 +55,7 @@ struct AlbumFlowView: View {
                 .padding(.top, 8)
             }
 
-            if selectedAlbum != nil || !queue.isEmpty {
+            if playback.currentAlbum != nil || !queue.isEmpty {
                 miniPlayer
             }
         }
@@ -54,8 +71,7 @@ struct AlbumFlowView: View {
         let featured = Genre.catalog[2].albums[0] // Binary Sunset - Last Light Protocol
 
         return Button {
-            selectedAlbum = featured
-            isPlaying = true
+            playback = .playing(featured)
             NSLog("[Albums] Selected: %@ by %@", featured.title, featured.artist)
         } label: {
             ZStack(alignment: .bottomLeading) {
@@ -115,12 +131,11 @@ struct AlbumFlowView: View {
     // MARK: - Album Card
 
     private func albumCard(_ album: Album) -> some View {
-        let isSelected = selectedAlbum?.id == album.id
+        let isSelected = playback.currentAlbum?.id == album.id
         let isQueued = queue.contains { $0.id == album.id }
 
         return Button {
-            selectedAlbum = album
-            isPlaying = true
+            playback = .playing(album)
             NSLog("[Albums] Selected: %@ by %@", album.title, album.artist)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
@@ -222,7 +237,7 @@ struct AlbumFlowView: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 12) {
-                if let album = selectedAlbum {
+                if let album = playback.currentAlbum {
                     Image(systemName: album.symbol)
                         .font(.title3)
                         .foregroundStyle(.white)
@@ -271,17 +286,20 @@ struct AlbumFlowView: View {
 
                 HStack(spacing: 20) {
                     Button {
-                        isPlaying.toggle()
+                        switch playback {
+                        case .idle: break
+                        case .playing(let album): playback = .paused(album)
+                        case .paused(let album): playback = .playing(album)
+                        }
                     } label: {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                             .font(.title3)
                     }
 
                     Button {
                         if let next = queue.first {
                             queue.removeFirst()
-                            selectedAlbum = next
-                            isPlaying = true
+                            playback = .playing(next)
                             NSLog("[Albums] Skipped to: %@ by %@", next.title, next.artist)
                         }
                     } label: {
