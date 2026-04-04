@@ -64,29 +64,6 @@ final class TheSafecracker {
         case failure(InteractionResult)
     }
 
-    // MARK: - Timing Constants
-
-    /// Default inter-key delay for text injection (30ms). Single source of truth
-    /// for typeText and deleteText default parameters.
-    nonisolated static let defaultInterKeyDelay: UInt64 = 30_000_000
-
-    /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
-    nonisolated static let maxInterKeyDelay: UInt64 = 500_000_000
-
-    /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
-    /// pipeline has run-loop time to transition from "possible" to "recognized".
-    nonisolated static let gestureYieldDelay: Duration = .milliseconds(50)
-
-    /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
-    /// state treats the selection as current before the subsequent delete.
-    nonisolated static let selectionSettleDelay: Duration = .milliseconds(50)
-
-    /// Poll interval for keyboard readiness after tapping a text field (100ms).
-    nonisolated static let keyboardPollInterval: Duration = .milliseconds(100)
-
-    /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
-    nonisolated static let keyboardPollMaxAttempts: Int = 20
-
     // MARK: - Internal Touch State
 
     private var activeTouches: [SyntheticTouch] = []
@@ -491,6 +468,32 @@ final class TheSafecracker {
         return nil
     }
 
+}
+
+// MARK: - Timing Constants
+
+nonisolated extension TheSafecracker {
+
+    /// Default inter-key delay for text injection (30ms). Single source of truth
+    /// for typeText and deleteText default parameters.
+    static let defaultInterKeyDelay: UInt64 = 30_000_000
+
+    /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
+    static let maxInterKeyDelay: UInt64 = 500_000_000
+
+    /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
+    /// pipeline has run-loop time to transition from "possible" to "recognized".
+    static let gestureYieldDelay: Duration = .milliseconds(50)
+
+    /// Yield after setting selectedTextRange (50ms) so the keyboard's internal
+    /// state treats the selection as current before the subsequent delete.
+    static let selectionSettleDelay: Duration = .milliseconds(50)
+
+    /// Poll interval for keyboard readiness after tapping a text field (100ms).
+    static let keyboardPollInterval: Duration = .milliseconds(100)
+
+    /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
+    static let keyboardPollMaxAttempts: Int = 20
 }
 
 // MARK: - EditAction + Selector
