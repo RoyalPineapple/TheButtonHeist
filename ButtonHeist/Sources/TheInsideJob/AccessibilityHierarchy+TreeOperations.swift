@@ -89,43 +89,9 @@ extension AccessibilityHierarchy {
     }
 }
 
-extension Array where Element == AccessibilityHierarchy {
-    /// Folds each root into a different type, bottom-up.
-    public func foldedHierarchy<Result>(
-        onElement: (AccessibilityElement, Int) -> Result,
-        onContainer: (AccessibilityContainer, [Result]) -> Result
-    ) -> [Result] {
-        map { $0.folded(onElement: onElement, onContainer: onContainer) }
-    }
-}
-
 // MARK: - Top-Down Context Propagation
 
 extension AccessibilityHierarchy {
-    /// Walks the tree top-down, propagating a context value through containers to elements.
-    ///
-    /// - `context`: the initial value at the root.
-    /// - `container`: transforms the context at each container boundary (parent context + container → child context).
-    /// - `element`: called at each leaf with the element, its traversal index, and the inherited context.
-    ///
-    /// Use this when parent nodes establish context that child nodes need — e.g., a scroll
-    /// view reference that propagates from a `.scrollable` container to its descendant elements.
-    public func forEach<Context>(
-        context: Context,
-        container: (Context, AccessibilityContainer) -> Context,
-        element: (AccessibilityElement, Int, Context) -> Void
-    ) {
-        switch self {
-        case let .element(accessibilityElement, traversalIndex):
-            element(accessibilityElement, traversalIndex, context)
-        case let .container(accessibilityContainer, children):
-            let childContext = container(context, accessibilityContainer)
-            for child in children {
-                child.forEach(context: childContext, container: container, element: element)
-            }
-        }
-    }
-
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
     /// - `context`: the initial value at the root.
@@ -155,17 +121,6 @@ extension AccessibilityHierarchy {
 }
 
 extension Array where Element == AccessibilityHierarchy {
-    /// Walks all roots top-down with inherited context.
-    public func forEach<Context>(
-        context: Context,
-        container: (Context, AccessibilityContainer) -> Context,
-        element: (AccessibilityElement, Int, Context) -> Void
-    ) {
-        for root in self {
-            root.forEach(context: context, container: container, element: element)
-        }
-    }
-
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
     public func compactMap<Context, Result>(
         context: Context,
@@ -183,12 +138,9 @@ extension AccessibilityHierarchy {
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
     public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        folded(
-            onElement: { element, traversalIndex in [(element, traversalIndex)] },
-            onContainer: { _, childLeaves in
-                childLeaves.reduce(into: []) { result, leaves in result.append(contentsOf: leaves) }
-            }
-        )
+        compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
+            (element, traversalIndex)
+        })
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).
