@@ -575,32 +575,12 @@ public final class TheBookKeeper {
         }
 
         let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
-        var step = buildStep(
+        let step = buildStep(
             command: command,
             args: args,
             cache: allElements,
             interfaceCache: recording.interfaceCache
         )
-
-        if let response, let actionResult = response.actionResult {
-            let expect = generateExpectation(
-                actionResult: actionResult,
-                args: args,
-                interfaceCache: recording.interfaceCache,
-                allElements: allElements
-            )
-            if let expect {
-                step = HeistEvidence(
-                    command: step.command,
-                    target: step.target,
-                    arguments: step.arguments.merging(
-                        ["expect": expect],
-                        uniquingKeysWith: { _, new in new }
-                    ),
-                    recorded: step.recorded
-                )
-            }
-        }
 
         // Write evidence to durable file (append-only JSONL)
         let encoder = JSONEncoder()
@@ -756,36 +736,6 @@ public final class TheBookKeeper {
         )
     }
 
-    /// Build a matcher for expectations — starts from identity, enriches with
-    /// notable state traits and value when present.
-    public func buildExpectationMatcher(
-        element: HeistElement,
-        allElements: [HeistElement]
-    ) -> ElementMatcher {
-        let identity = buildMinimalMatcher(element: element, allElements: allElements)
-        let elementStateTraits = element.traits.filter { Self.stateTraits.contains($0) }
-        let notableStateTraits = elementStateTraits.isEmpty ? nil : elementStateTraits
-        let notableValue = element.value
-
-        if notableStateTraits == nil && notableValue == nil {
-            return identity
-        }
-
-        let mergedTraits: [HeistTrait]?
-        if let identityTraits = identity.traits, let notable = notableStateTraits {
-            mergedTraits = identityTraits + notable
-        } else {
-            mergedTraits = identity.traits ?? notableStateTraits
-        }
-
-        return ElementMatcher(
-            label: identity.label,
-            identifier: identity.identifier,
-            value: notableValue,
-            traits: mergedTraits
-        )
-    }
-
     private func uniquelyMatches(
         _ matcher: ElementMatcher,
         element: HeistElement,
@@ -797,114 +747,6 @@ public final class TheBookKeeper {
             if matchCount > 1 { return false }
         }
         return matchCount == 1
-    }
-
-    // MARK: - Expectation Generation
-
-    private static let insertionRemovalCap = 5
-
-    private static let propertyPriority: [ElementProperty] = [
-        .value, .label, .traits, .hint, .actions,
-    ]
-
-    func generateExpectation(
-        actionResult: ActionResult,
-        args: [String: Any],
-        interfaceCache: [String: HeistElement],
-        allElements: [HeistElement]
-    ) -> HeistValue? {
-        guard let delta = actionResult.interfaceDelta else { return nil }
-
-        var expectations: [HeistValue] = []
-
-        switch delta.kind {
-        case .screenChanged:
-            expectations.append(.string("screen_changed"))
-
-        case .elementsChanged:
-            if let propertyExpect = buildPropertyExpectation(
-                delta: delta, args: args, interfaceCache: interfaceCache
-            ) {
-                expectations.append(propertyExpect)
-            }
-
-            if let added = delta.added {
-                let postActionElements = allElements + added
-                for element in added.prefix(Self.insertionRemovalCap) {
-                    let matcher = buildExpectationMatcher(
-                        element: element, allElements: postActionElements
-                    )
-                    expectations.append(matcherExpectation(key: "elementAppeared", matcher: matcher))
-                }
-            }
-
-            if let removed = delta.removed {
-                let preActionElements = Array(interfaceCache.values)
-                for heistId in removed.prefix(Self.insertionRemovalCap) {
-                    guard let element = interfaceCache[heistId] else { continue }
-                    let matcher = buildExpectationMatcher(
-                        element: element, allElements: preActionElements
-                    )
-                    expectations.append(matcherExpectation(key: "elementDisappeared", matcher: matcher))
-                }
-            }
-
-            if expectations.isEmpty {
-                expectations.append(.string("elements_changed"))
-            }
-
-        case .noChange:
-            return nil
-        }
-
-        guard !expectations.isEmpty else { return nil }
-        return expectations.count == 1 ? expectations[0] : .array(expectations)
-    }
-
-    private func buildPropertyExpectation(
-        delta: InterfaceDelta,
-        args: [String: Any],
-        interfaceCache: [String: HeistElement]
-    ) -> HeistValue? {
-        guard let updates = delta.updated, !updates.isEmpty else { return nil }
-
-        let targetHeistId = args["heistId"] as? String
-        let targetUpdate: ElementUpdate?
-        if let targetHeistId {
-            targetUpdate = updates.first { $0.heistId == targetHeistId }
-        } else {
-            targetUpdate = updates.first { update in
-                update.changes.contains { !$0.property.isGeometry }
-            }
-        }
-
-        guard let update = targetUpdate else { return nil }
-
-        let semanticChanges = update.changes.filter { !$0.property.isGeometry }
-        for priority in Self.propertyPriority {
-            if let change = semanticChanges.first(where: { $0.property == priority }) {
-                var expectDict: [String: HeistValue] = [
-                    "property": .string(change.property.rawValue),
-                ]
-                if let newValue = change.new {
-                    expectDict["newValue"] = .string(newValue)
-                }
-                return .object(["elementUpdated": .object(expectDict)])
-            }
-        }
-
-        return nil
-    }
-
-    private func matcherExpectation(key: String, matcher: ElementMatcher) -> HeistValue {
-        var matcherDict: [String: HeistValue] = [:]
-        if let label = matcher.label { matcherDict["label"] = .string(label) }
-        if let matcherIdentifier = matcher.identifier { matcherDict["identifier"] = .string(matcherIdentifier) }
-        if let matcherValue = matcher.value { matcherDict["value"] = .string(matcherValue) }
-        if let traits = matcher.traits {
-            matcherDict["traits"] = .array(traits.map { .string($0.rawValue) })
-        }
-        return .object([key: .object(matcherDict)])
     }
 
     // MARK: - Heist File I/O
