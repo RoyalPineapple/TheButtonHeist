@@ -193,7 +193,7 @@ extension TheBagman {
                         containerFingerprints = currentHierarchy.containerFingerprints
                         manifest.markExplored(container)
                         let fingerprint = containerFingerprints[container] ?? 0
-                        cacheContainerState(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
+                        updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
                         manifest.explorationTime = CACurrentMediaTime() - startTime
                         return manifest
                     }
@@ -207,7 +207,7 @@ extension TheBagman {
                 manifest.markExplored(container)
 
                 let fingerprint = containerFingerprints[container] ?? 0
-                cacheContainerState(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
+                updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
 
                 let newContainers = currentHierarchy.scrollableContainers
                     .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
@@ -257,7 +257,7 @@ extension TheBagman {
     }
 
     /// Cache a container's explore state using a pre-computed fingerprint.
-    private func cacheContainerState(
+    private func updateContainerExploreCache(
         _ container: AccessibilityContainer,
         fingerprint: Int,
         accumulated: [AccessibilityElement],

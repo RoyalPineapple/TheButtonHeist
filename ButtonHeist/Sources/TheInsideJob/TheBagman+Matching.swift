@@ -89,16 +89,40 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        !matchingHierarchy(matcher).isEmpty
+        firstMatch(matcher) != nil
     }
 
     /// Returns the match only if exactly one leaf element satisfies the predicate.
     /// Returns nil on zero matches or ambiguity (2+).
     func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        let matching = matchingHierarchy(matcher).elements
-        guard matching.count == 1,
-              let only = matching.first else { return nil }
-        return .init(element: only.element)
+        let filtered = matchingHierarchy(matcher)
+        guard !filtered.isEmpty else { return nil }
+        var found: AccessibilityElement?
+        for root in filtered {
+            if root.hasSecondLeaf(found: &found) { return nil }
+        }
+        guard let element = found else { return nil }
+        return .init(element: element)
+    }
+}
+
+// MARK: - Early-Exit Leaf Counting
+
+extension AccessibilityHierarchy {
+    /// Walks the tree looking for a second leaf element. Returns true (early exit)
+    /// as soon as a second leaf is found. The first leaf is stored in `found`.
+    func hasSecondLeaf(found: inout AccessibilityElement?) -> Bool {
+        switch self {
+        case .element(let element, _):
+            if found != nil { return true }
+            found = element
+            return false
+        case .container(_, let children):
+            for child in children {
+                if child.hasSecondLeaf(found: &found) { return true }
+            }
+            return false
+        }
     }
 }
 

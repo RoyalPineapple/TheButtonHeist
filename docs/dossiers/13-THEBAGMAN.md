@@ -20,8 +20,8 @@ TheBagman handles all the goods during TheInsideJob:
 10. **Wire conversion at boundary** — `toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
 11. **Delta computation** — `captureBeforeState()` captures a `BeforeState` token (snapshot + viewport elements + VC identity); after the action, `actionResultWithDelta(before:)` computes the delta through a single codepath for both success and failure. Includes post-action `exploreAndPrune()` so deltas capture off-screen changes.
 12. **Container fingerprint caching** — `ContainerExploreState` caches each scrollable container's visible subtree fingerprint, accumulated fingerprint, and discovered heistIds. On re-explore, unchanged containers are skipped via O(1) fingerprint comparison.
-12. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheBagman+Capture.swift)
-13. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (TheBagman+Diagnostics.swift)
+13. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheBagman+Capture.swift)
+14. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (TheBagman+Diagnostics.swift)
 
 ## Custody Contract
 
