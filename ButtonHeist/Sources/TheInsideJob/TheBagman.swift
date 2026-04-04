@@ -94,10 +94,6 @@ final class TheBagman {
     /// Read/written by Pulse for change detection.
     var lastHierarchyHash: Int = 0
 
-    /// Whether we've served at least one interface response since the last screen change.
-    /// Reset on screen change so the next `sendInterface` does a full explore.
-    var hasServedInterface: Bool = false
-
     /// Accumulates every heistId seen during an explore cycle.
     /// Populated by `apply()` when non-nil, pruned by `pruneAfterExplore()`.
     /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
@@ -357,7 +353,6 @@ final class TheBagman {
         containerExploreStates.removeAll()
         exploreCycleIds = nil
         lastHierarchyHash = 0
-        hasServedInterface = false
     }
 
     /// Explore the screen and prune stale elements from the registry.
@@ -625,7 +620,6 @@ final class TheBagman {
             presentedHeistIds.removeAll()
             elementToHeistId.removeAll()
             containerExploreStates.removeAll()
-            hasServedInterface = false
         }
         if let afterResult {
             apply(afterResult)

@@ -73,17 +73,12 @@ extension TheInsideJob {
             return
         }
 
-        // First request seeds the registry with a full explore. After that,
-        // every action runs exploreScreen so the registry stays current.
-        // Either way, return .all — the caller may filter to off-screen elements
-        // and expects stable traversal order across the full registry.
-        if !bagman.hasServedInterface {
-            let manifest = await bagman.exploreAndPrune()
-            bagman.hasServedInterface = true
-            let elementCount = bagman.screenElements.count
-            let time = String(format: "%.2f", manifest.explorationTime)
-            insideJobLogger.info("Initial explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
-        }
+        // Explore on every sendInterface call. The container fingerprint cache
+        // makes this near-free on static screens — unchanged containers are skipped.
+        let manifest = await bagman.exploreAndPrune()
+        let elementCount = bagman.screenElements.count
+        let time = String(format: "%.2f", manifest.explorationTime)
+        insideJobLogger.info("Explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
 
         let snapshot = bagman.selectElements(.all)
         bagman.markPresented(snapshot)
