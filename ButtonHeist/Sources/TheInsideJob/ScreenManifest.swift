@@ -195,27 +195,21 @@ extension TheBagman {
 
                     // Early exit if target found
                     if let target, resolveFirstMatch(target) != nil {
-                        Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-                        await tripwire.yieldFrames(2)
-                        refresh()
-                        containerFingerprints = currentHierarchy.containerFingerprints
-                        manifest.markExplored(container)
-                        let fingerprint = containerFingerprints[container] ?? 0
-                        updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
+                        await restoreAndCache(
+                            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+                            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+                            manifest: &manifest, containerFingerprints: &containerFingerprints
+                        )
                         manifest.explorationTime = CACurrentMediaTime() - startTime
                         return manifest
                     }
                 }
 
-                // Restore the visual scroll position, accounting for any inset changes
-                Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-                await tripwire.yieldFrames(2)
-                refresh()
-                containerFingerprints = currentHierarchy.containerFingerprints
-                manifest.markExplored(container)
-
-                let fingerprint = containerFingerprints[container] ?? 0
-                updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
+                await restoreAndCache(
+                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+                    manifest: &manifest, containerFingerprints: &containerFingerprints
+                )
 
                 let newContainers = currentHierarchy.scrollableContainers
                     .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
@@ -225,6 +219,25 @@ extension TheBagman {
 
         manifest.explorationTime = CACurrentMediaTime() - startTime
         return manifest
+    }
+
+    /// Restore scroll position after exploring a container and cache the results.
+    private func restoreAndCache(
+        scrollView: UIScrollView,
+        savedVisualOrigin: CGPoint,
+        container: AccessibilityContainer,
+        accumulated: [AccessibilityElement],
+        accumulatedOrigins: [CGPoint?],
+        manifest: inout ScreenManifest,
+        containerFingerprints: inout [AccessibilityContainer: Int]
+    ) async {
+        Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
+        await tripwire.yieldFrames(2)
+        refresh()
+        containerFingerprints = currentHierarchy.containerFingerprints
+        manifest.markExplored(container)
+        let fingerprint = containerFingerprints[container] ?? 0
+        updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
     }
 
     // MARK: - Helpers
