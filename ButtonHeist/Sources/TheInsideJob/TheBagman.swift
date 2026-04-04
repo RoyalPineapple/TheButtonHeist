@@ -445,23 +445,24 @@ final class TheBagman {
         let heistIds = assignHeistIds(result.elements)
 
         elementToHeistId = Dictionary(
-            uniqueKeysWithValues: zip(result.elements, heistIds).map { ($0, $1) }
+            zip(result.elements, heistIds).map { ($0, $1) },
+            uniquingKeysWith: { _, latest in latest }
         )
 
         for (parsedElement, heistId) in zip(result.elements, heistIds) {
-            let ctx = contexts[parsedElement]
+            let context = contexts[parsedElement]
             if var existing = screenElements[heistId] {
                 existing.element = parsedElement
-                existing.object = ctx?.object
-                existing.scrollView = ctx?.scrollView
+                existing.object = context?.object
+                existing.scrollView = context?.scrollView
                 screenElements[heistId] = existing
             } else {
                 screenElements[heistId] = ScreenElement(
                     heistId: heistId,
-                    contentSpaceOrigin: ctx?.contentSpaceOrigin,
+                    contentSpaceOrigin: context?.contentSpaceOrigin,
                     element: parsedElement,
-                    object: ctx?.object,
-                    scrollView: ctx?.scrollView
+                    object: context?.object,
+                    scrollView: context?.scrollView
                 )
             }
         }

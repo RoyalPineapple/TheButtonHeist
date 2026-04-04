@@ -166,7 +166,7 @@ public final class TheInsideJob {
         let scopeNames = allowedScopes.map(\.rawValue).sorted().joined(separator: ", ")
         insideJobLogger.info("Connection scopes: \(scopeNames)")
         insideJobLogger.info("Server listening on port \(actualPort)")
-        insideJobLogger.info("Auth token: \(self.muscle.authToken, privacy: .public)")
+        insideJobLogger.info("Connect with session token: \(self.muscle.sessionToken, privacy: .public)")
         insideJobLogger.info("Instance ID: \(self.effectiveInstanceId)")
         advertiseService(port: actualPort)
 
