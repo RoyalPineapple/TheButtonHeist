@@ -65,26 +65,16 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
 
-    /// Filter the hierarchy to leaf elements satisfying the matcher predicate.
-    /// Container structure is preserved for branches with matching descendants.
-    private func matchingHierarchy(_ matcher: ElementMatcher) -> [AccessibilityHierarchy] {
-        filteredHierarchy { node in
-            guard case .element(let element, _) = node else { return false }
-            return element.matches(matcher)
+    /// All leaf elements in the tree that satisfy the property predicates.
+    func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
+        compactMap { element, _ in
+            element.matches(matcher) ? .init(element: element) : nil
         }
     }
 
     /// First leaf element in the tree that satisfies all property predicates.
     func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        guard let first = matchingHierarchy(matcher).elements.first else { return nil }
-        return .init(element: first.element)
-    }
-
-    /// All leaf elements in the tree that satisfy the property predicates.
-    func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
-        matchingHierarchy(matcher).elements.map { element, _ in
-            .init(element: element)
-        }
+        allMatches(matcher).first
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
@@ -95,34 +85,9 @@ extension Array where Element == AccessibilityHierarchy {
     /// Returns the match only if exactly one leaf element satisfies the predicate.
     /// Returns nil on zero matches or ambiguity (2+).
     func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        let filtered = matchingHierarchy(matcher)
-        guard !filtered.isEmpty else { return nil }
-        var found: AccessibilityElement?
-        for root in filtered where root.hasSecondLeaf(found: &found) {
-            return nil
-        }
-        guard let element = found else { return nil }
-        return .init(element: element)
-    }
-}
-
-// MARK: - Early-Exit Leaf Counting
-
-extension AccessibilityHierarchy {
-    /// Walks the tree looking for a second leaf element. Returns true (early exit)
-    /// as soon as a second leaf is found. The first leaf is stored in `found`.
-    func hasSecondLeaf(found: inout AccessibilityElement?) -> Bool {
-        switch self {
-        case .element(let element, _):
-            if found != nil { return true }
-            found = element
-            return false
-        case .container(_, let children):
-            for child in children where child.hasSecondLeaf(found: &found) {
-                return true
-            }
-            return false
-        }
+        let matches = allMatches(matcher)
+        guard matches.count == 1 else { return nil }
+        return matches[0]
     }
 }
 
