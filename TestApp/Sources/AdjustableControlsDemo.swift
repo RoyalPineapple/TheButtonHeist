@@ -12,7 +12,6 @@ struct AdjustableControlsDemo: View {
                 Slider(value: $sliderValue, in: 0...100, step: 10) {
                     Text("Volume")
                 }
-                .accessibilityIdentifier("buttonheist.adjustable.slider")
                 .accessibilityValue("\(Int(sliderValue))")
                 .onChange(of: sliderValue) { _, newValue in
                     lastAction = "Slider: \(Int(newValue))"
@@ -20,7 +19,6 @@ struct AdjustableControlsDemo: View {
                 }
 
                 Stepper("Quantity: \(stepperValue)", value: $stepperValue, in: 0...10)
-                    .accessibilityIdentifier("buttonheist.adjustable.stepper")
                     .onChange(of: stepperValue) { _, newValue in
                         lastAction = "Stepper: \(newValue)"
                         NSLog("[ControlsDemo] Stepper changed to: %d", newValue)
@@ -32,18 +30,14 @@ struct AdjustableControlsDemo: View {
                     Text("\(Int(sliderValue))")
                 }
                 .gaugeStyle(.accessoryLinear)
-                .accessibilityIdentifier("buttonheist.adjustable.gauge")
 
                 ProgressView("Uploading…", value: progressValue)
-                    .accessibilityIdentifier("buttonheist.adjustable.linearProgress")
 
                 ProgressView("Loading…")
-                    .accessibilityIdentifier("buttonheist.adjustable.spinnerProgress")
             }
 
             Section {
                 Text("Last action: \(lastAction)")
-                    .accessibilityIdentifier("buttonheist.adjustable.lastActionLabel")
             }
         }
         .navigationTitle("Adjustable Controls")

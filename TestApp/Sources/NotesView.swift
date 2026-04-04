@@ -16,28 +16,24 @@ struct NotesView: View {
             Section("Add Note") {
                 HStack {
                     TextField("Note title", text: $newNoteTitle)
-                        .accessibilityIdentifier("buttonheist.notes.titleField")
                         .onSubmit(addNote)
 
                     Button("Add") {
                         addNote()
                     }
                     .disabled(newNoteTitle.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityIdentifier("buttonheist.notes.addButton")
                 }
             }
 
             Section {
                 Text("\(notes.count) note\(notes.count == 1 ? "" : "s")")
                     .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("buttonheist.notes.noteCount")
             }
 
             Section("Notes") {
                 if notes.isEmpty {
                     Text("No notes yet")
                         .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("buttonheist.notes.emptyLabel")
                 } else {
                     ForEach(notes) { note in
                         NavigationLink {
@@ -45,7 +41,6 @@ struct NotesView: View {
                         } label: {
                             NoteRowView(note: note)
                         }
-                        .accessibilityIdentifier("buttonheist.notes.item-\(note.id.uuidString)")
                         .accessibilityAction(named: "Delete") {
                             deleteNote(note)
                         }
@@ -61,7 +56,6 @@ struct NotesView: View {
                     Button("Clear All Notes", role: .destructive) {
                         clearAll()
                     }
-                    .accessibilityIdentifier("buttonheist.notes.clearAllButton")
                 }
             }
         }
@@ -137,13 +131,11 @@ struct NoteDetailView: View {
         Form {
             Section("Title") {
                 TextField("Note title", text: $title)
-                    .accessibilityIdentifier("buttonheist.notes.detail.titleField")
             }
 
             Section("Body") {
                 TextEditor(text: $content)
                     .frame(minHeight: 200)
-                    .accessibilityIdentifier("buttonheist.notes.detail.bodyEditor")
             }
         }
         .navigationTitle(title.isEmpty ? "Untitled" : title)
