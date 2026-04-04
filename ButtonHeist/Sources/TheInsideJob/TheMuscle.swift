@@ -5,7 +5,11 @@ import UIKit
 import os.log
 import TheScore
 
-/// Manages client authentication, token validation, and UI-based connection approval.
+/// Manages client authentication, session token validation, and UI-based connection approval.
+///
+/// The session token is a coordination primitive — it keeps agents from stepping on each
+/// other's sessions, not a security credential. Anyone with debug access to the device
+/// can read it from the logs and connect.
 ///
 /// Token resolution order:
 /// 1. Explicit token (from INSIDEJOB_TOKEN env var or InsideJobToken plist key)
@@ -97,7 +101,7 @@ final class TheMuscle {
     /// Single source of truth for all per-client state. Absent = no such client.
     private var clients: [Int: ClientPhase] = [:]
 
-    private(set) var authToken: String
+    private(set) var sessionToken: String
     private weak var presentedAlert: UIAlertController?
 
     // MARK: - Computed Client Accessors
@@ -181,7 +185,7 @@ final class TheMuscle {
     // MARK: - Init
 
     init(explicitToken: String?) {
-        self.authToken = explicitToken ?? UUID().uuidString
+        self.sessionToken = explicitToken ?? UUID().uuidString
         if EnvironmentKey.insideJobRestrictWatchers.value != nil {
             self.restrictWatchers = EnvironmentKey.insideJobRestrictWatchers.boolValue
         } else if let plistValue = Bundle.main.object(forInfoDictionaryKey: "InsideJobRestrictWatchers") as? Bool {
@@ -323,7 +327,7 @@ final class TheMuscle {
             return
         }
 
-        guard payload.token == authToken else {
+        guard payload.token == sessionToken else {
             // Wrong token → reject with guidance to retry without a token
             let attempts = recordFailedAttempt(address: address)
             if attempts >= TheMuscle.maxFailedAttempts {
@@ -362,8 +366,8 @@ final class TheMuscle {
     func approveClient(_ clientId: Int) {
         guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
 
-        // UI-approved clients use the server's authToken — session check with that token
-        let driverIdentity = effectiveDriverId(driverId: nil, token: authToken)
+        // UI-approved clients use the server's sessionToken — session check with that token
+        let driverIdentity = effectiveDriverId(driverId: nil, token: sessionToken)
         if !acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond) {
             return
         }
@@ -371,7 +375,7 @@ final class TheMuscle {
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity, subscribed: false)
         markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
-        sendMessage(.authApproved(AuthApprovedPayload(token: authToken)), respond: respond)
+        sendMessage(.authApproved(AuthApprovedPayload(token: sessionToken)), respond: respond)
         onClientAuthenticated?(clientId, respond)
     }
 
@@ -393,8 +397,8 @@ final class TheMuscle {
     }
 
     func invalidateToken() {
-        authToken = UUID().uuidString
-        logger.info("Token invalidated, new token: \(self.authToken, privacy: .sensitive)")
+        sessionToken = UUID().uuidString
+        logger.info("Session token rotated: \(self.sessionToken, privacy: .public)")
     }
 
     // MARK: - Status Accessors
@@ -450,7 +454,7 @@ final class TheMuscle {
                 }
                 return
             }
-            guard payload.token == authToken else {
+            guard payload.token == sessionToken else {
                 let attempts = recordFailedAttempt(address: address)
                 if attempts >= TheMuscle.maxFailedAttempts {
                     logger.warning("Address \(address) locked out after \(attempts) failed watch attempts")

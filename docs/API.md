@@ -423,11 +423,11 @@ public enum Command: String, CaseIterable, Sendable {
     case listTargets = "list_targets"
     case getSessionLog = "get_session_log"
     case archiveSession = "archive_session"
-    // ... 37 total cases
+    // ... 38 total cases
 }
 ```
 
-Single source of truth for the 37 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
+Single source of truth for the 38 supported commands. Each case has a `rawValue` matching the wire-format string (e.g., `.oneFingerTap` → `"one_finger_tap"`). `Command.allCases` replaces the former hand-maintained string array.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
 

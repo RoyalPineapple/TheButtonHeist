@@ -6,6 +6,7 @@ final class ConnectionPhaseTests: XCTestCase {
     func testPhaseEquality() {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let dummyTask = Task<Void, Never> {}
+        defer { dummyTask.cancel() }
 
         XCTAssertEqual(TheHandoff.ConnectionPhase.disconnected, .disconnected)
         XCTAssertEqual(TheHandoff.ConnectionPhase.connecting(device: device), .connecting(device: device))
@@ -19,6 +20,7 @@ final class ConnectionPhaseTests: XCTestCase {
     func testAllPhasesDifferent() {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let dummyTask = Task<Void, Never> {}
+        defer { dummyTask.cancel() }
         let phases: [TheHandoff.ConnectionPhase] = [
             .disconnected,
             .connecting(device: device),

@@ -177,13 +177,17 @@ public final class TheHandoff {
 
     private static let persistentDriverId: String = {
         let fileURL = driverIdFile
-        if let existing = try? String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+        if let existing = (try? String(contentsOf: fileURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines),
            !existing.isEmpty {
             return existing
         }
         let generated = UUID().uuidString.lowercased()
         let dir = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        } catch {
+            logger.warning("Failed to create driver-id directory: \(error.localizedDescription)")
+        }
         if !FileManager.default.createFile(
             atPath: fileURL.path,
             contents: Data(generated.utf8),

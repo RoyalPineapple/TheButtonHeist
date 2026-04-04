@@ -18,7 +18,7 @@
 #          ./scripts/release.sh 2026.04.03   # Explicit CalVer
 #          ./scripts/release.sh --dry-run    # Preview only
 #
-# See VERSIONING.md for versioning rules.
+# See VERSIONING.md in bh-infra for versioning rules.
 
 set -euo pipefail
 
@@ -53,7 +53,14 @@ fi
 
 echo "==> Phase 1: Validating preconditions"
 
-# Must be at the same commit as origin/main
+# Must be on the main branch at the same commit as origin/main
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    echo "Error: must be on the main branch (currently on '$CURRENT_BRANCH')"
+    echo "  git checkout main"
+    exit 1
+fi
+
 git fetch origin main --quiet
 LOCAL_SHA=$(git rev-parse HEAD)
 REMOTE_SHA=$(git rev-parse origin/main)
@@ -185,11 +192,11 @@ echo ""
 echo "==> Phase 4: Running tests"
 
 echo "  Running TheScoreTests..."
-tuist test TheScoreTests --no-selective-testing 2>&1 | tail -1
+tuist test TheScoreTests --no-selective-testing
 echo "  ✓ TheScoreTests"
 
 echo "  Running ButtonHeistTests..."
-tuist test ButtonHeistTests --no-selective-testing 2>&1 | tail -1
+tuist test ButtonHeistTests --no-selective-testing
 echo "  ✓ ButtonHeistTests"
 
 # Find or create a simulator for iOS tests
@@ -203,7 +210,7 @@ SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceTyp
 xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
 
 echo "  Running TheInsideJobTests on $SIM_NAME..."
-tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing 2>&1 | tail -1
+tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
 echo "  ✓ TheInsideJobTests"
 
 # Clean up test simulator
