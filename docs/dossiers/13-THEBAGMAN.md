@@ -76,7 +76,6 @@ graph TD
             Hash["lastHierarchyHash: Int"]
             ContainerCache["containerExploreStates<br/>[Container: ContainerExploreState]"]
             ExploreCycle["exploreCycleIds: Set&lt;String&gt;?<br/>Tracks heistIds during explore"]
-            ServedFlag["hasServedInterface: Bool<br/>First-request explore gate"]
         end
 
         subgraph Pipeline["Parse → Apply Pipeline"]
@@ -244,7 +243,6 @@ struct ScreenElement {
 | `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
 | `containerExploreStates` | Screen | Cached fingerprint + heistIds per scrollable container |
 | `exploreCycleIds` | Explore cycle | Accumulates heistIds during `exploreAndPrune()`, nil outside |
-| `hasServedInterface` | Screen | Gates first-request full explore in `sendInterface` |
 
 **Data flows down through three tiers:**
 - **Tier 1 (tree)**: `currentHierarchy`, `scrollableContainerViews` — volatile, rebuilt each refresh
