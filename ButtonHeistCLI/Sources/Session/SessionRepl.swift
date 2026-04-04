@@ -113,9 +113,37 @@ final class ReplSession {
         }
     }
 
-    // MARK: - Human-Friendly Input Parser
+    // MARK: - Output
 
-    nonisolated static let humanHelp = """
+    private func outputResponse(_ response: FenceResponse, id: Any?) {
+        switch format {
+        case .human:
+            writeOutput(response.humanFormatted())
+        case .compact:
+            writeOutput(response.compactFormatted())
+        case .json:
+            if var dictionary = response.jsonDict() {
+                if let id {
+                    dictionary["id"] = id
+                }
+                if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
+                   let json = String(data: data, encoding: .utf8) {
+                    writeOutput(json)
+                } else {
+                    logStatus("Failed to serialize response as JSON")
+                }
+            } else {
+                logStatus("Failed to serialize response as JSON")
+            }
+        }
+    }
+}
+
+// MARK: - Human-Friendly Input Parser
+
+nonisolated extension ReplSession {
+
+    static let humanHelp = """
         Commands (type a command, or use JSON for full control):
 
         Quick reference:
@@ -172,7 +200,7 @@ final class ReplSession {
         JSON input still works: {"command":"activate","heistId":"button_save"}
         """
 
-    private nonisolated static let commandAliases: [String: String] = [
+    private static let commandAliases: [String: String] = [
         "tap": TheFence.Command.oneFingerTap.rawValue,
         "press": TheFence.Command.longPress.rawValue,
         "ui": TheFence.Command.getInterface.rawValue,
@@ -187,7 +215,7 @@ final class ReplSession {
     ]
 
     /// Aliases that expand to a command + default parameter (e.g. "copy" → edit_action with action=copy).
-    private nonisolated static let compoundAliases: [String: (command: String, params: [String: String])] = [
+    private static let compoundAliases: [String: (command: String, params: [String: String])] = [
         "copy": (TheFence.Command.editAction.rawValue, ["action": EditAction.copy.rawValue]),
         "paste": (TheFence.Command.editAction.rawValue, ["action": EditAction.paste.rawValue]),
         "cut": (TheFence.Command.editAction.rawValue, ["action": EditAction.cut.rawValue]),
@@ -195,19 +223,19 @@ final class ReplSession {
         "select_all": (TheFence.Command.editAction.rawValue, ["action": EditAction.selectAll.rawValue]),
     ]
 
-    private nonisolated static let directionWords: Set<String> = [
+    private static let directionWords: Set<String> = [
         "up", "down", "left", "right", "next", "previous"
     ]
 
-    private nonisolated static let edgeWords: Set<String> = [
+    private static let edgeWords: Set<String> = [
         "top", "bottom", "left", "right"
     ]
 
-    private nonisolated static let directionCommands: Set<String> = [
+    private static let directionCommands: Set<String> = [
         TheFence.Command.swipe.rawValue, TheFence.Command.scroll.rawValue,
     ]
 
-    nonisolated static func parseHumanInput(_ line: String) -> [String: Any] {
+    static func parseHumanInput(_ line: String) -> [String: Any] {
         let tokens = tokenize(line)
         guard let first = tokens.first else { return [:] }
 
@@ -250,7 +278,7 @@ final class ReplSession {
         return result
     }
 
-    private nonisolated static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
+    private static func interpretPositionalArgs(command: String, positional: [String], into result: inout [String: Any]) {
         guard !positional.isEmpty else { return }
 
         switch command {
@@ -309,12 +337,12 @@ final class ReplSession {
         }
     }
 
-    private nonisolated static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
+    private static func applyElementTarget(_ tokens: [String], into result: inout [String: Any]) {
         guard let first = tokens.first else { return }
         result["heistId"] = first
     }
 
-    private nonisolated static func tokenize(_ line: String) -> [String] {
+    private static func tokenize(_ line: String) -> [String] {
         var tokens: [String] = []
         var current = ""
         var inQuote: Character?
@@ -342,28 +370,5 @@ final class ReplSession {
             tokens.append(current)
         }
         return tokens
-    }
-
-    private func outputResponse(_ response: FenceResponse, id: Any?) {
-        switch format {
-        case .human:
-            writeOutput(response.humanFormatted())
-        case .compact:
-            writeOutput(response.compactFormatted())
-        case .json:
-            if var dictionary = response.jsonDict() {
-                if let id {
-                    dictionary["id"] = id
-                }
-                if let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
-                   let json = String(data: data, encoding: .utf8) {
-                    writeOutput(json)
-                } else {
-                    logStatus("Failed to serialize response as JSON")
-                }
-            } else {
-                logStatus("Failed to serialize response as JSON")
-            }
-        }
     }
 }

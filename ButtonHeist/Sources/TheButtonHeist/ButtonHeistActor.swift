@@ -6,10 +6,14 @@ public actor ButtonHeistActor {
     public static let shared = ButtonHeistActor()
 
     /// Execute a closure on the ButtonHeistActor.
-    public static func run<T: Sendable>(
+    ///
+    /// The generic `E` preserves the caller's typed error: if `body` throws `FenceError`,
+    /// this method throws `FenceError` — not `any Error`. Callers that pass a non-throwing
+    /// closure get a non-throwing call site automatically.
+    public static func run<T: Sendable, E: Error>(
         resultType: T.Type = T.self,
-        body: @ButtonHeistActor @Sendable () throws -> T
-    ) async rethrows -> T {
+        body: @ButtonHeistActor @Sendable () throws(E) -> T
+    ) async throws(E) -> T {
         try await body()
     }
 }

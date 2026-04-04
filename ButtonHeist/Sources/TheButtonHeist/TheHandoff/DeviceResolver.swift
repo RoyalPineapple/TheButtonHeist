@@ -63,7 +63,7 @@ public struct DeviceResolver {
         }
     }
 
-    private func finalSelection() async throws -> DiscoveredDevice {
+    private func finalSelection() async throws(FenceError) -> DiscoveredDevice {
         let reachable = await getDiscoveredDevices().reachable()
         if let device = Self.selectDevice(from: reachable, filter: filter) {
             return device

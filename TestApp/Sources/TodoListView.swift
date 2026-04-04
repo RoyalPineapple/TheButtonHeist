@@ -32,7 +32,7 @@ struct TodoListView: View {
     }
 
     private var activeCount: Int {
-        items.filter { !$0.isCompleted }.count
+        items.count(where: { !$0.isCompleted })
     }
 
     private var hasCompleted: Bool {
@@ -129,7 +129,7 @@ struct TodoListView: View {
     }
 
     private func clearCompleted() {
-        let count = items.filter { $0.isCompleted }.count
+        let count = items.count(where: { $0.isCompleted })
         items.removeAll { $0.isCompleted }
         NSLog("[TodoList] Cleared %d completed items (remaining: %d)", count, items.count)
     }
