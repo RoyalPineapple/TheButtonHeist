@@ -78,10 +78,17 @@ enum CLIRunner {
         case .compact:
             writeOutput(response.compactFormatted())
         case .json:
-            if let dictionary = response.jsonDict(),
-               let data = try? JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys]),
-               let json = String(data: data, encoding: .utf8) {
-                writeOutput(json)
+            if let dictionary = response.jsonDict() {
+                do {
+                    let data = try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
+                    if let json = String(data: data, encoding: .utf8) {
+                        writeOutput(json)
+                    } else {
+                        logStatus("Failed to encode JSON data as UTF-8")
+                    }
+                } catch {
+                    logStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
+                }
             } else {
                 logStatus("Failed to serialize response as JSON")
             }
