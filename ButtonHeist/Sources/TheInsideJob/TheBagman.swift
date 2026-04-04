@@ -136,13 +136,9 @@ final class TheBagman {
     /// won't appear in currentHierarchy — they get Int.max.
     func buildTraversalOrderIndex() -> [String: Int] {
         Dictionary(
-            uniqueKeysWithValues: currentHierarchy.compactMap(
-                context: (),
-                container: { _, _ in () },
-                element: { [elementToHeistId] element, traversalIndex, _ in
-                    elementToHeistId[element].map { ($0, traversalIndex) }
-                }
-            )
+            uniqueKeysWithValues: currentHierarchy.compactMap { [elementToHeistId] element, traversalIndex in
+                elementToHeistId[element].map { ($0, traversalIndex) }
+            }
         )
     }
 
@@ -381,7 +377,6 @@ final class TheBagman {
         guard !windows.isEmpty else { return nil }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var allElements: [AccessibilityElement] = []
         var allObjects: [AccessibilityElement: NSObject] = [:]
         var allScrollViews: [AccessibilityContainer: UIView] = [:]
 
@@ -401,7 +396,6 @@ final class TheBagman {
                         }
                     }
                 )
-                let windowElements = windowTree.elements.map(\.element)
 
                 if windows.count > 1 {
                     let windowName = NSStringFromClass(type(of: window))
@@ -417,13 +411,11 @@ final class TheBagman {
                 } else {
                     allHierarchy.append(contentsOf: windowTree)
                 }
-
-                allElements.append(contentsOf: windowElements)
             }
         }
 
         return ParseResult(
-            elements: allElements,
+            elements: allHierarchy.sortedElements,
             hierarchy: allHierarchy,
             objects: allObjects,
             scrollViews: allScrollViews
@@ -576,7 +568,7 @@ final class TheBagman {
     func captureBeforeState() -> BeforeState {
         BeforeState(
             snapshot: selectElements(.all),
-            elements: currentHierarchy.elements.map(\.element),
+            elements: currentHierarchy.sortedElements,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
