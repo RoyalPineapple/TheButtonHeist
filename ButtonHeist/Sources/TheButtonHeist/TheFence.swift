@@ -336,7 +336,8 @@ public final class TheFence {
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
         ElementTarget(
             heistId: stringArg(dictionary, "heistId"),
-            matcher: try elementMatcher(dictionary)
+            matcher: try elementMatcher(dictionary),
+            ordinal: intArg(dictionary, "ordinal")
         )
     }
 
