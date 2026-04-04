@@ -1,5 +1,15 @@
 import AccessibilitySnapshotParser
 
+// MARK: - Container Convenience
+
+extension AccessibilityContainer {
+    /// Whether this container is scrollable.
+    var isScrollable: Bool {
+        if case .scrollable = type { return true }
+        return false
+    }
+}
+
 // MARK: - Filter
 
 extension AccessibilityHierarchy {
@@ -138,8 +148,10 @@ extension AccessibilityHierarchy {
     public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         folded(
             onElement: { element, traversalIndex in [(element, traversalIndex)] },
-            onContainer: { _, childLeaves in childLeaves.flatMap { $0 }.sorted { $0.traversalIndex < $1.traversalIndex } }
-        )
+            onContainer: { _, childLeaves in
+                childLeaves.reduce(into: []) { result, leaves in result.append(contentsOf: leaves) }
+            }
+        ).sorted { $0.traversalIndex < $1.traversalIndex }
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).
@@ -183,10 +195,13 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// Scrollable containers in pre-order (outermost first).
     var scrollableContainers: [AccessibilityContainer] {
-        filteredHierarchy { node in
-            guard case .container(let container, _) = node else { return false }
-            return container.isScrollable
-        }.containers
+        foldedHierarchy(
+            onElement: { _, _ in [] },
+            onContainer: { container, childResults in
+                let descendants = childResults.flatMap { $0 }
+                return container.isScrollable ? [container] + descendants : descendants
+            }
+        ).flatMap { $0 }
     }
 
     /// Each container mapped to its subtree content fingerprint.
