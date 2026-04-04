@@ -148,6 +148,7 @@ struct CalculatorView: View {
                 NSLog("[Calc] Equals: %@", display)
             }
         case .operatorPending(let accumulated, let pending):
+            // "5 + =" repeats the operand: 5 + 5 = 10 (matches iOS Calculator)
             let result = calculate(accumulated, accumulated, pending)
             display = formatNumber(result)
             entryState = .clean

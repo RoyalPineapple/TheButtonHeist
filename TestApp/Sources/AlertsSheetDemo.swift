@@ -5,24 +5,13 @@ struct AlertsSheetDemo: View {
     @State private var lastAction = "None"
     @State private var alertTextInput = ""
 
-    enum Presentation: Identifiable {
+    enum Presentation {
         case simpleAlert
         case twoButtonAlert
         case destructiveAlert
         case textFieldAlert
         case confirmationDialog
         case sheet
-
-        var id: String {
-            switch self {
-            case .simpleAlert: return "simple"
-            case .twoButtonAlert: return "twoButton"
-            case .destructiveAlert: return "destructive"
-            case .textFieldAlert: return "textField"
-            case .confirmationDialog: return "confirmation"
-            case .sheet: return "sheet"
-            }
-        }
     }
 
     private func isPresented(_ kind: Presentation) -> Binding<Bool> {
