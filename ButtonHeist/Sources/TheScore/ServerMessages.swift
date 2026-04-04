@@ -497,7 +497,7 @@ extension ActionExpectation {
                 return ExpectationResult(met: true, expectation: self, actual: nil)
             }
             let observed = updates.map { u in
-                let props = u.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
+                let props = u.changes.map { "\($0.property.rawValue): \($0.old, default: "nil") → \($0.new, default: "nil")" }
                 return "\(u.heistId): \(props.joined(separator: ", "))"
             }.joined(separator: "; ")
             return ExpectationResult(met: false, expectation: self, actual: observed)

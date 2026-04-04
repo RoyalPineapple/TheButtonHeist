@@ -16,7 +16,7 @@ extension TheFence {
             }
             lastActionResult = result
             guard let exploreResult = result.exploreResult else {
-                return .error("Explore failed: \(result.message ?? "unknown error")")
+                return .error("Explore failed: \(result.message, default: "unknown error")")
             }
             let detail = (args["detail"] as? String).flatMap(InterfaceDetail.init) ?? .summary
             let interface = Interface(

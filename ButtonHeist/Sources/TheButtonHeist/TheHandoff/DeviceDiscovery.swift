@@ -266,7 +266,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
         let visibleDevices = registry.devices
         guard !visibleDevices.isEmpty else { return }
 
-        let unreachableServiceNames = await withTaskGroup(of: String?.self, returning: [String].self) { group in
+        let unreachableServiceNames = await withTaskGroup(of: String?.self) { group in
             for device in visibleDevices {
                 group.addTask {
                     await device.isReachable(timeout: 0.75) ? nil : device.id

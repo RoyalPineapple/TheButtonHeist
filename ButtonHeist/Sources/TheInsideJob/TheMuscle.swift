@@ -536,10 +536,9 @@ final class TheMuscle {
     }
 
     private func releaseSession() {
-        let hadSession: Bool
-        switch sessionPhase {
-        case .idle: hadSession = false
-        case .active, .draining: hadSession = true
+        let hadSession = switch sessionPhase {
+        case .idle: false
+        case .active, .draining: true
         }
         cancelTimerIfDraining()
         sessionPhase = .idle
@@ -623,11 +622,10 @@ final class TheMuscle {
     /// Record a failed auth attempt for an address. Returns the new attempt count.
     @discardableResult
     private func recordFailedAttempt(address: String) -> Int {
-        let currentAttempts: Int
-        switch addressAuthStates[address] {
-        case .failing(let count): currentAttempts = count
-        case .lockedOut(_, let count): currentAttempts = count
-        case nil: currentAttempts = 0
+        let currentAttempts = switch addressAuthStates[address] {
+        case .failing(let count): count
+        case .lockedOut(_, let count): count
+        case nil: 0
         }
         let newAttempts = currentAttempts + 1
         if newAttempts >= TheMuscle.maxFailedAttempts {

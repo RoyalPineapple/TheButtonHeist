@@ -184,7 +184,7 @@ public enum FenceResponse {
                     text += "  [expectation met]"
                 } else {
                     let tier = expectation.expectation.map(String.init(describing:)) ?? "delivery"
-                    text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
+                    text += "  [expectation FAILED: expected \(tier), got \(expectation.actual, default: "nil")]"
                 }
             }
             return text
@@ -235,8 +235,8 @@ public enum FenceResponse {
             text += " (\(manifest.errorCount) errors)"
         }
         text += "\n  Artifacts: \(manifest.artifacts.count)"
-        let screenshots = manifest.artifacts.filter { $0.type == .screenshot }.count
-        let recordings = manifest.artifacts.filter { $0.type == .recording }.count
+        let screenshots = manifest.artifacts.count(where: { $0.type == .screenshot })
+        let recordings = manifest.artifacts.count(where: { $0.type == .recording })
         if screenshots > 0 && recordings > 0 {
             text += " (\(screenshots) screenshots, \(recordings) recordings)"
         } else if screenshots > 0 {
@@ -263,11 +263,10 @@ public enum FenceResponse {
         var output = "\(devices.count) device(s):\n"
         for (index, device) in devices.enumerated() {
             let id = device.shortId ?? "----"
-            let typeLabel: String
-            switch device.connectionType {
-            case .simulator: typeLabel = "sim"
-            case .usb: typeLabel = "usb"
-            case .network: typeLabel = "network"
+            let typeLabel = switch device.connectionType {
+            case .simulator: "sim"
+            case .usb: "usb"
+            case .network: "network"
             }
             output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))  [\(typeLabel)]\n"
         }
@@ -731,7 +730,7 @@ public enum FenceResponse {
         }
         if let expectation {
             if !expectation.met {
-                text += "\n[expectation FAILED: got \(expectation.actual ?? "nil")]"
+                text += "\n[expectation FAILED: got \(expectation.actual, default: "nil")]"
             }
         }
         return text
@@ -866,7 +865,7 @@ public enum FenceResponse {
                 for update in updates {
                     let meaningful = update.changes.filter { !$0.property.isGeometry }
                     for change in meaningful {
-                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+                        lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old, default: "nil")\" → \"\(change.new, default: "nil")\"")
                     }
                 }
             }

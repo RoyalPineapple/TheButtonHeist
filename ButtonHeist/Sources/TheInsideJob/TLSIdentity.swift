@@ -79,7 +79,7 @@ public actor TLSIdentity {
     }
 
     /// Remove a stored identity from the Keychain.
-    public static func delete(label: String = "com.buttonheist.tls") throws {
+    public static func delete(label: String = "com.buttonheist.tls") throws(TLSIdentityError) {
         let classes: [CFString] = [kSecClassKey, kSecClassCertificate, kSecClassIdentity]
         for secClass in classes {
             let query: [String: Any] = [
@@ -208,7 +208,7 @@ public actor TLSIdentity {
         privateKey: P256.Signing.PrivateKey,
         certificate: SecCertificate,
         label: String
-    ) throws -> SecIdentity {
+    ) throws(TLSIdentityError) -> SecIdentity {
         let keyData = privateKey.x963Representation
         let keyAttributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
@@ -272,7 +272,7 @@ public actor TLSIdentity {
     private static func createInMemoryIdentity(
         privateKey: P256.Signing.PrivateKey,
         certificate: SecCertificate
-    ) throws -> SecIdentity {
+    ) throws(TLSIdentityError) -> SecIdentity {
         let tempLabel = "com.buttonheist.tls.ephemeral.\(UUID().uuidString)"
 
         // Clean up temporary Keychain items when we're done.

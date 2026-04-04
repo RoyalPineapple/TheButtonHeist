@@ -103,12 +103,10 @@ final class TheStakeout {
         let screen = UIScreen.main
         let nativeWidth = screen.bounds.width * screen.scale
         let nativeHeight = screen.bounds.height * screen.scale
-        let effectiveScale: CGFloat
-        if let requestedScale = config.scale {
-            effectiveScale = max(0.25, min(1.0, CGFloat(requestedScale)))
+        let effectiveScale: CGFloat = if let requestedScale = config.scale {
+            max(0.25, min(1.0, CGFloat(requestedScale)))
         } else {
-            // Default: 1x point size = native / screen.scale
-            effectiveScale = 1.0 / screen.scale
+            1.0 / screen.scale
         }
         let width = Int(nativeWidth * effectiveScale)
         let height = Int(nativeHeight * effectiveScale)
