@@ -551,10 +551,10 @@ public final class TheFence {
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
                 expectationMet: nil, elementCount: iface.elements.count, error: nil
             )
-        case .error(let msg):
+        case .error(let message):
             return BatchStepSummary(
                 command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: msg
+                expectationMet: nil, elementCount: nil, error: message
             )
         default:
             return BatchStepSummary(

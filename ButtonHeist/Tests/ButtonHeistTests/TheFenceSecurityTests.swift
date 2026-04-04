@@ -147,9 +147,8 @@ final class TheFenceSecurityTests: XCTestCase {
             try await fence.start()
             // Trigger recording so handoff.isRecording becomes true
             _ = try await fence.execute(request: ["command": "start_recording"])
-            // Yield to let the mock's Task-dispatched recordingStarted message arrive
-            await Task.yield()
-            await Task.yield()
+            // Allow the mock's Task-dispatched recordingStarted message to arrive
+            for _ in 0..<5 { await Task.yield() }
             let response = try await fence.execute(request: [
                 "command": "stop_recording", "output": "/tmp/../etc/passwd",
             ])
@@ -185,19 +184,16 @@ final class TheFenceSecurityTests: XCTestCase {
     // MARK: - Recording Validation
 
     @ButtonHeistActor
-    func testStartRecordingWhenConnected() async {
+    func testStartRecordingWhenConnected() async throws {
         let (fence, _) = makeConnectedFence()
-        do {
-            let response = try await fence.execute(request: ["command": "start_recording"])
-            if case .ok = response {
-                // Expected
-            } else if case .error = response {
-                // Acceptable
-            } else {
-                // Any response is fine
-            }
-        } catch {
-            // notConnected or other errors are acceptable
+        let response = try await fence.execute(request: ["command": "start_recording"])
+        switch response {
+        case .ok:
+            break
+        case .error:
+            break
+        default:
+            XCTFail("Expected .ok or .error for start_recording, got: \(response)")
         }
     }
 
