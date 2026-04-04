@@ -30,7 +30,7 @@ struct WaitForCommand: AsyncParsableCommand {
 
     func validate() throws {
         guard timeout > 0 && timeout <= 30 else {
-            throw ValidationError("timeout must be between 0 and 30 seconds, got \(timeout)")
+            throw ValidationError("timeout must be greater than 0 and at most 30 seconds, got \(timeout)")
         }
     }
 

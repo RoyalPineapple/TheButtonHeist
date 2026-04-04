@@ -30,11 +30,15 @@ extension ElementAction: Codable {
     }
 
     public init(from decoder: Decoder) throws {
-        if let keyed = try? decoder.container(keyedBy: CodingKeys.self),
-           keyed.contains(.custom) {
-            let name = try keyed.decode(String.self, forKey: .custom)
-            self = .custom(name)
-            return
+        do {
+            let keyed = try decoder.container(keyedBy: CodingKeys.self)
+            if keyed.contains(.custom) {
+                let name = try keyed.decode(String.self, forKey: .custom)
+                self = .custom(name)
+                return
+            }
+        } catch DecodingError.typeMismatch {
+            // Not a keyed container — fall through to single-value decoding
         }
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)

@@ -274,13 +274,14 @@ final class TheStakeout {
         }
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
+        // If we can't read the file size, skip the check and continue recording
         let fileSize: Int?
         do {
-            fileSize = try FileManager.default.attributesOfItem(atPath: session.outputURL.path)[.size] as? Int
+            let attributes = try FileManager.default.attributesOfItem(atPath: session.outputURL.path)
+            fileSize = attributes[.size] as? Int
         } catch {
-            logger.warning("Could not read recording file size: \(error)")
-            stopRecording(reason: .fileSizeLimit)
-            return
+            logger.warning("Could not read recording file size, skipping size check: \(error)")
+            fileSize = nil
         }
         if let fileSize, fileSize > 7_000_000 {
             logger.warning("File size limit reached: \(fileSize) bytes")
