@@ -123,10 +123,47 @@ final class TheFenceSecurityTests: XCTestCase {
 
     @ButtonHeistActor
     func testStopRecordingRejectsPathTraversal() async {
-        await assertValidationError(
-            ["command": "stop_recording", "output": "/tmp/../etc/passwd"],
-            contains: "must not contain '..'"
-        )
+        let (fence, mockConn) = makeConnectedFence()
+        // Put the handoff into recording state by simulating a server recordingStarted
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), elements: []))
+            case .requestScreen:
+                return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
+            case .startRecording:
+                return .recordingStarted
+            case .stopRecording:
+                return .recording(RecordingPayload(
+                    videoData: "", width: 390, height: 844, duration: 1,
+                    frameCount: 8, fps: 8, startTime: Date(), endTime: Date(),
+                    stopReason: .manual
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+        do {
+            try await fence.start()
+            // Trigger recording so handoff.isRecording becomes true
+            _ = try await fence.execute(request: ["command": "start_recording"])
+            // Yield to let the mock's Task-dispatched recordingStarted message arrive
+            await Task.yield()
+            await Task.yield()
+            let response = try await fence.execute(request: [
+                "command": "stop_recording", "output": "/tmp/../etc/passwd",
+            ])
+            if case .error(let message) = response {
+                XCTAssertTrue(
+                    message.contains("must not contain '..'"),
+                    "Expected path traversal error, got: \(message)"
+                )
+            } else {
+                XCTFail("Expected .error response, got: \(response)")
+            }
+        } catch {
+            XCTFail("Unexpected throw: \(error)")
+        }
     }
 
     @ButtonHeistActor

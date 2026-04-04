@@ -129,7 +129,7 @@ extension TheSafecracker {
         }
 
         if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
-            return true
+            return false
         }
         scrollView.setContentOffset(newOffset, animated: true)
         return true
