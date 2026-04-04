@@ -134,22 +134,6 @@ extension AccessibilityHierarchy {
             return false
         }
     }
-
-    /// Walks the tree looking for a second leaf element. Returns true (early exit)
-    /// as soon as a second leaf is found. The first leaf is stored in `found`.
-    func hasSecondLeaf(found: inout AccessibilityElement?) -> Bool {
-        switch self {
-        case .element(let element, _):
-            if found != nil { return true }
-            found = element
-            return false
-        case .container(_, let children):
-            for child in children where child.hasSecondLeaf(found: &found) {
-                return true
-            }
-            return false
-        }
-    }
 }
 
 // MARK: - AccessibilityElement Matching

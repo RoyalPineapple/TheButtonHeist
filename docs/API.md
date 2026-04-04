@@ -880,6 +880,7 @@ Two resolution strategies: `heistId` (assigned token from `get_interface`) or `m
 
 - `heistId: String?` - Stable element identifier assigned by `get_interface`
 - `match: ElementMatcher?` - Predicate matcher for accessibility-based resolution
+- `ordinal: Int?` - 0-based index to select among multiple matches. Requires `match`. Without ordinal, multiple matches return an ambiguity error with a hint showing valid ordinal range.
 
 ### TouchTapTarget
 
