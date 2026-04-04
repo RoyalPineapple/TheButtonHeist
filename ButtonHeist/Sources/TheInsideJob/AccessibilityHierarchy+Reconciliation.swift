@@ -350,4 +350,3 @@ private func buttonHeistStitchPage(
 ) -> StitchResult {
     stitchPage(accumulated: accumulated, page: page)
 }
-

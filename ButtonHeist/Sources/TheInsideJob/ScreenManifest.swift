@@ -229,14 +229,14 @@ extension TheBagman {
 
     /// Visible elements in a scrollable container, in traversal order.
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = currentHierarchy.elements.compactMap { element, _ -> (AccessibilityElement, CGPoint?)? in
+        let pairs = currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
             guard let heistId = elementToHeistId[element],
                   viewportHeistIds.contains(heistId),
                   let entry = screenElements[heistId],
                   isElementInContainer(entry, container: container) else { return nil }
-            return (entry.element, entry.contentSpaceOrigin)
+            return (element: entry.element, origin: entry.contentSpaceOrigin)
         }
-        return ContainerPage(elements: pairs.map(\.0), origins: pairs.map(\.1))
+        return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
     }
 
     /// Check whether a screen element belongs to a given scrollable container

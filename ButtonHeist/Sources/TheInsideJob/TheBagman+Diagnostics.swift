@@ -96,14 +96,13 @@ extension TheBagman {
             ))
         }
 
-        return relaxations.lazy
-            .filter { $0.relaxed.hasPredicates }
-            .compactMap { r in
-                self.findMatch(r.relaxed).map { found in
-                    "near miss: matched all fields except \(r.field) — actual \(r.field)=\(r.actual(found))"
-                }
-            }
-            .first
+        for relaxation in relaxations {
+            guard relaxation.relaxed.hasPredicates,
+                  let found = findMatch(relaxation.relaxed) else { continue }
+            let actualValue = relaxation.actual(found)
+            return "near miss: matched all fields except \(relaxation.field) — actual \(relaxation.field)=\(actualValue)"
+        }
+        return nil
     }
 
     /// Compact summary of on-screen elements for total-miss fallback.

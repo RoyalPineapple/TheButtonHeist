@@ -137,11 +137,11 @@ extension TheBagman {
         // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
         // with heistId as tiebreaker for deterministic ordering within that group.
         return candidates.compactMap { heistId in
-            screenElements[heistId].map { (orderByHeistId[heistId] ?? Int.max, $0) }
+            screenElements[heistId].map { (order: orderByHeistId[heistId] ?? Int.max, entry: $0) }
         }.sorted {
-            if $0.0 != $1.0 { return $0.0 < $1.0 }
-            return $0.1.heistId < $1.1.heistId
-        }.map(\.1)
+            if $0.order != $1.order { return $0.order < $1.order }
+            return $0.entry.heistId < $1.entry.heistId
+        }.map(\.entry)
     }
 
     /// Mark heistIds as having been sent to a client. Call when elements are
@@ -248,12 +248,7 @@ extension TheBagman {
     }
 
     func slugify(_ text: String?) -> String? {
-        guard let text, !text.isEmpty else { return nil }
-        let slug = text.lowercased()
-            .replacing(/[^a-z0-9]+/, with: "_")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
-        guard !slug.isEmpty else { return nil }
-        return String(slug.prefix(24))
+        TheScore.slugify(text)
     }
 
     /// Compare two element snapshots and return a compact delta.
@@ -324,16 +319,18 @@ extension TheBagman {
         let newByHeistId = Dictionary(grouping: afterEls, by: \.heistId)
         let allHeistIds = Set(oldByHeistId.keys).union(newByHeistId.keys)
 
-        let (updated, added, removed) = allHeistIds.reduce(
-            into: ([ElementUpdate](), [HeistElement](), [String]())
-        ) { accumulator, hid in
+        var updated: [ElementUpdate] = []
+        var added: [HeistElement] = []
+        var removed: [String] = []
+
+        for hid in allHeistIds {
             let oldEls = oldByHeistId[hid] ?? []
             let newEls = newByHeistId[hid] ?? []
             let pairCount = min(oldEls.count, newEls.count)
-            accumulator.0 += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
+            updated += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
                 .compactMap { buildElementUpdate(old: $0, new: $1) }
-            accumulator.2 += oldEls.suffix(from: pairCount).map(\.heistId)
-            accumulator.1 += newEls.suffix(from: pairCount)
+            removed += oldEls.suffix(from: pairCount).map(\.heistId)
+            added += newEls.suffix(from: pairCount)
         }
 
         if added.isEmpty && removed.isEmpty && updated.isEmpty {
@@ -396,12 +393,22 @@ extension Array where Element == HeistElement {
     var screenName: String? {
         first { $0.traits.contains(.header) }?.label
     }
+
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    var screenId: String? {
+        screenName.flatMap { slugify($0) }
+    }
 }
 
 extension Array where Element == TheBagman.ScreenElement {
     /// Label of the first header-traited element (screen name hint).
     var screenName: String? {
         first { $0.element.traits.contains(.header) }?.element.label
+    }
+
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    var screenId: String? {
+        screenName.flatMap { slugify($0) }
     }
 }
 

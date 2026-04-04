@@ -11,14 +11,15 @@ TheBagman handles all the goods during TheInsideJob:
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
 2. **Parse/apply pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value; `apply()` mutates the registry. Screen change detection happens between these two steps — no mixed old/new state.
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
-4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup + `presentedHeistIds` gate, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `heistIdByTraversalOrder`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
+4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup + `presentedHeistIds` gate, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `elementToHeistId`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
-6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `reducedHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
+6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `filteredHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 8. **HeistId synthesis** — assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
 9. **Topology-based screen change detection** — detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
 10. **Wire conversion at boundary** — `toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
-11. **Delta computation** — compares before/after element snapshots to produce `InterfaceDelta` (screen change = VC identity from TheTripwire OR topology change from TheBagman)
+11. **Delta computation** — `captureBeforeState()` captures a `BeforeState` token (snapshot + viewport elements + VC identity); after the action, `actionResultWithDelta(before:)` computes the delta through a single codepath for both success and failure. Includes post-action `exploreAndPrune()` so deltas capture off-screen changes.
+12. **Container fingerprint caching** — `ContainerExploreState` caches each scrollable container's visible subtree fingerprint, accumulated fingerprint, and discovered heistIds. On re-explore, unchanged containers are skipped via O(1) fingerprint comparison.
 12. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheBagman+Capture.swift)
 13. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (TheBagman+Diagnostics.swift)
 
@@ -65,14 +66,17 @@ flowchart LR
 ```mermaid
 graph TD
     subgraph TheBagman["TheBagman (@MainActor, internal)"]
-        subgraph Stores["Instance State (7 stores)"]
+        subgraph Stores["Instance State (10 stores)"]
             Registry["screenElements: [String: ScreenElement]<br/>Persistent, screen-lifetime"]
-            OnScreen["onScreen: Set&lt;String&gt;<br/>Currently visible heistIds"]
+            Viewport["viewportHeistIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
             Presented["presentedHeistIds: Set&lt;String&gt;<br/>Gate: elements sent to clients"]
             Hierarchy["currentHierarchy: [AccessibilityHierarchy]<br/>Tree for matchers + scroll discovery"]
             ScrollViews["scrollableContainerViews<br/>[Container: UIView]"]
-            ReverseIdx["heistIdByTraversalOrder: [Int: String]<br/>O(1) matcher → heistId lookup"]
+            ReverseIdx["elementToHeistId: [AccessibilityElement: String]<br/>O(1) matcher → heistId lookup"]
             Hash["lastHierarchyHash: Int"]
+            ContainerCache["containerExploreStates<br/>[Container: ContainerExploreState]"]
+            ExploreCycle["exploreCycleIds: Set&lt;String&gt;?<br/>Tracks heistIds during explore"]
+            ServedFlag["hasServedInterface: Bool<br/>First-request explore gate"]
         end
 
         subgraph Pipeline["Parse → Apply Pipeline"]
@@ -89,7 +93,8 @@ graph TD
         end
 
         subgraph Wire["Wire Boundary"]
-            Snapshot["snapshot(_:) → [ScreenElement]<br/>+ populates presentedHeistIds"]
+            Select["selectElements(_:) → [ScreenElement]<br/>Pure read, no side effects"]
+            Mark["markPresented(_:)<br/>Explicit side effect"]
             ToWire["toWire(_:) → [HeistElement]<br/>Converts at serialization boundary"]
         end
 
@@ -120,17 +125,18 @@ flowchart TD
     Detect -->|No| Apply
 
     Clear --> Apply["apply(ParseResult)"]
-    Apply --> Walk["walkHierarchy()<br/>→ ElementContext per element"]
+    Apply --> Walk["buildElementContexts()<br/>→ ElementContext per element"]
     Walk --> IDs["assignHeistIds(elements)<br/>→ [String] parallel to elements"]
-    IDs --> Upsert["Upsert screenElements<br/>+ build heistIdByTraversalOrder<br/>+ rebuild onScreen"]
+    IDs --> Upsert["Upsert screenElements<br/>+ build elementToHeistId<br/>+ rebuild viewportHeistIds<br/>+ union into exploreCycleIds"]
 ```
 
 ## Data Flow: Snapshot → Wire
 
 ```mermaid
 flowchart LR
-    Snap["snapshot(.visible / .all)"] --> SE["[ScreenElement]<br/>+ presentedHeistIds populated"]
-    SE -->|"At wire boundary"| TW["toWire() → [HeistElement]"]
+    Sel["selectElements(.viewport / .all)<br/>(pure read)"] --> SE["[ScreenElement]"]
+    SE --> MP["markPresented(_:)<br/>(explicit side effect)"]
+    MP -->|"At wire boundary"| TW["toWire() → [HeistElement]"]
     TW --> Interface["Interface payload<br/>(Pulse, sendInterface,<br/>ExploreResult)"]
 ```
 
@@ -141,7 +147,7 @@ All interactions follow the same pipeline: TheBagman resolves the target, execut
 ```mermaid
 flowchart TD
     CMD["Client command<br/>(activate, tap, swipe, ...)"] --> DISP["TheInsideJob.dispatchInteraction()"]
-    DISP --> SNAP["Capture before-snapshot<br/>(snapshot(.visible) + elements + VC identity)"]
+    DISP --> SNAP["captureBeforeState()<br/>→ BeforeState token"]
     SNAP --> EXEC["TheBagman.executeXxx(target)"]
 
     EXEC --> ENS["ensureOnScreen(target)<br/>Auto-scroll if element<br/>is off-viewport"]
@@ -156,7 +162,7 @@ flowchart TD
     OK -->|No| FALL["Fallback: TheSafecracker.tap()<br/>(synthetic touch at activation point)"]
     FALL --> RET
 
-    RET --> DELTA["actionResultWithDelta()<br/>(parse → detect → apply → delta)"]
+    RET --> DELTA["actionResultWithDelta(before:)<br/>(parse → detect → apply →<br/>exploreAndPrune → delta)"]
     DELTA --> SEND["Send ActionResult<br/>to client"]
 ```
 
@@ -174,7 +180,7 @@ flowchart TD
 
     B -->|".matcher(m)"| G["currentHierarchy<br/>.uniqueMatch(matcher)"]
     G --> H{Result?}
-    H -->|Exactly 1| I["heistIdByTraversalOrder[index]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
+    H -->|Exactly 1| I["elementToHeistId[element]<br/>→ screenElements[heistId]<br/>(O(1) reverse index)"]
     I --> E
     H -->|0 matches| F
     H -->|2+ matches| AMB["Return .ambiguous(candidates, diagnostics)"]
@@ -186,19 +192,20 @@ Screen change detection happens *before* registry mutation — parse returns an 
 
 ```mermaid
 flowchart TD
-    A["actionResultWithDelta()"] --> B{Action<br/>succeeded?}
-    B -->|No| C["Return error ActionResult"]
+    A["actionResultWithDelta(before:)"] --> B{Action<br/>succeeded?}
+    B -->|No| C["Return error ActionResult<br/>(same codepath, errorKind set)"]
     B -->|Yes| D["tripwire.waitForAllClear(1s)"]
     D --> E["parse() → ParseResult<br/>(no mutation yet)"]
 
     E --> F{Screen change?<br/>VC identity OR topology}
-    F -->|Yes| G["Clear registry<br/>(before apply)"]
+    F -->|Yes| G["Clear registry + containerExploreStates<br/>(before apply)"]
     F -->|No| H["apply(ParseResult)"]
     G --> H
 
-    H --> I["snapshot(.visible)"]
-    I --> J["computeDelta(before, after)"]
-    J --> K["Return ActionResult<br/>with delta + element state"]
+    H --> I["exploreAndPrune()<br/>(fingerprint-cached re-explore)"]
+    I --> J["selectElements(.all) + markPresented()"]
+    J --> K["computeDelta(before, after)"]
+    K --> L["Return ActionResult<br/>with delta + explore stats"]
 ```
 
 ## ScreenElement Structure
@@ -220,7 +227,7 @@ struct ScreenElement {
 **Lifetime rules:**
 - UIKit guarantees the scroll view outlives its children, so if `object != nil` then `scrollView != nil` (when originally set)
 - If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse) but the scroll view is still alive — you can still scroll to its content-space position
-- `presentedHeistIds` gates targeting — `resolveTarget(.heistId)` requires the element to have been sent to clients via `snapshot()`
+- `presentedHeistIds` gates targeting — `resolveTarget(.heistId)` requires the element to have been sent to clients via `markPresented()`
 
 ## Instance State Inventory
 
@@ -229,16 +236,20 @@ struct ScreenElement {
 | `currentHierarchy` | Refresh | Tree for matcher resolution + scroll target discovery |
 | `scrollableContainerViews` | Refresh | Container → UIView for scroll operations |
 | `screenElements` | Screen | The registry — all resolution paths read from here |
-| `onScreen` | Refresh | Visible subset for stagnation detection + `snapshot(.visible)` |
-| `heistIdByTraversalOrder` | Refresh | O(1) reverse index: traversal order → heistId |
-| `presentedHeistIds` | Screen | Gate: elements sent to clients. Only `snapshot()` writes it. |
+| `viewportHeistIds` | Refresh | HeistIds visible in the device viewport |
+| `elementToHeistId` | Refresh | O(1) reverse index: AccessibilityElement → heistId |
+| `presentedHeistIds` | Screen | Gate: elements sent to clients. Only `markPresented()` writes it. |
 | `lastHierarchyHash` | Screen | Pulse polling dedup memo |
 | `lastScreenName` | Screen | First header element label, computed once in `apply()` |
+| `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
+| `containerExploreStates` | Screen | Cached fingerprint + heistIds per scrollable container |
+| `exploreCycleIds` | Explore cycle | Accumulates heistIds during `exploreAndPrune()`, nil outside |
+| `hasServedInterface` | Screen | Gates first-request full explore in `sendInterface` |
 
 **Data flows down through three tiers:**
 - **Tier 1 (tree)**: `currentHierarchy`, `scrollableContainerViews` — volatile, rebuilt each refresh
-- **Tier 2 (registry)**: `screenElements`, `onScreen`, `heistIdByTraversalOrder` — persistent, upserted
-- **Tier 3 (gate)**: `presentedHeistIds` — append-only within a screen, populated by `snapshot()`
+- **Tier 2 (registry)**: `screenElements`, `viewportHeistIds`, `elementToHeistId` — persistent, upserted
+- **Tier 3 (gate)**: `presentedHeistIds` — append-only within a screen, populated by `markPresented()`
 
 No store writes to another store. No circular dependencies.
 
@@ -249,7 +260,7 @@ No store writes to another store. No circular dependencies.
 | `TheBagman.swift` | ~640 | Core: ParseResult, parse/apply pipeline, resolution, interactivity, topology, action result assembly |
 | `TheBagman+Actions.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
 | `TheBagman+Scroll.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
-| `TheBagman+Conversion.swift` | ~445 | snapshot(), toWire(), heistId synthesis, delta computation, tree conversion |
+| `TheBagman+Conversion.swift` | ~445 | selectElements(), markPresented(), toWire(), heistId synthesis, delta computation, tree conversion |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
 | `TheBagman+Diagnostics.swift` | ~140 | Resolution error formatting: near-miss, similar heistIds, compact summary |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |

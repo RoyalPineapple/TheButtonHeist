@@ -124,6 +124,10 @@ final class TheBagman {
     /// Computed once in `apply()` from the hierarchy's traversal order.
     private(set) var lastScreenName: String?
 
+    /// Slugified screen name for machine use (e.g. "controls_demo").
+    /// Computed alongside `lastScreenName` in `apply()`.
+    private(set) var lastScreenId: String?
+
     private let parser = AccessibilityHierarchyParser()
 
     /// Back-reference to the stakeout for recording frame capture.
@@ -135,11 +139,12 @@ final class TheBagman {
     /// Elements discovered via scroll exploration but not in the current viewport
     /// won't appear in currentHierarchy — they get Int.max.
     func buildTraversalOrderIndex() -> [String: Int] {
-        Dictionary(
-            uniqueKeysWithValues: currentHierarchy.elements.compactMap { element, traversalIndex in
-                elementToHeistId[element].map { ($0, traversalIndex) }
-            }
-        )
+        var index: [String: Int] = [:]
+        for (element, traversalIndex) in currentHierarchy.elements {
+            guard let heistId = elementToHeistId[element] else { continue }
+            index[heistId] = traversalIndex
+        }
+        return index
     }
 
     // MARK: - Element Interactivity (object-based)
@@ -474,6 +479,7 @@ final class TheBagman {
         lastScreenName = result.elements.first {
             $0.traits.contains(.header) && $0.label != nil
         }?.label
+        lastScreenId = slugify(lastScreenName)
     }
 
     /// Parse and apply in one step. Most callers use this.
@@ -572,7 +578,7 @@ final class TheBagman {
     func captureBeforeState() -> BeforeState {
         BeforeState(
             snapshot: selectElements(.all),
-            elements: screenElements.values.map(\.element),
+            elements: currentHierarchy.elements.map(\.element),
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
@@ -595,7 +601,8 @@ final class TheBagman {
                 ?? ((method == .elementNotFound || method == .elementDeallocated)
                     ? .elementNotFound : .actionFailed)
             return ActionResult(success: false, method: method, message: message, errorKind: kind,
-                                value: value, screenName: before.snapshot.screenName)
+                                value: value, screenName: before.snapshot.screenName,
+                                screenId: before.snapshot.screenId)
         }
 
         // Wait for all clear: presentation layers settled AND accessibility tree stable.
@@ -671,6 +678,7 @@ final class TheBagman {
             elementValue: elementValue,
             elementTraits: elementTraits,
             screenName: afterSnapshot.screenName,
+            screenId: afterSnapshot.screenId,
             exploreResult: exploreResult
         )
     }

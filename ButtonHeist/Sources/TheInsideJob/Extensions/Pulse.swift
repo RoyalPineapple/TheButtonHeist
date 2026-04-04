@@ -80,7 +80,9 @@ extension TheInsideJob {
         if !bagman.hasServedInterface {
             let manifest = await bagman.exploreAndPrune()
             bagman.hasServedInterface = true
-            insideJobLogger.info("Initial explore: \(self.bagman.screenElements.count) elements (\(manifest.scrollCount) scrolls, \(String(format: "%.2f", manifest.explorationTime))s)")
+            let elementCount = bagman.screenElements.count
+            let time = String(format: "%.2f", manifest.explorationTime)
+            insideJobLogger.info("Initial explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
         }
 
         let snapshot = bagman.selectElements(.all)

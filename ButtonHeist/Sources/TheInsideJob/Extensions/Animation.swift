@@ -8,6 +8,7 @@ extension TheInsideJob {
     // MARK: - Wait For Idle Handler
 
     func handleWaitForIdle(_ target: WaitForIdleTarget, requestId: String? = nil, respond: @escaping (Data) -> Void) async {
+        bagman.refresh()
         let before = bagman.captureBeforeState()
         let timeout = min(target.timeout ?? 5.0, 60.0)
         let settled = await tripwire.waitForAllClear(timeout: timeout)
