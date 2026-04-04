@@ -442,6 +442,9 @@ extension TheFence {
 
     func handleStartRecording(_ args: [String: Any]) async throws -> FenceResponse {
         guard handoff.isConnected else { throw FenceError.notConnected }
+        guard !handoff.isRecording else {
+            return .error("Recording already in progress — use stop_recording first")
+        }
         let config = RecordingConfig(
             fps: intArg(args, "fps"),
             scale: doubleArg(args, "scale"),
@@ -516,9 +519,9 @@ extension TheFence {
             do {
                 try await start()
             } catch {
-                return .error("Connect failed and could not restore previous connection: \(error.localizedDescription)")
+                return .error("Connect failed and could not restore previous connection: \(error.displayMessage)")
             }
-            return .error("Connect failed, restored previous connection: \(error.localizedDescription)")
+            return .error("Connect failed, restored previous connection: \(error.displayMessage)")
         }
 
         let deviceName = handoff.connectedDevice.map { handoff.displayName(for: $0) } ?? resolvedDevice
@@ -533,6 +536,9 @@ extension TheFence {
     }
 
     func handleStopRecording(_ args: [String: Any]) async throws -> FenceResponse {
+        guard handoff.isRecording else {
+            return .error("No recording in progress — use start_recording first")
+        }
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }

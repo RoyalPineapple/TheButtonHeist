@@ -99,10 +99,10 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollToEdgeReturnsTrueWhenAlreadyAtEdge() {
+    func testScrollToEdgeReturnsFalseWhenAlreadyAtEdge() {
         let sv = makeScrollView(contentOffset: .zero)
         let moved = safecracker.scrollToEdge(sv, edge: .top)
-        XCTAssertTrue(moved, "Already at edge should return true (not false)")
+        XCTAssertFalse(moved, "Already at edge should return false (no scroll needed)")
     }
 
     // MARK: - scrollToOppositeEdge

@@ -274,8 +274,16 @@ final class TheStakeout {
         }
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
-        if let fileSize = try? FileManager.default.attributesOfItem(atPath: session.outputURL.path)[.size] as? Int,
-           fileSize > 7_000_000 {
+        // If we can't read the file size, skip the check and continue recording
+        let fileSize: Int?
+        do {
+            let attributes = try FileManager.default.attributesOfItem(atPath: session.outputURL.path)
+            fileSize = attributes[.size] as? Int
+        } catch {
+            logger.warning("Could not read recording file size, skipping size check: \(error)")
+            fileSize = nil
+        }
+        if let fileSize, fileSize > 7_000_000 {
             logger.warning("File size limit reached: \(fileSize) bytes")
             stopRecording(reason: .fileSizeLimit)
             return
@@ -378,13 +386,13 @@ final class TheStakeout {
             Task { @MainActor in
                 guard let self else { return }
                 defer { self.cleanup(outputURL: outputURL) }
-                guard let writer = self.currentWriter else {
-                    self.deliverError(.finalizationFailed("Writer deallocated"))
+                guard let currentWriter = self.currentWriter else {
+                    self.deliverError(.finalizationFailed("Writer deallocated during finalization"))
                     return
                 }
 
-                if writer.status == .failed {
-                    self.deliverError(.finalizationFailed(writer.error?.localizedDescription ?? "Unknown"))
+                if currentWriter.status == .failed {
+                    self.deliverError(.finalizationFailed(currentWriter.error?.localizedDescription ?? "Unknown"))
                     return
                 }
 
@@ -429,7 +437,11 @@ final class TheStakeout {
         stakeoutPhase = .idle
 
         // Clean up temp file
-        try? FileManager.default.removeItem(at: outputURL)
+        do {
+            try FileManager.default.removeItem(at: outputURL)
+        } catch {
+            logger.warning("Failed to clean up recording temp file at \(outputURL.path): \(error)")
+        }
     }
 
     enum TheStakeoutError: Error, LocalizedError {
