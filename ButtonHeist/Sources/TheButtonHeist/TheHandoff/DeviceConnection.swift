@@ -324,9 +324,21 @@ public final class DeviceConnection: DeviceConnecting {
         }
     }
 
-    // MARK: - TLS
+    private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {
+        do {
+            return try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+        } catch {
+            logger.error("Failed to decode server response: \(error)")
+            return nil
+        }
+    }
+}
 
-    private nonisolated static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
+// MARK: - TLS
+
+nonisolated extension DeviceConnection {
+
+    fileprivate static func makeTLSParameters(expectedFingerprint: String) -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
         sec_protocol_options_set_min_tls_protocol_version(
@@ -363,7 +375,7 @@ public final class DeviceConnection: DeviceConnecting {
         return NWParameters(tls: tlsOptions)
     }
 
-    private nonisolated static func makeLoopbackTLSParameters() -> NWParameters {
+    fileprivate static func makeLoopbackTLSParameters() -> NWParameters {
         let tlsOptions = NWProtocolTLS.Options()
 
         sec_protocol_options_set_min_tls_protocol_version(
@@ -382,7 +394,7 @@ public final class DeviceConnection: DeviceConnecting {
         return NWParameters(tls: tlsOptions)
     }
 
-    nonisolated static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
+    static func isLoopbackEndpoint(_ endpoint: NWEndpoint) -> Bool {
         guard case .hostPort(let host, _) = endpoint else { return false }
 
         switch host {
@@ -394,15 +406,6 @@ public final class DeviceConnection: DeviceConnecting {
             return false
         @unknown default:
             return false
-        }
-    }
-
-    private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {
-        do {
-            return try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-        } catch {
-            logger.error("Failed to decode server response: \(error)")
-            return nil
         }
     }
 }

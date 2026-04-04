@@ -235,8 +235,8 @@ public enum FenceResponse {
             text += " (\(manifest.errorCount) errors)"
         }
         text += "\n  Artifacts: \(manifest.artifacts.count)"
-        let screenshots = manifest.artifacts.filter { $0.type == .screenshot }.count
-        let recordings = manifest.artifacts.filter { $0.type == .recording }.count
+        let screenshots = manifest.artifacts.count(where: { $0.type == .screenshot })
+        let recordings = manifest.artifacts.count(where: { $0.type == .recording })
         if screenshots > 0 && recordings > 0 {
             text += " (\(screenshots) screenshots, \(recordings) recordings)"
         } else if screenshots > 0 {
@@ -263,11 +263,10 @@ public enum FenceResponse {
         var output = "\(devices.count) device(s):\n"
         for (index, device) in devices.enumerated() {
             let id = device.shortId ?? "----"
-            let typeLabel: String
-            switch device.connectionType {
-            case .simulator: typeLabel = "sim"
-            case .usb: typeLabel = "usb"
-            case .network: typeLabel = "network"
+            let typeLabel = switch device.connectionType {
+            case .simulator: "sim"
+            case .usb: "usb"
+            case .network: "network"
             }
             output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))  [\(typeLabel)]\n"
         }

@@ -101,8 +101,14 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
         }
     }
 
+}
+
+// MARK: - Subprocess Utilities
+
+nonisolated extension USBDeviceDiscovery {
+
     /// Run `xcrun devicectl list devices` and return names of connected devices.
-    nonisolated private static func discoverConnectedDevices() -> [String] {
+    private static func discoverConnectedDevices() -> [String] {
         guard let output = runProcess("/usr/bin/xcrun", arguments: ["devicectl", "list", "devices"], timeout: 10) else {
             return []
         }
@@ -122,7 +128,7 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
     }
 
     /// Run `lsof -i -P -n` and extract the CoreDevice IPv6 tunnel address.
-    nonisolated private static func findIPv6Tunnel() -> String? {
+    private static func findIPv6Tunnel() -> String? {
         guard let output = runProcess("/usr/sbin/lsof", arguments: ["-i", "-P", "-n"], timeout: 5) else {
             return nil
         }
@@ -138,7 +144,7 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
         return "\(prefix)::1"
     }
 
-    nonisolated private static func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
+    private static func runProcess(_ path: String, arguments: [String], timeout: TimeInterval) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
