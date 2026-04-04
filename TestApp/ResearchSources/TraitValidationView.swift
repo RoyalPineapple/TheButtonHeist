@@ -95,7 +95,9 @@ struct TraitValidationView: View {
             Button("Button") {}.accessibilityIdentifier("tv.button")
             Button("Disabled") {}.disabled(true).accessibilityIdentifier("tv.disabledButton")
             // bit 1: link
-            Link("Link", destination: URL(string: "https://example.com")!).accessibilityIdentifier("tv.link")
+            if let exampleURL = URL(string: "https://example.com") {
+                Link("Link", destination: exampleURL).accessibilityIdentifier("tv.link")
+            }
             // bit 2: image
             Image(systemName: "star.fill").accessibilityLabel("Star").accessibilityIdentifier("tv.image")
             // bit 6: staticText
@@ -148,8 +150,12 @@ struct TraitValidationView: View {
         }
         let content = lines.joined(separator: "\n")
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("trait_scan.txt")
-        try? content.write(to: path, atomically: true, encoding: .utf8)
-        print("[TraitValidation] Wrote \(results.count) results to \(path.path)")
+        do {
+            try content.write(to: path, atomically: true, encoding: .utf8)
+            print("[TraitValidation] Wrote \(results.count) results to \(path.path)")
+        } catch {
+            print("[TraitValidation] Failed to write results: \(error)")
+        }
     }
 
     private func walkAllViews(_ view: UIView, depth: Int) {

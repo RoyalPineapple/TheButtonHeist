@@ -36,7 +36,6 @@ struct LongListView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
                         }
-                        .accessibilityIdentifier("buttonheist.longList.ordered-\(item.index)")
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 orderedItems.removeAll { $0.id == item.id }
@@ -50,7 +49,6 @@ struct LongListView: View {
                     }
                 } header: {
                     Text("Order (\(orderedItems.count))")
-                        .accessibilityIdentifier("buttonheist.longList.orderHeader")
                 }
             }
 
@@ -66,7 +64,6 @@ struct LongListView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityIdentifier(item.identifier)
                     .swipeActions(edge: .trailing) {
                         if isOrdered(item) {
                             Button(role: .destructive) {
@@ -97,22 +94,18 @@ struct LongListView: View {
                 }
             }
         }
-        .accessibilityIdentifier("buttonheist.longList.list")
         .searchable(text: $searchText, prompt: "Search items")
         .navigationTitle("Long List")
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Text("\(filteredItems.count) items")
-                    .accessibilityIdentifier("buttonheist.longList.count")
                 if !orderedItems.isEmpty {
                     Text("·")
                     Text("\(orderedItems.count) ordered")
-                        .accessibilityIdentifier("buttonheist.longList.orderCount")
                 }
                 if let selectedItem {
                     Spacer()
                     Text("Selected: \(selectedItem)")
-                        .accessibilityIdentifier("buttonheist.longList.selected")
                 }
             }
             .font(.caption)
@@ -131,14 +124,6 @@ private struct ListItem: Identifiable {
     let category: String
 
     var id: Int { index }
-
-    var identifier: String {
-        switch index {
-        case 0:  "buttonheist.longList.first"
-        case 99: "buttonheist.longList.last"
-        default: "buttonheist.longList.item-\(index)"
-        }
-    }
 
     init(index: Int) {
         self.index = index

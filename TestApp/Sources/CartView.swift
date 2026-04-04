@@ -44,7 +44,6 @@ struct CartView: View {
                 Spacer()
                 Text("\(items.reduce(0) { $0 + $1.quantity })")
             }
-            .accessibilityIdentifier("buttonheist.cart.itemCount")
 
             HStack {
                 Text("Subtotal")
@@ -54,7 +53,6 @@ struct CartView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(subtotal))
-            .accessibilityIdentifier("buttonheist.cart.subtotal")
 
             HStack {
                 Text("Tax (8.5%)")
@@ -64,7 +62,6 @@ struct CartView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(tax))
-            .accessibilityIdentifier("buttonheist.cart.tax")
 
             HStack {
                 Text("Total")
@@ -75,7 +72,6 @@ struct CartView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityValue(spokenPrice(total))
-            .accessibilityIdentifier("buttonheist.cart.total")
         }
     }
 
@@ -85,7 +81,6 @@ struct CartView: View {
                 CartItemRow(item: item) { newQuantity in
                     updateQuantity(itemID: item.id, quantity: newQuantity)
                 }
-                .accessibilityIdentifier("buttonheist.cart.item-\(item.id.uuidString)")
             }
         }
     }
@@ -98,14 +93,12 @@ struct CartView: View {
                 Label("Add Item", systemImage: "plus.circle.fill")
             }
             .disabled(!canAddItem)
-            .accessibilityIdentifier("buttonheist.cart.addItem")
 
             Button(role: .destructive) {
                 clearCart()
             } label: {
                 Label("Clear Cart", systemImage: "trash")
             }
-            .accessibilityIdentifier("buttonheist.cart.clear")
         }
     }
 
@@ -120,7 +113,6 @@ struct CartView: View {
                     addRandomItem()
                 }
             }
-            .accessibilityIdentifier("buttonheist.cart.empty")
         }
     }
 
@@ -216,7 +208,6 @@ private struct CartItemRow: View {
                     .monospacedDigit()
                     .frame(minWidth: 20, alignment: .center)
             }
-            .accessibilityIdentifier("buttonheist.cart.stepper-\(item.id.uuidString)")
             .accessibilityValue("\(item.quantity)")
         }
     }

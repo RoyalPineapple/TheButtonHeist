@@ -14,7 +14,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("buttonheist.settings.colorScheme")
                 .onChange(of: settings.colorScheme) { _, newValue in
                     NSLog("[Settings] Color scheme: %@", newValue.rawValue)
                 }
@@ -25,7 +24,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("buttonheist.settings.accentColor")
                 .onChange(of: settings.accentColor) { _, newValue in
                     NSLog("[Settings] Accent color: %@", newValue.rawValue)
                 }
@@ -36,7 +34,6 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("buttonheist.settings.textSize")
                 .onChange(of: settings.textSize) { _, newValue in
                     NSLog("[Settings] Text size: %@", newValue.rawValue)
                 }
@@ -44,7 +41,6 @@ struct SettingsView: View {
 
             Section("Profile") {
                 TextField("Username", text: $settings.username)
-                    .accessibilityIdentifier("buttonheist.settings.username")
                     .onChange(of: settings.username) { _, newValue in
                         NSLog("[Settings] Username: \"%@\"", newValue)
                     }
@@ -52,13 +48,11 @@ struct SettingsView: View {
 
             Section("Behavior") {
                 Toggle("Show Completed Todos", isOn: $settings.showCompletedTodos)
-                    .accessibilityIdentifier("buttonheist.settings.showCompleted")
                     .onChange(of: settings.showCompletedTodos) { _, newValue in
                         NSLog("[Settings] Show completed todos: %@", newValue ? "on" : "off")
                     }
 
                 Toggle("Compact Mode", isOn: $settings.compactMode)
-                    .accessibilityIdentifier("buttonheist.settings.compactMode")
                     .onChange(of: settings.compactMode) { _, newValue in
                         NSLog("[Settings] Compact mode: %@", newValue ? "on" : "off")
                     }
@@ -72,7 +66,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("buttonheist.settings.currentColorScheme")
 
                 HStack {
                     Text("Accent Color")
@@ -81,7 +74,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("buttonheist.settings.currentAccentColor")
 
                 HStack {
                     Text("Text Size")
@@ -90,7 +82,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("buttonheist.settings.currentTextSize")
 
                 HStack {
                     Text("Username")
@@ -99,7 +90,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("buttonheist.settings.currentUsername")
             }
         }
         .navigationTitle("Settings")

@@ -103,6 +103,14 @@ When adding new screens:
 - **Demo screens** (controls, scroll tests, standard UI patterns) go in `TestApp/Sources/` and are wired into `RootView.swift`
 - **Research screens** (SPI experiments, trait probing, runtime inspection) go in `TestApp/ResearchSources/` and are wired into `ResearchApp.swift`
 
+## No `accessibilityIdentifier` in Demo Screens
+
+`accessibilityIdentifier` is an escape hatch, not a feature. It helps developers write UI tests, but it does nothing for accessibility users — VoiceOver never reads it, Switch Control never sees it, and it actively harms Button Heist's mission. The whole point is to navigate apps through the real accessibility user space: labels, values, traits, hints, and actions. If an element can only be found by identifier, that element is invisible to a real user and the heist should fail.
+
+**Do not add `accessibilityIdentifier` to demo app screens** (`TestApp/Sources/`, `TestApp/UIKitSources/`). Instead, make every element findable by its natural accessibility properties — the same properties a VoiceOver user relies on. This is the bar: if the agent can't find it, a blind user can't either, and the fix is better accessibility, not an identifier.
+
+Research screens (`TestApp/ResearchSources/`) are exempt — they probe the accessibility tree at the SPI level and use identifiers functionally to locate specific test fixtures.
+
 ## Simulator Quick Start
 
 Build and deploy the demo app to an iOS Simulator for end-to-end testing.

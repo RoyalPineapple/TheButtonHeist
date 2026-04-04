@@ -44,14 +44,12 @@ struct TodoListView: View {
             Section("Add Todo") {
                 HStack {
                     TextField("What needs to be done?", text: $newItemText)
-                        .accessibilityIdentifier("buttonheist.todo.newItemField")
                         .onSubmit(addItem)
 
                     Button("Add") {
                         addItem()
                     }
                     .disabled(newItemText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityIdentifier("buttonheist.todo.addButton")
                 }
             }
 
@@ -62,24 +60,20 @@ struct TodoListView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("buttonheist.todo.filterPicker")
 
                 Text("\(activeCount) item\(activeCount == 1 ? "" : "s") remaining")
                     .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("buttonheist.todo.itemCount")
             }
 
             Section("Todos") {
                 if filteredItems.isEmpty {
                     Text(items.isEmpty ? "No todos yet" : "No \(filter.rawValue.lowercased()) todos")
                         .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("buttonheist.todo.emptyLabel")
                 } else {
                     ForEach(filteredItems) { item in
                         TodoRowView(item: item) {
                             toggleItem(item)
                         }
-                        .accessibilityIdentifier("buttonheist.todo.item-\(item.id.uuidString)")
                         .accessibilityAction(named: "Delete") {
                             deleteItem(item)
                         }
@@ -95,7 +89,6 @@ struct TodoListView: View {
                     Button("Clear Completed", role: .destructive) {
                         clearCompleted()
                     }
-                    .accessibilityIdentifier("buttonheist.todo.clearCompletedButton")
                 }
             }
         }

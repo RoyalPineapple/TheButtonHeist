@@ -10,23 +10,26 @@ enum ToolDefinitions {
     // Agents that need the actual video file should pass the "output" parameter
     // in stop_recording to write to disk and receive only the file path.
 
-    // Shared element targeting properties — 6-property block used by action/scroll/gesture tools
+    // Shared element targeting properties — 6-property block used by action/scroll/gesture tools.
+    // Elements are found through real accessibility properties (label, value, traits) — the same
+    // interface VoiceOver users navigate. heistId is the stable shorthand from get_interface.
+    // Avoid identifier — it is a developer escape hatch that real users cannot see.
     static let elementTargetProperties: [String: Value] = [
-        "heistId": ["type": "string", "description": "Target element by stable heistId (preferred)"],
-        "identifier": ["type": "string", "description": "Target element by accessibility identifier"],
-        "label": ["type": "string", "description": "Target by accessibility label (first match)"],
-        "value": ["type": "string", "description": "Target by accessibility value (first match)"],
-        "traits": ["type": "array", "items": ["type": "string"], "description": "Target: all listed traits must be present"],
-        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Target: none of these traits may be present"],
+        "heistId": ["type": "string", "description": "Target element by stable heistId from get_interface (preferred for known elements)"],
+        "label": ["type": "string", "description": "Target by accessibility label — the text VoiceOver reads aloud (e.g. \"Sign In\", \"Mountain Sunset\")"],
+        "value": ["type": "string", "description": "Target by accessibility value — current state or placeholder (e.g. \"Email\", \"50%\", \"selected\")"],
+        "traits": ["type": "array", "items": ["type": "string"], "description": "Target by traits — role qualifiers like button, header, selected, textEntry. All listed traits must match."],
+        "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Exclude elements with any of these traits"],
+        "identifier": ["type": "string", "description": "Target by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
     ]
 
     // Shared element filter properties — 5-property block used by get_interface (no heistId, uses "Filter" descriptions)
     static let elementFilterProperties: [String: Value] = [
-        "label": ["type": "string", "description": "Filter by accessibility label (first match)"],
-        "identifier": ["type": "string", "description": "Filter by accessibility identifier (first match)"],
-        "value": ["type": "string", "description": "Filter by accessibility value (first match)"],
+        "label": ["type": "string", "description": "Filter by accessibility label (the text VoiceOver reads)"],
+        "value": ["type": "string", "description": "Filter by accessibility value (current state or placeholder)"],
         "traits": ["type": "array", "items": ["type": "string"], "description": "Filter: all listed traits must be present"],
         "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Filter: none of these traits may be present"],
+        "identifier": ["type": "string", "description": "Filter by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
     ]
 
     // Shared expect property for action tools — matches the batch step schema
@@ -71,16 +74,35 @@ enum ToolDefinitions {
 
     // MARK: - Getting Started
     //
-    // New to Button Heist? Start with these 5 tools:
+    // Button Heist navigates iOS apps through the real accessibility interface — the same
+    // labels, values, traits, hints, and actions that VoiceOver users rely on. There are no
+    // accessibility identifiers involved. If the agent can't find an element, a blind user
+    // can't either, and the fix is better accessibility — not a test hook.
+    //
+    // Start with these 5 tools:
     //   1. connect         — establish a session with the iOS app
     //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
     //   3. activate        — interact with elements (covers 80% of interactions)
     //   4. scroll_to_visible — navigate long lists to find off-screen elements
     //   5. run_batch       — multi-step sequences with expectations
     //
-    // Two targeting modes:
-    //   - heistId: copy from get_interface, paste into activate (stable, zero ambiguity)
-    //   - matcher: describe by properties (label, traits, identifier) for dynamic elements
+    // Finding elements:
+    //   Every element on screen has a heistId (deterministic, stable across refreshes)
+    //   plus natural accessibility properties: label, value, traits, actions, hints.
+    //
+    //   - heistId: copy from get_interface, paste into activate. Zero ambiguity, preferred
+    //     for targeting specific known elements.
+    //   - label: match by the text a VoiceOver user would hear ("Sign In", "Mountain Sunset").
+    //   - value: match by the element's current value ("Email", "50%", "3 items remaining").
+    //     Text fields expose placeholder text as their value when empty.
+    //   - traits: match by role — "button", "staticText", "header", "selected", "notEnabled",
+    //     "textEntry", "secureTextField", "image", etc. Add traits to disambiguate when labels
+    //     collide (e.g. label="Add" + traits=["button"] to skip the "Add Todo" header).
+    //   - actions: elements advertise custom actions like "Delete", "Add to Queue",
+    //     "Remove from Favorites". Use activate(action: "Delete") to invoke them.
+    //
+    //   All matcher fields are AND — every field you specify must match. Start with just
+    //   label, add traits or value only if you get ambiguous matches.
     //
     // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
     // get_screen (screenshots), get_interface(full: true) (full screen census).
@@ -136,12 +158,12 @@ enum ToolDefinitions {
     static let activate = Tool(
         name: "activate",
         description: """
-            Activate a UI element. This is the primary way to interact with buttons, links, and controls. \
-            Uses the activation-first pattern: tries accessibility activation (like VoiceOver double-tap) first, \
-            falls back to synthetic tap at the element's activation point. \
-            Target by heistId (preferred), or by matcher fields (label, traits, identifier, etc.). \
-            Matcher fields return the first match — add more fields to narrow if needed. \
-            Pass 'action' to perform a named action instead: "increment", "decrement", or any custom action from the element's actions array.
+            Activate a UI element — the primary way to tap buttons, follow links, and toggle controls. \
+            Works like a VoiceOver double-tap: tries accessibility activation first, falls back to synthetic tap. \
+            Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
+            value (current state), traits (role like "button", "selected"). \
+            If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
+            Pass 'action' to invoke a custom action instead: "increment", "decrement", "Delete", or any action from the element's actions array.
             """,
         inputSchema: .object([
             "type": "object",
@@ -158,7 +180,7 @@ enum ToolDefinitions {
         description: """
             Type text and/or delete characters via keyboard injection. Optionally target an element \
             to focus it first and read back the resulting value. \
-            Target by heistId (preferred), matcher fields (label, traits), or identifier.
+            Target text fields by value (placeholder text, e.g. value="Email") or by heistId.
             """,
         inputSchema: .object([
             "type": "object",
@@ -327,10 +349,10 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Search for an element by scrolling. Target the element by heistId or describe it by \
-            accessibility properties: identifier, label, value, and/or traits. All specified matcher \
-            fields must match (AND). Automatically searches through all scrollable containers on screen \
-            (outermost first), adapting the scroll direction to each container's natural axis. \
+            Search for an off-screen element by scrolling. Describe the element by its natural \
+            accessibility properties: label, value, and/or traits (all specified fields must match). \
+            Or target by heistId if known. Automatically searches through all scrollable containers \
+            on screen (outermost first), adapting the scroll direction to each container's natural axis. \
             Returns the found element or diagnostic info about the search.
             """,
         inputSchema: .object([

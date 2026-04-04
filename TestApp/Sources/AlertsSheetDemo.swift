@@ -1,48 +1,66 @@
 import SwiftUI
 
 struct AlertsSheetDemo: View {
-    @State private var showAlert = false
-    @State private var showTwoButtonAlert = false
-    @State private var showDestructiveAlert = false
-    @State private var showTextFieldAlert = false
-    @State private var showConfirmation = false
-    @State private var showSheet = false
+    @State private var activePresentation: Presentation?
     @State private var lastAction = "None"
     @State private var alertTextInput = ""
+
+    enum Presentation: Identifiable {
+        case simpleAlert
+        case twoButtonAlert
+        case destructiveAlert
+        case textFieldAlert
+        case confirmationDialog
+        case sheet
+
+        var id: String {
+            switch self {
+            case .simpleAlert: return "simple"
+            case .twoButtonAlert: return "twoButton"
+            case .destructiveAlert: return "destructive"
+            case .textFieldAlert: return "textField"
+            case .confirmationDialog: return "confirmation"
+            case .sheet: return "sheet"
+            }
+        }
+    }
+
+    private func isPresented(_ kind: Presentation) -> Binding<Bool> {
+        Binding(
+            get: { activePresentation == kind },
+            set: { if !$0 { activePresentation = nil } }
+        )
+    }
 
     var body: some View {
         Form {
             Section("Simple Alerts") {
                 Button("Show Alert") {
-                    showAlert = true
+                    activePresentation = .simpleAlert
                     lastAction = "Alert shown"
                     NSLog("[AlertsDemo] Alert presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.simple")
 
                 Button("Show Two-Button Alert") {
-                    showTwoButtonAlert = true
+                    activePresentation = .twoButtonAlert
                     lastAction = "Two-button alert shown"
                     NSLog("[AlertsDemo] Two-button alert presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.twoButton")
 
                 Button("Show Destructive Alert") {
-                    showDestructiveAlert = true
+                    activePresentation = .destructiveAlert
                     lastAction = "Destructive alert shown"
                     NSLog("[AlertsDemo] Destructive alert presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.destructive")
 
                 Button("Show Text Field Alert") {
                     alertTextInput = ""
-                    showTextFieldAlert = true
+                    activePresentation = .textFieldAlert
                     lastAction = "Text field alert shown"
                     NSLog("[AlertsDemo] Text field alert presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.textField")
             }
-            .alert("Alert Title", isPresented: $showAlert) {
+            .alert("Alert Title", isPresented: isPresented(.simpleAlert)) {
                 Button("OK") {
                     lastAction = "Alert: OK"
                     NSLog("[AlertsDemo] Alert OK tapped")
@@ -50,7 +68,7 @@ struct AlertsSheetDemo: View {
             } message: {
                 Text("This is a simple alert with one button.")
             }
-            .alert("Confirm Action", isPresented: $showTwoButtonAlert) {
+            .alert("Confirm Action", isPresented: isPresented(.twoButtonAlert)) {
                 Button("Cancel", role: .cancel) {
                     lastAction = "Two-button: Cancel"
                     NSLog("[AlertsDemo] Two-button Cancel tapped")
@@ -62,7 +80,7 @@ struct AlertsSheetDemo: View {
             } message: {
                 Text("Do you want to proceed with this action?")
             }
-            .alert("Delete Item", isPresented: $showDestructiveAlert) {
+            .alert("Delete Item", isPresented: isPresented(.destructiveAlert)) {
                 Button("Cancel", role: .cancel) {
                     lastAction = "Destructive: Cancel"
                     NSLog("[AlertsDemo] Destructive Cancel tapped")
@@ -74,9 +92,8 @@ struct AlertsSheetDemo: View {
             } message: {
                 Text("This action cannot be undone.")
             }
-            .alert("Enter Name", isPresented: $showTextFieldAlert) {
+            .alert("Enter Name", isPresented: isPresented(.textFieldAlert)) {
                 TextField("Name", text: $alertTextInput)
-                    .accessibilityIdentifier("buttonheist.alert.textFieldInput")
                 Button("Cancel", role: .cancel) {
                     lastAction = "TextField: Cancel"
                     NSLog("[AlertsDemo] TextField Cancel tapped")
@@ -91,20 +108,18 @@ struct AlertsSheetDemo: View {
 
             Section("Dialogs & Sheets") {
                 Button("Show Confirmation Dialog") {
-                    showConfirmation = true
+                    activePresentation = .confirmationDialog
                     lastAction = "Confirmation shown"
                     NSLog("[AlertsDemo] Confirmation dialog presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.confirmation")
 
                 Button("Show Sheet") {
-                    showSheet = true
+                    activePresentation = .sheet
                     lastAction = "Sheet shown"
                     NSLog("[AlertsDemo] Sheet presented")
                 }
-                .accessibilityIdentifier("buttonheist.alert.sheet")
             }
-            .confirmationDialog("Choose Action", isPresented: $showConfirmation) {
+            .confirmationDialog("Choose Action", isPresented: isPresented(.confirmationDialog)) {
                 Button("Save") {
                     lastAction = "Confirmation: Save"
                     NSLog("[AlertsDemo] Confirmation: Save")
@@ -117,25 +132,22 @@ struct AlertsSheetDemo: View {
                     lastAction = "Confirmation: Cancel"
                 }
             }
-            .sheet(isPresented: $showSheet) {
+            .sheet(isPresented: isPresented(.sheet)) {
                 VStack(spacing: 20) {
                     Text("Sheet Content")
                         .font(.headline)
-                        .accessibilityIdentifier("buttonheist.alert.sheetTitle")
 
                     Button("Dismiss") {
-                        showSheet = false
+                        activePresentation = nil
                         lastAction = "Sheet dismissed"
                         NSLog("[AlertsDemo] Sheet dismissed")
                     }
-                    .accessibilityIdentifier("buttonheist.alert.sheetDismiss")
                 }
                 .padding()
             }
 
             Section {
                 Text("Last action: \(lastAction)")
-                    .accessibilityIdentifier("buttonheist.alert.lastAction")
             }
         }
         .navigationTitle("Alerts & Sheets")
