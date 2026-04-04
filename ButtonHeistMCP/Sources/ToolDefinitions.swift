@@ -24,7 +24,7 @@ enum ToolDefinitions {
         ],
         "excludeTraits": ["type": "array", "items": ["type": "string"], "description": "Exclude elements with any of these traits"],
         "identifier": ["type": "string", "description": "Target by accessibilityIdentifier (escape hatch — prefer label/value/traits)"],
-        "ordinal": ["type": "integer", "description": "0-based index to select among multiple matches (in tree traversal order). Omit to require a unique match."],
+        "ordinal": ["type": "integer", "description": "0-based index to disambiguate when multiple elements match. 0 = first match, 1 = second, etc. (tree traversal order). Omit to require a unique match — ambiguity errors show the valid range."],
     ]
 
     // Shared element filter properties — 5-property block used by get_interface (no heistId, uses "Filter" descriptions)
@@ -106,7 +106,9 @@ enum ToolDefinitions {
     //     "Remove from Favorites". Use activate(action: "Delete") to invoke them.
     //
     //   All matcher fields are AND — every field you specify must match. Start with just
-    //   label, add traits or value only if you get ambiguous matches.
+    //   label, add traits or value only if you get ambiguous matches. If multiple elements
+    //   still match, the error tells you the valid ordinal range — pass ordinal (0-based)
+    //   to pick by position: 0 = first match, 1 = second, etc.
     //
     // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
     // get_screen (screenshots), get_interface(full: true) (full screen census).
@@ -167,6 +169,8 @@ enum ToolDefinitions {
             Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
             value (current state), traits (role like "button", "selected"). \
             If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
+            If multiple elements still match, the error shows the valid ordinal range — pass ordinal to select \
+            by position (0 = first, 1 = second, etc.). \
             Pass 'action' to invoke a custom action instead: "increment", "decrement", "Delete", or any action from the element's actions array.
             """,
         inputSchema: .object([
