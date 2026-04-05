@@ -44,8 +44,7 @@ extension TheInsideJob {
 
         guard muscle.hasSubscribers else { return }
 
-        let snapshot = bagman.selectElements(.viewport)
-        bagman.markPresented(snapshot)
+        let snapshot = bagman.selectElements()
         let wireElements = bagman.toWire(snapshot)
         let currentHash = wireElements.hashValue
 
@@ -76,12 +75,11 @@ extension TheInsideJob {
         // Explore on every sendInterface call. The container fingerprint cache
         // makes this near-free on static screens — unchanged containers are skipped.
         let manifest = await bagman.exploreAndPrune()
-        let elementCount = bagman.screenElements.count
+        let elementCount = bagman.registry.elements.count
         let time = String(format: "%.2f", manifest.explorationTime)
         insideJobLogger.info("Explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
 
-        let snapshot = bagman.selectElements(.all)
-        bagman.markPresented(snapshot)
+        let snapshot = bagman.selectElements()
         let tree = bagman.currentHierarchy.isEmpty ? nil : bagman.currentHierarchy.map { bagman.convertHierarchyNode($0) }
         let payload = Interface(timestamp: Date(), elements: bagman.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
