@@ -87,9 +87,8 @@ extension Array where Element == AccessibilityHierarchy {
         guard limit > 0 else { return [] }
         var results: [AccessibilityHierarchy.MatchResult] = []
         for root in self {
-            if root.collectMatches(matcher, limit: limit, into: &results) {
-                break
-            }
+            let limitReached = root.collectMatches(matcher, limit: limit, into: &results)
+            if limitReached { break }
         }
         return results
     }
@@ -127,9 +126,8 @@ extension AccessibilityHierarchy {
             return false
         case .container(_, let children):
             for child in children {
-                if child.collectMatches(matcher, limit: limit, into: &results) {
-                    return true
-                }
+                let limitReached = child.collectMatches(matcher, limit: limit, into: &results)
+                if limitReached { return true }
             }
             return false
         }
