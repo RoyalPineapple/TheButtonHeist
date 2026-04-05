@@ -24,6 +24,47 @@ final class TheSafecracker {
     /// Used by ensureOnScreen to wait for scroll animations to settle.
     weak var tripwire: TheTripwire?
 
+    // MARK: - Keyboard State
+
+    /// Whether the software keyboard is currently visible. Updated via
+    /// keyboard notifications — no polling needed.
+    private(set) var keyboardVisibleFlag = false
+
+    func startKeyboardObservation() {
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(keyboardFrameDidChange),
+                           name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardWillShow),
+                           name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardDidHide),
+                           name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    func stopKeyboardObservation() {
+        let center = NotificationCenter.default
+        center.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    @objc private func keyboardFrameDidChange(_ notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let screenBounds = notification.object
+            .flatMap { $0 as? UIScreen }?.bounds
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.screen.bounds
+            ?? .zero
+        keyboardVisibleFlag = endFrame.intersects(screenBounds)
+            && endFrame.height > 0
+            && endFrame.origin.y < screenBounds.height
+    }
+
+    @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
+    @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
+
     // MARK: - Fingerprints
 
     /// Visual interaction indicators for taps and gesture tracking.
@@ -244,11 +285,11 @@ final class TheSafecracker {
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
-    /// Reads the notification-driven flag from TheTripwire (frame-based
-    /// detection, matching KIF's approach) with a fallback to
-    /// KeyboardBridge for hardware keyboard scenarios.
+    /// Reads the notification-driven flag (frame-based detection, matching
+    /// KIF's approach) with a fallback to KeyboardBridge for hardware
+    /// keyboard scenarios.
     func isKeyboardVisible() -> Bool {
-        if let tripwire, tripwire.keyboardVisibleFlag { return true }
+        if keyboardVisibleFlag { return true }
         return KeyboardBridge.shared()?.hasActiveInput ?? false
     }
 

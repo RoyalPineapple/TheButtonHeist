@@ -176,6 +176,7 @@ public final class TheInsideJob {
             self?.handlePulseTransition(transition)
         }
         tripwire.startPulse()
+        bagman.safecracker.startKeyboardObservation()
 
         insideJobLogger.info("Server started successfully")
     }
@@ -199,6 +200,7 @@ public final class TheInsideJob {
 
         tripwire.stopPulse()
         tripwire.onTransition = nil
+        bagman.safecracker.stopKeyboardObservation()
 
         muscle.tearDown()
 
@@ -777,6 +779,7 @@ public final class TheInsideJob {
         hierarchyInvalidated = false
 
         tripwire.stopPulse()
+        bagman.safecracker.stopKeyboardObservation()
 
         muscle.tearDown()
 
@@ -832,6 +835,7 @@ public final class TheInsideJob {
                     self?.handlePulseTransition(transition)
                 }
                 self.tripwire.startPulse()
+                self.bagman.safecracker.startKeyboardObservation()
 
                 // Resume polling if it was active before suspend
                 if case .paused(let interval) = self.pollingPhase {
