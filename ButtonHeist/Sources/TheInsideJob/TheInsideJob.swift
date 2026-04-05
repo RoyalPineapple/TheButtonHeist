@@ -70,7 +70,6 @@ public final class TheInsideJob {
     private let sessionId = UUID()
     let tripwire = TheTripwire()
     let bagman: TheBagman
-    let theSafecracker = TheSafecracker()
 
     private let allowedScopes: Set<ConnectionScope>
 
@@ -123,9 +122,6 @@ public final class TheInsideJob {
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
         self.bagman = TheBagman(tripwire: self.tripwire)
-        self.theSafecracker.bagman = self.bagman
-        self.theSafecracker.tripwire = self.tripwire
-        self.bagman.safecracker = self.theSafecracker
 
         if let scopes = allowedScopes {
             self.allowedScopes = scopes
@@ -488,7 +484,7 @@ public final class TheInsideJob {
         let start = CFAbsoluteTimeGetCurrent()
 
         // Phase 0: immediate check — refresh only, no snapshot needed.
-        // hasTarget uses presentedHeistIds (already populated) or walks the hierarchy directly.
+        // hasTarget checks registry.elements (for heistId) or walks the hierarchy (for matchers).
         bagman.refresh()
         if target.resolvedAbsent {
             if !bagman.hasTarget(elementTarget) {
@@ -564,7 +560,7 @@ public final class TheInsideJob {
             method: .explore,
             before: before
         )
-        let elements = bagman.toWire(bagman.selectElements(.all))
+        let elements = bagman.toWire(bagman.selectElements())
         let actionResult = baseResult.adding(exploreElements: elements)
 
         recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)

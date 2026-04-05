@@ -14,9 +14,15 @@ extension CGFloat {
     }
 }
 
-// MARK: - Trait Names
+// MARK: - Wire Conversion
 
 extension TheBagman {
+
+    /// Converts internal accessibility types to wire format (HeistElement, ElementNode)
+    /// and computes interface deltas. Pure transformations — no mutable state.
+    @MainActor struct WireConversion {
+
+    // MARK: - Trait Names
 
     /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
     /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
@@ -25,13 +31,10 @@ extension TheBagman {
     func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
         traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
-}
 
-// MARK: - Element Conversion
+    // MARK: - Element Conversion
 
-extension TheBagman {
-
-    func convertElement(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
+    func convert(_ element: AccessibilityElement) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             description: element.description,
@@ -50,31 +53,42 @@ extension TheBagman {
             customContent: element.customContent.isEmpty ? nil : element.customContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
             },
-            actions: buildActions(for: element, object: object)
+            actions: buildActions(for: element)
         )
     }
 
-    func buildActions(for element: AccessibilityElement, object: NSObject?) -> [ElementAction] {
+    func buildActions(for element: AccessibilityElement) -> [ElementAction] {
         var actions: [ElementAction] = []
-        if isInteractive(element: element, object: object) {
+        if Interactivity.isInteractive(element: element) {
             actions.append(.activate)
         }
-        if element.traits.contains(.adjustable), isInteractive(element: element, object: object) {
+        if element.traits.contains(.adjustable), Interactivity.isInteractive(element: element) {
             actions.append(.increment)
             actions.append(.decrement)
         }
-        for name in customActionNames(from: object) {
-            actions.append(.custom(name))
+        for action in element.customActions {
+            actions.append(.custom(action.name))
         }
         return actions
     }
-}
 
-// MARK: - Tree Conversion
+    // MARK: - Wire Output
 
-extension TheBagman {
+    /// Convert a ScreenElement to its wire representation.
+    func toWire(_ entry: ScreenElement) -> HeistElement {
+        var wire = convert(entry.element)
+        wire.heistId = entry.heistId
+        return wire
+    }
 
-    func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
+    /// Convert a snapshot to wire format. Use at serialization boundaries.
+    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
+        entries.map { toWire($0) }
+    }
+
+    // MARK: - Tree Conversion
+
+    func convertNode(_ node: AccessibilityHierarchy) -> ElementNode {
         node.folded(
             onElement: { _, traversalIndex in
                 .element(order: traversalIndex)
@@ -118,138 +132,8 @@ extension TheBagman {
             frameHeight: container.frame.size.height.sanitizedForJSON
         )
     }
-}
 
-// MARK: - Interface Delta
-
-extension TheBagman {
-
-    /// Select elements from the registry by scope, sorted by traversal order.
-    /// Pure read — no side effects. Call `markPresented(_:)` separately when
-    /// sending elements to a client.
-    func selectElements(_ scope: SnapshotScope) -> [ScreenElement] {
-        let orderByHeistId = buildTraversalOrderIndex()
-
-        let candidates: [String] = switch scope {
-        case .viewport: Array(viewportHeistIds)
-        case .all: Array(screenElements.keys)
-        }
-        // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
-        // with heistId as tiebreaker for deterministic ordering within that group.
-        return candidates.compactMap { heistId in
-            screenElements[heistId].map { (order: orderByHeistId[heistId] ?? Int.max, entry: $0) }
-        }.sorted {
-            if $0.order != $1.order { return $0.order < $1.order }
-            return $0.entry.heistId < $1.entry.heistId
-        }.map(\.entry)
-    }
-
-    /// Mark heistIds as having been sent to a client. Call when elements are
-    /// actually leaving TheBagman — this gates `resolveTarget` (callers can only
-    /// target elements they've seen).
-    func markPresented(_ elements: [ScreenElement]) {
-        presentedHeistIds.formUnion(elements.map(\.heistId))
-    }
-
-    /// Convert a ScreenElement to its wire representation.
-    func toWire(_ entry: ScreenElement) -> HeistElement {
-        var wire = convertElement(entry.element, object: entry.object)
-        wire.heistId = entry.heistId
-        return wire
-    }
-
-    /// Convert a snapshot to wire format. Use at serialization boundaries.
-    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
-        entries.map { toWire($0) }
-    }
-
-    // MARK: - Stable ID Synthesis
-
-    /// Trait priority for heistId prefix — most descriptive wins.
-    /// Precomputed bitmasks from AccessibilitySnapshotParser's knownTraits.
-    private static let traitPriority: [(name: String, mask: UIAccessibilityTraits)] = [
-        ("backButton", UIAccessibilityTraits.fromNames(["backButton"])),
-        ("searchField", UIAccessibilityTraits.fromNames(["searchField"])),
-        ("textEntry", UIAccessibilityTraits.fromNames(["textEntry"])),
-        ("switchButton", UIAccessibilityTraits.fromNames(["switchButton"])),
-        ("adjustable", .adjustable),
-        ("button", .button),
-        ("link", .link),
-        ("image", .image),
-        ("header", .header),
-        ("tabBar", UIAccessibilityTraits.fromNames(["tabBar"])),
-    ]
-
-    /// Assign deterministic `heistId` to each AccessibilityElement.
-    /// Developer-provided identifiers take priority — they become the heistId directly.
-    /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
-    /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
-    /// Returns the heistId array, parallel to the input elements array.
-    func assignHeistIds(_ elements: [AccessibilityElement]) -> [String] {
-        // Phase 1: generate base IDs
-        var heistIds = elements.map { element -> String in
-            if let identifier = element.identifier, !identifier.isEmpty {
-                return identifier
-            }
-            return synthesizeBaseId(element)
-        }
-
-        // Phase 2: disambiguate duplicates
-        let counts = heistIds.reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-
-        var seen: [String: Int] = [:]
-        for i in heistIds.indices {
-            let base = heistIds[i]
-            if let count = counts[base], count > 1 {
-                let index = seen[base, default: 0] + 1
-                seen[base] = index
-                heistIds[i] = "\(base)_\(index)"
-            }
-        }
-
-        return heistIds
-    }
-
-    func synthesizeBaseId(_ element: AccessibilityElement) -> String {
-        let traitPrefix = Self.traitPriority.first { element.traits.contains($0.mask) }?.name
-            ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
-
-        // Value is intentionally excluded — it changes on interaction (toggles,
-        // sliders, checkboxes) and must not affect element identity.
-        // Strip leading words that duplicate the trait prefix before slugifying:
-        // "Switch Button Off" with prefix "switchButton" → slug of "Off" → "off"
-        let labelForSlug = stripTraitPrefix(element.label, traitPrefix: traitPrefix)
-            ?? element.label
-        let slug = slugify(labelForSlug)
-            ?? slugify(element.description)
-
-        if let slug {
-            return "\(traitPrefix)_\(slug)"
-        }
-        return traitPrefix
-    }
-
-    /// Strip leading words from text that duplicate the trait prefix.
-    /// "Switch Button Off" with prefix "switchButton" → "Off"
-    /// Returns nil if stripping would leave nothing (label IS the trait name).
-    func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
-        guard let text else { return nil }
-        let prefixWords = traitPrefix
-            .replacing(/([a-z])([A-Z])/, with: { "\($0.output.1) \($0.output.2)" })
-            .lowercased()
-            .split(separator: " ")
-        let textWords = text.split(separator: " ", omittingEmptySubsequences: true)
-        guard textWords.count > prefixWords.count else { return nil }
-        for (prefixWord, textWord) in zip(prefixWords, textWords) {
-            guard textWord.lowercased() == prefixWord else { return nil }
-        }
-        let remainder = textWords.dropFirst(prefixWords.count).joined(separator: " ")
-        return remainder.isEmpty ? nil : remainder
-    }
-
-    func slugify(_ text: String?) -> String? {
-        TheScore.slugify(text)
-    }
+    // MARK: - Interface Delta
 
     /// Compare two element snapshots and return a compact delta.
     ///
@@ -268,7 +152,7 @@ extension TheBagman {
         // Screen changed: VC identity differs → return full new interface
         if isScreenChange {
             let afterWire = toWire(after)
-            let tree = afterTree?.map { convertHierarchyNode($0) }
+            let tree = afterTree?.map { convertNode($0) }
             let fullInterface = Interface(timestamp: Date(), elements: afterWire, tree: tree)
             return InterfaceDelta(
                 kind: .screenChanged,
@@ -383,45 +267,8 @@ extension TheBagman {
         guard !changes.isEmpty else { return nil }
         return ElementUpdate(heistId: new.heistId, changes: changes)
     }
-
-}
-
-// MARK: - Array Helpers
-
-extension Array where Element == HeistElement {
-    /// Label of the first header-traited element (screen name hint).
-    var screenName: String? {
-        first { $0.traits.contains(.header) }?.label
     }
-
-    /// Slugified screen name for machine use (e.g. "controls_demo").
-    var screenId: String? {
-        screenName.flatMap { slugify($0) }
-    }
-}
-
-extension Array where Element == TheBagman.ScreenElement {
-    /// Label of the first header-traited element (screen name hint).
-    var screenName: String? {
-        first { $0.element.traits.contains(.header) }?.element.label
-    }
-
-    /// Slugified screen name for machine use (e.g. "controls_demo").
-    var screenId: String? {
-        screenName.flatMap { slugify($0) }
-    }
-}
-
-// MARK: - Shape Helper
-
-extension AccessibilityElement.Shape {
-    var frame: CGRect {
-        switch self {
-        case let .frame(rect): return rect
-        case let .path(path): return path.bounds
-        }
-    }
-}
+} // extension TheBagman
 
 #endif // DEBUG
 #endif // canImport(UIKit)
