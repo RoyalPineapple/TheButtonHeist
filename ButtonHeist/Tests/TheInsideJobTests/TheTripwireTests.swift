@@ -28,9 +28,6 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-
-            keyboardVisible: false,
-            textInputActive: false,
             windowCount: 1,
             quietFrames: 2
         )
@@ -45,9 +42,6 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-
-            keyboardVisible: false,
-            textInputActive: false,
             windowCount: 1,
             quietFrames: 5
         )
@@ -62,9 +56,6 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: true,
             topmostVC: nil,
-
-            keyboardVisible: false,
-            textInputActive: false,
             windowCount: 1,
             quietFrames: 5
         )
@@ -79,9 +70,6 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-
-            keyboardVisible: false,
-            textInputActive: false,
             windowCount: 1,
             quietFrames: 1
         )
@@ -99,9 +87,6 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: ObjectIdentifier(vc),
-
-            keyboardVisible: true,
-            textInputActive: true,
             windowCount: 3,
             quietFrames: 2
         )
@@ -223,74 +208,6 @@ final class TheTripwireTests: XCTestCase {
         tripwire.startPulse()
         XCTAssertTrue(tripwire.isPulseRunning)
         // No crash, no double-registration
-    }
-
-    // MARK: - Keyboard Notification Flags
-
-    func testKeyboardWillShowSetsFlag() {
-        tripwire.startPulse()
-        NotificationCenter.default.post(name: UIResponder.keyboardWillShowNotification, object: nil)
-        XCTAssertTrue(tripwire.keyboardVisibleFlag)
-    }
-
-    func testKeyboardDidHideClearsFlag() {
-        tripwire.startPulse()
-        NotificationCenter.default.post(name: UIResponder.keyboardWillShowNotification, object: nil)
-        NotificationCenter.default.post(name: UIResponder.keyboardDidHideNotification, object: nil)
-        XCTAssertFalse(tripwire.keyboardVisibleFlag)
-    }
-
-    func testKeyboardFrameOnScreenSetsFlag() {
-        tripwire.startPulse()
-        let screenBounds = UIScreen.main.bounds
-        let keyboardFrame = CGRect(
-            x: 0,
-            y: screenBounds.height - 300,
-            width: screenBounds.width,
-            height: 300
-        )
-        NotificationCenter.default.post(
-            name: UIResponder.keyboardDidChangeFrameNotification,
-            object: nil,
-            userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboardFrame]
-        )
-        XCTAssertTrue(tripwire.keyboardVisibleFlag)
-    }
-
-    func testKeyboardFrameOffScreenClearsFlag() {
-        tripwire.startPulse()
-        let screenBounds = UIScreen.main.bounds
-        let offScreenFrame = CGRect(
-            x: 0,
-            y: screenBounds.height,
-            width: screenBounds.width,
-            height: 300
-        )
-        NotificationCenter.default.post(
-            name: UIResponder.keyboardDidChangeFrameNotification,
-            object: nil,
-            userInfo: [UIResponder.keyboardFrameEndUserInfoKey: offScreenFrame]
-        )
-        XCTAssertFalse(tripwire.keyboardVisibleFlag)
-    }
-
-    func testTextEditingBeginsetsFlag() {
-        tripwire.startPulse()
-        NotificationCenter.default.post(name: UITextField.textDidBeginEditingNotification, object: nil)
-        XCTAssertTrue(tripwire.textInputActiveFlag)
-    }
-
-    func testTextEditingEndClearsFlag() {
-        tripwire.startPulse()
-        NotificationCenter.default.post(name: UITextField.textDidBeginEditingNotification, object: nil)
-        NotificationCenter.default.post(name: UITextField.textDidEndEditingNotification, object: nil)
-        XCTAssertFalse(tripwire.textInputActiveFlag)
-    }
-
-    func testNotificationFlagsNotRegisteredBeforePulseStart() {
-        // Flags should not respond to notifications before startPulse()
-        NotificationCenter.default.post(name: UIResponder.keyboardWillShowNotification, object: nil)
-        XCTAssertFalse(tripwire.keyboardVisibleFlag)
     }
 
     // MARK: - isScreenChange (VC identity — unchanged from before)
