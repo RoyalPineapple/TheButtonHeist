@@ -131,7 +131,7 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected typeText, got \(decoded)")
         }
         XCTAssertEqual(decodedTarget.text, "Hello")
-        if case .matcher(let matcher) = decodedTarget.elementTarget {
+        if case .matcher(let matcher, _) = decodedTarget.elementTarget {
             XCTAssertEqual(matcher.identifier, "nameField")
         } else {
             XCTFail("Expected .matcher elementTarget")
@@ -206,7 +206,7 @@ final class ClientMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .waitFor(let wf) = decoded, case .matcher(let m) = wf.elementTarget {
+        if case .waitFor(let wf) = decoded, case .matcher(let m, _) = wf.elementTarget {
             XCTAssertEqual(m.label, "Loading")
             XCTAssertEqual(m.traits, [.staticText])
             XCTAssertEqual(wf.absent, true)
@@ -258,7 +258,7 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
         XCTAssertEqual(decoded.requestId, "wf-1")
-        if case .waitFor(let wf) = decoded.message, case .matcher(let m) = wf.elementTarget {
+        if case .waitFor(let wf) = decoded.message, case .matcher(let m, _) = wf.elementTarget {
             XCTAssertEqual(m.label, "Done")
             XCTAssertEqual(wf.absent, false)
             XCTAssertEqual(wf.timeout, 15.0)
@@ -343,6 +343,84 @@ final class ClientMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertNil(decoded.exploreResult)
+    }
+
+    // MARK: - ElementTarget Ordinal Tests
+
+    func testElementTargetMatcherWithoutOrdinalRoundTrip() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Save"))
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+
+        guard case .matcher(let matcher, let ordinal) = decoded else {
+            return XCTFail("Expected .matcher, got \(decoded)")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertNil(ordinal)
+    }
+
+    func testElementTargetMatcherWithOrdinalRoundTrip() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 2)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+
+        guard case .matcher(let matcher, let ordinal) = decoded else {
+            return XCTFail("Expected .matcher, got \(decoded)")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertEqual(ordinal, 2)
+    }
+
+    func testElementTargetOrdinalFlatWireFormat() throws {
+        let json = #"{"label":"Save","ordinal":2}"#
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
+
+        guard case .matcher(let matcher, let ordinal) = decoded else {
+            return XCTFail("Expected .matcher, got \(decoded)")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(ordinal, 2)
+    }
+
+    func testElementTargetOrdinalOmittedInWireFormat() throws {
+        let json = #"{"label":"Save"}"#
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
+
+        guard case .matcher(_, let ordinal) = decoded else {
+            return XCTFail("Expected .matcher, got \(decoded)")
+        }
+        XCTAssertNil(ordinal)
+    }
+
+    func testElementTargetNegativeOrdinalThrows() {
+        let json = #"{"label":"Save","ordinal":-1}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("non-negative"))
+        }
+    }
+
+    func testElementTargetHeistIdIgnoresOrdinal() throws {
+        let json = #"{"heistId":"button_save","ordinal":2}"#
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
+
+        guard case .heistId(let id) = decoded else {
+            return XCTFail("Expected .heistId, got \(decoded)")
+        }
+        XCTAssertEqual(id, "button_save")
+    }
+
+    func testElementTargetOrdinalEquality() {
+        let withOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1)
+        let withoutOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"))
+        let differentOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 2)
+
+        XCTAssertNotEqual(withOrdinal, withoutOrdinal)
+        XCTAssertNotEqual(withOrdinal, differentOrdinal)
+        XCTAssertEqual(withOrdinal, ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1))
     }
 
     // MARK: - UnitPoint Tests

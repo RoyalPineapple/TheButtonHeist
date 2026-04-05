@@ -231,6 +231,122 @@ final class TheBagmanResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("screen is empty"))
     }
 
+    // MARK: - Ordinal Selection
+
+    func testOrdinalSelectsNthMatch() {
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
+        let save3 = element(label: "Save", value: "archive")
+        register(save1, heistId: "button_save_1", index: 0)
+        register(save2, heistId: "button_save_2", index: 1)
+        register(save3, heistId: "button_save_3", index: 2)
+
+        let result0 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 0))
+        XCTAssertEqual(result0.resolved?.element.value, "draft")
+
+        let result1 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1))
+        XCTAssertEqual(result1.resolved?.element.value, "final")
+
+        let result2 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2))
+        XCTAssertEqual(result2.resolved?.element.value, "archive")
+    }
+
+    func testOrdinalOutOfBoundsReturnsNotFound() {
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
+        register(save1, heistId: "button_save_1", index: 0)
+        register(save2, heistId: "button_save_2", index: 1)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 5))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
+        XCTAssertTrue(diagnostics.contains("2 matches"))
+    }
+
+    func testOrdinalNilPreservesAmbiguousBehavior() {
+        let save1 = element(label: "Save", value: "draft")
+        let save2 = element(label: "Save", value: "final")
+        register(save1, heistId: "button_save_1", index: 0)
+        register(save2, heistId: "button_save_2", index: 1)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        guard case .ambiguous(_, let diagnostics) = result else {
+            XCTFail("Expected .ambiguous, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("2 elements match"))
+        XCTAssertTrue(diagnostics.contains("ordinal"), "Should hint about ordinal usage")
+    }
+
+    func testOrdinalZeroOnSingleMatchSucceeds() {
+        let element = element(label: "Save", traits: .button)
+        register(element, heistId: "button_save", index: 0)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 0))
+        XCTAssertNotNil(result.resolved)
+        XCTAssertEqual(result.resolved?.element.label, "Save")
+    }
+
+    func testNegativeOrdinalReturnsNotFound() {
+        let element = element(label: "Save", traits: .button)
+        register(element, heistId: "button_save", index: 0)
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: -1))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("non-negative"))
+    }
+
+    func testOrdinalZeroOnNoMatchReturnsNotFound() {
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Nonexistent"), ordinal: 0))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("ordinal 0 requested"))
+        XCTAssertTrue(diagnostics.contains("0 matches"))
+    }
+
+    // MARK: - Early-Exit Matching
+
+    func testMatchesWithLimitStopsEarly() {
+        let elements = (0..<10).map { index in
+            element(label: "Item", value: "\(index)")
+        }
+        for (index, element) in elements.enumerated() {
+            register(element, heistId: "item_\(index)", index: index)
+        }
+
+        let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), limit: 3)
+        XCTAssertEqual(limit3.count, 3)
+        XCTAssertEqual(limit3[0].element.value, "0")
+        XCTAssertEqual(limit3[1].element.value, "1")
+        XCTAssertEqual(limit3[2].element.value, "2")
+    }
+
+    func testMatchesWithLimitExceedingCountReturnsAll() {
+        let element1 = element(label: "Save", value: "one")
+        let element2 = element(label: "Save", value: "two")
+        register(element1, heistId: "save_1", index: 0)
+        register(element2, heistId: "save_2", index: 1)
+
+        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), limit: 10)
+        XCTAssertEqual(results.count, 2)
+    }
+
+    func testMatchesWithLimitZeroReturnsEmpty() {
+        let element = element(label: "Save", traits: .button)
+        register(element, heistId: "button_save", index: 0)
+
+        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), limit: 0)
+        XCTAssertTrue(results.isEmpty)
+    }
+
     // MARK: - Select + Mark Presented Tracking
 
     func testSelectElementsIsPureRead() {
