@@ -11,7 +11,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "testButton")
     }
 
@@ -20,7 +20,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TouchTapTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "button")
         XCTAssertNil(decoded.pointX)
         XCTAssertNil(decoded.pointY)
@@ -42,7 +42,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(LongPressTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "btn")
         XCTAssertEqual(decoded.duration, 1.5)
         XCTAssertNil(decoded.pointX)
@@ -68,7 +68,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(SwipeTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "list")
         XCTAssertEqual(decoded.direction, .up)
         XCTAssertNil(decoded.endX)
@@ -96,7 +96,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(DragTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "slider")
         XCTAssertEqual(decoded.endX, 300)
         XCTAssertEqual(decoded.endY, 200)
@@ -132,7 +132,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(CustomActionTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "item")
         XCTAssertEqual(decoded.actionName, "Delete")
     }
@@ -143,7 +143,7 @@ final class ActionCommandTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .activate(let target) = decoded {
-            guard case .matcher(let m) = target else { return XCTFail("Expected .matcher") }
+            guard case .matcher(let m, _) = target else { return XCTFail("Expected .matcher") }
             XCTAssertEqual(m.identifier, "btn")
         } else {
             XCTFail("Expected activate message")
@@ -256,7 +256,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(PinchTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "mapView")
         XCTAssertEqual(decoded.scale, 2.0)
         XCTAssertEqual(decoded.spread, 80)
@@ -282,7 +282,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(RotateTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "imageView")
         XCTAssertEqual(decoded.angle, 1.57)
         XCTAssertEqual(decoded.radius, 50)
@@ -308,7 +308,7 @@ final class ActionCommandTests: XCTestCase {
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(TwoFingerTapTarget.self, from: data)
 
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "zoomControl")
         XCTAssertEqual(decoded.spread, 60)
         XCTAssertNil(decoded.centerX)
@@ -532,7 +532,7 @@ final class ActionCommandTests: XCTestCase {
 
         XCTAssertEqual(decoded.text, "hello")
         XCTAssertNil(decoded.deleteCount)
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "textField")
     }
 
@@ -543,7 +543,7 @@ final class ActionCommandTests: XCTestCase {
 
         XCTAssertEqual(decoded.text, "world")
         XCTAssertEqual(decoded.deleteCount, 5)
-        guard case .matcher(let m) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
+        guard case .matcher(let m, _) = decoded.elementTarget else { return XCTFail("Expected .matcher") }
         XCTAssertEqual(m.identifier, "input")
     }
 
@@ -554,7 +554,7 @@ final class ActionCommandTests: XCTestCase {
 
         if case .typeText(let target) = decoded {
             XCTAssertEqual(target.text, "abc")
-            guard case .matcher(let m) = target.elementTarget else { return XCTFail("Expected .matcher") }
+            guard case .matcher(let m, _) = target.elementTarget else { return XCTFail("Expected .matcher") }
             XCTAssertEqual(m.identifier, "field")
         } else {
             XCTFail("Expected typeText message")
@@ -664,5 +664,42 @@ final class ActionCommandTests: XCTestCase {
         XCTAssertTrue(decoded.success)
         XCTAssertEqual(decoded.method, .waitForIdle)
         XCTAssertEqual(decoded.message, "UI is idle")
+    }
+
+    // MARK: - Ordinal Tests
+
+    func testElementTargetWithOrdinalEncoding() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 2)
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+
+        guard case .matcher(let m, let ordinal) = decoded else { return XCTFail("Expected .matcher") }
+        XCTAssertEqual(m.label, "Save")
+        XCTAssertEqual(ordinal, 2)
+    }
+
+    func testElementTargetWithoutOrdinalEncoding() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Save"))
+        let data = try JSONEncoder().encode(target)
+        let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
+
+        guard case .matcher(_, let ordinal) = decoded else { return XCTFail("Expected .matcher") }
+        XCTAssertNil(ordinal)
+    }
+
+    func testActivateMessageWithOrdinalEncoding() throws {
+        let target = ElementTarget.matcher(ElementMatcher(label: "Add", traits: [.button]), ordinal: 1)
+        let message = ClientMessage.activate(target)
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        if case .activate(let decodedTarget) = decoded {
+            guard case .matcher(let m, let ordinal) = decodedTarget else { return XCTFail("Expected .matcher") }
+            XCTAssertEqual(m.label, "Add")
+            XCTAssertEqual(m.traits, [.button])
+            XCTAssertEqual(ordinal, 1)
+        } else {
+            XCTFail("Expected activate message")
+        }
     }
 }

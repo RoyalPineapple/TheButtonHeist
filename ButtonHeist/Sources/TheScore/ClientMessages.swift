@@ -194,15 +194,20 @@ public enum ElementTarget: Sendable, Equatable {
     /// Stable ID assigned by get_interface — fast O(1) lookup.
     case heistId(String)
     /// Predicate matcher: label, identifier, value, traits, excludeTraits.
-    case matcher(ElementMatcher)
+    /// `ordinal` is a 0-based selection index into the list of matches
+    /// (ordered by tree traversal). When nil, requires a unique match and
+    /// reports ambiguity on 2+ hits. When set, selects the Nth match.
+    /// This is a selection index into match results, NOT a traversal index.
+    case matcher(ElementMatcher, ordinal: Int? = nil)
 
     /// Convenience: build from optional fields. HeistId wins if present.
     /// Returns nil if both are empty.
-    public init?(heistId: String? = nil, matcher: ElementMatcher) {
+    public init?(heistId: String? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
+            assert(ordinal == nil, "ordinal is ignored when heistId is present — pass one or the other")
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
-            self = .matcher(match)
+            self = .matcher(match, ordinal: ordinal)
         } else {
             return nil
         }
@@ -215,6 +220,7 @@ extension ElementTarget: Codable {
     private enum CodingKeys: String, CodingKey {
         case heistId
         case label, identifier, value, traits, excludeTraits
+        case ordinal
     }
 
     public init(from decoder: Decoder) throws {
@@ -230,8 +236,15 @@ extension ElementTarget: Codable {
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
+        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "ordinal must be non-negative, got \(ordinal)"
+            ))
+        }
         if let match = matcher.nonEmpty {
-            self = .matcher(match)
+            self = .matcher(match, ordinal: ordinal)
         } else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
@@ -245,12 +258,13 @@ extension ElementTarget: Codable {
         switch self {
         case .heistId(let id):
             try container.encode(id, forKey: .heistId)
-        case .matcher(let m):
-            try container.encodeIfPresent(m.label, forKey: .label)
-            try container.encodeIfPresent(m.identifier, forKey: .identifier)
-            try container.encodeIfPresent(m.value, forKey: .value)
-            try container.encodeIfPresent(m.traits, forKey: .traits)
-            try container.encodeIfPresent(m.excludeTraits, forKey: .excludeTraits)
+        case .matcher(let matcher, let ordinal):
+            try container.encodeIfPresent(matcher.label, forKey: .label)
+            try container.encodeIfPresent(matcher.identifier, forKey: .identifier)
+            try container.encodeIfPresent(matcher.value, forKey: .value)
+            try container.encodeIfPresent(matcher.traits, forKey: .traits)
+            try container.encodeIfPresent(matcher.excludeTraits, forKey: .excludeTraits)
+            try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
     }
 }

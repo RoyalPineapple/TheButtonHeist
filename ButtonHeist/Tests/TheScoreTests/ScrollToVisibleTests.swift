@@ -12,7 +12,7 @@ final class ScrollToVisibleTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        guard case .matcher(let matcher) = decoded.elementTarget else {
+        guard case .matcher(let matcher, _) = decoded.elementTarget else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.label, "Color Picker")
@@ -43,7 +43,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let target = ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Save")))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        guard case .matcher(let matcher) = decoded.elementTarget else {
+        guard case .matcher(let matcher, _) = decoded.elementTarget else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.label, "Save")
@@ -113,7 +113,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
         guard case .scrollToVisible(let decodedTarget) = decoded,
-              case .matcher(let matcher) = decodedTarget.elementTarget else {
+              case .matcher(let matcher, _) = decodedTarget.elementTarget else {
             return XCTFail("Expected scrollToVisible with matcher")
         }
         XCTAssertEqual(matcher.label, "Settings")
@@ -131,7 +131,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
         XCTAssertEqual(decoded.requestId, "test-123")
         guard case .scrollToVisible(let decodedTarget) = decoded.message,
-              case .matcher(let matcher) = decodedTarget.elementTarget else {
+              case .matcher(let matcher, _) = decodedTarget.elementTarget else {
             return XCTFail("Expected scrollToVisible with matcher")
         }
         XCTAssertEqual(matcher.identifier, "market.row.colorPicker")

@@ -41,15 +41,17 @@ final class MessageIntegrationTests: XCTestCase {
 
     /// Test snapshot payload with multiple elements
     func testLargeSnapshotPayload() throws {
-        let elements = (0..<100).map { i in
-            HeistElement(
+        let elements = (0..<100).map { i -> HeistElement in
+            let value: String? = i % 2 == 0 ? "Value" : nil
+            let actions: [ElementAction] = i % 3 == 0 ? [.activate] : []
+            return HeistElement(
                 description: "Element \(i)",
                 label: "Label \(i)",
-                value: i % 2 == 0 ? "Value" : nil,
+                value: value,
                 identifier: "element_\(i)",
                 frameX: Double(i * 10), frameY: Double(i * 5),
                 frameWidth: 100, frameHeight: 44,
-                actions: i % 3 == 0 ? [.activate] : []
+                actions: actions
             )
         }
 
