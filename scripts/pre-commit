@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Submodule freshness check ---
+# Ensure AccessibilitySnapshot tracks the tip of the buttonheist branch.
+# .gitmodules declares branch = buttonheist; this fetches and pins the latest.
+git submodule update --remote --quiet -- submodules/AccessibilitySnapshot 2>/dev/null || true
+submodule_dirty=$(git diff --name-only -- submodules/AccessibilitySnapshot)
+if [[ -n "$submodule_dirty" ]]; then
+    git add -- submodules/AccessibilitySnapshot
+    echo "note: updated AccessibilitySnapshot submodule to tip of buttonheist"
+fi
+
 # --- Tuist project freshness check ---
 if command -v tuist >/dev/null 2>&1; then
     # Ensure external dependencies are fetched before generating
