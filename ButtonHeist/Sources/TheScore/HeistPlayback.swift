@@ -149,20 +149,6 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
         return dictionary
     }
-
-    /// Build a wait_for request from this step's element matcher.
-    /// Used by the playback engine to settle before retrying a failed step.
-    public func waitForRequest(timeout: Double) -> [String: Any] {
-        var request: [String: Any] = ["command": "wait_for", "timeout": timeout]
-        if let target {
-            if let label = target.label { request["label"] = label }
-            if let matchIdentifier = target.identifier { request["identifier"] = matchIdentifier }
-            if let matchValue = target.value { request["value"] = matchValue }
-            if let matchTraits = target.traits { request["traits"] = matchTraits.map(\.rawValue) }
-            if let matchExclude = target.excludeTraits { request["excludeTraits"] = matchExclude.map(\.rawValue) }
-        }
-        return request
-    }
 }
 
 // MARK: - Heist Value
