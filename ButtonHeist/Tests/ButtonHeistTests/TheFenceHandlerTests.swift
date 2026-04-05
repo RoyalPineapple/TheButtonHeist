@@ -203,7 +203,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["identifier": "myButton"]
         guard let target = try fence.elementTarget(dict),
-              case .matcher(let matcher) = target else {
+              case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.identifier, "myButton")
@@ -225,7 +225,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save", "traits": ["button"]]
         guard let target = try fence.elementTarget(dict),
-              case .matcher(let matcher) = target else {
+              case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
         XCTAssertEqual(matcher.label, "Save")
@@ -242,6 +242,29 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected .heistId")
         }
         XCTAssertEqual(id, "button_save")
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithOrdinal() throws {
+        let (fence, _) = makeConnectedFence()
+        let dict: [String: Any] = ["label": "Save", "ordinal": 2]
+        guard let target = try fence.elementTarget(dict),
+              case .matcher(let matcher, let ordinal) = target else {
+            return XCTFail("Expected .matcher with ordinal")
+        }
+        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(ordinal, 2)
+    }
+
+    @ButtonHeistActor
+    func testElementTargetWithoutOrdinal() throws {
+        let (fence, _) = makeConnectedFence()
+        let dict: [String: Any] = ["label": "Save"]
+        guard let target = try fence.elementTarget(dict),
+              case .matcher(_, let ordinal) = target else {
+            return XCTFail("Expected .matcher")
+        }
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor

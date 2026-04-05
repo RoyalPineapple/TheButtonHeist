@@ -1015,6 +1015,7 @@ Container types:
 |-------|------|-------------|
 | `heistId` | `String?` | Stable element identifier assigned by `get_interface` |
 | `match` | `ElementMatcher?` | Predicate matcher for accessibility-based resolution |
+| `ordinal` | `Int?` | 0-based index to select among multiple matches (requires `match`). Without ordinal, multiple matches return an ambiguity error. |
 
 Two resolution strategies. Resolution priority: `heistId` > `match`. At least one field should be provided.
 
