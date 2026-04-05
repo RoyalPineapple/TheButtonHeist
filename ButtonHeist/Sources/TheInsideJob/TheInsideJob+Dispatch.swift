@@ -3,35 +3,54 @@
 import Foundation
 import TheScore
 
-// MARK: - Interaction Dispatch Helpers
-
 extension TheInsideJob {
 
-    /// Route interaction messages to TheSafecracker through the standard
+    /// Route interaction messages through the standard
     /// refresh-snapshot-execute-delta pipeline.
     func dispatchInteraction(_ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void) async {
-        if await dispatchAccessibilityInteraction(message, requestId: requestId, respond: respond) { return }
-        if await dispatchTouchInteraction(message, requestId: requestId, respond: respond) { return }
-        if await dispatchTextAndScrollInteraction(message, requestId: requestId, respond: respond) { return }
+        switch message {
+        case .activate, .increment, .decrement, .performCustomAction,
+             .editAction, .setPasteboard, .getPasteboard, .resignFirstResponder:
+            await dispatchAccessibilityAction(message, requestId: requestId, respond: respond)
 
-        insideJobLogger.error("Unhandled message type in dispatchInteraction")
-        sendMessage(.actionResult(ActionResult(
-            success: false,
-            method: .activate,
-            message: "Unhandled command",
-            errorKind: .unsupported,
-            screenName: bagman.lastScreenName,
-            screenId: bagman.lastScreenId
-        )), requestId: requestId, respond: respond)
+        case .touchTap, .touchLongPress, .touchSwipe, .touchDrag,
+             .touchPinch, .touchRotate, .touchTwoFingerTap,
+             .touchDrawPath, .touchDrawBezier:
+            await dispatchTouchGesture(message, requestId: requestId, respond: respond)
+
+        case .typeText(let target):
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTypeText(target) }
+        case .scroll(let target):
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScroll(target) }
+        case .scrollToVisible(let target):
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScrollToVisible(target) }
+        case .elementSearch(let target):
+            await performElementSearch(target: target, command: message, requestId: requestId, respond: respond)
+        case .scrollToEdge(let target):
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScrollToEdge(target) }
+        case .waitFor(let target):
+            await performWaitFor(target: target, command: message, requestId: requestId, respond: respond)
+        case .explore:
+            await performExplore(command: message, requestId: requestId, respond: respond)
+
+        default:
+            insideJobLogger.error("Unhandled message type in dispatchInteraction")
+            sendMessage(.actionResult(ActionResult(
+                success: false,
+                method: .activate,
+                message: "Unhandled command",
+                errorKind: .unsupported,
+                screenName: bagman.lastScreenName,
+                screenId: bagman.lastScreenId
+            )), requestId: requestId, respond: respond)
+        }
     }
 
-    // MARK: - Accessibility Interactions
+    // MARK: - Accessibility Actions
 
-    /// Handles activate, increment, decrement, custom action, edit action, and resign first responder.
-    /// Returns true if the message was handled.
-    private func dispatchAccessibilityInteraction(
+    private func dispatchAccessibilityAction(
         _ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void
-    ) async -> Bool {
+    ) async {
         switch message {
         case .activate(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeActivate(target) }
@@ -50,18 +69,15 @@ extension TheInsideJob {
         case .resignFirstResponder:
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeResignFirstResponder() }
         default:
-            return false
+            break
         }
-        return true
     }
 
-    // MARK: - Touch Interactions
+    // MARK: - Touch Gestures
 
-    /// Handles tap, long press, swipe, drag, pinch, rotate, two-finger tap, draw path, and draw bezier.
-    /// Returns true if the message was handled.
-    private func dispatchTouchInteraction(
+    private func dispatchTouchGesture(
         _ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void
-    ) async -> Bool {
+    ) async {
         switch message {
         case .touchTap(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTap(target) }
@@ -82,35 +98,8 @@ extension TheInsideJob {
         case .touchDrawBezier(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeDrawBezier(target) }
         default:
-            return false
+            break
         }
-        return true
-    }
-
-    // MARK: - Text & Scroll Interactions
-
-    /// Handles typeText, scroll, scrollToVisible, and scrollToEdge.
-    /// Returns true if the message was handled.
-    private func dispatchTextAndScrollInteraction(
-        _ message: ClientMessage, requestId: String?, respond: @escaping (Data) -> Void
-    ) async -> Bool {
-        switch message {
-        case .typeText(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTypeText(target) }
-        case .scroll(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScroll(target) }
-        case .scrollToVisible(let target):
-            await performScrollToVisibleSearch(target: target, command: message, requestId: requestId, respond: respond)
-        case .scrollToEdge(let target):
-            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeScrollToEdge(target) }
-        case .waitFor(let target):
-            await performWaitFor(target: target, command: message, requestId: requestId, respond: respond)
-        case .explore:
-            await performExplore(command: message, requestId: requestId, respond: respond)
-        default:
-            return false
-        }
-        return true
     }
 }
 

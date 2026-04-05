@@ -83,7 +83,6 @@
 		7FB26FEC3688200253566165 /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */; };
 		829B5C6336718013BECCF027 /* TheInsideJob+Dispatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19290497683B32A62E132809 /* TheInsideJob+Dispatch.swift */; };
 		83B29D2A5A9726FCFBCC1062 /* TheHandoffStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE478B1B9A069FD64C5BD2E /* TheHandoffStateTests.swift */; };
-		84A337C8A25148BC81B2DE3B /* TheSafecracker+TextEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */; };
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
 		8A1C2908B07C993A9BC28DE0 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */; };
 		8E15B3F0C1DC05A1CAF77FB6 /* WireConversionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576DC1131A4B4E3E1404CE61 /* WireConversionTests.swift */; };
@@ -398,7 +397,6 @@
 		D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CryptoBoringWrapper.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
 		DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheScoreTests.swift; sourceTree = "<group>"; };
-		DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+TextEntry.swift"; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		E20911C376F477524EC4F207 /* TheStakeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeoutTests.swift; sourceTree = "<group>"; };
 		E2EA15816DA81341F66436C5 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
@@ -649,7 +647,6 @@
 				321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */,
 				4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */,
 				BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */,
-				DEF71F4358EF1D15FD8D6E7B /* TheSafecracker+TextEntry.swift */,
 			);
 			path = TheSafecracker;
 			sourceTree = "<group>";
@@ -1074,7 +1071,6 @@
 				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
 				C631D8CED9D54B65D5B59413 /* TheSafecracker+MultiTouch.swift in Sources */,
 				5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */,
-				84A337C8A25148BC81B2DE3B /* TheSafecracker+TextEntry.swift in Sources */,
 				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
 				E3EB50B8FF78DE114640D797 /* TheStakeout.swift in Sources */,
 				7DD042B29F6EA06B23F49451 /* TheTripwire.swift in Sources */,

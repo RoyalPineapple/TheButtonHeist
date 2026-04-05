@@ -124,7 +124,7 @@ enum ToolDefinitions {
         getInterface, activate, typeText, swipe, getScreen,
         waitForIdle, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
-        scroll, scrollToVisible, scrollToEdge,
+        scroll, scrollToVisible, elementSearch, scrollToEdge,
         runBatch, getSessionState,
         connect, listTargets,
         getSessionLog, archiveSession,
@@ -364,11 +364,28 @@ enum ToolDefinitions {
     static let scrollToVisible = Tool(
         name: "scroll_to_visible",
         description: """
-            Search for an off-screen element by scrolling. Describe the element by its natural \
-            accessibility properties: label, value, and/or traits (all specified fields must match). \
-            Or target by heistId if known. Automatically searches through all scrollable containers \
-            on screen (outermost first), adapting the scroll direction to each container's natural axis. \
-            Returns the found element or diagnostic info about the search.
+            Jump to a known element's position in its scroll view. The element must already be in \
+            the registry (seen in a previous get_interface or action delta). If the element is already \
+            visible, this is a no-op. If the element has never been seen, use element_search instead.
+            """,
+        inputSchema: .object([
+            "type": "object",
+            "properties": .object(elementTargetProperties.merging([
+                "expect": expectProperty,
+            ] as [String: Value]) { _, new in new }),
+            "additionalProperties": false,
+        ])
+    )
+
+    static let elementSearch = Tool(
+        name: "element_search",
+        description: """
+            Search for an element by scrolling through all scrollable containers on screen. \
+            Use when the element has never been seen (not in the registry). Describe the element \
+            by its natural accessibility properties: label, value, and/or traits (all specified \
+            fields must match). Automatically searches outermost containers first, adapting the \
+            scroll direction to each container's natural axis. Returns the found element or \
+            diagnostic info about the search.
             """,
         inputSchema: .object([
             "type": "object",

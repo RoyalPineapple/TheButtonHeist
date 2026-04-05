@@ -14,22 +14,19 @@ TheSafecracker is the hands of the operation:
 4. **Text input** — typing via `KeyboardBridge` (UIKeyboardImpl wrapper), works in both software and hardware keyboard modes
 5. **Text clearing** — select-all + delete via UITextInput
 6. **Keyboard management** — detect visibility (via TheTripwire flag + UIKeyboardImpl fallback), dismiss keyboard
-7. **Pasteboard operations** — read/write UIPasteboard.general
-8. **Accessibility actions** — activate, increment, decrement, custom actions
-9. **Point resolution** — resolve target coordinates from element heistId/match or explicit x/y
-10. **Scrolling** — `scrollByPage` (UIScrollView.setContentOffset), `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe` (synthetic swipe for non-UIScrollView containers)
-11. **Auto-scroll to visible** — transparent pre-interaction scroll ensuring targets are within screen bounds
-12. **First responder lookup** — walks the view hierarchy to find the current first responder
+7. **Scrolling** — `scrollByPage` (UIScrollView.setContentOffset), `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe` (synthetic swipe for non-UIScrollView containers)
+8. **First responder lookup** — walks the view hierarchy to find the current first responder
+
+TheSafecracker does **not** resolve element targets, check interactivity, or read the element registry. TheBagman resolves everything and hands TheSafecracker the coordinates, frames, or UIScrollViews it needs.
 
 ## Source Files
 
 | File | Purpose |
 |------|---------|
 | `TheSafecracker.swift` | Core class, single-finger primitives, keyboard wrappers, `InteractionResult`, `PointResolution`, first responder utilities, N-finger primitives, `onGestureMove` callback |
-| `TheSafecracker+Actions.swift` | Pure gesture execution: `executeDrawPath`, `executeDrawBezier`, duration/velocity helpers (most `execute*` methods moved to `TheBagman+Actions.swift`) |
+| `TheSafecracker+Actions.swift` | Duration/velocity helpers for draw gestures |
 | `TheSafecracker+Scroll.swift` | Scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, `scrollBySwipe` |
 | `TheSafecracker+MultiTouch.swift` | `pinch`, `rotate`, `twoFingerTap` |
-| `TheSafecracker+TextEntry.swift` | Redirect stub only — `executeTypeText` moved to `TheBagman+Actions.swift`; raw keyboard methods remain in `TheSafecracker.swift` |
 | `TheSafecracker+Bezier.swift` | `BezierSampler` — cubic bezier sampling into polylines |
 | `TheSafecracker+IOHIDEventBuilder.swift` | `IOHIDEventBuilder` + `FingerTouchData`; IOKit dlopen/dlsym loader |
 | `KeyboardBridge.swift` | `UIKeyboardImpl` wrapper: `shared()`, `type(_:)`, `deleteBackward()`, `drainTaskQueue()`, `hasActiveInput` |
@@ -41,8 +38,7 @@ TheSafecracker is the hands of the operation:
 ```mermaid
 graph TD
     subgraph TheSafecracker["TheSafecracker (@MainActor)"]
-        Actions["TheSafecracker+Actions.swift — execute*, scrolling, ensureOnScreen"]
-        TextEntry["TheSafecracker+TextEntry.swift — executeTypeText sequence"]
+        Actions["TheSafecracker+Actions.swift — duration helpers"]
         Core["TheSafecracker.swift — Single-finger & N-finger primitives"]
         Multi["TheSafecracker+MultiTouch.swift — pinch, rotate, twoFingerTap"]
     end
@@ -61,19 +57,16 @@ graph TD
     end
 
     subgraph Crew["Crew References"]
-        Bagman["TheBagman (weak) — element resolution & point lookup"]
         Tripwire["TheTripwire (weak) — keyboard flag, settle wait"]
     end
 
     Actions --> Core
     Actions --> Multi
-    Actions --> TextEntry
     Core --> TouchPipeline
     TouchPipeline --> IOHID
     TouchPipeline --> ObjC
     TextEntry --> KB
     KB --> ObjC
-    Actions --> Bagman
     Actions --> Tripwire
 ```
 
