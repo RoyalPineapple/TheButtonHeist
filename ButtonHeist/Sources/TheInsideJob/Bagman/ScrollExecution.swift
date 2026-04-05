@@ -77,8 +77,7 @@ extension TheBagman {
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = viewportHeistIds
-        guard let safecracker else { return (false, before) }
+        let before = registry.viewportIds
 
         switch target {
         case .uiScrollView(let sv):
@@ -98,7 +97,7 @@ extension TheBagman {
             _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
             await tripwire.yieldFrames(3)
             refresh()
-            return (viewportHeistIds != before, before)
+            return (registry.viewportIds != before, before)
         }
     }
 
@@ -146,7 +145,6 @@ extension TheBagman {
         let moved: Bool
         switch scrollTarget {
         case .uiScrollView(let sv):
-            guard let safecracker else { return .failure(.scrollToEdge, message: "No gesture engine") }
             moved = safecracker.scrollToEdge(sv, edge: target.edge)
         case .swipeable:
             let direction = Self.edgeDirection(for: target.edge)
@@ -157,7 +155,7 @@ extension TheBagman {
                 )
                 if !stepped { break }
                 didMove = true
-                if viewportHeistIds == before { break }
+                if registry.viewportIds == before { break }
             }
             moved = didMove
         }
@@ -190,12 +188,8 @@ extension TheBagman {
             return foundResult(found, scrollCount: 0)
         }
 
-        guard safecracker != nil else {
-            return .failure(.scrollToVisible, message: "No gesture engine available")
-        }
-
         if case .heistId(let heistId) = searchTarget,
-           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
+           let entry = registry.elements[heistId],
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let savedOffset = scrollView.contentOffset
@@ -235,7 +229,7 @@ extension TheBagman {
                 return foundResult(found, scrollCount: scrollCount)
             }
 
-            if viewportHeistIds == before { exhausted.insert(container) }
+            if registry.viewportIds == before { exhausted.insert(container) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -284,19 +278,18 @@ extension TheBagman {
             success: false, method: .scrollToVisible,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
                 totalItems: nil, exhaustive: true
             )
         )
     }
 
     private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
-        markPresented([found.screenElement])
         let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .scrollToVisible, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
@@ -314,11 +307,9 @@ extension TheBagman {
     }
 
     func ensureOnScreen(for target: ElementTarget) async {
-        guard let safecracker else { return }
-
         if case .heistId(let heistId) = target,
-           !viewportHeistIds.contains(heistId),
-           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
+           !registry.viewportIds.contains(heistId),
+           let entry = registry.elements[heistId],
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
@@ -350,9 +341,8 @@ extension TheBagman {
         guard !UIScreen.main.bounds.contains(frame) else { return }
         let activationPoint = responder.accessibilityActivationPoint
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = screenElements.values
-            .first(where: { $0.object === responder })?.scrollView,
-              let safecracker else { return }
+        guard let scrollView = registry.elements.values
+            .first(where: { $0.object === responder })?.scrollView else { return }
         if safecracker.scrollToMakeVisible(
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
@@ -363,8 +353,7 @@ extension TheBagman {
     }
 
     private func ensureOnScreenSync(_ resolved: ResolvedTarget, animated: Bool = true) {
-        guard let object = resolved.screenElement.object,
-              let safecracker else { return }
+        guard let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
         guard !frame.isNull, !frame.isEmpty else { return }

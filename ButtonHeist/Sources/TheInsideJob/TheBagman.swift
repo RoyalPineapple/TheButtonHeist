@@ -18,13 +18,14 @@ final class TheBagman {
     private let wireConverter = WireConversion()
     private let diagnostics = Diagnostics()
 
+    /// The gesture engine. TheBagman drives TheSafecracker
+    /// for synthetic touch when accessibility activation fails.
+    let safecracker = TheSafecracker()
+
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
+        self.safecracker.tripwire = tripwire
     }
-
-    /// Back-reference to the gesture engine. TheBagman drives TheSafecracker
-    /// for synthetic touch when accessibility activation fails.
-    weak var safecracker: TheSafecracker?
 
     // MARK: - Parse Result
 
@@ -68,33 +69,8 @@ final class TheBagman {
         weak var scrollView: UIScrollView?
     }
 
-    /// Scope for snapshot: viewport (elements visible on the device screen)
-    /// or all (full app screen including off-viewport content from scroll exploration).
-    enum SnapshotScope {
-        case viewport
-        case all
-    }
-
     /// The element registry — all known elements, viewport visibility, presentation state.
     var registry = ElementRegistry()
-
-    // Forwarding accessors — callers use these until fully migrated.
-    var screenElements: [String: ScreenElement] {
-        get { registry.elements }
-        set { registry.elements = newValue }
-    }
-    var viewportHeistIds: Set<String> {
-        get { registry.viewportIds }
-        set { registry.viewportIds = newValue }
-    }
-    var presentedHeistIds: Set<String> {
-        get { registry.presentedIds }
-        set { registry.presentedIds = newValue }
-    }
-    var elementToHeistId: [AccessibilityElement: String] {
-        get { registry.reverseIndex }
-        set { registry.reverseIndex = newValue }
-    }
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     /// Read/written by Pulse for change detection.
@@ -127,9 +103,10 @@ final class TheBagman {
     /// Elements discovered via scroll exploration but not in the current viewport
     /// won't appear in currentHierarchy — they get Int.max.
     func buildTraversalOrderIndex() -> [String: Int] {
-        Dictionary(
-            currentHierarchy.compactMap { [elementToHeistId] element, traversalIndex in
-                elementToHeistId[element].map { ($0, traversalIndex) }
+        let reverseIndex = registry.reverseIndex
+        return Dictionary(
+            currentHierarchy.compactMap { element, traversalIndex in
+                reverseIndex[element].map { ($0, traversalIndex) }
             },
             uniquingKeysWith: { _, latest in latest }
         )
@@ -219,9 +196,9 @@ final class TheBagman {
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else {
+            guard let entry = registry.elements[heistId] else {
                 return .notFound(diagnostics: diagnostics.heistIdNotFound(
-                    heistId, knownIds: screenElements.keys, viewportCount: viewportHeistIds.count
+                    heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
@@ -238,8 +215,8 @@ final class TheBagman {
                     return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
                 }
                 let selected = hits[ordinal]
-                if let heistId = elementToHeistId[selected.element],
-                   let screenElement = screenElements[heistId] {
+                if let heistId = registry.reverseIndex[selected.element],
+                   let screenElement = registry.elements[heistId] {
                     return .resolved(ResolvedTarget(screenElement: screenElement))
                 }
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
@@ -247,8 +224,8 @@ final class TheBagman {
             // No ordinal — require unique match
             let hits = source.matches(matcher, limit: 2)
             if hits.count == 1 {
-                if let heistId = elementToHeistId[hits[0].element],
-                   let screenElement = screenElements[heistId] {
+                if let heistId = registry.reverseIndex[hits[0].element],
+                   let screenElement = registry.elements[heistId] {
                     return .resolved(ResolvedTarget(screenElement: screenElement))
                 }
                 return .notFound(diagnostics: matcherNotFoundMessage(matcher))
@@ -294,18 +271,18 @@ final class TheBagman {
 
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
-    /// For heistId: checks presentedHeistIds (elements sent to clients).
+    /// For heistId: checks registry.elements.
     /// For matcher: checks currentHierarchy.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
-            return presentedHeistIds.contains(heistId)
+            return registry.elements[heistId] != nil
         case .matcher(let matcher, _):
             return hasMatch(matcher)
         }
     }
 
-    func checkElementInteractivity(_ element: AccessibilityElement) -> String? {
+    func checkElementInteractivity(_ element: AccessibilityElement) -> Interactivity.InteractivityCheck {
         Interactivity.checkInteractivity(element)
     }
 
@@ -336,13 +313,13 @@ final class TheBagman {
     // MARK: - Diagnostics Forwarding
 
     func heistIdNotFoundMessage(_ heistId: String) -> String {
-        diagnostics.heistIdNotFound(heistId, knownIds: screenElements.keys, viewportCount: viewportHeistIds.count)
+        diagnostics.heistIdNotFound(heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count)
     }
 
     func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
         diagnostics.matcherNotFound(
             matcher, hierarchy: currentHierarchy,
-            screenElements: screenElements, viewportHeistIds: viewportHeistIds,
+            screenElements: registry.elements, viewportHeistIds: registry.viewportIds,
             traversalOrder: buildTraversalOrderIndex()
         )
     }
@@ -402,31 +379,17 @@ final class TheBagman {
 
     // MARK: - Element Selection
 
-    /// Select elements from the registry by scope, sorted by traversal order.
-    /// Pure read — no side effects. Call `markPresented(_:)` separately when
-    /// sending elements to a client.
-    func selectElements(_ scope: SnapshotScope) -> [ScreenElement] {
+    /// All elements in the registry, sorted by traversal order.
+    /// Off-screen elements (Int.max) sort to the end, with heistId as tiebreaker.
+    func selectElements() -> [ScreenElement] {
         let orderByHeistId = buildTraversalOrderIndex()
-
-        let candidates: [String] = switch scope {
-        case .viewport: Array(viewportHeistIds)
-        case .all: Array(screenElements.keys)
-        }
-        // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
-        // with heistId as tiebreaker for deterministic ordering within that group.
-        return candidates.compactMap { heistId in
-            screenElements[heistId].map { (order: orderByHeistId[heistId] ?? Int.max, entry: $0) }
-        }.sorted {
-            if $0.order != $1.order { return $0.order < $1.order }
-            return $0.entry.heistId < $1.entry.heistId
-        }.map(\.entry)
-    }
-
-    /// Mark heistIds as having been sent to a client. Call when elements are
-    /// actually leaving TheBagman — this gates `resolveTarget` (callers can only
-    /// target elements they've seen).
-    func markPresented(_ elements: [ScreenElement]) {
-        registry.markPresented(elements)
+        return registry.elements.values
+            .sorted {
+                let orderA = orderByHeistId[$0.heistId] ?? Int.max
+                let orderB = orderByHeistId[$1.heistId] ?? Int.max
+                if orderA != orderB { return orderA < orderB }
+                return $0.heistId < $1.heistId
+            }
     }
 
     // MARK: - Refresh Pipeline
@@ -563,7 +526,7 @@ final class TheBagman {
     // MARK: - Apply (mutates registry)
 
     /// Apply a parse result to the registry. Sets `currentHierarchy`,
-    /// `scrollableContainerViews`, upserts into `screenElements`, rebuilds `viewportHeistIds`.
+    /// `scrollableContainerViews`, upserts into `registry.elements`, rebuilds `registry.viewportIds`.
     func apply(_ result: ParseResult) {
         currentHierarchy = result.hierarchy
         scrollableContainerViews = result.scrollViews
@@ -674,7 +637,7 @@ final class TheBagman {
     /// Pure read — does not mutate state or mark elements as presented.
     func captureBeforeState() -> BeforeState {
         BeforeState(
-            snapshot: selectElements(.all),
+            snapshot: selectElements(),
             elements: currentHierarchy.sortedElements,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
@@ -730,8 +693,7 @@ final class TheBagman {
         // the O(1) contentSize + visible-fingerprint check skips unchanged containers.
         // On screen change the cache was just cleared, so every container gets explored.
         let manifest = await exploreAndPrune()
-        let afterSnapshot = selectElements(.all)
-        markPresented(afterSnapshot)
+        let afterSnapshot = selectElements()
 
         let delta = wireConverter.computeDelta(
             before: before.snapshot, after: afterSnapshot,

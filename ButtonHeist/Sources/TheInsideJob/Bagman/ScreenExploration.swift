@@ -25,7 +25,7 @@ extension TheBagman {
 
     /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        exploreCycleIds = viewportHeistIds
+        exploreCycleIds = registry.viewportIds
         let manifest = await exploreScreen(target: target)
         if let seen = exploreCycleIds {
             registry.prune(keeping: seen)
@@ -40,14 +40,9 @@ extension TheBagman {
         var manifest = ScreenManifest()
 
         refresh()
-        manifest.recordVisibleElements(viewportHeistIds)
+        manifest.recordVisibleElements(registry.viewportIds)
 
         if let target, resolveFirstMatch(target) != nil {
-            manifest.explorationTime = CACurrentMediaTime() - startTime
-            return manifest
-        }
-
-        guard let safecracker else {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
@@ -113,7 +108,7 @@ extension TheBagman {
                     await tripwire.yieldFrames(2)
                     refresh()
                     originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(viewportHeistIds, container: container)
+                    manifest.recordVisibleElements(registry.viewportIds, container: container)
 
                     let page = visibleElementsInContainer(container)
                     let result = stitchPage(
@@ -176,9 +171,9 @@ extension TheBagman {
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
         let pairs = currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
-            guard let heistId = elementToHeistId[element],
-                  viewportHeistIds.contains(heistId),
-                  let entry = screenElements[heistId],
+            guard let heistId = registry.reverseIndex[element],
+                  registry.viewportIds.contains(heistId),
+                  let entry = registry.elements[heistId],
                   isElementInContainer(entry, container: container) else { return nil }
             return (element: entry.element, origin: entry.contentSpaceOrigin)
         }
@@ -193,7 +188,7 @@ extension TheBagman {
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            screenElements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
@@ -222,7 +217,7 @@ extension TheBagman {
         let accFingerprint = accumulatedContentFingerprint(
             elements: accumulated, origins: accumulatedOrigins
         )
-        let heistIds = Set(screenElements.filter { isElementInContainer($0.value, container: container) }.keys)
+        let heistIds = Set(registry.elements.filter { isElementInContainer($0.value, container: container) }.keys)
         containerExploreStates[container] = ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
             accumulatedFingerprint: accFingerprint,

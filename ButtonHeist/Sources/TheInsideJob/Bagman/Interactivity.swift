@@ -10,6 +10,11 @@ extension TheBagman {
     /// Pure predicates for element interactivity — no mutable state.
     /// Used by WireConverter (to build action lists) and ActionExecutor
     /// (to gate interaction attempts).
+    enum InteractivityCheck {
+        case interactive
+        case blocked(reason: String)
+    }
+
     @MainActor enum Interactivity {
 
     /// Check if an element is interactive given its parsed data and live object.
@@ -21,11 +26,10 @@ extension TheBagman {
             || object.accessibilityRespondsToUserInteraction
     }
 
-    /// Check if an element is interactive based on traits.
-    /// Returns nil if interactive, or an error string if not.
-    static func checkInteractivity(_ element: AccessibilityElement) -> String? {
+    /// Validate whether an element can receive interaction based on its traits.
+    static func checkInteractivity(_ element: AccessibilityElement) -> InteractivityCheck {
         if element.traits.contains(.notEnabled) {
-            return "Element is disabled (has 'notEnabled' trait)"
+            return .blocked(reason: "Element is disabled (has 'notEnabled' trait)")
         }
 
         let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
@@ -39,7 +43,7 @@ extension TheBagman {
             insideJobLogger.warning("Element '\(element.description)' has only static traits, tap may not work")
         }
 
-        return nil
+        return .interactive
     }
 
     /// Return custom action names from a live NSObject.

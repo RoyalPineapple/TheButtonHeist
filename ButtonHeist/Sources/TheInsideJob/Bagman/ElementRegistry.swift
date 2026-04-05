@@ -7,11 +7,10 @@ import TheScore
 extension TheBagman {
 
     /// The element registry — tracks all known elements, their viewport visibility,
-    /// presentation state, and reverse lookup indices.
+    /// and reverse lookup indices.
     ///
     /// Invariants enforced by API:
     /// - viewportIds is always a subset of elements.keys
-    /// - presentedIds is always a subset of elements.keys
     /// - reverseIndex is rebuilt in sync with viewportIds
     struct ElementRegistry {
 
@@ -20,9 +19,6 @@ extension TheBagman {
 
     /// HeistIds currently visible in the device viewport — rebuilt each refresh cycle.
     var viewportIds: Set<String> = []
-
-    /// Which elements have been sent to clients.
-    var presentedIds: Set<String> = []
 
     /// Reverse index: AccessibilityElement → heistId for the current visible set.
     var reverseIndex: [AccessibilityElement: String] = [:]
@@ -65,20 +61,13 @@ extension TheBagman {
     mutating func clear() {
         elements.removeAll()
         viewportIds.removeAll()
-        presentedIds.removeAll()
         reverseIndex.removeAll()
     }
 
-    /// Clear screen-level state on screen change. Does not clear `viewportIds`; the subsequent `apply()` rebuilds it.
+    /// Clear screen-level state on screen change.
     mutating func clearScreen() {
         elements.removeAll()
-        presentedIds.removeAll()
         reverseIndex.removeAll()
-    }
-
-    /// Mark heistIds as presented to clients.
-    mutating func markPresented(_ entries: [ScreenElement]) {
-        presentedIds.formUnion(entries.map(\.heistId))
     }
 
     /// Prune elements not in the given set (post-explore cleanup).
