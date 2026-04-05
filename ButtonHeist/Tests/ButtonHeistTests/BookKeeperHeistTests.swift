@@ -208,6 +208,77 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertNil(script.steps[0].arguments["command"])
     }
 
+    // MARK: - Error Skipping
+
+    @ButtonHeistActor
+    func testErrorResponseSkipsRecording() throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Missing"],
+            response: .error("element not found")
+        )
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Go"],
+            response: .ok(message: "activated")
+        )
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].target?.label, "Go")
+    }
+
+    @ButtonHeistActor
+    func testFailedActionResultSkipsRecording() throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let failedResult = ActionResult(
+            success: false,
+            method: .activate,
+            message: "element not found",
+            errorKind: .elementNotFound
+        )
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Missing"],
+            response: .action(result: failedResult)
+        )
+
+        let successResult = ActionResult(success: true, method: .activate)
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Go"],
+            response: .action(result: successResult)
+        )
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 1)
+        XCTAssertEqual(heist.steps[0].target?.label, "Go")
+    }
+
+    @ButtonHeistActor
+    func testSuccessfulActionResultIsRecorded() throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "test")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        let result = ActionResult(success: true, method: .activate)
+        bookKeeper.recordHeistEvidence(
+            command: .activate,
+            args: ["command": "activate", "label": "Go"],
+            response: .action(result: result)
+        )
+
+        let heist = try bookKeeper.stopHeistRecording()
+        XCTAssertEqual(heist.steps.count, 1)
+    }
+
     // MARK: - Minimal Matcher
 
     @ButtonHeistActor
