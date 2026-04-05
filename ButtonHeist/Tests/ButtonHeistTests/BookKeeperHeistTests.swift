@@ -68,7 +68,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go", "traits": ["button"]])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go", "traits": ["button"]])
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.version, 1)
@@ -84,7 +84,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
         _ = try bookKeeper.stopHeistRecording()
         try bookKeeper.startHeistRecording(app: "com.example.second")
         XCTAssertTrue(bookKeeper.isRecordingHeist)
@@ -98,16 +98,16 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let excluded = [
-            "help", "status", "quit", "exit", "list_devices",
-            "get_interface", "get_screen", "get_session_state",
-            "connect", "list_targets", "start_heist", "stop_heist",
+        let excluded: [TheFence.Command] = [
+            .help, .status, .quit, .exit, .listDevices,
+            .getInterface, .getScreen, .getSessionState,
+            .connect, .listTargets, .startHeist, .stopHeist,
         ]
         for command in excluded {
-            bookKeeper.recordHeistEvidence(command: command, args: ["command": command])
+            bookKeeper.recordHeistEvidence(command: command, args: ["command": command.rawValue])
         }
 
-        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
         let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
@@ -117,7 +117,7 @@ final class BookKeeperHeistTests: XCTestCase {
     func testRecordingIgnoredWhenNotRecording() throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
-        bookKeeper.recordHeistEvidence(command: "activate", args: ["command": "activate", "label": "Go"])
+        bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
@@ -126,7 +126,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "activate", args: [
+        bookKeeper.recordHeistEvidence(command: .activate, args: [
             "command": "activate",
             "label": "Submit",
             "traits": ["button"],
@@ -142,7 +142,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "type_text", args: [
+        bookKeeper.recordHeistEvidence(command: .typeText, args: [
             "command": "type_text",
             "text": "hello world",
             "clearFirst": true,
@@ -163,7 +163,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let elements = [makeElement(heistId: "button_submit", label: "Submit", traits: [.button])]
         bookKeeper.updateInterfaceCache(elements)
 
-        bookKeeper.recordHeistEvidence(command: "activate", args: [
+        bookKeeper.recordHeistEvidence(command: .activate, args: [
             "command": "activate",
             "heistId": "button_submit",
         ])
@@ -179,7 +179,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "one_finger_tap", args: [
+        bookKeeper.recordHeistEvidence(command: .oneFingerTap, args: [
             "command": "one_finger_tap",
             "x": 100.0,
             "y": 200.0,
@@ -195,7 +195,7 @@ final class BookKeeperHeistTests: XCTestCase {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
-        bookKeeper.recordHeistEvidence(command: "activate", args: [
+        bookKeeper.recordHeistEvidence(command: .activate, args: [
             "command": "activate",
             "label": "Save",
             "pngData": "base64binarydata",
@@ -216,11 +216,12 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el", label: "Save", identifier: "saveButton", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
 
         XCTAssertEqual(matcher.identifier, "saveButton")
         XCTAssertNil(matcher.label)
         XCTAssertNil(matcher.traits)
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor
@@ -229,11 +230,12 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el", label: "Save", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
 
         XCTAssertEqual(matcher.label, "Save")
         XCTAssertEqual(matcher.traits, [.button])
         XCTAssertNil(matcher.identifier)
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor
@@ -242,11 +244,12 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Item", identifier: "item_1", traits: [.staticText])
         let duplicate = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
 
         XCTAssertEqual(matcher.identifier, "item_1")
         XCTAssertNil(matcher.label)
         XCTAssertNil(matcher.traits)
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor
@@ -255,11 +258,12 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Slider", value: "50%", traits: [.adjustable])
         let duplicate = makeElement(heistId: "el2", label: "Slider", value: "75%", traits: [.adjustable])
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
 
         XCTAssertEqual(matcher.label, "Slider")
         XCTAssertNil(matcher.value)
         XCTAssertEqual(matcher.traits, [.adjustable])
+        XCTAssertEqual(ordinal, 0, "First of two ambiguous elements should get ordinal 0")
     }
 
     @ButtonHeistActor
@@ -268,24 +272,34 @@ final class BookKeeperHeistTests: XCTestCase {
         let target = makeElement(heistId: "el1", label: "Toggle", traits: [.button, .selected])
         let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
+        let (matcher, ordinal) = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, other])
 
         XCTAssertEqual(matcher.label, "Toggle")
         XCTAssertEqual(matcher.traits, [.button])
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherAcceptsAmbiguityRatherThanUseState() {
+    func testAmbiguousElementsGetOrdinals() {
         let bookKeeper = makeBookKeeper()
-        let target = makeElement(heistId: "el1", label: "Item", traits: [.staticText])
-        let duplicate = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
+        let first = makeElement(heistId: "el1", label: "Item", traits: [.staticText])
+        let second = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
+        let third = makeElement(heistId: "el3", label: "Item", traits: [.staticText])
+        let allElements = [first, second, third]
 
-        let matcher = bookKeeper.buildMinimalMatcher(element: target, allElements: [target, duplicate])
+        let (matcher0, ordinal0) = bookKeeper.buildMinimalMatcher(element: first, allElements: allElements)
+        let (matcher1, ordinal1) = bookKeeper.buildMinimalMatcher(element: second, allElements: allElements)
+        let (matcher2, ordinal2) = bookKeeper.buildMinimalMatcher(element: third, allElements: allElements)
 
-        XCTAssertEqual(matcher.label, "Item")
-        XCTAssertEqual(matcher.traits, [.staticText])
-        XCTAssertNil(matcher.value)
-        XCTAssertNil(matcher.identifier)
+        // All share the same matcher
+        XCTAssertEqual(matcher0.label, "Item")
+        XCTAssertEqual(matcher1.label, "Item")
+        XCTAssertEqual(matcher2.label, "Item")
+
+        // Each gets its traversal-order ordinal
+        XCTAssertEqual(ordinal0, 0)
+        XCTAssertEqual(ordinal1, 1)
+        XCTAssertEqual(ordinal2, 2)
     }
 
     // MARK: - Heist File I/O

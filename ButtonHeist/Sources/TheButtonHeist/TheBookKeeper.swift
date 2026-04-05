@@ -546,20 +546,20 @@ public final class TheBookKeeper {
     }
 
     /// Commands that should not appear in heist playbacks.
-    private static let excludedHeistCommands: Set<String> = [
-        "help", "status", "quit", "exit",
-        "list_devices", "get_interface", "get_screen",
-        "get_session_state", "connect", "list_targets",
-        "get_session_log", "archive_session",
-        "start_recording", "stop_recording",
-        "run_batch",
-        "start_heist", "stop_heist", "play_heist",
+    private static let excludedHeistCommands: Set<TheFence.Command> = [
+        .help, .status, .quit, .exit,
+        .listDevices, .getInterface, .getScreen,
+        .getSessionState, .connect, .listTargets,
+        .getSessionLog, .archiveSession,
+        .startRecording, .stopRecording,
+        .runBatch,
+        .startHeist, .stopHeist, .playHeist,
     ]
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded — failed actions are skipped.
     public func recordHeistEvidence(
-        command: String,
+        command: TheFence.Command,
         args: [String: Any],
         response: FenceResponse? = nil,
         interfaceElements: [HeistElement]? = nil
@@ -576,7 +576,7 @@ public final class TheBookKeeper {
 
         let allElements = interfaceElements ?? Array(recording.interfaceCache.values)
         let step = buildStep(
-            command: command,
+            command: command.rawValue,
             args: args,
             cache: allElements,
             interfaceCache: recording.interfaceCache
@@ -621,10 +621,13 @@ public final class TheBookKeeper {
         }
 
         var target: ElementMatcher?
+        var ordinal: Int?
         var metadata: RecordedMetadata?
 
         if let heistId, let element = interfaceCache[heistId] {
-            target = buildMinimalMatcher(element: element, allElements: cache)
+            let result = buildMinimalMatcher(element: element, allElements: cache)
+            target = result.matcher
+            ordinal = result.ordinal
             metadata = RecordedMetadata(
                 heistId: heistId,
                 frame: RecordedFrame(
@@ -657,6 +660,7 @@ public final class TheBookKeeper {
         return HeistEvidence(
             command: command,
             target: target,
+            ordinal: ordinal,
             arguments: arguments,
             recorded: metadata
         )
@@ -699,24 +703,28 @@ public final class TheBookKeeper {
     /// among all currently visible elements. Uses only identity fields —
     /// never value (mutable state) or state traits (selected, notEnabled, etc.).
     /// Skips identifiers that contain UUIDs (runtime-generated, not stable across sessions).
+    ///
+    /// When no combination of fields yields a unique match, returns the best
+    /// matcher alongside the element's 0-based ordinal among all matches
+    /// (traversal order in the allElements array).
     public func buildMinimalMatcher(
         element: HeistElement,
         allElements: [HeistElement]
-    ) -> ElementMatcher {
+    ) -> (matcher: ElementMatcher, ordinal: Int?) {
         let traits = identityTraits(element.traits)
         let stableIdentifier = element.identifier.flatMap { isStableIdentifier($0) ? $0 : nil }
 
         if let stableIdentifier {
             let candidate = ElementMatcher(identifier: stableIdentifier)
             if uniquelyMatches(candidate, element: element, in: allElements) {
-                return candidate
+                return (candidate, nil)
             }
         }
 
         if let elementLabel = element.label {
             let candidate = ElementMatcher(label: elementLabel, traits: traits)
             if uniquelyMatches(candidate, element: element, in: allElements) {
-                return candidate
+                return (candidate, nil)
             }
 
             if let stableIdentifier {
@@ -724,16 +732,19 @@ public final class TheBookKeeper {
                     label: elementLabel, identifier: stableIdentifier, traits: traits
                 )
                 if uniquelyMatches(candidate, element: element, in: allElements) {
-                    return candidate
+                    return (candidate, nil)
                 }
             }
         }
 
-        return ElementMatcher(
+        // No unique matcher found — fall back to best-effort matcher with ordinal
+        let bestMatcher = ElementMatcher(
             label: element.label,
             identifier: stableIdentifier,
             traits: traits
         )
+        let ordinal = ordinalOf(element, matching: bestMatcher, in: allElements)
+        return (bestMatcher, ordinal)
     }
 
     private func uniquelyMatches(
@@ -747,6 +758,27 @@ public final class TheBookKeeper {
             if matchCount > 1 { return false }
         }
         return matchCount == 1
+    }
+
+    /// Find the 0-based index of `element` among all elements matching `matcher`.
+    /// Returns nil if the element is the only match (ordinal would be redundant).
+    private func ordinalOf(
+        _ element: HeistElement,
+        matching matcher: ElementMatcher,
+        in allElements: [HeistElement]
+    ) -> Int? {
+        var index = 0
+        var found: Int?
+        var totalMatches = 0
+        for candidate in allElements where candidate.matches(matcher) {
+            if candidate.heistId == element.heistId {
+                found = index
+            }
+            index += 1
+            totalMatches += 1
+        }
+        guard totalMatches > 1 else { return nil }
+        return found
     }
 
     // MARK: - Heist File I/O
