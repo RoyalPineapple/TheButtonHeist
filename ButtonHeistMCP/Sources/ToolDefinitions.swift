@@ -93,7 +93,7 @@ enum ToolDefinitions {
     // Start with these 5 tools:
     //   1. connect         — establish a session with the iOS app
     //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
-    //   3. activate        — interact with elements (covers 80% of interactions)
+    //   3. activate        — tap elements that have "activate" in their actions array
     //   4. scroll_to_visible — navigate long lists to find off-screen elements
     //   5. run_batch       — multi-step sequences with expectations
     //
@@ -174,6 +174,8 @@ enum ToolDefinitions {
         description: """
             Activate a UI element — the primary way to tap buttons, follow links, and toggle controls. \
             Works like a VoiceOver double-tap: tries accessibility activation first, falls back to synthetic tap. \
+            Only elements with "activate" in their actions array can be activated — static text, headers, and \
+            images without actions will fail. Check the element's actions in get_interface before calling. \
             Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
             value (current state), traits (role like "button", "selected"). \
             If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
