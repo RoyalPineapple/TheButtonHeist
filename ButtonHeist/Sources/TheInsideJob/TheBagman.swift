@@ -14,12 +14,9 @@ import TheScore
 @MainActor
 final class TheBagman {
 
-    private let idAssigner = IdAssignment()
-    private let wireConverter = WireConversion()
-    private let diagnostics = Diagnostics()
-
-    /// The gesture engine. TheBagman drives TheSafecracker
-    /// for synthetic touch when accessibility activation fails.
+    /// The gesture engine. Created and owned by TheBagman.
+    /// TheSafecracker is pure "fingers on glass" — it acts on resolved
+    /// coordinates and objects, never queries the registry.
     let safecracker = TheSafecracker()
 
     init(tripwire: TheTripwire) {
@@ -193,7 +190,7 @@ final class TheBagman {
         switch target {
         case .heistId(let heistId):
             guard let entry = registry.elements[heistId] else {
-                return .notFound(diagnostics: diagnostics.heistIdNotFound(
+                return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count
                 ))
             }
@@ -309,11 +306,11 @@ final class TheBagman {
     // MARK: - Diagnostics Forwarding
 
     func heistIdNotFoundMessage(_ heistId: String) -> String {
-        diagnostics.heistIdNotFound(heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count)
+        Diagnostics.heistIdNotFound(heistId, knownIds: registry.elements.keys, viewportCount: registry.viewportIds.count)
     }
 
     func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
-        diagnostics.matcherNotFound(
+        Diagnostics.matcherNotFound(
             matcher, hierarchy: currentHierarchy,
             screenElements: registry.elements, viewportHeistIds: registry.viewportIds,
             traversalOrder: buildTraversalOrderIndex()
@@ -321,29 +318,29 @@ final class TheBagman {
     }
 
     func formatMatcher(_ matcher: ElementMatcher) -> String {
-        diagnostics.formatMatcher(matcher)
+        Diagnostics.formatMatcher(matcher)
     }
 
     // MARK: - Wire Conversion Forwarding
 
     func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
-        wireConverter.traitNames(traits)
+        WireConversion.traitNames(traits)
     }
 
     func convertElement(_ element: AccessibilityElement) -> HeistElement {
-        wireConverter.convert(element)
+        WireConversion.convert(element)
     }
 
     func toWire(_ entry: ScreenElement) -> HeistElement {
-        wireConverter.toWire(entry)
+        WireConversion.toWire(entry)
     }
 
     func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
-        wireConverter.toWire(entries)
+        WireConversion.toWire(entries)
     }
 
     func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
-        wireConverter.convertNode(node)
+        WireConversion.convertNode(node)
     }
 
     func computeDelta(
@@ -352,25 +349,25 @@ final class TheBagman {
         afterTree: [AccessibilityHierarchy]?,
         isScreenChange: Bool
     ) -> InterfaceDelta {
-        wireConverter.computeDelta(before: before, after: after, afterTree: afterTree, isScreenChange: isScreenChange)
+        WireConversion.computeDelta(before: before, after: after, afterTree: afterTree, isScreenChange: isScreenChange)
     }
 
     // MARK: - Id Assignment Forwarding
 
     func assignHeistIds(_ elements: [AccessibilityElement]) -> [String] {
-        idAssigner.assign(elements)
+        IdAssignment.assign(elements)
     }
 
     func synthesizeBaseId(_ element: AccessibilityElement) -> String {
-        idAssigner.synthesizeBaseId(element)
+        IdAssignment.synthesizeBaseId(element)
     }
 
     func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
-        idAssigner.stripTraitPrefix(text, traitPrefix: traitPrefix)
+        IdAssignment.stripTraitPrefix(text, traitPrefix: traitPrefix)
     }
 
     func slugify(_ text: String?) -> String? {
-        idAssigner.slugify(text)
+        IdAssignment.slugify(text)
     }
 
     // MARK: - Element Selection
@@ -533,7 +530,7 @@ final class TheBagman {
             elementObjects: result.objects
         )
 
-        let heistIds = idAssigner.assign(result.elements)
+        let heistIds = IdAssignment.assign(result.elements)
         registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
 
         exploreCycleIds?.formUnion(heistIds)
@@ -542,7 +539,7 @@ final class TheBagman {
         lastScreenName = result.elements.first {
             $0.traits.contains(.header) && $0.label != nil
         }?.label
-        lastScreenId = idAssigner.slugify(lastScreenName)
+        lastScreenId = IdAssignment.slugify(lastScreenName)
     }
 
     /// Parse and apply in one step. Most callers use this.
@@ -691,7 +688,7 @@ final class TheBagman {
         let manifest = await exploreAndPrune()
         let afterSnapshot = selectElements()
 
-        let delta = wireConverter.computeDelta(
+        let delta = WireConversion.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
         )
@@ -716,7 +713,7 @@ final class TheBagman {
             elementLabel = postElement?.label
             elementValue = postElement?.value
             if let traits = postElement?.traits {
-                elementTraits = wireConverter.traitNames(traits)
+                elementTraits = WireConversion.traitNames(traits)
             }
         }
 
