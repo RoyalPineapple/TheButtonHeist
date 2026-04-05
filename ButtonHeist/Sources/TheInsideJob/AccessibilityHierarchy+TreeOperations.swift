@@ -10,6 +10,58 @@ extension AccessibilityContainer {
     }
 }
 
+// MARK: - Filter
+
+extension AccessibilityHierarchy {
+    /// Returns a pruned copy of the tree containing only nodes where `isIncluded` returns true.
+    ///
+    /// For `.element` nodes, the element is kept when the predicate matches.
+    /// For `.container` nodes, children are filtered recursively first. The container is kept
+    /// when it has surviving children **or** the predicate matches the container itself.
+    /// An empty container that matches the predicate is preserved (useful for finding
+    /// specific container types like `.scrollable` or `.tabBar`).
+    public func filtered(
+        _ isIncluded: (AccessibilityHierarchy) -> Bool
+    ) -> AccessibilityHierarchy? {
+        switch self {
+        case .element:
+            return isIncluded(self) ? self : nil
+
+        case let .container(container, children):
+            let survivingChildren = children.compactMap { $0.filtered(isIncluded) }
+            if !survivingChildren.isEmpty {
+                return .container(container, children: survivingChildren)
+            }
+            if isIncluded(self) {
+                return .container(container, children: [])
+            }
+            return nil
+        }
+    }
+}
+
+// MARK: - Map
+
+extension AccessibilityHierarchy {
+    /// Returns a new tree with `transform` applied to every node, bottom-up.
+    ///
+    /// Children are mapped before their parent, so the closure receives each container
+    /// with its already-transformed children. This makes it safe to inspect or reshape
+    /// subtrees during the transform.
+    public func mapped(
+        _ transform: (AccessibilityHierarchy) -> AccessibilityHierarchy
+    ) -> AccessibilityHierarchy {
+        switch self {
+        case .element:
+            return transform(self)
+
+        case let .container(container, children):
+            let mappedChildren = children.map { $0.mapped(transform) }
+            return transform(.container(container, children: mappedChildren))
+        }
+    }
+}
+
 // MARK: - Fold (catamorphism — transform tree to a different type)
 
 extension AccessibilityHierarchy {
@@ -19,8 +71,8 @@ extension AccessibilityHierarchy {
     /// For containers: children are folded first, then `onContainer` receives the
     /// container metadata and the already-folded children.
     ///
-    /// This is the general-purpose tree destructor — `convertHierarchyNode` and `containers`
-    /// are both built on it. Use it when the output type differs from `AccessibilityHierarchy`.
+    /// This is the general-purpose tree destructor — `mapped` and `convertHierarchyNode`
+    /// are both special cases. Use it when the output type differs from `AccessibilityHierarchy`.
     public func folded<Result>(
         onElement: (AccessibilityElement, Int) -> Result,
         onContainer: (AccessibilityContainer, [Result]) -> Result
@@ -37,17 +89,27 @@ extension AccessibilityHierarchy {
     }
 }
 
+extension Array where Element == AccessibilityHierarchy {
+    /// Folds each root into a different type, bottom-up.
+    public func foldedHierarchy<Result>(
+        onElement: (AccessibilityElement, Int) -> Result,
+        onContainer: (AccessibilityContainer, [Result]) -> Result
+    ) -> [Result] {
+        map { $0.folded(onElement: onElement, onContainer: onContainer) }
+    }
+}
+
 // MARK: - Top-Down Context Propagation
 
 extension AccessibilityHierarchy {
-    /// Walks the tree top-down, threading a context value from parent to child.
+    /// Walks the tree top-down, propagating a context value through containers to elements.
     ///
     /// - `context`: the initial value at the root.
-    /// - `container`: transforms the context at each container boundary.
-    /// - `element`: visits each leaf element with the inherited context.
+    /// - `container`: transforms the context at each container boundary (parent context + container → child context).
+    /// - `element`: called at each leaf with the element, its traversal index, and the inherited context.
     ///
-    /// Use this for side-effectful traversal where parent containers establish context
-    /// that child elements need — e.g., propagating a scroll view reference.
+    /// Use this when parent nodes establish context that child nodes need — e.g., a scroll
+    /// view reference that propagates from a `.scrollable` container to its descendant elements.
     public func forEach<Context>(
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
@@ -90,16 +152,6 @@ extension AccessibilityHierarchy {
             }
         }
     }
-
-    /// Transforms leaf elements, collecting non-nil results. No context propagation.
-    public func compactMap<Result>(
-        _ transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
-            transform(element, traversalIndex)
-        })
-    }
-
 }
 
 extension Array where Element == AccessibilityHierarchy {
@@ -122,14 +174,6 @@ extension Array where Element == AccessibilityHierarchy {
     ) -> [Result] {
         flatMap { $0.compactMap(context: context, container: container, element: element) }
     }
-
-    /// Transforms leaf elements across all roots, collecting non-nil results. No context propagation.
-    public func compactMap<Result>(
-        _ transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        flatMap { $0.compactMap(transform) }
-    }
-
 }
 
 // MARK: - Leaf Extraction
@@ -139,7 +183,12 @@ extension AccessibilityHierarchy {
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
     public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        compactMap { element, traversalIndex in (element, traversalIndex) }
+        folded(
+            onElement: { element, traversalIndex in [(element, traversalIndex)] },
+            onContainer: { _, childLeaves in
+                childLeaves.reduce(into: []) { result, leaves in result.append(contentsOf: leaves) }
+            }
+        )
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).
@@ -178,15 +227,24 @@ extension AccessibilityHierarchy {
 // MARK: - Array Conveniences
 
 extension Array where Element == AccessibilityHierarchy {
+    /// Filters each root node in the array, removing nodes that don't match the predicate.
+    /// Container structure is preserved for branches that contain matching descendants.
+    public func filteredHierarchy(
+        _ isIncluded: (AccessibilityHierarchy) -> Bool
+    ) -> [AccessibilityHierarchy] {
+        compactMap { $0.filtered(isIncluded) }
+    }
+
+    /// Maps every node in every root, bottom-up.
+    public func mappedHierarchy(
+        _ transform: (AccessibilityHierarchy) -> AccessibilityHierarchy
+    ) -> [AccessibilityHierarchy] {
+        map { $0.mapped(transform) }
+    }
+
     /// The accessibility elements across all roots, sorted by traversal index.
     public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         flatMap(\.elements).sorted { $0.traversalIndex < $1.traversalIndex }
-    }
-
-    /// The accessibility elements across all roots, sorted by traversal index, without the index tuple.
-    /// Convenience for `.elements.map(\.element)` when you only need the elements in traversal order.
-    public var sortedElements: [AccessibilityElement] {
-        elements.map(\.element)
     }
 
     /// All container nodes across all roots, depth-first (outermost first).
@@ -198,7 +256,13 @@ extension Array where Element == AccessibilityHierarchy {
 
     /// Scrollable containers in pre-order (outermost first).
     var scrollableContainers: [AccessibilityContainer] {
-        containers.filter(\.isScrollable)
+        foldedHierarchy(
+            onElement: { _, _ in [] },
+            onContainer: { container, childResults in
+                let descendants = childResults.flatMap { $0 }
+                return container.isScrollable ? [container] + descendants : descendants
+            }
+        ).flatMap { $0 }
     }
 
     /// Each container mapped to its subtree content fingerprint.
