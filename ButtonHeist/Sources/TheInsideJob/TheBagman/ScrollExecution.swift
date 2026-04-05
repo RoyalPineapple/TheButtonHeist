@@ -385,14 +385,15 @@ extension TheBagman {
     }
 
     func ensureFirstResponderOnScreen() async {
-        guard let responder = tripwire.currentFirstResponder() else { return }
-        let frame = responder.accessibilityFrame
+        guard let heistId = registry.firstResponderHeistId,
+              let entry = registry.elements[heistId],
+              let object = entry.object else { return }
+        let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        let activationPoint = responder.accessibilityActivationPoint
+        let activationPoint = object.accessibilityActivationPoint
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = registry.elements.values
-            .first(where: { $0.object === responder })?.scrollView else { return }
+        guard let scrollView = entry.scrollView else { return }
         if safecracker.scrollToMakeVisible(
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction

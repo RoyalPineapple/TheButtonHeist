@@ -29,7 +29,6 @@ final class TheTripwire {
         let fingerprint: PresentationFingerprint
         let hasRelevantAnimations: Bool
         let topmostVC: ObjectIdentifier?
-        let firstResponder: ObjectIdentifier?
         let keyboardVisible: Bool
         let textInputActive: Bool
         let windowCount: Int
@@ -49,7 +48,6 @@ final class TheTripwire {
         case settled
         case unsettled
         case screenChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
-        case focusChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
         case keyboardChanged(visible: Bool)
         case textInputChanged(active: Bool)
     }
@@ -289,7 +287,6 @@ final class TheTripwire {
             && (prev?.fingerprint.matches(fingerprint) ?? true)
 
         let vcId = topmostViewController().map(ObjectIdentifier.init)
-        let responderId = currentFirstResponder().map(ObjectIdentifier.init)
 
         let reading = PulseReading(
             tick: context.tickCount,
@@ -298,7 +295,6 @@ final class TheTripwire {
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: vcId,
-            firstResponder: responderId,
             keyboardVisible: context.keyboardVisibleFlag,
             textInputActive: context.textInputActiveFlag,
             windowCount: scan.windowCount,
@@ -309,9 +305,6 @@ final class TheTripwire {
         // Diff against previous reading and fire transitions
         if vcId != prev?.topmostVC {
             onTransition?(.screenChanged(from: prev?.topmostVC, to: vcId))
-        }
-        if responderId != prev?.firstResponder {
-            onTransition?(.focusChanged(from: prev?.firstResponder, to: responderId))
         }
         if context.keyboardVisibleFlag != (prev?.keyboardVisible ?? false) {
             onTransition?(.keyboardChanged(visible: context.keyboardVisibleFlag))
@@ -425,27 +418,6 @@ final class TheTripwire {
             }
             .sorted { $0.windowLevel > $1.windowLevel }
             .map { ($0, $0 as UIView) }
-    }
-
-    // MARK: - First Responder
-
-    /// The current first responder view, if any.
-    /// Walks the view hierarchy of all traversable windows.
-    func currentFirstResponder() -> UIView? {
-        for (window, _) in getTraversableWindows() {
-            if let responder = findFirstResponder(in: window) {
-                return responder
-            }
-        }
-        return nil
-    }
-
-    private func findFirstResponder(in view: UIView) -> UIView? {
-        if view.isFirstResponder { return view }
-        for sub in view.subviews {
-            if let found = findFirstResponder(in: sub) { return found }
-        }
-        return nil
     }
 
     // MARK: - View Controller Identity
