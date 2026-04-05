@@ -2,7 +2,7 @@
 
 > **File:** `ButtonHeist/Sources/TheButtonHeist/TheBookKeeper.swift`
 > **Platform:** macOS 14.0+
-> **Role:** Centralized file operations — session logs, artifact storage, compression, path safety
+> **Role:** Centralized file operations — session logs, artifact storage, compression, path safety, heist recording
 
 ## Responsibilities
 
@@ -14,6 +14,8 @@ TheBookKeeper owns all filesystem I/O on the macOS side:
 4. **Manifest tracking** — maintains a `manifest.json` listing every artifact written during the session, with type, size, timestamp, and the command that produced it
 5. **Compression** — gzips session logs on close via `/usr/bin/gzip`; bundles a completed session directory into a `.tar.gz` archive on demand via `/usr/bin/tar`
 6. **Lifecycle** — creates session directory on `beginSession`, closes and compresses on `closeSession`, archives on `archiveSession`
+7. **Heist recording** — records agent sessions as replayable `.heist` scripts. Builds minimal `ElementMatcher` for each targeted element (smallest matcher that uniquely identifies it), filters out state traits and UUID-containing identifiers, falls back to ordinal when no unique matcher exists. Manages `HeistRecording` state within `ActiveSession`, writes `HeistPlayback` (envelope) and `HeistEvidence` (individual steps) to disk
+8. **Heist file I/O** — static `writeHeist(_:to:)` and `readHeist(from:)` for `.heist` file serialization (pretty-printed JSON with sorted keys)
 
 ## Architecture Diagram
 
@@ -240,23 +242,29 @@ let bookKeeper = TheBookKeeper()
 
 ### Commands
 
-Two local-only commands dispatch to TheBookKeeper without sending anything to the iOS device:
+Five local-only commands dispatch to TheBookKeeper without sending anything to the iOS device:
 
 | Command | Enum case | Behavior |
 |---------|-----------|----------|
 | `get_session_log` | `.getSessionLog` | Returns the current `SessionManifest` as a `.sessionLog` response |
 | `archive_session` | `.archiveSession` | Closes and archives the session, returns `.archiveResult` with the archive path |
+| `start_heist` | `.startHeist` | Begins heist recording for the current session (auto-starts a session if needed) |
+| `stop_heist` | `.stopHeist` | Stops heist recording and writes the `.heist` file to the specified output path |
+| `play_heist` | `.playHeist` | Reads a `.heist` file and replays steps sequentially via `execute(request:)` |
 
-Both are in the no-connection-required guard alongside `get_session_state`, `list_devices`, `connect`, and `list_targets`.
+All are in the no-connection-required guard alongside `get_session_state`, `list_devices`, `connect`, and `list_targets`.
 
 ### FenceResponse cases
 
 ```swift
 case sessionLog(manifest: SessionManifest)
 case archiveResult(path: String, manifest: SessionManifest)
+case heistStarted
+case heistStopped(path: String, stepCount: Int)
+case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
 ```
 
-Both implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
+All implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
 ### Logging integration
 
@@ -275,9 +283,15 @@ TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writ
 buttonheist session-log              # Print session manifest and stats
 buttonheist archive-session          # Close + archive current session → prints archive path
   --delete-source                    # Remove session directory after archiving
+buttonheist start-heist              # Begin heist recording
+  --app <bundleId>                   # Target app (default: com.buttonheist.testapp)
+buttonheist stop-heist               # Stop recording and write .heist file
+  --output <path>                    # Output file path (required)
+buttonheist play-heist               # Replay a .heist file
+  --input <path>                     # Input file path (required)
 ```
 
-Both accept `--format` (human/json/compact) and standard `ConnectionOptions`.
+All accept `--format` (human/json/compact) and standard `ConnectionOptions`.
 
 ## MCP Tools
 
@@ -340,7 +354,7 @@ MP4 (H.264) is already compressed. Gzipping an MP4 saves <1%.
 
 ## Tests
 
-34 tests in `TheBookKeeperTests.swift`, using real filesystem I/O against a temp directory that is created in `setUp` and deleted in `tearDown`.
+34 tests in `TheBookKeeperTests.swift` plus additional heist-specific tests in `BookKeeperHeistTests.swift`, using real filesystem I/O against a temp directory that is created in `setUp` and deleted in `tearDown`.
 
 | Group | Tests | What they verify |
 |-------|-------|-----------------|
