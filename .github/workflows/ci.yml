@@ -136,7 +136,7 @@ jobs:
           # Boot continues asynchronously — don't wait for bootstatus here
 
       - name: Generate project
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: tuist generate --no-binary-cache --no-open
 
       - name: Build iOS app targets
