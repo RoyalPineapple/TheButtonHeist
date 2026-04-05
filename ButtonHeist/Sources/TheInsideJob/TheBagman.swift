@@ -17,9 +17,6 @@ final class TheBagman {
     private let idAssigner = IdAssignment()
     private let wireConverter = WireConversion()
     private let diagnostics = Diagnostics()
-    private lazy var actions = ActionExecution(bagman: self)
-    private lazy var scroll = ScrollExecution(bagman: self)
-    private lazy var explorer = ScreenExploration(bagman: self)
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
@@ -79,7 +76,7 @@ final class TheBagman {
     }
 
     /// The element registry — all known elements, viewport visibility, presentation state.
-    private var registry = ElementRegistry()
+    var registry = ElementRegistry()
 
     // Forwarding accessors — callers use these until fully migrated.
     var screenElements: [String: ScreenElement] {
@@ -108,11 +105,8 @@ final class TheBagman {
     /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
     var exploreCycleIds: Set<String>?
 
-    /// Forwarding accessor for container explore cache (owned by ScreenExploration).
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] {
-        get { explorer.containerExploreStates }
-        set { explorer.containerExploreStates = newValue }
-    }
+    /// Cached state from the last explore of each scrollable container.
+    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
     /// Screen name from the registry (first header element by traversal order).
     /// Computed once in `apply()` from the hierarchy's traversal order.
@@ -406,38 +400,6 @@ final class TheBagman {
         idAssigner.slugify(text)
     }
 
-    // MARK: - Action Forwarding
-
-    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeActivate(target) }
-    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeIncrement(target) }
-    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeDecrement(target) }
-    func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult { await actions.executeCustomAction(target) }
-    func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult { await actions.executeEditAction(target) }
-    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult { await actions.executeSetPasteboard(target) }
-    func executeGetPasteboard() -> TheSafecracker.InteractionResult { actions.executeGetPasteboard() }
-    func executeResignFirstResponder() async -> TheSafecracker.InteractionResult { await actions.executeResignFirstResponder() }
-    func executeTap(_ target: TouchTapTarget) async -> TheSafecracker.InteractionResult { await actions.executeTap(target) }
-    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult { await actions.executeLongPress(target) }
-    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult { await actions.executeSwipe(target) }
-    func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrag(target) }
-    func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult { await actions.executePinch(target) }
-    func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult { await actions.executeRotate(target) }
-    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult { await actions.executeTwoFingerTap(target) }
-    func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrawPath(target) }
-    func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrawBezier(target) }
-    func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult { await actions.executeTypeText(target) }
-
-    // MARK: - Scroll Forwarding
-
-    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScroll(target) }
-    func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScrollToEdge(target) }
-    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScrollToVisible(target) }
-    func ensureOnScreen(for target: ElementTarget) async { await scroll.ensureOnScreen(for: target) }
-    func ensureFirstResponderOnScreen() async { await scroll.ensureFirstResponderOnScreen() }
-    func resolveScrollTarget(screenElement: ScreenElement, axis: ScrollAxis? = nil) -> ScrollableTarget? {
-        scroll.resolveScrollTarget(screenElement: screenElement, axis: axis)
-    }
-
     // MARK: - Element Selection
 
     /// Select elements from the registry by scope, sorted by traversal order.
@@ -467,11 +429,6 @@ final class TheBagman {
         registry.markPresented(elements)
     }
 
-    /// Prune elements not seen during an explore cycle.
-    func pruneRegistry(keeping seen: Set<String>) {
-        registry.prune(keeping: seen)
-    }
-
     // MARK: - Refresh Pipeline
 
     /// Clear all cached element data (used on suspend).
@@ -481,10 +438,6 @@ final class TheBagman {
         containerExploreStates.removeAll()
         exploreCycleIds = nil
         lastHierarchyHash = 0
-    }
-
-    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        await explorer.exploreAndPrune(target: target)
     }
 
     // MARK: - Parse (read-only)

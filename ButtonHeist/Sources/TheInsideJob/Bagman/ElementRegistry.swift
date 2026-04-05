@@ -69,7 +69,7 @@ extension TheBagman {
         reverseIndex.removeAll()
     }
 
-    /// Clear screen-level state on screen change (keeps nothing).
+    /// Clear screen-level state on screen change. Does not clear `viewportIds`; the subsequent `apply()` rebuilds it.
     mutating func clearScreen() {
         elements.removeAll()
         presentedIds.removeAll()
