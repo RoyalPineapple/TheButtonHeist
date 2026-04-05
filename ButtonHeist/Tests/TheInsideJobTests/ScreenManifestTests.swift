@@ -71,7 +71,9 @@ final class ScreenManifestTests: XCTestCase {
         manifest.recordVisibleElements(["id-a"])
 
         XCTAssertTrue(manifest.contains("id-a"))
-        XCTAssertNil(manifest.elementContainers["id-a"] as Any?)
+        XCTAssertTrue(manifest.elementContainers.keys.contains("id-a"), "Key should exist in map")
+        let container = manifest.elementContainers["id-a"].flatMap { $0 }
+        XCTAssertNil(container, "Container value should be nil when none provided")
     }
 
     // MARK: - markExplored
