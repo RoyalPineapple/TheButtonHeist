@@ -114,8 +114,8 @@ final class TheBagman {
 
     // MARK: - Element Interactivity (forwarded to Interactivity)
 
-    func isInteractive(element: AccessibilityElement, object: NSObject?) -> Bool {
-        Interactivity.isInteractive(element: element, object: object)
+    func isInteractive(element: AccessibilityElement) -> Bool {
+        Interactivity.isInteractive(element: element)
     }
 
     // MARK: - Unified Element Resolution
@@ -153,7 +153,7 @@ final class TheBagman {
 
     /// Check if the element supports interaction.
     func hasInteractiveObject(_ screenElement: ScreenElement) -> Bool {
-        isInteractive(element: screenElement.element, object: screenElement.object)
+        isInteractive(element: screenElement.element)
     }
 
     /// Perform accessibilityActivate.
@@ -330,8 +330,8 @@ final class TheBagman {
         wireConverter.traitNames(traits)
     }
 
-    func convertElement(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
-        wireConverter.convert(element, object: object)
+    func convertElement(_ element: AccessibilityElement) -> HeistElement {
+        wireConverter.convert(element)
     }
 
     func toWire(_ entry: ScreenElement) -> HeistElement {
