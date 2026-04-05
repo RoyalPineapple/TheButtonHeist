@@ -118,10 +118,6 @@ final class TheBagman {
         Interactivity.isInteractive(element: element, object: object)
     }
 
-    func customActionNames(from object: NSObject?) -> [String] {
-        Interactivity.customActionNames(from: object)
-    }
-
     // MARK: - Unified Element Resolution
 
     /// Result of resolving an ElementTarget to a concrete element.
