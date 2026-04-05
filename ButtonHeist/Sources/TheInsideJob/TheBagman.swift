@@ -14,6 +14,13 @@ import TheScore
 @MainActor
 final class TheBagman {
 
+    private let idAssigner = IdAssignment()
+    private let wireConverter = WireConversion()
+    private let diagnostics = Diagnostics()
+    private lazy var actions = ActionExecution(bagman: self)
+    private lazy var scroll = ScrollExecution(bagman: self)
+    private lazy var explorer = ScreenExploration(bagman: self)
+
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
     }
@@ -64,11 +71,6 @@ final class TheBagman {
         weak var scrollView: UIScrollView?
     }
 
-    /// Which elements have been sent to clients. Checked by resolveTarget to prevent
-    /// targeting elements the caller hasn't seen. Populated by snapshot(_:) — the single
-    /// path through which elements leave TheBagman.
-    var presentedHeistIds: Set<String> = []
-
     /// Scope for snapshot: viewport (elements visible on the device screen)
     /// or all (full app screen including off-viewport content from scroll exploration).
     enum SnapshotScope {
@@ -76,19 +78,26 @@ final class TheBagman {
         case all
     }
 
-    /// Persistent element registry keyed by heistId. Lives for the screen's duration.
-    /// Populated during apply(), cleared on screen change.
-    /// TheBagman-only: mutated by extensions across files. Tests inject via @testable.
-    var screenElements: [String: ScreenElement] = [:]
+    /// The element registry — all known elements, viewport visibility, presentation state.
+    private var registry = ElementRegistry()
 
-    /// HeistIds currently visible in the device viewport — rebuilt each refresh cycle.
-    /// Elements in screenElements but not in this set have scrolled beyond the viewport.
-    /// TheBagman-only: mutated by extensions across files.
-    var viewportHeistIds: Set<String> = []
-
-    /// Reverse index: AccessibilityElement → heistId for the current visible set.
-    /// Rebuilt each refresh in apply(). Enables O(1) matcher resolution.
-    var elementToHeistId: [AccessibilityElement: String] = [:]
+    // Forwarding accessors — callers use these until fully migrated.
+    var screenElements: [String: ScreenElement] {
+        get { registry.elements }
+        set { registry.elements = newValue }
+    }
+    var viewportHeistIds: Set<String> {
+        get { registry.viewportIds }
+        set { registry.viewportIds = newValue }
+    }
+    var presentedHeistIds: Set<String> {
+        get { registry.presentedIds }
+        set { registry.presentedIds = newValue }
+    }
+    var elementToHeistId: [AccessibilityElement: String] {
+        get { registry.reverseIndex }
+        set { registry.reverseIndex = newValue }
+    }
 
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     /// Read/written by Pulse for change detection.
@@ -99,22 +108,11 @@ final class TheBagman {
     /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
     var exploreCycleIds: Set<String>?
 
-    /// Cached state from the last explore of each scrollable container.
-    /// Compared on re-explore to skip containers whose content hasn't changed.
-    /// Both signals come from the accessibility hierarchy — no UIKit plumbing.
-    struct ContainerExploreState {
-        /// Merkle fingerprint of the container's visible subtree at the restored
-        /// scroll position. Changes when any visible element's content mutates.
-        let visibleSubtreeFingerprint: Int
-        /// Hash of all accumulated elements discovered across all scroll positions
-        /// during the last full explore. Used to verify the skip was valid.
-        let accumulatedFingerprint: Int
-        /// HeistIds discovered during the last full explore of this container.
-        /// Unioned into `exploreCycleIds` on cache hit so the prune step
-        /// doesn't delete off-screen elements the skip was meant to preserve.
-        let discoveredHeistIds: Set<String>
+    /// Forwarding accessor for container explore cache (owned by ScreenExploration).
+    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] {
+        get { explorer.containerExploreStates }
+        set { explorer.containerExploreStates = newValue }
     }
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
     /// Screen name from the registry (first header element by traversal order).
     /// Computed once in `apply()` from the hierarchy's traversal order.
@@ -143,20 +141,14 @@ final class TheBagman {
         )
     }
 
-    // MARK: - Element Interactivity (object-based)
+    // MARK: - Element Interactivity (forwarded to Interactivity)
 
-    /// Check if an element is interactive given its parsed data and live object.
     func isInteractive(element: AccessibilityElement, object: NSObject?) -> Bool {
-        guard let object else { return false }
-        return element.respondsToUserInteraction
-            || element.traits.contains(.adjustable)
-            || !element.customActions.isEmpty
-            || object.accessibilityRespondsToUserInteraction
+        Interactivity.isInteractive(element: element, object: object)
     }
 
-    /// Return custom action names from a live NSObject.
     func customActionNames(from object: NSObject?) -> [String] {
-        object?.accessibilityCustomActions?.map { $0.name } ?? []
+        Interactivity.customActionNames(from: object)
     }
 
     // MARK: - Unified Element Resolution
@@ -234,7 +226,9 @@ final class TheBagman {
         switch target {
         case .heistId(let heistId):
             guard let entry = screenElements[heistId], presentedHeistIds.contains(heistId) else {
-                return .notFound(diagnostics: heistIdNotFoundMessage(heistId))
+                return .notFound(diagnostics: diagnostics.heistIdNotFound(
+                    heistId, knownIds: screenElements.keys, viewportCount: viewportHeistIds.count
+                ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))
         case .matcher(let matcher, let ordinal):
@@ -317,25 +311,8 @@ final class TheBagman {
         }
     }
 
-    /// Check if an element is interactive based on traits.
-    /// Returns nil if interactive, or an error string if not.
     func checkElementInteractivity(_ element: AccessibilityElement) -> String? {
-        if element.traits.contains(.notEnabled) {
-            return "Element is disabled (has 'notEnabled' trait)"
-        }
-
-        let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
-        let hasInteractiveTraits = element.traits.contains(.button) ||
-                                   element.traits.contains(.link) ||
-                                   element.traits.contains(.adjustable) ||
-                                   element.traits.contains(.searchField) ||
-                                   element.traits.contains(.keyboardKey)
-
-        if staticTraitsOnly && !hasInteractiveTraits && element.customActions.isEmpty {
-            insideJobLogger.warning("Element '\(element.description)' has only static traits, tap may not work")
-        }
-
-        return nil
+        Interactivity.checkInteractivity(element)
     }
 
     /// Resolve a screen point from an element target or explicit coordinates.
@@ -362,31 +339,152 @@ final class TheBagman {
         resolveTarget(elementTarget).resolved?.element.shape.frame
     }
 
+    // MARK: - Diagnostics Forwarding
+
+    func heistIdNotFoundMessage(_ heistId: String) -> String {
+        diagnostics.heistIdNotFound(heistId, knownIds: screenElements.keys, viewportCount: viewportHeistIds.count)
+    }
+
+    func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
+        diagnostics.matcherNotFound(
+            matcher, hierarchy: currentHierarchy,
+            screenElements: screenElements, viewportHeistIds: viewportHeistIds,
+            traversalOrder: buildTraversalOrderIndex()
+        )
+    }
+
+    func formatMatcher(_ matcher: ElementMatcher) -> String {
+        diagnostics.formatMatcher(matcher)
+    }
+
+    // MARK: - Wire Conversion Forwarding
+
+    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+        wireConverter.traitNames(traits)
+    }
+
+    func convertElement(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
+        wireConverter.convert(element, object: object)
+    }
+
+    func toWire(_ entry: ScreenElement) -> HeistElement {
+        wireConverter.toWire(entry)
+    }
+
+    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
+        wireConverter.toWire(entries)
+    }
+
+    func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
+        wireConverter.convertNode(node)
+    }
+
+    func computeDelta(
+        before: [ScreenElement],
+        after: [ScreenElement],
+        afterTree: [AccessibilityHierarchy]?,
+        isScreenChange: Bool
+    ) -> InterfaceDelta {
+        wireConverter.computeDelta(before: before, after: after, afterTree: afterTree, isScreenChange: isScreenChange)
+    }
+
+    // MARK: - Id Assignment Forwarding
+
+    func assignHeistIds(_ elements: [AccessibilityElement]) -> [String] {
+        idAssigner.assign(elements)
+    }
+
+    func synthesizeBaseId(_ element: AccessibilityElement) -> String {
+        idAssigner.synthesizeBaseId(element)
+    }
+
+    func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
+        idAssigner.stripTraitPrefix(text, traitPrefix: traitPrefix)
+    }
+
+    func slugify(_ text: String?) -> String? {
+        idAssigner.slugify(text)
+    }
+
+    // MARK: - Action Forwarding
+
+    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeActivate(target) }
+    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeIncrement(target) }
+    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult { await actions.executeDecrement(target) }
+    func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult { await actions.executeCustomAction(target) }
+    func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult { await actions.executeEditAction(target) }
+    func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult { await actions.executeSetPasteboard(target) }
+    func executeGetPasteboard() -> TheSafecracker.InteractionResult { actions.executeGetPasteboard() }
+    func executeResignFirstResponder() async -> TheSafecracker.InteractionResult { await actions.executeResignFirstResponder() }
+    func executeTap(_ target: TouchTapTarget) async -> TheSafecracker.InteractionResult { await actions.executeTap(target) }
+    func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult { await actions.executeLongPress(target) }
+    func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult { await actions.executeSwipe(target) }
+    func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrag(target) }
+    func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult { await actions.executePinch(target) }
+    func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult { await actions.executeRotate(target) }
+    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult { await actions.executeTwoFingerTap(target) }
+    func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrawPath(target) }
+    func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult { await actions.executeDrawBezier(target) }
+    func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult { await actions.executeTypeText(target) }
+
+    // MARK: - Scroll Forwarding
+
+    func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScroll(target) }
+    func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScrollToEdge(target) }
+    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult { await scroll.executeScrollToVisible(target) }
+    func ensureOnScreen(for target: ElementTarget) async { await scroll.ensureOnScreen(for: target) }
+    func ensureFirstResponderOnScreen() async { await scroll.ensureFirstResponderOnScreen() }
+    func resolveScrollTarget(screenElement: ScreenElement, axis: ScrollAxis? = nil) -> ScrollableTarget? {
+        scroll.resolveScrollTarget(screenElement: screenElement, axis: axis)
+    }
+
+    // MARK: - Element Selection
+
+    /// Select elements from the registry by scope, sorted by traversal order.
+    /// Pure read — no side effects. Call `markPresented(_:)` separately when
+    /// sending elements to a client.
+    func selectElements(_ scope: SnapshotScope) -> [ScreenElement] {
+        let orderByHeistId = buildTraversalOrderIndex()
+
+        let candidates: [String] = switch scope {
+        case .viewport: Array(viewportHeistIds)
+        case .all: Array(screenElements.keys)
+        }
+        // Sort by traversal order. Off-screen elements (Int.max) sort to the end,
+        // with heistId as tiebreaker for deterministic ordering within that group.
+        return candidates.compactMap { heistId in
+            screenElements[heistId].map { (order: orderByHeistId[heistId] ?? Int.max, entry: $0) }
+        }.sorted {
+            if $0.order != $1.order { return $0.order < $1.order }
+            return $0.entry.heistId < $1.entry.heistId
+        }.map(\.entry)
+    }
+
+    /// Mark heistIds as having been sent to a client. Call when elements are
+    /// actually leaving TheBagman — this gates `resolveTarget` (callers can only
+    /// target elements they've seen).
+    func markPresented(_ elements: [ScreenElement]) {
+        registry.markPresented(elements)
+    }
+
+    /// Prune elements not seen during an explore cycle.
+    func pruneRegistry(keeping seen: Set<String>) {
+        registry.prune(keeping: seen)
+    }
+
     // MARK: - Refresh Pipeline
 
     /// Clear all cached element data (used on suspend).
     func clearCache() {
         currentHierarchy.removeAll()
-        screenElements.removeAll()
-        presentedHeistIds.removeAll()
-        viewportHeistIds.removeAll()
-        elementToHeistId.removeAll()
+        registry.clear()
         containerExploreStates.removeAll()
         exploreCycleIds = nil
         lastHierarchyHash = 0
     }
 
-    /// Explore the screen and prune stale elements from the registry.
-    /// Tracks which heistIds are seen across all `apply()` calls during the explore,
-    /// then removes any that weren't visited — they no longer exist on screen.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        exploreCycleIds = viewportHeistIds
-        let manifest = await exploreScreen(target: target)
-        if let seen = exploreCycleIds {
-            screenElements = screenElements.filter { seen.contains($0.key) }
-        }
-        exploreCycleIds = nil
-        return manifest
+        await explorer.exploreAndPrune(target: target)
     }
 
     // MARK: - Parse (read-only)
@@ -523,33 +621,8 @@ final class TheBagman {
             elementObjects: result.objects
         )
 
-        // Assign heistIds from AccessibilityElements directly — no wire conversion needed
-        let heistIds = assignHeistIds(result.elements)
-
-        elementToHeistId = Dictionary(
-            zip(result.elements, heistIds).map { ($0, $1) },
-            uniquingKeysWith: { _, latest in latest }
-        )
-
-        for (parsedElement, heistId) in zip(result.elements, heistIds) {
-            let context = contexts[parsedElement]
-            if var existing = screenElements[heistId] {
-                existing.element = parsedElement
-                existing.object = context?.object
-                existing.scrollView = context?.scrollView
-                screenElements[heistId] = existing
-            } else {
-                screenElements[heistId] = ScreenElement(
-                    heistId: heistId,
-                    contentSpaceOrigin: context?.contentSpaceOrigin,
-                    element: parsedElement,
-                    object: context?.object,
-                    scrollView: context?.scrollView
-                )
-            }
-        }
-
-        viewportHeistIds = Set(heistIds)
+        let heistIds = idAssigner.assign(result.elements)
+        registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
 
         exploreCycleIds?.formUnion(heistIds)
 
@@ -557,7 +630,7 @@ final class TheBagman {
         lastScreenName = result.elements.first {
             $0.traits.contains(.header) && $0.label != nil
         }?.label
-        lastScreenId = slugify(lastScreenName)
+        lastScreenId = idAssigner.slugify(lastScreenName)
     }
 
     /// Parse and apply in one step. Most callers use this.
@@ -569,16 +642,8 @@ final class TheBagman {
         return result
     }
 
-    /// Per-element context gathered during the hierarchy walk.
-    private struct ElementContext {
-        let contentSpaceOrigin: CGPoint?
-        weak var scrollView: UIScrollView?
-        weak var object: NSObject?
-    }
-
     /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// scroll view refs, and live element objects. Uses compactMap(context:container:element:)
-    /// to propagate the nearest scroll view from parent containers to child elements.
+    /// scroll view refs, and live element objects.
     private func buildElementContexts(
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
@@ -700,9 +765,7 @@ final class TheBagman {
         if isScreenChange {
             // Clear the old screen's registry before applying new data.
             // No mixed state — the old registry is gone before new entries arrive.
-            screenElements.removeAll()
-            presentedHeistIds.removeAll()
-            elementToHeistId.removeAll()
+            registry.clearScreen()
             containerExploreStates.removeAll()
         }
         if let afterResult {
@@ -717,7 +780,7 @@ final class TheBagman {
         let afterSnapshot = selectElements(.all)
         markPresented(afterSnapshot)
 
-        let delta = computeDelta(
+        let delta = wireConverter.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
         )
@@ -742,7 +805,7 @@ final class TheBagman {
             elementLabel = postElement?.label
             elementValue = postElement?.value
             if let traits = postElement?.traits {
-                elementTraits = traitNames(traits)
+                elementTraits = wireConverter.traitNames(traits)
             }
         }
 

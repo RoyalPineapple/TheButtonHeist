@@ -123,7 +123,6 @@ public final class TheInsideJob {
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
         self.bagman = TheBagman(tripwire: self.tripwire)
-        self.theSafecracker.bagman = self.bagman
         self.theSafecracker.tripwire = self.tripwire
         self.bagman.safecracker = self.theSafecracker
 
