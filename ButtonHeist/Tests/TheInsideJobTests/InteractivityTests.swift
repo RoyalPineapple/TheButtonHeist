@@ -1,0 +1,111 @@
+#if canImport(UIKit)
+import XCTest
+@testable import AccessibilitySnapshotParser
+@testable import TheInsideJob
+@testable import TheScore
+
+@MainActor
+final class InteractivityTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    private func makeElement(
+        label: String? = nil,
+        traits: UIAccessibilityTraits = [],
+        customActions: [AccessibilityElement.CustomAction] = [],
+        respondsToUserInteraction: Bool = false
+    ) -> AccessibilityElement {
+        AccessibilityElement(
+            description: label ?? "",
+            label: label,
+            value: nil,
+            traits: traits,
+            identifier: nil,
+            hint: nil,
+            userInputLabels: nil,
+            shape: .frame(.zero),
+            activationPoint: .zero,
+            usesDefaultActivationPoint: true,
+            customActions: customActions,
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: respondsToUserInteraction
+        )
+    }
+
+    // MARK: - isInteractive
+
+    func testRespondsToUserInteractionIsInteractive() {
+        let element = makeElement(respondsToUserInteraction: true)
+        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+    }
+
+    func testAdjustableTraitIsInteractive() {
+        let element = makeElement(traits: .adjustable)
+        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+    }
+
+    func testCustomActionsIsInteractive() {
+        let element = makeElement(customActions: [.init(name: "Delete")])
+        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+    }
+
+    func testStaticTextNotInteractive() {
+        let element = makeElement(label: "Hello", traits: .staticText)
+        XCTAssertFalse(TheBagman.Interactivity.isInteractive(element: element))
+    }
+
+    func testNoTraitsNoInteraction() {
+        let element = makeElement(label: "Plain")
+        XCTAssertFalse(TheBagman.Interactivity.isInteractive(element: element))
+    }
+
+    // MARK: - checkInteractivity
+
+    func testDisabledElementIsBlocked() {
+        let element = makeElement(traits: .notEnabled)
+        let result = TheBagman.Interactivity.checkInteractivity(element)
+        switch result {
+        case .blocked(let reason):
+            XCTAssertTrue(reason.contains("disabled"))
+        case .interactive:
+            XCTFail("Expected blocked for notEnabled trait")
+        }
+    }
+
+    func testEnabledButtonIsInteractive() {
+        let element = makeElement(traits: .button)
+        let result = TheBagman.Interactivity.checkInteractivity(element)
+        switch result {
+        case .interactive:
+            break
+        case .blocked(let reason):
+            XCTFail("Expected interactive, got blocked: \(reason)")
+        }
+    }
+
+    func testStaticOnlyElementStillReturnsInteractive() {
+        let element = makeElement(traits: .staticText)
+        let result = TheBagman.Interactivity.checkInteractivity(element)
+        switch result {
+        case .interactive:
+            break
+        case .blocked(let reason):
+            XCTFail("Expected interactive (with warning), got blocked: \(reason)")
+        }
+    }
+
+    func testNotEnabledTakesPrecedence() {
+        let element = makeElement(traits: [.button, .notEnabled])
+        let result = TheBagman.Interactivity.checkInteractivity(element)
+        switch result {
+        case .blocked:
+            break
+        case .interactive:
+            XCTFail("Expected blocked — notEnabled should override button trait")
+        }
+    }
+}
+
+#endif
