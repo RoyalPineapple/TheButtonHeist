@@ -646,6 +646,9 @@ extension TheFence {
     }
 
     private func handlePlayHeist(_ args: [String: Any]) async throws -> FenceResponse {
+        guard !isPlayingHeist else {
+            throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
+        }
         guard let inputPath = stringArg(args, "input") else {
             throw FenceError.invalidRequest("play_heist requires an 'input' path")
         }

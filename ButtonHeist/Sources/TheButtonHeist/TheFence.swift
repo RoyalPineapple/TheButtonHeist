@@ -103,6 +103,7 @@ public final class TheFence {
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
     private var isStarted = false
+    var isPlayingHeist = false
 
     /// Cached interface elements from the most recent get_interface response.
     /// Used by TheBookKeeper to resolve heistIds to element properties for heist recording.
@@ -269,13 +270,16 @@ public final class TheFence {
             bookKeeper.updateInterfaceCache(iface.elements)
         }
 
-        // Record the command for heist playback (no-ops when not recording)
-        bookKeeper.recordHeistEvidence(
-            command: command.rawValue,
-            args: request,
-            response: response,
-            interfaceElements: lastInterfaceElements.isEmpty ? nil : lastInterfaceElements
-        )
+        // Record the command for heist playback (skip during playback; no-ops when not recording)
+        if !isPlayingHeist {
+            bookKeeper.recordHeistEvidence(
+                command: command,
+                args: request,
+                response: response,
+                interfaceElements: lastInterfaceElements.isEmpty ? nil : lastInterfaceElements
+            )
+        }
+
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {
             let delivery = ActionExpectation.validateDelivery(actionResult)
