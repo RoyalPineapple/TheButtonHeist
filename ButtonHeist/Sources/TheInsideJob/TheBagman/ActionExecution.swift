@@ -6,90 +6,102 @@ import TheScore
 
 // MARK: - Action Execution
 //
-// TheBagman resolves elements and performs all accessibility actions.
-// TheSafecracker is only called for raw gesture synthesis (tap, swipe, etc.)
-// when accessibility activation fails or for explicit touch commands.
+// Two generic pipelines handle all element and point interactions.
+// Each executeXxx method is a thin wrapper that feeds the pipeline
+// a closure for the actual gesture or accessibility action.
 
 extension TheBagman {
+
+    // MARK: - Element Action Pipeline
+
+    /// Unified pipeline for actions that target an element:
+    /// ensureOnScreen → resolve → check interactivity → perform action.
+    func performElementAction(
+        target: ElementTarget,
+        method: ActionMethod,
+        requireInteractive: Bool = true,
+        action: (ResolvedTarget) async -> TheSafecracker.InteractionResult?
+    ) async -> TheSafecracker.InteractionResult {
+        await ensureOnScreen(for: target)
+        let resolution = resolveTarget(target)
+        guard let resolved = resolution.resolved else {
+            return .failure(.elementNotFound, message: resolution.diagnostics)
+        }
+        if requireInteractive {
+            if case .blocked(let reason) = checkElementInteractivity(resolved.element) {
+                return .failure(method, message: reason)
+            }
+            guard hasInteractiveObject(resolved.screenElement) else {
+                return .failure(method, message: "Element does not support \(method.rawValue)")
+            }
+        }
+        return await action(resolved) ?? .failure(method, message: "\(method.rawValue) failed")
+    }
+
+    /// Unified pipeline for gestures that target a screen point:
+    /// ensureOnScreen (if element target) → resolve point → perform gesture.
+    func performPointAction(
+        elementTarget: ElementTarget?,
+        pointX: Double?,
+        pointY: Double?,
+        method: ActionMethod,
+        action: (CGPoint) async -> Bool
+    ) async -> TheSafecracker.InteractionResult {
+        if let elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
+        switch resolvePoint(from: elementTarget, pointX: pointX, pointY: pointY) {
+        case .failure(let result):
+            return result
+        case .success(let point):
+            let success = await action(point)
+            if success { safecracker.fingerprints.showFingerprint(at: point) }
+            return TheSafecracker.InteractionResult(success: success, method: method, message: nil, value: nil)
+        }
+    }
 
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await ensureOnScreen(for: target)
-        let resolution = resolveTarget(target)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        await performElementAction(target: target, method: .activate) { resolved in
+            let point = resolved.element.activationPoint
+            if self.activate(resolved.screenElement) {
+                self.safecracker.fingerprints.showFingerprint(at: point)
+                return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
+            }
+            if await self.safecracker.tap(at: point) {
+                self.safecracker.fingerprints.showFingerprint(at: point)
+                return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
+            }
+            return nil
         }
-
-        if case .blocked(let reason) = checkElementInteractivity(resolved.element) {
-            return .failure(.activate, message: reason)
-        }
-
-        let point = resolved.element.activationPoint
-        guard hasInteractiveObject(resolved.screenElement) else {
-            return .failure(.activate, message: "Element does not support activation")
-        }
-
-        if activate(resolved.screenElement) {
-            safecracker.fingerprints.showFingerprint(at: point)
-            return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
-        }
-
-        // Fall back to synthetic tap via TheSafecracker
-        if await safecracker.tap(at: point) {
-            safecracker.fingerprints.showFingerprint(at: point)
-            return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
-        }
-
-        return .failure(.activate, message: "Activation failed")
     }
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await ensureOnScreen(for: target)
-        let resolution = resolveTarget(target)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        await performElementAction(target: target, method: .increment) { resolved in
+            self.increment(resolved.screenElement)
+            self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+            return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
         }
-        guard hasInteractiveObject(resolved.screenElement) else {
-            return .failure(.increment, message: "Element does not support increment")
-        }
-
-        increment(resolved.screenElement)
-        safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
-        return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await ensureOnScreen(for: target)
-        let resolution = resolveTarget(target)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        await performElementAction(target: target, method: .decrement) { resolved in
+            self.decrement(resolved.screenElement)
+            self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+            return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
         }
-        guard hasInteractiveObject(resolved.screenElement) else {
-            return .failure(.decrement, message: "Element does not support decrement")
-        }
-
-        decrement(resolved.screenElement)
-        safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
-        return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
-        await ensureOnScreen(for: target.elementTarget)
-        let resolution = resolveTarget(target.elementTarget)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+        await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
+            let success = self.performCustomAction(named: target.actionName, on: resolved.screenElement)
+            return TheSafecracker.InteractionResult(
+                success: success, method: .customAction,
+                message: success ? nil : "Action '\(target.actionName)' not found",
+                value: nil
+            )
         }
-        guard hasInteractiveObject(resolved.screenElement) else {
-            return .failure(.customAction, message: "Element does not support custom actions")
-        }
-
-        let success = performCustomAction(named: target.actionName, on: resolved.screenElement)
-        return TheSafecracker.InteractionResult(
-            success: success, method: .customAction,
-            message: success ? nil : "Action '\(target.actionName)' not found",
-            value: nil
-        )
     }
 
     // MARK: - Edit / Pasteboard / Responder
@@ -127,42 +139,29 @@ extension TheBagman {
         )
     }
 
-    // MARK: - Touch Gestures (element resolution → TheSafecracker)
+    // MARK: - Touch Gestures
 
     func executeTap(_ target: TouchTapTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result): return result
-        case .success(let point):
-            guard await safecracker.tap(at: point) else {
-                return .failure(.syntheticTap, message: "Touch tap failed")
-            }
-            safecracker.fingerprints.showFingerprint(at: point)
-            return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
+        await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
+            method: .syntheticTap
+        ) { point in
+            await self.safecracker.tap(at: point)
         }
     }
 
     func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
-        case .failure(let result): return result
-        case .success(let point):
-            let duration = clampDuration(target.duration)
-            let success = await safecracker.longPress(at: point, duration: duration)
-            if success { safecracker.fingerprints.showFingerprint(at: point) }
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticLongPress, message: nil, value: nil)
+        let duration = clampDuration(target.duration)
+        return await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
+            method: .syntheticLongPress
+        ) { point in
+            await self.safecracker.longPress(at: point, duration: duration)
         }
     }
 
     func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-
+        // Unit-point swipe: resolve element frame, compute start/end from unit coordinates
         let unitStart: UnitPoint?
         let unitEnd: UnitPoint?
         if let start = target.start, let end = target.end {
@@ -180,10 +179,10 @@ extension TheBagman {
             guard let elementTarget = target.elementTarget else {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
+            await ensureOnScreen(for: elementTarget)
             guard let frame = resolveFrame(for: elementTarget) else {
                 return .failure(.elementNotFound, message: "Element not found")
             }
-
             let startPoint = CGPoint(
                 x: frame.origin.x + unitStart.x * frame.width,
                 y: frame.origin.y + unitStart.y * frame.height
@@ -192,16 +191,18 @@ extension TheBagman {
                 x: frame.origin.x + unitEnd.x * frame.width,
                 y: frame.origin.y + unitEnd.y * frame.height
             )
-
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            return TheSafecracker.InteractionResult(
-                success: success, method: .syntheticSwipe, message: nil, value: nil
-            )
+            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
         }
 
+        // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
+        if let elementTarget = target.elementTarget {
+            await ensureOnScreen(for: elementTarget)
+        }
         switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result): return result
+        case .failure(let result):
+            return result
         case .success(let startPoint):
             let endPoint: CGPoint
             if let endX = target.endX, let endY = target.endY {
@@ -217,95 +218,77 @@ extension TheBagman {
             } else {
                 return .failure(.syntheticSwipe, message: "No end point or direction")
             }
-
             let duration = clampDuration(target.duration ?? 0.15)
             let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            return TheSafecracker.InteractionResult(
-                success: success, method: .syntheticSwipe, message: nil, value: nil
-            )
+            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
         }
     }
 
     func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
-        case .failure(let result): return result
-        case .success(let startPoint):
-            let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
-            return TheSafecracker.InteractionResult(
-                success: success, method: .syntheticDrag, message: nil, value: nil
-            )
+        let duration = clampDuration(target.duration ?? 0.5)
+        return await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.startX, pointY: target.startY,
+            method: .syntheticDrag
+        ) { startPoint in
+            await self.safecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
         }
     }
 
     func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result): return result
-        case .success(let center):
-            let spread = target.spread ?? 100.0
-            let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker.pinch(
+        let spread = target.spread ?? 100.0
+        let duration = clampDuration(target.duration ?? 0.5)
+        return await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            method: .syntheticPinch
+        ) { center in
+            await self.safecracker.pinch(
                 center: center, scale: CGFloat(target.scale),
                 spread: CGFloat(spread), duration: duration
-            )
-            return TheSafecracker.InteractionResult(
-                success: success, method: .syntheticPinch, message: nil, value: nil
             )
         }
     }
 
     func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result): return result
-        case .success(let center):
-            let radius = target.radius ?? 100.0
-            let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker.rotate(
+        let radius = target.radius ?? 100.0
+        let duration = clampDuration(target.duration ?? 0.5)
+        return await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            method: .syntheticRotate
+        ) { center in
+            await self.safecracker.rotate(
                 center: center, angle: CGFloat(target.angle),
                 radius: CGFloat(radius), duration: duration
-            )
-            return TheSafecracker.InteractionResult(
-                success: success, method: .syntheticRotate, message: nil, value: nil
             )
         }
     }
 
     func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult {
-        if let elementTarget = target.elementTarget {
-            await ensureOnScreen(for: elementTarget)
-        }
-        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
-        case .failure(let result): return result
-        case .success(let center):
-            let spread = target.spread ?? 40.0
-            let success = await safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
-            if success { safecracker.fingerprints.showFingerprint(at: center) }
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticTwoFingerTap, message: nil, value: nil)
+        let spread = target.spread ?? 40.0
+        return await performPointAction(
+            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            method: .syntheticTwoFingerTap
+        ) { center in
+            await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         }
     }
 
     func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {
+        guard target.points.count <= 10_000 else {
+            return .failure(.syntheticDrawPath, message: "Too many points (max 10,000)")
+        }
         let cgPoints = target.points.map { $0.cgPoint }
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        return TheSafecracker.InteractionResult(
-            success: success, method: .syntheticDrawPath, message: nil, value: nil
-        )
+        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
     }
 
     func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
+        guard target.segments.count <= 1_000 else {
+            return .failure(.syntheticDrawPath, message: "Too many segments (max 1,000)")
+        }
         guard !target.segments.isEmpty else {
             return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
         }
@@ -321,9 +304,7 @@ extension TheBagman {
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
         let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        return TheSafecracker.InteractionResult(
-            success: success, method: .syntheticDrawPath, message: nil, value: nil
-        )
+        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
     }
 
     // MARK: - Text Entry
@@ -410,9 +391,9 @@ extension TheBagman {
             result = resolvedDuration
         } else if let velocity = velocity, velocity > 0 {
             var totalLength: Double = 0
-            for i in 1..<points.count {
-                let dx = points[i].x - points[i-1].x
-                let dy = points[i].y - points[i-1].y
+            for index in 1..<points.count {
+                let dx = points[index].x - points[index - 1].x
+                let dy = points[index].y - points[index - 1].y
                 totalLength += sqrt(dx * dx + dy * dy)
             }
             result = totalLength / velocity

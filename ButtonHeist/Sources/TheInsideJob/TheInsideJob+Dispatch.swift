@@ -78,27 +78,9 @@ extension TheInsideJob {
         case .touchTwoFingerTap(let target):
             await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
-            guard target.points.count <= 10_000 else {
-                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many points (max 10,000)",
-                                       errorKind: .validationError, screenName: bagman.lastScreenName,
-                                       screenId: bagman.lastScreenId)
-                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
-                return true
-            }
-            await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.bagman.executeDrawPath(target)
-            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            guard target.segments.count <= 1_000 else {
-                let err = ActionResult(success: false, method: .syntheticDrawPath, message: "Too many segments (max 1,000)",
-                                       errorKind: .validationError, screenName: bagman.lastScreenName,
-                                       screenId: bagman.lastScreenId)
-                sendMessage(.actionResult(err), requestId: requestId, respond: respond)
-                return true
-            }
-            await performInteraction(command: message, requestId: requestId, respond: respond) {
-                await self.bagman.executeDrawBezier(target)
-            }
+            await performInteraction(command: message, requestId: requestId, respond: respond) { await self.bagman.executeDrawBezier(target) }
         default:
             return false
         }
