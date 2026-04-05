@@ -24,7 +24,7 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
         Core["TheInsideJob.swift — Server lifecycle, message dispatch, performInteraction"]
-        Dispatch["TheInsideJob+Dispatch.swift — 3-part interaction dispatch table"]
+        Dispatch["TheInsideJob+Dispatch.swift — Grouped interaction dispatch"]
         Pulse["Extensions/Pulse.swift — Invalidation, pulse transitions, settle-driven polling"]
         Anim["Extensions/Animation.swift — waitForIdle handler"]
         Screen["Extensions/Screen.swift — Screenshot capture, recording mgmt"]
@@ -63,8 +63,8 @@ graph TD
 
 | File | Purpose |
 |------|---------|
-| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performScrollToVisibleSearch` |
-| `TheInsideJob+Dispatch.swift` | Three-part interaction dispatch: accessibility, touch, text+scroll |
+| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performElementSearch` |
+| `TheInsideJob+Dispatch.swift` | Grouped interaction dispatch: accessibility actions, touch gestures, text+scroll+search |
 | `ScreenManifest.swift` | Full-screen element census: scrolls all containers, records every element, restores scroll positions |
 | `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
 | `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
@@ -103,28 +103,31 @@ flowchart TD
     Level2 --> RecCases["startRecording / stopRecording"]
     Level2 --> DispatchInt["dispatchInteraction → 3 sub-dispatchers"]
 
-    DispatchInt --> AccDisp["dispatchAccessibilityInteraction"]
-    DispatchInt --> TouchDisp["dispatchTouchInteraction"]
-    DispatchInt --> TextDisp["dispatchTextAndScrollInteraction"]
+    DispatchInt --> AccDisp["dispatchAccessibilityAction"]
+    DispatchInt --> TouchDisp["dispatchTouchGesture"]
+    DispatchInt --> Inline["Inline: typeText, scroll, scrollToVisible,<br/>scrollToEdge, waitFor, explore"]
+    DispatchInt --> Search["performElementSearch() (dedicated path)"]
 
     AccDisp --> Perform["performInteraction()"]
     TouchDisp --> Perform
-    TextDisp --> Perform
-    TextDisp --> ScrollVis["performScrollToVisibleSearch() (dedicated path)"]
+    Inline --> Perform
 ```
 
-### `dispatchAccessibilityInteraction`
+### `dispatchAccessibilityAction`
 `activate`, `increment`, `decrement`, `performCustomAction`, `editAction`, `setPasteboard`, `getPasteboard`, `resignFirstResponder`
 
-### `dispatchTouchInteraction`
+### `dispatchTouchGesture`
 `touchTap`, `touchLongPress`, `touchSwipe`, `touchDrag`, `touchPinch`, `touchRotate`, `touchTwoFingerTap`, `touchDrawPath` (≤10,000 points), `touchDrawBezier` (≤1,000 segments)
 
-### `dispatchTextAndScrollInteraction`
-`typeText`, `scroll`, `scrollToVisible` (→ dedicated path), `scrollToEdge`, `waitFor`, `explore`
+### Inline in `dispatchInteraction`
+`typeText`, `scroll`, `scrollToVisible` (one-shot), `scrollToEdge`, `waitFor`, `explore`
+
+### `performElementSearch` (dedicated path)
+`elementSearch` — iterative page-by-page scroll search. Bypasses `performInteraction` because the scroll loop manages its own refresh/settle cycles.
 
 ## `performInteraction` Pipeline
 
-Every interaction except `scrollToVisible` flows through this method:
+Every interaction except `elementSearch` flows through this method:
 
 ```mermaid
 flowchart TD
@@ -145,7 +148,7 @@ flowchart TD
     S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
 ```
 
-`performScrollToVisibleSearch` is structurally identical but calls `bagman.executeScrollToVisible` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response.
+`performElementSearch` is structurally identical but calls `bagman.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
 
 ## Status Message Handling
 

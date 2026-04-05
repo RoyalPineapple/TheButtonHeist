@@ -517,11 +517,11 @@ public final class TheInsideJob {
         return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
     }
 
-    /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
+    /// Dedicated dispatch for element_search. Bypasses performInteraction
     /// because the scroll loop does its own repeated refresh/settle cycles internally.
     /// Captures before/after snapshots for delta computation around the entire search.
-    func performScrollToVisibleSearch(
-        target: ScrollToVisibleTarget,
+    func performElementSearch(
+        target: ElementSearchTarget,
         command: ClientMessage,
         requestId: String?,
         respond: @escaping (Data) -> Void
@@ -529,7 +529,7 @@ public final class TheInsideJob {
         stakeout?.noteActivity()
         bagman.refresh()
         let before = bagman.captureBeforeState()
-        let result = await bagman.executeScrollToVisible(target)
+        let result = await bagman.executeElementSearch(target)
 
         let actionResult = await bagman.actionResultWithDelta(
             success: result.success,

@@ -20,7 +20,7 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
-| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution, scroll orchestration, delta computation, screen capture |
+| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution (via unified pipeline), scroll orchestration, delta computation, screen capture |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Cross-Cutting
@@ -89,10 +89,10 @@ sequenceDiagram
     DC->>SS: JSON + newline
     SS->>IJ: handleClientMessage
     IJ->>IJ: bagman.refreshAccessibilityData()
-    IJ->>IJ: bagman.snapshotElements() (before)
-    IJ->>TS: executeActivation(target)
-    TS->>TS: resolve element, activate/tap
-    TS-->>IJ: InteractionResult
+    IJ->>IJ: bagman.captureBeforeState() (before)
+    IJ->>IJ: bagman.executeActivate(target)
+    Note over IJ: TheBagman resolves target,<br/>hands TheSafecracker resolved values
+    IJ-->>IJ: InteractionResult
     IJ->>IJ: computeDelta(before, after)
     IJ-->>DC: actionResult(delta)
     DC-->>TH: onActionResult

@@ -12,8 +12,8 @@ TheBagman handles all the goods during TheInsideJob:
 2. **Parse/apply pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value; `apply()` mutates the registry. Screen change detection happens between these two steps — no mixed old/new state.
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
 4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
-5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
-6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `filteredHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
+5. **Action execution** — Two generic pipelines (`performElementAction` for element-targeted actions, `performPointAction` for coordinate-targeted gestures) handle resolution, interactivity checking, and error reporting. Each `executeXxx` method is a thin closure that feeds the pipeline. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
+6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 8. **HeistId synthesis** — assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
 9. **Topology-based screen change detection** — detects navigation changes that reuse the same VC by checking back button trait (private `0x8000000`) appearance/disappearance and header label disjointness (`isTopologyChanged`)
@@ -42,7 +42,7 @@ flowchart LR
         B1["Element registry<br/>(screenElements)"]
         B2["Target resolution<br/>(heistId / matcher)"]
         B3["Parse → Apply pipeline"]
-        B4["Scroll orchestration<br/>(scroll, scrollToEdge,<br/>scrollToVisible)"]
+        B4["Scroll orchestration<br/>(scroll, scrollToEdge,<br/>scrollToVisible, elementSearch)"]
         B5["Action execution<br/>(activate, increment,<br/>decrement, customAction)"]
         B6["Screen capture<br/>+ recording frames"]
     end
@@ -101,7 +101,7 @@ graph TD
         end
 
         subgraph Scrolling["Scroll Orchestration (+Scroll)"]
-            ScrollVis["executeScrollToVisible<br/>(hierarchy walk + stagnation)"]
+            ScrollVis["executeScrollToVisible (one-shot)<br/>executeElementSearch (iterative)"]
             ScrollCmd["executeScroll, executeScrollToEdge"]
         end
     end
@@ -261,13 +261,13 @@ No store writes to another store. No circular dependencies.
 | `TheBagman.swift` | ~800 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
-| `TheBagman/ActionExecution.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
-| `TheBagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
+| `TheBagman/ActionExecution.swift` | ~420 | Unified pipelines (`performElementAction`, `performPointAction`) + all `executeXxx` methods |
+| `TheBagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible (one-shot), element-search (iterative), ensure-on-screen, direction mapping |
 | `TheBagman/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
-| `TheBagman/WireConversion.swift` | ~215 | toWire(), delta computation, tree conversion |
-| `TheBagman/IdAssignment.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
+| `TheBagman/WireConversion.swift` | ~215 | Caseless enum with static methods: toWire(), delta computation, tree conversion |
+| `TheBagman/IdAssignment.swift` | ~100 | Caseless enum with static methods: deterministic heistId synthesis from traits/labels |
 | `TheBagman/ElementRegistry.swift` | ~95 | Element registry storage: elements, viewportIds, reverseIndex |
-| `TheBagman/Diagnostics.swift` | ~50 | Resolution error formatting: near-miss, similar heistIds, compact summary |
+| `TheBagman/Diagnostics.swift` | ~50 | Caseless enum with static methods: resolution error formatting |
 | `TheBagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConversion and ActionExecution) |
 | `TheBagman/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
 | `TheBagman/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |

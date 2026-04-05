@@ -232,7 +232,7 @@ public final class TheFence {
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
             return try await handleGesture(command: command, args: args)
-        case .scroll, .scrollToVisible, .scrollToEdge:
+        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
             return try await handleScrollAction(command: command, args: args)
         case .waitFor:
             return try await handleWaitFor(args)

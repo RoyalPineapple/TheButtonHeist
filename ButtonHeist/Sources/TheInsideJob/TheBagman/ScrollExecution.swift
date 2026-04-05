@@ -176,18 +176,67 @@ extension TheBagman {
         }
     }
 
+    // MARK: - Scroll To Visible (One-Shot)
+
+    /// One-shot scroll: jump directly to a known element's position.
+    /// If already visible, no-op. If the element has a recorded content-space
+    /// position, computes the target offset and scrolls there in one shot.
+    /// Fails if the element is not in the registry or has no scroll position.
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
-        guard let searchTarget = target.elementTarget else {
+        guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
+        }
+
+        refresh()
+
+        // Already visible — ensure it's in the comfort zone and return
+        if let found = resolveFirstMatch(elementTarget) {
+            ensureOnScreenSync(found)
+            return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: "Already visible", value: nil)
+        }
+
+        // Known element with recorded position — one-shot jump
+        if case .heistId(let heistId) = elementTarget,
+           let entry = registry.elements[heistId],
+           let origin = entry.contentSpaceOrigin,
+           let scrollView = entry.scrollView {
+            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
+            scrollView.setContentOffset(targetOffset, animated: true)
+            await tripwire.yieldRealFrames(20)
+            refresh()
+            if let found = resolveFirstMatch(elementTarget) {
+                ensureOnScreenSync(found)
+                await tripwire.yieldRealFrames(20)
+                refresh()
+                if resolveFirstMatch(elementTarget) != nil {
+                    return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
+                }
+            }
+            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
+        }
+
+        return .failure(.scrollToVisible, message: "Element not in registry or has no recorded scroll position. Use element_search to find unseen elements.")
+    }
+
+    // MARK: - Element Search (Iterative)
+
+    /// Iterative search: page through scroll content looking for an element.
+    /// Used when the element has never been seen (not in the registry).
+    func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
+        guard let searchTarget = target.elementTarget else {
+            return .failure(.elementSearch, message: "Element target required for element_search")
         }
         let searchDirection = target.resolvedDirection
 
         refresh()
+
+        // Check if already visible before searching
         if let found = resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
-            return foundResult(found, scrollCount: 0)
+            return searchFoundResult(found, scrollCount: 0)
         }
 
+        // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
            let entry = registry.elements[heistId],
            let origin = entry.contentSpaceOrigin,
@@ -198,7 +247,7 @@ extension TheBagman {
             await tripwire.yieldRealFrames(20)
             refresh()
             if let found = resolveFirstMatch(searchTarget),
-               let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
+               let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
                 return result
             }
             scrollView.setContentOffset(savedOffset, animated: true)
@@ -206,6 +255,7 @@ extension TheBagman {
             refresh()
         }
 
+        // Iterative page-by-page search
         var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
         let maxScrolls = 200
@@ -223,19 +273,19 @@ extension TheBagman {
             scrollCount += 1
 
             if let found = resolveFirstMatch(searchTarget) {
-                if let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
+                if let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
                     return result
                 }
-                return foundResult(found, scrollCount: scrollCount)
+                return searchFoundResult(found, scrollCount: scrollCount)
             }
 
             if registry.viewportIds == before { exhausted.insert(container) }
         }
 
-        return notFoundResult(scrollCount: scrollCount)
+        return searchNotFoundResult(scrollCount: scrollCount)
     }
 
-    private func fineTuneAndResolve(
+    private func searchFineTuneAndResolve(
         _ found: ResolvedTarget,
         searchTarget: ElementTarget,
         scrollCount: Int
@@ -244,7 +294,7 @@ extension TheBagman {
         await tripwire.yieldRealFrames(20)
         refresh()
         guard let fresh = resolveFirstMatch(searchTarget) else { return nil }
-        return foundResult(fresh, scrollCount: scrollCount)
+        return searchFoundResult(fresh, scrollCount: scrollCount)
     }
 
     func findScrollTarget(
@@ -273,9 +323,9 @@ extension TheBagman {
         return nil
     }
 
-    private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
+    private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
         TheSafecracker.InteractionResult(
-            success: false, method: .scrollToVisible,
+            success: false, method: .elementSearch,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
                 scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
@@ -284,10 +334,10 @@ extension TheBagman {
         )
     }
 
-    private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
+    private func searchFoundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
         let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
-            success: true, method: .scrollToVisible, message: nil, value: nil,
+            success: true, method: .elementSearch, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
                 scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
