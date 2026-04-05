@@ -21,8 +21,8 @@ extension TheBagman {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
 
-        if let interactivityError = checkElementInteractivity(resolved.element) {
-            return .failure(.elementNotFound, message: interactivityError)
+        if case .blocked(let reason) = checkElementInteractivity(resolved.element) {
+            return .failure(.activate, message: reason)
         }
 
         let point = resolved.element.activationPoint
@@ -31,12 +31,12 @@ extension TheBagman {
         }
 
         if activate(resolved.screenElement) {
-            safecracker?.fingerprints.showFingerprint(at: point)
+            safecracker.fingerprints.showFingerprint(at: point)
             return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
 
         // Fall back to synthetic tap via TheSafecracker
-        if let safecracker, await safecracker.tap(at: point) {
+        if await safecracker.tap(at: point) {
             safecracker.fingerprints.showFingerprint(at: point)
             return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
         }
@@ -55,7 +55,7 @@ extension TheBagman {
         }
 
         increment(resolved.screenElement)
-        safecracker?.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+        safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
@@ -70,7 +70,7 @@ extension TheBagman {
         }
 
         decrement(resolved.screenElement)
-        safecracker?.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+        safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
@@ -96,9 +96,6 @@ extension TheBagman {
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
         await ensureFirstResponderOnScreen()
-        guard let safecracker else {
-            return .failure(.editAction, message: "No gesture engine available")
-        }
         let success = safecracker.performEditAction(target.action)
         return TheSafecracker.InteractionResult(success: success, method: .editAction, message: nil, value: nil)
     }
@@ -122,9 +119,6 @@ extension TheBagman {
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
         await ensureFirstResponderOnScreen()
-        guard let safecracker else {
-            return .failure(.resignFirstResponder, message: "No gesture engine available")
-        }
         let success = safecracker.resignFirstResponder()
         return TheSafecracker.InteractionResult(
             success: success, method: .resignFirstResponder,
@@ -142,7 +136,7 @@ extension TheBagman {
         switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
         case .failure(let result): return result
         case .success(let point):
-            guard let safecracker, await safecracker.tap(at: point) else {
+            guard await safecracker.tap(at: point) else {
                 return .failure(.syntheticTap, message: "Touch tap failed")
             }
             safecracker.fingerprints.showFingerprint(at: point)
@@ -158,8 +152,8 @@ extension TheBagman {
         case .failure(let result): return result
         case .success(let point):
             let duration = clampDuration(target.duration)
-            let success = await safecracker?.longPress(at: point, duration: duration) ?? false
-            if success { safecracker?.fingerprints.showFingerprint(at: point) }
+            let success = await safecracker.longPress(at: point, duration: duration)
+            if success { safecracker.fingerprints.showFingerprint(at: point) }
             return TheSafecracker.InteractionResult(success: success, method: .syntheticLongPress, message: nil, value: nil)
         }
     }
@@ -200,8 +194,10 @@ extension TheBagman {
             )
 
             let duration = clampDuration(target.duration ?? 0.15)
-            let success = await safecracker?.swipe(from: startPoint, to: endPoint, duration: duration) ?? false
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
+            let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
+            return TheSafecracker.InteractionResult(
+                success: success, method: .syntheticSwipe, message: nil, value: nil
+            )
         }
 
         switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
@@ -223,8 +219,10 @@ extension TheBagman {
             }
 
             let duration = clampDuration(target.duration ?? 0.15)
-            let success = await safecracker?.swipe(from: startPoint, to: endPoint, duration: duration) ?? false
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
+            let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
+            return TheSafecracker.InteractionResult(
+                success: success, method: .syntheticSwipe, message: nil, value: nil
+            )
         }
     }
 
@@ -236,8 +234,10 @@ extension TheBagman {
         case .failure(let result): return result
         case .success(let startPoint):
             let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker?.drag(from: startPoint, to: target.endPoint, duration: duration) ?? false
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticDrag, message: nil, value: nil)
+            let success = await safecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
+            return TheSafecracker.InteractionResult(
+                success: success, method: .syntheticDrag, message: nil, value: nil
+            )
         }
     }
 
@@ -250,8 +250,13 @@ extension TheBagman {
         case .success(let center):
             let spread = target.spread ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker?.pinch(center: center, scale: CGFloat(target.scale), spread: CGFloat(spread), duration: duration) ?? false
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticPinch, message: nil, value: nil)
+            let success = await safecracker.pinch(
+                center: center, scale: CGFloat(target.scale),
+                spread: CGFloat(spread), duration: duration
+            )
+            return TheSafecracker.InteractionResult(
+                success: success, method: .syntheticPinch, message: nil, value: nil
+            )
         }
     }
 
@@ -264,8 +269,13 @@ extension TheBagman {
         case .success(let center):
             let radius = target.radius ?? 100.0
             let duration = clampDuration(target.duration ?? 0.5)
-            let success = await safecracker?.rotate(center: center, angle: CGFloat(target.angle), radius: CGFloat(radius), duration: duration) ?? false
-            return TheSafecracker.InteractionResult(success: success, method: .syntheticRotate, message: nil, value: nil)
+            let success = await safecracker.rotate(
+                center: center, angle: CGFloat(target.angle),
+                radius: CGFloat(radius), duration: duration
+            )
+            return TheSafecracker.InteractionResult(
+                success: success, method: .syntheticRotate, message: nil, value: nil
+            )
         }
     }
 
@@ -277,8 +287,8 @@ extension TheBagman {
         case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 40.0
-            let success = await safecracker?.twoFingerTap(at: center, spread: CGFloat(spread)) ?? false
-            if success { safecracker?.fingerprints.showFingerprint(at: center) }
+            let success = await safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
+            if success { safecracker.fingerprints.showFingerprint(at: center) }
             return TheSafecracker.InteractionResult(success: success, method: .syntheticTwoFingerTap, message: nil, value: nil)
         }
     }
@@ -289,8 +299,10 @@ extension TheBagman {
             return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        let success = await safecracker?.drawPath(points: cgPoints, duration: duration) ?? false
-        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
+        let success = await safecracker.drawPath(points: cgPoints, duration: duration)
+        return TheSafecracker.InteractionResult(
+            success: success, method: .syntheticDrawPath, message: nil, value: nil
+        )
     }
 
     func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
@@ -308,18 +320,15 @@ extension TheBagman {
             return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        let success = await safecracker?.drawPath(points: cgPoints, duration: duration) ?? false
-        return TheSafecracker.InteractionResult(success: success, method: .syntheticDrawPath, message: nil, value: nil)
+        let success = await safecracker.drawPath(points: cgPoints, duration: duration)
+        return TheSafecracker.InteractionResult(
+            success: success, method: .syntheticDrawPath, message: nil, value: nil
+        )
     }
 
     // MARK: - Text Entry
 
     func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
-        guard let safecracker else {
-            return .failure(.typeText, message: "No gesture engine available")
-        }
-
-        // Step 0: If element target provided, resolve and tap to focus
         if let elementTarget = target.elementTarget {
             await ensureOnScreen(for: elementTarget)
             let resolution = resolveTarget(elementTarget)
@@ -333,7 +342,6 @@ extension TheBagman {
             }
             safecracker.fingerprints.showFingerprint(at: point)
 
-            // Wait for keyboard
             var inputReady = false
             for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
                 try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
@@ -354,7 +362,6 @@ extension TheBagman {
             }
         }
 
-        // Step 1: Clear existing text if requested
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         if target.clearFirst == true {
             guard await safecracker.clearText() else {
@@ -362,21 +369,18 @@ extension TheBagman {
             }
         }
 
-        // Step 2: Delete characters if requested
         if let deleteCount = target.deleteCount, deleteCount > 0 {
             guard await safecracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay) else {
                 return .failure(.typeText, message: "No keyboard or focused text input available for delete.")
             }
         }
 
-        // Step 3: Type text if provided
         if let text = target.text, !text.isEmpty {
             guard await safecracker.typeText(text, interKeyDelay: interKeyDelay) else {
                 return .failure(.typeText, message: "No keyboard or focused text input available for typing.")
             }
         }
 
-        // Step 4: Refresh and read back value
         try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
         refresh()
 

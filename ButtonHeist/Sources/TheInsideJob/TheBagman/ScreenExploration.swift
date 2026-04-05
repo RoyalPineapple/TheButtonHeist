@@ -4,104 +4,45 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
-// MARK: - Screen Manifest
+// MARK: - Screen Exploration
 //
-// Maps every element on the current screen — including off-screen content inside
-// scrollable containers. Built by scrolling each container to its limits and back.
-// Scroll positions are saved and restored; the user sees no visual change.
-//
-// Uses the reconciliation algorithms (stitchPage, findOverlap, contentFingerprint)
-// for element deduplication and stagnation detection. Container subtree fingerprints
-// from the accessibility hierarchy drive the skip-on-re-explore fast path — all
-// signals come from the accessibility domain, not UIKit plumbing.
-//
-// Used by:
-//   get_interface --full → full census (target: nil), returns manifest
-//   scroll_to_visible → targeted search (target: ElementTarget), stops early
-//   post-action → automatic re-explore, skips unchanged containers
-
-/// Complete element map for a screen, including off-screen content.
-struct ScreenManifest {
-
-    /// Every heistId discovered, mapped to the container it was found in.
-    /// Elements not inside a scrollable container map to nil.
-    var elementContainers: [String: AccessibilityContainer?] = [:]
-
-    /// Containers that have been fully explored.
-    var exploredContainers = Set<AccessibilityContainer>()
-
-    /// Total scrollByPage calls during exploration.
-    var scrollCount = 0
-
-    /// Containers skipped because their accessibility fingerprint matched the cached value.
-    var skippedContainers = 0
-
-    /// Wall-clock time spent exploring, in seconds.
-    var explorationTime: TimeInterval = 0
-
-    /// Total unique heistIds discovered.
-    var elementCount: Int { elementContainers.count }
-
-    /// Whether all known scrollable containers have been explored.
-    var isComplete: Bool { pendingContainers.isEmpty }
-
-    /// Containers discovered but not yet explored.
-    var pendingContainers = Set<AccessibilityContainer>()
-
-    /// Safety cap on per-container scroll iterations. Prevents runaway scrolling
-    /// in pathological layouts (e.g. infinite-scroll feeds). If a container exceeds
-    /// this, the census for that container is silently truncated.
-    static let maxScrollsPerContainer = 200
-
-    // MARK: - Queries
-
-    func contains(_ heistId: String) -> Bool {
-        elementContainers[heistId] != nil
-    }
-
-    // MARK: - Building
-
-    mutating func recordVisibleElements(
-        _ viewportHeistIds: Set<String>,
-        container: AccessibilityContainer? = nil
-    ) {
-        for heistId in viewportHeistIds where elementContainers[heistId] == nil {
-            elementContainers.updateValue(container, forKey: heistId)
-        }
-    }
-
-    mutating func markExplored(_ container: AccessibilityContainer) {
-        exploredContainers.insert(container)
-        pendingContainers.remove(container)
-    }
-
-    mutating func addPendingContainers(_ containers: [AccessibilityContainer]) {
-        pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
-    }
-}
-
-// MARK: - Exploration
+// Scrolls every scrollable container to discover all elements on screen.
+// Container fingerprint caching skips unchanged containers on re-explore.
 
 extension TheBagman {
 
+    fileprivate struct ContainerPage {
+        let elements: [AccessibilityElement]
+        let origins: [CGPoint?]
+    }
+
+    /// Cached state from the last explore of each scrollable container.
+    struct ContainerExploreState {
+        let visibleSubtreeFingerprint: Int
+        let accumulatedFingerprint: Int
+        let discoveredHeistIds: Set<String>
+    }
+
+    /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
+    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
+        exploreCycleIds = registry.viewportIds
+        let manifest = await exploreScreen(target: target)
+        if let seen = exploreCycleIds {
+            registry.prune(keeping: seen)
+        }
+        exploreCycleIds = nil
+        return manifest
+    }
+
     /// Scroll all scrollable containers to discover every element on screen.
-    /// With a target: stops early when the target is found. Without: full census.
-    /// Scroll positions are saved and restored. Unchanged containers are skipped
-    /// via cached accessibility fingerprints.
     func exploreScreen(target: ElementTarget? = nil) async -> ScreenManifest {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
         refresh()
-        manifest.recordVisibleElements(viewportHeistIds)
+        manifest.recordVisibleElements(registry.viewportIds)
 
-        // Early exit if target is already visible
         if let target, resolveFirstMatch(target) != nil {
-            manifest.explorationTime = CACurrentMediaTime() - startTime
-            return manifest
-        }
-
-        guard let safecracker else {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
@@ -127,8 +68,6 @@ extension TheBagman {
                     continue
                 }
 
-                // Skip unchanged containers via fingerprint cache.
-                // Targeted searches always scroll — the target may be off-screen.
                 let currentFingerprint = containerFingerprints[container] ?? 0
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
@@ -139,8 +78,6 @@ extension TheBagman {
                     continue
                 }
 
-                // Check for off-screen content using the container's accessibility
-                // metadata. The .scrollable type carries contentSize from the parser.
                 guard case .scrollable(let contentSize) = container.type else {
                     manifest.markExplored(container)
                     continue
@@ -152,24 +89,18 @@ extension TheBagman {
                     continue
                 }
 
-                // Save the visual scroll position — the content point at the top-left of
-                // the visible area. Raw contentOffset drifts when adjustedContentInset
-                // changes during explore (nav bar collapse, search bar hide).
                 let savedVisualOrigin = CGPoint(
                     x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
                     y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
                 )
                 let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
 
-                // O(1) origin lookup — rebuilt after each refresh() to reflect new elements.
                 var originByElement = buildOriginIndex()
 
                 let initialPage = visibleElementsInContainer(container)
                 var accumulated = initialPage.elements
                 var accumulatedOrigins = initialPage.origins
 
-                // Scroll forward page by page. Stop when stitchPage reports no
-                // new elements (the page is entirely overlap with accumulated).
                 for _ in 0..<ScreenManifest.maxScrollsPerContainer {
                     let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
                     guard moved else { break }
@@ -177,7 +108,7 @@ extension TheBagman {
                     await tripwire.yieldFrames(2)
                     refresh()
                     originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(viewportHeistIds, container: container)
+                    manifest.recordVisibleElements(registry.viewportIds, container: container)
 
                     let page = visibleElementsInContainer(container)
                     let result = stitchPage(
@@ -187,13 +118,10 @@ extension TheBagman {
                         pageOrigins: page.origins
                     )
                     accumulated = result.elements
-                    // originByElement values are CGPoint? — subscript returns CGPoint??,
-                    // so ?? nil flattens to CGPoint? (missing element → nil origin).
                     accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
 
                     if result.inserted.isEmpty { break }
 
-                    // Early exit if target found
                     if let target, resolveFirstMatch(target) != nil {
                         await restoreAndCache(
                             scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
@@ -221,7 +149,8 @@ extension TheBagman {
         return manifest
     }
 
-    /// Restore scroll position after exploring a container and cache the results.
+    // MARK: - Exploration Helpers
+
     private func restoreAndCache(
         scrollView: UIScrollView,
         savedVisualOrigin: CGPoint,
@@ -240,48 +169,30 @@ extension TheBagman {
         updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
     }
 
-    // MARK: - Helpers
-
-    /// Elements and their content-space origins for a given container.
-    private struct ContainerPage {
-        let elements: [AccessibilityElement]
-        let origins: [CGPoint?]
-    }
-
-    /// Visible elements in a scrollable container, in traversal order.
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
         let pairs = currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
-            guard let heistId = elementToHeistId[element],
-                  viewportHeistIds.contains(heistId),
-                  let entry = screenElements[heistId],
+            guard let heistId = registry.reverseIndex[element],
+                  registry.viewportIds.contains(heistId),
+                  let entry = registry.elements[heistId],
                   isElementInContainer(entry, container: container) else { return nil }
             return (element: entry.element, origin: entry.contentSpaceOrigin)
         }
         return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
     }
 
-    /// Check whether a screen element belongs to a given scrollable container
-    /// by verifying its scroll view matches the container's backing view.
     private func isElementInContainer(_ element: ScreenElement, container: AccessibilityContainer) -> Bool {
         guard let containerView = scrollableContainerViews[container] as? UIScrollView,
               let elementScrollView = element.scrollView else { return false }
         return containerView === elementScrollView
     }
 
-    /// Build an O(1) lookup from AccessibilityElement to its content-space origin.
-    /// Rebuilt after each refresh() to reflect newly-discovered elements.
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            screenElements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
 
-    // MARK: - Scroll Position Restore
-
-    /// Restore a scroll view to the same visual position, compensating for any
-    /// `adjustedContentInset` changes that occurred during explore (nav bar
-    /// collapse, search bar hide, safe area shifts).
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
         let insets = scrollView.adjustedContentInset
         let restoredOffset = CGPoint(
@@ -297,7 +208,6 @@ extension TheBagman {
         scrollView.setContentOffset(clampedOffset, animated: false)
     }
 
-    /// Cache a container's explore state using a pre-computed fingerprint.
     private func updateContainerExploreCache(
         _ container: AccessibilityContainer,
         fingerprint: Int,
@@ -307,7 +217,7 @@ extension TheBagman {
         let accFingerprint = accumulatedContentFingerprint(
             elements: accumulated, origins: accumulatedOrigins
         )
-        let heistIds = Set(screenElements.filter { isElementInContainer($0.value, container: container) }.keys)
+        let heistIds = Set(registry.elements.filter { isElementInContainer($0.value, container: container) }.keys)
         containerExploreStates[container] = ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
             accumulatedFingerprint: accFingerprint,

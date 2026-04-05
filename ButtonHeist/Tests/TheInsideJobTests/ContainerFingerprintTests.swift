@@ -386,7 +386,7 @@ final class ContainerFingerprintTests: XCTestCase {
     // MARK: - ScreenManifest
 
     func testRecordVisibleElementsAddsNewEntries() {
-        var manifest = ScreenManifest()
+        var manifest = TheBagman.ScreenManifest()
         manifest.recordVisibleElements(["a", "b", "c"])
 
         XCTAssertEqual(manifest.elementCount, 3)
@@ -401,7 +401,7 @@ final class ContainerFingerprintTests: XCTestCase {
             frame: .zero
         )
 
-        var manifest = ScreenManifest()
+        var manifest = TheBagman.ScreenManifest()
         manifest.recordVisibleElements(["a"], container: container)
         manifest.recordVisibleElements(["a"], container: nil)
 
@@ -416,7 +416,7 @@ final class ContainerFingerprintTests: XCTestCase {
             frame: .zero
         )
 
-        var manifest = ScreenManifest()
+        var manifest = TheBagman.ScreenManifest()
         manifest.addPendingContainers([container])
         XCTAssertTrue(manifest.pendingContainers.contains(container))
         XCTAssertFalse(manifest.isComplete)
@@ -433,7 +433,7 @@ final class ContainerFingerprintTests: XCTestCase {
             frame: .zero
         )
 
-        var manifest = ScreenManifest()
+        var manifest = TheBagman.ScreenManifest()
         manifest.markExplored(container)
         manifest.addPendingContainers([container])
 
