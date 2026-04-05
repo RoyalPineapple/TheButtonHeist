@@ -569,8 +569,78 @@ extension TheFence {
             let deleteSource = boolArg(args, "delete_source") ?? false
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
+        case .startHeist, .stopHeist, .playHeist:
+            return try await handleHeistCommand(command: command, args: args)
         default:
             return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
+    }
+
+    // MARK: - Handler: Heist Recording & Playback
+
+    func handleHeistCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        switch command {
+        case .startHeist:
+            let app = stringArg(args, "app") ?? "com.buttonheist.testapp"
+            // Ensure a BookKeeper session is active — heist recording is a session artifact
+            if bookKeeper.manifest == nil {
+                let identifier = stringArg(args, "identifier") ?? "heist"
+                try bookKeeper.beginSession(identifier: identifier)
+            }
+            try bookKeeper.startHeistRecording(app: app)
+            return .heistStarted
+        case .stopHeist:
+            let heist = try bookKeeper.stopHeistRecording()
+            guard let outputPath = stringArg(args, "output") else {
+                throw FenceError.invalidRequest("stop_heist requires an 'output' path")
+            }
+            guard !outputPath.split(separator: "/").contains("..") else {
+                throw FenceError.invalidRequest("Invalid output path: must not contain '..' components")
+            }
+            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
+            try TheBookKeeper.writeHeist(heist, to: resolvedURL)
+            return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        case .playHeist:
+            return try await handlePlayHeist(args)
+        default:
+            return .error("Unexpected heist command: \(command.rawValue)")
+        }
+    }
+
+    private func handlePlayHeist(_ args: [String: Any]) async throws -> FenceResponse {
+        guard let inputPath = stringArg(args, "input") else {
+            throw FenceError.invalidRequest("play_heist requires an 'input' path")
+        }
+        guard !inputPath.split(separator: "/").contains("..") else {
+            throw FenceError.invalidRequest("Invalid input path: must not contain '..' components")
+        }
+
+        let resolvedURL = URL(fileURLWithPath: inputPath).standardized
+        let heist = try TheBookKeeper.readHeist(from: resolvedURL)
+
+        let playbackStart = CFAbsoluteTimeGetCurrent()
+        var completedSteps = 0
+        var failedIndex: Int?
+
+        isPlayingHeist = true
+        defer { isPlayingHeist = false }
+
+        for (index, step) in heist.steps.enumerated() {
+            let request = step.toRequestDictionary()
+            do {
+                _ = try await execute(request: request)
+                completedSteps += 1
+            } catch {
+                failedIndex = index
+                break
+            }
+        }
+
+        let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
+        return .heistPlayback(
+            completedSteps: completedSteps,
+            failedIndex: failedIndex,
+            totalTimingMs: totalTimingMs
+        )
     }
 }

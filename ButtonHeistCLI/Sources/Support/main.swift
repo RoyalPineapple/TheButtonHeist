@@ -52,6 +52,11 @@ struct ButtonHeistApp: AsyncParsableCommand {
             // Session management
             SessionLogCommand.self,
             ArchiveSessionCommand.self,
+
+            // Heist recording & playback
+            StartHeistCommand.self,
+            StopHeistCommand.self,
+            PlayHeistCommand.self,
         ]
     )
 }
