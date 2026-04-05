@@ -5,7 +5,7 @@ import AccessibilitySnapshotParser
 
 // MARK: - Element Interactivity
 
-extension TheBagman {
+extension TheStash {
 
     /// Pure predicates for element interactivity — no mutable state.
     /// Used by WireConverter (to build action lists) and ActionExecutor
@@ -45,7 +45,7 @@ extension TheBagman {
     }
 
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

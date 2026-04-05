@@ -6,7 +6,7 @@ import TheScore
 
 // MARK: - HeistId Assignment
 
-extension TheBagman {
+extension TheStash {
 
     /// Assigns deterministic heistIds to accessibility elements.
     /// Pure value-in, value-out — no mutable state.
@@ -98,7 +98,7 @@ extension TheBagman {
         TheScore.slugify(text)
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

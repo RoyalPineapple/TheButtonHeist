@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 // Integration tests for performWaitFor — the settle-event polling loop that waits
 // for an element to appear or disappear. Requires the BH Demo test host
-// since wait_for polls the live accessibility tree via TheBagman.
+// since wait_for polls the live accessibility tree via TheStash.
 import XCTest
 @testable import TheInsideJob
 @testable import TheScore
@@ -65,14 +65,7 @@ final class WaitForIntegrationTests: XCTestCase {
         timeout: Double? = nil
     ) async -> ActionResult? {
         let waitTarget = WaitForTarget(elementTarget: target, absent: absent, timeout: timeout)
-        let (respond, result) = collectResponse()
-        await insideJob.performWaitFor(
-            target: waitTarget,
-            command: .waitFor(waitTarget),
-            requestId: "test",
-            respond: respond
-        )
-        return result()
+        return await insideJob.brains.performWaitFor(target: waitTarget)
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -216,8 +209,8 @@ final class WaitForIntegrationTests: XCTestCase {
         defer { label.removeFromSuperview() }
 
         // Refresh the tree so heistIds are assigned
-        insideJob.bagman.refresh()
-        let elements = insideJob.bagman.selectElements()
+        insideJob.brains.refresh()
+        let elements = insideJob.stash.selectElements()
 
         // Find the heistId for our element
         let heistId = elements.first(where: {

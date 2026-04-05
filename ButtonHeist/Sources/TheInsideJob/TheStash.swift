@@ -4,25 +4,18 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
-/// The crew member who holds and protects the mcguffin (the live UI/accessibility world).
+/// The stash — holds the goods and answers questions about them.
 ///
-/// TheBagman owns the accessibility data lifecycle: reading the UI, storing
-/// element references, computing diffs, and capturing visual state. Live
-/// object pointers are kept only as weak references and should never be owned
-/// outside TheBagman. Uses TheTripwire for timing
-/// signals (when to read) and screen change detection (what kind of read).
+/// TheStash is the element registry. It holds every known accessibility element,
+/// resolves targets by heistId or matcher, produces wire format, and computes
+/// deltas. Pure data — no side effects, no gestures, no scrolling.
+/// TheBurglar populates it. TheBrains queries it.
 @MainActor
-final class TheBagman {
-
-    /// The gesture engine. Created and owned by TheBagman.
-    /// TheSafecracker is pure "fingers on glass" — it acts on resolved
-    /// coordinates and objects, never queries the registry.
-    let safecracker = TheSafecracker()
+final class TheStash {
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
         self.burglar = TheBurglar(tripwire: tripwire)
-        self.safecracker.tripwire = tripwire
     }
 
     // MARK: - Volatile State (rebuilt each refresh)
@@ -62,14 +55,6 @@ final class TheBagman {
     /// Hash of the last hierarchy sent to subscribers (for polling comparison).
     /// Read/written by Pulse for change detection.
     var lastHierarchyHash: Int = 0
-
-    /// Accumulates every heistId seen during an explore cycle.
-    /// Populated by `apply()` when non-nil, pruned by `pruneAfterExplore()`.
-    /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
-    var exploreCycleIds: Set<String>?
-
-    /// Cached state from the last explore of each scrollable container.
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
 
     /// Screen name from the registry (first header element by traversal order).
     /// Computed once in `apply()` from the hierarchy's traversal order.
@@ -379,8 +364,6 @@ final class TheBagman {
     func clearCache() {
         currentHierarchy.removeAll()
         registry.clear()
-        containerExploreStates.removeAll()
-        exploreCycleIds = nil
         lastHierarchyHash = 0
     }
 
@@ -396,125 +379,6 @@ final class TheBagman {
         burglar.refresh(into: self)
     }
 
-    // MARK: - Action Result with Delta
-
-    /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
-    /// Waits for all animations (UIKit and SwiftUI) to settle via presentation layer diffing,
-    /// then polls for accessibility tree stability as a safety net.
-    ///
-    /// State captured before an action for delta computation.
-    struct BeforeState {
-        let snapshot: [ScreenElement]
-        let elements: [AccessibilityElement]
-        let viewController: ObjectIdentifier?
-    }
-
-    /// Capture the current state for delta computation before an action.
-    /// Caller must have called `refresh()` already this frame.
-    /// Pure read — does not mutate state or mark elements as presented.
-    func captureBeforeState() -> BeforeState {
-        BeforeState(
-            snapshot: selectElements(),
-            elements: currentHierarchy.sortedElements,
-            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
-        )
-    }
-
-    /// Screen change detection is three-tier:
-    /// 1. VC identity — UIKit navigation (push/pop, modal present/dismiss)
-    /// 2. Back button trait — private trait bit 27 appeared/disappeared
-    /// 3. Header structure — the set of header labels changed completely
-    func actionResultWithDelta(
-        success: Bool,
-        method: ActionMethod,
-        message: String? = nil,
-        value: String? = nil,
-        errorKind: ErrorKind? = nil,
-        before: BeforeState,
-        target: ElementTarget? = nil
-    ) async -> ActionResult {
-        guard success else {
-            let kind = errorKind
-                ?? ((method == .elementNotFound || method == .elementDeallocated)
-                    ? .elementNotFound : .actionFailed)
-            return ActionResult(success: false, method: method, message: message, errorKind: kind,
-                                value: value, screenName: before.snapshot.screenName,
-                                screenId: before.snapshot.screenId)
-        }
-
-        // Wait for all clear: presentation layers settled AND accessibility tree stable.
-        let start = CFAbsoluteTimeGetCurrent()
-        let settled = await tripwire.waitForAllClear(timeout: 1.0)
-        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
-
-        // Parse without mutating — detect screen change before touching the registry.
-        let afterResult = burglar.parse()
-
-        // Screen change gate: VC identity OR accessibility topology
-        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
-        let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || burglar.isTopologyChanged(before: before.elements, after: afterResult?.elements ?? [])
-        if isScreenChange {
-            // Clear the old screen's registry before applying new data.
-            // No mixed state — the old registry is gone before new entries arrive.
-            registry.clearScreen()
-            containerExploreStates.removeAll()
-        }
-        if let afterResult {
-            burglar.apply(afterResult, to: self)
-        }
-
-        // Run a full explore after every action so the delta captures off-screen changes.
-        // Container fingerprint caching makes this near-instant when nothing changed —
-        // the O(1) contentSize + visible-fingerprint check skips unchanged containers.
-        // On screen change the cache was just cleared, so every container gets explored.
-        let manifest = await exploreAndPrune()
-        let afterSnapshot = selectElements()
-
-        let delta = WireConversion.computeDelta(
-            before: before.snapshot, after: afterSnapshot,
-            afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
-        )
-
-        // Diagnostics only — elements ride on the delta, not duplicated here.
-        let exploreResult = ExploreResult(
-            elements: [],
-            scrollCount: manifest.scrollCount,
-            containersExplored: manifest.exploredContainers.count,
-            explorationTime: manifest.explorationTime
-        )
-
-        // Capture a recording frame after the action completes
-        captureActionFrame()
-
-        // Look up the acted-on element in the post-action parsed hierarchy
-        var elementLabel: String?
-        var elementValue: String?
-        var elementTraits: [HeistTrait]?
-        if let target {
-            let postElement = resolveTarget(target).resolved?.element
-            elementLabel = postElement?.label
-            elementValue = postElement?.value
-            if let traits = postElement?.traits {
-                elementTraits = WireConversion.traitNames(traits)
-            }
-        }
-
-        return ActionResult(
-            success: true,
-            method: method,
-            message: message,
-            value: value,
-            interfaceDelta: delta,
-            elementLabel: elementLabel,
-            elementValue: elementValue,
-            elementTraits: elementTraits,
-            screenName: afterSnapshot.screenName,
-            screenId: afterSnapshot.screenId,
-            exploreResult: exploreResult
-        )
-    }
 }
 
 // MARK: - Hosting View for Single-Object Parsing

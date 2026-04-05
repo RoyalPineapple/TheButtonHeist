@@ -10,7 +10,7 @@ import TheScore
 // Each executeXxx method is a thin wrapper that feeds the pipeline
 // a closure for the actual gesture or accessibility action.
 
-extension TheBagman {
+extension TheBrains {
 
     // MARK: - Element Action Pipeline
 
@@ -20,18 +20,18 @@ extension TheBagman {
         target: ElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
-        action: (ResolvedTarget) async -> TheSafecracker.InteractionResult?
+        action: (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target)
-        let resolution = resolveTarget(target)
+        let resolution = stash.resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
         if requireInteractive {
-            if case .blocked(let reason) = checkElementInteractivity(resolved.element) {
+            if case .blocked(let reason) = stash.checkElementInteractivity(resolved.element) {
                 return .failure(method, message: reason)
             }
-            guard hasInteractiveObject(resolved.screenElement) else {
+            guard stash.hasInteractiveObject(resolved.screenElement) else {
                 return .failure(method, message: "Element does not support \(method.rawValue)")
             }
         }
@@ -50,7 +50,7 @@ extension TheBagman {
         if let elementTarget {
             await ensureOnScreen(for: elementTarget)
         }
-        switch resolvePoint(from: elementTarget, pointX: pointX, pointY: pointY) {
+        switch stash.resolvePoint(from: elementTarget, pointX: pointX, pointY: pointY) {
         case .failure(let result):
             return result
         case .success(let point):
@@ -65,7 +65,7 @@ extension TheBagman {
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .activate) { resolved in
             let point = resolved.element.activationPoint
-            if self.activate(resolved.screenElement) {
+            if stash.activate(resolved.screenElement) {
                 self.safecracker.fingerprints.showFingerprint(at: point)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
@@ -79,7 +79,7 @@ extension TheBagman {
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
-            self.increment(resolved.screenElement)
+            stash.increment(resolved.screenElement)
             self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
         }
@@ -87,7 +87,7 @@ extension TheBagman {
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
-            self.decrement(resolved.screenElement)
+            stash.decrement(resolved.screenElement)
             self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
         }
@@ -95,7 +95,7 @@ extension TheBagman {
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target.elementTarget, method: .customAction) { resolved in
-            let success = self.performCustomAction(named: target.actionName, on: resolved.screenElement)
+            let success = stash.performCustomAction(named: target.actionName, on: resolved.screenElement)
             return TheSafecracker.InteractionResult(
                 success: success, method: .customAction,
                 message: success ? nil : "Action '\(target.actionName)' not found",
@@ -180,7 +180,7 @@ extension TheBagman {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
             await ensureOnScreen(for: elementTarget)
-            guard let frame = resolveFrame(for: elementTarget) else {
+            guard let frame = stash.resolveFrame(for: elementTarget) else {
                 return .failure(.elementNotFound, message: "Element not found")
             }
             let startPoint = CGPoint(
@@ -200,7 +200,7 @@ extension TheBagman {
         if let elementTarget = target.elementTarget {
             await ensureOnScreen(for: elementTarget)
         }
-        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        switch stash.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result):
             return result
         case .success(let startPoint):
@@ -312,7 +312,7 @@ extension TheBagman {
     func executeTypeText(_ target: TypeTextTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
             await ensureOnScreen(for: elementTarget)
-            let resolution = resolveTarget(elementTarget)
+            let resolution = stash.resolveTarget(elementTarget)
             guard let resolved = resolution.resolved else {
                 return .failure(.elementNotFound, message: resolution.diagnostics)
             }
@@ -363,11 +363,11 @@ extension TheBagman {
         }
 
         try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
-        refresh()
+        stash.refresh()
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let resolved = resolveTarget(elementTarget).resolved {
+            if let resolved = stash.resolveTarget(elementTarget).resolved {
                 fieldValue = resolved.element.value
             }
         }

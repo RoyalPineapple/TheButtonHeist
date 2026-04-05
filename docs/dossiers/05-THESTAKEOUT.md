@@ -116,7 +116,7 @@ if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 ### MEDIUM PRIORITY
 
 **Inactivity detection uses accessibility hierarchy hash, not pixel comparison** (`TheStakeout.swift`)
-- Activity is tracked via `noteScreenChange()` (called when TheBagman detects a hierarchy hash change) and `noteActivity()` (called on each incoming client command)
+- Activity is tracked via `noteScreenChange()` (called when TheStash detects a hierarchy hash change) and `noteActivity()` (called on each incoming client command)
 - Subtle pixel-only animations (e.g. spinner rotation) do NOT count as activity, so they won't prevent inactivity timeout
 - This is intentional — recording only extends when meaningful UI content changes
 

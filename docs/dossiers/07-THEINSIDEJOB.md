@@ -33,7 +33,7 @@ graph TD
 
     subgraph Crew["Crew Members (Owned)"]
         Tripwire["TheTripwire — UI pulse, settle detection"]
-        Bagman["TheBagman — Element cache, hierarchy, delta"]
+        Bagman["TheStash — Element cache, hierarchy, delta"]
         Muscle["TheMuscle — Auth & sessions"]
         Safecracker["TheSafecracker — Touch & text"]
         Stakeout["TheStakeout — Recording"]
@@ -66,7 +66,7 @@ graph TD
 | `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performElementSearch` |
 | `TheInsideJob+Dispatch.swift` | Grouped interaction dispatch: accessibility actions, touch gestures, text+scroll+search |
 | `ScreenManifest.swift` | Full-screen element census: scrolls all containers, records every element, restores scroll positions |
-| `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
+| `TheStash.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
 | `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
 | `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
@@ -229,7 +229,7 @@ Inbound data paths:
 ### MEDIUM PRIORITY
 
 **No unit tests for TheInsideJob itself**
-- Delta computation logic in TheBagman is pure data transformation and could be tested without UIKit
+- Delta computation logic in TheStash is pure data transformation and could be tested without UIKit
 - Server-side dispatch logic is untested
 
 ### LOW PRIORITY

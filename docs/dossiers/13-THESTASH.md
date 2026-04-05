@@ -1,18 +1,18 @@
-# TheBagman - The Score Handler
+# TheStash - The Score Handler
 
-> **Files:** `TheBagman.swift`, `TheBagman+Matching.swift`, `TheBagman+Capture.swift`, `TheBagman/ActionExecution.swift`, `TheBagman/ScrollExecution.swift`, `TheBagman/ScreenExploration.swift`, `TheBagman/WireConversion.swift`, `TheBagman/IdAssignment.swift`, `TheBagman/ElementRegistry.swift`, `TheBagman/Diagnostics.swift`, `TheBagman/Interactivity.swift`, `TheBagman/ScreenManifest.swift`, `TheBagman/ArrayHelpers.swift`
+> **Files:** `TheStash.swift`, `TheStash+Matching.swift`, `TheStash+Capture.swift`, `TheStash/ActionExecution.swift`, `TheStash/ScrollExecution.swift`, `TheStash/ScreenExploration.swift`, `TheStash/WireConversion.swift`, `TheStash/IdAssignment.swift`, `TheStash/ElementRegistry.swift`, `TheStash/Diagnostics.swift`, `TheStash/Interactivity.swift`, `TheStash/ScreenManifest.swift`, `TheStash/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Owns element registry, hierarchy parsing, target resolution, action execution, scroll orchestration, delta computation, and screen capture
 
 ## Responsibilities
 
-TheBagman handles all the goods during TheInsideJob:
+TheStash handles all the goods during TheInsideJob:
 
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
 2. **Parse/apply pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value; `apply()` mutates the registry. Screen change detection happens between these two steps — no mixed old/new state.
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
 4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
-5. **Action execution** — Two generic pipelines (`performElementAction` for element-targeted actions, `performPointAction` for coordinate-targeted gestures) handle resolution, interactivity checking, and error reporting. Each `executeXxx` method is a thin closure that feeds the pipeline. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
+5. **Action execution** — Two generic pipelines (`performElementAction` for element-targeted actions, `performPointAction` for coordinate-targeted gestures) handle resolution, interactivity checking, and error reporting. Each `executeXxx` method is a thin closure that feeds the pipeline. TheStash resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
 6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
 8. **HeistId synthesis** — assigns stable, deterministic `heistId` identifiers directly from `AccessibilityElement` (developer identifier preferred, else synthesized from traits+label; value excluded for stability), with suffix disambiguation for duplicates
@@ -20,24 +20,24 @@ TheBagman handles all the goods during TheInsideJob:
 10. **Wire conversion at boundary** — `toWire()` converts `ScreenElement` → `HeistElement` only at serialization boundaries (Pulse broadcast, sendInterface, ExploreResult). All internal code operates on `AccessibilityElement`.
 11. **Delta computation** — `captureBeforeState()` captures a `BeforeState` token (snapshot + viewport elements + VC identity); after the action, `actionResultWithDelta(before:)` computes the delta through a single codepath for both success and failure. Includes post-action `exploreAndPrune()` so deltas capture off-screen changes.
 12. **Container fingerprint caching** — `ContainerExploreState` caches each scrollable container's visible subtree fingerprint, accumulated fingerprint, and discovered heistIds. On re-explore, unchanged containers are skipped via O(1) fingerprint comparison.
-13. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheBagman+Capture.swift)
-14. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (TheBagman+Diagnostics.swift)
+13. **Screen capture** — renders traversable windows via `UIGraphicsImageRenderer` (TheStash+Capture.swift)
+14. **Resolution diagnostics** — near-miss suggestions, similar heistId hints, compact element summaries (TheStash+Diagnostics.swift)
 
 ## Custody Contract
 
-TheBagman is the custodian of the live accessibility/UI object world.
+TheStash is the custodian of the live accessibility/UI object world.
 
-- **Exclusive ownership of live object references** — if a subsystem needs to get from a parsed element back to a live `NSObject`, it goes through TheBagman
-- **Weak references only** — live objects are stored in `ScreenElement.object` and `ScreenElement.scrollView` as `weak` references; TheBagman never prolongs the lifetime of app UI objects
+- **Exclusive ownership of live object references** — if a subsystem needs to get from a parsed element back to a live `NSObject`, it goes through TheStash
+- **Weak references only** — live objects are stored in `ScreenElement.object` and `ScreenElement.scrollView` as `weak` references; TheStash never prolongs the lifetime of app UI objects
 - **No exported live handles** — other subsystems should work through Bagman APIs that return values, frames, points, or perform actions on their behalf
-- **Parser boundary** — `AccessibilityHierarchyParser` usage belongs to TheBagman; TheTripwire handles timing/window observation, and TheSafecracker handles raw gesture synthesis
-- **Fail closed on staleness** — if the weak object is gone, TheBagman treats it as stale state and re-resolves from a fresh parse instead of pretending the handle is still valid
+- **Parser boundary** — `AccessibilityHierarchyParser` usage belongs to TheStash; TheTripwire handles timing/window observation, and TheSafecracker handles raw gesture synthesis
+- **Fail closed on staleness** — if the weak object is gone, TheStash treats it as stale state and re-resolves from a fresh parse instead of pretending the handle is still valid
 
 ## Crew Responsibility Boundaries
 
 ```mermaid
 flowchart LR
-    subgraph TheBagman ["TheBagman (data + dispatch)"]
+    subgraph TheStash ["TheStash (data + dispatch)"]
         direction TB
         B1["Element registry<br/>(screenElements)"]
         B2["Target resolution<br/>(heistId / matcher)"]
@@ -65,7 +65,7 @@ flowchart LR
 
 ```mermaid
 graph TD
-    subgraph TheBagman["TheBagman (@MainActor, internal)"]
+    subgraph TheStash["TheStash (@MainActor, internal)"]
         subgraph Stores["Instance State"]
             Registry["registry.elements: [String: ScreenElement]<br/>Persistent, screen-lifetime"]
             Viewport["registry.viewportIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
@@ -106,10 +106,10 @@ graph TD
         end
     end
 
-    TheInsideJob["TheInsideJob"] --> TheBagman
-    TheTripwire["TheTripwire"] -.->|injected via init| TheBagman
-    TheBagman -.->|"via ActionExecution/ScrollExecution"| TheSafecracker["TheSafecracker"]
-    TheBagman -.->|"weak var stakeout"| TheStakeout["TheStakeout"]
+    TheInsideJob["TheInsideJob"] --> TheStash
+    TheTripwire["TheTripwire"] -.->|injected via init| TheStash
+    TheStash -.->|"via ActionExecution/ScrollExecution"| TheSafecracker["TheSafecracker"]
+    TheStash -.->|"weak var stakeout"| TheStakeout["TheStakeout"]
 ```
 
 ## Data Flow: Parse → Apply
@@ -140,13 +140,13 @@ flowchart LR
 
 ## Action Execution Pipeline
 
-All interactions follow the same pipeline: TheBagman resolves the target, executes the action (with optional fallback to TheSafecracker for synthetic touch), then produces a delta.
+All interactions follow the same pipeline: TheStash resolves the target, executes the action (with optional fallback to TheSafecracker for synthetic touch), then produces a delta.
 
 ```mermaid
 flowchart TD
     CMD["Client command<br/>(activate, tap, swipe, ...)"] --> DISP["TheInsideJob.dispatchInteraction()"]
     DISP --> SNAP["captureBeforeState()<br/>→ BeforeState token"]
-    SNAP --> EXEC["TheBagman.executeXxx(target)"]
+    SNAP --> EXEC["TheStash.executeXxx(target)"]
 
     EXEC --> ENS["ensureOnScreen(target)<br/>Auto-scroll if element<br/>is off-viewport"]
     ENS --> RES["resolveTarget(target)"]
@@ -258,27 +258,27 @@ No store writes to another store. No circular dependencies.
 
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `TheBagman.swift` | ~800 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
-| `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
-| `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
-| `TheBagman/ActionExecution.swift` | ~420 | Unified pipelines (`performElementAction`, `performPointAction`) + all `executeXxx` methods |
-| `TheBagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible (one-shot), element-search (iterative), ensure-on-screen, direction mapping |
-| `TheBagman/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
-| `TheBagman/WireConversion.swift` | ~215 | Caseless enum with static methods: toWire(), delta computation, tree conversion |
-| `TheBagman/IdAssignment.swift` | ~100 | Caseless enum with static methods: deterministic heistId synthesis from traits/labels |
-| `TheBagman/ElementRegistry.swift` | ~95 | Element registry storage: elements, viewportIds, reverseIndex |
-| `TheBagman/Diagnostics.swift` | ~50 | Caseless enum with static methods: resolution error formatting |
-| `TheBagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConversion and ActionExecution) |
-| `TheBagman/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
-| `TheBagman/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |
+| `TheStash.swift` | ~800 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
+| `TheStash+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
+| `TheStash+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
+| `TheStash/ActionExecution.swift` | ~420 | Unified pipelines (`performElementAction`, `performPointAction`) + all `executeXxx` methods |
+| `TheStash/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible (one-shot), element-search (iterative), ensure-on-screen, direction mapping |
+| `TheStash/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
+| `TheStash/WireConversion.swift` | ~215 | Caseless enum with static methods: toWire(), delta computation, tree conversion |
+| `TheStash/IdAssignment.swift` | ~100 | Caseless enum with static methods: deterministic heistId synthesis from traits/labels |
+| `TheStash/ElementRegistry.swift` | ~95 | Element registry storage: elements, viewportIds, reverseIndex |
+| `TheStash/Diagnostics.swift` | ~50 | Caseless enum with static methods: resolution error formatting |
+| `TheStash/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConversion and ActionExecution) |
+| `TheStash/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
+| `TheStash/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |
 
 ## Dependencies
 
 - **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), VC identity-based screen change detection, and first responder lookup
-- **TheSafecracker** (via ActionExecution and ScrollExecution extensions) — TheBagman delegates to TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
-- **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheBagman calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
+- **TheSafecracker** (via ActionExecution and ScrollExecution extensions) — TheStash delegates to TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
+- **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheStash calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree with `elementVisitor` and `containerVisitor` closures
 
 ## Architectural Rule
 
-If code needs to parse the accessibility hierarchy, hold onto a live accessibility-backed `NSObject`, resolve an element target, or execute an accessibility action, that responsibility belongs to TheBagman. TheSafecracker is exclusively "fingers on glass" — it provides raw gesture primitives but never resolves targets or owns element state. Wire types (`HeistElement`) are produced by `toWire()` only at serialization boundaries — all internal code operates on `AccessibilityElement`.
+If code needs to parse the accessibility hierarchy, hold onto a live accessibility-backed `NSObject`, resolve an element target, or execute an accessibility action, that responsibility belongs to TheStash. TheSafecracker is exclusively "fingers on glass" — it provides raw gesture primitives but never resolves targets or owns element state. Wire types (`HeistElement`) are produced by `toWire()` only at serialization boundaries — all internal code operates on `AccessibilityElement`.

@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class WireConverterTests: XCTestCase {
 
-    private typealias WireConversion = TheBagman.WireConversion
+    private typealias WireConversion = TheStash.WireConversion
 
     // MARK: - Helpers
 
@@ -59,8 +59,8 @@ final class WireConverterTests: XCTestCase {
         frameHeight: Double = 0,
         activationPointX: Double = 0,
         activationPointY: Double = 0
-    ) -> TheBagman.ScreenElement {
-        TheBagman.ScreenElement(
+    ) -> TheStash.ScreenElement {
+        TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: makeElement(
@@ -128,7 +128,7 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testEmptySnapshotsReturnNoChange() {
-        let empty: [TheBagman.ScreenElement] = []
+        let empty: [TheStash.ScreenElement] = []
         let delta = WireConversion.computeDelta(
             before: empty, after: empty, afterTree: nil, isScreenChange: false
         )

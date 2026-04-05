@@ -5,7 +5,7 @@ import TheScore
 
 /// TheSafecracker scroll primitives — pure UIScrollView manipulation.
 /// Takes a scroll view and movement parameters, produces offset changes.
-/// No element awareness, no TheBagman reference. TheBagman finds the
+/// No element awareness, no TheStash reference. TheStash finds the
 /// scroll view from the accessibility hierarchy and passes it here.
 extension TheSafecracker {
 

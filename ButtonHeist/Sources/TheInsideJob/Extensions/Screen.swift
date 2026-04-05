@@ -10,7 +10,7 @@ extension TheInsideJob {
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
 
-        guard let (image, bounds) = bagman.captureScreen() else {
+        guard let (image, bounds) = stash.captureScreen() else {
             sendMessage(.error("Could not access app window"), requestId: requestId, respond: respond)
             return
         }
@@ -32,7 +32,7 @@ extension TheInsideJob {
 
     func broadcastScreen() {
         guard muscle.hasSubscribers else { return }
-        guard let (image, bounds) = bagman.captureScreen(),
+        guard let (image, bounds) = stash.captureScreen(),
               let pngData = image.pngData() else { return }
 
         let screenPayload = ScreenPayload(
@@ -54,7 +54,7 @@ extension TheInsideJob {
 
         let recorder = TheStakeout()
         recorder.captureFrame = { [weak self] in
-            self?.bagman.captureScreenForRecording()
+            self?.stash.captureScreenForRecording()
         }
         recorder.onRecordingComplete = { [weak self] result in
             switch result {
@@ -64,13 +64,13 @@ extension TheInsideJob {
                 self?.broadcastToAll(.recordingError(error.localizedDescription))
             }
             self?.recordingPhase = .idle
-            self?.bagman.stakeout = nil
+            self?.stash.stakeout = nil
         }
 
         do {
             try recorder.startRecording(config: config)
             recordingPhase = .recording(stakeout: recorder)
-            bagman.stakeout = recorder
+            stash.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             sendMessage(.recordingError(error.localizedDescription), requestId: requestId, respond: respond)

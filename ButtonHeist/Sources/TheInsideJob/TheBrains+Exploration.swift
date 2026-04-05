@@ -9,7 +9,7 @@ import TheScore
 // Scrolls every scrollable container to discover all elements on screen.
 // Container fingerprint caching skips unchanged containers on re-explore.
 
-extension TheBagman {
+extension TheBrains {
 
     fileprivate struct ContainerPage {
         let elements: [AccessibilityElement]
@@ -25,10 +25,10 @@ extension TheBagman {
 
     /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        exploreCycleIds = registry.viewportIds
+        exploreCycleIds = stash.registry.viewportIds
         let manifest = await exploreScreen(target: target)
         if let seen = exploreCycleIds {
-            registry.prune(keeping: seen)
+            stash.registry.prune(keeping: seen)
         }
         exploreCycleIds = nil
         return manifest
@@ -39,16 +39,16 @@ extension TheBagman {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
-        refresh()
-        manifest.recordVisibleElements(registry.viewportIds)
+        stash.refresh()
+        manifest.recordVisibleElements(stash.registry.viewportIds)
 
-        if let target, resolveFirstMatch(target) != nil {
+        if let target, stash.resolveFirstMatch(target) != nil {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
 
-        manifest.addPendingContainers(currentHierarchy.scrollableContainers)
-        var containerFingerprints = currentHierarchy.containerFingerprints
+        manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
+        var containerFingerprints = stash.currentHierarchy.containerFingerprints
 
         while !manifest.pendingContainers.isEmpty {
             let batch = manifest.pendingContainers.sorted { first, second in
@@ -61,7 +61,7 @@ extension TheBagman {
 
             for container in batch {
                 guard case .scrollable = container.type,
-                      let view = scrollableContainerViews[container],
+                      let view = stash.scrollableContainerViews[container],
                       let scrollView = view as? UIScrollView,
                       view.window != nil else {
                     manifest.markExplored(container)
@@ -108,7 +108,7 @@ extension TheBagman {
                     await tripwire.yieldFrames(2)
                     refresh()
                     originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(registry.viewportIds, container: container)
+                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
 
                     let page = visibleElementsInContainer(container)
                     let result = stitchPage(
@@ -122,7 +122,7 @@ extension TheBagman {
 
                     if result.inserted.isEmpty { break }
 
-                    if let target, resolveFirstMatch(target) != nil {
+                    if let target, stash.resolveFirstMatch(target) != nil {
                         await restoreAndCache(
                             scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
                             container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
@@ -139,7 +139,7 @@ extension TheBagman {
                     manifest: &manifest, containerFingerprints: &containerFingerprints
                 )
 
-                let newContainers = currentHierarchy.scrollableContainers
+                let newContainers = stash.currentHierarchy.scrollableContainers
                     .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
                 manifest.addPendingContainers(newContainers)
             }
@@ -162,33 +162,33 @@ extension TheBagman {
     ) async {
         Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
         await tripwire.yieldFrames(2)
-        refresh()
-        containerFingerprints = currentHierarchy.containerFingerprints
+        stash.refresh()
+        containerFingerprints = stash.currentHierarchy.containerFingerprints
         manifest.markExplored(container)
         let fingerprint = containerFingerprints[container] ?? 0
         updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
-            guard let heistId = registry.reverseIndex[element],
-                  registry.viewportIds.contains(heistId),
-                  let entry = registry.elements[heistId],
+        let pairs = stash.currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
+            guard let heistId = stash.registry.reverseIndex[element],
+                  stash.registry.viewportIds.contains(heistId),
+                  let entry = stash.registry.elements[heistId],
                   isElementInContainer(entry, container: container) else { return nil }
             return (element: entry.element, origin: entry.contentSpaceOrigin)
         }
         return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
     }
 
-    private func isElementInContainer(_ element: ScreenElement, container: AccessibilityContainer) -> Bool {
-        guard let containerView = scrollableContainerViews[container] as? UIScrollView,
+    private func isElementInContainer(_ element: TheStash.ScreenElement, container: AccessibilityContainer) -> Bool {
+        guard let containerView = stash.scrollableContainerViews[container] as? UIScrollView,
               let elementScrollView = element.scrollView else { return false }
         return containerView === elementScrollView
     }
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            stash.registry.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
@@ -217,7 +217,7 @@ extension TheBagman {
         let accFingerprint = accumulatedContentFingerprint(
             elements: accumulated, origins: accumulatedOrigins
         )
-        let heistIds = Set(registry.elements.filter { isElementInContainer($0.value, container: container) }.keys)
+        let heistIds = Set(stash.registry.elements.filter { isElementInContainer($0.value, container: container) }.keys)
         containerExploreStates[container] = ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
             accumulatedFingerprint: accFingerprint,

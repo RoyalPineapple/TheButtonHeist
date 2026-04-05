@@ -5,13 +5,13 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class TheBagmanResolutionTests: XCTestCase {
+final class TheStashResolutionTests: XCTestCase {
 
-    private var bagman: TheBagman!
+    private var bagman: TheStash!
 
     override func setUp() {
         super.setUp()
-        bagman = TheBagman(tripwire: TheTripwire())
+        bagman = TheStash(tripwire: TheTripwire())
     }
 
     override func tearDown() {
@@ -51,7 +51,7 @@ final class TheBagmanResolutionTests: XCTestCase {
 
     /// Register an element in the registry, currentHierarchy, and reverse index.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
-        bagman.registry.elements[heistId] = TheBagman.ScreenElement(
+        bagman.registry.elements[heistId] = TheStash.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
