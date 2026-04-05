@@ -17,13 +17,11 @@ extension TheBagman {
 
     @MainActor enum Interactivity {
 
-    /// Check if an element is interactive given its parsed data and live object.
-    static func isInteractive(element: AccessibilityElement, object: NSObject?) -> Bool {
-        guard let object else { return false }
-        return element.respondsToUserInteraction
+    /// Check if an element is interactive based on its parsed accessibility data.
+    static func isInteractive(element: AccessibilityElement) -> Bool {
+        element.respondsToUserInteraction
             || element.traits.contains(.adjustable)
             || !element.customActions.isEmpty
-            || object.accessibilityRespondsToUserInteraction
     }
 
     /// Validate whether an element can receive interaction based on its traits.

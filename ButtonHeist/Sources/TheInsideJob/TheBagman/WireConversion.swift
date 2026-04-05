@@ -34,7 +34,7 @@ extension TheBagman {
 
     // MARK: - Element Conversion
 
-    func convert(_ element: AccessibilityElement, object: NSObject? = nil) -> HeistElement {
+    func convert(_ element: AccessibilityElement) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             description: element.description,
@@ -53,16 +53,16 @@ extension TheBagman {
             customContent: element.customContent.isEmpty ? nil : element.customContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
             },
-            actions: buildActions(for: element, object: object)
+            actions: buildActions(for: element)
         )
     }
 
-    func buildActions(for element: AccessibilityElement, object: NSObject?) -> [ElementAction] {
+    func buildActions(for element: AccessibilityElement) -> [ElementAction] {
         var actions: [ElementAction] = []
-        if Interactivity.isInteractive(element: element, object: object) {
+        if Interactivity.isInteractive(element: element) {
             actions.append(.activate)
         }
-        if element.traits.contains(.adjustable), Interactivity.isInteractive(element: element, object: object) {
+        if element.traits.contains(.adjustable), Interactivity.isInteractive(element: element) {
             actions.append(.increment)
             actions.append(.decrement)
         }
@@ -76,7 +76,7 @@ extension TheBagman {
 
     /// Convert a ScreenElement to its wire representation.
     func toWire(_ entry: ScreenElement) -> HeistElement {
-        var wire = convert(entry.element, object: entry.object)
+        var wire = convert(entry.element)
         wire.heistId = entry.heistId
         return wire
     }
