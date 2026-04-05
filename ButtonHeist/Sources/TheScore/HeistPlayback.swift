@@ -216,11 +216,17 @@ public enum HeistValue: Codable, Sendable, Equatable {
         case let intValue as Int: return .int(intValue)
         case let doubleValue as Double: return .double(doubleValue)
         case let stringValue as String: return .string(stringValue)
-        case let arrayValue as [Any]: return .array(arrayValue.compactMap { from($0) })
+        case let arrayValue as [Any]:
+            var converted: [HeistValue] = []
+            for element in arrayValue {
+                guard let heistValue = from(element) else { return nil }
+                converted.append(heistValue)
+            }
+            return .array(converted)
         case let objectValue as [String: Any]:
             var result: [String: HeistValue] = [:]
             for (key, nestedValue) in objectValue {
-                guard let converted = from(nestedValue) else { continue }
+                guard let converted = from(nestedValue) else { return nil }
                 result[key] = converted
             }
             return .object(result)
