@@ -1,6 +1,6 @@
 # TheBagman - The Score Handler
 
-> **Files:** `TheBagman.swift`, `TheBagman+Matching.swift`, `TheBagman+Capture.swift`, `Bagman/ActionExecution.swift`, `Bagman/ScrollExecution.swift`, `Bagman/ScreenExploration.swift`, `Bagman/WireConversion.swift`, `Bagman/IdAssignment.swift`, `Bagman/ElementRegistry.swift`, `Bagman/Diagnostics.swift`, `Bagman/Interactivity.swift`, `Bagman/ScreenManifest.swift`, `Bagman/ArrayHelpers.swift`
+> **Files:** `TheBagman.swift`, `TheBagman+Matching.swift`, `TheBagman+Capture.swift`, `TheBagman/ActionExecution.swift`, `TheBagman/ScrollExecution.swift`, `TheBagman/ScreenExploration.swift`, `TheBagman/WireConversion.swift`, `TheBagman/IdAssignment.swift`, `TheBagman/ElementRegistry.swift`, `TheBagman/Diagnostics.swift`, `TheBagman/Interactivity.swift`, `TheBagman/ScreenManifest.swift`, `TheBagman/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Owns element registry, hierarchy parsing, target resolution, action execution, scroll orchestration, delta computation, and screen capture
 
@@ -11,7 +11,7 @@ TheBagman handles all the goods during TheInsideJob:
 1. **Screen-lifetime element registry** — maintains `screenElements: [String: ScreenElement]` keyed by heistId, persistent across refreshes within the same screen
 2. **Parse/apply pipeline** — `parse()` reads the live accessibility tree into an immutable `ParseResult` value; `apply()` mutates the registry. Screen change detection happens between these two steps — no mixed old/new state.
 3. **Hierarchy parsing** — drives `AccessibilityHierarchyParser` with `elementVisitor` + `containerVisitor` closures to capture element objects and scroll view refs
-4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup + `presentedHeistIds` gate, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `elementToHeistId`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
+4. **Target resolution** — `resolveTarget(_:)` is the single entry point: `.heistId` → O(1) dictionary lookup in `registry.elements`, `.matcher` → `uniqueMatch` tree walk + O(1) reverse index lookup via `registry.reverseIndex`. Returns `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). See [15-UNIFIED-TARGETING.md](15-UNIFIED-TARGETING.md) for the full targeting system.
 5. **Action execution** — `executeActivate`, `executeIncrement`, `executeDecrement`, `executeCustomAction`, `executeTap`, `executeSwipe`, `executeTypeText`, etc. TheBagman resolves the target, checks interactivity, performs the action, and falls back to TheSafecracker for synthetic touch when accessibility activation fails.
 6. **Scroll orchestration** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible`. `scroll` and `scrollToEdge` use `resolveScrollTarget` to get the element's stored `screenElement.scrollView` from the accessibility hierarchy. `scrollToVisible` walks the accessibility hierarchy tree (outermost first via `filteredHierarchy`), scrolls each container with two-tier dispatch (UIScrollView → synthetic swipe), and marks containers exhausted on stagnation. See [04a-SCROLLING.md](04a-SCROLLING.md).
 7. **Element matching** — `findMatch(_:)`, `hasMatch(_:)`, `resolveFirstMatch(_:)` search the canonical accessibility hierarchy using `ElementMatcher` predicates with AND semantics and case-insensitive substring matching.
@@ -66,10 +66,9 @@ flowchart LR
 ```mermaid
 graph TD
     subgraph TheBagman["TheBagman (@MainActor, internal)"]
-        subgraph Stores["Instance State (10 stores)"]
-            Registry["screenElements: [String: ScreenElement]<br/>Persistent, screen-lifetime"]
-            Viewport["viewportHeistIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
-            Presented["presentedHeistIds: Set&lt;String&gt;<br/>Gate: elements sent to clients"]
+        subgraph Stores["Instance State"]
+            Registry["registry.elements: [String: ScreenElement]<br/>Persistent, screen-lifetime"]
+            Viewport["registry.viewportIds: Set&lt;String&gt;<br/>Currently visible in device viewport"]
             Hierarchy["currentHierarchy: [AccessibilityHierarchy]<br/>Tree for matchers + scroll discovery"]
             ScrollViews["scrollableContainerViews<br/>[Container: UIView]"]
             ReverseIdx["elementToHeistId: [AccessibilityElement: String]<br/>O(1) matcher → heistId lookup"]
@@ -120,7 +119,7 @@ flowchart TD
     Parse["parse()"] --> PR["ParseResult (value type)<br/>• elements: [AccessibilityElement]<br/>• hierarchy: [AccessibilityHierarchy]<br/>• objects: [AE: NSObject]<br/>• scrollViews: [Container: UIView]"]
 
     PR --> Detect{"Screen change?<br/>(VC identity OR topology)"}
-    Detect -->|Yes| Clear["Clear registry<br/>screenElements.removeAll()<br/>presentedHeistIds.removeAll()"]
+    Detect -->|Yes| Clear["Clear registry<br/>registry.clearScreen()"]
     Detect -->|No| Apply
 
     Clear --> Apply["apply(ParseResult)"]
@@ -172,8 +171,8 @@ Two resolution strategies: O(1) dictionary lookup for heistIds, predicate search
 ```mermaid
 flowchart TD
     A["resolveTarget(ElementTarget)"] --> B{Target type?}
-    B -->|".heistId(id)"| C["screenElements[id]<br/>+ presentedHeistIds.contains(id)"]
-    C --> D{Entry exists<br/>& presented?}
+    B -->|".heistId(id)"| C["registry.elements[id]"]
+    C --> D{Entry exists?}
     D -->|Yes| E["Return .resolved(ResolvedTarget)"]
     D -->|No| F["Return .notFound(diagnostics)"]
 
@@ -232,7 +231,7 @@ struct ScreenElement {
 **Lifetime rules:**
 - UIKit guarantees the scroll view outlives its children, so if `object != nil` then `scrollView != nil` (when originally set)
 - If `object == nil` but `scrollView != nil`, the element was deallocated (cell reuse) but the scroll view is still alive — you can still scroll to its content-space position
-- `presentedHeistIds` gates targeting — `resolveTarget(.heistId)` requires the element to have been sent to clients via `markPresented()`
+- Any element in `registry.elements` is resolvable by heistId — the former `presentedHeistIds` gate has been removed
 
 ## Instance State Inventory
 
@@ -240,20 +239,18 @@ struct ScreenElement {
 |-------|----------|---------|
 | `currentHierarchy` | Refresh | Tree for matcher resolution + scroll target discovery |
 | `scrollableContainerViews` | Refresh | Container → UIView for scroll operations |
-| `screenElements` | Screen | The registry — all resolution paths read from here |
-| `viewportHeistIds` | Refresh | HeistIds visible in the device viewport |
-| `elementToHeistId` | Refresh | O(1) reverse index: AccessibilityElement → heistId |
-| `presentedHeistIds` | Screen | Gate: elements sent to clients. Only `markPresented()` writes it. |
+| `registry.elements` | Screen | The registry — all resolution paths read from here |
+| `registry.viewportIds` | Refresh | HeistIds visible in the device viewport |
+| `registry.reverseIndex` | Refresh | O(1) reverse index: AccessibilityElement → heistId |
 | `lastHierarchyHash` | Screen | Pulse polling dedup memo |
 | `lastScreenName` | Screen | First header element label, computed once in `apply()` |
 | `lastScreenId` | Screen | Slugified `lastScreenName` (e.g. "controls_demo"), computed alongside it |
 | `containerExploreStates` | Screen | Cached fingerprint + heistIds per scrollable container |
 | `exploreCycleIds` | Explore cycle | Accumulates heistIds during `exploreAndPrune()`, nil outside |
 
-**Data flows down through three tiers:**
+**Data flows down through two tiers:**
 - **Tier 1 (tree)**: `currentHierarchy`, `scrollableContainerViews` — volatile, rebuilt each refresh
-- **Tier 2 (registry)**: `screenElements`, `viewportHeistIds`, `elementToHeistId` — persistent, upserted
-- **Tier 3 (gate)**: `presentedHeistIds` — append-only within a screen, populated by `markPresented()`
+- **Tier 2 (registry)**: `registry.elements`, `registry.viewportIds`, `registry.reverseIndex` — persistent, upserted
 
 No store writes to another store. No circular dependencies.
 
@@ -264,21 +261,21 @@ No store writes to another store. No circular dependencies.
 | `TheBagman.swift` | ~800 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
-| `Bagman/ActionExecution.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
-| `Bagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
-| `Bagman/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
-| `Bagman/WireConversion.swift` | ~215 | toWire(), delta computation, tree conversion |
-| `Bagman/IdAssignment.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
-| `Bagman/ElementRegistry.swift` | ~95 | Element registry storage: screenElements, viewportIds, presentedIds, reverseIndex |
-| `Bagman/Diagnostics.swift` | ~50 | Resolution error formatting: near-miss, similar heistIds, compact summary |
-| `Bagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConverter and ActionExecutor) |
-| `Bagman/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
-| `Bagman/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |
+| `TheBagman/ActionExecution.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
+| `TheBagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
+| `TheBagman/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
+| `TheBagman/WireConversion.swift` | ~215 | toWire(), delta computation, tree conversion |
+| `TheBagman/IdAssignment.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
+| `TheBagman/ElementRegistry.swift` | ~95 | Element registry storage: elements, viewportIds, reverseIndex |
+| `TheBagman/Diagnostics.swift` | ~50 | Resolution error formatting: near-miss, similar heistIds, compact summary |
+| `TheBagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConversion and ActionExecution) |
+| `TheBagman/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
+| `TheBagman/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |
 
 ## Dependencies
 
 - **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), VC identity-based screen change detection, and first responder lookup
-- **TheSafecracker** (via `ActionExecutor` and `ScrollExecutor`) — TheBagman delegates to TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
+- **TheSafecracker** (via ActionExecution and ScrollExecution extensions) — TheBagman delegates to TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
 - **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheBagman calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree with `elementVisitor` and `containerVisitor` closures
 

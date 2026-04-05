@@ -278,7 +278,7 @@ final class TheBagman {
         }
     }
 
-    func checkElementInteractivity(_ element: AccessibilityElement) -> Interactivity.InteractivityCheck {
+    func checkElementInteractivity(_ element: AccessibilityElement) -> InteractivityCheck {
         Interactivity.checkInteractivity(element)
     }
 

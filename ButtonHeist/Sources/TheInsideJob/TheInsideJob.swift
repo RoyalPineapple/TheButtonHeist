@@ -484,7 +484,7 @@ public final class TheInsideJob {
         let start = CFAbsoluteTimeGetCurrent()
 
         // Phase 0: immediate check — refresh only, no snapshot needed.
-        // hasTarget uses presentedHeistIds (already populated) or walks the hierarchy directly.
+        // hasTarget checks registry.elements (for heistId) or walks the hierarchy (for matchers).
         bagman.refresh()
         if target.resolvedAbsent {
             if !bagman.hasTarget(elementTarget) {
