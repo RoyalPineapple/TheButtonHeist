@@ -8,31 +8,46 @@ import TheScore
 //
 // Diagnostic messages for element resolution failures: near-miss suggestions,
 // similar heistId hints, and compact element summaries for total misses.
+// All methods take the data they need as parameters — no mutable state.
 
 extension TheBagman {
 
-    func heistIdNotFoundMessage(_ heistId: String) -> String {
-        let similar = screenElements.keys.sorted()
+    struct Diagnostics {
+
+    func heistIdNotFound(
+        _ heistId: String,
+        knownIds: some Collection<String>,
+        viewportCount: Int
+    ) -> String {
+        let similar = knownIds.sorted()
             .filter { $0.contains(heistId) || heistId.contains($0) }
         if similar.isEmpty {
-            let count = viewportHeistIds.count
-            return "Element not found: \"\(heistId)\" (\(count) elements on screen)"
+            return "Element not found: \"\(heistId)\" (\(viewportCount) elements on screen)"
         }
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
 
-    /// Diagnostics for a matcher that had zero matches (not ambiguous — that's
-    /// handled by `resolveTarget` returning `.ambiguous`).
-    func matcherNotFoundMessage(_ matcher: ElementMatcher) -> String {
+    func matcherNotFound(
+        _ matcher: ElementMatcher,
+        hierarchy: [AccessibilityHierarchy],
+        screenElements: [String: ScreenElement],
+        viewportHeistIds: Set<String>,
+        traversalOrder: [String: Int]
+    ) -> String {
         let query = formatMatcher(matcher)
 
         // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
-        if let nearMiss = findNearMiss(for: matcher) {
+        if let nearMiss = findNearMiss(for: matcher, in: hierarchy) {
             return "No match for: \(query)\n\(nearMiss)"
         }
 
-        // Tier 2: Nothing close — dump a compact summary and suggest looking for a search field.
-        return "No match for: \(query)\n\(compactElementSummary())"
+        // Tier 2: Nothing close — dump a compact summary.
+        let summary = compactElementSummary(
+            screenElements: screenElements,
+            viewportHeistIds: viewportHeistIds,
+            traversalOrder: traversalOrder
+        )
+        return "No match for: \(query)\n\(summary)"
     }
 
     /// Format a matcher's predicates as a human-readable query string.
@@ -51,9 +66,11 @@ extension TheBagman {
     /// Only considers relaxations that still have at least one remaining predicate —
     /// dropping the only predicate matches everything, which isn't a useful near-miss.
     /// Returns a diagnostic line or nil if no near-miss found.
-    func findNearMiss(for matcher: ElementMatcher) -> String? {
-        typealias Relaxation = (field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)
-        var relaxations: [Relaxation] = []
+    func findNearMiss(
+        for matcher: ElementMatcher,
+        in hierarchy: [AccessibilityHierarchy]
+    ) -> String? {
+        var relaxations: [(field: String, relaxed: ElementMatcher, actual: (AccessibilityElement) -> String)] = []
 
         if matcher.value != nil {
             relaxations.append((
@@ -98,7 +115,7 @@ extension TheBagman {
 
         for relaxation in relaxations {
             guard relaxation.relaxed.hasPredicates,
-                  let found = findMatch(relaxation.relaxed) else { continue }
+                  let found = hierarchy.firstMatch(relaxation.relaxed)?.element else { continue }
             let actualValue = relaxation.actual(found)
             return "near miss: matched all fields except \(relaxation.field) — actual \(relaxation.field)=\(actualValue)"
         }
@@ -107,12 +124,15 @@ extension TheBagman {
 
     /// Compact summary of on-screen elements for total-miss fallback.
     /// Capped at 20 elements to avoid flooding the response.
-    func compactElementSummary() -> String {
+    func compactElementSummary(
+        screenElements: [String: ScreenElement],
+        viewportHeistIds: Set<String>,
+        traversalOrder: [String: Int]
+    ) -> String {
         let cap = 20
-        let orderByHeistId = buildTraversalOrderIndex()
         let visibleElements = screenElements.values
             .filter { viewportHeistIds.contains($0.heistId) }
-            .sorted { (orderByHeistId[$0.heistId] ?? Int.max) < (orderByHeistId[$1.heistId] ?? Int.max) }
+            .sorted { (traversalOrder[$0.heistId] ?? Int.max) < (traversalOrder[$1.heistId] ?? Int.max) }
         if visibleElements.isEmpty {
             return "screen is empty (0 elements)"
         }
@@ -134,7 +154,8 @@ extension TheBagman {
         }
         return lines.joined(separator: "\n")
     }
-}
+    }
+} // extension TheBagman
 
 #endif // DEBUG
 #endif // canImport(UIKit)

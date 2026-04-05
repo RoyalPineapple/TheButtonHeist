@@ -49,20 +49,19 @@ final class TheBagmanResolutionTests: XCTestCase {
     /// Accumulated hierarchy nodes for matcher resolution.
     private var hierarchyNodes: [AccessibilityHierarchy] = []
 
-    /// Register an element in screenElements, currentHierarchy, and presentedHeistIds.
+    /// Register an element in the registry, currentHierarchy, and reverse index.
     private func register(_ element: AccessibilityElement, heistId: String, index: Int) {
-        bagman.screenElements[heistId] = TheBagman.ScreenElement(
+        bagman.registry.elements[heistId] = TheBagman.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: nil,
             element: element,
             object: nil,
             scrollView: nil
         )
-        bagman.presentedHeistIds.insert(heistId)
         // Add to hierarchy and reverse index for matcher resolution
         hierarchyNodes.append(.element(element, traversalIndex: index))
         bagman.currentHierarchy = hierarchyNodes
-        bagman.elementToHeistId[element] = heistId
+        bagman.registry.reverseIndex[element] = heistId
     }
 
     // MARK: - heistId Resolution
@@ -89,19 +88,6 @@ final class TheBagmanResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("Element not found"))
-    }
-
-    func testHeistIdNotPresentedReturnsNotFound() {
-        let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
-        // Remove from presented set
-        bagman.presentedHeistIds.remove("button_ok")
-
-        let result = bagman.resolveTarget(.heistId("button_ok"))
-        guard case .notFound = result else {
-            XCTFail("Expected .notFound, got \(result)")
-            return
-        }
     }
 
     func testHeistIdNotFoundShowsSimilar() {
@@ -349,63 +335,38 @@ final class TheBagmanResolutionTests: XCTestCase {
 
     // MARK: - Select + Mark Presented Tracking
 
-    func testSelectElementsIsPureRead() {
+    func testSelectElementsReturnsSortedByTraversalOrder() {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
-        bagman.presentedHeistIds.remove("button_save")
 
-        let result = bagman.selectElements(.all)
+        let result = bagman.selectElements()
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result[0].heistId, "button_save")
-        XCTAssertFalse(bagman.presentedHeistIds.contains("button_save"),
-                        "selectElements must not mutate presentedHeistIds")
     }
 
-    func testMarkPresentedEnablesSubsequentHeistIdLookup() {
-        let element = element(label: "Combobox", traits: .button)
-        register(element, heistId: "button_combobox", index: 0)
-        bagman.presentedHeistIds.remove("button_combobox")
-
-        // Before marking, heistId lookup should fail
-        let beforeResult = bagman.resolveTarget(.heistId("button_combobox"))
-        XCTAssertNil(beforeResult.resolved, "Should not resolve unpresented element")
-
-        // After markPresented, heistId lookup should succeed
-        let selected = bagman.selectElements(.all)
-        bagman.markPresented(selected)
-        let afterResult = bagman.resolveTarget(.heistId("button_combobox"))
-        XCTAssertNotNil(afterResult.resolved, "Should resolve after markPresented")
-    }
-
-    func testSelectAllIncludesOffScreenElements() {
+    func testSelectElementsIncludesOffScreenElements() {
         let visible = element(label: "Visible", traits: .button)
         let offScreen = element(label: "OffScreen", traits: .button)
         register(visible, heistId: "button_visible", index: 0)
         register(offScreen, heistId: "button_offscreen", index: 1)
 
         // Simulate off-viewport: only "button_visible" is in the viewport set
-        bagman.viewportHeistIds = Set(["button_visible"])
+        bagman.registry.viewportIds = Set(["button_visible"])
 
-        let all = bagman.selectElements(.all)
+        let all = bagman.selectElements()
         XCTAssertEqual(all.count, 2, "Should return both visible and off-screen elements")
         let heistIds = all.map(\.heistId)
         XCTAssertTrue(heistIds.contains("button_visible"))
         XCTAssertTrue(heistIds.contains("button_offscreen"))
     }
 
-    func testMarkPresentedViewportDoesNotPresentOffScreen() {
-        let visible = element(label: "Visible", traits: .button)
-        let offScreen = element(label: "OffScreen", traits: .button)
-        register(visible, heistId: "button_visible", index: 0)
-        register(offScreen, heistId: "button_offscreen", index: 1)
-        bagman.presentedHeistIds.removeAll()
-        bagman.viewportHeistIds = Set(["button_visible"])
+    func testRegisteredElementResolvesWithoutMarkPresented() {
+        let element = element(label: "Combobox", traits: .button)
+        register(element, heistId: "button_combobox", index: 0)
 
-        let selected = bagman.selectElements(.viewport)
-        bagman.markPresented(selected)
-        XCTAssertTrue(bagman.presentedHeistIds.contains("button_visible"))
-        XCTAssertFalse(bagman.presentedHeistIds.contains("button_offscreen"),
-                        "markPresented(.viewport) must not present off-viewport elements")
+        // Element resolves immediately — no markPresented gate
+        let result = bagman.resolveTarget(.heistId("button_combobox"))
+        XCTAssertNotNil(result.resolved)
     }
 }
 

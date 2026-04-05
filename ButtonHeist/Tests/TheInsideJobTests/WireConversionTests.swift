@@ -1,0 +1,382 @@
+#if canImport(UIKit)
+import XCTest
+@testable import AccessibilitySnapshotParser
+@testable import TheInsideJob
+@testable import TheScore
+
+@MainActor
+final class WireConverterTests: XCTestCase {
+
+    private let converter = TheBagman.WireConversion()
+
+    // MARK: - Helpers
+
+    private func makeElement(
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
+        hint: String? = nil,
+        traits: [HeistTrait] = [],
+        frameX: Double = 0,
+        frameY: Double = 0,
+        frameWidth: Double = 0,
+        frameHeight: Double = 0,
+        activationPointX: Double = 0,
+        activationPointY: Double = 0
+    ) -> AccessibilityElement {
+        let uiTraits = UIAccessibilityTraits.fromNames(traits.map(\.rawValue))
+        let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
+        let activationPoint = CGPoint(x: activationPointX, y: activationPointY)
+        return AccessibilityElement(
+            description: label ?? "",
+            label: label,
+            value: value,
+            traits: uiTraits,
+            identifier: identifier,
+            hint: hint,
+            userInputLabels: nil,
+            shape: .frame(frame),
+            activationPoint: activationPoint,
+            usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
+            customActions: [],
+            customContent: [],
+            customRotors: [],
+            accessibilityLanguage: nil,
+            respondsToUserInteraction: true
+        )
+    }
+
+    private func makeScreenElement(
+        heistId: String,
+        label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
+        hint: String? = nil,
+        traits: [HeistTrait] = [],
+        frameX: Double = 0,
+        frameY: Double = 0,
+        frameWidth: Double = 0,
+        frameHeight: Double = 0,
+        activationPointX: Double = 0,
+        activationPointY: Double = 0
+    ) -> TheBagman.ScreenElement {
+        TheBagman.ScreenElement(
+            heistId: heistId,
+            contentSpaceOrigin: nil,
+            element: makeElement(
+                label: label, value: value, identifier: identifier, hint: hint,
+                traits: traits, frameX: frameX, frameY: frameY,
+                frameWidth: frameWidth, frameHeight: frameHeight,
+                activationPointX: activationPointX, activationPointY: activationPointY
+            ),
+            object: nil,
+            scrollView: nil
+        )
+    }
+
+    // MARK: - Trait Mapping
+
+    func testSingleTraitMapped() {
+        let traits = converter.traitNames(.button)
+        XCTAssertEqual(traits, [.button])
+    }
+
+    func testMultipleTraitsMapped() {
+        let traits = converter.traitNames([.button, .selected])
+        XCTAssertTrue(traits.contains(.button))
+        XCTAssertTrue(traits.contains(.selected))
+        XCTAssertEqual(traits.count, 2)
+    }
+
+    func testBackButtonPrivateTraitMapped() {
+        let traits = converter.traitNames(UIAccessibilityTraits(rawValue: 1 << 27))
+        XCTAssertEqual(traits, [.backButton])
+    }
+
+    func testNoTraitsReturnsEmpty() {
+        let traits = converter.traitNames(.none)
+        XCTAssertTrue(traits.isEmpty)
+    }
+
+    func testTraitMappingDeclarationOrder() {
+        let traits = converter.traitNames([.button, .selected])
+        XCTAssertEqual(traits[0], .button)
+        XCTAssertEqual(traits[1], .selected)
+    }
+
+    // MARK: - Trait Name Sync
+
+    func testHeistTraitAllCasesMatchParser() {
+        let parserNames = UIAccessibilityTraits.knownTraitNames
+        let wireNames = Set(HeistTrait.allCases.map(\.rawValue))
+        XCTAssertEqual(wireNames, parserNames,
+                       "HeistTrait.allCases must match parser's knownTraitNames")
+    }
+
+    // MARK: - Delta: Identical Snapshots
+
+    func testIdenticalSnapshotsReturnNoChange() {
+        let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
+        let delta = converter.computeDelta(
+            before: elements, after: elements, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertEqual(delta.elementCount, 1)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+        XCTAssertNil(delta.updated)
+    }
+
+    func testEmptySnapshotsReturnNoChange() {
+        let empty: [TheBagman.ScreenElement] = []
+        let delta = converter.computeDelta(
+            before: empty, after: empty, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .noChange)
+        XCTAssertEqual(delta.elementCount, 0)
+    }
+
+    // MARK: - Delta: Element Added
+
+    func testElementAddedProducesElementsChanged() {
+        let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
+        let added = makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button])
+        let after = before + [added]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.added?.count, 1)
+        XCTAssertEqual(delta.added?.first?.heistId, "button_cancel")
+        XCTAssertNil(delta.removed)
+    }
+
+    // MARK: - Delta: Element Removed
+
+    func testElementRemovedProducesElementsChanged() {
+        let before = [
+            makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button]),
+            makeScreenElement(heistId: "button_cancel", label: "Cancel", traits: [.button]),
+        ]
+        let after = [before[0]]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.removed, ["button_cancel"])
+        XCTAssertNil(delta.added)
+    }
+
+    // MARK: - Delta: Property Changes
+
+    func testValueChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "slider", value: "50%")]
+        let after = [makeScreenElement(heistId: "slider", value: "75%")]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.updated?.count, 1)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .value)
+        XCTAssertEqual(change?.old, "50%")
+        XCTAssertEqual(change?.new, "75%")
+    }
+
+    func testTraitsChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "btn", traits: [.button])]
+        let after = [makeScreenElement(heistId: "btn", traits: [.button, .selected])]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .traits)
+        XCTAssertEqual(change?.old, "button")
+        XCTAssertEqual(change?.new, "button, selected")
+    }
+
+    func testHintChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "btn", hint: "Tap to continue")]
+        let after = [makeScreenElement(heistId: "btn", hint: "Tap to go back")]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .hint)
+        XCTAssertEqual(change?.old, "Tap to continue")
+        XCTAssertEqual(change?.new, "Tap to go back")
+    }
+
+    func testActionsChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "slider", traits: [.button])]
+        let after = [makeScreenElement(heistId: "slider", traits: [.adjustable])]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertNotNil(delta.updated)
+    }
+
+    func testFrameChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "box", frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 50)]
+        let after = [makeScreenElement(heistId: "box", frameX: 10, frameY: 20, frameWidth: 100, frameHeight: 50)]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .frame)
+        XCTAssertEqual(change?.old, "0,0,100,50")
+        XCTAssertEqual(change?.new, "10,20,100,50")
+    }
+
+    func testActivationPointChangeProducesUpdate() {
+        let before = [makeScreenElement(heistId: "btn", activationPointX: 50, activationPointY: 25)]
+        let after = [makeScreenElement(heistId: "btn", activationPointX: 75, activationPointY: 40)]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .activationPoint)
+        XCTAssertEqual(change?.old, "50,25")
+        XCTAssertEqual(change?.new, "75,40")
+    }
+
+    func testMultiplePropertyChangesOnSameElement() {
+        let before = [makeScreenElement(heistId: "slider", value: "50%", hint: "Volume")]
+        let after = [makeScreenElement(heistId: "slider", value: "75%", hint: "Music Volume")]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.updated?.first?.changes.count, 2)
+        let properties = delta.updated?.first?.changes.map(\.property)
+        XCTAssertTrue(properties?.contains(.value) == true)
+        XCTAssertTrue(properties?.contains(.hint) == true)
+    }
+
+    // MARK: - Delta: Label Change Tracking
+
+    func testLabelChangeOnIdentifierMatchedElementProducesUpdate() {
+        let before = [makeScreenElement(heistId: "loginButton", label: "Show More", identifier: "loginButton")]
+        let after = [makeScreenElement(heistId: "loginButton", label: "Show Less", identifier: "loginButton")]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.updated?.count, 1)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .label)
+        XCTAssertEqual(change?.old, "Show More")
+        XCTAssertEqual(change?.new, "Show Less")
+    }
+
+    // MARK: - Delta: Label Change = Add + Remove
+
+    func testLabelChangeProducesAddAndRemove() {
+        let before = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
+        let after = [makeScreenElement(heistId: "button_done", label: "Done", traits: [.button])]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.removed, ["button_ok"])
+        XCTAssertEqual(delta.added?.first?.heistId, "button_done")
+        XCTAssertNil(delta.updated)
+    }
+
+    // MARK: - Delta: Screen Change
+
+    func testScreenChangeReturnsFull() {
+        let before = [makeScreenElement(heistId: "button_ok")]
+        let after = [makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header])]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: true
+        )
+        XCTAssertEqual(delta.kind, .screenChanged)
+        XCTAssertNotNil(delta.newInterface)
+        XCTAssertEqual(delta.newInterface?.elements.count, 1)
+        XCTAssertEqual(delta.elementCount, 1)
+    }
+
+    // MARK: - Delta: Duplicate heistId Pairing
+
+    func testDuplicateHeistIdPairedByIndex() {
+        let before = [
+            makeScreenElement(heistId: "cell_1", value: "A"),
+            makeScreenElement(heistId: "cell_1", value: "B"),
+        ]
+        let after = [
+            makeScreenElement(heistId: "cell_1", value: "X"),
+            makeScreenElement(heistId: "cell_1", value: "Y"),
+        ]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.updated?.count, 2)
+        XCTAssertNil(delta.added)
+        XCTAssertNil(delta.removed)
+    }
+
+    func testDuplicateHeistIdExcessGoesToAddedRemoved() {
+        let before = [
+            makeScreenElement(heistId: "cell", value: "A"),
+            makeScreenElement(heistId: "cell", value: "B"),
+            makeScreenElement(heistId: "cell", value: "C"),
+        ]
+        let after = [
+            makeScreenElement(heistId: "cell", value: "X"),
+        ]
+
+        let delta = converter.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        XCTAssertEqual(delta.updated?.count, 1)
+        XCTAssertEqual(delta.removed?.count, 2)
+    }
+
+    // MARK: - Delta: Empty Diff Coerced to noChange
+
+    func testNoDifferencesCoercedToNoChange() {
+        let screenElement = makeScreenElement(heistId: "btn", label: "OK", traits: [.button])
+
+        let delta = converter.computeDelta(
+            before: [screenElement], after: [screenElement], afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .noChange)
+    }
+
+    // MARK: - Snapshot Screen Name
+
+    func testSnapshotScreenNameFromHeaderElement() {
+        let elements = [
+            makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button]),
+            makeScreenElement(heistId: "header_settings", label: "Settings", traits: [.header]),
+        ]
+        XCTAssertEqual(elements.screenName, "Settings")
+    }
+
+    func testSnapshotScreenNameNilWhenNoHeader() {
+        let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
+        XCTAssertNil(elements.screenName)
+    }
+}
+
+#endif
