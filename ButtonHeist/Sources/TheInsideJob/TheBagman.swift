@@ -21,18 +21,8 @@ final class TheBagman {
 
     init(tripwire: TheTripwire) {
         self.tripwire = tripwire
+        self.burglar = TheBurglar(tripwire: tripwire)
         self.safecracker.tripwire = tripwire
-    }
-
-    // MARK: - Parse Result
-
-    /// Everything the parser produces in a single read. Value type — no mutation,
-    /// no instance state. Created by `parse()`, consumed by `apply(_:)`.
-    struct ParseResult {
-        let elements: [AccessibilityElement]
-        let hierarchy: [AccessibilityHierarchy]
-        let objects: [AccessibilityElement: NSObject]
-        let scrollViews: [AccessibilityContainer: UIView]
     }
 
     // MARK: - Volatile State (rebuilt each refresh)
@@ -44,7 +34,7 @@ final class TheBagman {
 
     /// Maps scrollable containers from the hierarchy to their backing UIView.
     /// Rebuilt on each accessibility refresh. Check `as? UIScrollView` at point of use.
-    private(set) var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
+    var scrollableContainerViews: [AccessibilityContainer: UIView] = [:]
 
     // MARK: - Screen-Lifetime Element Registry
 
@@ -83,13 +73,11 @@ final class TheBagman {
 
     /// Screen name from the registry (first header element by traversal order).
     /// Computed once in `apply()` from the hierarchy's traversal order.
-    private(set) var lastScreenName: String?
+    var lastScreenName: String?
 
     /// Slugified screen name for machine use (e.g. "controls_demo").
     /// Computed alongside `lastScreenName` in `apply()`.
-    private(set) var lastScreenId: String?
-
-    private let parser = AccessibilityHierarchyParser()
+    var lastScreenId: String?
 
     /// Back-reference to the stakeout for recording frame capture.
     weak var stakeout: TheStakeout?
@@ -396,229 +384,16 @@ final class TheBagman {
         lastHierarchyHash = 0
     }
 
-    // MARK: - Parse (read-only)
-
-    /// Read the live accessibility tree without mutating any state.
-    /// Returns a ParseResult value that can be inspected (e.g., for topology comparison)
-    /// before deciding whether to apply it.
-    func parse() -> ParseResult? {
-        let windows = tripwire.getTraversableWindows()
-        guard !windows.isEmpty else { return nil }
-
-        // Temporarily reveal search bars hidden by `hidesSearchBarWhenScrolling`.
-        // The navigation bar collapses the search bar when the scroll view is not
-        // at the very top, making it invisible to the accessibility snapshot parser
-        // (zero frame). Toggling the flag + forcing layout expands the bar for the
-        // duration of the parse. Restoring `true` re-arms hide-on-scroll without
-        // snapping the bar closed — it stays visible until the next scroll event.
-        let revealedSearchBars = Self.revealHiddenSearchBars()
-        defer { Self.restoreSearchBarHiding(revealedSearchBars) }
-
-        var allHierarchy: [AccessibilityHierarchy] = []
-        var allObjects: [AccessibilityElement: NSObject] = [:]
-        var allScrollViews: [AccessibilityContainer: UIView] = [:]
-
-        // Accessibility property reads return autoreleased ObjC objects.
-        // Draining per-window keeps high-water mark proportional to one window's tree.
-        for (window, rootView) in windows {
-            autoreleasepool {
-                let windowTree = parser.parseAccessibilityHierarchy(
-                    in: rootView,
-                    rotorResultLimit: 0,
-                    elementVisitor: { element, _, object in
-                        allObjects[element] = object
-                    },
-                    containerVisitor: { container, object in
-                        if case .scrollable = container.type, let view = object as? UIView {
-                            allScrollViews[container] = view
-                        }
-                    }
-                )
-
-                if windows.count > 1 {
-                    let windowName = NSStringFromClass(type(of: window))
-                    let container = AccessibilityContainer(
-                        type: .semanticGroup(
-                            label: windowName,
-                            value: "windowLevel: \(window.windowLevel.rawValue)",
-                            identifier: nil
-                        ),
-                        frame: window.frame
-                    )
-                    allHierarchy.append(.container(container, children: windowTree))
-                } else {
-                    allHierarchy.append(contentsOf: windowTree)
-                }
-            }
-        }
-
-        return ParseResult(
-            elements: allHierarchy.sortedElements,
-            hierarchy: allHierarchy,
-            objects: allObjects,
-            scrollViews: allScrollViews
-        )
-    }
-
-    // MARK: - Search Bar Reveal
-
-    /// Temporarily disable `hidesSearchBarWhenScrolling` on all visible navigation
-    /// items that have a search controller, forcing the search bar into its expanded
-    /// layout. Returns the navigation items that were toggled so they can be restored.
-    private static func revealHiddenSearchBars() -> [UINavigationItem] {
-        var revealed: [UINavigationItem] = []
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else { return revealed }
-
-        for window in windowScene.windows where !window.isHidden {
-            guard let rootViewController = window.rootViewController else { continue }
-            for viewController in Self.allVisibleViewControllers(from: rootViewController) {
-                let item = viewController.navigationItem
-                guard item.searchController != nil, item.hidesSearchBarWhenScrolling else { continue }
-                UIView.performWithoutAnimation {
-                    item.hidesSearchBarWhenScrolling = false
-                    viewController.navigationController?.navigationBar.layoutIfNeeded()
-                }
-                revealed.append(item)
-            }
-        }
-        return revealed
-    }
-
-    /// Re-arm hide-on-scroll for navigation items that were temporarily revealed.
-    /// The search bar stays visible until the next scroll event — no snap-back.
-    private static func restoreSearchBarHiding(_ items: [UINavigationItem]) {
-        guard !items.isEmpty else { return }
-        UIView.performWithoutAnimation {
-            for item in items {
-                item.hidesSearchBarWhenScrolling = true
-            }
-        }
-    }
-
-    /// Collect all visible view controllers from a root (presented, nav stack, tab children).
-    private static func allVisibleViewControllers(from root: UIViewController) -> [UIViewController] {
-        var result: [UIViewController] = []
-        var stack: [UIViewController] = [root]
-        while let viewController = stack.popLast() {
-            if let presented = viewController.presentedViewController {
-                stack.append(presented)
-            }
-            if let nav = viewController as? UINavigationController {
-                if let top = nav.topViewController { stack.append(top) }
-            } else if let tab = viewController as? UITabBarController {
-                if let selected = tab.selectedViewController { stack.append(selected) }
-            } else {
-                result.append(viewController)
-            }
-        }
-        return result
-    }
-
-    // MARK: - Apply (mutates registry)
-
-    /// Apply a parse result to the registry. Sets `currentHierarchy`,
-    /// `scrollableContainerViews`, upserts into `registry.elements`, rebuilds `registry.viewportIds`.
-    func apply(_ result: ParseResult) {
-        currentHierarchy = result.hierarchy
-        scrollableContainerViews = result.scrollViews
-
-        let contexts = buildElementContexts(
-            hierarchy: result.hierarchy,
-            scrollableContainerViews: result.scrollViews,
-            elementObjects: result.objects
-        )
-
-        let heistIds = IdAssignment.assign(result.elements)
-        registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
-
-        // Detect first responder among parsed elements — no view hierarchy walk.
-        let firstResponders = zip(result.elements, heistIds).filter { element, _ in
-            (result.objects[element] as? UIView)?.isFirstResponder == true
-        }
-        if firstResponders.count > 1 {
-            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
-        }
-        registry.firstResponderHeistId = firstResponders.first?.1
-
-        exploreCycleIds?.formUnion(heistIds)
-
-        // Cache screen name — first header element in traversal order.
-        lastScreenName = result.elements.first {
-            $0.traits.contains(.header) && $0.label != nil
-        }?.label
-        lastScreenId = IdAssignment.slugify(lastScreenName)
-    }
-
-    /// Parse and apply in one step. Most callers use this.
-    /// Returns the ParseResult for callers that need the hierarchy tree or elements.
-    @discardableResult
-    func refresh() -> ParseResult? {
-        guard let result = parse() else { return nil }
-        apply(result)
-        return result
-    }
-
-    /// Walk the hierarchy tree to gather per-element context: content-space origins,
-    /// scroll view refs, and live element objects.
-    private func buildElementContexts(
-        hierarchy: [AccessibilityHierarchy],
-        scrollableContainerViews: [AccessibilityContainer: UIView],
-        elementObjects: [AccessibilityElement: NSObject]
-    ) -> [AccessibilityElement: ElementContext] {
-        Dictionary(
-            hierarchy.compactMap(
-                context: nil as UIScrollView?,
-                container: { parentScrollView, accessibilityContainer in
-                    (scrollableContainerViews[accessibilityContainer] as? UIScrollView) ?? parentScrollView
-                },
-                element: { element, _, scrollView in
-                    let origin: CGPoint? = scrollView.flatMap { scrollView in
-                        let frame = element.shape.frame
-                        return (!frame.isNull && !frame.isEmpty)
-                            ? scrollView.convert(frame.origin, from: nil)
-                            : nil
-                    }
-                    return (
-                        element,
-                        ElementContext(
-                            contentSpaceOrigin: origin,
-                            scrollView: scrollView,
-                            object: elementObjects[element]
-                        )
-                    )
-                }
-            ),
-            uniquingKeysWith: { _, latest in latest }
-        )
-    }
-
     /// TheTripwire handles window access and animation detection.
     let tripwire: TheTripwire
 
-    // MARK: - Topology-Based Screen Change
+    /// TheBurglar handles parsing and populating the registry.
+    let burglar: TheBurglar
 
-    /// Did the accessibility topology change between two element snapshots?
-    /// Checks two signals using the parser's native `AccessibilityElement`:
-    /// - Back button trait appeared or disappeared (navigation push/pop)
-    /// - Header structure changed completely (all header labels replaced)
-    func isTopologyChanged(
-        before: [AccessibilityElement],
-        after: [AccessibilityElement]
-    ) -> Bool {
-        let backButtonTrait = UIAccessibilityTraits(rawValue: 1 << 27)
-        let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
-        let hasBackButton = after.contains { $0.traits.contains(backButtonTrait) }
-        if hadBackButton != hasBackButton { return true }
-
-        let beforeHeaders = Set(before.compactMap { $0.traits.contains(.header) ? $0.label : nil })
-        let afterHeaders = Set(after.compactMap { $0.traits.contains(.header) ? $0.label : nil })
-        if !beforeHeaders.isEmpty, !afterHeaders.isEmpty, beforeHeaders.isDisjoint(with: afterHeaders) {
-            return true
-        }
-
-        return false
+    /// Convenience: parse and apply in one step via TheBurglar.
+    @discardableResult
+    func refresh() -> TheBurglar.ParseResult? {
+        burglar.refresh(into: self)
     }
 
     // MARK: - Action Result with Delta
@@ -674,12 +449,12 @@ final class TheBagman {
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
         // Parse without mutating — detect screen change before touching the registry.
-        let afterResult = parse()
+        let afterResult = burglar.parse()
 
         // Screen change gate: VC identity OR accessibility topology
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || isTopologyChanged(before: before.elements, after: afterResult?.elements ?? [])
+            || burglar.isTopologyChanged(before: before.elements, after: afterResult?.elements ?? [])
         if isScreenChange {
             // Clear the old screen's registry before applying new data.
             // No mixed state — the old registry is gone before new entries arrive.
@@ -687,7 +462,7 @@ final class TheBagman {
             containerExploreStates.removeAll()
         }
         if let afterResult {
-            apply(afterResult)
+            burglar.apply(afterResult, to: self)
         }
 
         // Run a full explore after every action so the delta captures off-screen changes.
