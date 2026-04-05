@@ -669,7 +669,15 @@ extension TheFence {
         for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
             do {
-                _ = try await execute(request: request)
+                let response = try await execute(request: request)
+                if case .error = response {
+                    failedIndex = index
+                    break
+                }
+                if let actionResult = response.actionResult, !actionResult.success {
+                    failedIndex = index
+                    break
+                }
                 completedSteps += 1
             } catch {
                 failedIndex = index

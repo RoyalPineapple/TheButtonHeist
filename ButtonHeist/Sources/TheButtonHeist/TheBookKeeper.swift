@@ -1,5 +1,8 @@
 import Foundation
+import os.log
 import TheScore
+
+private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "heist")
 
 // MARK: - Session Phase State Machine
 
@@ -591,6 +594,7 @@ public final class TheBookKeeper {
             lineData.append(contentsOf: [0x0A])
             recording.fileHandle.write(lineData)
         } catch {
+            logger.error("Failed to encode heist evidence for \(command.rawValue): \(error.localizedDescription)")
             return
         }
         recording.evidenceCount += 1
