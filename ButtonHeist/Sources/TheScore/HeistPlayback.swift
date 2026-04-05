@@ -43,6 +43,9 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
     public let target: ElementMatcher?
+    /// 0-based selection index when the matcher is ambiguous (multiple elements
+    /// share the same label/traits). Nil when the matcher uniquely identifies the element.
+    public let ordinal: Int?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
@@ -52,11 +55,13 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     public init(
         command: String,
         target: ElementMatcher? = nil,
+        ordinal: Int? = nil,
         arguments: [String: HeistValue] = [:],
         recorded: RecordedMetadata? = nil
     ) {
         self.command = command
         self.target = target
+        self.ordinal = ordinal
         self.arguments = arguments
         self.recorded = recorded
     }
@@ -66,12 +71,13 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case command
         case label, identifier, value, traits, excludeTraits
+        case ordinal
         case recorded = "_recorded"
     }
 
     /// Keys that belong to element targeting or step metadata, not command arguments.
     private static let reservedKeys: Set<String> = [
-        "command", "label", "identifier", "value", "traits", "excludeTraits", "_recorded",
+        "command", "label", "identifier", "value", "traits", "excludeTraits", "ordinal", "_recorded",
     ]
 
     public init(from decoder: Decoder) throws {
@@ -86,6 +92,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
         target = matcher.nonEmpty
+        ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
 
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
 
@@ -112,6 +119,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             try container.encodeIfPresent(target.traits, forKey: .traits)
             try container.encodeIfPresent(target.excludeTraits, forKey: .excludeTraits)
         }
+        try container.encodeIfPresent(ordinal, forKey: .ordinal)
 
         try container.encodeIfPresent(recorded, forKey: .recorded)
 
@@ -133,6 +141,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             if let matchTraits = target.traits { dictionary["traits"] = matchTraits.map(\.rawValue) }
             if let matchExclude = target.excludeTraits { dictionary["excludeTraits"] = matchExclude.map(\.rawValue) }
         }
+        if let ordinal { dictionary["ordinal"] = ordinal }
 
         for (key, playbackValue) in arguments {
             dictionary[key] = playbackValue.toAny()

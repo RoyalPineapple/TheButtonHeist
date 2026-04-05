@@ -622,6 +622,9 @@ extension TheFence {
         var completedSteps = 0
         var failedIndex: Int?
 
+        isPlayingHeist = true
+        defer { isPlayingHeist = false }
+
         for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
             do {
