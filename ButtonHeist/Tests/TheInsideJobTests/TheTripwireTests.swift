@@ -28,7 +28,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-            firstResponder: nil,
+
             keyboardVisible: false,
             textInputActive: false,
             windowCount: 1,
@@ -45,7 +45,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-            firstResponder: nil,
+
             keyboardVisible: false,
             textInputActive: false,
             windowCount: 1,
@@ -62,7 +62,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: true,
             topmostVC: nil,
-            firstResponder: nil,
+
             keyboardVisible: false,
             textInputActive: false,
             windowCount: 1,
@@ -79,7 +79,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: nil,
-            firstResponder: nil,
+
             keyboardVisible: false,
             textInputActive: false,
             windowCount: 1,
@@ -99,7 +99,7 @@ final class TheTripwireTests: XCTestCase {
             fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
             hasRelevantAnimations: false,
             topmostVC: ObjectIdentifier(vc),
-            firstResponder: nil,
+
             keyboardVisible: true,
             textInputActive: true,
             windowCount: 3,
@@ -291,51 +291,6 @@ final class TheTripwireTests: XCTestCase {
         // Flags should not respond to notifications before startPulse()
         NotificationCenter.default.post(name: UIResponder.keyboardWillShowNotification, object: nil)
         XCTAssertFalse(tripwire.keyboardVisibleFlag)
-    }
-
-    // MARK: - First Responder
-
-    func testCurrentFirstResponderReturnsNilWhenNothingFocused() {
-        // In the test host, no text field is focused by default
-        // so currentFirstResponder should return nil or whatever
-        // the host has focused. We just verify it doesn't crash.
-        _ = tripwire.currentFirstResponder()
-    }
-
-    func testFirstResponderTrackedInPulseReading() {
-        let reading = TheTripwire.PulseReading(
-            tick: 10,
-            timestamp: CFAbsoluteTimeGetCurrent(),
-            layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
-            hasRelevantAnimations: false,
-            topmostVC: nil,
-            firstResponder: nil,
-            keyboardVisible: false,
-            textInputActive: false,
-            windowCount: 1,
-            quietFrames: 2
-        )
-        XCTAssertNil(reading.firstResponder)
-    }
-
-    func testFirstResponderIdentityTracksView() {
-        let textField = UITextField()
-        let id = ObjectIdentifier(textField)
-        let reading = TheTripwire.PulseReading(
-            tick: 10,
-            timestamp: CFAbsoluteTimeGetCurrent(),
-            layoutPending: false,
-            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
-            hasRelevantAnimations: false,
-            topmostVC: nil,
-            firstResponder: id,
-            keyboardVisible: false,
-            textInputActive: false,
-            windowCount: 1,
-            quietFrames: 2
-        )
-        XCTAssertEqual(reading.firstResponder, id)
     }
 
     // MARK: - isScreenChange (VC identity — unchanged from before)

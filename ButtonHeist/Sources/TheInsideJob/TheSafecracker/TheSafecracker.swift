@@ -275,26 +275,18 @@ final class TheSafecracker {
         return true
     }
 
-    /// Clear all text in the focused text input using UITextInput select-all + delete.
-    /// Uses UITextInput protocol directly — works with UITextField, UITextView,
-    /// and any custom UITextInput conformer.
+    /// Clear all text in the focused text input using select-all + delete.
+    /// Routes through the responder chain — no view hierarchy walk needed.
     func clearText() async -> Bool {
-        guard let textInput = firstResponderView() as? (any UITextInput) else {
-            return false
-        }
-
-        let start = textInput.beginningOfDocument
-        let end = textInput.endOfDocument
-        guard let fullRange = textInput.textRange(from: start, to: end) else { return true }
-        if fullRange.isEmpty { return true }
-        textInput.selectedTextRange = fullRange
-        // Brief yield so the selection registers before delete
+        // Select all via responder chain
+        UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.selectAll), to: nil, from: nil, for: nil)
         try? await Task.sleep(for: Self.selectionSettleDelay)
 
+        // Delete via keyboard bridge (preferred) or responder chain
         if let keyboard = KeyboardBridge.shared() {
             keyboard.deleteBackward()
         } else {
-            textInput.deleteBackward()
+            return false
         }
         return true
     }
@@ -309,31 +301,9 @@ final class TheSafecracker {
     }
 
     /// Resign first responder, dismissing the keyboard if visible.
+    /// Routes through the responder chain — no view hierarchy walk needed.
     func resignFirstResponder() -> Bool {
-        guard let responder = firstResponderView() else { return false }
-        responder.resignFirstResponder()
-        return true
-    }
-
-    // MARK: - First Responder
-
-    /// Find the first responder view across all windows in the active scene.
-    func firstResponderView() -> UIView? {
-        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        for window in allWindows {
-            if let found = findFirstResponder(in: window) { return found }
-        }
-        return nil
-    }
-
-    func findFirstResponder(in view: UIView) -> UIView? {
-        if view.isFirstResponder { return view }
-        for sub in view.subviews {
-            if let found = findFirstResponder(in: sub) { return found }
-        }
-        return nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     // MARK: - Public: Text Input Readiness

@@ -20,6 +20,10 @@ extension TheBagman {
     /// HeistIds currently visible in the device viewport — rebuilt each refresh cycle.
     var viewportIds: Set<String> = []
 
+    /// HeistId of the element whose live object is currently first responder, if any.
+    /// Rebuilt each refresh cycle — no view hierarchy walk needed.
+    var firstResponderHeistId: String?
+
     /// Reverse index: AccessibilityElement → heistId for the current visible set.
     var reverseIndex: [AccessibilityElement: String] = [:]
 
@@ -62,6 +66,7 @@ extension TheBagman {
         elements.removeAll()
         viewportIds.removeAll()
         reverseIndex.removeAll()
+        firstResponderHeistId = nil
     }
 
     /// Clear screen-level state on screen change.

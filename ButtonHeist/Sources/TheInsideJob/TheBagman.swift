@@ -533,6 +533,15 @@ final class TheBagman {
         let heistIds = IdAssignment.assign(result.elements)
         registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
 
+        // Detect first responder among parsed elements — no view hierarchy walk.
+        let firstResponders = zip(result.elements, heistIds).filter { element, _ in
+            (result.objects[element] as? UIView)?.isFirstResponder == true
+        }
+        if firstResponders.count > 1 {
+            insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
+        }
+        registry.firstResponderHeistId = firstResponders.first?.1
+
         exploreCycleIds?.formUnion(heistIds)
 
         // Cache screen name — first header element in traversal order.
