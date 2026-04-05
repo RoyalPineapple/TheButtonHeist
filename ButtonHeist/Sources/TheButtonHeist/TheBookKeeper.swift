@@ -682,23 +682,6 @@ public final class TheBookKeeper {
         return filtered.isEmpty ? nil : filtered
     }
 
-    /// UUID pattern — identifiers containing UUIDs are runtime-generated and not stable.
-    private static let uuidPattern: NSRegularExpression = {
-        do {
-            return try NSRegularExpression(
-                pattern: "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
-            )
-        } catch {
-            fatalError("Invalid UUID regex pattern: \(error)")
-        }
-    }()
-
-    /// Check whether an identifier is stable (developer-assigned) vs runtime-generated (contains UUID).
-    private func isStableIdentifier(_ identifier: String) -> Bool {
-        let range = NSRange(identifier.startIndex..., in: identifier)
-        return Self.uuidPattern.firstMatch(in: identifier, range: range) == nil
-    }
-
     /// Build the smallest ElementMatcher that uniquely identifies the element
     /// among all currently visible elements. Uses only identity fields —
     /// never value (mutable state) or state traits (selected, notEnabled, etc.).
