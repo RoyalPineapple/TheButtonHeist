@@ -163,6 +163,34 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(HeistValue.from(Data()))
     }
 
+    func testHeistValueFromArrayFailsOnUnconvertibleElement() {
+        let mixedArray: [Any] = ["hello", 42, Data()]
+        XCTAssertNil(HeistValue.from(mixedArray))
+    }
+
+    func testHeistValueFromDictFailsOnUnconvertibleValue() {
+        let mixedDict: [String: Any] = ["name": "test", "data": Data()]
+        XCTAssertNil(HeistValue.from(mixedDict))
+    }
+
+    func testHeistValueFromValidArraySucceeds() {
+        let validArray: [Any] = ["hello", 42, true]
+        let expected: HeistValue = .array([.string("hello"), .int(42), .bool(true)])
+        XCTAssertEqual(HeistValue.from(validArray), expected)
+    }
+
+    func testHeistValueFromValidDictSucceeds() {
+        let validDict: [String: Any] = ["name": "test", "count": 3]
+        let result = HeistValue.from(validDict)
+        XCTAssertNotNil(result)
+        if case .object(let objectValue) = result {
+            XCTAssertEqual(objectValue["name"], .string("test"))
+            XCTAssertEqual(objectValue["count"], .int(3))
+        } else {
+            XCTFail("Expected .object case")
+        }
+    }
+
     func testHeistValueToAny() {
         XCTAssertEqual(HeistValue.string("hello").toAny() as? String, "hello")
         XCTAssertEqual(HeistValue.int(42).toAny() as? Int, 42)
