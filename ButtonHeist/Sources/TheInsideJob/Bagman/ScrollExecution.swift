@@ -15,7 +15,6 @@ import TheScore
 extension TheBagman {
 
     /// A scrollable container discovered from the accessibility hierarchy.
-    /// UIScrollView → direct setContentOffset. swipeable → synthetic swipe (no UIScrollView ref).
     @MainActor enum ScrollableTarget {
         case uiScrollView(UIScrollView)
         case swipeable(frame: CGRect, contentSize: CGSize)
@@ -41,16 +40,7 @@ extension TheBagman {
         static let vertical   = ScrollAxis(rawValue: 1 << 1)
     }
 
-    @MainActor
-    final class ScrollExecution {
-
-    unowned let bagman: TheBagman
-
-    init(bagman: TheBagman) {
-        self.bagman = bagman
-    }
-
-    private var safecracker: TheSafecracker? { bagman.safecracker }
+    // MARK: - Scroll Axis Detection
 
     static func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
         var axis: ScrollAxis = []
@@ -82,13 +72,12 @@ extension TheBagman {
 
     // MARK: - Unified Scroll Dispatch
 
-    /// Scroll a target by one page, wait for layout to settle, and refresh.
-    func scrollOnePageAndSettle(
+    private func scrollOnePageAndSettle(
         _ target: ScrollableTarget,
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = bagman.viewportHeistIds
+        let before = viewportHeistIds
         guard let safecracker else { return (false, before) }
 
         switch target {
@@ -101,15 +90,15 @@ extension TheBagman {
                     frame: screenFrame, direction: direction
                 )
             } else {
-                await bagman.tripwire.yieldFrames(3)
+                await tripwire.yieldFrames(3)
             }
-            bagman.refresh()
+            refresh()
             return (true, before)
         case .swipeable(let frame, _):
             _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
-            await bagman.tripwire.yieldFrames(3)
-            bagman.refresh()
-            return (bagman.viewportHeistIds != before, before)
+            await tripwire.yieldFrames(3)
+            refresh()
+            return (viewportHeistIds != before, before)
         }
     }
 
@@ -119,7 +108,7 @@ extension TheBagman {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
-        let resolution = bagman.resolveTarget(elementTarget)
+        let resolution = resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
@@ -143,7 +132,7 @@ extension TheBagman {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
-        let resolution = bagman.resolveTarget(elementTarget)
+        let resolution = resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
@@ -168,7 +157,7 @@ extension TheBagman {
                 )
                 if !stepped { break }
                 didMove = true
-                if bagman.viewportHeistIds == before { break }
+                if viewportHeistIds == before { break }
             }
             moved = didMove
         }
@@ -195,9 +184,8 @@ extension TheBagman {
         }
         let searchDirection = target.resolvedDirection
 
-        // Already visible?
-        bagman.refresh()
-        if let found = bagman.resolveFirstMatch(searchTarget) {
+        refresh()
+        if let found = resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
             return foundResult(found, scrollCount: 0)
         }
@@ -206,26 +194,24 @@ extension TheBagman {
             return .failure(.scrollToVisible, message: "No gesture engine available")
         }
 
-        // Fast path: cached content-space position jump
         if case .heistId(let heistId) = searchTarget,
-           let entry = bagman.screenElements[heistId], bagman.presentedHeistIds.contains(heistId),
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let savedOffset = scrollView.contentOffset
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: true)
-            await bagman.tripwire.yieldRealFrames(20)
-            bagman.refresh()
-            if let found = bagman.resolveFirstMatch(searchTarget),
+            await tripwire.yieldRealFrames(20)
+            refresh()
+            if let found = resolveFirstMatch(searchTarget),
                let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
                 return result
             }
             scrollView.setContentOffset(savedOffset, animated: true)
-            await bagman.tripwire.yieldRealFrames(20)
-            bagman.refresh()
+            await tripwire.yieldRealFrames(20)
+            refresh()
         }
 
-        // Page-by-page search
         var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
         let maxScrolls = 200
@@ -242,14 +228,14 @@ extension TheBagman {
 
             scrollCount += 1
 
-            if let found = bagman.resolveFirstMatch(searchTarget) {
+            if let found = resolveFirstMatch(searchTarget) {
                 if let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
                     return result
                 }
                 return foundResult(found, scrollCount: scrollCount)
             }
 
-            if bagman.viewportHeistIds == before { exhausted.insert(container) }
+            if viewportHeistIds == before { exhausted.insert(container) }
         }
 
         return notFoundResult(scrollCount: scrollCount)
@@ -261,9 +247,9 @@ extension TheBagman {
         scrollCount: Int
     ) async -> TheSafecracker.InteractionResult? {
         ensureOnScreenSync(found)
-        await bagman.tripwire.yieldRealFrames(20)
-        bagman.refresh()
-        guard let fresh = bagman.resolveFirstMatch(searchTarget) else { return nil }
+        await tripwire.yieldRealFrames(20)
+        refresh()
+        guard let fresh = resolveFirstMatch(searchTarget) else { return nil }
         return foundResult(fresh, scrollCount: scrollCount)
     }
 
@@ -271,13 +257,13 @@ extension TheBagman {
         axis: ScrollAxis? = nil,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        let candidates = bagman.currentHierarchy.scrollableContainers
+        let candidates = currentHierarchy.scrollableContainers
             .filter { !exhausted.contains($0) }
 
         for container in candidates {
             guard case .scrollable(let contentSize) = container.type else { continue }
             let target: ScrollableTarget
-            if let view = bagman.scrollableContainerViews[container], view.window != nil {
+            if let view = scrollableContainerViews[container], view.window != nil {
                 if let scrollView = view as? UIScrollView {
                     target = .uiScrollView(scrollView)
                 } else {
@@ -298,19 +284,19 @@ extension TheBagman {
             success: false, method: .scrollToVisible,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: bagman.screenElements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
                 totalItems: nil, exhaustive: true
             )
         )
     }
 
     private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
-        bagman.markPresented([found.screenElement])
-        let wire = bagman.toWire(found.screenElement)
+        markPresented([found.screenElement])
+        let wire = toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
             success: true, method: .scrollToVisible, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: bagman.screenElements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: screenElements.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
@@ -331,17 +317,17 @@ extension TheBagman {
         guard let safecracker else { return }
 
         if case .heistId(let heistId) = target,
-           !bagman.viewportHeistIds.contains(heistId),
-           let entry = bagman.screenElements[heistId], bagman.presentedHeistIds.contains(heistId),
+           !viewportHeistIds.contains(heistId),
+           let entry = screenElements[heistId], presentedHeistIds.contains(heistId),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: true)
-            await bagman.tripwire.yieldFrames(20)
-            bagman.refresh()
+            await tripwire.yieldFrames(20)
+            refresh()
         }
 
-        guard let resolved = bagman.resolveTarget(target).resolved,
+        guard let resolved = resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
@@ -352,31 +338,31 @@ extension TheBagman {
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            await bagman.tripwire.yieldFrames(3)
-            bagman.refresh()
+            await tripwire.yieldFrames(3)
+            refresh()
         }
     }
 
     func ensureFirstResponderOnScreen() async {
-        guard let responder = bagman.tripwire.currentFirstResponder() else { return }
+        guard let responder = tripwire.currentFirstResponder() else { return }
         let frame = responder.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
         let activationPoint = responder.accessibilityActivationPoint
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = bagman.screenElements.values
+        guard let scrollView = screenElements.values
             .first(where: { $0.object === responder })?.scrollView,
               let safecracker else { return }
         if safecracker.scrollToMakeVisible(
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) {
-            await bagman.tripwire.yieldFrames(3)
-            bagman.refresh()
+            await tripwire.yieldFrames(3)
+            refresh()
         }
     }
 
-    func ensureOnScreenSync(_ resolved: ResolvedTarget, animated: Bool = true) {
+    private func ensureOnScreenSync(_ resolved: ResolvedTarget, animated: Bool = true) {
         guard let object = resolved.screenElement.object,
               let safecracker else { return }
         let frame = object.accessibilityFrame
@@ -461,8 +447,7 @@ extension TheBagman {
 
         return CGPoint(x: targetX, y: targetY)
     }
-    }
-} // extension TheBagman
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

@@ -23,49 +23,37 @@ extension TheBagman {
         let discoveredHeistIds: Set<String>
     }
 
-    @MainActor
-    final class ScreenExploration {
-
-    unowned let bagman: TheBagman
-
-    init(bagman: TheBagman) {
-        self.bagman = bagman
-    }
-
-    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
-
     /// Explore and prune: track heistIds across all apply() calls, then remove unseen.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        bagman.exploreCycleIds = bagman.viewportHeistIds
-        let manifest = await explore(target: target)
-        if let seen = bagman.exploreCycleIds {
-            bagman.pruneRegistry(keeping: seen)
+        exploreCycleIds = viewportHeistIds
+        let manifest = await exploreScreen(target: target)
+        if let seen = exploreCycleIds {
+            registry.prune(keeping: seen)
         }
-        bagman.exploreCycleIds = nil
+        exploreCycleIds = nil
         return manifest
     }
 
     /// Scroll all scrollable containers to discover every element on screen.
-    func explore(target: ElementTarget? = nil) async -> ScreenManifest {
+    func exploreScreen(target: ElementTarget? = nil) async -> ScreenManifest {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
 
-        bagman.refresh()
-        manifest.recordVisibleElements(bagman.viewportHeistIds)
+        refresh()
+        manifest.recordVisibleElements(viewportHeistIds)
 
-        // Early exit if target is already visible
-        if let target, bagman.resolveFirstMatch(target) != nil {
+        if let target, resolveFirstMatch(target) != nil {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
 
-        guard let safecracker = bagman.safecracker else {
+        guard let safecracker else {
             manifest.explorationTime = CACurrentMediaTime() - startTime
             return manifest
         }
 
-        manifest.addPendingContainers(bagman.currentHierarchy.scrollableContainers)
-        var containerFingerprints = bagman.currentHierarchy.containerFingerprints
+        manifest.addPendingContainers(currentHierarchy.scrollableContainers)
+        var containerFingerprints = currentHierarchy.containerFingerprints
 
         while !manifest.pendingContainers.isEmpty {
             let batch = manifest.pendingContainers.sorted { first, second in
@@ -78,19 +66,18 @@ extension TheBagman {
 
             for container in batch {
                 guard case .scrollable = container.type,
-                      let view = bagman.scrollableContainerViews[container],
+                      let view = scrollableContainerViews[container],
                       let scrollView = view as? UIScrollView,
                       view.window != nil else {
                     manifest.markExplored(container)
                     continue
                 }
 
-                // Skip unchanged containers via fingerprint cache.
                 let currentFingerprint = containerFingerprints[container] ?? 0
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
                    target == nil {
-                    bagman.exploreCycleIds?.formUnion(cached.discoveredHeistIds)
+                    exploreCycleIds?.formUnion(cached.discoveredHeistIds)
                     manifest.markExplored(container)
                     manifest.skippedContainers += 1
                     continue
@@ -123,10 +110,10 @@ extension TheBagman {
                     let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
                     guard moved else { break }
                     manifest.scrollCount += 1
-                    await bagman.tripwire.yieldFrames(2)
-                    bagman.refresh()
+                    await tripwire.yieldFrames(2)
+                    refresh()
                     originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(bagman.viewportHeistIds, container: container)
+                    manifest.recordVisibleElements(viewportHeistIds, container: container)
 
                     let page = visibleElementsInContainer(container)
                     let result = stitchPage(
@@ -140,8 +127,7 @@ extension TheBagman {
 
                     if result.inserted.isEmpty { break }
 
-                    // Early exit if target found
-                    if let target, bagman.resolveFirstMatch(target) != nil {
+                    if let target, resolveFirstMatch(target) != nil {
                         await restoreAndCache(
                             scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
                             container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
@@ -158,7 +144,7 @@ extension TheBagman {
                     manifest: &manifest, containerFingerprints: &containerFingerprints
                 )
 
-                let newContainers = bagman.currentHierarchy.scrollableContainers
+                let newContainers = currentHierarchy.scrollableContainers
                     .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
                 manifest.addPendingContainers(newContainers)
             }
@@ -168,7 +154,7 @@ extension TheBagman {
         return manifest
     }
 
-    // MARK: - Helpers
+    // MARK: - Exploration Helpers
 
     private func restoreAndCache(
         scrollView: UIScrollView,
@@ -180,19 +166,19 @@ extension TheBagman {
         containerFingerprints: inout [AccessibilityContainer: Int]
     ) async {
         Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
-        await bagman.tripwire.yieldFrames(2)
-        bagman.refresh()
-        containerFingerprints = bagman.currentHierarchy.containerFingerprints
+        await tripwire.yieldFrames(2)
+        refresh()
+        containerFingerprints = currentHierarchy.containerFingerprints
         manifest.markExplored(container)
         let fingerprint = containerFingerprints[container] ?? 0
         updateContainerExploreCache(container, fingerprint: fingerprint, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins)
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
-        let pairs = bagman.currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
-            guard let heistId = bagman.elementToHeistId[element],
-                  bagman.viewportHeistIds.contains(heistId),
-                  let entry = bagman.screenElements[heistId],
+        let pairs = currentHierarchy.elements.compactMap { element, _ -> (element: AccessibilityElement, origin: CGPoint?)? in
+            guard let heistId = elementToHeistId[element],
+                  viewportHeistIds.contains(heistId),
+                  let entry = screenElements[heistId],
                   isElementInContainer(entry, container: container) else { return nil }
             return (element: entry.element, origin: entry.contentSpaceOrigin)
         }
@@ -200,14 +186,14 @@ extension TheBagman {
     }
 
     private func isElementInContainer(_ element: ScreenElement, container: AccessibilityContainer) -> Bool {
-        guard let containerView = bagman.scrollableContainerViews[container] as? UIScrollView,
+        guard let containerView = scrollableContainerViews[container] as? UIScrollView,
               let elementScrollView = element.scrollView else { return false }
         return containerView === elementScrollView
     }
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            bagman.screenElements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            screenElements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }
@@ -236,15 +222,14 @@ extension TheBagman {
         let accFingerprint = accumulatedContentFingerprint(
             elements: accumulated, origins: accumulatedOrigins
         )
-        let heistIds = Set(bagman.screenElements.filter { isElementInContainer($0.value, container: container) }.keys)
+        let heistIds = Set(screenElements.filter { isElementInContainer($0.value, container: container) }.keys)
         containerExploreStates[container] = ContainerExploreState(
             visibleSubtreeFingerprint: fingerprint,
             accumulatedFingerprint: accFingerprint,
             discoveredHeistIds: heistIds
         )
     }
-    }
-} // extension TheBagman
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

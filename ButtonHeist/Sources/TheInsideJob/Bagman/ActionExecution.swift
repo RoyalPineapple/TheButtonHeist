@@ -6,42 +6,31 @@ import TheScore
 
 // MARK: - Action Execution
 //
-// Resolves elements and performs all accessibility actions.
+// TheBagman resolves elements and performs all accessibility actions.
 // TheSafecracker is only called for raw gesture synthesis (tap, swipe, etc.)
 // when accessibility activation fails or for explicit touch commands.
 
 extension TheBagman {
 
-    @MainActor
-    final class ActionExecution {
-
-    unowned let bagman: TheBagman
-
-    init(bagman: TheBagman) {
-        self.bagman = bagman
-    }
-
-    private var safecracker: TheSafecracker? { bagman.safecracker }
-
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureOnScreen(for: target)
-        let resolution = bagman.resolveTarget(target)
+        await ensureOnScreen(for: target)
+        let resolution = resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
 
-        if let interactivityError = bagman.checkElementInteractivity(resolved.element) {
+        if let interactivityError = checkElementInteractivity(resolved.element) {
             return .failure(.elementNotFound, message: interactivityError)
         }
 
         let point = resolved.element.activationPoint
-        guard bagman.hasInteractiveObject(resolved.screenElement) else {
+        guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.activate, message: "Element does not support activation")
         }
 
-        if bagman.activate(resolved.screenElement) {
+        if activate(resolved.screenElement) {
             safecracker?.fingerprints.showFingerprint(at: point)
             return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
         }
@@ -56,46 +45,46 @@ extension TheBagman {
     }
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureOnScreen(for: target)
-        let resolution = bagman.resolveTarget(target)
+        await ensureOnScreen(for: target)
+        let resolution = resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        guard bagman.hasInteractiveObject(resolved.screenElement) else {
+        guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.increment, message: "Element does not support increment")
         }
 
-        bagman.increment(resolved.screenElement)
+        increment(resolved.screenElement)
         safecracker?.fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
     }
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureOnScreen(for: target)
-        let resolution = bagman.resolveTarget(target)
+        await ensureOnScreen(for: target)
+        let resolution = resolveTarget(target)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        guard bagman.hasInteractiveObject(resolved.screenElement) else {
+        guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.decrement, message: "Element does not support decrement")
         }
 
-        bagman.decrement(resolved.screenElement)
+        decrement(resolved.screenElement)
         safecracker?.fingerprints.showFingerprint(at: resolved.element.activationPoint)
         return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
     }
 
     func executeCustomAction(_ target: CustomActionTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureOnScreen(for: target.elementTarget)
-        let resolution = bagman.resolveTarget(target.elementTarget)
+        await ensureOnScreen(for: target.elementTarget)
+        let resolution = resolveTarget(target.elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
-        guard bagman.hasInteractiveObject(resolved.screenElement) else {
+        guard hasInteractiveObject(resolved.screenElement) else {
             return .failure(.customAction, message: "Element does not support custom actions")
         }
 
-        let success = bagman.performCustomAction(named: target.actionName, on: resolved.screenElement)
+        let success = performCustomAction(named: target.actionName, on: resolved.screenElement)
         return TheSafecracker.InteractionResult(
             success: success, method: .customAction,
             message: success ? nil : "Action '\(target.actionName)' not found",
@@ -106,7 +95,7 @@ extension TheBagman {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureFirstResponderOnScreen()
+        await ensureFirstResponderOnScreen()
         guard let safecracker else {
             return .failure(.editAction, message: "No gesture engine available")
         }
@@ -115,7 +104,7 @@ extension TheBagman {
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
-        await bagman.ensureFirstResponderOnScreen()
+        await ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return TheSafecracker.InteractionResult(
             success: true, method: .setPasteboard, message: nil, value: target.text
@@ -132,7 +121,7 @@ extension TheBagman {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
-        await bagman.ensureFirstResponderOnScreen()
+        await ensureFirstResponderOnScreen()
         guard let safecracker else {
             return .failure(.resignFirstResponder, message: "No gesture engine available")
         }
@@ -148,9 +137,9 @@ extension TheBagman {
 
     func executeTap(_ target: TouchTapTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
         case .failure(let result): return result
         case .success(let point):
             guard let safecracker, await safecracker.tap(at: point) else {
@@ -163,9 +152,9 @@ extension TheBagman {
 
     func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.pointX, pointY: target.pointY) {
         case .failure(let result): return result
         case .success(let point):
             let duration = clampDuration(target.duration)
@@ -177,7 +166,7 @@ extension TheBagman {
 
     func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
 
         let unitStart: UnitPoint?
@@ -197,7 +186,7 @@ extension TheBagman {
             guard let elementTarget = target.elementTarget else {
                 return .failure(.syntheticSwipe, message: "Unit-point swipe requires an element target")
             }
-            guard let frame = bagman.resolveFrame(for: elementTarget) else {
+            guard let frame = resolveFrame(for: elementTarget) else {
                 return .failure(.elementNotFound, message: "Element not found")
             }
 
@@ -215,7 +204,7 @@ extension TheBagman {
             return TheSafecracker.InteractionResult(success: success, method: .syntheticSwipe, message: nil, value: nil)
         }
 
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result): return result
         case .success(let startPoint):
             let endPoint: CGPoint
@@ -241,9 +230,9 @@ extension TheBagman {
 
     func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.startX, pointY: target.startY) {
         case .failure(let result): return result
         case .success(let startPoint):
             let duration = clampDuration(target.duration ?? 0.5)
@@ -254,9 +243,9 @@ extension TheBagman {
 
     func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 100.0
@@ -268,9 +257,9 @@ extension TheBagman {
 
     func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result): return result
         case .success(let center):
             let radius = target.radius ?? 100.0
@@ -282,9 +271,9 @@ extension TheBagman {
 
     func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult {
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
+            await ensureOnScreen(for: elementTarget)
         }
-        switch bagman.resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
+        switch resolvePoint(from: target.elementTarget, pointX: target.centerX, pointY: target.centerY) {
         case .failure(let result): return result
         case .success(let center):
             let spread = target.spread ?? 40.0
@@ -330,10 +319,9 @@ extension TheBagman {
             return .failure(.typeText, message: "No gesture engine available")
         }
 
-        // Step 0: If element target provided, resolve and tap to focus
         if let elementTarget = target.elementTarget {
-            await bagman.ensureOnScreen(for: elementTarget)
-            let resolution = bagman.resolveTarget(elementTarget)
+            await ensureOnScreen(for: elementTarget)
+            let resolution = resolveTarget(elementTarget)
             guard let resolved = resolution.resolved else {
                 return .failure(.elementNotFound, message: resolution.diagnostics)
             }
@@ -344,7 +332,6 @@ extension TheBagman {
             }
             safecracker.fingerprints.showFingerprint(at: point)
 
-            // Wait for keyboard
             var inputReady = false
             for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
                 try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
@@ -365,7 +352,6 @@ extension TheBagman {
             }
         }
 
-        // Step 1: Clear existing text if requested
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         if target.clearFirst == true {
             guard await safecracker.clearText() else {
@@ -373,27 +359,24 @@ extension TheBagman {
             }
         }
 
-        // Step 2: Delete characters if requested
         if let deleteCount = target.deleteCount, deleteCount > 0 {
             guard await safecracker.deleteText(count: deleteCount, interKeyDelay: interKeyDelay) else {
                 return .failure(.typeText, message: "No keyboard or focused text input available for delete.")
             }
         }
 
-        // Step 3: Type text if provided
         if let text = target.text, !text.isEmpty {
             guard await safecracker.typeText(text, interKeyDelay: interKeyDelay) else {
                 return .failure(.typeText, message: "No keyboard or focused text input available for typing.")
             }
         }
 
-        // Step 4: Refresh and read back value
         try? await Task.sleep(for: TheSafecracker.keyboardPollInterval)
-        bagman.refresh()
+        refresh()
 
         var fieldValue: String?
         if let elementTarget = target.elementTarget {
-            if let resolved = bagman.resolveTarget(elementTarget).resolved {
+            if let resolved = resolveTarget(elementTarget).resolved {
                 fieldValue = resolved.element.value
             }
         }
@@ -428,8 +411,7 @@ extension TheBagman {
         }
         return clampDuration(result)
     }
-    }
-} // extension TheBagman
+}
 
 #endif // DEBUG
 #endif // canImport(UIKit)

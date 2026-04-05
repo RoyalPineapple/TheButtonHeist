@@ -261,14 +261,14 @@ No store writes to another store. No circular dependencies.
 
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `TheBagman.swift` | ~300 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
+| `TheBagman.swift` | ~800 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
-| `Bagman/ActionExecutor.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
-| `Bagman/ScrollExecutor.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
-| `Bagman/ScreenExplorer.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
-| `Bagman/WireConverter.swift` | ~215 | toWire(), delta computation, tree conversion |
-| `Bagman/IdAssigner.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
+| `Bagman/ActionExecution.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
+| `Bagman/ScrollExecution.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
+| `Bagman/ScreenExploration.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
+| `Bagman/WireConversion.swift` | ~215 | toWire(), delta computation, tree conversion |
+| `Bagman/IdAssignment.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
 | `Bagman/ElementRegistry.swift` | ~95 | Element registry storage: screenElements, viewportIds, presentedIds, reverseIndex |
 | `Bagman/Diagnostics.swift` | ~50 | Resolution error formatting: near-miss, similar heistIds, compact summary |
 | `Bagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConverter and ActionExecutor) |
