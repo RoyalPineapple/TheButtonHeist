@@ -20,13 +20,13 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
-| [TheBagman](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution (via unified pipeline), scroll orchestration, delta computation, screen capture |
+| [TheStash](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution (via unified pipeline), scroll orchestration, delta computation, screen capture |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Cross-Cutting
 | Dossier | Covers |
 |---------|--------|
-| [Unified Targeting](15-UNIFIED-TARGETING.md) | Element resolution pipeline: TheFence → ElementTarget → TheBagman.resolveTarget → action execution |
+| [Unified Targeting](15-UNIFIED-TARGETING.md) | Element resolution pipeline: TheFence → ElementTarget → TheStash.resolveTarget → action execution |
 
 ### Outside Team (macOS - CLI/MCP/Client)
 | Crew Member | Alias | Primary Role |
@@ -42,7 +42,7 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 ```mermaid
 graph TD
     TheScore["TheScore — Shared Protocol"]
-    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheBagman, TheTripwire, TheStakeout,<br/>TheFingerprints, TheSafecracker, TheMuscle, ThePlant</i>"]
+    TheInsideJob["TheInsideJob — iOS Server + Transport<br/><i>includes TheStash, TheTripwire, TheStakeout,<br/>TheFingerprints, TheSafecracker, TheMuscle, ThePlant</i>"]
     ButtonHeist["ButtonHeist — macOS Client Framework"]
     CLI["ButtonHeistCLI — CLI"]
     MCP["ButtonHeistMCP — MCP Server"]
@@ -60,7 +60,7 @@ graph TD
     TheInsideJob --> TestApp
 ```
 
-> **Note:** TheBagman, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
+> **Note:** TheStash, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
 
 ## End-to-End Data Flow
 
@@ -91,7 +91,7 @@ sequenceDiagram
     IJ->>IJ: bagman.refreshAccessibilityData()
     IJ->>IJ: bagman.captureBeforeState() (before)
     IJ->>IJ: bagman.executeActivate(target)
-    Note over IJ: TheBagman resolves target,<br/>hands TheSafecracker resolved values
+    Note over IJ: TheStash resolves target,<br/>hands TheSafecracker resolved values
     IJ-->>IJ: InteractionResult
     IJ->>IJ: computeDelta(before, after)
     IJ-->>DC: actionResult(delta)
@@ -109,6 +109,6 @@ These issues span multiple crew members and warrant holistic review:
 3. **Inconsistent timeouts** - 15s for actions, 30s for type_text/screenshots, 10s for interface requests
 4. ~~**`vendorid` TXT key**~~ - Fixed: removed from DiscoveredDevice and DeviceDiscovery
 5. ~~**Token logged in plaintext**~~ - By design: session token is logged with `privacy: .public` — it's a coordination primitive for agent isolation, not a security credential
-6. **No TheInsideJob unit tests** - TheMuscleTests added; TheBagman and TheInsideJob server-side logic still untested
+6. **No TheInsideJob unit tests** - TheMuscleTests added; TheStash and TheInsideJob server-side logic still untested
 7. **USBDeviceDiscovery blocks actor thread** - Subprocess calls in @ButtonHeistActor context
 8. ~~**Interaction log payload unbounded**~~ - Fixed: capped at 500 events, uses InterfaceDelta instead of full snapshots

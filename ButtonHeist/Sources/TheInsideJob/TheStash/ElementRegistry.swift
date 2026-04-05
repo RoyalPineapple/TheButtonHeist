@@ -4,7 +4,7 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
-extension TheBagman {
+extension TheStash {
 
     /// The element registry — tracks all known elements, their viewport visibility,
     /// and reverse lookup indices.
@@ -87,7 +87,7 @@ extension TheBagman {
         weak var scrollView: UIScrollView?
         weak var object: NSObject?
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

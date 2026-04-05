@@ -17,7 +17,7 @@ TheSafecracker is the hands of the operation:
 7. **Scrolling** — `scrollByPage` (UIScrollView.setContentOffset), `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe` (synthetic swipe for non-UIScrollView containers)
 8. **First responder lookup** — walks the view hierarchy to find the current first responder
 
-TheSafecracker does **not** resolve element targets, check interactivity, or read the element registry. TheBagman resolves everything and hands TheSafecracker the coordinates, frames, or UIScrollViews it needs.
+TheSafecracker does **not** resolve element targets, check interactivity, or read the element registry. TheStash resolves everything and hands TheSafecracker the coordinates, frames, or UIScrollViews it needs.
 
 ## Source Files
 
@@ -199,7 +199,7 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 > **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
+TheStash owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
 
 | Primitive | Input | Mechanism |
 |-----------|-------|-----------|
@@ -209,7 +209,7 @@ TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md))
 | `scrollToOppositeEdge` | UIScrollView + direction | Jump to opposite content edge (no animation) |
 | `scrollBySwipe` | CGRect + direction | Synthetic swipe gesture at 75% travel, 0.25s duration |
 
-**Auto-scroll** is driven by TheBagman's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
+**Auto-scroll** is driven by TheStash's `ensureOnScreen(for:)` before every element-targeted interaction. It checks `accessibilityFrame` against `UIScreen.main.bounds`, uses the accessibility hierarchy's scroll view reference (with UIKit ancestor fallback), calls TheSafecracker's `scrollToMakeVisible` for minimum offset adjustment, waits for settle via TheTripwire, and refreshes the element cache. Best-effort: never blocks or fails the command.
 
 **Input size guards:** `touchDrawPath` limits to 10,000 points; `touchDrawBezier` limits to 1,000 segments.
 
@@ -225,7 +225,7 @@ TheBagman owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md))
 
 > Full targeting system documentation: [15-UNIFIED-TARGETING.md](../dossiers/15-UNIFIED-TARGETING.md)
 
-All action executors resolve elements via `TheBagman.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget` wrapping a `ScreenElement`. The live NSObject is accessed via `screenElement.object` (a weak reference).
+All action executors resolve elements via `TheStash.resolveTarget(_:)` which checks heistId → match and returns `ResolvedTarget` wrapping a `ScreenElement`. The live NSObject is accessed via `screenElement.object` (a weak reference).
 
 ```mermaid
 flowchart TD

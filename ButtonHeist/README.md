@@ -55,7 +55,7 @@ Location: `Sources/TheInsideJob/`
 | `TheInsideJob.swift` | Main server singleton. TLS server, Bonjour, lifecycle management, hierarchy debounce (300ms), polling |
 | `TheInsideJob+Dispatch.swift` | Routes incoming `ClientMessage` cases to TheSafecracker and other handlers |
 | `TheMuscle.swift` | Auth and session manager. Token resolution, per-connection state machine, session lock, watcher tracking, inactivity release timer |
-| `TheBagman.swift` | Element cache. Hierarchy parser, element lookup, animation detection (`layerTreeHasAnimations`), delta computation, screen capture |
+| `TheStash.swift` | Element cache. Hierarchy parser, element lookup, animation detection (`layerTreeHasAnimations`), delta computation, screen capture |
 | `TheStakeout.swift` | Screen recording engine. `AVAssetWriter` H.264/MP4, configurable fps (1–15), scale (0.25–1.0), inactivity timeout, max duration, 7MB file cap |
 | `TheFingerprints.swift` | Visual touch indicators. Passthrough window at `.statusBar + 100`, 40pt semi-transparent white circles, multi-finger tracking |
 | `ServerTransport.swift` | TLS listener + Bonjour advertisement. Builds TXT record with `simudid`, `installationid`, `instanceid`, `certfp`, `sessionactive`, etc. |

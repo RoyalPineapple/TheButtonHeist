@@ -4,13 +4,13 @@ import XCTest
 @testable import TheInsideJob
 
 @MainActor
-final class TheBagmanTopologyTests: XCTestCase {
+final class TheStashTopologyTests: XCTestCase {
 
-    private var bagman: TheBagman!
+    private var bagman: TheStash!
 
     override func setUp() {
         super.setUp()
-        bagman = TheBagman(tripwire: TheTripwire())
+        bagman = TheStash(tripwire: TheTripwire())
     }
 
     override func tearDown() {

@@ -7,8 +7,8 @@ import TheScore
 /// The crew member who breaks in and takes what he finds.
 ///
 /// TheBurglar reads the live accessibility tree, assigns heistIds, detects
-/// screen changes, and populates TheBagman's registry. He owns the parse
-/// pipeline — the work of acquisition. TheBagman owns the registry and
+/// screen changes, and populates TheStash's registry. He owns the parse
+/// pipeline — the work of acquisition. TheStash owns the registry and
 /// answers questions about it.
 @MainActor
 final class TheBurglar {
@@ -91,9 +91,12 @@ final class TheBurglar {
 
     /// Apply a parse result to the registry. Sets `currentHierarchy`,
     /// `scrollableContainerViews`, upserts into `registry.elements`, rebuilds `registry.viewportIds`.
-    func apply(_ result: ParseResult, to bagman: TheBagman) {
-        bagman.currentHierarchy = result.hierarchy
-        bagman.scrollableContainerViews = result.scrollViews
+    /// Apply a parse result to the stash. Returns the assigned heistIds
+    /// so the caller can track them (e.g. for explore cycle accumulation).
+    @discardableResult
+    func apply(_ result: ParseResult, to stash: TheStash) -> [String] {
+        stash.currentHierarchy = result.hierarchy
+        stash.scrollableContainerViews = result.scrollViews
 
         let contexts = buildElementContexts(
             hierarchy: result.hierarchy,
@@ -101,8 +104,8 @@ final class TheBurglar {
             elementObjects: result.objects
         )
 
-        let heistIds = TheBagman.IdAssignment.assign(result.elements)
-        bagman.registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
+        let heistIds = TheStash.IdAssignment.assign(result.elements)
+        stash.registry.apply(parsedElements: result.elements, heistIds: heistIds, contexts: contexts)
 
         // Detect first responder among parsed elements — no view hierarchy walk.
         let firstResponders = zip(result.elements, heistIds).filter { element, _ in
@@ -111,22 +114,22 @@ final class TheBurglar {
         if firstResponders.count > 1 {
             insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
         }
-        bagman.registry.firstResponderHeistId = firstResponders.first?.1
-
-        bagman.exploreCycleIds?.formUnion(heistIds)
+        stash.registry.firstResponderHeistId = firstResponders.first?.1
 
         // Cache screen name — first header element in traversal order.
-        bagman.lastScreenName = result.elements.first {
+        stash.lastScreenName = result.elements.first {
             $0.traits.contains(.header) && $0.label != nil
         }?.label
-        bagman.lastScreenId = TheBagman.IdAssignment.slugify(bagman.lastScreenName)
+        stash.lastScreenId = TheStash.IdAssignment.slugify(stash.lastScreenName)
+
+        return heistIds
     }
 
     /// Parse and apply in one step. Most callers use this.
     @discardableResult
-    func refresh(into bagman: TheBagman) -> ParseResult? {
+    func refresh(into stash: TheStash) -> ParseResult? {
         guard let result = parse() else { return nil }
-        apply(result, to: bagman)
+        apply(result, to: stash)
         return result
     }
 
@@ -159,7 +162,7 @@ final class TheBurglar {
         hierarchy: [AccessibilityHierarchy],
         scrollableContainerViews: [AccessibilityContainer: UIView],
         elementObjects: [AccessibilityElement: NSObject]
-    ) -> [AccessibilityElement: TheBagman.ElementContext] {
+    ) -> [AccessibilityElement: TheStash.ElementContext] {
         Dictionary(
             hierarchy.compactMap(
                 context: nil as UIScrollView?,
@@ -175,7 +178,7 @@ final class TheBurglar {
                     }
                     return (
                         element,
-                        TheBagman.ElementContext(
+                        TheStash.ElementContext(
                             contentSpaceOrigin: origin,
                             scrollView: scrollView,
                             object: elementObjects[element]

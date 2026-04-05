@@ -16,7 +16,7 @@ extension CGFloat {
 
 // MARK: - Wire Conversion
 
-extension TheBagman {
+extension TheStash {
 
     /// Converts internal accessibility types to wire format (HeistElement, ElementNode)
     /// and computes interface deltas. Pure transformations — no mutable state.
@@ -268,7 +268,7 @@ extension TheBagman {
         return ElementUpdate(heistId: new.heistId, changes: changes)
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

@@ -1,9 +1,9 @@
 # Scrolling Deep Dive
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBagman+Scroll.swift` (orchestration), `TheSafecracker+Scroll.swift` (scroll primitives)
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Scroll.swift` (orchestration), `TheSafecracker+Scroll.swift` (scroll primitives)
 > **Parent dossiers:** [13-THEBAGMAN.md](13-THEBAGMAN.md), [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
 
-TheBagman owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
+TheStash owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
 
 Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe for everything else.
 
@@ -42,7 +42,7 @@ For `scroll_to_visible`, `adaptDirection` maps the caller's direction hint to ea
 
 Humans watching an agent interact with a simulator need to see every action happen on screen. Without auto-scroll, an agent can tap, type into, or swipe an element that's scrolled out of the viewport — the action succeeds but the observer sees nothing happen.
 
-The check runs inside TheBagman before every interaction (via `ensureOnScreen(for:)`). The agent has no knowledge of it, sends no extra parameters, and receives no indication it happened. From the agent's perspective the command just works. From the human's perspective the screen scrolls to the element and then the action occurs.
+The check runs inside TheStash before every interaction (via `ensureOnScreen(for:)`). The agent has no knowledge of it, sends no extra parameters, and receives no indication it happened. From the agent's perspective the command just works. From the human's perspective the screen scrolls to the element and then the action occurs.
 
 ### What it checks
 
@@ -109,7 +109,7 @@ Two public methods resolve their target, then delegate to a shared private imple
 
 | Method | Resolves object from | Used by |
 |--------|---------------------|---------|
-| `ensureOnScreen(for: ElementTarget)` | TheBagman screenElements registry | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
+| `ensureOnScreen(for: ElementTarget)` | TheStash screenElements registry | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
 | `ensureFirstResponderOnScreen()` | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
 
 ### Best-effort guarantee
@@ -213,4 +213,4 @@ The 44pt overlap when paging ensures continuity — the last few lines of the pr
 
 ### Why NSObject for ensureOnScreen
 
-The auto-scroll has two callers: element-targeted commands (resolve through TheBagman) and first-responder commands (resolve through the UIView responder chain). Both produce a live `NSObject` that has `accessibilityFrame` and participates in the view hierarchy. Accepting `NSObject` lets both paths share one implementation.
+The auto-scroll has two callers: element-targeted commands (resolve through TheStash) and first-responder commands (resolve through the UIView responder chain). Both produce a live `NSObject` that has `accessibilityFrame` and participates in the view hierarchy. Accepting `NSObject` lets both paths share one implementation.

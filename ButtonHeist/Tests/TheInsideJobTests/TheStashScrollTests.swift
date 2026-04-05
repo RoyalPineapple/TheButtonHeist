@@ -5,17 +5,17 @@ import XCTest
 @testable import TheScore
 
 @MainActor
-final class TheBagmanScrollTests: XCTestCase {
+final class TheStashScrollTests: XCTestCase {
 
-    private var bagman: TheBagman!
+    private var brains: TheBrains!
 
     override func setUp() {
         super.setUp()
-        bagman = TheBagman(tripwire: TheTripwire())
+        brains = TheBrains(tripwire: TheTripwire())
     }
 
     override func tearDown() {
-        bagman = nil
+        brains = nil
         super.tearDown()
     }
 
@@ -26,7 +26,7 @@ final class TheBagmanScrollTests: XCTestCase {
         scrollView.isScrollEnabled = true
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let screenElement = TheBagman.ScreenElement(
+        let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
             element: dummyElement(),
@@ -35,7 +35,7 @@ final class TheBagmanScrollTests: XCTestCase {
             scrollView: scrollView
         )
 
-        let target = bagman.resolveScrollTarget(screenElement: screenElement)
+        let target = brains.resolveScrollTarget(screenElement: screenElement)
         if case .uiScrollView(let sv) = target {
             XCTAssertTrue(sv === scrollView)
         } else {
@@ -44,7 +44,7 @@ final class TheBagmanScrollTests: XCTestCase {
     }
 
     func testResolveScrollTargetReturnsNilWhenNoScrollView() {
-        let screenElement = TheBagman.ScreenElement(
+        let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
             element: dummyElement(),
@@ -53,7 +53,7 @@ final class TheBagmanScrollTests: XCTestCase {
             scrollView: nil
         )
 
-        let target = bagman.resolveScrollTarget(screenElement: screenElement)
+        let target = brains.resolveScrollTarget(screenElement: screenElement)
         XCTAssertNil(target)
     }
 
@@ -63,7 +63,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 200)
 
-        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertFalse(axis.contains(.vertical))
     }
@@ -72,7 +72,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 2000)
 
-        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertFalse(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -81,7 +81,7 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 2000, height: 2000)
 
-        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.contains(.horizontal))
         XCTAssertTrue(axis.contains(.vertical))
     }
@@ -90,40 +90,40 @@ final class TheBagmanScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
-        let axis = TheBagman.scrollableAxis(of: .uiScrollView(scrollView))
+        let axis = TheBrains.scrollableAxis(of: .uiScrollView(scrollView))
         XCTAssertTrue(axis.isEmpty)
     }
 
     // MARK: - adaptDirection
 
     func testAdaptDirectionMatchingAxis() {
-        let target = TheBagman.ScrollableTarget.swipeable(
+        let target = TheBrains.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBagman.adaptDirection(.down, for: target), .down)
-        XCTAssertEqual(TheBagman.adaptDirection(.up, for: target), .up)
+        XCTAssertEqual(TheBrains.adaptDirection(.down, for: target), .down)
+        XCTAssertEqual(TheBrains.adaptDirection(.up, for: target), .up)
     }
 
     func testAdaptDirectionCrossAxis() {
-        let target = TheBagman.ScrollableTarget.swipeable(
+        let target = TheBrains.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 200),
             contentSize: CGSize(width: 2000, height: 200)
         )
-        XCTAssertEqual(TheBagman.adaptDirection(.down, for: target), .right,
+        XCTAssertEqual(TheBrains.adaptDirection(.down, for: target), .right,
                        "Forward vertical → forward horizontal")
-        XCTAssertEqual(TheBagman.adaptDirection(.up, for: target), .left,
+        XCTAssertEqual(TheBrains.adaptDirection(.up, for: target), .left,
                        "Backward vertical → backward horizontal")
     }
 
     func testAdaptDirectionCrossAxisVertical() {
-        let target = TheBagman.ScrollableTarget.swipeable(
+        let target = TheBrains.ScrollableTarget.swipeable(
             frame: CGRect(x: 0, y: 0, width: 400, height: 800),
             contentSize: CGSize(width: 400, height: 2000)
         )
-        XCTAssertEqual(TheBagman.adaptDirection(.right, for: target), .down,
+        XCTAssertEqual(TheBrains.adaptDirection(.right, for: target), .down,
                        "Forward horizontal → forward vertical")
-        XCTAssertEqual(TheBagman.adaptDirection(.left, for: target), .up,
+        XCTAssertEqual(TheBrains.adaptDirection(.left, for: target), .up,
                        "Backward horizontal → backward vertical")
     }
 

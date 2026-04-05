@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class DiagnosticsTests: XCTestCase {
 
-    private typealias Diagnostics = TheBagman.Diagnostics
+    private typealias Diagnostics = TheStash.Diagnostics
 
     // MARK: - heistIdNotFound
 
@@ -84,7 +84,7 @@ final class DiagnosticsTests: XCTestCase {
 
     func testCompactSummaryShowsElementCount() {
         let element = makeElement(label: "Hello")
-        let screenElement = TheBagman.ScreenElement(
+        let screenElement = TheStash.ScreenElement(
             heistId: "hello",
             contentSpaceOrigin: nil,
             element: element,

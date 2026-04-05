@@ -8,7 +8,7 @@
 
 TheTripwire is the UI state sensor for TheInsideJob. It owns a single persistent `CADisplayLink` that fires at ~10 Hz, sampling the entire layer tree, view controller hierarchy, first responder, and input state on every tick. Multiple concurrent callers can wait for the UI to settle, each tracking their own quiet-frame count against an independent deadline.
 
-TheTripwire never reads the accessibility tree. It reads UIKit timing signals (layers, animations, VCs, keyboard notifications). TheBagman reads the accessibility tree. The two are cleanly separated.
+TheTripwire never reads the accessibility tree. It reads UIKit timing signals (layers, animations, VCs, keyboard notifications). TheStash reads the accessibility tree. The two are cleanly separated.
 
 ## Nested Types
 
@@ -95,7 +95,7 @@ graph TD
 
     subgraph Consumers["Consumers"]
         IJ["TheInsideJob"]
-        BM["TheBagman"]
+        BM["TheStash"]
         SC["TheSafecracker"]
     end
 
@@ -239,7 +239,7 @@ Key design: each waiter starts its own quiet-frame counter at zero, independent 
 1. `CATransaction.flush()` — commit pending Core Animation transactions (flushes SwiftUI layout)
 2. `Task.yield()` — yield to the main run loop so layout and rendering can execute
 
-This is used by `TheBagman`'s scroll scan loop and scroll-to-edge re-jump loop. Two frames is enough for SwiftUI lazy containers to materialize content after a `contentOffset` change, without the overhead of the full pulse-based settle detection.
+This is used by `TheStash`'s scroll scan loop and scroll-to-edge re-jump loop. Two frames is enough for SwiftUI lazy containers to materialize content after a `contentOffset` change, without the overhead of the full pulse-based settle detection.
 
 **Why not `waitForSettle`:** The settle path waits for presentation layers to match model layers (no in-flight animations). In a scroll scan, we don't care about animations finishing — we just need layout to run so new accessibility elements appear. `yieldFrames` is ~2 orders of magnitude faster per step.
 
@@ -294,9 +294,9 @@ flowchart TD
 
 Sampled every tick. Identity change fires `.screenChanged(from:to:)`.
 
-### Topology supplement (TheBagman)
+### Topology supplement (TheStash)
 
-For cases where the VC is reused (e.g., Workflow-style navigation), TheBagman supplements with topology-based detection:
+For cases where the VC is reused (e.g., Workflow-style navigation), TheStash supplements with topology-based detection:
 - **Back button trait** (bit 27): presence/absence change = screen change
 - **Header labels**: if both before/after have headers and they're completely disjoint = screen change
 
@@ -327,14 +327,14 @@ Scans the `foregroundActive` `UIWindowScene`. Filters out:
 
 Sorts by `windowLevel` descending (frontmost first). Returns `[(window: UIWindow, rootView: UIView)]`.
 
-Used by both `scanLayers()` (fingerprinting) and `TheBagman.refreshAccessibilityData()` (accessibility parsing), ensuring both operate on the same window set.
+Used by both `scanLayers()` (fingerprinting) and `TheStash.refreshAccessibilityData()` (accessibility parsing), ensuring both operate on the same window set.
 
 ## Crew Interactions
 
 ```mermaid
 graph LR
     IJ["TheInsideJob"] -->|"owns, start/stopPulse, onTransition"| TW["TheTripwire"]
-    BM["TheBagman"] -->|"let tripwire (strong)"| TW
+    BM["TheStash"] -->|"let tripwire (strong)"| TW
     SC["TheSafecracker"] -->|"weak var tripwire"| TW
 
     TW -->|".settled → broadcastCurrentHierarchy()"| IJ
@@ -343,7 +343,7 @@ graph LR
 ```
 
 - **TheInsideJob** owns the instance. Sets `onTransition` in `start()`, calls `startPulse()`/`stopPulse()` on suspend/resume. On `.settled`, broadcasts hierarchy if invalidated.
-- **TheBagman** holds a strong ref passed at init. Uses `getTraversableWindows()` for parsing and capture, `waitForAllClear()` post-action, `topmostViewController()` and `isScreenChange()` for delta computation.
+- **TheStash** holds a strong ref passed at init. Uses `getTraversableWindows()` for parsing and capture, `waitForAllClear()` post-action, `topmostViewController()` and `isScreenChange()` for delta computation.
 - **TheSafecracker** holds a weak ref. Reads `keyboardVisibleFlag` directly for `isKeyboardVisible()`. Uses `waitForAllClear()` for scroll-settle in `ensureOnScreen`.
 
 ## Design Decisions
@@ -353,7 +353,7 @@ graph LR
 - **Weak-ref indirection via PulseTick**: `CADisplayLink` retains its target. If TheTripwire were the target, deallocating it would leave a dangling display link. The `PulseTick` intermediary checks a weak ref and self-invalidates.
 - **`CATransaction.flush()` before scanning**: SwiftUI batches layout commits. Without the flush, `scanLayers()` would see stale layer positions and report false "quiet" readings.
 - **Per-waiter quiet frames**: Global quiet-frame count can't serve multiple concurrent callers with different start times. Each waiter tracks its own count from registration, preventing false positives from stale settle state.
-- **Separation from TheBagman**: TheTripwire reads UIKit timing signals; TheBagman reads the accessibility tree. Neither imports the other's domain. The only shared surface is `getTraversableWindows()`.
+- **Separation from TheStash**: TheTripwire reads UIKit timing signals; TheStash reads the accessibility tree. Neither imports the other's domain. The only shared surface is `getTraversableWindows()`.
 - **VC identity over element overlap**: `ObjectIdentifier` comparison of the topmost VC is cheaper and more reliable than the old heuristic of element identifier overlap ratios.
 - **Presentation layer fingerprinting**: Summing `CALayer.presentation()` positions/opacities catches any layer movement without enumerating specific animation types. The tolerances (0.5 pt position, 0.05 opacity) filter sub-pixel noise while catching all perceptible motion.
 
@@ -361,6 +361,6 @@ graph LR
 
 ### LOW PRIORITY
 
-**`getTraversableWindows()` is called from both TheTripwire and TheBagman**
-- TheBagman calls `tripwire.getTraversableWindows()` for hierarchy parsing and screen capture
+**`getTraversableWindows()` is called from both TheTripwire and TheStash**
+- TheStash calls `tripwire.getTraversableWindows()` for hierarchy parsing and screen capture
 - This is by design (shared window set), but the method is on TheTripwire rather than being shared infrastructure

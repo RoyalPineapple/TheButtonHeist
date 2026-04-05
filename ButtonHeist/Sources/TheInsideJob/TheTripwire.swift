@@ -14,7 +14,7 @@ import UIKit
 /// 2. **Did the screen change?** (VC identity comparison)
 /// 3. **What transitioned?** (settle/unsettle, screen change, keyboard change)
 ///
-/// The accessibility tree is TheBagman's domain; TheTripwire never reads it.
+/// The accessibility tree is TheStash's domain; TheTripwire never reads it.
 @MainActor
 final class TheTripwire {
 
@@ -329,7 +329,7 @@ final class TheTripwire {
     // MARK: - Window Access
 
     /// The traversable windows in the active scene, sorted by window level (front to back).
-    /// Shared with TheBagman — both need the same window set.
+    /// Shared with TheStash — both need the same window set.
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene

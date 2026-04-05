@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class IdAssignerTests: XCTestCase {
 
-    private typealias IdAssignment = TheBagman.IdAssignment
+    private typealias IdAssignment = TheStash.IdAssignment
 
     // MARK: - Helpers
 

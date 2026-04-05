@@ -10,7 +10,7 @@ import TheScore
 // similar heistId hints, and compact element summaries for total misses.
 // All methods take the data they need as parameters — no mutable state.
 
-extension TheBagman {
+extension TheStash {
 
     enum Diagnostics {
 
@@ -155,7 +155,7 @@ extension TheBagman {
         return lines.joined(separator: "\n")
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)
