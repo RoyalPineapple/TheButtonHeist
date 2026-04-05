@@ -28,14 +28,16 @@ extension TheStash {
     ]
 
     /// Assign deterministic `heistId` to each AccessibilityElement.
-    /// Developer-provided identifiers take priority — they become the heistId directly.
+    /// Stable developer-provided identifiers take priority — they become the heistId directly.
+    /// Identifiers containing UUIDs (SwiftUI runtime artifacts) are skipped in favor of synthesis.
     /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
     /// Returns the heistId array, parallel to the input elements array.
     static func assign(_ elements: [AccessibilityElement]) -> [String] {
         // Phase 1: generate base IDs
         var heistIds = elements.map { element -> String in
-            if let identifier = element.identifier, !identifier.isEmpty {
+            if let identifier = element.identifier, !identifier.isEmpty,
+               isStableIdentifier(identifier) {
                 return identifier
             }
             return synthesizeBaseId(element)
