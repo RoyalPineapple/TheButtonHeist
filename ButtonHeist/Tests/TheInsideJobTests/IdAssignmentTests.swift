@@ -51,66 +51,66 @@ final class IdAssignerTests: XCTestCase {
 
     func testEmptyIdentifierFallsToSynthesis() {
         let ids = assign([makeElement(label: "OK", identifier: "", traits: [.button])])
-        XCTAssertEqual(ids[0], "button_ok")
+        XCTAssertEqual(ids[0], "ok_button")
     }
 
     func testNilIdentifierFallsToSynthesis() {
         let ids = assign([makeElement(label: "OK", identifier: nil, traits: [.button])])
-        XCTAssertEqual(ids[0], "button_ok")
+        XCTAssertEqual(ids[0], "ok_button")
     }
 
     // MARK: - Trait Priority
 
     func testBackButtonTraitTakesPriority() {
         let ids = assign([makeElement(label: "Back", traits: [.button, .backButton])])
-        XCTAssertEqual(ids[0], "backButton_back")
+        XCTAssertEqual(ids[0], "back_backButton")
     }
 
     func testSearchFieldBeatsButton() {
         let ids = assign([makeElement(label: "Find", traits: [.button, .searchField])])
-        XCTAssertEqual(ids[0], "searchField_find")
+        XCTAssertEqual(ids[0], "find_searchField")
     }
 
     func testButtonBeatsLink() {
         let ids = assign([makeElement(label: "Go", traits: [.link, .button])])
-        XCTAssertEqual(ids[0], "button_go")
+        XCTAssertEqual(ids[0], "go_button")
     }
 
     func testAdjustableBeatsButton() {
         let ids = assign([makeElement(label: "Volume", traits: [.button, .adjustable])])
-        XCTAssertEqual(ids[0], "adjustable_volume")
+        XCTAssertEqual(ids[0], "volume_adjustable")
     }
 
     func testImageTraitUsed() {
         let ids = assign([makeElement(label: "Logo", traits: [.image])])
-        XCTAssertEqual(ids[0], "image_logo")
+        XCTAssertEqual(ids[0], "logo_image")
     }
 
     func testHeaderTraitUsed() {
         let ids = assign([makeElement(label: "Settings", traits: [.header])])
-        XCTAssertEqual(ids[0], "header_settings")
+        XCTAssertEqual(ids[0], "settings_header")
     }
 
     func testTabBarTraitUsed() {
         let ids = assign([makeElement(label: "Home", traits: [.tabBar])])
-        XCTAssertEqual(ids[0], "tabBar_home")
+        XCTAssertEqual(ids[0], "home_tabBar")
     }
 
-    // MARK: - Trait Prefix Deduplication
+    // MARK: - Trait Suffix Deduplication
 
     func testSwitchButtonLabelRedundancyStripped() {
         let ids = assign([makeElement(label: "Switch Button Off", traits: [.switchButton])])
-        XCTAssertEqual(ids[0], "switchButton_off")
+        XCTAssertEqual(ids[0], "off_switchButton")
     }
 
     func testButtonLabelRedundancyStripped() {
         let ids = assign([makeElement(label: "Button Submit", traits: [.button])])
-        XCTAssertEqual(ids[0], "button_submit")
+        XCTAssertEqual(ids[0], "submit_button")
     }
 
     func testNoRedundancyWhenLabelDoesNotOverlap() {
         let ids = assign([makeElement(label: "Settings", traits: [.button])])
-        XCTAssertEqual(ids[0], "button_settings")
+        XCTAssertEqual(ids[0], "settings_button")
     }
 
     func testRedundancyStrippingKeepsFullIdWhenRemainderEmpty() {
@@ -120,19 +120,19 @@ final class IdAssignerTests: XCTestCase {
 
     func testTextEntryLabelRedundancyStripped() {
         let ids = assign([makeElement(label: "Text Entry Email", traits: [.textEntry])])
-        XCTAssertEqual(ids[0], "textEntry_email")
+        XCTAssertEqual(ids[0], "email_textEntry")
     }
 
     func testPartialPrefixMatchNotStripped() {
         let ids = assign([makeElement(label: "But More", traits: [.button])])
-        XCTAssertEqual(ids[0], "button_but_more")
+        XCTAssertEqual(ids[0], "but_more_button")
     }
 
     // MARK: - Fallbacks
 
     func testStaticTextFallbackWhenLabelPresent() {
         let ids = assign([makeElement(label: "Hello World")])
-        XCTAssertEqual(ids[0], "staticText_hello_world")
+        XCTAssertEqual(ids[0], "hello_world_staticText")
     }
 
     func testElementFallbackWhenNoLabelNoTrait() {
@@ -147,23 +147,23 @@ final class IdAssignerTests: XCTestCase {
 
     func testValueExcludedButDescriptionUsed() {
         let ids = assign([makeElement(value: "50%", description: "VolumeSlider")])
-        XCTAssertEqual(ids[0], "element_volumeslider")
+        XCTAssertEqual(ids[0], "volumeslider_element")
     }
 
     func testElementFallbackWithDescriptionSlug() {
         let ids = assign([makeElement(description: "UIView")])
-        XCTAssertEqual(ids[0], "element_uiview")
+        XCTAssertEqual(ids[0], "uiview_element")
     }
 
     func testSlugFallbackChainLabelThenDescription() {
         let withLabel = assign([makeElement(label: "A", value: "B", description: "C", traits: [.button])])
-        XCTAssertEqual(withLabel[0], "button_a")
+        XCTAssertEqual(withLabel[0], "a_button")
 
         let withValue = assign([makeElement(value: "B", description: "C", traits: [.button])])
-        XCTAssertEqual(withValue[0], "button_c")
+        XCTAssertEqual(withValue[0], "c_button")
 
         let withDesc = assign([makeElement(description: "CView", traits: [.button])])
-        XCTAssertEqual(withDesc[0], "button_cview")
+        XCTAssertEqual(withDesc[0], "cview_button")
     }
 
     // MARK: - Slug Synthesis
@@ -224,9 +224,9 @@ final class IdAssignerTests: XCTestCase {
             makeElement(label: "Cell", traits: [.staticText]),
             makeElement(label: "Cell", traits: [.staticText]),
         ])
-        XCTAssertEqual(ids[0], "staticText_cell_1")
-        XCTAssertEqual(ids[1], "staticText_cell_2")
-        XCTAssertEqual(ids[2], "staticText_cell_3")
+        XCTAssertEqual(ids[0], "cell_staticText_1")
+        XCTAssertEqual(ids[1], "cell_staticText_2")
+        XCTAssertEqual(ids[2], "cell_staticText_3")
     }
 
     func testCollidingDeveloperIdentifiersGetSuffixes() {
@@ -243,8 +243,8 @@ final class IdAssignerTests: XCTestCase {
             makeElement(label: "OK", traits: [.button]),
             makeElement(label: "Cancel", traits: [.button]),
         ])
-        XCTAssertEqual(ids[0], "button_ok")
-        XCTAssertEqual(ids[1], "button_cancel")
+        XCTAssertEqual(ids[0], "ok_button")
+        XCTAssertEqual(ids[1], "cancel_button")
     }
 
     func testMixedUniqueAndDuplicates() {
@@ -255,7 +255,7 @@ final class IdAssignerTests: XCTestCase {
         ])
         XCTAssertEqual(ids[0], "button_ok_1")
         XCTAssertEqual(ids[1], "button_ok_2")
-        XCTAssertEqual(ids[2], "button_cancel")
+        XCTAssertEqual(ids[2], "cancel_button")
     }
 
     // MARK: - Value Stability
