@@ -20,10 +20,6 @@ final class TheSafecracker {
 
     // MARK: - Crew References
 
-    /// Back-reference to the element cache and UI observation owner.
-    /// Used by extension files to resolve interaction targets.
-    weak var bagman: TheBagman?
-
     /// Back-reference to the timing and window state observer.
     /// Used by ensureOnScreen to wait for scroll animations to settle.
     weak var tripwire: TheTripwire?

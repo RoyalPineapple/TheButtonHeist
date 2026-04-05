@@ -1,6 +1,6 @@
 # TheBagman - The Score Handler
 
-> **Files:** `TheBagman.swift`, `TheBagman+Actions.swift`, `TheBagman+Scroll.swift`, `TheBagman+Conversion.swift`, `TheBagman+Matching.swift`, `TheBagman+Diagnostics.swift`, `TheBagman+Capture.swift`
+> **Files:** `TheBagman.swift`, `TheBagman+Matching.swift`, `TheBagman+Capture.swift`, `Bagman/ActionExecution.swift`, `Bagman/ScrollExecution.swift`, `Bagman/ScreenExploration.swift`, `Bagman/WireConversion.swift`, `Bagman/IdAssignment.swift`, `Bagman/ElementRegistry.swift`, `Bagman/Diagnostics.swift`, `Bagman/Interactivity.swift`, `Bagman/ScreenManifest.swift`, `Bagman/ArrayHelpers.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Owns element registry, hierarchy parsing, target resolution, action execution, scroll orchestration, delta computation, and screen capture
 
@@ -109,7 +109,7 @@ graph TD
 
     TheInsideJob["TheInsideJob"] --> TheBagman
     TheTripwire["TheTripwire"] -.->|injected via init| TheBagman
-    TheBagman -.->|"weak var safecracker"| TheSafecracker["TheSafecracker"]
+    TheBagman -.->|"via ActionExecution/ScrollExecution"| TheSafecracker["TheSafecracker"]
     TheBagman -.->|"weak var stakeout"| TheStakeout["TheStakeout"]
 ```
 
@@ -261,18 +261,24 @@ No store writes to another store. No circular dependencies.
 
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `TheBagman.swift` | ~640 | Core: ParseResult, parse/apply pipeline, resolution, interactivity, topology, action result assembly |
-| `TheBagman+Actions.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
-| `TheBagman+Scroll.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
-| `TheBagman+Conversion.swift` | ~445 | selectElements(), markPresented(), toWire(), heistId synthesis, delta computation, tree conversion |
+| `TheBagman.swift` | ~300 | Core: ParseResult, parse/apply pipeline, resolution, topology, action result assembly, forwarding accessors |
 | `TheBagman+Matching.swift` | ~200 | Element matching against ElementMatcher predicates |
-| `TheBagman+Diagnostics.swift` | ~140 | Resolution error formatting: near-miss, similar heistIds, compact summary |
 | `TheBagman+Capture.swift` | ~55 | Screen capture (clean + recording overlay) |
+| `Bagman/ActionExecutor.swift` | ~420 | All action execution (activate, tap, swipe, type, pinch, etc.) |
+| `Bagman/ScrollExecutor.swift` | ~500 | Scroll orchestration, scroll-to-visible, ensure-on-screen, direction mapping |
+| `Bagman/ScreenExplorer.swift` | ~170 | Off-screen content discovery; drives scroll-to-explore cycle |
+| `Bagman/WireConverter.swift` | ~215 | toWire(), delta computation, tree conversion |
+| `Bagman/IdAssigner.swift` | ~100 | Deterministic heistId synthesis from traits/labels |
+| `Bagman/ElementRegistry.swift` | ~95 | Element registry storage: screenElements, viewportIds, presentedIds, reverseIndex |
+| `Bagman/Diagnostics.swift` | ~50 | Resolution error formatting: near-miss, similar heistIds, compact summary |
+| `Bagman/Interactivity.swift` | ~50 | Interactivity predicates (shared by WireConverter and ActionExecutor) |
+| `Bagman/ScreenManifest.swift` | ~65 | Container exploration bookkeeping |
+| `Bagman/ArrayHelpers.swift` | ~45 | [HeistElement] screen name/id helpers |
 
 ## Dependencies
 
 - **TheTripwire** (injected via `init(tripwire:)`) — provides window access, timing coordination (`allClear`, `waitForAllClear`), VC identity-based screen change detection, and first responder lookup
-- **TheSafecracker** (`weak var safecracker: TheSafecracker?`) — TheBagman calls TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
+- **TheSafecracker** (via `ActionExecutor` and `ScrollExecutor`) — TheBagman delegates to TheSafecracker for raw gesture synthesis (fallback tap, scroll primitives, text entry, edit actions)
 - **TheStakeout** (`weak var stakeout: TheStakeout?`) — TheBagman calls `stakeout?.captureActionFrame()` during action result assembly for recording frame capture
 - **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree with `elementVisitor` and `containerVisitor` closures
 
