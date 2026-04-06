@@ -240,29 +240,54 @@ extension TheBrains {
 
     // MARK: - Presentation Obscuring
 
-    /// Returns true if the view is behind a presented view controller —
-    /// i.e., the view's owning VC is not the topmost presented VC or
-    /// a descendant of it.
+    /// Returns true if the view is behind a presented view controller.
+    ///
+    /// Walks the entire VC hierarchy (not just rootVC) to find any presentation.
+    /// If a VC anywhere in the tree has a `presentedViewController`, and the view's
+    /// owning VC is not a descendant of the topmost presented VC, the view is obscured.
+    ///
+    /// This handles both root-level presentations (Square Register: root presents
+    /// receipt sheet) and nested presentations (nav child presents a modal).
     static func isObscuredByPresentation(view: UIView) -> Bool {
         guard let window = view.window,
               let rootVC = window.rootViewController else {
             return false
         }
 
-        // Walk the presentation chain to find the topmost presented VC.
-        var topPresented = rootVC.presentedViewController
-        guard topPresented != nil else {
+        guard let topPresented = Self.topmostPresentedViewController(from: rootVC) else {
             return false
         }
-        while let next = topPresented?.presentedViewController {
-            topPresented = next
-        }
 
-        // Walk up from the view's nearest VC to see if it's under the presented hierarchy.
         guard let viewVC = view.nearestViewController else {
             return true
         }
-        return !viewVC.isDescendant(of: topPresented!)
+        return !viewVC.isDescendant(of: topPresented)
+    }
+
+    /// Walks the full VC tree (children + presentations) to find the topmost
+    /// presented view controller. Returns nil if no presentation exists.
+    private static func topmostPresentedViewController(
+        from root: UIViewController
+    ) -> UIViewController? {
+        var topPresented: UIViewController?
+
+        var queue: [UIViewController] = [root]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+
+            if let presented = current.presentedViewController {
+                // Walk the presentation chain to the top.
+                var top = presented
+                while let next = top.presentedViewController {
+                    top = next
+                }
+                topPresented = top
+            }
+
+            queue.append(contentsOf: current.children)
+        }
+
+        return topPresented
     }
 }
 
