@@ -89,7 +89,7 @@ private let kIOHIDEventFieldDigitizerIsDisplayIntegrated: Int = 0x00050001
 
 // MARK: - Dynamic Loading of IOKit Functions
 
-private var _IOHIDEventCreateDigitizerEvent: @convention(c) (
+nonisolated(unsafe) private var _IOHIDEventCreateDigitizerEvent: @convention(c) (
     CFAllocator?,
     UInt64,
     UInt32,
@@ -108,7 +108,7 @@ private var _IOHIDEventCreateDigitizerEvent: @convention(c) (
     UInt32
 ) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-private var _IOHIDEventCreateDigitizerFingerEventWithQuality: @convention(c) (
+nonisolated(unsafe) private var _IOHIDEventCreateDigitizerFingerEventWithQuality: @convention(c) (
     CFAllocator?,
     UInt64,
     UInt32,
@@ -129,19 +129,19 @@ private var _IOHIDEventCreateDigitizerFingerEventWithQuality: @convention(c) (
     UInt32
 ) -> UnsafeMutableRawPointer? = { _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ in nil }
 
-private var _IOHIDEventAppendEvent: @convention(c) (
+nonisolated(unsafe) private var _IOHIDEventAppendEvent: @convention(c) (
     UnsafeMutableRawPointer,
     UnsafeMutableRawPointer,
     UInt32
 ) -> Void = { _, _, _ in }
 
-private var _IOHIDEventSetFloatValue: @convention(c) (
+nonisolated(unsafe) private var _IOHIDEventSetFloatValue: @convention(c) (
     UnsafeMutableRawPointer,
     UInt32,
     Float
 ) -> Void = { _, _, _ in }
 
-private var ioHIDFunctionsLoaded = false
+nonisolated(unsafe) private var ioHIDFunctionsLoaded = false
 
 private func loadIOHIDFunctions() {
     guard !ioHIDFunctionsLoaded else { return }

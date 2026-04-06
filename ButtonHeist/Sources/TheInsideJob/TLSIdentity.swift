@@ -190,7 +190,7 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
         var certRef: SecCertificate?
         let certStatus = SecIdentityCopyCertificate(secIdentity, &certRef)
         guard certStatus == errSecSuccess, let cert = certRef else {
@@ -265,7 +265,7 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
         return secIdentity
     }
 
@@ -336,7 +336,7 @@ public actor TLSIdentity {
         guard CFGetTypeID(identityRef as CFTypeRef) == SecIdentityGetTypeID() else {
             throw TLSIdentityError.keychainError(errSecParam)
         }
-        let secIdentity = unsafeBitCast(identityRef, to: SecIdentity.self)
+        let secIdentity = unsafeDowncast(identityRef as AnyObject, to: SecIdentity.self)
         return secIdentity
     }
 }
