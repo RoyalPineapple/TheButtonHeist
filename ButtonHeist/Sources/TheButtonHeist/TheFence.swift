@@ -110,9 +110,9 @@ public final class TheFence {
     }
     var playbackPhase: PlaybackPhase = .idle
 
-    /// Cached interface elements from the most recent get_interface response.
-    /// Used by TheBookKeeper to resolve heistIds to element properties for heist recording.
-    private var lastInterfaceElements: [HeistElement] = []
+    /// Cached interface elements from the most recent get_interface response, keyed by heistId.
+    /// Used by TheBookKeeper for heist recording and by expectation validation for elementDisappeared.
+    private var lastInterfaceCache: [String: HeistElement] = [:]
 
     // MARK: - Pending Request Tracking
 
@@ -233,18 +233,16 @@ public final class TheFence {
 
         // Snapshot pre-action elements before updating the cache — elementDisappeared
         // expectations need to resolve removed heistIds against the pre-action state.
-        let preActionElements = lastInterfaceElements
+        let preActionCache = lastInterfaceCache
 
         // Update interface cache for heist recording from any response that carries elements:
         // get_interface returns them directly; actions with screen-change deltas carry newInterface.
         // The cache merges (not replaces) so the activated element survives screen transitions.
         if case .interface(let iface, _, _, _) = response {
-            lastInterfaceElements = iface.elements
-            bookKeeper.updateInterfaceCache(iface.elements)
+            updateInterfaceCache(iface.elements)
         } else if let actionResult = response.actionResult,
                   let newInterface = actionResult.interfaceDelta?.newInterface {
-            lastInterfaceElements = newInterface.elements
-            bookKeeper.updateInterfaceCache(newInterface.elements)
+            updateInterfaceCache(newInterface.elements)
         }
 
         // Record the command for heist playback (skip during playback; no-ops when not recording)
@@ -253,7 +251,7 @@ public final class TheFence {
                 command: command,
                 args: request,
                 response: response,
-                interfaceElements: lastInterfaceElements.isEmpty ? nil : lastInterfaceElements
+                interfaceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values)
             )
         }
 
@@ -264,10 +262,6 @@ public final class TheFence {
                 return .action(result: actionResult, expectation: delivery)
             }
             if let expectation = try parseExpectation(request) {
-                let preActionCache = Dictionary(
-                    preActionElements.map { ($0.heistId, $0) },
-                    uniquingKeysWith: { _, latest in latest }
-                )
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionCache
                 )
@@ -284,6 +278,15 @@ public final class TheFence {
             filter: filter,
             timeout: config.connectionTimeout
         )
+    }
+
+    // MARK: - Interface Cache
+
+    private func updateInterfaceCache(_ elements: [HeistElement]) {
+        for element in elements {
+            lastInterfaceCache[element.heistId] = element
+        }
+        bookKeeper.updateInterfaceCache(elements)
     }
 
     // MARK: - Response Logging

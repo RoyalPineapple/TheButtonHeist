@@ -1325,4 +1325,28 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(completedSteps, 1)
         XCTAssertNil(failedIndex)
     }
+
+    @ButtonHeistActor
+    func testPlayHeistRejectsNewerVersion() async throws {
+        let heist = HeistPlayback(
+            version: HeistPlayback.currentVersion + 1,
+            app: "com.test.mock",
+            steps: []
+        )
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": heistURL.path,
+            ])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("newer than supported version"))
+        }
+    }
 }

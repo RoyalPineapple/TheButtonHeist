@@ -660,6 +660,12 @@ extension TheFence {
 
         let heist = try TheBookKeeper.readHeist(from: resolvedURL)
 
+        guard heist.version <= HeistPlayback.currentVersion else {
+            throw FenceError.invalidRequest(
+                "Heist file version \(heist.version) is newer than supported version \(HeistPlayback.currentVersion). Update Button Heist to play this file."
+            )
+        }
+
         // Warn if the connected app doesn't match the app the heist was recorded against
         if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
            connectedBundle != heist.app {

@@ -381,7 +381,9 @@ public enum FenceResponse {
             ]
             if let failedIndex { dict["failedIndex"] = failedIndex }
             return dict
-        default:
+        case .ok, .error, .help, .status, .devices, .interface, .action,
+             .screenshot, .screenshotData, .recording, .recordingData, .batch,
+             .sessionState, .targets:
             return ["status": "ok"]
         }
     }
