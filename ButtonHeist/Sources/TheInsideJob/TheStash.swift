@@ -217,13 +217,14 @@ final class TheStash {
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
     /// For heistId: checks registry.elements.
-    /// For matcher: checks currentHierarchy, then falls back to registry.
+    /// For matcher: checks currentHierarchy only (not registry). The registry
+    /// caches previously-seen elements and would defeat wait_for absent checks.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
             return registry.elements[heistId] != nil
         case .matcher(let matcher, _):
-            return hasMatch(matcher)
+            return currentHierarchy.hasMatch(matcher)
         }
     }
 
