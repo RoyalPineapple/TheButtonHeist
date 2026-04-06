@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
@@ -185,9 +188,74 @@ public final class TheFence {
             try await start()
         }
 
+        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+        do {
+            try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
+        } catch {
+            logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
+
         let start = CFAbsoluteTimeGetCurrent()
-        let response = try await dispatch(command: command, args: request)
+        let response: FenceResponse
+        do {
+            response = try await dispatch(command: command, args: dispatchArgs)
+        } catch {
+            let durationMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+            do {
+                try bookKeeper.logResponse(
+                    requestId: requestId,
+                    status: .error,
+                    durationMilliseconds: durationMs,
+                    error: error.localizedDescription
+                )
+            } catch let logError {
+                logger.warning("Failed to log error response for \(requestId, privacy: .public): \(logError.localizedDescription, privacy: .public)")
+            }
+            throw error
+        }
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+
+        let responseStatus: ResponseStatus
+        let artifactPath: String?
+        let errorMessage: String?
+        switch response {
+        case .error(let message):
+            responseStatus = .error
+            artifactPath = nil
+            errorMessage = message
+        case .screenshot(let path, _, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .recording(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .archiveResult(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .ok, .help, .status, .devices, .interface, .action,
+             .screenshotData, .recordingData, .batch, .sessionState,
+             .targets, .sessionLog:
+            responseStatus = .ok
+            artifactPath = nil
+            errorMessage = nil
+        }
+        do {
+            try bookKeeper.logResponse(
+                requestId: requestId,
+                status: responseStatus,
+                durationMilliseconds: lastLatencyMs,
+                artifact: artifactPath,
+                error: errorMessage
+            )
+        } catch {
+            logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
 
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {

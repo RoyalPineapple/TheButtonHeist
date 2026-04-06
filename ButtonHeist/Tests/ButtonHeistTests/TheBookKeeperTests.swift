@@ -216,8 +216,11 @@ final class TheBookKeeperTests: XCTestCase {
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
         let lines = content.split(separator: "\n")
-        XCTAssertEqual(lines.count, 1)
-        let json = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(lines.count, 2) // header + command
+        let header = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(header?["type"] as? String, "header")
+        XCTAssertEqual(header?["formatVersion"] as? String, SessionFormatVersion.current)
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         XCTAssertEqual(json?["type"] as? String, "command")
         XCTAssertEqual(json?["requestId"] as? String, "req-1")
         XCTAssertEqual(json?["command"] as? String, "activate")
@@ -239,8 +242,8 @@ final class TheBookKeeperTests: XCTestCase {
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
         let lines = content.split(separator: "\n")
-        XCTAssertEqual(lines.count, 1)
-        let json = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(lines.count, 2) // header + response
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         XCTAssertEqual(json?["type"] as? String, "response")
         XCTAssertEqual(json?["requestId"] as? String, "req-1")
         XCTAssertEqual(json?["status"] as? String, "ok")
@@ -300,6 +303,7 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-manifest")
         let manifest = bookKeeper.manifest
         XCTAssertNotNil(manifest)
+        XCTAssertEqual(manifest?.formatVersion, SessionFormatVersion.current)
         XCTAssertEqual(manifest?.artifacts.count, 0)
         XCTAssertEqual(manifest?.commandCount, 0)
         XCTAssertEqual(manifest?.errorCount, 0)
@@ -480,5 +484,106 @@ final class TheBookKeeperTests: XCTestCase {
                 return
             }
         }
+    }
+
+    // MARK: - Session Log Integration
+
+    @ButtonHeistActor
+    func testLogCommandAndResponseProduceCorrelatedEntries() throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-correlation")
+        try bookKeeper.logCommand(requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
+        try bookKeeper.logResponse(
+            requestId: "req-42",
+            status: .ok,
+            durationMilliseconds: 120,
+            artifact: "screenshots/001-get_screen.png"
+        )
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        XCTAssertEqual(lines.count, 3) // header + command + response
+
+        let commandEntry = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let responseEntry = try JSONSerialization.jsonObject(with: Data(lines[2].utf8)) as? [String: Any]
+
+        XCTAssertEqual(commandEntry?["requestId"] as? String, "req-42")
+        XCTAssertEqual(commandEntry?["type"] as? String, "command")
+        XCTAssertEqual(responseEntry?["requestId"] as? String, "req-42")
+        XCTAssertEqual(responseEntry?["type"] as? String, "response")
+        XCTAssertEqual(responseEntry?["artifact"] as? String, "screenshots/001-get_screen.png")
+        XCTAssertEqual(responseEntry?["duration_ms"] as? Int, 120)
+    }
+
+    @ButtonHeistActor
+    func testLogResponseWithArtifactTracksPath() throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-artifact-log")
+        try bookKeeper.logResponse(
+            requestId: "r1",
+            status: .ok,
+            durationMilliseconds: 50,
+            artifact: "recordings/001-stop_recording.mp4"
+        )
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let logPath = session.directory.appendingPathComponent("session.jsonl")
+        let content = try String(contentsOf: logPath, encoding: .utf8)
+        let lines = content.split(separator: "\n")
+        XCTAssertEqual(lines.count, 2) // header + response
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        XCTAssertEqual(json?["artifact"] as? String, "recordings/001-stop_recording.mp4")
+    }
+
+    @ButtonHeistActor
+    func testWriteRecordingUpdatesManifestWithMetadata() throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-rec-manifest")
+        let testData = Data([0x00, 0x00, 0x00, 0x1C])
+        let base64 = testData.base64EncodedString()
+        _ = try bookKeeper.writeRecording(
+            base64Data: base64,
+            requestId: "r1",
+            command: .stopRecording,
+            metadata: RecordingMetadata(width: 393, height: 852, duration: 12.5, fps: 8, frameCount: 100)
+        )
+        let artifact = bookKeeper.manifest?.artifacts.first
+        XCTAssertEqual(artifact?.type, .recording)
+        XCTAssertEqual(artifact?.path, "recordings/001-stop_recording.mp4")
+        XCTAssertEqual(artifact?.metadata["width"], 393.0)
+        XCTAssertEqual(artifact?.metadata["height"], 852.0)
+        XCTAssertEqual(artifact?.metadata["duration"], 12.5)
+        XCTAssertEqual(artifact?.metadata["fps"], 8.0)
+        XCTAssertEqual(artifact?.metadata["frameCount"], 100.0)
+    }
+
+    @ButtonHeistActor
+    func testMixedArtifactsShareSequenceCounter() throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-mixed-seq")
+        let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
+        let mp4Data = Data([0x00, 0x00, 0x00, 0x1C]).base64EncodedString()
+
+        let screenshot = try bookKeeper.writeScreenshot(
+            base64Data: pngData, requestId: "r1", command: .getScreen,
+            metadata: ScreenshotMetadata(width: 390, height: 844)
+        )
+        let recording = try bookKeeper.writeRecording(
+            base64Data: mp4Data, requestId: "r2", command: .stopRecording,
+            metadata: RecordingMetadata(width: 390, height: 844, duration: 5.0, fps: 8, frameCount: 40)
+        )
+        let screenshot2 = try bookKeeper.writeScreenshot(
+            base64Data: pngData, requestId: "r3", command: .getScreen,
+            metadata: ScreenshotMetadata(width: 390, height: 844)
+        )
+
+        XCTAssertTrue(screenshot.lastPathComponent.hasPrefix("001-"))
+        XCTAssertTrue(recording.lastPathComponent.hasPrefix("002-"))
+        XCTAssertTrue(screenshot2.lastPathComponent.hasPrefix("003-"))
+        XCTAssertEqual(bookKeeper.manifest?.artifacts.count, 3)
     }
 }

@@ -137,11 +137,19 @@ $XDG_DATA_HOME/buttonheist/sessions/
 
 The `init(baseDirectory:)` parameter overrides all env var resolution, used by tests to write into a temp directory.
 
+## Format Versioning
+
+Both the JSONL session log and the manifest use SemVer versioning via `SessionFormatVersion.current` (defined in `SessionManifest.swift`). The current version is **0.1.0**. Bump the version when:
+- **Patch** (0.1.x): adding optional fields, clarifying semantics without changing structure
+- **Minor** (0.x.0): adding required fields, new record types, new artifact types
+- **Major** (x.0.0): removing fields, changing field types, breaking the JSONL line structure
+
 ## Session Log Format
 
-Append-only JSONL. One JSON object per line. Two record types:
+Append-only JSONL. One JSON object per line. The first line is always a header; subsequent lines are command/response pairs:
 
 ```jsonl
+{"formatVersion":"0.1.0","sessionId":"accra-scroll-detection-2026-04-02-143022","type":"header"}
 {"command":"activate","requestId":"abc-123","t":"2026-04-02T14:30:22.451Z","type":"command","args":{"identifier":"loginButton"}}
 {"duration_ms":441,"requestId":"abc-123","status":"ok","t":"2026-04-02T14:30:22.892Z","type":"response"}
 {"command":"get_screen","requestId":"def-456","t":"2026-04-02T14:30:25.100Z","type":"command"}
@@ -149,8 +157,10 @@ Append-only JSONL. One JSON object per line. Two record types:
 ```
 
 Fields:
+- `type` — `"header"`, `"command"`, or `"response"`
+- `formatVersion` — SemVer string (header only)
+- `sessionId` — session identifier (header only)
 - `t` — ISO 8601 timestamp with fractional seconds
-- `type` — `"command"` or `"response"`
 - `requestId` — correlates command/response pairs
 - `command` — the `TheFence.Command` raw value (command records only)
 - `args` — the request arguments, minus binary data and the `"command"` key itself (command records only; omitted when empty)
@@ -165,6 +175,7 @@ Binary data exclusion: keys in the `binaryKeys` set (`pngData`, `videoData`) are
 
 ```json
 {
+    "formatVersion": "0.1.0",
     "sessionId": "accra-scroll-detection-2026-04-02-143022",
     "startTime": "2026-04-02T14:30:22Z",
     "endTime": "2026-04-02T14:31:45Z",
@@ -247,13 +258,16 @@ case archiveResult(path: String, manifest: SessionManifest)
 
 Both implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
-### Logging integration (planned)
+### Logging integration
 
-TheFence's `execute(request:)` is the hook point for wrapping dispatch with log calls. The API is ready — `logCommand` and `logResponse` silently no-op when the phase is `.idle`, so wiring them in has no effect until a session is begun.
+TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `do/catch` with `os.log` warnings so logging failures never break command execution. The `requestId` generated in `execute()` is threaded into handlers via `_requestId` in the args dict, ensuring session log entries and artifact writes share the same correlation ID. When no session is active (`.idle` phase), both calls silently no-op.
 
-### File write delegation (planned)
+### File write delegation
 
-TheFence handlers `handleGetScreen` and `handleStopRecording` still write files inline via `Data.write(to:)` with duplicated path-traversal guards. The plan is to delegate these to `bookKeeper.writeToPath` and `bookKeeper.writeScreenshot`/`writeRecording`, removing the duplicated `..` checks from handlers.
+TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper:
+- **Explicit `--output` path**: delegates to `bookKeeper.writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
+- **Active session, no explicit path**: auto-persists to the session directory via `bookKeeper.writeScreenshot`/`writeRecording`, which tracks the artifact in the manifest with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
+- **No session, no explicit path**: returns raw base64 data over the wire (unchanged behavior).
 
 ## CLI Commands
 
