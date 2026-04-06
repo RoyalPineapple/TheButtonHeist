@@ -229,45 +229,7 @@ public final class TheFence {
         }
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
 
-        let responseStatus: ResponseStatus
-        let artifactPath: String?
-        let errorMessage: String?
-        switch response {
-        case .error(let message):
-            responseStatus = .error
-            artifactPath = nil
-            errorMessage = message
-        case .screenshot(let path, _, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .recording(let path, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .archiveResult(let path, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .ok, .help, .status, .devices, .interface, .action,
-             .screenshotData, .recordingData, .batch, .sessionState,
-             .targets, .sessionLog, .heistStarted, .heistStopped,
-             .heistPlayback:
-            responseStatus = .ok
-            artifactPath = nil
-            errorMessage = nil
-        }
-        do {
-            try bookKeeper.logResponse(
-                requestId: requestId,
-                status: responseStatus,
-                durationMilliseconds: lastLatencyMs,
-                artifact: artifactPath,
-                error: errorMessage
-            )
-        } catch {
-            logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        logResponse(requestId: requestId, response: response, durationMs: lastLatencyMs)
 
         // Update interface cache for heist recording from any response that carries elements:
         // get_interface returns them directly; actions with screen-change deltas carry newInterface.
@@ -318,6 +280,50 @@ public final class TheFence {
             filter: filter,
             timeout: config.connectionTimeout
         )
+    }
+
+    // MARK: - Response Logging
+
+    private func logResponse(requestId: String, response: FenceResponse, durationMs: Int) {
+        let responseStatus: ResponseStatus
+        let artifactPath: String?
+        let errorMessage: String?
+        switch response {
+        case .error(let message):
+            responseStatus = .error
+            artifactPath = nil
+            errorMessage = message
+        case .screenshot(let path, _, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .recording(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .archiveResult(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .ok, .help, .status, .devices, .interface, .action,
+             .screenshotData, .recordingData, .batch, .sessionState,
+             .targets, .sessionLog, .heistStarted, .heistStopped,
+             .heistPlayback:
+            responseStatus = .ok
+            artifactPath = nil
+            errorMessage = nil
+        }
+        do {
+            try bookKeeper.logResponse(
+                requestId: requestId,
+                status: responseStatus,
+                durationMilliseconds: durationMs,
+                artifact: artifactPath,
+                error: errorMessage
+            )
+        } catch {
+            logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Command Dispatch (thin router)
