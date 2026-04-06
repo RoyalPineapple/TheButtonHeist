@@ -357,9 +357,7 @@ extension TheBrains {
     }
 
     func ensureOnScreen(for target: ElementTarget) async {
-        if case .heistId(let heistId) = target,
-           !stash.registry.viewportIds.contains(heistId),
-           let entry = stash.registry.elements[heistId],
+        if let entry = offViewportRegistryEntry(for: target),
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
@@ -415,6 +413,26 @@ extension TheBrains {
             frame, in: scrollView, animated: animated,
             comfortMarginFraction: Self.comfortMarginFraction
         )
+    }
+
+    // MARK: - Off-Viewport Registry Lookup
+
+    /// Find a registry element that matches `target` but is NOT in the current viewport.
+    /// For `.heistId`, looks up the registry directly. For `.matcher`, searches all
+    /// registry entries for the first off-viewport match. Returns nil if the element
+    /// is already visible or not in the registry.
+    private func offViewportRegistryEntry(for target: ElementTarget) -> TheStash.ScreenElement? {
+        switch target {
+        case .heistId(let heistId):
+            guard !stash.registry.viewportIds.contains(heistId) else { return nil }
+            return stash.registry.elements[heistId]
+        case .matcher(let matcher, _):
+            for (heistId, entry) in stash.registry.elements
+            where !stash.registry.viewportIds.contains(heistId) && entry.element.matches(matcher) {
+                return entry
+            }
+            return nil
+        }
     }
 
     // MARK: - Scroll Target Resolution
