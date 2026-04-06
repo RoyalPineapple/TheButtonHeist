@@ -136,12 +136,23 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy from the connected iOS device. Returns elements with \
-            heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
-            Target elements in subsequent calls using heistId. \
-            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list. \
-            Set full=true to discover every element on screen including off-screen content inside \
-            scrollable containers (scrolls each container to its limits and back, restoring positions).
+            Get the current UI element hierarchy. Returns elements with heistId, label, value, \
+            traits, and actions. Use detail=full for geometry (frame, activation point). \
+            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
+            Set full=true to explore off-screen content in scroll views (scrolls each container \
+            to its limits and back, restoring positions). \
+            \
+            Every action response includes a delta — use that first: \
+            + heistId "label" [traits] = appeared, - heistId = disappeared, \
+            ~ heistId: property "old" > "new" = changed, screen changed = full navigation \
+            (new interface included, all old heistIds invalidated). \
+            Only call get_interface again when you need elements the delta didn't cover. \
+            \
+            Targeting: heistId is stable on the current screen — copy from a previous response, \
+            use in the next action. After a screen change, all heistIds reset — use matchers \
+            (label, value, traits) or read from the delta's new interface. Never construct or \
+            predict a heistId. Matcher strings are case-insensitive substrings; traits match exactly. \
+            Zero matches returns suggestions, never a fuzzy guess.
             """,
         inputSchema: .object([
             "type": "object",
@@ -536,17 +547,18 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute a batch of Button Heist commands in a single MCP call. \
-            Each step is a JSON request matching the CLI session format (must include 'command'). \
-            Every action implicitly checks delivery (success==true). \
-            Steps can include an 'expect' field to classify the expected outcome: \
-            "screen_changed", "elements_changed", or {"elementUpdated": {"heistId": "...", "newValue": "..."}}. \
-            Results report what actually happened — the caller decides what to do with it. \
-            The policy controls whether the batch stops on first error or unmet expectation. \
-            Valid commands: activate (with optional 'action' for custom actions), increment, decrement, \
-            perform_custom_action, type_text, scroll, scroll_to_visible, scroll_to_edge, swipe, \
-            one_finger_tap, long_press, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier, \
-            edit_action, set_pasteboard, get_pasteboard, dismiss_keyboard, get_interface, get_screen.
+            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
+            plus that command's parameters. Use stop_on_error (default) for dependent sequences, \
+            continue_on_error for independent steps. Returns per-step results and a merged net delta. \
+            \
+            Attach 'expect' to each step to build a self-verifying script: every step declares \
+            its hypothesis, the system checks it, and the summary tells you which passed and which \
+            diverged — a complete pass/fail report in one round trip. \
+            \
+            Valid commands: activate, increment, decrement, perform_custom_action, type_text, \
+            scroll, scroll_to_visible, scroll_to_edge, swipe, one_finger_tap, long_press, drag, \
+            pinch, rotate, two_finger_tap, draw_path, draw_bezier, edit_action, set_pasteboard, \
+            get_pasteboard, dismiss_keyboard, get_interface, get_screen.
             """,
         inputSchema: [
             "type": "object",
@@ -671,11 +683,21 @@ enum ToolDefinitions {
     static let startHeist = Tool(
         name: "start_heist",
         description: """
-            Start recording a heist playback. All subsequent commands (actions, gestures, \
-            text input) are captured as steps in a .heist file. Element targets are recorded \
-            as matchers (label, traits, identifier) rather than heistIds so the heist can be \
-            replayed against any session. Call get_interface before acting to ensure element \
-            data is cached for matcher construction.
+            Start recording a heist. All subsequent successful commands are captured as \
+            steps in a .heist file. Failed actions are silently skipped. \
+            \
+            Before recording: call get_interface to populate the element cache. The recorder \
+            converts heistIds to portable matchers (label, traits, identifier) automatically, \
+            but can only build good matchers when it has cached element data. Without a primed \
+            cache, steps degrade to coordinate-only evidence that breaks across devices. \
+            \
+            During recording: attach 'expect' to actions — expectations are recorded with each \
+            step and validated on every replay. Use specific expectations over generic ones: \
+            {"elementUpdated": {"heistId": "toggle", "newValue": "1"}} tells you exactly what \
+            broke on replay; "elements_changed" only tells you something didn't move. \
+            \
+            Read-only commands (get_interface, get_screen, status) and meta-commands \
+            (run_batch, start/stop_recording) are not recorded.
             """,
         inputSchema: [
             "type": "object",
@@ -692,8 +714,10 @@ enum ToolDefinitions {
     static let stopHeist = Tool(
         name: "stop_heist",
         description: """
-            Stop recording and save the heist playback to a .heist file. \
-            Returns the file path and number of steps recorded.
+            Stop recording and save the heist to a .heist file. Returns the file path \
+            and number of steps recorded. At least one step must have been recorded. \
+            The output file is a self-contained JSON playback script with matcher-based \
+            element targeting — no heistIds, no coordinates, portable across sessions.
             """,
         inputSchema: [
             "type": "object",
@@ -711,9 +735,11 @@ enum ToolDefinitions {
     static let playHeist = Tool(
         name: "play_heist",
         description: """
-            Play back a recorded .heist file. Each step is executed sequentially. \
-            Playback stops on the first error. Returns the number of completed steps \
-            and total timing.
+            Play back a .heist file. Steps execute sequentially against the connected app. \
+            Playback stops on the first failed step (action error or unsuccessful result). \
+            Returns completed step count, failed step index (if any), and total timing in ms. \
+            If the heist was recorded against a different app, a warning is logged but \
+            playback proceeds — the matchers may still resolve correctly.
             """,
         inputSchema: [
             "type": "object",
