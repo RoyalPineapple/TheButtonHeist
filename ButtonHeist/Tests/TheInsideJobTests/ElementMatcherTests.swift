@@ -490,13 +490,13 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(result?.element.label, "Second")
     }
 
-    func testHierarchyArrayAllMatches() {
+    func testHierarchyArrayMultipleMatches() {
         let tree: [AccessibilityHierarchy] = [
             .element(element(label: "A", traits: .button), traversalIndex: 0),
             .element(element(label: "B", traits: .header), traversalIndex: 1),
             .element(element(label: "C", traits: .button), traversalIndex: 2),
         ]
-        let results = tree.allMatches(ElementMatcher(traits: [.button]))
+        let results = tree.matches(ElementMatcher(traits: [.button]), limit: 100)
         XCTAssertEqual(results.count, 2)
         XCTAssertEqual(results[0].element.label, "A")
         XCTAssertEqual(results[1].element.label, "C")
@@ -683,14 +683,14 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(result?.element.label, "Leaf")
     }
 
-    func testAllMatchesFindsMultipleLeaves() {
+    func testMatchesFindsMultipleLeavesInContainer() {
         let tree: [AccessibilityHierarchy] = [
             labeledGroup(label: "Section", children: [
                 .element(element(label: "Item"), traversalIndex: 0),
                 .element(element(label: "Item"), traversalIndex: 1),
             ])
         ]
-        let results = tree.allMatches(ElementMatcher(label: "Item"))
+        let results = tree.matches(ElementMatcher(label: "Item"), limit: 100)
         XCTAssertEqual(results.count, 2)
     }
 }

@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Release script for Button Heist.
 #
-# Performs the local release pipeline from a clean main branch:
+# Performs the full release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
 #   2. Bump version across 5 files
 #   3. Build all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
 #   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
 #   5. Commit, tag, push
+#   6. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
 #
-# Pushing the tag triggers .github/workflows/release.yml which:
+# The release workflow (triggered by the tag push):
 #   - Builds universal binaries (arm64 + x86_64)
 #   - Creates the GitHub release with artifacts
 #   - Updates the Homebrew tap with real SHA-256 hashes
+#
+# Idempotent: if CI fails, the script deletes the tag, reverts the
+# version bump, and cleans up the GitHub release — re-run to retry.
 #
 # Usage: ./scripts/release.sh [--dry-run] [<version>]
 # Example: ./scripts/release.sh              # Uses today's date: 2026.04.03
@@ -104,7 +108,8 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
     echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
-    echo "  5. CI builds universal binaries, creates GitHub release, updates Homebrew tap"
+    echo "  5. Wait for CI release workflow"
+    echo "  6. On success: upgrade Homebrew. On failure: rollback tag + commit"
     exit 0
 fi
 
@@ -240,6 +245,66 @@ echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
 echo ""
 
 # --------------------------------------------------------------------------
+# Phase 6: Wait for CI and upgrade Homebrew
+# --------------------------------------------------------------------------
+
+echo "==> Phase 6: Waiting for release workflow"
+
+# Find the workflow run triggered by the tag push
+for _ in 1 2 3 4 5; do
+    RUN_ID=$(gh run list --repo "$GITHUB_REPO" --branch "v$NEW_VERSION" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+    if [[ -n "$RUN_ID" ]]; then break; fi
+    sleep 2
+done
+
+if [[ -z "${RUN_ID:-}" ]]; then
+    echo "  Could not find release workflow run for v$NEW_VERSION."
+    echo "  Check manually: https://github.com/$GITHUB_REPO/actions"
+    echo "  Then run: brew update && brew upgrade royalpineapple/tap/buttonheist"
+else
+    echo "  Watching run $RUN_ID..."
+    if gh run watch "$RUN_ID" --repo "$GITHUB_REPO" --exit-status; then
+        echo ""
+        echo "  ✓ Release workflow passed"
+        if command -v brew &>/dev/null && brew list royalpineapple/tap/buttonheist &>/dev/null; then
+            echo "  Upgrading Homebrew..."
+            brew update --quiet
+            brew upgrade royalpineapple/tap/buttonheist
+            echo "  ✓ Homebrew upgraded to $(buttonheist --version)"
+        fi
+    else
+        echo ""
+        echo "  ✗ Release workflow failed — rolling back"
+        echo ""
+
+        # Delete remote and local tag
+        git push origin --delete "v$NEW_VERSION" 2>/dev/null || true
+        git tag -d "v$NEW_VERSION" 2>/dev/null || true
+        echo "  ✓ Deleted tag v$NEW_VERSION"
+
+        # Revert the version bump commit, but only if HEAD is actually the release commit
+        RELEASE_MSG="Release $NEW_VERSION"
+        if [[ "$(git log -1 --format=%s)" == "$RELEASE_MSG" ]]; then
+            git revert --no-edit HEAD
+            git push origin HEAD:main
+            echo "  ✓ Reverted version bump on main"
+        else
+            echo "  ⚠ HEAD is not the release commit — skipping revert (manual cleanup needed)"
+        fi
+
+        # Delete the failed GitHub release if one was created
+        gh release delete "v$NEW_VERSION" --repo "$GITHUB_REPO" --yes 2>/dev/null || true
+        echo "  ✓ Cleaned up GitHub release"
+
+        echo ""
+        echo "  Release rolled back. Fix the issue and re-run:"
+        echo "    ./scripts/release.sh $NEW_VERSION"
+        exit 1
+    fi
+fi
+echo ""
+
+# --------------------------------------------------------------------------
 # Done
 # --------------------------------------------------------------------------
 
@@ -248,10 +313,4 @@ echo "  Release $NEW_VERSION complete"
 echo "========================================="
 echo ""
 echo "  Tag:      v$NEW_VERSION"
-echo "  CI:       https://github.com/$GITHUB_REPO/actions"
-echo ""
-echo "  The release workflow is now building universal binaries,"
-echo "  creating the GitHub release, and updating the Homebrew tap."
-echo ""
-echo "  Monitor:  gh run watch --repo $GITHUB_REPO"
 echo ""

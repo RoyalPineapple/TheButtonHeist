@@ -103,6 +103,16 @@ public final class TheFence {
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
     private var isStarted = false
+    /// Playback phase — prevents re-entrant play_heist calls and tracks the active input path.
+    enum PlaybackPhase {
+        case idle
+        case playing(inputPath: String)
+    }
+    var playbackPhase: PlaybackPhase = .idle
+
+    /// Cached interface elements from the most recent get_interface response, keyed by heistId.
+    /// Used by TheBookKeeper for heist recording and by expectation validation for elementDisappeared.
+    private var lastInterfaceCache: [String: HeistElement] = [:]
 
     // MARK: - Pending Request Tracking
 
@@ -184,6 +194,7 @@ public final class TheFence {
         if command != .getSessionState && command != .listDevices &&
             command != .connect && command != .listTargets &&
             command != .getSessionLog && command != .archiveSession &&
+            command != .startHeist && command != .stopHeist &&
             (!isStarted || !handoff.isConnected) {
             try await start()
         }
@@ -218,6 +229,69 @@ public final class TheFence {
         }
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
 
+        logResponse(requestId: requestId, response: response, durationMs: lastLatencyMs)
+
+        // Snapshot pre-action elements before updating the cache — elementDisappeared
+        // expectations need to resolve removed heistIds against the pre-action state.
+        let preActionCache = lastInterfaceCache
+
+        // Update interface cache for heist recording from any response that carries elements:
+        // get_interface returns them directly; actions with screen-change deltas carry newInterface.
+        // The cache merges (not replaces) so the activated element survives screen transitions.
+        if case .interface(let iface, _, _, _) = response {
+            updateInterfaceCache(iface.elements)
+        } else if let actionResult = response.actionResult,
+                  let newInterface = actionResult.interfaceDelta?.newInterface {
+            updateInterfaceCache(newInterface.elements)
+        }
+
+        // Record the command for heist playback (skip during playback; no-ops when not recording)
+        if case .idle = playbackPhase {
+            bookKeeper.recordHeistEvidence(
+                command: command,
+                args: request,
+                response: response,
+                interfaceElements: lastInterfaceCache.isEmpty ? nil : Array(lastInterfaceCache.values)
+            )
+        }
+
+        // Every action gets implicit delivery validation; higher tiers are additive
+        if let actionResult = response.actionResult {
+            let delivery = ActionExpectation.validateDelivery(actionResult)
+            if !delivery.met {
+                return .action(result: actionResult, expectation: delivery)
+            }
+            if let expectation = try parseExpectation(request) {
+                let validation = expectation.validate(
+                    against: actionResult, preActionElements: preActionCache
+                )
+                return .action(result: actionResult, expectation: validation)
+            }
+        }
+
+        return response
+    }
+
+    private func connect() async throws {
+        let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
+        try await handoff.connectWithDiscovery(
+            filter: filter,
+            timeout: config.connectionTimeout
+        )
+    }
+
+    // MARK: - Interface Cache
+
+    private func updateInterfaceCache(_ elements: [HeistElement]) {
+        for element in elements {
+            lastInterfaceCache[element.heistId] = element
+        }
+        bookKeeper.updateInterfaceCache(elements)
+    }
+
+    // MARK: - Response Logging
+
+    private func logResponse(requestId: String, response: FenceResponse, durationMs: Int) {
         let responseStatus: ResponseStatus
         let artifactPath: String?
         let errorMessage: String?
@@ -240,7 +314,8 @@ public final class TheFence {
             errorMessage = nil
         case .ok, .help, .status, .devices, .interface, .action,
              .screenshotData, .recordingData, .batch, .sessionState,
-             .targets, .sessionLog:
+             .targets, .sessionLog, .heistStarted, .heistStopped,
+             .heistPlayback:
             responseStatus = .ok
             artifactPath = nil
             errorMessage = nil
@@ -249,35 +324,13 @@ public final class TheFence {
             try bookKeeper.logResponse(
                 requestId: requestId,
                 status: responseStatus,
-                durationMilliseconds: lastLatencyMs,
+                durationMilliseconds: durationMs,
                 artifact: artifactPath,
                 error: errorMessage
             )
         } catch {
             logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
-
-        // Every action gets implicit delivery validation; higher tiers are additive
-        if let actionResult = response.actionResult {
-            let delivery = ActionExpectation.validateDelivery(actionResult)
-            if !delivery.met {
-                return .action(result: actionResult, expectation: delivery)
-            }
-            if let expectation = try parseExpectation(request) {
-                let validation = expectation.validate(against: actionResult)
-                return .action(result: actionResult, expectation: validation)
-            }
-        }
-
-        return response
-    }
-
-    private func connect() async throws {
-        let filter = config.deviceFilter ?? EnvironmentKey.buttonheistDevice.value
-        try await handoff.connectWithDiscovery(
-            filter: filter,
-            timeout: config.connectionTimeout
-        )
     }
 
     // MARK: - Command Dispatch (thin router)
@@ -326,7 +379,7 @@ public final class TheFence {
             return try await handleConnect(args)
         case .listTargets:
             return handleListTargets()
-        case .getSessionLog, .archiveSession:
+        case .getSessionLog, .archiveSession, .startHeist, .stopHeist, .playHeist:
             return try await handleBookKeeperCommand(command: command, args: args)
         case .help, .quit, .exit:
             return .error("Unexpected command in dispatch: \(command.rawValue)")
@@ -439,6 +492,20 @@ public final class TheFence {
 
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
         guard let expect = dictionary["expect"] else { return nil }
+        // Array of expectations → compound
+        if let array = expect as? [[String: Any]] {
+            let sub = try array.map { try parseSingleExpectation($0) }
+            return sub.count == 1 ? sub[0] : .compound(sub)
+        }
+        if let array = expect as? [Any] {
+            // Mixed array (strings and objects)
+            let sub = try array.map { try parseSingleExpectationValue($0) }
+            return sub.count == 1 ? sub[0] : .compound(sub)
+        }
+        return try parseSingleExpectationValue(expect)
+    }
+
+    private func parseSingleExpectationValue(_ expect: Any) throws -> ActionExpectation {
         if let str = expect as? String {
             switch str {
             case "screen_changed":
@@ -453,36 +520,78 @@ public final class TheFence {
             }
         }
         if let dict = expect as? [String: Any] {
-            if let eu = dict["elementUpdated"] as? [String: Any] {
-                let property: ElementProperty?
-                if let propStr = eu["property"] as? String {
-                    guard let p = ElementProperty(rawValue: propStr) else {
-                        throw FenceError.invalidRequest(
-                            "Unknown element property: \"\(propStr)\". " +
-                            "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
-                        )
-                    }
-                    property = p
-                } else {
-                    property = nil
-                }
-                return .elementUpdated(
-                    heistId: eu["heistId"] as? String,
-                    property: property,
-                    oldValue: eu["oldValue"] as? String,
-                    newValue: eu["newValue"] as? String
-                )
-            }
-            if dict.keys.contains("elementUpdated") {
-                return .elementUpdated()
-            }
-            throw FenceError.invalidRequest(
-                "Invalid expectation object: expected {\"elementUpdated\": {…}}, " +
-                "got keys: \(dict.keys.sorted())"
-            )
+            return try parseSingleExpectation(dict)
         }
         throw FenceError.invalidRequest(
-            "Invalid expectation type: expected string or {\"elementUpdated\": {…}} object"
+            "Invalid expectation type: expected string, object, or array"
+        )
+    }
+
+    private func parseSingleExpectation(_ dict: [String: Any]) throws -> ActionExpectation {
+        if let eu = dict["elementUpdated"] as? [String: Any] {
+            let property: ElementProperty?
+            if let propStr = eu["property"] as? String {
+                guard let p = ElementProperty(rawValue: propStr) else {
+                    throw FenceError.invalidRequest(
+                        "Unknown element property: \"\(propStr)\". " +
+                        "Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
+                    )
+                }
+                property = p
+            } else {
+                property = nil
+            }
+            return .elementUpdated(
+                heistId: eu["heistId"] as? String,
+                property: property,
+                oldValue: eu["oldValue"] as? String,
+                newValue: eu["newValue"] as? String
+            )
+        }
+        if dict.keys.contains("elementUpdated") {
+            return .elementUpdated()
+        }
+        if let matcherDict = dict["elementAppeared"] as? [String: Any] {
+            return .elementAppeared(try parseMatcherFromDict(matcherDict))
+        }
+        if let matcherDict = dict["elementDisappeared"] as? [String: Any] {
+            return .elementDisappeared(try parseMatcherFromDict(matcherDict))
+        }
+        throw FenceError.invalidRequest(
+            "Invalid expectation object: expected elementUpdated, elementAppeared, or elementDisappeared. " +
+            "Got keys: \(dict.keys.sorted())"
+        )
+    }
+
+    private func parseMatcherFromDict(_ dict: [String: Any]) throws -> ElementMatcher {
+        let traits: [HeistTrait]?
+        if let traitNames = dict["traits"] as? [String] {
+            traits = try traitNames.map { name in
+                guard let trait = HeistTrait(rawValue: name) else {
+                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
+                }
+                return trait
+            }
+        } else {
+            traits = nil
+        }
+        let excludeTraits: [HeistTrait]?
+        if let excludeNames = dict["excludeTraits"] as? [String] {
+            excludeTraits = try excludeNames.map { name in
+                guard let trait = HeistTrait(rawValue: name) else {
+                    throw FenceError.invalidRequest("Unknown trait: \"\(name)\"")
+                }
+                return trait
+            }
+        } else {
+            excludeTraits = nil
+        }
+        return ElementMatcher(
+            label: dict["label"] as? String,
+            identifier: dict["identifier"] as? String,
+            value: dict["value"] as? String,
+            traits: traits,
+            excludeTraits: excludeTraits
         )
     }
 

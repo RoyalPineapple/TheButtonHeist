@@ -1,5 +1,8 @@
 import Foundation
+import os.log
 import TheScore
+
+private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 
 @ButtonHeistActor
 extension TheFence {
@@ -7,9 +10,9 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
-        let full = boolArg(args, "full") == true
+        let full = boolArg(args, "full") ?? true
 
-        // Full mode: explore the screen first, return all discovered elements
+        // Full mode (default): explore the screen, return all discovered elements
         if full {
             let result: ActionResult = try await sendAndAwait(.explore) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.exploreSeconds)
@@ -607,8 +610,131 @@ extension TheFence {
             let deleteSource = boolArg(args, "delete_source") ?? false
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
+        case .startHeist, .stopHeist, .playHeist:
+            return try await handleHeistCommand(command: command, args: args)
         default:
             return .error("Unexpected BookKeeper command: \(command.rawValue)")
         }
+    }
+
+    // MARK: - Handler: Heist Recording & Playback
+
+    func handleHeistCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
+        switch command {
+        case .startHeist:
+            let app = stringArg(args, "app") ?? "com.buttonheist.testapp"
+            // Ensure a BookKeeper session is active — heist recording is a session artifact
+            if bookKeeper.manifest == nil {
+                let identifier = stringArg(args, "identifier") ?? "heist"
+                try bookKeeper.beginSession(identifier: identifier)
+            }
+            try bookKeeper.startHeistRecording(app: app)
+            return .heistStarted
+        case .stopHeist:
+            let heist = try bookKeeper.stopHeistRecording()
+            guard let outputPath = stringArg(args, "output") else {
+                throw FenceError.invalidRequest("stop_heist requires an 'output' path")
+            }
+            guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
+                throw FenceError.invalidRequest("Invalid output path: must not be empty or contain '..' components")
+            }
+            try TheBookKeeper.writeHeist(heist, to: resolvedURL)
+            return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        case .playHeist:
+            return try await handlePlayHeist(args)
+        default:
+            return .error("Unexpected heist command: \(command.rawValue)")
+        }
+    }
+
+    private func handlePlayHeist(_ args: [String: Any]) async throws -> FenceResponse {
+        guard case .idle = playbackPhase else {
+            throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
+        }
+        guard let inputPath = stringArg(args, "input") else {
+            throw FenceError.invalidRequest("play_heist requires an 'input' path")
+        }
+        guard let resolvedURL = bookKeeper.validateOutputPath(inputPath) else {
+            throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
+        }
+
+        let heist = try TheBookKeeper.readHeist(from: resolvedURL)
+
+        guard heist.version <= HeistPlayback.currentVersion else {
+            throw FenceError.invalidRequest(
+                "Heist file version \(heist.version) is newer than supported version \(HeistPlayback.currentVersion). Update Button Heist to play this file."
+            )
+        }
+
+        // Warn if the connected app doesn't match the app the heist was recorded against
+        if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
+           connectedBundle != heist.app {
+            logger.warning(
+                "Heist was recorded against \(heist.app) but connected app is \(connectedBundle)"
+            )
+        }
+
+        let playbackStart = CFAbsoluteTimeGetCurrent()
+        var completedSteps = 0
+        var failedIndex: Int?
+
+        playbackPhase = .playing(inputPath: resolvedURL.path)
+        defer { playbackPhase = .idle }
+
+        // Prime the registry before playback — get_interface defaults to full exploration
+        _ = try await execute(request: ["command": "get_interface"])
+
+        for (index, step) in heist.steps.enumerated() {
+            let request = step.toRequestDictionary()
+            do {
+                let response = try await execute(request: request)
+
+                // On elementNotFound with a matcher target, try scroll_to_visible then retry.
+                // The element may be off-screen — during recording it was found via full explore,
+                // but playback only sees the viewport.
+                if let actionResult = response.actionResult,
+                   !actionResult.success,
+                   actionResult.errorKind == .elementNotFound,
+                   let target = step.target, target.hasPredicates {
+                    let scrollRequest = step.scrollToVisibleRequest()
+                    let scrollResponse = try await execute(request: scrollRequest)
+                    if let scrollResult = scrollResponse.actionResult, scrollResult.success {
+                        let retryResponse = try await execute(request: request)
+                        if case .error = retryResponse {
+                            failedIndex = index
+                            break
+                        }
+                        if let retryResult = retryResponse.actionResult, !retryResult.success {
+                            failedIndex = index
+                            break
+                        }
+                        completedSteps += 1
+                        continue
+                    }
+                    failedIndex = index
+                    break
+                }
+
+                if case .error = response {
+                    failedIndex = index
+                    break
+                }
+                if let actionResult = response.actionResult, !actionResult.success {
+                    failedIndex = index
+                    break
+                }
+                completedSteps += 1
+            } catch {
+                failedIndex = index
+                break
+            }
+        }
+
+        let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
+        return .heistPlayback(
+            completedSteps: completedSteps,
+            failedIndex: failedIndex,
+            totalTimingMs: totalTimingMs
+        )
     }
 }

@@ -28,14 +28,16 @@ extension TheStash {
     ]
 
     /// Assign deterministic `heistId` to each AccessibilityElement.
-    /// Developer-provided identifiers take priority — they become the heistId directly.
+    /// Stable developer-provided identifiers take priority — they become the heistId directly.
+    /// Identifiers containing UUIDs (SwiftUI runtime artifacts) are skipped in favor of synthesis.
     /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
     /// Returns the heistId array, parallel to the input elements array.
     static func assign(_ elements: [AccessibilityElement]) -> [String] {
         // Phase 1: generate base IDs
         var heistIds = elements.map { element -> String in
-            if let identifier = element.identifier, !identifier.isEmpty {
+            if let identifier = element.identifier, !identifier.isEmpty,
+               isStableIdentifier(identifier) {
                 return identifier
             }
             return synthesizeBaseId(element)
@@ -58,39 +60,39 @@ extension TheStash {
     }
 
     static func synthesizeBaseId(_ element: AccessibilityElement) -> String {
-        let traitPrefix = Self.traitPriority.first { element.traits.contains($0.mask) }?.name
+        let traitSuffix = Self.traitPriority.first { element.traits.contains($0.mask) }?.name
             ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
         // Value is intentionally excluded — it changes on interaction (toggles,
         // sliders, checkboxes) and must not affect element identity.
-        // Strip leading words that duplicate the trait prefix before slugifying:
-        // "Switch Button Off" with prefix "switchButton" → slug of "Off" → "off"
-        let labelForSlug = stripTraitPrefix(element.label, traitPrefix: traitPrefix)
+        // Strip leading words that duplicate the trait suffix before slugifying:
+        // "Switch Button Off" with suffix "switchButton" → slug of "Off" → "off"
+        let labelForSlug = stripTraitSuffix(element.label, traitSuffix: traitSuffix)
             ?? element.label
         let slug = slugify(labelForSlug)
             ?? slugify(element.description)
 
         if let slug {
-            return "\(traitPrefix)_\(slug)"
+            return "\(slug)_\(traitSuffix)"
         }
-        return traitPrefix
+        return traitSuffix
     }
 
-    /// Strip leading words from text that duplicate the trait prefix.
-    /// "Switch Button Off" with prefix "switchButton" → "Off"
+    /// Strip leading words from text that duplicate the trait suffix used in the heistId.
+    /// "Switch Button Off" with suffix "switchButton" → "Off"
     /// Returns nil if stripping would leave nothing (label IS the trait name).
-    static func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
+    static func stripTraitSuffix(_ text: String?, traitSuffix: String) -> String? {
         guard let text else { return nil }
-        let prefixWords = traitPrefix
+        let suffixWords = traitSuffix
             .replacing(/([a-z])([A-Z])/, with: { "\($0.output.1) \($0.output.2)" })
             .lowercased()
             .split(separator: " ")
         let textWords = text.split(separator: " ", omittingEmptySubsequences: true)
-        guard textWords.count > prefixWords.count else { return nil }
-        for (prefixWord, textWord) in zip(prefixWords, textWords) {
-            guard textWord.lowercased() == prefixWord else { return nil }
+        guard textWords.count > suffixWords.count else { return nil }
+        for (suffixWord, textWord) in zip(suffixWords, textWords) {
+            guard textWord.lowercased() == suffixWord else { return nil }
         }
-        let remainder = textWords.dropFirst(prefixWords.count).joined(separator: " ")
+        let remainder = textWords.dropFirst(suffixWords.count).joined(separator: " ")
         return remainder.isEmpty ? nil : remainder
     }
 

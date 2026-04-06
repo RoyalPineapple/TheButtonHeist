@@ -49,10 +49,13 @@ enum ToolDefinitions {
             Outcome signal for this action. Delivery is always checked implicitly. \
             String values: "screen_changed" (did the view controller change?), \
             "elements_changed" (were elements added, removed, or updated?). \
-            Object value: {"elementUpdated": {"heistId": "slider", "property": "value", "newValue": "5"}} \
-            to check specific property changes on elements. \
-            elementUpdated follows "say what you know" — provide only the fields you care about \
-            (heistId, property, oldValue, newValue). Omitted fields are wildcards.
+            Object values: \
+            {"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}} — \
+            check property changes. All fields optional, omitted = wildcard. \
+            {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
+            {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
+            Matcher fields (label, identifier, value, traits, excludeTraits) use the same \
+            matching rules as element targeting.
             """,
         "oneOf": .array([
             [
@@ -76,8 +79,31 @@ enum ToolDefinitions {
                         ],
                         "additionalProperties": false,
                     ],
+                    "elementAppeared": [
+                        "type": "object",
+                        "description": "Expect an element matching this predicate to appear in the delta's added list",
+                        "properties": [
+                            "label": ["type": "string"],
+                            "identifier": ["type": "string"],
+                            "value": ["type": "string"],
+                            "traits": ["type": "array", "items": ["type": "string"]],
+                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
+                        ],
+                        "additionalProperties": false,
+                    ],
+                    "elementDisappeared": [
+                        "type": "object",
+                        "description": "Expect an element matching this predicate to disappear from the delta's removed list",
+                        "properties": [
+                            "label": ["type": "string"],
+                            "identifier": ["type": "string"],
+                            "value": ["type": "string"],
+                            "traits": ["type": "array", "items": ["type": "string"]],
+                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
+                        ],
+                        "additionalProperties": false,
+                    ],
                 ],
-                "required": .array([.string("elementUpdated")]),
                 "additionalProperties": false,
             ],
         ]),
@@ -93,7 +119,7 @@ enum ToolDefinitions {
     // Start with these 5 tools:
     //   1. connect         — establish a session with the iOS app
     //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
-    //   3. activate        — interact with elements (covers 80% of interactions)
+    //   3. activate        — tap elements that have "activate" in their actions array
     //   4. scroll_to_visible — navigate long lists to find off-screen elements
     //   5. run_batch       — multi-step sequences with expectations
     //
@@ -118,7 +144,7 @@ enum ToolDefinitions {
     //   to pick by position: 0 = first match, 1 = second, etc.
     //
     // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
-    // get_screen (screenshots), get_interface(full: true) (full screen census).
+    // get_screen (screenshots).
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -128,6 +154,7 @@ enum ToolDefinitions {
         runBatch, getSessionState,
         connect, listTargets,
         getSessionLog, archiveSession,
+        startHeist, stopHeist, playHeist,
     ]
 
     // MARK: - Individual Tools
@@ -135,12 +162,23 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy from the connected iOS device. Returns elements with \
-            heistId, label, value, traits, and actions. Use detail=full for geometry (frame, activation point). \
-            Target elements in subsequent calls using heistId. \
-            Filter with matcher fields (label, traits, excludeTraits, etc.) or a heistId list. \
-            Set full=true to discover every element on screen including off-screen content inside \
-            scrollable containers (scrolls each container to its limits and back, restoring positions).
+            Get the current UI element hierarchy. By default, explores the entire screen \
+            including off-screen content in scroll views — every element the app exposes is \
+            returned. Pass full=false for only visible elements (faster, but may miss content \
+            below the fold). Use detail=full for geometry (frame, activation point). \
+            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
+            \
+            Every action response includes a delta — use that first: \
+            + heistId "label" [traits] = appeared, - heistId = disappeared, \
+            ~ heistId: property "old" > "new" = changed, screen changed = full navigation \
+            (new interface included, all old heistIds invalidated). \
+            Only call get_interface again when you need elements the delta didn't cover. \
+            \
+            Targeting: heistId is stable on the current screen — copy from a previous response, \
+            use in the next action. After a screen change, all heistIds reset — use matchers \
+            (label, value, traits) or read from the delta's new interface. Never construct or \
+            predict a heistId. Matcher strings are case-insensitive substrings; traits match exactly. \
+            Zero matches returns suggestions, never a fuzzy guess.
             """,
         inputSchema: .object([
             "type": "object",
@@ -153,8 +191,8 @@ enum ToolDefinitions {
                 "full": [
                     "type": "boolean",
                     "description": """
-                        When true, explores the entire screen including off-screen content \
-                        in scroll views. Returns all elements, not just visible ones.
+                        Full exploration is on by default — set to false to return only \
+                        visible elements (faster, but misses off-screen content in scroll views).
                         """,
                 ],
                 "elements": [
@@ -173,6 +211,8 @@ enum ToolDefinitions {
         description: """
             Activate a UI element — the primary way to tap buttons, follow links, and toggle controls. \
             Works like a VoiceOver double-tap: tries accessibility activation first, falls back to synthetic tap. \
+            Only elements with "activate" in their actions array can be activated — static text, headers, and \
+            images without actions will fail. Check the element's actions in get_interface before calling. \
             Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
             value (current state), traits (role like "button", "selected"). \
             If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
@@ -242,6 +282,10 @@ enum ToolDefinitions {
                     ],
                     "required": .array([.string("x"), .string("y")]),
                 ],
+                "startX": ["type": "number", "description": "Start X screen coordinate (alternative to unit-point start)"],
+                "startY": ["type": "number", "description": "Start Y screen coordinate"],
+                "endX": ["type": "number", "description": "End X screen coordinate (alternative to unit-point end)"],
+                "endY": ["type": "number", "description": "End Y screen coordinate"],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
@@ -341,8 +385,8 @@ enum ToolDefinitions {
     static let scroll = Tool(
         name: "scroll",
         description: """
-            Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor \
-            of the specified element, or the main scroll view if no element is specified. \
+            Scroll a scroll view by one page in a direction. Requires an element target — scrolls \
+            the nearest scrollable ancestor of that element. \
             The direction determines which axis to scroll — scrolling "right" on an element inside \
             a horizontal carousel scrolls the carousel, while scrolling "down" scrolls the outer list.
             """,
@@ -429,11 +473,13 @@ enum ToolDefinitions {
             Common params: heistId or matcher fields (element target) or x/y (coordinates). \
             one_finger_tap: synthetic tap at coordinates (use 'activate' for element interactions instead). \
             drag: endX, endY required. \
-            long_press: duration (seconds, default 1.0). \
-            pinch: scale required (>1 zoom in, <1 zoom out). \
-            rotate: angle required (radians). \
-            draw_path: points array of {x, y} objects. \
-            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}.
+            long_press: duration (seconds, default 0.5). \
+            pinch: scale required (>1 zoom in, <1 zoom out), optional centerX/centerY (default element center or x/y), spread. \
+            rotate: angle required (radians), optional centerX/centerY, radius. \
+            two_finger_tap: optional centerX/centerY, spread. \
+            draw_path: points array of {x, y} objects, optional velocity (points/sec). \
+            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}; \
+            optional samplesPerSegment, velocity.
             """,
         inputSchema: .object([
             "type": "object",
@@ -452,9 +498,15 @@ enum ToolDefinitions {
                 "startY": ["type": "number", "description": "Start Y coordinate (draw_bezier)"],
                 "endX": ["type": "number", "description": "End X coordinate (drag)"],
                 "endY": ["type": "number", "description": "End Y coordinate (drag)"],
-                "duration": ["type": "number", "description": "Duration in seconds (long_press, draw_path, draw_bezier)"],
+                "duration": ["type": "number", "description": "Duration in seconds (long_press default 0.5, draw_path, draw_bezier)"],
                 "scale": ["type": "number", "description": "Pinch scale factor (>1 zoom in, <1 zoom out)"],
                 "angle": ["type": "number", "description": "Rotation angle in radians"],
+                "centerX": ["type": "number", "description": "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"],
+                "centerY": ["type": "number", "description": "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"],
+                "spread": ["type": "number", "description": "Finger spread distance (pinch, two_finger_tap)"],
+                "radius": ["type": "number", "description": "Rotation radius (rotate)"],
+                "velocity": ["type": "number", "description": "Drawing velocity in points/sec (draw_path, draw_bezier)"],
+                "samplesPerSegment": ["type": "integer", "description": "Bezier curve sampling resolution (draw_bezier)"],
                 "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
                 "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
                 "expect": expectProperty,
@@ -533,17 +585,18 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute a batch of Button Heist commands in a single MCP call. \
-            Each step is a JSON request matching the CLI session format (must include 'command'). \
-            Every action implicitly checks delivery (success==true). \
-            Steps can include an 'expect' field to classify the expected outcome: \
-            "screen_changed", "elements_changed", or {"elementUpdated": {"heistId": "...", "newValue": "..."}}. \
-            Results report what actually happened — the caller decides what to do with it. \
-            The policy controls whether the batch stops on first error or unmet expectation. \
-            Valid commands: activate (with optional 'action' for custom actions), increment, decrement, \
-            perform_custom_action, type_text, scroll, scroll_to_visible, scroll_to_edge, swipe, \
-            one_finger_tap, long_press, drag, pinch, rotate, two_finger_tap, draw_path, draw_bezier, \
-            edit_action, set_pasteboard, get_pasteboard, dismiss_keyboard, get_interface, get_screen.
+            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
+            plus that command's parameters. Use stop_on_error (default) for dependent sequences, \
+            continue_on_error for independent steps. Returns per-step results and a merged net delta. \
+            \
+            Attach 'expect' to each step to build a self-verifying script: every step declares \
+            its hypothesis, the system checks it, and the summary tells you which passed and which \
+            diverged — a complete pass/fail report in one round trip. \
+            \
+            Valid commands: activate, increment, decrement, perform_custom_action, type_text, \
+            scroll, scroll_to_visible, scroll_to_edge, swipe, one_finger_tap, long_press, drag, \
+            pinch, rotate, two_finger_tap, draw_path, draw_bezier, edit_action, set_pasteboard, \
+            get_pasteboard, dismiss_keyboard, get_interface, get_screen.
             """,
         inputSchema: [
             "type": "object",
@@ -661,6 +714,84 @@ enum ToolDefinitions {
                     "description": "Delete the session directory after archiving (default: false)",
                 ],
             ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let startHeist = Tool(
+        name: "start_heist",
+        description: """
+            Start recording a heist. All subsequent successful commands are captured as \
+            steps in a .heist file. Failed actions are silently skipped. \
+            \
+            Before recording: call get_interface to populate the element cache. The recorder \
+            converts heistIds to portable matchers (label, traits, identifier) automatically, \
+            but can only build good matchers when it has cached element data. Without a primed \
+            cache, steps degrade to coordinate-only evidence that breaks across devices. \
+            \
+            During recording: attach 'expect' to actions — expectations are recorded with each \
+            step and validated on every replay. Use specific expectations over generic ones: \
+            {"elementUpdated": {"heistId": "toggle", "newValue": "1"}} tells you exactly what \
+            broke on replay; "elements_changed" only tells you something didn't move. \
+            \
+            Read-only commands (get_interface, get_screen, status) and meta-commands \
+            (run_batch, start/stop_recording) are not recorded.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "app": [
+                    "type": "string",
+                    "description": "Bundle ID of the app being recorded (default: com.buttonheist.testapp)",
+                ],
+                "identifier": [
+                    "type": "string",
+                    "description": "Session name for the recording (default: heist). Used as directory name if a new session is created.",
+                ],
+            ],
+            "additionalProperties": false,
+        ]
+    )
+
+    static let stopHeist = Tool(
+        name: "stop_heist",
+        description: """
+            Stop recording and save the heist to a .heist file. Returns the file path \
+            and number of steps recorded. At least one step must have been recorded. \
+            The output file is a self-contained JSON playback script with matcher-based \
+            element targeting — no heistIds, no coordinates, portable across sessions.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "output": [
+                    "type": "string",
+                    "description": "File path to write the .heist file",
+                ],
+            ],
+            "required": .array(["output"]),
+            "additionalProperties": false,
+        ]
+    )
+
+    static let playHeist = Tool(
+        name: "play_heist",
+        description: """
+            Play back a .heist file. Steps execute sequentially against the connected app. \
+            Playback stops on the first failed step (action error or unsuccessful result). \
+            Returns completed step count, failed step index (if any), and total timing in ms. \
+            If the heist was recorded against a different app, a warning is logged but \
+            playback proceeds — the matchers may still resolve correctly.
+            """,
+        inputSchema: [
+            "type": "object",
+            "properties": [
+                "input": [
+                    "type": "string",
+                    "description": "Path to the .heist file to play back",
+                ],
+            ],
+            "required": .array(["input"]),
             "additionalProperties": false,
         ]
     )
