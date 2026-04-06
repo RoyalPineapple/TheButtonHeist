@@ -99,10 +99,10 @@ jobs:
           git submodule update --init --recursive submodules/AccessibilitySnapshot
 
       - name: Install Tuist
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
       - name: Cache Tuist dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
         with:
           path: Tuist/.build
           key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
@@ -175,10 +175,10 @@ jobs:
           git submodule update --init --recursive submodules/AccessibilitySnapshot
 
       - name: Install Tuist
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
       - name: Cache Tuist dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
         with:
           path: Tuist/.build
           key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
