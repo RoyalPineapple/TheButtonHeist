@@ -675,6 +675,11 @@ extension TheFence {
         playbackPhase = .playing(inputPath: resolvedURL.path)
         defer { playbackPhase = .idle }
 
+        // Full explore before playback so off-screen elements are in the registry.
+        // During recording, get_interface with full explore discovers everything;
+        // playback starts cold and would miss elements below the fold.
+        _ = try await execute(request: ["command": "get_interface", "full": true])
+
         for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
             do {
