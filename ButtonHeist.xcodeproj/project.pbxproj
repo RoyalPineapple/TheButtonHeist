@@ -1524,14 +1524,14 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/2d80ef968c6c995791a532e5b322676d",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c2266b35b7ee9c597d0f6c39ba3da3d",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c52862638f75c5a78c90112172855c9",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c7fe03b27826c81ca4d4b604a0edfd8",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/6ffec6a9ac0b5b7bc630c93762826ffd",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/aeac5c4261e2dc58c701dc3e3e109885",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/d0d467ab357932e244e7792dd760b438",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/f09eefc3d4adb298bc82dfa512d9b3eb",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/2d80ef968c6c995791a532e5b322676d",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c2266b35b7ee9c597d0f6c39ba3da3d",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c52862638f75c5a78c90112172855c9",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c7fe03b27826c81ca4d4b604a0edfd8",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/6ffec6a9ac0b5b7bc630c93762826ffd",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/aeac5c4261e2dc58c701dc3e3e109885",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/d0d467ab357932e244e7792dd760b438",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/f09eefc3d4adb298bc82dfa512d9b3eb",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1589,14 +1589,14 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/2d80ef968c6c995791a532e5b322676d",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c2266b35b7ee9c597d0f6c39ba3da3d",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c52862638f75c5a78c90112172855c9",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/3c7fe03b27826c81ca4d4b604a0edfd8",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/6ffec6a9ac0b5b7bc630c93762826ffd",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/aeac5c4261e2dc58c701dc3e3e109885",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/d0d467ab357932e244e7792dd760b438",
-					"$(SRCROOT)/../../.cache/tuist/Binaries/f09eefc3d4adb298bc82dfa512d9b3eb",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/2d80ef968c6c995791a532e5b322676d",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c2266b35b7ee9c597d0f6c39ba3da3d",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c52862638f75c5a78c90112172855c9",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/3c7fe03b27826c81ca4d4b604a0edfd8",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/6ffec6a9ac0b5b7bc630c93762826ffd",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/aeac5c4261e2dc58c701dc3e3e109885",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/d0d467ab357932e244e7792dd760b438",
+					"$(SRCROOT)/../../../../.cache/tuist/Binaries/f09eefc3d4adb298bc82dfa512d9b3eb",
 				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
