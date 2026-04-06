@@ -1,5 +1,8 @@
 import Foundation
+import os.log
 import TheScore
+
+private let logger = Logger(subsystem: "com.buttonheist.fence", category: "handlers")
 
 @ButtonHeistActor
 extension TheFence {
@@ -632,10 +635,9 @@ extension TheFence {
             guard let outputPath = stringArg(args, "output") else {
                 throw FenceError.invalidRequest("stop_heist requires an 'output' path")
             }
-            guard !outputPath.split(separator: "/").contains("..") else {
-                throw FenceError.invalidRequest("Invalid output path: must not contain '..' components")
+            guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
+                throw FenceError.invalidRequest("Invalid output path: must not be empty or contain '..' components")
             }
-            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             try TheBookKeeper.writeHeist(heist, to: resolvedURL)
             return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
         case .playHeist:
@@ -646,30 +648,64 @@ extension TheFence {
     }
 
     private func handlePlayHeist(_ args: [String: Any]) async throws -> FenceResponse {
-        guard !isPlayingHeist else {
+        guard case .idle = playbackPhase else {
             throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
         }
         guard let inputPath = stringArg(args, "input") else {
             throw FenceError.invalidRequest("play_heist requires an 'input' path")
         }
-        guard !inputPath.split(separator: "/").contains("..") else {
-            throw FenceError.invalidRequest("Invalid input path: must not contain '..' components")
+        guard let resolvedURL = bookKeeper.validateOutputPath(inputPath) else {
+            throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }
 
-        let resolvedURL = URL(fileURLWithPath: inputPath).standardized
         let heist = try TheBookKeeper.readHeist(from: resolvedURL)
+
+        // Warn if the connected app doesn't match the app the heist was recorded against
+        if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
+           connectedBundle != heist.app {
+            logger.warning(
+                "Heist was recorded against \(heist.app) but connected app is \(connectedBundle)"
+            )
+        }
 
         let playbackStart = CFAbsoluteTimeGetCurrent()
         var completedSteps = 0
         var failedIndex: Int?
 
-        isPlayingHeist = true
-        defer { isPlayingHeist = false }
+        playbackPhase = .playing(inputPath: resolvedURL.path)
+        defer { playbackPhase = .idle }
 
         for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
             do {
                 let response = try await execute(request: request)
+
+                // On elementNotFound with a matcher target, try scroll_to_visible then retry.
+                // The element may be off-screen — during recording it was found via full explore,
+                // but playback only sees the viewport.
+                if let actionResult = response.actionResult,
+                   !actionResult.success,
+                   actionResult.errorKind == .elementNotFound,
+                   let target = step.target, target.hasPredicates {
+                    let scrollRequest = step.scrollToVisibleRequest()
+                    let scrollResponse = try await execute(request: scrollRequest)
+                    if let scrollResult = scrollResponse.actionResult, scrollResult.success {
+                        let retryResponse = try await execute(request: request)
+                        if case .error = retryResponse {
+                            failedIndex = index
+                            break
+                        }
+                        if let retryResult = retryResponse.actionResult, !retryResult.success {
+                            failedIndex = index
+                            break
+                        }
+                        completedSteps += 1
+                        continue
+                    }
+                    failedIndex = index
+                    break
+                }
+
                 if case .error = response {
                     failedIndex = index
                     break

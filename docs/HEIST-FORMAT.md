@@ -209,3 +209,28 @@ buttonheist play-heist --input recording.heist
 - Playback stops on the first failed action (element not found, timeout, etc.)
 - The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
 - No `get_interface` calls are injected — the script is replayed exactly as recorded
+
+## Playback Performance
+
+Heist playback removes the agent from the loop entirely — no reasoning, no `get_interface` polling, no token consumption. The following data compares a Claude Sonnet 4.6 agent completing benchmark tasks via the `bh` (semantic addressing) config against deterministic playback of `.heist` recordings of the same tasks. Recordings were made on one simulator and played back on a different one to confirm cross-device portability.
+
+| Task | Agent turns | Agent time | Agent tokens | Agent cost | Playback steps | Playback time |
+|------|-------------|------------|--------------|------------|----------------|---------------|
+| T3-settings-roundtrip | 11 | 58s | 415,260 | $0.20 | 4 | 4.5s |
+| T11-increment | 5 | 25s | 181,603 | $0.10 | 7 | 7.9s |
+| T5-controls-gauntlet | 15 | 98s | 582,896 | $0.39 | 20 | 22.4s |
+| **Total** | **31** | **181s** | **1,179,759** | **$0.70** | **31** | **34.8s** |
+
+Playback is **5x faster** at **zero cost** — no API calls, no tokens, no model variance. The agent spends most of its wall time reading the interface, reasoning about what to do next, and formatting tool calls. Playback skips all of that and fires actions directly.
+
+These numbers are against the `bh` config (semantic addressing). Against coordinate-based configs (`idb`, `mobile-mcp`), the agent gap is wider — those use 2-4x more turns per task because every action requires a screenshot/describe cycle to compute tap coordinates.
+
+### When to use playback vs agents
+
+| Use case | Approach |
+|----------|----------|
+| Regression testing known flows | Playback — deterministic, fast, free |
+| Exploring new UI or unknown state | Agent — needs reasoning to navigate |
+| CI smoke tests | Playback — record once, replay on every build |
+| Benchmark scoring | Agent — the benchmark measures agent capability |
+| Demo recordings | Playback — consistent, reproducible |
