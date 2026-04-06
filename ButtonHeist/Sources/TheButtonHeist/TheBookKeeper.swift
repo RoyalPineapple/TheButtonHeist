@@ -230,13 +230,12 @@ public final class TheBookKeeper {
             let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
             heistEvidenceCount = lineCount
             heistFilePath = heistLog
-            NSLog(
-                "[BookKeeper] ⚠️ Abandoned heist in session %@ — %d evidence entries preserved at %@",
-                sessionId, lineCount, heistLog.path
+            logger.warning(
+                "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
             )
         }
 
-        NSLog("[BookKeeper] Recovered abandoned session: %@", sessionId)
+        logger.info("Recovered abandoned session: \(sessionId)")
         return (heistEvidenceCount, heistFilePath)
     }
 
