@@ -9,21 +9,15 @@
 #   5. Commit, tag, push
 #   6. Wait for CI release workflow; upgrade Homebrew on success, rollback on failure
 #
-# The release workflow (triggered by the tag push):
-#   - Builds universal binaries (arm64 + x86_64)
-#   - Creates the GitHub release with artifacts
-#   - Updates the Homebrew tap with real SHA-256 hashes
+# Versioning: SemVer (MAJOR.MINOR.PATCH). Default bump is patch.
 #
-# Idempotent: if CI fails, the script deletes the tag, reverts the
-# version bump, and cleans up the GitHub release — re-run to retry.
-#
-# Usage: ./scripts/release.sh [--dry-run] [<version>]
-# Example: ./scripts/release.sh              # Uses today's date: 2026.04.03
-#          ./scripts/release.sh              # Same day again: auto-increments to 2026.04.03.1
-#          ./scripts/release.sh 2026.04.03   # Explicit CalVer
+# Usage: ./scripts/release.sh [--dry-run] [--skip-tests] [--major | --minor | <version>]
+# Example: ./scripts/release.sh              # Bump patch: 0.2.0 -> 0.2.1
+#          ./scripts/release.sh --minor      # Bump minor: 0.2.1 -> 0.3.0
+#          ./scripts/release.sh --major      # Bump major: 0.3.0 -> 1.0.0
+#          ./scripts/release.sh 0.5.0        # Explicit version
 #          ./scripts/release.sh --dry-run    # Preview only
-#
-# See VERSIONING.md in bh-infra for versioning rules.
+#          ./scripts/release.sh --skip-tests # Skip Phase 4
 
 set -euo pipefail
 
@@ -31,33 +25,45 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-CALVER_REGEX='^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$'
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 GITHUB_REPO="RoyalPineapple/TheButtonHeist"
 
 DRY_RUN=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-    DRY_RUN=true
-    shift
-fi
+SKIP_TESTS=false
+BUMP_TYPE=""
 
-# Default to today's date; auto-increment patch if today's version is already released
-if [[ $# -lt 1 ]]; then
-    BASE_DATE="$(date +%Y.%m.%d)"
-    if git tag -l "v$BASE_DATE" | grep -q .; then
-        PATCH=1
-        while git tag -l "v${BASE_DATE}.${PATCH}" | grep -q .; do
-            PATCH=$((PATCH + 1))
-        done
-        NEW_VERSION="${BASE_DATE}.${PATCH}"
-    else
-        NEW_VERSION="$BASE_DATE"
-    fi
-else
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)    DRY_RUN=true; shift ;;
+        --skip-tests) SKIP_TESTS=true; shift ;;
+        --major)      BUMP_TYPE="major"; shift ;;
+        --minor)      BUMP_TYPE="minor"; shift ;;
+        --patch)      BUMP_TYPE="patch"; shift ;;
+        -*)           echo "Error: unknown flag '$1'"; exit 1 ;;
+        *)            break ;;
+    esac
+done
+
+# Read current version
+CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
+
+if [[ $# -ge 1 ]]; then
     NEW_VERSION="$1"
+elif [[ -n "$BUMP_TYPE" ]]; then
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+    case "$BUMP_TYPE" in
+        major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+        minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+        patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+    esac
+else
+    # Default: bump patch
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+    NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
 fi
 
-if ! [[ "$NEW_VERSION" =~ $CALVER_REGEX ]]; then
-    echo "Error: '$NEW_VERSION' is not a valid CalVer (e.g. 2026.04.03, 2026.04.03.1)"
+if ! [[ "$NEW_VERSION" =~ $SEMVER_REGEX ]]; then
+    echo "Error: '$NEW_VERSION' is not valid semver (e.g. 0.2.0, 1.0.0)"
     exit 1
 fi
 
@@ -91,21 +97,14 @@ if [[ -n $(git status --porcelain) ]]; then
     exit 1
 fi
 
-# Read current version
-CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
-
 if [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
-    echo "Error: version is already $NEW_VERSION and tag v$NEW_VERSION exists."
-    echo "  To cut a same-day patch, omit the version argument and the script will auto-increment:"
-    echo "    ./scripts/release.sh"
+    echo "Error: version is already $NEW_VERSION."
     exit 1
 fi
 
 # Tag must not exist
 if [[ -n $(git tag -l "v$NEW_VERSION" 2>/dev/null) ]]; then
     echo "Error: tag v$NEW_VERSION already exists."
-    echo "  To cut a same-day patch, omit the version argument and the script will auto-increment:"
-    echo "    ./scripts/release.sh"
     exit 1
 fi
 
@@ -120,7 +119,11 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "Would perform:"
     echo "  1. Bump version in 5 files + regenerate Xcode projects"
     echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
-    echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
+    if [[ "$SKIP_TESTS" == true ]]; then
+        echo "  3. (tests skipped)"
+    else
+        echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
+    fi
     echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
     echo "  5. Wait for CI release workflow"
     echo "  6. On success: upgrade Homebrew. On failure: rollback tag + commit"
@@ -224,34 +227,39 @@ echo ""
 # Phase 4: Test
 # --------------------------------------------------------------------------
 
-echo "==> Phase 4: Running tests"
+if [[ "$SKIP_TESTS" == true ]]; then
+    echo "==> Phase 4: Skipping tests (--skip-tests)"
+    echo ""
+else
+    echo "==> Phase 4: Running tests"
 
-echo "  Running TheScoreTests..."
-tuist test TheScoreTests --no-selective-testing
-echo "  ✓ TheScoreTests"
+    echo "  Running TheScoreTests..."
+    tuist test TheScoreTests --no-selective-testing
+    echo "  ✓ TheScoreTests"
 
-echo "  Running ButtonHeistTests..."
-tuist test ButtonHeistTests --no-selective-testing
-echo "  ✓ ButtonHeistTests"
+    echo "  Running ButtonHeistTests..."
+    tuist test ButtonHeistTests --no-selective-testing
+    echo "  ✓ ButtonHeistTests"
 
-# Find or create a simulator for iOS tests
-SIM_NAME="release-test-$$"
-SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS 26" | tail -1 | sed 's/.*- //')
-if [[ -z "$SIM_RUNTIME" ]]; then
-    echo "  Warning: no iOS 26 runtime found, trying latest available..."
-    SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS" | tail -1 | sed 's/.*- //')
+    # Find or create a simulator for iOS tests
+    SIM_NAME="release-test-$$"
+    SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS 26" | tail -1 | sed 's/.*- //')
+    if [[ -z "$SIM_RUNTIME" ]]; then
+        echo "  Warning: no iOS 26 runtime found, trying latest available..."
+        SIM_RUNTIME=$(xcrun simctl list runtimes | grep "iOS" | tail -1 | sed 's/.*- //')
+    fi
+    SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$SIM_RUNTIME")
+    xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
+
+    echo "  Running TheInsideJobTests on $SIM_NAME..."
+    tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
+    echo "  ✓ TheInsideJobTests"
+
+    # Clean up test simulator
+    xcrun simctl shutdown "$SIM_UDID" 2>/dev/null || true
+    xcrun simctl delete "$SIM_UDID" 2>/dev/null || true
+    echo ""
 fi
-SIM_UDID=$(xcrun simctl create "$SIM_NAME" "com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro" "$SIM_RUNTIME")
-xcrun simctl boot "$SIM_UDID" 2>/dev/null || true
-
-echo "  Running TheInsideJobTests on $SIM_NAME..."
-tuist test TheInsideJobTests --platform ios --device "$SIM_NAME" --no-selective-testing
-echo "  ✓ TheInsideJobTests"
-
-# Clean up test simulator
-xcrun simctl shutdown "$SIM_UDID" 2>/dev/null || true
-xcrun simctl delete "$SIM_UDID" 2>/dev/null || true
-echo ""
 
 # --------------------------------------------------------------------------
 # Phase 5: Commit, tag, push
