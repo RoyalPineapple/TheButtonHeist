@@ -68,16 +68,23 @@ struct ButtonHeistMCPServer {
 
         ## Expectations
 
-        Attach `expect` to any action to state what should happen. The action executes \
-        regardless — expectations are hypotheses, not preconditions. Before you act, \
-        ask: what should change? A toggle flips a value. A nav button changes the screen. \
-        A delete removes an element. Form that hypothesis, attach it, and let the result \
-        confirm or correct you. Unmet expectations are information, not errors.
+        Every action is an opportunity to validate. Attaching `expect` costs nothing — \
+        the action runs the same way — but turns a blind tap into a verified assertion. \
+        Agents that use expectations routinely catch regressions as a side effect of \
+        navigation. Agents that don't are just clicking and hoping.
 
-        The more specific your expectation, the more a failure tells you. \
-        `"elements_changed"` proves something moved; \
-        `{"elementUpdated": {"heistId": "x", "newValue": "5"}}` proves the right thing \
-        moved to the right state.
+        Before you act, ask: what should change? A toggle flips a value. A nav button \
+        changes the screen. A delete removes an element. Form that hypothesis, attach it, \
+        and let the result confirm or correct you. Unmet expectations are information, \
+        not errors — they tell you what actually happened so you can adapt.
+
+        Expectations are as specific as you need — say what you know, omit what you don't: \
+        `"elements_changed"` — something should change (broadest). \
+        `{"elementUpdated": {}}` — some element's property should change. \
+        `{"elementUpdated": {"heistId": "counter"}}` — this specific element should change. \
+        `{"elementUpdated": {"heistId": "counter", "property": "value"}}` — its value specifically. \
+        `{"elementUpdated": {"heistId": "counter", "newValue": "5"}}` — and it should become "5". \
+        Each level narrows what counts as success. The more specific, the more a failure tells you.
 
         ## Recording Heists
 
