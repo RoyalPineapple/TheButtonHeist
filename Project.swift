@@ -17,7 +17,7 @@ let project = Project(
         automaticSchemesOptions: .disabled
     ),
     settings: .settings(base: [
-        "SWIFT_VERSION": "5.0",
+        "SWIFT_VERSION": "6",
         "LastSwiftMigration": "2620",
         "SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES",
     ]),
@@ -33,7 +33,7 @@ let project = Project(
             sources: ["ButtonHeist/Sources/TheScore/**"],
 
             settings: .settings(base: [
-                "SWIFT_VERSION": "5.0",
+                "SWIFT_VERSION": "6",
                 "LastSwiftMigration": "2620",
             ])
         ),
