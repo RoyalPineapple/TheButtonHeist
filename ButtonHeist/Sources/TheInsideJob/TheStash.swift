@@ -20,8 +20,8 @@ final class TheStash {
 
     // MARK: - Volatile State (rebuilt each refresh)
 
-    /// Accessibility hierarchy from the last refresh. Used for matcher resolution
-    /// (uniqueMatch tree walk), scroll target discovery, and wire tree construction.
+    /// Accessibility hierarchy from the last refresh. Used for matcher resolution,
+    /// scroll target discovery, and wire tree construction.
     /// Set by apply(). Tests inject via @testable.
     var currentHierarchy: [AccessibilityHierarchy] = []
 
@@ -169,95 +169,35 @@ final class TheStash {
             }
             return .resolved(ResolvedTarget(screenElement: entry))
         case .matcher(let matcher, let ordinal):
-            let source = currentHierarchy
-            if let ordinal {
-                guard ordinal >= 0 else {
-                    return .notFound(diagnostics: "ordinal must be non-negative, got \(ordinal)")
-                }
-                // Ordinal selection: collect matches up to ordinal+1, return the Nth
-                let hits = source.matches(matcher, limit: ordinal + 1)
-                // Fall back to registry (explored off-screen elements) if hierarchy has no matches
-                if hits.isEmpty {
-                    let registryHits = registryMatches(matcher, limit: ordinal + 1)
-                    if ordinal < registryHits.count {
-                        return .resolved(ResolvedTarget(screenElement: registryHits[ordinal]))
-                    }
-                    let total = registryHits.count
-                    return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
-                }
-                guard ordinal < hits.count else {
-                    let total = hits.count
-                    return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
-                }
-                let selected = hits[ordinal]
-                if let heistId = registry.reverseIndex[selected.element],
-                   let screenElement = registry.elements[heistId] {
-                    return .resolved(ResolvedTarget(screenElement: screenElement))
-                }
-                return .notFound(diagnostics: matcherNotFoundMessage(matcher))
-            }
-            // No ordinal — require unique match
-            let hits = source.matches(matcher, limit: 2)
-            if hits.count == 1 {
-                if let heistId = registry.reverseIndex[hits[0].element],
-                   let screenElement = registry.elements[heistId] {
-                    return .resolved(ResolvedTarget(screenElement: screenElement))
-                }
-                return .notFound(diagnostics: matcherNotFoundMessage(matcher))
-            }
-            if hits.count > 1 {
-                // Cap at 11 to avoid a full tree scan — we show 10 candidates
-                // and indicate "more" if the 11th exists
-                let capped = source.matches(matcher, limit: 11)
-                let candidates = capped.prefix(10).map { match -> String in
-                    var parts: [String] = []
-                    if let label = match.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
-                    if let id = match.element.identifier, !id.isEmpty { parts.append("id=\(id)") }
-                    if let val = match.element.value, !val.isEmpty { parts.append("value=\(val)") }
-                    return parts.joined(separator: " ")
-                }
-                let query = formatMatcher(matcher)
-                let countLabel = capped.count > 10 ? "10+" : "\(capped.count)"
-                let rangeLabel = capped.count > 10 ? "0, 1, 2, ..." : "0–\(capped.count - 1)"
-                var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
-                lines.append(contentsOf: candidates.map { "  \($0)" })
-                if capped.count > 10 {
-                    lines.append("  ... and more")
-                }
-                return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
-            }
-            // Hierarchy had zero matches — fall back to registry (explored off-screen elements)
-            return resolveMatcherFromRegistry(matcher)
+            return resolveMatcher(matcher, ordinal: ordinal)
         }
     }
 
-    /// Registry-only matcher resolution — used when the hierarchy has zero matches.
-    /// Searches explored off-screen elements with the same unique/ambiguous semantics.
-    private func resolveMatcherFromRegistry(_ matcher: ElementMatcher) -> TargetResolution {
-        let registryHits = registryMatches(matcher, limit: 2)
-        if registryHits.count == 1 {
-            return .resolved(ResolvedTarget(screenElement: registryHits[0]))
-        }
-        if registryHits.count > 1 {
-            let capped = registryMatches(matcher, limit: 11)
-            let candidates = capped.prefix(10).map { screenElement -> String in
-                var parts: [String] = []
-                if let label = screenElement.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
-                if let identifier = screenElement.element.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
-                if let value = screenElement.element.value, !value.isEmpty { parts.append("value=\(value)") }
-                return parts.joined(separator: " ")
+    /// Single matcher resolution path. Hierarchy-first for traversal order,
+    /// registry fallback for off-screen elements, one set of resolution semantics.
+    private func resolveMatcher(_ matcher: ElementMatcher, ordinal: Int?) -> TargetResolution {
+        if let ordinal {
+            guard ordinal >= 0 else {
+                return .notFound(diagnostics: "ordinal must be non-negative, got \(ordinal)")
             }
-            let query = formatMatcher(matcher)
-            let countLabel = capped.count > 10 ? "10+" : "\(capped.count)"
-            let rangeLabel = capped.count > 10 ? "0, 1, 2, ..." : "0–\(capped.count - 1)"
-            var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
-            lines.append(contentsOf: candidates.map { "  \($0)" })
-            if capped.count > 10 {
-                lines.append("  ... and more")
+            let matches = matchScreenElements(matcher, limit: ordinal + 1)
+            guard ordinal < matches.count else {
+                let total = matches.count
+                return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
             }
-            return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
+            return .resolved(ResolvedTarget(screenElement: matches[ordinal]))
         }
-        return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+        // No ordinal — require unique match
+        let matches = matchScreenElements(matcher, limit: 2)
+        switch matches.count {
+        case 0:
+            return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+        case 1:
+            return .resolved(ResolvedTarget(screenElement: matches[0]))
+        default:
+            let capped = matchScreenElements(matcher, limit: 11)
+            return ambiguousResolution(matcher, elements: capped.map(\.element))
+        }
     }
 
     /// Resolve a target using first-match semantics (no ambiguity check).
@@ -331,6 +271,30 @@ final class TheStash {
 
     func formatMatcher(_ matcher: ElementMatcher) -> String {
         Diagnostics.formatMatcher(matcher)
+    }
+
+    /// Build an ambiguous resolution from a list of matching elements.
+    /// Shared by both hierarchy and registry matcher paths.
+    private func ambiguousResolution(
+        _ matcher: ElementMatcher,
+        elements: [AccessibilityElement]
+    ) -> TargetResolution {
+        let candidates = elements.prefix(10).map { element -> String in
+            var parts: [String] = []
+            if let label = element.label, !label.isEmpty { parts.append("\"\(label)\"") }
+            if let identifier = element.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
+            if let value = element.value, !value.isEmpty { parts.append("value=\(value)") }
+            return parts.joined(separator: " ")
+        }
+        let query = formatMatcher(matcher)
+        let countLabel = elements.count > 10 ? "10+" : "\(elements.count)"
+        let rangeLabel = elements.count > 10 ? "0, 1, 2, ..." : "0–\(elements.count - 1)"
+        var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
+        lines.append(contentsOf: candidates.map { "  \($0)" })
+        if elements.count > 10 {
+            lines.append("  ... and more")
+        }
+        return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
     }
 
     // MARK: - Element Selection
