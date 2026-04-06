@@ -45,13 +45,13 @@ extension TheInsideJob {
         guard muscle.hasSubscribers else { return }
 
         let snapshot = stash.selectElements()
-        let wireElements = stash.toWire(snapshot)
+        let wireElements = TheStash.WireConversion.toWire(snapshot)
         let currentHash = wireElements.hashValue
 
         guard currentHash != stash.lastHierarchyHash else { return }
         stash.lastHierarchyHash = currentHash
 
-        let tree = parseResult.hierarchy.map { stash.convertHierarchyNode($0) }
+        let tree = parseResult.hierarchy.map { TheStash.WireConversion.convertNode($0) }
         let payload = Interface(timestamp: Date(), elements: wireElements, tree: tree)
 
         broadcastToSubscribed(.interface(payload))
@@ -80,8 +80,8 @@ extension TheInsideJob {
         insideJobLogger.info("Explore: \(elementCount) elements (\(manifest.scrollCount) scrolls, \(time)s)")
 
         let snapshot = stash.selectElements()
-        let tree = stash.currentHierarchy.isEmpty ? nil : stash.currentHierarchy.map { stash.convertHierarchyNode($0) }
-        let payload = Interface(timestamp: Date(), elements: stash.toWire(snapshot), tree: tree)
+        let tree = stash.currentHierarchy.isEmpty ? nil : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
+        let payload = Interface(timestamp: Date(), elements: TheStash.WireConversion.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
     }
 }

@@ -33,7 +33,9 @@ graph TD
 
     subgraph Crew["Crew Members (Owned)"]
         Tripwire["TheTripwire — UI pulse, settle detection"]
-        Bagman["TheStash — Element cache, hierarchy, delta"]
+        Brains["TheBrains — Action dispatch, delta cycle"]
+        Stash["TheStash — Element registry, resolution"]
+        Burglar["TheBurglar — Parse pipeline"]
         Muscle["TheMuscle — Auth & sessions"]
         Safecracker["TheSafecracker — Touch & text"]
         Stakeout["TheStakeout — Recording"]
@@ -48,13 +50,15 @@ graph TD
     TLS --> Server
     STransport --> Server
     Core --> Muscle
-    Core --> Safecracker
     Core --> Stakeout
     Core --> Tripwire
-    Core --> Bagman
+    Core --> Brains
+    Brains --> Stash
+    Brains --> Safecracker
+    Stash --> Burglar
     Core --> STransport
-    Dispatch --> Safecracker
-    Pulse --> Bagman
+    Dispatch --> Brains
+    Pulse --> Brains
     Pulse --> Tripwire
     Screen --> Stakeout
 ```
@@ -63,10 +67,11 @@ graph TD
 
 | File | Purpose |
 |------|---------|
-| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performElementSearch` |
-| `TheInsideJob+Dispatch.swift` | Grouped interaction dispatch: accessibility actions, touch gestures, text+scroll+search |
-| `ScreenManifest.swift` | Full-screen element census: scrolls all containers, records every element, restores scroll positions |
-| `TheStash.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
+| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch |
+| `TheBrains.swift` | Action dispatch, delta cycle, exploration orchestration |
+| `TheBurglar.swift` | Hierarchy parsing, parse/apply pipeline, topology detection |
+| `TheStash.swift` | Element registry, target resolution, wire conversion, screen capture |
+| `ScreenManifest.swift` | Full-screen element census bookkeeping |
 | `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
 | `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
@@ -133,12 +138,12 @@ Every interaction except `elementSearch` flows through this method:
 flowchart TD
     Start["performInteraction(message, interaction)"]
     Start --> S1["1. stakeout?.noteActivity()"]
-    S1 --> S2["2. bagman.refreshAccessibilityData()"]
-    S2 --> S3["3. bagman.snapshotElements() — before"]
+    S1 --> S2["2. brains.refresh()"]
+    S2 --> S3["3. brains.captureBeforeState() — before"]
     S3 --> S3b["4. tripwire.topmostViewController() — beforeVC"]
     S3b --> S4["5. await interaction() — TheSafecracker.*"]
     S4 --> S5{"success?"}
-    S5 -->|yes| S5a["6. await bagman.actionResultWithDelta()"]
+    S5 -->|yes| S5a["6. await brains.actionResultWithDelta()"]
     S5 -->|no| S5b["6. Build failure ActionResult"]
     S5a --> S6{"recording active?"}
     S5b --> S6
@@ -148,7 +153,7 @@ flowchart TD
     S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
 ```
 
-`performElementSearch` is structurally identical but calls `bagman.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
+`performElementSearch` is structurally identical but calls `brains.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
 
 ## Status Message Handling
 
@@ -175,7 +180,7 @@ flowchart LR
 There is **no debounce timer**. The mechanism is entirely pulse-driven:
 - `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
 - the next `.settled` transition fires `handlePulseTransition`
-- `broadcastIfChanged()` refreshes Bagman, compares the snapshot hash, and broadcasts the same shared interface payload path
+- `broadcastIfChanged()` refreshes via TheBrains, compares the snapshot hash, and broadcasts the same shared interface payload path
 
 ### 2. Settle-driven polling (supplementary)
 

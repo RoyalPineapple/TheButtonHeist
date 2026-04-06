@@ -152,7 +152,7 @@ extension TheBrains {
             afterTree: stash.currentHierarchy, isScreenChange: false
         )
 
-        let exploreElements = afterSnapshot.map { stash.toWire($0) }
+        let exploreElements = afterSnapshot.map { TheStash.WireConversion.toWire($0) }
 
         return ActionResult(
             success: true,

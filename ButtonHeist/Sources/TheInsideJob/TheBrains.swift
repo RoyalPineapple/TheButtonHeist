@@ -154,11 +154,6 @@ final class TheBrains {
         exploreCycleIds = nil
     }
 
-    /// Mark elements as presented (for progressive disclosure).
-    func markPresented(_ elements: [TheStash.ScreenElement]) {
-        // presentedHeistIds gate was removed — this is now a no-op placeholder
-        // retained for the interface contract.
-    }
 }
 
 #endif // DEBUG

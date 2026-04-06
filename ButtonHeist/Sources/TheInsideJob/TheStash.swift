@@ -294,55 +294,6 @@ final class TheStash {
         Diagnostics.formatMatcher(matcher)
     }
 
-    // MARK: - Wire Conversion Forwarding
-
-    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
-        WireConversion.traitNames(traits)
-    }
-
-    func convertElement(_ element: AccessibilityElement) -> HeistElement {
-        WireConversion.convert(element)
-    }
-
-    func toWire(_ entry: ScreenElement) -> HeistElement {
-        WireConversion.toWire(entry)
-    }
-
-    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
-        WireConversion.toWire(entries)
-    }
-
-    func convertHierarchyNode(_ node: AccessibilityHierarchy) -> ElementNode {
-        WireConversion.convertNode(node)
-    }
-
-    func computeDelta(
-        before: [ScreenElement],
-        after: [ScreenElement],
-        afterTree: [AccessibilityHierarchy]?,
-        isScreenChange: Bool
-    ) -> InterfaceDelta {
-        WireConversion.computeDelta(before: before, after: after, afterTree: afterTree, isScreenChange: isScreenChange)
-    }
-
-    // MARK: - Id Assignment Forwarding
-
-    func assignHeistIds(_ elements: [AccessibilityElement]) -> [String] {
-        IdAssignment.assign(elements)
-    }
-
-    func synthesizeBaseId(_ element: AccessibilityElement) -> String {
-        IdAssignment.synthesizeBaseId(element)
-    }
-
-    func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
-        IdAssignment.stripTraitPrefix(text, traitPrefix: traitPrefix)
-    }
-
-    func slugify(_ text: String?) -> String? {
-        IdAssignment.slugify(text)
-    }
-
     // MARK: - Element Selection
 
     /// All elements in the registry, sorted by traversal order.

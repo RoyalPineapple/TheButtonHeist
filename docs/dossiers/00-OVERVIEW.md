@@ -20,7 +20,9 @@ Button Heist is a remote iOS UI automation system structured as a heist crew. An
 | [TheMuscle](06-THEMUSCLE.md) | The Bouncer | Authentication, session locking, on-device approval |
 | [TheInsideJob](07-THEINSIDEJOB.md) | The Inside Operative | iOS server coordinator, message dispatch, UI polling, TLS transport |
 | [ThePlant](08-THEPLANT.md) | The Advance Man | Zero-config auto-start via ObjC +load |
-| [TheStash](13-THEBAGMAN.md) | The Score Handler | Element registry, hierarchy parsing, target resolution, action execution (via unified pipeline), scroll orchestration, delta computation, screen capture |
+| [TheStash](13-THESTASH.md) | The Score Handler | Element registry, target resolution, wire conversion, screen capture |
+| [TheBurglar](13a-THEBURGLAR.md) | The Acquisition Specialist | Hierarchy parsing, parse/apply pipeline, topology detection |
+| [TheBrains](13b-THEBRAINS.md) | The Mastermind | Action execution, scroll orchestration, delta cycle, exploration |
 | [TheTripwire](14-THETRIPWIRE.md) | The Early Warning System | Animation detection, VC identity, presentation layer fingerprinting |
 
 ### Cross-Cutting
@@ -60,7 +62,7 @@ graph TD
     TheInsideJob --> TestApp
 ```
 
-> **Note:** TheStash, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
+> **Note:** TheStash, TheBurglar, TheBrains, TheTripwire, TheSafecracker, TheMuscle, TheStakeout, TheFingerprints, and ThePlant are all source groups compiled into the `TheInsideJob` framework target — they are not separate modules. They have separate dossiers because they are architecturally distinct subsystems with clear responsibilities.
 
 ## End-to-End Data Flow
 
@@ -88,10 +90,10 @@ sequenceDiagram
     TH->>DC: send(.activate(target))
     DC->>SS: JSON + newline
     SS->>IJ: handleClientMessage
-    IJ->>IJ: bagman.refreshAccessibilityData()
-    IJ->>IJ: bagman.captureBeforeState() (before)
-    IJ->>IJ: bagman.executeActivate(target)
-    Note over IJ: TheStash resolves target,<br/>hands TheSafecracker resolved values
+    IJ->>IJ: brains.refresh()
+    IJ->>IJ: brains.captureBeforeState() (before)
+    IJ->>IJ: brains.executeCommand(.activate(target))
+    Note over IJ: TheBrains coordinates TheStash (resolve),<br/>TheSafecracker (gesture fallback)
     IJ-->>IJ: InteractionResult
     IJ->>IJ: computeDelta(before, after)
     IJ-->>DC: actionResult(delta)

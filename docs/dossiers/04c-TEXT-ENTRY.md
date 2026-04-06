@@ -82,7 +82,7 @@ Iterates each `Character` in the string (Swift character granularity, not UTF-16
 
 ### Step 5: Readback
 
-Waits 100ms, refreshes the accessibility element cache via `bagman.refreshElements()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
+Waits 100ms, refreshes the accessibility element cache via `brains.refresh()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
 
 ## KeyboardBridge
 

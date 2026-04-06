@@ -1,7 +1,7 @@
 # Scrolling Deep Dive
 
 > **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Scroll.swift` (orchestration), `TheSafecracker+Scroll.swift` (scroll primitives)
-> **Parent dossiers:** [13-THEBAGMAN.md](13-THEBAGMAN.md), [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
+> **Parent dossiers:** [13b-THEBRAINS.md](13b-THEBRAINS.md), [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
 
 TheStash owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when.
 
