@@ -234,7 +234,13 @@ public final class TheFence {
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil
-        default:
+        case .archiveResult(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .ok, .help, .status, .devices, .interface, .action,
+             .screenshotData, .recordingData, .batch, .sessionState,
+             .targets, .sessionLog:
             responseStatus = .ok
             artifactPath = nil
             errorMessage = nil
