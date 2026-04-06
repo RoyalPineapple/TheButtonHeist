@@ -456,11 +456,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(found?.label, "Hidden Button")
     }
 
-    func testHasTargetFindsOffScreenMatcher() {
+    func testHasTargetIgnoresOffScreenMatcherInRegistry() {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
+        // hasTarget checks live hierarchy only — registry-only elements are invisible
+        // so wait_for absent works correctly when elements leave the screen
+        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
     }
 
     func testRegisteredElementResolvesWithoutMarkPresented() {
