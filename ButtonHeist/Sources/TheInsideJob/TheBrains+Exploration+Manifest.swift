@@ -20,6 +20,9 @@ extension TheBrains {
     /// Containers skipped because their accessibility fingerprint matched the cached value.
     var skippedContainers = 0
 
+    /// Containers skipped because they are behind a presented view controller.
+    var skippedObscuredContainers = 0
+
     /// Wall-clock time spent exploring, in seconds.
     var explorationTime: TimeInterval = 0
 

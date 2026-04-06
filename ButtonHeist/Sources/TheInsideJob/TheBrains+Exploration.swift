@@ -68,6 +68,12 @@ extension TheBrains {
                     continue
                 }
 
+                if Self.isObscuredByPresentation(view: view) {
+                    manifest.markExplored(container)
+                    manifest.skippedObscuredContainers += 1
+                    continue
+                }
+
                 let currentFingerprint = containerFingerprints[container] ?? 0
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
@@ -230,6 +236,69 @@ extension TheBrains {
             accumulatedFingerprint: accFingerprint,
             discoveredHeistIds: heistIds
         )
+    }
+
+    // MARK: - Presentation Obscuring
+
+    /// Returns true if the view is behind a presented view controller —
+    /// i.e., the view's owning VC is not the topmost presented VC or
+    /// a descendant of it.
+    static func isObscuredByPresentation(view: UIView) -> Bool {
+        guard let window = view.window,
+              let rootVC = window.rootViewController else {
+            return false
+        }
+
+        // Walk the presentation chain to find the topmost presented VC.
+        var topPresented = rootVC.presentedViewController
+        guard topPresented != nil else {
+            return false
+        }
+        while let next = topPresented?.presentedViewController {
+            topPresented = next
+        }
+
+        // Walk up from the view's nearest VC to see if it's under the presented hierarchy.
+        guard let viewVC = view.nearestViewController else {
+            return true
+        }
+        return !viewVC.isDescendant(of: topPresented!)
+    }
+}
+
+// MARK: - UIView Responder Chain
+
+extension UIView {
+
+    /// Walks the responder chain to find the nearest UIViewController that owns this view.
+    var nearestViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let viewController = next as? UIViewController { return viewController }
+            responder = next
+        }
+        return nil
+    }
+}
+
+// MARK: - UIViewController Hierarchy
+
+extension UIViewController {
+
+    /// Returns true if this view controller is a descendant of the given ancestor —
+    /// checking parent, presenting, navigation, and tab controller chains, as well
+    /// as child view controllers of container types.
+    func isDescendant(of ancestor: UIViewController) -> Bool {
+        if self === ancestor { return true }
+
+        // Check if we're a child of the ancestor's child hierarchy (nav, tab, children)
+        var queue: [UIViewController] = [ancestor]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            if current === self { return true }
+            queue.append(contentsOf: current.children)
+        }
+        return false
     }
 }
 
