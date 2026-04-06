@@ -247,6 +247,7 @@ extension ActionResult {
             elements: exploreElements,
             scrollCount: explore.scrollCount,
             containersExplored: explore.containersExplored,
+            containersSkippedObscured: explore.containersSkippedObscured,
             explorationTime: explore.explorationTime
         )
         return ActionResult(
@@ -298,6 +299,8 @@ public struct ExploreResult: Codable, Sendable {
     public let scrollCount: Int
     /// Number of scrollable containers explored
     public let containersExplored: Int
+    /// Containers skipped because they were behind a presented view controller
+    public let containersSkippedObscured: Int
     /// Wall-clock time spent exploring, in seconds
     public let explorationTime: Double
 
@@ -308,11 +311,13 @@ public struct ExploreResult: Codable, Sendable {
         elements: [HeistElement],
         scrollCount: Int,
         containersExplored: Int,
+        containersSkippedObscured: Int = 0,
         explorationTime: Double
     ) {
         self.elements = elements
         self.scrollCount = scrollCount
         self.containersExplored = containersExplored
+        self.containersSkippedObscured = containersSkippedObscured
         self.explorationTime = explorationTime
     }
 }

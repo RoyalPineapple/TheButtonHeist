@@ -312,7 +312,20 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.elements[0].heistId, "el_0")
         XCTAssertEqual(decoded.scrollCount, 6)
         XCTAssertEqual(decoded.containersExplored, 3)
+        XCTAssertEqual(decoded.containersSkippedObscured, 0)
         XCTAssertEqual(decoded.explorationTime, 1.25)
+    }
+
+    func testExploreResultWithObscuredContainersRoundTrips() throws {
+        let result = ExploreResult(
+            elements: [], scrollCount: 2,
+            containersExplored: 1, containersSkippedObscured: 3,
+            explorationTime: 0.5
+        )
+        let data = try JSONEncoder().encode(result)
+        let decoded = try JSONDecoder().decode(ExploreResult.self, from: data)
+        XCTAssertEqual(decoded.containersSkippedObscured, 3)
+        XCTAssertEqual(decoded.containersExplored, 1)
     }
 
     func testActionResultWithExploreResult() throws {
