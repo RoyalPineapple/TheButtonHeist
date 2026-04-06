@@ -128,14 +128,15 @@ jobs:
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate --no-open
+          tuist generate --no-binary-cache --no-open
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project is out of date. Run 'tuist cache --external-only && tuist generate' and commit the changes."
+            echo "::error::Generated Xcode project is out of date. Run 'tuist generate --no-binary-cache' and commit the changes."
             echo "::group::Diff"
             git diff -- '*.pbxproj' '*.xcworkspacedata'
             echo "::endgroup::"
             exit 1
           }
+          tuist generate --no-open
 
       - name: Run macOS tests
         timeout-minutes: 10
