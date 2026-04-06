@@ -118,6 +118,7 @@ jobs:
         run: echo "sha=$(git ls-tree HEAD submodules/AccessibilitySnapshot | awk '{print $3}')" >> "$GITHUB_OUTPUT"
 
       - name: Cache Tuist binary cache
+        id: tuist-binary-cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
         with:
           path: ~/.cache/tuist/Binaries
@@ -125,19 +126,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
-      - name: Debug binary cache state
-        run: |
-          echo "=== Restored cache directories ==="
-          ls ~/.cache/tuist/Binaries/ 2>/dev/null || echo "No Binaries directory"
-          echo "=== Contents of first hash dir ==="
-          FIRST=$(ls ~/.cache/tuist/Binaries/ 2>/dev/null | head -1)
-          if [ -n "$FIRST" ]; then
-            ls -laR ~/.cache/tuist/Binaries/$FIRST/ | head -30
-          fi
-          echo "=== Tuist expected hashes ==="
-          tuist cache --print-hashes --external-only 2>&1 || true
-
       - name: Warm binary cache for external dependencies
+        if: steps.tuist-binary-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
 
@@ -223,6 +213,7 @@ jobs:
         run: echo "sha=$(git ls-tree HEAD submodules/AccessibilitySnapshot | awk '{print $3}')" >> "$GITHUB_OUTPUT"
 
       - name: Cache Tuist binary cache
+        id: tuist-binary-cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
         with:
           path: ~/.cache/tuist/Binaries
@@ -231,6 +222,7 @@ jobs:
             ${{ runner.os }}-tuist-binaries-
 
       - name: Warm binary cache for external dependencies
+        if: steps.tuist-binary-cache.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: tuist cache --external-only
 
