@@ -133,6 +133,17 @@ fi
 
 echo "==> Phase 2: Bumping version"
 
+# From this point, any failure should revert uncommitted version bumps
+cleanup_version_bump() {
+    if [[ -n $(git status --porcelain) ]]; then
+        echo ""
+        echo "  Reverting uncommitted version bump..."
+        git checkout -- .
+        echo "  ✓ Worktree restored to clean state"
+    fi
+}
+trap cleanup_version_bump EXIT
+
 escape_sed_pattern() {
     printf '%s' "$1" | sed 's/\\/\\\\/g; s/\./\\./g; s/[*\[\]^$+?(){}|]/\\&/g'
 }
@@ -260,6 +271,9 @@ git commit -m "Release $NEW_VERSION"
 git tag "v$NEW_VERSION"
 git push origin HEAD:main
 git push origin "v$NEW_VERSION"
+
+# Version bump is committed — disable the cleanup trap
+trap - EXIT
 
 echo "  ✓ Committed, tagged v$NEW_VERSION, pushed"
 echo ""
