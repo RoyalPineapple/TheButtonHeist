@@ -47,6 +47,14 @@ jobs:
         timeout-minutes: 5
         run: swift build --target TheScore
 
+      - name: Build ButtonHeist
+        timeout-minutes: 5
+        run: swift build --target ButtonHeist
+
+      - name: Build TheInsideJob
+        timeout-minutes: 5
+        run: swift build --target TheInsideJob
+
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 15
