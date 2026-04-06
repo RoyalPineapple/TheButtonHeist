@@ -125,6 +125,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-tuist-binaries-
 
+      - name: Debug binary cache state
+        run: |
+          echo "=== Restored cache directories ==="
+          ls ~/.cache/tuist/Binaries/ 2>/dev/null || echo "No Binaries directory"
+          echo "=== Tuist expected hashes ==="
+          tuist cache --print-hashes --external-only 2>&1 || true
+
       - name: Warm binary cache for external dependencies
         timeout-minutes: 10
         run: tuist cache --external-only
