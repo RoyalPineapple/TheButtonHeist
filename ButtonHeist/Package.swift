@@ -31,7 +31,7 @@ let package = Package(
                 "TheScore",
                 .product(
                     name: "AccessibilitySnapshotParser",
-                    package: "AccessibilitySnapshot",
+                    package: "AccessibilitySnapshotBH",
                     condition: .when(platforms: [.iOS])
                 ),
                 .product(name: "X509", package: "swift-certificates"),
