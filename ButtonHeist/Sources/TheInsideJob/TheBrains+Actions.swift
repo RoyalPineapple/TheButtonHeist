@@ -20,7 +20,7 @@ extension TheBrains {
         target: ElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
-        action: (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
+        action: @MainActor (TheStash.ResolvedTarget) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
         await ensureOnScreen(for: target)
         let resolution = stash.resolveTarget(target)

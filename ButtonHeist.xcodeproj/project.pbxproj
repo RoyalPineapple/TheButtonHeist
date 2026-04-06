@@ -1351,7 +1351,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Owholemodule";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Owholemodule";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1664,7 +1664,7 @@
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphoneos*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=iphonesimulator*]" = "-Onone";
 				"SWIFT_OPTIMIZATION_LEVEL[sdk=macosx*]" = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				"VERSIONING_SYSTEM[sdk=iphoneos*]" = "apple-generic";
 				"VERSIONING_SYSTEM[sdk=iphonesimulator*]" = "apple-generic";
@@ -1726,7 +1726,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1789,7 +1789,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6;
 			};
 			name = Debug;
 		};
