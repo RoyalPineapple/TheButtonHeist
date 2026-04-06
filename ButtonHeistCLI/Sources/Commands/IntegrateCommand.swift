@@ -125,14 +125,38 @@ struct IntegrateCommand: ParsableCommand {
             return derivedDataPath
         }
 
-        throw ValidationError(
-            """
-            TheInsideJob frameworks not found. Build them first:
-              xcodebuild -workspace ButtonHeist.xcworkspace -scheme TheInsideJob \
-                -destination 'generic/platform=iOS Simulator' build
-            Then re-run this command.
-            """
-        )
+        // Report which frameworks are missing and tailor advice to install method
+        let missingFromHomebrew = Self.requiredFrameworks.filter { framework in
+            let path = (homebrewFrameworksDir as NSString).appendingPathComponent(framework)
+            var isDir: ObjCBool = false
+            return !FileManager.default.fileExists(atPath: path, isDirectory: &isDir) || !isDir.boolValue
+        }
+
+        let isHomebrewInstall = binaryDir.contains("/Cellar/") || binaryDir.contains("/homebrew/")
+        let missingList = missingFromHomebrew.map { "  - \($0)" }.joined(separator: "\n")
+
+        if isHomebrewInstall {
+            throw ValidationError(
+                """
+                ButtonHeistFrameworks directory is missing or incomplete.
+                Missing:\n\(missingList)
+
+                Reinstall to get the frameworks:
+                  brew reinstall royalpineapple/tap/buttonheist
+                """
+            )
+        } else {
+            throw ValidationError(
+                """
+                TheInsideJob frameworks not found. Build them first:
+                  xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
+                    -destination 'generic/platform=iOS Simulator' build
+                Then re-run this command.
+
+                Missing:\n\(missingList)
+                """
+            )
+        }
     }
 
     private func hasAllFrameworks(in directory: String) -> Bool {
