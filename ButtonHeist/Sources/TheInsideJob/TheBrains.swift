@@ -83,11 +83,6 @@ final class TheBrains {
                                 screenId: before.snapshot.screenId)
         }
 
-        // Yield a few frames before checking settle so UIKit has time to begin
-        // any resulting animations (e.g. popup dismiss, sheet retract). Without this,
-        // waitForAllClear can see 2 quiet frames before the animation even starts.
-        await tripwire.yieldFrames(3)
-
         let start = CFAbsoluteTimeGetCurrent()
         let settled = await tripwire.waitForAllClear(timeout: 1.0)
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)

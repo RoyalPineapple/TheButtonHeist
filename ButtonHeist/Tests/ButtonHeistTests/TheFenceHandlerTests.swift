@@ -1101,4 +1101,228 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(checked, 0)
         XCTAssertEqual(met, 0)
     }
+
+    // MARK: - Heist Playback
+
+    @ButtonHeistActor
+    private func writeTemporaryHeist(_ heist: HeistPlayback) throws -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+        let heistURL = tempDir.appendingPathComponent("test-\(UUID().uuidString).heist")
+        try TheBookKeeper.writeHeist(heist, to: heistURL)
+        return heistURL
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistMissingInputThrows() async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: ["command": "play_heist"])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("requires an 'input' path"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistPathTraversalThrows() async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: ["command": "play_heist", "input": "/tmp/../etc/passwd"])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid input path"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistEmptyPathThrows() async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            _ = try await fence.execute(request: ["command": "play_heist", "input": ""])
+            XCTFail("Expected FenceError.invalidRequest to be thrown")
+        } catch {
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid input path"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistEmptyStepsCompletesSuccessfully() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertNil(failedIndex)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistExecutesStepsInOrder() async throws {
+        let steps = [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn2")),
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn3")),
+        ]
+        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 3)
+        XCTAssertNil(failedIndex)
+
+        // Verify all three activate commands were sent
+        let activateMessages = mockConn.sent.filter { message, _ in
+            if case .activate = message { return true }
+            return false
+        }
+        XCTAssertEqual(activateMessages.count, 3)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistStopsOnErrorResponse() async throws {
+        // Use a step that triggers a .error FenceResponse (unknown command)
+        // after one successful step
+        let steps = [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "not_a_real_command"),
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn3")),
+        ]
+        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 1)
+        XCTAssertEqual(failedIndex, 1)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistStopsOnFirstStepError() async throws {
+        let steps = [
+            HeistEvidence(command: "not_a_real_command"),
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+        ]
+        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertEqual(failedIndex, 0)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistReentrantGuard() async throws {
+        // Create a heist that itself tries to play another heist (play_heist nested in play_heist)
+        let innerHeist = HeistPlayback(app: "com.test.mock", steps: [])
+        let innerURL = try writeTemporaryHeist(innerHeist)
+        defer { try? FileManager.default.removeItem(at: innerURL) }
+
+        let steps = [
+            HeistEvidence(
+                command: "play_heist",
+                arguments: ["input": .string(innerURL.path)]
+            ),
+        ]
+        let outerHeist = HeistPlayback(app: "com.test.mock", steps: steps)
+        let outerURL = try writeTemporaryHeist(outerHeist)
+        defer { try? FileManager.default.removeItem(at: outerURL) }
+
+        let (fence, _) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": outerURL.path
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        // The nested play_heist should fail (re-entrant guard), stopping playback at step 0
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertEqual(failedIndex, 0)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistReportsTimingMs() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+
+        guard case .heistPlayback(_, _, let totalTimingMs) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertGreaterThanOrEqual(totalTimingMs, 0)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistResetsPhaseAfterCompletion() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, _) = makeConnectedFence()
+        // First playback should succeed
+        let firstResponse = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+        guard case .heistPlayback = firstResponse else {
+            return XCTFail("Expected heistPlayback response")
+        }
+
+        // Second playback should also succeed (phase reset to idle)
+        let secondResponse = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path
+        ])
+        guard case .heistPlayback(let completedSteps, let failedIndex, _) = secondResponse else {
+            return XCTFail("Expected heistPlayback response")
+        }
+        XCTAssertEqual(completedSteps, 1)
+        XCTAssertNil(failedIndex)
+    }
 }
