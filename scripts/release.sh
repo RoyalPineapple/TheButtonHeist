@@ -19,6 +19,7 @@
 #
 # Usage: ./scripts/release.sh [--dry-run] [<version>]
 # Example: ./scripts/release.sh              # Uses today's date: 2026.04.03
+#          ./scripts/release.sh              # Same day again: auto-increments to 2026.04.03.1
 #          ./scripts/release.sh 2026.04.03   # Explicit CalVer
 #          ./scripts/release.sh --dry-run    # Preview only
 #
@@ -39,9 +40,18 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     shift
 fi
 
-# Default to today's date
+# Default to today's date; auto-increment patch if today's version is already released
 if [[ $# -lt 1 ]]; then
-    NEW_VERSION="$(date +%Y.%m.%d)"
+    BASE_DATE="$(date +%Y.%m.%d)"
+    if git tag -l "v$BASE_DATE" | grep -q .; then
+        PATCH=1
+        while git tag -l "v${BASE_DATE}.${PATCH}" | grep -q .; do
+            PATCH=$((PATCH + 1))
+        done
+        NEW_VERSION="${BASE_DATE}.${PATCH}"
+    else
+        NEW_VERSION="$BASE_DATE"
+    fi
 else
     NEW_VERSION="$1"
 fi
@@ -85,13 +95,17 @@ fi
 CURRENT_VERSION=$(grep -o 'buttonHeistVersion = "[^"]*"' ButtonHeist/Sources/TheScore/Messages.swift | cut -d'"' -f2)
 
 if [[ "$CURRENT_VERSION" == "$NEW_VERSION" ]]; then
-    echo "Version is already $NEW_VERSION. Nothing to do."
-    exit 0
+    echo "Error: version is already $NEW_VERSION and tag v$NEW_VERSION exists."
+    echo "  To cut a same-day patch, omit the version argument and the script will auto-increment:"
+    echo "    ./scripts/release.sh"
+    exit 1
 fi
 
 # Tag must not exist
 if [[ -n $(git tag -l "v$NEW_VERSION" 2>/dev/null) ]]; then
     echo "Error: tag v$NEW_VERSION already exists."
+    echo "  To cut a same-day patch, omit the version argument and the script will auto-increment:"
+    echo "    ./scripts/release.sh"
     exit 1
 fi
 
