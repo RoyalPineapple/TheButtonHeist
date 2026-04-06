@@ -149,6 +149,21 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
         return dictionary
     }
+
+    /// Build a scroll_to_visible request from this step's element matcher.
+    /// Used by the playback engine to scroll off-screen elements into view before retrying.
+    public func scrollToVisibleRequest() -> [String: Any] {
+        var request: [String: Any] = ["command": "scroll_to_visible"]
+        if let target {
+            if let label = target.label { request["label"] = label }
+            if let matchIdentifier = target.identifier { request["identifier"] = matchIdentifier }
+            if let matchValue = target.value { request["value"] = matchValue }
+            if let matchTraits = target.traits { request["traits"] = matchTraits.map(\.rawValue) }
+            if let matchExclude = target.excludeTraits { request["excludeTraits"] = matchExclude.map(\.rawValue) }
+        }
+        if let ordinal { request["ordinal"] = ordinal }
+        return request
+    }
 }
 
 // MARK: - Heist Value

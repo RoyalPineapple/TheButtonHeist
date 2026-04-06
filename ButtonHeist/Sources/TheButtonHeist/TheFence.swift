@@ -103,7 +103,12 @@ public final class TheFence {
     let handoff = TheHandoff()
     let bookKeeper = TheBookKeeper()
     private var isStarted = false
-    var isPlayingHeist = false
+    /// Playback phase — prevents re-entrant play_heist calls and tracks the active input path.
+    enum PlaybackPhase {
+        case idle
+        case playing(inputPath: String)
+    }
+    var playbackPhase: PlaybackPhase = .idle
 
     /// Cached interface elements from the most recent get_interface response.
     /// Used by TheBookKeeper to resolve heistIds to element properties for heist recording.
@@ -264,14 +269,19 @@ public final class TheFence {
             logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
 
-        // Update interface cache for heist recording when get_interface returns elements
+        // Update interface cache for heist recording from any response that carries elements:
+        // get_interface returns them directly; actions with screen-change deltas carry newInterface.
         if case .interface(let iface, _, _, _) = response {
             lastInterfaceElements = iface.elements
             bookKeeper.updateInterfaceCache(iface.elements)
+        } else if let actionResult = response.actionResult,
+                  let newInterface = actionResult.interfaceDelta?.newInterface {
+            lastInterfaceElements = newInterface.elements
+            bookKeeper.updateInterfaceCache(newInterface.elements)
         }
 
         // Record the command for heist playback (skip during playback; no-ops when not recording)
-        if !isPlayingHeist {
+        if case .idle = playbackPhase {
             bookKeeper.recordHeistEvidence(
                 command: command,
                 args: request,
