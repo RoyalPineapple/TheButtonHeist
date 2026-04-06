@@ -314,7 +314,7 @@ ButtonHeist/
 ├── ButtonHeistMCP/               # MCP server (Swift Package)
 ├── ButtonHeistCLI/               # CLI tool (Swift Package)
 ├── TestApp/                      # SwiftUI + UIKit test applications
-├── AccessibilitySnapshot/        # Git submodule (hierarchy parsing)
+├── AccessibilitySnapshotBH/      # Git submodule (hierarchy parsing)
 ├── docs/                         # Architecture, API, protocol, auth, USB docs
 │   └── dossiers/                 # Per-module technical documentation
 ```
@@ -357,4 +357,4 @@ Apache License 2.0. See `LICENSE`.
 ## Acknowledgments
 
 - [KIF (Keep It Functional)](https://github.com/kif-framework/KIF). TheSafecracker's touch synthesis is built on KIF's pioneering work in programmatic iOS UI interaction.
-- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot). Used for parsing UIKit accessibility hierarchies.
+- [AccessibilitySnapshot](https://github.com/cashapp/AccessibilitySnapshot). Used for parsing UIKit accessibility hierarchies (via our fork [AccessibilitySnapshotBH](https://github.com/RoyalPineapple/AccessibilitySnapshotBH)).

@@ -5,7 +5,7 @@
       location = "group:../ButtonHeist.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:../submodules/AccessibilitySnapshot/AccessibilitySnapshot.xcodeproj">
+      location = "group:../submodules/AccessibilitySnapshotBH/AccessibilitySnapshot.xcodeproj">
    </FileRef>
    <FileRef
       location = "group:TestApp.xcodeproj">
