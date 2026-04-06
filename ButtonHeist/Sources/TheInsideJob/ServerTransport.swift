@@ -19,7 +19,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// let port = try transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
 /// ```
-public final class ServerTransport: NSObject {
+public final class ServerTransport: NSObject, @unchecked Sendable {
 
     /// The underlying TCP server (actor-isolated).
     public let server: SimpleSocketServer
