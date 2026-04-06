@@ -231,6 +231,10 @@ public final class TheFence {
 
         logResponse(requestId: requestId, response: response, durationMs: lastLatencyMs)
 
+        // Snapshot pre-action elements before updating the cache — elementDisappeared
+        // expectations need to resolve removed heistIds against the pre-action state.
+        let preActionElements = lastInterfaceElements
+
         // Update interface cache for heist recording from any response that carries elements:
         // get_interface returns them directly; actions with screen-change deltas carry newInterface.
         // The cache merges (not replaces) so the activated element survives screen transitions.
@@ -261,7 +265,7 @@ public final class TheFence {
             }
             if let expectation = try parseExpectation(request) {
                 let preActionCache = Dictionary(
-                    lastInterfaceElements.map { ($0.heistId, $0) },
+                    preActionElements.map { ($0.heistId, $0) },
                     uniquingKeysWith: { _, latest in latest }
                 )
                 let validation = expectation.validate(
