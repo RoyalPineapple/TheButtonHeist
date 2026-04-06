@@ -118,7 +118,7 @@ enum ToolDefinitions {
     //   to pick by position: 0 = first match, 1 = second, etc.
     //
     // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
-    // get_screen (screenshots), get_interface(full: true) (full screen census).
+    // get_screen (screenshots).
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -136,11 +136,11 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy. Returns elements with heistId, label, value, \
-            traits, and actions. Use detail=full for geometry (frame, activation point). \
+            Get the current UI element hierarchy. By default, explores the entire screen \
+            including off-screen content in scroll views — every element the app exposes is \
+            returned. Pass full=false for only visible elements (faster, but may miss content \
+            below the fold). Use detail=full for geometry (frame, activation point). \
             Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
-            Set full=true to explore off-screen content in scroll views (scrolls each container \
-            to its limits and back, restoring positions). \
             \
             Every action response includes a delta — use that first: \
             + heistId "label" [traits] = appeared, - heistId = disappeared, \
@@ -165,8 +165,8 @@ enum ToolDefinitions {
                 "full": [
                     "type": "boolean",
                     "description": """
-                        When true, explores the entire screen including off-screen content \
-                        in scroll views. Returns all elements, not just visible ones.
+                        Full exploration is on by default — set to false to return only \
+                        visible elements (faster, but misses off-screen content in scroll views).
                         """,
                 ],
                 "elements": [

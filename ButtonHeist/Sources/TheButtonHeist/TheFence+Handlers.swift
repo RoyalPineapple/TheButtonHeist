@@ -10,9 +10,9 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
-        let full = boolArg(args, "full") == true
+        let full = boolArg(args, "full") ?? true
 
-        // Full mode: explore the screen first, return all discovered elements
+        // Full mode (default): explore the screen, return all discovered elements
         if full {
             let result: ActionResult = try await sendAndAwait(.explore) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.exploreSeconds)
@@ -675,10 +675,8 @@ extension TheFence {
         playbackPhase = .playing(inputPath: resolvedURL.path)
         defer { playbackPhase = .idle }
 
-        // Full explore before playback so off-screen elements are in the registry.
-        // During recording, get_interface with full explore discovers everything;
-        // playback starts cold and would miss elements below the fold.
-        _ = try await execute(request: ["command": "get_interface", "full": true])
+        // Prime the registry before playback — get_interface defaults to full exploration
+        _ = try await execute(request: ["command": "get_interface"])
 
         for (index, step) in heist.steps.enumerated() {
             let request = step.toRequestDictionary()
