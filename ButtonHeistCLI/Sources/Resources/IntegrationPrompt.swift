@@ -6,12 +6,331 @@ enum IntegrationPrompt {
     in-app server that lets AI agents (and humans) control the app via CLI or MCP.
 
     No initialization code is needed — the framework auto-starts via an ObjC +load
-    hook when the binary is linked. You just need to: copy the frameworks, wire them
-    into the build, add the import, and add Info.plist entries.
+    hook when the binary is linked. You just need to: wire the dependency, add the
+    import, and add Info.plist entries.
 
     **Important:** TheInsideJob requires iOS 17.0+.
 
-    ## Prebuilt frameworks
+    ## Step 1: Identify the build system
+
+    Examine the project root to determine which build system is in use. Check for
+    these files, in order:
+
+    | File(s) present | Build system |
+    |---|---|
+    | `MODULE.bazel` or `WORKSPACE.bazel` + `BUILD.bazel` files + `Package.swift` | **Bazel + SPM** |
+    | `MODULE.bazel` or `WORKSPACE.bazel` + `BUILD.bazel` files (no `Package.swift`) | **Bazel (manual)** |
+    | `Project.swift` or `Tuist/` directory | **Tuist** |
+    | `project.yml` | **XcodeGen** |
+    | `Podfile` | **CocoaPods** |
+    | `Package.swift` at root (no Bazel files) + `.xcodeproj` | **SPM + Xcode** |
+    | Only `.xcodeproj` or `.xcworkspace` | **Xcode project (manual)** |
+
+    Projects may use combinations (e.g. CocoaPods + Xcode, Tuist + SPM). If
+    multiple signals are present, follow the primary build system's path and adapt.
+
+    ## Step 2: Identify the app target
+
+    Find the main iOS application target — the one that produces a .app bundle.
+    Skip test targets, app extensions (widgets, intents, share extensions), watch
+    apps, and framework/library targets.
+
+    If there are multiple app targets (e.g. a debug app and a production app),
+    prefer the debug/development target. If unclear, ask the user which target.
+
+    ## Step 3: Add the dependency
+
+    Follow the section matching your detected build system.
+
+    ---
+
+    ### Path A: Swift Package Manager (Xcode-managed)
+
+    For projects using SPM through Xcode's built-in package management.
+
+    **Detection:** `Package.swift` at root or SPM packages visible in
+    `.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/`.
+
+    1. Add to `Package.swift` dependencies:
+
+    ```swift
+    .package(url: "https://github.com/RoyalPineapple/TheButtonHeist", from: "{{VERSION}}"),
+    ```
+
+    2. Add the product to the app target's dependencies:
+
+    ```swift
+    .product(name: "TheInsideJob", package: "TheButtonHeist"),
+    ```
+
+    3. If the project uses Xcode's GUI-managed packages (no root `Package.swift`),
+       instruct the user to add it via File > Add Package Dependencies in Xcode.
+
+    **Conflict warning:** If the project already depends on
+    `CashApp/AccessibilitySnapshot`, there will be a package name collision with
+    TheButtonHeist's fork dependency. The fork must use a distinct package name,
+    or the project must switch to the fork.
+
+    ---
+
+    ### Path B: CocoaPods
+
+    **Detection:** `Podfile` at the project root.
+
+    1. Add to the app target in `Podfile`:
+
+    ```ruby
+    target 'YourApp' do
+      pod 'TheButtonHeist', :git => 'https://github.com/RoyalPineapple/TheButtonHeist.git', :tag => '{{VERSION}}'
+    end
+    ```
+
+    If TheButtonHeist publishes a podspec to trunk, use the simpler form:
+
+    ```ruby
+    pod 'TheButtonHeist', '~> {{VERSION}}'
+    ```
+
+    2. For debug-only linking, wrap in a configuration condition:
+
+    ```ruby
+    pod 'TheButtonHeist', :git => 'https://github.com/RoyalPineapple/TheButtonHeist.git', :tag => '{{VERSION}}', :configurations => ['Debug']
+    ```
+
+    3. Run:
+
+    ```bash
+    pod install
+    ```
+
+    4. Open the `.xcworkspace` (not `.xcodeproj`) going forward.
+
+    ---
+
+    ### Path C: Tuist
+
+    **Detection:** `Project.swift` or `Tuist/` directory at the project root.
+
+    1. Add the external dependency in `Tuist/Package.swift` (or wherever Tuist
+       manages external dependencies):
+
+    ```swift
+    .package(url: "https://github.com/RoyalPineapple/TheButtonHeist", from: "{{VERSION}}"),
+    ```
+
+    2. In `Project.swift`, add TheInsideJob as a dependency of the app target:
+
+    ```swift
+    .target(
+        name: "YourApp",
+        dependencies: [
+            .external(name: "TheInsideJob"),
+            // ... existing deps
+        ],
+    )
+    ```
+
+    3. Fetch and resolve:
+
+    ```bash
+    tuist install
+    ```
+
+    4. Regenerate the project:
+
+    ```bash
+    tuist generate
+    ```
+
+    ---
+
+    ### Path D: XcodeGen
+
+    **Detection:** `project.yml` at the project root.
+
+    1. Add TheButtonHeist as a Swift Package in `project.yml`:
+
+    ```yaml
+    packages:
+      TheButtonHeist:
+        url: https://github.com/RoyalPineapple/TheButtonHeist
+        from: "{{VERSION}}"
+    ```
+
+    2. Add the dependency to the app target:
+
+    ```yaml
+    targets:
+      YourApp:
+        dependencies:
+          - package: TheButtonHeist
+            product: TheInsideJob
+    ```
+
+    3. Regenerate the project:
+
+    ```bash
+    xcodegen generate
+    ```
+
+    ---
+
+    ### Path E: Bazel + SPM (`rules_swift_package_manager`)
+
+    **Detection:** `MODULE.bazel` + `Package.swift` at root, `BUILD.bazel` files
+    throughout, possibly a `Packages/` directory with auto-generated wrappers.
+
+    1. Add to `Package.swift` dependencies:
+
+    ```swift
+    .package(url: "https://github.com/RoyalPineapple/TheButtonHeist", from: "{{VERSION}}"),
+    ```
+
+    2. Resolve dependencies using the project's resolve command. Common patterns:
+
+    ```bash
+    # If the project has a custom resolve script:
+    sq package resolve
+    # Or directly:
+    bazel run @swift_package//:resolve
+    # Or:
+    swift package resolve
+    ```
+
+    3. Add to `MODULE.bazel` in the `use_repo(swift_deps, ...)` block, in
+       alphabetical order:
+
+    ```starlark
+    "swiftpkg_thebuttonheist",
+    ```
+
+    4. Generate Bazel wrappers if the project uses them. Look for a generation
+       script (e.g. `Scripts/SwiftPM/generate_swiftpm_dependency_wrappers.rb` or
+       similar). This creates `Packages/thebuttonheist/BUILD.bazel`.
+
+    5. Wire as a **debug-only** dependency. Bazel projects typically use a
+       `select()` mechanism for debug-only deps. Search for where other debug
+       frameworks are linked (Reveal, FLEX, FloatingPerformanceMonitor). Look for
+       patterns like:
+
+    ```starlark
+    deps = some_select(
+        debug = [
+            "//Packages/ios-reveal-sdk:Reveal-SDK",
+        ],
+        default = [...],
+    )
+    ```
+
+    Add TheInsideJob to the debug list:
+
+    ```starlark
+    "//Packages/thebuttonheist:TheInsideJob",
+    ```
+
+    If there is no debug/release selection mechanism, add it to the regular `deps`.
+
+    **Conflict warning:** Same AccessibilitySnapshot collision risk as Path A.
+
+    **What NOT to do in Bazel projects:**
+    - Do NOT edit `.pbxproj` files — Bazel projects generate Xcode projects
+    - Do NOT copy/vendor frameworks manually — use the SPM integration
+    - Do NOT modify `BUILD.bazel` dependency lists by hand for SPM packages — use
+      the project's wrapper generation tooling
+
+    ---
+
+    ### Path F: Bazel (manual, no SPM)
+
+    **Detection:** `MODULE.bazel` or `WORKSPACE.bazel` + `BUILD.bazel` files, but
+    no `Package.swift` for dependency management.
+
+    This requires vendoring the prebuilt frameworks.
+
+    1. Copy the prebuilt frameworks into the project:
+
+    ```bash
+    mkdir -p Vendor/ButtonHeist
+    cp -R {{FRAMEWORKS_PATH}}/*.framework Vendor/ButtonHeist/
+    ```
+
+    2. Create a `Vendor/ButtonHeist/BUILD.bazel`:
+
+    ```starlark
+    load(
+        "@build_bazel_rules_apple//apple:apple.bzl",
+        "apple_dynamic_framework_import",
+    )
+
+    FRAMEWORKS = [
+        "TheInsideJob",
+        "TheScore",
+        "AccessibilitySnapshotParser",
+        "AccessibilitySnapshotParser_ObjC",
+        "X509",
+        "Crypto",
+        "SwiftASN1",
+        "CCryptoBoringSSL",
+        "CCryptoBoringSSLShims",
+        "CryptoBoringWrapper",
+        "_CertificateInternals",
+        "_CryptoExtras",
+    ]
+
+    [apple_dynamic_framework_import(
+        name = fw + "-import",
+        framework_imports = glob([fw + ".framework/**"]),
+        visibility = ["//visibility:private"],
+    ) for fw in FRAMEWORKS]
+
+    objc_library(
+        name = "TheInsideJob",
+        deps = [fw + "-import" for fw in FRAMEWORKS],
+        visibility = ["//visibility:public"],
+    )
+    ```
+
+    3. Add `//Vendor/ButtonHeist:TheInsideJob` to the app target's `deps`.
+
+    4. If `bitcode_strip` fails during the build, pre-strip the frameworks:
+
+    ```bash
+    for fw in Vendor/ButtonHeist/*.framework; do
+      name=$(basename "$fw" .framework)
+      xcrun bitcode_strip "$fw/$name" -r -o "$fw/$name.tmp" 2>/dev/null && mv "$fw/$name.tmp" "$fw/$name"
+    done
+    ```
+
+    ---
+
+    ### Path G: Buck / Buck2
+
+    **Detection:** `BUCK` or `TARGETS` files, `.buckconfig` at root.
+
+    1. Add the prebuilt frameworks (same as Path F step 1).
+
+    2. Create a `BUCK` file in the vendor directory:
+
+    ```python
+    prebuilt_apple_framework(
+        name = "TheInsideJob",
+        framework = "TheInsideJob.framework",
+        preferred_linkage = "shared",
+        visibility = ["PUBLIC"],
+    )
+    ```
+
+    Repeat for each framework, or create a wrapper rule that depends on all of them.
+
+    3. Add the dependency to the app target's `deps`.
+
+    ---
+
+    ### Path H: Xcode project (manual)
+
+    For projects with only `.xcodeproj` / `.xcworkspace` and no package manager.
+
+    #### Prebuilt frameworks
 
     The prebuilt frameworks are at:
 
@@ -37,115 +356,43 @@ enum IntegrationPrompt {
     - `_CertificateInternals.framework`
     - `_CryptoExtras.framework`
 
-    ## Step 1: Identify the app target
-
-    Find the main iOS application target — the one that produces a .app bundle.
-    Skip test targets, app extensions (widgets, intents, share extensions), watch
-    apps, and framework/library targets.
-
-    If there are multiple app targets (e.g. a debug app and a production app),
-    prefer the debug/development target. If unclear, ask the user which target.
-
-    ## Step 2: Copy frameworks into the project
-
-    Create a `ButtonHeistFrameworks/` directory inside the project and copy all
-    the frameworks into it:
+    #### Copy frameworks into the project
 
     ```bash
     mkdir -p ButtonHeistFrameworks
-    cp -R {{FRAMEWORKS_PATH}}/TheInsideJob.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/TheScore.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/AccessibilitySnapshotParser.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/AccessibilitySnapshotParser_ObjC.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/X509.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/Crypto.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/SwiftASN1.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/CCryptoBoringSSL.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/CCryptoBoringSSLShims.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/CryptoBoringWrapper.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/_CertificateInternals.framework ButtonHeistFrameworks/
-    cp -R {{FRAMEWORKS_PATH}}/_CryptoExtras.framework ButtonHeistFrameworks/
+    cp -R {{FRAMEWORKS_PATH}}/*.framework ButtonHeistFrameworks/
     ```
 
-    ## Step 3: Wire frameworks into the Xcode project
+    #### Wire frameworks into the Xcode project
 
-    Edit the `project.pbxproj` file to add the frameworks. This is a plain-text
-    plist file. You need to add several entries. Study the existing framework
-    references in the file to match the exact style.
+    Edit the `project.pbxproj` file. Study existing framework references to match
+    the exact style. **Generate unique 24-character hex IDs** for each new object.
 
-    **Generate unique 24-character hex IDs** for each new object. Look at existing
-    IDs in the file and ensure yours don't collide.
+    For each of the 12 frameworks, add:
 
-    For each framework, you need:
-
-    ### 3a. PBXFileReference (one per framework)
-
-    Add in the `/* Begin PBXFileReference section */`:
+    1. **PBXFileReference** in `/* Begin PBXFileReference section */`:
 
     ```
-    		<FILE_REF_ID> /* TheInsideJob.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TheInsideJob.framework; path = ButtonHeistFrameworks/TheInsideJob.framework; sourceTree = "<group>"; };
+    <ID> /* Foo.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foo.framework; path = ButtonHeistFrameworks/Foo.framework; sourceTree = "<group>"; };
     ```
 
-    ### 3b. PBXGroup
+    2. **PBXGroup** — add file references to an existing "Frameworks" group or
+       create a new "ButtonHeistFrameworks" group.
 
-    Add the file references to an existing group (like "Frameworks") or create a
-    new "ButtonHeistFrameworks" group and add it to the main group's children.
-
-    ### 3c. PBXBuildFile (two per framework — link + embed)
-
-    Each framework needs two build file entries:
+    3. **PBXBuildFile** — two per framework (link + embed):
 
     ```
-    		<LINK_BUILD_FILE_ID> /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = <FILE_REF_ID> /* TheInsideJob.framework */; };
-    		<EMBED_BUILD_FILE_ID> /* TheInsideJob.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = <FILE_REF_ID> /* TheInsideJob.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+    <LINK_ID> /* Foo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = <ID>; };
+    <EMBED_ID> /* Foo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = <ID>; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
     ```
 
-    ### 3d. Add to the app target's Frameworks build phase
+    4. **PBXFrameworksBuildPhase** — add the link build file ID.
 
-    Find the `PBXFrameworksBuildPhase` for the app target and add:
+    5. **PBXCopyFilesBuildPhase** (`dstSubfolderSpec = 10`) — add the embed build
+       file ID. Create this phase if it doesn't exist.
 
-    ```
-    		<LINK_BUILD_FILE_ID> /* TheInsideJob.framework in Frameworks */,
-    ```
-
-    ### 3e. Add or create an Embed Frameworks build phase
-
-    Find or create a `PBXCopyFilesBuildPhase` with `dstSubfolderSpec = 10` (Frameworks)
-    for the app target. Add all the embed build file IDs:
-
-    ```
-    		<EMBED_BUILD_FILE_ID> /* TheInsideJob.framework in Embed Frameworks */,
-    ```
-
-    If creating the phase:
-
-    ```
-    		<COPY_PHASE_ID> /* Embed Frameworks */ = {
-    			isa = PBXCopyFilesBuildPhase;
-    			buildActionMask = 2147483647;
-    			dstPath = "";
-    			dstSubfolderSpec = 10;
-    			files = (
-    				<EMBED_BUILD_FILE_IDS...>
-    			);
-    			name = "Embed Frameworks";
-    			runOnlyForDeploymentPostprocessing = 0;
-    		};
-    ```
-
-    And add `<COPY_PHASE_ID>` to the target's `buildPhases` array.
-
-    ### 3f. Add framework search path
-
-    Add to the app target's build settings (in the `XCBuildConfiguration` objects
-    for both Debug and Release):
-
-    ```
-    FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/ButtonHeistFrameworks";
-    ```
-
-    If there's already a `FRAMEWORK_SEARCH_PATHS`, append to it. The value is an
-    array:
+    6. **Framework search path** — add to `FRAMEWORK_SEARCH_PATHS` in both Debug
+       and Release build configurations:
 
     ```
     FRAMEWORK_SEARCH_PATHS = (
@@ -154,30 +401,11 @@ enum IntegrationPrompt {
     );
     ```
 
-    **Repeat steps 3a–3e for ALL 12 frameworks listed above.** Every framework must
-    have file references, build files, link phase entries, and embed phase entries.
+    ---
 
     ## Step 4: Add the import
 
-    Find the app entry point. Look for these patterns:
-
-    **SwiftUI app:**
-    ```swift
-    @main
-    struct SomeApp: App {
-    ```
-
-    **UIKit AppDelegate:**
-    ```swift
-    @main
-    class AppDelegate: UIResponder, UIApplicationDelegate {
-    ```
-    or
-    ```swift
-    @UIApplicationMain
-    class AppDelegate: UIResponder, UIApplicationDelegate {
-    ```
-
+    Find the app entry point (`@main struct ... App` or `@main class AppDelegate`).
     Add the import wrapped in a DEBUG guard:
 
     ```swift
@@ -190,8 +418,8 @@ enum IntegrationPrompt {
 
     ## Step 5: Info.plist entries
 
-    TheInsideJob uses Bonjour for device discovery. iOS requires two Info.plist
-    keys for local network access:
+    TheInsideJob uses Bonjour for device discovery. Add these keys to the app's
+    Info.plist:
 
     ```xml
     <key>NSLocalNetworkUsageDescription</key>
@@ -202,50 +430,56 @@ enum IntegrationPrompt {
     </array>
     ```
 
-    Find the app Info.plist (check the target build settings for `INFOPLIST_FILE`)
-    and add the keys directly.
+    **Important:** If the app already has `NSBonjourServices`, **append**
+    `_buttonheist._tcp` to the existing array — do not replace it. If the app
+    already has `NSLocalNetworkUsageDescription`, leave the existing string as-is.
 
-    If there is no Info.plist file and the target uses `GENERATE_INFOPLIST_FILE = YES`,
-    add the keys via build settings in the pbxproj:
+    If there is no Info.plist and the target uses `GENERATE_INFOPLIST_FILE = YES`,
+    add the keys via build settings:
 
     ```
     INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Button Heist uses the local network for UI automation.";
     INFOPLIST_KEY_NSBonjourServices = _buttonheist._tcp;
     ```
 
-    **Important:** If the app already has `NSBonjourServices`, append
-    `_buttonheist._tcp` to the existing array — do not replace it.
-
     ## Step 6: Verify the build
 
-    Run a build to confirm everything compiles. Use **absolute paths** in the command:
+    Build the project using whatever build system was detected:
 
     ```bash
-    xcodebuild -project <absolute/path/to/project.xcodeproj> -scheme <AppScheme> \
-      -destination 'generic/platform=iOS Simulator' build
-    ```
+    # SPM / Xcode
+    xcodebuild -project <path.xcodeproj> -scheme <Scheme> -destination 'generic/platform=iOS Simulator' build
 
-    Or if there's an `.xcworkspace`:
+    # CocoaPods
+    xcodebuild -workspace <path.xcworkspace> -scheme <Scheme> -destination 'generic/platform=iOS Simulator' build
 
-    ```bash
-    xcodebuild -workspace <absolute/path/to/workspace.xcworkspace> -scheme <AppScheme> \
-      -destination 'generic/platform=iOS Simulator' build
+    # Tuist
+    tuist build
+
+    # Bazel
+    bazel build //<target> --swiftcopt=-Xfrontend --swiftcopt=-suppress-warnings
+
+    # Buck2
+    buck2 build //<target>
     ```
 
     Do not use `swift build` for iOS projects — it does not have access to iOS SDKs.
 
     If the build fails, read the error and fix it. Common issues:
-    - Missing framework search path
-    - Framework not embedded (link vs embed)
+    - Missing framework search path (Xcode manual path)
+    - Framework not embedded — link vs embed (Xcode manual path)
     - Minimum deployment target too low (requires iOS 17.0+)
+    - AccessibilitySnapshot package name collision (SPM-based paths)
+    - `bitcode_strip` failures on vendored frameworks (Bazel manual path)
 
     ## Step 7: Print summary
 
     After successful integration, print:
-    - What files you changed
-    - How to build and run the app — use **absolute paths** in all commands
+    - Which build system was detected
+    - What files were changed
+    - How to build and run the app
     - How to connect: `buttonheist list` then `buttonheist session`
-    - Note that .mcp.json is configured (if it exists) for AI agent access
+    - Note that .mcp.json should be configured for AI agent access
 
     Be concise. Make the minimal changes needed. Do not refactor, rename, or
     "improve" anything else in the project.
