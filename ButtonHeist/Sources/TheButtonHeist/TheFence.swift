@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "bookkeeper")
 
 /// Errors thrown by TheFence during command dispatch, connection, and action execution.
 public enum FenceError: Error, LocalizedError {
@@ -186,20 +189,31 @@ public final class TheFence {
         }
 
         let requestId = (request["requestId"] as? String) ?? UUID().uuidString
-        try? bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
+        do {
+            try bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
+        } catch {
+            logger.warning("Failed to log command \(command.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+
+        var dispatchArgs = request
+        dispatchArgs["_requestId"] = requestId
 
         let start = CFAbsoluteTimeGetCurrent()
         let response: FenceResponse
         do {
-            response = try await dispatch(command: command, args: request)
+            response = try await dispatch(command: command, args: dispatchArgs)
         } catch {
             let durationMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-            try? bookKeeper.logResponse(
-                requestId: requestId,
-                status: .error,
-                durationMilliseconds: durationMs,
-                error: error.localizedDescription
-            )
+            do {
+                try bookKeeper.logResponse(
+                    requestId: requestId,
+                    status: .error,
+                    durationMilliseconds: durationMs,
+                    error: error.localizedDescription
+                )
+            } catch let logError {
+                logger.warning("Failed to log error response for \(requestId, privacy: .public): \(logError.localizedDescription, privacy: .public)")
+            }
             throw error
         }
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
@@ -225,13 +239,17 @@ public final class TheFence {
             artifactPath = nil
             errorMessage = nil
         }
-        try? bookKeeper.logResponse(
-            requestId: requestId,
-            status: responseStatus,
-            durationMilliseconds: lastLatencyMs,
-            artifact: artifactPath,
-            error: errorMessage
-        )
+        do {
+            try bookKeeper.logResponse(
+                requestId: requestId,
+                status: responseStatus,
+                durationMilliseconds: lastLatencyMs,
+                artifact: artifactPath,
+                error: errorMessage
+            )
+        } catch {
+            logger.warning("Failed to log response for \(requestId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
 
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {
