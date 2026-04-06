@@ -14,7 +14,7 @@ let package = Package(
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
     ],
     dependencies: [
-        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshot", revision: "6b81a2a6000f5c736aed10a5cf1194811316064a"),
+        .package(url: "https://github.com/RoyalPineapple/AccessibilitySnapshotBH", revision: "f6093b7b0d103a7e453a96a225aaffcb353a4605"),
         .package(url: "https://github.com/apple/swift-certificates", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0"),
     ],
@@ -31,7 +31,7 @@ let package = Package(
                 "TheScore",
                 .product(
                     name: "AccessibilitySnapshotParser",
-                    package: "AccessibilitySnapshot",
+                    package: "AccessibilitySnapshotBH",
                     condition: .when(platforms: [.iOS])
                 ),
                 .product(name: "X509", package: "swift-certificates"),
