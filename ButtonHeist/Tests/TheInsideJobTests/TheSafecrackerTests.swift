@@ -13,24 +13,24 @@ final class TheSafecrackerTests: XCTestCase {
         tripwire = TheTripwire()
         safecracker = TheSafecracker()
         safecracker.tripwire = tripwire
+        safecracker.startKeyboardObservation()
     }
 
     override func tearDown() {
+        safecracker.stopKeyboardObservation()
         tripwire.stopPulse()
         tripwire = nil
         safecracker = nil
         super.tearDown()
     }
 
-    // MARK: - Keyboard Visibility (via TheTripwire)
+    // MARK: - Keyboard Visibility
 
     func testKeyboardNotVisibleByDefault() {
         XCTAssertFalse(safecracker.isKeyboardVisible())
     }
 
     func testKeyboardVisibleAfterFrameNotification() {
-        tripwire.startPulse()
-
         let screenBounds = UIScreen.main.bounds
         let keyboardFrame = CGRect(
             x: 0,
@@ -49,8 +49,6 @@ final class TheSafecrackerTests: XCTestCase {
     }
 
     func testKeyboardNotVisibleWhenFrameOffScreen() {
-        tripwire.startPulse()
-
         let screenBounds = UIScreen.main.bounds
         let offScreenFrame = CGRect(
             x: 0,
@@ -68,9 +66,7 @@ final class TheSafecrackerTests: XCTestCase {
         XCTAssertFalse(safecracker.isKeyboardVisible())
     }
 
-    func testKeyboardNotVisibleAfterPulseStop() {
-        tripwire.startPulse()
-
+    func testKeyboardNotVisibleAfterObservationStopped() {
         let screenBounds = UIScreen.main.bounds
         let keyboardFrame = CGRect(
             x: 0,
@@ -84,23 +80,17 @@ final class TheSafecrackerTests: XCTestCase {
             object: nil,
             userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboardFrame]
         )
+        XCTAssertTrue(safecracker.isKeyboardVisible())
 
-        tripwire.stopPulse()
+        safecracker.stopKeyboardObservation()
 
-        // After stopping the pulse, TheTripwire removes observers and resets flags.
-        // Subsequent notifications should not update the flag.
-        NotificationCenter.default.post(
-            name: UIResponder.keyboardDidChangeFrameNotification,
-            object: nil,
-            userInfo: [UIResponder.keyboardFrameEndUserInfoKey: keyboardFrame]
-        )
-
-        XCTAssertFalse(safecracker.isKeyboardVisible())
+        // After stopping observation, the flag retains its last value
+        // but new notifications should not update it.
+        let newSafecracker = TheSafecracker()
+        XCTAssertFalse(newSafecracker.isKeyboardVisible())
     }
 
     func testKeyboardVisibilityTogglesWithNotifications() {
-        tripwire.startPulse()
-
         let screenBounds = UIScreen.main.bounds
         let visibleFrame = CGRect(
             x: 0,

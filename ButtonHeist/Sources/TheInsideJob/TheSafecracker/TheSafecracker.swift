@@ -24,6 +24,47 @@ final class TheSafecracker {
     /// Used by ensureOnScreen to wait for scroll animations to settle.
     weak var tripwire: TheTripwire?
 
+    // MARK: - Keyboard State
+
+    /// Whether the software keyboard is currently visible. Updated via
+    /// keyboard notifications — no polling needed.
+    private(set) var keyboardVisibleFlag = false
+
+    func startKeyboardObservation() {
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(keyboardFrameDidChange),
+                           name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardWillShow),
+                           name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardDidHide),
+                           name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    func stopKeyboardObservation() {
+        let center = NotificationCenter.default
+        center.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    @objc private func keyboardFrameDidChange(_ notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let screenBounds = notification.object
+            .flatMap { $0 as? UIScreen }?.bounds
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.screen.bounds
+            ?? .zero
+        keyboardVisibleFlag = endFrame.intersects(screenBounds)
+            && endFrame.height > 0
+            && endFrame.origin.y < screenBounds.height
+    }
+
+    @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
+    @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
+
     // MARK: - Fingerprints
 
     /// Visual interaction indicators for taps and gesture tracking.
@@ -244,11 +285,11 @@ final class TheSafecracker {
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
-    /// Reads the notification-driven flag from TheTripwire (frame-based
-    /// detection, matching KIF's approach) with a fallback to
-    /// KeyboardBridge for hardware keyboard scenarios.
+    /// Reads the notification-driven flag (frame-based detection, matching
+    /// KIF's approach) with a fallback to KeyboardBridge for hardware
+    /// keyboard scenarios.
     func isKeyboardVisible() -> Bool {
-        if let tripwire, tripwire.keyboardVisibleFlag { return true }
+        if keyboardVisibleFlag { return true }
         return KeyboardBridge.shared()?.hasActiveInput ?? false
     }
 
@@ -275,26 +316,18 @@ final class TheSafecracker {
         return true
     }
 
-    /// Clear all text in the focused text input using UITextInput select-all + delete.
-    /// Uses UITextInput protocol directly — works with UITextField, UITextView,
-    /// and any custom UITextInput conformer.
+    /// Clear all text in the focused text input using select-all + delete.
+    /// Routes through the responder chain — no view hierarchy walk needed.
     func clearText() async -> Bool {
-        guard let textInput = firstResponderView() as? (any UITextInput) else {
-            return false
-        }
-
-        let start = textInput.beginningOfDocument
-        let end = textInput.endOfDocument
-        guard let fullRange = textInput.textRange(from: start, to: end) else { return true }
-        if fullRange.isEmpty { return true }
-        textInput.selectedTextRange = fullRange
-        // Brief yield so the selection registers before delete
+        // Select all via responder chain
+        UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.selectAll), to: nil, from: nil, for: nil)
         try? await Task.sleep(for: Self.selectionSettleDelay)
 
+        // Delete via keyboard bridge (preferred) or responder chain
         if let keyboard = KeyboardBridge.shared() {
             keyboard.deleteBackward()
         } else {
-            textInput.deleteBackward()
+            return false
         }
         return true
     }
@@ -309,31 +342,9 @@ final class TheSafecracker {
     }
 
     /// Resign first responder, dismissing the keyboard if visible.
+    /// Routes through the responder chain — no view hierarchy walk needed.
     func resignFirstResponder() -> Bool {
-        guard let responder = firstResponderView() else { return false }
-        responder.resignFirstResponder()
-        return true
-    }
-
-    // MARK: - First Responder
-
-    /// Find the first responder view across all windows in the active scene.
-    func firstResponderView() -> UIView? {
-        let allWindows: [UIWindow] = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        for window in allWindows {
-            if let found = findFirstResponder(in: window) { return found }
-        }
-        return nil
-    }
-
-    func findFirstResponder(in view: UIView) -> UIView? {
-        if view.isFirstResponder { return view }
-        for sub in view.subviews {
-            if let found = findFirstResponder(in: sub) { return found }
-        }
-        return nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     // MARK: - Public: Text Input Readiness

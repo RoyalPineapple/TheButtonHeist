@@ -24,7 +24,7 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 graph TD
     subgraph TheInsideJob["TheInsideJob (Singleton, @MainActor)"]
         Core["TheInsideJob.swift — Server lifecycle, message dispatch, performInteraction"]
-        Dispatch["TheInsideJob+Dispatch.swift — 3-part interaction dispatch table"]
+        Dispatch["TheInsideJob+Dispatch.swift — Grouped interaction dispatch"]
         Pulse["Extensions/Pulse.swift — Invalidation, pulse transitions, settle-driven polling"]
         Anim["Extensions/Animation.swift — waitForIdle handler"]
         Screen["Extensions/Screen.swift — Screenshot capture, recording mgmt"]
@@ -33,7 +33,9 @@ graph TD
 
     subgraph Crew["Crew Members (Owned)"]
         Tripwire["TheTripwire — UI pulse, settle detection"]
-        Bagman["TheBagman — Element cache, hierarchy, delta"]
+        Brains["TheBrains — Action dispatch, delta cycle"]
+        Stash["TheStash — Element registry, resolution"]
+        Burglar["TheBurglar — Parse pipeline"]
         Muscle["TheMuscle — Auth & sessions"]
         Safecracker["TheSafecracker — Touch & text"]
         Stakeout["TheStakeout — Recording"]
@@ -48,13 +50,15 @@ graph TD
     TLS --> Server
     STransport --> Server
     Core --> Muscle
-    Core --> Safecracker
     Core --> Stakeout
     Core --> Tripwire
-    Core --> Bagman
+    Core --> Brains
+    Brains --> Stash
+    Brains --> Safecracker
+    Stash --> Burglar
     Core --> STransport
-    Dispatch --> Safecracker
-    Pulse --> Bagman
+    Dispatch --> Brains
+    Pulse --> Brains
     Pulse --> Tripwire
     Screen --> Stakeout
 ```
@@ -63,10 +67,11 @@ graph TD
 
 | File | Purpose |
 |------|---------|
-| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch, `performInteraction`, `performScrollToVisibleSearch` |
-| `TheInsideJob+Dispatch.swift` | Three-part interaction dispatch: accessibility, touch, text+scroll |
-| `ScreenManifest.swift` | Full-screen element census: scrolls all containers, records every element, restores scroll positions |
-| `TheBagman.swift` | Element cache, hierarchy parsing, delta computation, animation detection, screen capture |
+| `TheInsideJob.swift` | Core lifecycle, server wiring, message dispatch |
+| `TheBrains.swift` | Action dispatch, delta cycle, exploration orchestration |
+| `TheBurglar.swift` | Hierarchy parsing, parse/apply pipeline, topology detection |
+| `TheStash.swift` | Element registry, target resolution, wire conversion, screen capture |
+| `ScreenManifest.swift` | Full-screen element census bookkeeping |
 | `Extensions/Pulse.swift` | `scheduleHierarchyUpdate`, `handlePulseTransition`, `startPollingLoop`, `broadcastIfChanged`, `sendInterface` |
 | `Extensions/Animation.swift` | `handleWaitForIdle` — waits for settle, returns interface snapshot |
 | `Extensions/Screen.swift` | Screen capture broadcast, recording start/stop handlers |
@@ -103,39 +108,42 @@ flowchart TD
     Level2 --> RecCases["startRecording / stopRecording"]
     Level2 --> DispatchInt["dispatchInteraction → 3 sub-dispatchers"]
 
-    DispatchInt --> AccDisp["dispatchAccessibilityInteraction"]
-    DispatchInt --> TouchDisp["dispatchTouchInteraction"]
-    DispatchInt --> TextDisp["dispatchTextAndScrollInteraction"]
+    DispatchInt --> AccDisp["dispatchAccessibilityAction"]
+    DispatchInt --> TouchDisp["dispatchTouchGesture"]
+    DispatchInt --> Inline["Inline: typeText, scroll, scrollToVisible,<br/>scrollToEdge, waitFor, explore"]
+    DispatchInt --> Search["performElementSearch() (dedicated path)"]
 
     AccDisp --> Perform["performInteraction()"]
     TouchDisp --> Perform
-    TextDisp --> Perform
-    TextDisp --> ScrollVis["performScrollToVisibleSearch() (dedicated path)"]
+    Inline --> Perform
 ```
 
-### `dispatchAccessibilityInteraction`
+### `dispatchAccessibilityAction`
 `activate`, `increment`, `decrement`, `performCustomAction`, `editAction`, `setPasteboard`, `getPasteboard`, `resignFirstResponder`
 
-### `dispatchTouchInteraction`
+### `dispatchTouchGesture`
 `touchTap`, `touchLongPress`, `touchSwipe`, `touchDrag`, `touchPinch`, `touchRotate`, `touchTwoFingerTap`, `touchDrawPath` (≤10,000 points), `touchDrawBezier` (≤1,000 segments)
 
-### `dispatchTextAndScrollInteraction`
-`typeText`, `scroll`, `scrollToVisible` (→ dedicated path), `scrollToEdge`, `waitFor`, `explore`
+### Inline in `dispatchInteraction`
+`typeText`, `scroll`, `scrollToVisible` (one-shot), `scrollToEdge`, `waitFor`, `explore`
+
+### `performElementSearch` (dedicated path)
+`elementSearch` — iterative page-by-page scroll search. Bypasses `performInteraction` because the scroll loop manages its own refresh/settle cycles.
 
 ## `performInteraction` Pipeline
 
-Every interaction except `scrollToVisible` flows through this method:
+Every interaction except `elementSearch` flows through this method:
 
 ```mermaid
 flowchart TD
     Start["performInteraction(message, interaction)"]
     Start --> S1["1. stakeout?.noteActivity()"]
-    S1 --> S2["2. bagman.refreshAccessibilityData()"]
-    S2 --> S3["3. bagman.snapshotElements() — before"]
+    S1 --> S2["2. brains.refresh()"]
+    S2 --> S3["3. brains.captureBeforeState() — before"]
     S3 --> S3b["4. tripwire.topmostViewController() — beforeVC"]
     S3b --> S4["5. await interaction() — TheSafecracker.*"]
     S4 --> S5{"success?"}
-    S5 -->|yes| S5a["6. await bagman.actionResultWithDelta()"]
+    S5 -->|yes| S5a["6. await brains.actionResultWithDelta()"]
     S5 -->|no| S5b["6. Build failure ActionResult"]
     S5a --> S6{"recording active?"}
     S5b --> S6
@@ -145,7 +153,7 @@ flowchart TD
     S7 --> S8["9. If hasSubscribers: broadcast InteractionEvent"]
 ```
 
-`performScrollToVisibleSearch` is structurally identical but calls `bagman.executeScrollToVisible` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response.
+`performElementSearch` is structurally identical but calls `brains.executeElementSearch` directly (handles repeated scroll+settle cycles internally) and preserves `scrollSearchResult` in the response. `scrollToVisible` is now a one-shot jump that flows through the standard `performInteraction` pipeline.
 
 ## Status Message Handling
 
@@ -172,7 +180,7 @@ flowchart LR
 There is **no debounce timer**. The mechanism is entirely pulse-driven:
 - `scheduleHierarchyUpdate()` sets `hierarchyInvalidated = true`
 - the next `.settled` transition fires `handlePulseTransition`
-- `broadcastIfChanged()` refreshes Bagman, compares the snapshot hash, and broadcasts the same shared interface payload path
+- `broadcastIfChanged()` refreshes via TheBrains, compares the snapshot hash, and broadcasts the same shared interface payload path
 
 ### 2. Settle-driven polling (supplementary)
 
@@ -226,7 +234,7 @@ Inbound data paths:
 ### MEDIUM PRIORITY
 
 **No unit tests for TheInsideJob itself**
-- Delta computation logic in TheBagman is pure data transformation and could be tested without UIKit
+- Delta computation logic in TheStash is pure data transformation and could be tested without UIKit
 - Server-side dispatch logic is untested
 
 ### LOW PRIORITY

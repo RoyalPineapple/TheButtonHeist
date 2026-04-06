@@ -69,7 +69,10 @@ public final class TheInsideJob {
     private let installationId: String
     private let sessionId = UUID()
     let tripwire = TheTripwire()
-    let bagman: TheBagman
+    let brains: TheBrains
+
+    /// Convenience accessor for the registry.
+    var stash: TheStash { brains.stash }
 
     private let allowedScopes: Set<ConnectionScope>
 
@@ -121,7 +124,7 @@ public final class TheInsideJob {
         self.instanceId = instanceId
         self.preferredPort = port
         self.installationId = Self.loadInstallationId()
-        self.bagman = TheBagman(tripwire: self.tripwire)
+        self.brains = TheBrains(tripwire: self.tripwire)
 
         if let scopes = allowedScopes {
             self.allowedScopes = scopes
@@ -176,6 +179,7 @@ public final class TheInsideJob {
             self?.handlePulseTransition(transition)
         }
         tripwire.startPulse()
+        brains.safecracker.startKeyboardObservation()
 
         insideJobLogger.info("Server started successfully")
     }
@@ -199,6 +203,7 @@ public final class TheInsideJob {
 
         tripwire.stopPulse()
         tripwire.onTransition = nil
+        brains.safecracker.stopKeyboardObservation()
 
         muscle.tearDown()
 
@@ -376,8 +381,8 @@ public final class TheInsideJob {
                     method: .activate,
                     message: "Watch mode is read-only",
                     errorKind: .unsupported,
-                    screenName: bagman.lastScreenName,
-                    screenId: bagman.lastScreenId
+                    screenName: stash.lastScreenName,
+                    screenId: stash.lastScreenId
                 )), requestId: requestId, respond: respond)
                 return
             }
@@ -388,7 +393,9 @@ public final class TheInsideJob {
             case .stopRecording:
                 handleStopRecording(requestId: requestId, respond: respond)
             default:
-                await dispatchInteraction(message, requestId: requestId, respond: respond)
+                stakeout?.noteActivity()
+                let actionResult = await brains.executeCommand(message)
+                recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
             }
         }
     }
@@ -420,150 +427,6 @@ public final class TheInsideJob {
         )
 
         return StatusPayload(identity: identity, session: session)
-    }
-
-    // MARK: - Interaction Dispatch
-
-    /// Standard interaction pattern: refresh → snapshot → execute → delta → respond
-    /// TheSafecracker handles all interaction concerns (touch visualization, element refresh for read-back).
-    /// When a recording is active, captures the command and before/after interface state.
-    func performInteraction(
-        command: ClientMessage,
-        requestId: String? = nil,
-        respond: @escaping (Data) -> Void,
-        interaction: () async -> TheSafecracker.InteractionResult
-    ) async {
-        stakeout?.noteActivity()
-        bagman.refresh()
-        let before = bagman.captureBeforeState()
-        let result = await interaction()
-
-        let actionResult = await bagman.actionResultWithDelta(
-            success: result.success,
-            method: result.method,
-            message: result.message,
-            value: result.value,
-            before: before,
-            target: command.actionTarget
-        )
-
-        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
-    }
-
-    /// Wait for an element matching a predicate to appear or disappear.
-    /// Uses TheTripwire settle events to avoid busy-polling — refreshes the tree
-    /// only after the UI settles.
-    func performWaitFor(
-        target: WaitForTarget,
-        command: ClientMessage,
-        requestId: String?,
-        respond: @escaping (Data) -> Void
-    ) async {
-        stakeout?.noteActivity()
-        bagman.refresh()
-        let before = bagman.captureBeforeState()
-        let result = await executeWaitFor(target)
-
-        let actionResult = await bagman.actionResultWithDelta(
-            success: result.success,
-            method: .waitFor,
-            message: result.message,
-            errorKind: result.success ? nil : .timeout,
-            before: before
-        )
-
-        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
-    }
-
-    /// Execute the wait_for polling loop.
-    /// Uses hasTarget (existence check) — doesn't require unique match.
-    /// Snapshots after each refresh so heistId lookup stays current.
-    private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
-        let elementTarget = target.elementTarget
-        let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
-        let start = CFAbsoluteTimeGetCurrent()
-
-        // Phase 0: immediate check — refresh only, no snapshot needed.
-        // hasTarget checks registry.elements (for heistId) or walks the hierarchy (for matchers).
-        bagman.refresh()
-        if target.resolvedAbsent {
-            if !bagman.hasTarget(elementTarget) {
-                return .init(success: true, method: .waitFor, message: "absent confirmed after 0.0s", value: nil)
-            }
-        } else {
-            if bagman.hasTarget(elementTarget) {
-                return .init(success: true, method: .waitFor, message: "matched immediately", value: nil)
-            }
-        }
-
-        // Phase 1: settle loop
-        while ContinuousClock.now < deadline {
-            _ = await tripwire.waitForAllClear(timeout: 1.0)
-            bagman.refresh()
-            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-            if target.resolvedAbsent {
-                if !bagman.hasTarget(elementTarget) {
-                    return .init(success: true, method: .waitFor, message: "absent confirmed after \(elapsed)s", value: nil)
-                }
-            } else {
-                if bagman.hasTarget(elementTarget) {
-                    return .init(success: true, method: .waitFor, message: "matched after \(elapsed)s", value: nil)
-                }
-            }
-        }
-
-        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let reason = target.resolvedAbsent ? "element still present" : "element not found"
-        return .failure(.waitFor, message: "timed out after \(elapsed)s (\(reason))")
-    }
-
-    /// Dedicated dispatch for scroll_to_visible search. Bypasses performInteraction
-    /// because the scroll loop does its own repeated refresh/settle cycles internally.
-    /// Captures before/after snapshots for delta computation around the entire search.
-    func performScrollToVisibleSearch(
-        target: ScrollToVisibleTarget,
-        command: ClientMessage,
-        requestId: String?,
-        respond: @escaping (Data) -> Void
-    ) async {
-        stakeout?.noteActivity()
-        bagman.refresh()
-        let before = bagman.captureBeforeState()
-        let result = await bagman.executeScrollToVisible(target)
-
-        let actionResult = await bagman.actionResultWithDelta(
-            success: result.success,
-            method: result.method,
-            message: result.message,
-            value: result.value,
-            errorKind: result.success ? nil : .elementNotFound,
-            before: before
-        ).adding(scrollSearchResult: result.scrollSearchResult)
-
-        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
-    }
-
-    func performExplore(
-        command: ClientMessage,
-        requestId: String?,
-        respond: @escaping (Data) -> Void
-    ) async {
-        stakeout?.noteActivity()
-        bagman.refresh()
-        let before = bagman.captureBeforeState()
-
-        // actionResultWithDelta runs exploreScreen and marks all elements as presented.
-        // Reuse the registry state it already computed — selectElements is a pure read
-        // so this is not a redundant snapshot, just a wire conversion of the same data.
-        let baseResult = await bagman.actionResultWithDelta(
-            success: true,
-            method: .explore,
-            before: before
-        )
-        let elements = bagman.toWire(bagman.selectElements())
-        let actionResult = baseResult.adding(exploreElements: elements)
-
-        recordAndBroadcast(command: command, actionResult: actionResult, requestId: requestId, respond: respond)
     }
 
     /// Record to stakeout, send response, and broadcast to subscribers.
@@ -777,12 +640,13 @@ public final class TheInsideJob {
         hierarchyInvalidated = false
 
         tripwire.stopPulse()
+        brains.safecracker.stopKeyboardObservation()
 
         muscle.tearDown()
 
         stopAccessibilityObservation()
 
-        bagman.clearCache()
+        brains.clearCache()
 
         serverPhase = .suspended
 
@@ -832,6 +696,7 @@ public final class TheInsideJob {
                     self?.handlePulseTransition(transition)
                 }
                 self.tripwire.startPulse()
+                self.brains.safecracker.startKeyboardObservation()
 
                 // Resume polling if it was active before suspend
                 if case .paused(let interval) = self.pollingPhase {

@@ -1,0 +1,160 @@
+#if canImport(UIKit)
+#if DEBUG
+import UIKit
+import AccessibilitySnapshotParser
+import TheScore
+import os.log
+
+/// The brains of the operation — plans the play, sequences the crew.
+///
+/// TheBrains takes a command and works it through to a result by coordinating
+/// TheStash (registry), TheBurglar (acquisition), TheSafecracker (gestures),
+/// and TheTripwire (timing). He owns action execution, scroll orchestration,
+/// screen exploration, and the post-action delta cycle.
+@MainActor
+final class TheBrains {
+
+    let stash: TheStash
+    let safecracker: TheSafecracker
+    let tripwire: TheTripwire
+
+    /// Cached state from the last explore of each scrollable container.
+    var containerExploreStates: [AccessibilityContainer: ContainerExploreState] = [:]
+
+    /// Accumulates every heistId seen during an explore cycle.
+    /// Populated by `apply()` when non-nil, pruned by `pruneAfterExplore()`.
+    /// nil outside of an explore cycle — `apply()` only accumulates when this is set.
+    var exploreCycleIds: Set<String>?
+
+    init(tripwire: TheTripwire) {
+        self.tripwire = tripwire
+        self.stash = TheStash(tripwire: tripwire)
+        self.safecracker = TheSafecracker()
+        self.safecracker.tripwire = tripwire
+    }
+
+    // MARK: - Refresh Convenience
+
+    /// Refresh the accessibility tree into the stash.
+    @discardableResult
+    func refresh() -> TheBurglar.ParseResult? {
+        guard let result = stash.burglar.refresh(into: stash) else { return nil }
+        exploreCycleIds?.formUnion(stash.registry.viewportIds)
+        return result
+    }
+
+    // MARK: - Before/After State
+
+    /// State captured before an action for delta computation.
+    struct BeforeState {
+        let snapshot: [TheStash.ScreenElement]
+        let elements: [AccessibilityElement]
+        let viewController: ObjectIdentifier?
+    }
+
+    /// Capture the current state for delta computation before an action.
+    /// Caller must have called `refresh()` already this frame.
+    func captureBeforeState() -> BeforeState {
+        BeforeState(
+            snapshot: stash.selectElements(),
+            elements: stash.currentHierarchy.sortedElements,
+            viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
+        )
+    }
+
+    // MARK: - Action Result with Delta
+
+    /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
+    func actionResultWithDelta(
+        success: Bool,
+        method: ActionMethod,
+        message: String? = nil,
+        value: String? = nil,
+        errorKind: ErrorKind? = nil,
+        before: BeforeState,
+        target: ElementTarget? = nil
+    ) async -> ActionResult {
+        guard success else {
+            let kind = errorKind
+                ?? ((method == .elementNotFound || method == .elementDeallocated)
+                    ? .elementNotFound : .actionFailed)
+            return ActionResult(success: false, method: method, message: message, errorKind: kind,
+                                value: value, screenName: before.snapshot.screenName,
+                                screenId: before.snapshot.screenId)
+        }
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let settled = await tripwire.waitForAllClear(timeout: 1.0)
+        let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+        insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
+
+        let afterResult = stash.burglar.parse()
+
+        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
+            || stash.burglar.isTopologyChanged(before: before.elements, after: afterResult?.elements ?? [])
+        if isScreenChange {
+            stash.registry.clearScreen()
+            containerExploreStates.removeAll()
+        }
+        if let afterResult {
+            let heistIds = stash.burglar.apply(afterResult, to: stash)
+            exploreCycleIds?.formUnion(heistIds)
+        }
+
+        let manifest = await exploreAndPrune()
+        let afterSnapshot = stash.selectElements()
+
+        let delta = TheStash.WireConversion.computeDelta(
+            before: before.snapshot, after: afterSnapshot,
+            afterTree: afterResult?.hierarchy, isScreenChange: isScreenChange
+        )
+
+        let exploreResult = ExploreResult(
+            elements: [],
+            scrollCount: manifest.scrollCount,
+            containersExplored: manifest.exploredContainers.count,
+            explorationTime: manifest.explorationTime
+        )
+
+        stash.captureActionFrame()
+
+        var elementLabel: String?
+        var elementValue: String?
+        var elementTraits: [HeistTrait]?
+        if let target {
+            let postElement = stash.resolveTarget(target).resolved?.element
+            elementLabel = postElement?.label
+            elementValue = postElement?.value
+            if let traits = postElement?.traits {
+                elementTraits = TheStash.WireConversion.traitNames(traits)
+            }
+        }
+
+        return ActionResult(
+            success: true,
+            method: method,
+            message: message,
+            value: value,
+            interfaceDelta: delta,
+            elementLabel: elementLabel,
+            elementValue: elementValue,
+            elementTraits: elementTraits,
+            screenName: afterSnapshot.screenName,
+            screenId: afterSnapshot.screenId,
+            exploreResult: exploreResult
+        )
+    }
+
+    // MARK: - Clear
+
+    func clearCache() {
+        stash.clearCache()
+        containerExploreStates.removeAll()
+        exploreCycleIds = nil
+    }
+
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

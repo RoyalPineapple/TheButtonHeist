@@ -4,7 +4,7 @@ import UIKit
 
 // MARK: - Screen Capture
 
-extension TheBagman {
+extension TheStash {
 
     /// Capture the screen by compositing all traversable windows.
     func captureScreen() -> (image: UIImage, bounds: CGRect)? {

@@ -10,11 +10,11 @@ import TheScore
 // similar heistId hints, and compact element summaries for total misses.
 // All methods take the data they need as parameters — no mutable state.
 
-extension TheBagman {
+extension TheStash {
 
-    struct Diagnostics {
+    enum Diagnostics {
 
-    func heistIdNotFound(
+    static func heistIdNotFound(
         _ heistId: String,
         knownIds: some Collection<String>,
         viewportCount: Int
@@ -27,7 +27,7 @@ extension TheBagman {
         return "Element not found: \"\(heistId)\"\nsimilar: \(similar.joined(separator: ", "))"
     }
 
-    func matcherNotFound(
+    static func matcherNotFound(
         _ matcher: ElementMatcher,
         hierarchy: [AccessibilityHierarchy],
         screenElements: [String: ScreenElement],
@@ -51,7 +51,7 @@ extension TheBagman {
     }
 
     /// Format a matcher's predicates as a human-readable query string.
-    func formatMatcher(_ matcher: ElementMatcher) -> String {
+    static func formatMatcher(_ matcher: ElementMatcher) -> String {
         var fields: [String] = []
         if let l = matcher.label { fields.append("label=\"\(l)\"") }
         if let id = matcher.identifier { fields.append("identifier=\"\(id)\"") }
@@ -66,7 +66,7 @@ extension TheBagman {
     /// Only considers relaxations that still have at least one remaining predicate —
     /// dropping the only predicate matches everything, which isn't a useful near-miss.
     /// Returns a diagnostic line or nil if no near-miss found.
-    func findNearMiss(
+    static func findNearMiss(
         for matcher: ElementMatcher,
         in hierarchy: [AccessibilityHierarchy]
     ) -> String? {
@@ -124,7 +124,7 @@ extension TheBagman {
 
     /// Compact summary of on-screen elements for total-miss fallback.
     /// Capped at 20 elements to avoid flooding the response.
-    func compactElementSummary(
+    static func compactElementSummary(
         screenElements: [String: ScreenElement],
         viewportHeistIds: Set<String>,
         traversalOrder: [String: Int]
@@ -155,7 +155,7 @@ extension TheBagman {
         return lines.joined(separator: "\n")
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

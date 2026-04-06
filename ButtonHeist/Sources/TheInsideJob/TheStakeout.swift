@@ -339,7 +339,7 @@ final class TheStakeout {
     //
     // Inactivity is tracked via `lastActivityTime`, updated by:
     //   - `noteActivity()` — called on each incoming client command
-    //   - `noteScreenChange()` — called when TheBagman detects a hierarchy hash change
+    //   - `noteScreenChange()` — called when TheStash detects a hierarchy hash change
     //
     // Note: screen hashing operates on the accessibility hierarchy, not pixels.
     // Subtle pixel-only animations (e.g. spinner rotation) do NOT count as activity,

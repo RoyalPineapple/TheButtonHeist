@@ -417,7 +417,7 @@ Swift has first-class support for a functional style — value types, enums with
 **Design principles:**
 
 - **One codepath, not two.** When success and failure need different data in the result, make that difference a parameter (a flag, an optional error kind), not a structural fork. Two codepaths assembling the same result type will inevitably drift.
-- **Separate pure reads from side effects.** If a function both queries state and mutates it, split it. Pure reads are testable without setup, composable without ordering constraints, and safe to call speculatively. Canonical example: `selectElements()` (pure read) + `markPresented()` (side effect), replacing `snapshot()` which did both.
+- **Separate pure reads from side effects.** If a function both queries state and mutates it, split it. Pure reads are testable without setup, composable without ordering constraints, and safe to call speculatively.
 - **Declarative predicates over imperative decisions.** Express skip/include/transform decisions as value comparisons (fingerprint equality, set membership), not as stateful flags set at an earlier point. The decision should be auditable from the values alone.
 
 **What to watch for:**

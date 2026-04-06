@@ -1,6 +1,6 @@
 # TheSafecracker Deep Dive: Text Entry
 
-> **Source:** `ButtonHeist/Sources/TheInsideJob/TheBagman+Actions.swift` (`executeTypeText`), `TheSafecracker/TheSafecracker.swift` (raw keyboard methods), `TheSafecracker/KeyboardBridge.swift`
+> **Source:** `ButtonHeist/Sources/TheInsideJob/TheStash+Actions.swift` (`executeTypeText`), `TheSafecracker/TheSafecracker.swift` (raw keyboard methods), `TheSafecracker/KeyboardBridge.swift`
 > **Parent dossier:** [04-THESAFECRACKER.md](04-THESAFECRACKER.md)
 
 Text entry bypasses the UIKit touch system entirely and speaks to `UIKeyboardImpl` through `KeyboardBridge` — a dedicated `@MainActor struct` that wraps all private API access via `ObjCRuntime`. This is the same technique used by the KIF testing framework. It works with both software and hardware keyboards.
@@ -49,7 +49,7 @@ If `elementTarget` is provided, `ensureOnScreen(for:)` scrolls the element into 
 
 ### Step 1: Focus
 
-**With elementTarget:** Resolves the element via TheBagman, taps at its `activationPoint` via synthetic touch, then polls `hasActiveTextInput()` every 100ms for up to 2 seconds (20 iterations). The poll exists because keyboard activation is asynchronous — UIKit needs time to create the keyboard host view and connect the input delegate.
+**With elementTarget:** Resolves the element via TheStash, taps at its `activationPoint` via synthetic touch, then polls `hasActiveTextInput()` every 100ms for up to 2 seconds (20 iterations). The poll exists because keyboard activation is asynchronous — UIKit needs time to create the keyboard host view and connect the input delegate.
 
 **Without elementTarget:** Checks `hasActiveTextInput()` once. If false, fails immediately — the caller must either provide an element to tap or ensure a field is already focused.
 
@@ -82,7 +82,7 @@ Iterates each `Character` in the string (Swift character granularity, not UTF-16
 
 ### Step 5: Readback
 
-Waits 100ms, refreshes the accessibility element cache via `bagman.refreshElements()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
+Waits 100ms, refreshes the accessibility element cache via `brains.refresh()`, then re-resolves the element and reads its `value` property. This value is returned in the `InteractionResult` so the agent knows what the field contains after typing.
 
 ## KeyboardBridge
 
@@ -136,7 +136,7 @@ Two methods in TheSafecracker do multi-window walks via `UIApplication.shared.co
 
 `clearText` casts the result inline: `firstResponderView() as? (any UITextInput)`. Returns nil if the first responder doesn't conform (e.g., a button that somehow became first responder).
 
-**Note:** `ensureFirstResponderOnScreen()` (in TheBagman, not TheSafecracker) uses `tripwire.currentFirstResponder()` to find the first responder, not `firstResponderView()`. See [04a-SCROLLING.md](04a-SCROLLING.md) for the auto-scroll entry points.
+**Note:** `ensureFirstResponderOnScreen()` (in TheStash, not TheSafecracker) uses `tripwire.currentFirstResponder()` to find the first responder, not `firstResponderView()`. See [04a-SCROLLING.md](04a-SCROLLING.md) for the auto-scroll entry points.
 
 ## Edit Actions
 

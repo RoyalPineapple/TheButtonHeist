@@ -172,9 +172,9 @@ extension AccessibilityElement {
     }
 }
 
-// MARK: - TheBagman Convenience
+// MARK: - TheStash Convenience
 
-extension TheBagman {
+extension TheStash {
 
     /// Search the hierarchy tree for the first match.
     func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {

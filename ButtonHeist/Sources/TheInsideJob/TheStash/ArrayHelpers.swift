@@ -18,7 +18,7 @@ extension Array where Element == HeistElement {
     }
 }
 
-extension Array where Element == TheBagman.ScreenElement {
+extension Array where Element == TheStash.ScreenElement {
     /// Label of the first header-traited element (screen name hint).
     var screenName: String? {
         first { $0.element.traits.contains(.header) }?.element.label

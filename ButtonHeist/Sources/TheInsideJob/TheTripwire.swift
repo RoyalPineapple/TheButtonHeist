@@ -14,7 +14,7 @@ import UIKit
 /// 2. **Did the screen change?** (VC identity comparison)
 /// 3. **What transitioned?** (settle/unsettle, screen change, keyboard change)
 ///
-/// The accessibility tree is TheBagman's domain; TheTripwire never reads it.
+/// The accessibility tree is TheStash's domain; TheTripwire never reads it.
 @MainActor
 final class TheTripwire {
 
@@ -29,9 +29,6 @@ final class TheTripwire {
         let fingerprint: PresentationFingerprint
         let hasRelevantAnimations: Bool
         let topmostVC: ObjectIdentifier?
-        let firstResponder: ObjectIdentifier?
-        let keyboardVisible: Bool
-        let textInputActive: Bool
         let windowCount: Int
 
         // Derived settle state
@@ -49,9 +46,6 @@ final class TheTripwire {
         case settled
         case unsettled
         case screenChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
-        case focusChanged(from: ObjectIdentifier?, to: ObjectIdentifier?)
-        case keyboardChanged(visible: Bool)
-        case textInputChanged(active: Bool)
     }
 
     // MARK: - Presentation Layer Fingerprinting
@@ -140,8 +134,6 @@ final class TheTripwire {
         let target: PulseTick
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
-        var keyboardVisibleFlag = false
-        var textInputActiveFlag = false
         var settleWaiters: [SettleWaiter] = []
 
         init(link: CADisplayLink, target: PulseTick) {
@@ -168,18 +160,6 @@ final class TheTripwire {
     private var runningContext: RunningContext? {
         if case .running(let context) = pulsePhase { return context }
         return nil
-    }
-
-    /// Keyboard visibility flag, valid only while pulse is running.
-    private(set) var keyboardVisibleFlag: Bool {
-        get { runningContext?.keyboardVisibleFlag ?? false }
-        set { runningContext?.keyboardVisibleFlag = newValue }
-    }
-
-    /// Text input flag, valid only while pulse is running.
-    private(set) var textInputActiveFlag: Bool {
-        get { runningContext?.textInputActiveFlag ?? false }
-        set { runningContext?.textInputActiveFlag = newValue }
     }
 
     private struct SettleWaiter {
@@ -289,7 +269,6 @@ final class TheTripwire {
             && (prev?.fingerprint.matches(fingerprint) ?? true)
 
         let vcId = topmostViewController().map(ObjectIdentifier.init)
-        let responderId = currentFirstResponder().map(ObjectIdentifier.init)
 
         let reading = PulseReading(
             tick: context.tickCount,
@@ -298,9 +277,6 @@ final class TheTripwire {
             fingerprint: fingerprint,
             hasRelevantAnimations: scan.hasRelevantAnimations,
             topmostVC: vcId,
-            firstResponder: responderId,
-            keyboardVisible: context.keyboardVisibleFlag,
-            textInputActive: context.textInputActiveFlag,
             windowCount: scan.windowCount,
             quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
         )
@@ -309,15 +285,6 @@ final class TheTripwire {
         // Diff against previous reading and fire transitions
         if vcId != prev?.topmostVC {
             onTransition?(.screenChanged(from: prev?.topmostVC, to: vcId))
-        }
-        if responderId != prev?.firstResponder {
-            onTransition?(.focusChanged(from: prev?.firstResponder, to: responderId))
-        }
-        if context.keyboardVisibleFlag != (prev?.keyboardVisible ?? false) {
-            onTransition?(.keyboardChanged(visible: context.keyboardVisibleFlag))
-        }
-        if context.textInputActiveFlag != (prev?.textInputActive ?? false) {
-            onTransition?(.textInputChanged(active: context.textInputActiveFlag))
         }
         if reading.isSettled && !(prev?.isSettled ?? false) {
             onTransition?(.settled)
@@ -352,64 +319,17 @@ final class TheTripwire {
     // MARK: - Notification Observation
 
     private func startNotificationObservation() {
-        let notificationCenter = NotificationCenter.default
-
-        // Keyboard visibility — frame-based detection matches KIF's approach.
-        // The frame check handles edge cases where the keyboard window exists
-        // but is off-screen (undocked, floating, or dismissed mid-animation).
-        notificationCenter.addObserver(self, selector: #selector(keyboardFrameDidChange),
-                       name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(keyboardWillShow),
-                       name: UIResponder.keyboardWillShowNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(keyboardDidHide),
-                       name: UIResponder.keyboardDidHideNotification, object: nil)
-
-        // Text input (first responder proxy)
-        notificationCenter.addObserver(self, selector: #selector(textEditingDidBegin),
-                       name: UITextField.textDidBeginEditingNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(textEditingDidEnd),
-                       name: UITextField.textDidEndEditingNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(textEditingDidBegin),
-                       name: UITextView.textDidBeginEditingNotification, object: nil)
-        notificationCenter.addObserver(self, selector: #selector(textEditingDidEnd),
-                       name: UITextView.textDidEndEditingNotification, object: nil)
+        // Reserved for future pulse-relevant notifications
     }
 
     private func stopNotificationObservation() {
-        let notificationCenter = NotificationCenter.default
-        notificationCenter.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UITextField.textDidBeginEditingNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UITextField.textDidEndEditingNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UITextView.textDidBeginEditingNotification, object: nil)
-        notificationCenter.removeObserver(self, name: UITextView.textDidEndEditingNotification, object: nil)
+        // Reserved for future pulse-relevant notifications
     }
-
-    @objc private func keyboardFrameDidChange(_ notification: Notification) {
-        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-        let screenBounds = notification.object
-            .flatMap { $0 as? UIScreen }?.bounds
-            ?? UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.screen.bounds
-            ?? .zero
-        keyboardVisibleFlag = endFrame.intersects(screenBounds)
-            && endFrame.height > 0
-            && endFrame.origin.y < screenBounds.height
-    }
-
-    @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
-    @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
-    @objc private func textEditingDidBegin() { textInputActiveFlag = true }
-    @objc private func textEditingDidEnd() { textInputActiveFlag = false }
 
     // MARK: - Window Access
 
     /// The traversable windows in the active scene, sorted by window level (front to back).
-    /// Shared with TheBagman — both need the same window set.
+    /// Shared with TheStash — both need the same window set.
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
@@ -425,27 +345,6 @@ final class TheTripwire {
             }
             .sorted { $0.windowLevel > $1.windowLevel }
             .map { ($0, $0 as UIView) }
-    }
-
-    // MARK: - First Responder
-
-    /// The current first responder view, if any.
-    /// Walks the view hierarchy of all traversable windows.
-    func currentFirstResponder() -> UIView? {
-        for (window, _) in getTraversableWindows() {
-            if let responder = findFirstResponder(in: window) {
-                return responder
-            }
-        }
-        return nil
-    }
-
-    private func findFirstResponder(in view: UIView) -> UIView? {
-        if view.isFirstResponder { return view }
-        for sub in view.subviews {
-            if let found = findFirstResponder(in: sub) { return found }
-        }
-        return nil
     }
 
     // MARK: - View Controller Identity
