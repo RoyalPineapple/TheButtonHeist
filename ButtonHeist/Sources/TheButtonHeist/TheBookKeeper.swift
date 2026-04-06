@@ -506,6 +506,9 @@ public final class TheBookKeeper {
             throw BookKeeperError.notRecordingHeist
         }
         guard recording.evidenceCount > 0 else {
+            recording.fileHandle.closeFile()
+            session.heistRecording = nil
+            phase = .active(session)
             throw BookKeeperError.noStepsRecorded
         }
 
