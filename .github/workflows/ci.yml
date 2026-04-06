@@ -29,6 +29,60 @@ jobs:
       - name: Run SwiftLint
         run: swiftlint lint --strict
 
+  submodule-pin:
+    runs-on: macos-15
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify AccessibilitySnapshot pin is tip of buttonheist branch
+        run: |
+          set -eo pipefail
+          SUBMODULE_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshot | awk '{print $3}')
+          BRANCH_TIP=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshot refs/heads/buttonheist | awk '{print $1}')
+          PACKAGE_SHA=$(grep -oE 'revision: "[0-9a-f]+"' Package.swift | grep -oE '[0-9a-f]{40}')
+
+          echo "Submodule pin:  $SUBMODULE_SHA"
+          echo "Branch tip:     $BRANCH_TIP"
+          echo "Package.swift:  $PACKAGE_SHA"
+
+          FAILED=0
+          if [ "$SUBMODULE_SHA" != "$BRANCH_TIP" ]; then
+            echo "::error::Submodule ($SUBMODULE_SHA) is behind buttonheist branch tip ($BRANCH_TIP). Run: git submodule update --remote submodules/AccessibilitySnapshot"
+            FAILED=1
+          fi
+          if [ "$PACKAGE_SHA" != "$SUBMODULE_SHA" ]; then
+            echo "::error::Package.swift revision ($PACKAGE_SHA) does not match submodule ($SUBMODULE_SHA). Update the revision pin in Package.swift."
+            FAILED=1
+          fi
+          exit $FAILED
+
+  spm-package:
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Resolve SPM dependencies
+        timeout-minutes: 5
+        run: swift package resolve
+
+      - name: Build TheScore
+        timeout-minutes: 5
+        run: swift build --target TheScore
+
+      - name: Build ButtonHeist
+        timeout-minutes: 5
+        run: swift build --target ButtonHeist
+
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 15
