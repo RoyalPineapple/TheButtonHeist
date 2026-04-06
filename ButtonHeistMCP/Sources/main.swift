@@ -50,9 +50,9 @@ struct ButtonHeistMCPServer {
         ## Choosing Tools
 
         **Observing**: `get_interface` for element data, `get_screen` for visual context. \
-        Start with `get_interface` — reach for `get_screen` only when layout or visual \
-        state matters. Use `get_interface(full: true)` to discover off-screen content \
-        inside scroll views.
+        Start with `get_interface` — it explores the full screen by default, including \
+        off-screen content in scroll views. Reach for `get_screen` only when layout or \
+        visual state matters.
 
         **Acting**: `activate` is your primary tool — it taps, toggles, follows links. \
         `type_text` for keyboard input. `swipe` for directional gestures. `scroll` for \
@@ -112,8 +112,8 @@ struct ButtonHeistMCPServer {
 
         Read the delta first — skip `get_interface` when the delta already told you what \
         changed. Use heistIds on the current screen, matchers after navigation. Batch \
-        predictable sequences. Escalate progressively: `get_interface` → filtered → \
-        `full: true`.
+        predictable sequences. Filter with matcher fields or heistId lists when you only \
+        need a subset of elements.
         """
 
     @ButtonHeistActor
