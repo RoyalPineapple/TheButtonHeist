@@ -7,4 +7,24 @@
    <FileRef
       location = "group:TestApp/TestApp.xcodeproj">
    </FileRef>
+   <Group
+      location = "group:submodules"
+      name = "submodules">
+      <FileRef
+         location = "group:AccessibilitySnapshotBH/AccessibilitySnapshot.xcodeproj">
+      </FileRef>
+   </Group>
+   <Group
+      location = "container:"
+      name = "Dependencies">
+      <FileRef
+         location = "group:Tuist/.build/tuist-derived/swift-asn1/swift-asn1.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Tuist/.build/tuist-derived/swift-certificates/swift-certificates.xcodeproj">
+      </FileRef>
+      <FileRef
+         location = "group:Tuist/.build/tuist-derived/swift-crypto/swift-crypto.xcodeproj">
+      </FileRef>
+   </Group>
 </Workspace>

@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # --- Submodule freshness check ---
-# Warn if AccessibilitySnapshot doesn't track the tip of the buttonheist branch.
-# .gitmodules declares branch = buttonheist; this fetches to check, but does NOT
+# Warn if AccessibilitySnapshotBH doesn't track the tip of main.
+# .gitmodules declares branch = main; this fetches to check, but does NOT
 # auto-stage — the developer must update and commit the pin intentionally.
-if git submodule update --remote --quiet -- submodules/AccessibilitySnapshot 2>/dev/null; then
-    submodule_dirty=$(git diff --name-only -- submodules/AccessibilitySnapshot)
+if git submodule update --remote --quiet -- submodules/AccessibilitySnapshotBH 2>/dev/null; then
+    submodule_dirty=$(git diff --name-only -- submodules/AccessibilitySnapshotBH)
     if [[ -n "$submodule_dirty" ]]; then
-        echo "warning: AccessibilitySnapshot submodule is behind the tip of buttonheist"
-        echo "Run: git submodule update --remote -- submodules/AccessibilitySnapshot && git add submodules/AccessibilitySnapshot"
+        echo "warning: AccessibilitySnapshotBH submodule is behind the tip of main"
+        echo "Run: git submodule update --remote -- submodules/AccessibilitySnapshotBH && git add submodules/AccessibilitySnapshotBH"
     fi
 fi
 
