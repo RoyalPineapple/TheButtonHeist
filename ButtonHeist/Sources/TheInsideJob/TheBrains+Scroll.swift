@@ -362,7 +362,7 @@ extension TheBrains {
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
             scrollView.setContentOffset(targetOffset, animated: true)
-            await tripwire.yieldFrames(20)
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
             refresh()
         }
 
