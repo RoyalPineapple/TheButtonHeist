@@ -49,10 +49,13 @@ enum ToolDefinitions {
             Outcome signal for this action. Delivery is always checked implicitly. \
             String values: "screen_changed" (did the view controller change?), \
             "elements_changed" (were elements added, removed, or updated?). \
-            Object value: {"elementUpdated": {"heistId": "slider", "property": "value", "newValue": "5"}} \
-            to check specific property changes on elements. \
-            elementUpdated follows "say what you know" — provide only the fields you care about \
-            (heistId, property, oldValue, newValue). Omitted fields are wildcards.
+            Object values: \
+            {"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}} — \
+            check property changes. All fields optional, omitted = wildcard. \
+            {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
+            {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
+            Matcher fields (label, identifier, value, traits, excludeTraits) use the same \
+            matching rules as element targeting.
             """,
         "oneOf": .array([
             [
@@ -76,8 +79,31 @@ enum ToolDefinitions {
                         ],
                         "additionalProperties": false,
                     ],
+                    "elementAppeared": [
+                        "type": "object",
+                        "description": "Expect an element matching this predicate to appear in the delta's added list",
+                        "properties": [
+                            "label": ["type": "string"],
+                            "identifier": ["type": "string"],
+                            "value": ["type": "string"],
+                            "traits": ["type": "array", "items": ["type": "string"]],
+                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
+                        ],
+                        "additionalProperties": false,
+                    ],
+                    "elementDisappeared": [
+                        "type": "object",
+                        "description": "Expect an element matching this predicate to disappear from the delta's removed list",
+                        "properties": [
+                            "label": ["type": "string"],
+                            "identifier": ["type": "string"],
+                            "value": ["type": "string"],
+                            "traits": ["type": "array", "items": ["type": "string"]],
+                            "excludeTraits": ["type": "array", "items": ["type": "string"]],
+                        ],
+                        "additionalProperties": false,
+                    ],
                 ],
-                "required": .array([.string("elementUpdated")]),
                 "additionalProperties": false,
             ],
         ]),
@@ -256,6 +282,10 @@ enum ToolDefinitions {
                     ],
                     "required": .array([.string("x"), .string("y")]),
                 ],
+                "startX": ["type": "number", "description": "Start X screen coordinate (alternative to unit-point start)"],
+                "startY": ["type": "number", "description": "Start Y screen coordinate"],
+                "endX": ["type": "number", "description": "End X screen coordinate (alternative to unit-point end)"],
+                "endY": ["type": "number", "description": "End Y screen coordinate"],
                 "duration": ["type": "number", "description": "Swipe duration in seconds"],
                 "expect": expectProperty,
             ] as [String: Value]) { _, new in new }),
@@ -355,8 +385,8 @@ enum ToolDefinitions {
     static let scroll = Tool(
         name: "scroll",
         description: """
-            Scroll a scroll view by one page in a direction. Targets the nearest scrollable ancestor \
-            of the specified element, or the main scroll view if no element is specified. \
+            Scroll a scroll view by one page in a direction. Requires an element target — scrolls \
+            the nearest scrollable ancestor of that element. \
             The direction determines which axis to scroll — scrolling "right" on an element inside \
             a horizontal carousel scrolls the carousel, while scrolling "down" scrolls the outer list.
             """,
@@ -443,11 +473,13 @@ enum ToolDefinitions {
             Common params: heistId or matcher fields (element target) or x/y (coordinates). \
             one_finger_tap: synthetic tap at coordinates (use 'activate' for element interactions instead). \
             drag: endX, endY required. \
-            long_press: duration (seconds, default 1.0). \
-            pinch: scale required (>1 zoom in, <1 zoom out). \
-            rotate: angle required (radians). \
-            draw_path: points array of {x, y} objects. \
-            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}.
+            long_press: duration (seconds, default 0.5). \
+            pinch: scale required (>1 zoom in, <1 zoom out), optional centerX/centerY (default element center or x/y), spread. \
+            rotate: angle required (radians), optional centerX/centerY, radius. \
+            two_finger_tap: optional centerX/centerY, spread. \
+            draw_path: points array of {x, y} objects, optional velocity (points/sec). \
+            draw_bezier: startX, startY required; segments array of {cp1X, cp1Y, cp2X, cp2Y, endX, endY}; \
+            optional samplesPerSegment, velocity.
             """,
         inputSchema: .object([
             "type": "object",
@@ -466,9 +498,15 @@ enum ToolDefinitions {
                 "startY": ["type": "number", "description": "Start Y coordinate (draw_bezier)"],
                 "endX": ["type": "number", "description": "End X coordinate (drag)"],
                 "endY": ["type": "number", "description": "End Y coordinate (drag)"],
-                "duration": ["type": "number", "description": "Duration in seconds (long_press, draw_path, draw_bezier)"],
+                "duration": ["type": "number", "description": "Duration in seconds (long_press default 0.5, draw_path, draw_bezier)"],
                 "scale": ["type": "number", "description": "Pinch scale factor (>1 zoom in, <1 zoom out)"],
                 "angle": ["type": "number", "description": "Rotation angle in radians"],
+                "centerX": ["type": "number", "description": "Center X (pinch, rotate, two_finger_tap — defaults to element center or x)"],
+                "centerY": ["type": "number", "description": "Center Y (pinch, rotate, two_finger_tap — defaults to element center or y)"],
+                "spread": ["type": "number", "description": "Finger spread distance (pinch, two_finger_tap)"],
+                "radius": ["type": "number", "description": "Rotation radius (rotate)"],
+                "velocity": ["type": "number", "description": "Drawing velocity in points/sec (draw_path, draw_bezier)"],
+                "samplesPerSegment": ["type": "integer", "description": "Bezier curve sampling resolution (draw_bezier)"],
                 "points": ["type": "array", "description": "Array of {x, y} waypoints (draw_path)"],
                 "segments": ["type": "array", "description": "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier)"],
                 "expect": expectProperty,
@@ -705,6 +743,10 @@ enum ToolDefinitions {
                 "app": [
                     "type": "string",
                     "description": "Bundle ID of the app being recorded (default: com.buttonheist.testapp)",
+                ],
+                "identifier": [
+                    "type": "string",
+                    "description": "Session name for the recording (default: heist). Used as directory name if a new session is created.",
                 ],
             ],
             "additionalProperties": false,
