@@ -286,7 +286,17 @@ extension TheFence {
             )
         case .scrollToVisible:
             guard let target = try elementTarget(args) else {
-                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for scroll_to_visible")
+                return .error("Must specify heistId or at least one match field for scroll_to_visible")
+            }
+            let scrollToVisibleTarget = ScrollToVisibleTarget(elementTarget: target)
+            let result: ActionResult = try await sendAndAwait(.scrollToVisible(scrollToVisibleTarget)) { requestId in
+                try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.actionSeconds)
+            }
+            lastActionResult = result
+            return .action(result: result)
+        case .elementSearch:
+            guard let target = try elementTarget(args) else {
+                return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for element_search")
             }
             let directionStr = stringArg(args, "direction")
             var direction: ScrollSearchDirection?
@@ -296,11 +306,11 @@ extension TheFence {
                     return .error("Invalid direction '\(directionStr)'. Valid: \(ScrollSearchDirection.allCases.map(\.rawValue).joined(separator: ", "))")
                 }
             }
-            let scrollToVisibleTarget = ScrollToVisibleTarget(
+            let searchTarget = ElementSearchTarget(
                 elementTarget: target,
                 direction: direction
             )
-            let result: ActionResult = try await sendAndAwait(.scrollToVisible(scrollToVisibleTarget)) { requestId in
+            let result: ActionResult = try await sendAndAwait(.elementSearch(searchTarget)) { requestId in
                 try await self.waitForActionResult(requestId: requestId, timeout: Timeouts.longActionSeconds)
             }
             lastActionResult = result

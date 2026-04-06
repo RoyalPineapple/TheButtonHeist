@@ -16,11 +16,11 @@ extension CGFloat {
 
 // MARK: - Wire Conversion
 
-extension TheBagman {
+extension TheStash {
 
     /// Converts internal accessibility types to wire format (HeistElement, ElementNode)
     /// and computes interface deltas. Pure transformations — no mutable state.
-    @MainActor struct WireConversion {
+    @MainActor enum WireConversion {
 
     // MARK: - Trait Names
 
@@ -28,13 +28,13 @@ extension TheBagman {
     /// The parser's `UIAccessibilityTraits.knownTraits` is the single source of truth
     /// for trait naming (22 traits including private traits like textEntry, switchButton).
     /// Strings are mapped to HeistTrait; unknown names are preserved via .unknown().
-    func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
+    static func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
         traits.traitNames.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
     }
 
     // MARK: - Element Conversion
 
-    func convert(_ element: AccessibilityElement) -> HeistElement {
+    static func convert(_ element: AccessibilityElement) -> HeistElement {
         let frame = element.shape.frame
         return HeistElement(
             description: element.description,
@@ -57,7 +57,7 @@ extension TheBagman {
         )
     }
 
-    func buildActions(for element: AccessibilityElement) -> [ElementAction] {
+    static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
         var actions: [ElementAction] = []
         if Interactivity.isInteractive(element: element) {
             actions.append(.activate)
@@ -75,20 +75,20 @@ extension TheBagman {
     // MARK: - Wire Output
 
     /// Convert a ScreenElement to its wire representation.
-    func toWire(_ entry: ScreenElement) -> HeistElement {
+    static func toWire(_ entry: ScreenElement) -> HeistElement {
         var wire = convert(entry.element)
         wire.heistId = entry.heistId
         return wire
     }
 
     /// Convert a snapshot to wire format. Use at serialization boundaries.
-    func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
+    static func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
         entries.map { toWire($0) }
     }
 
     // MARK: - Tree Conversion
 
-    func convertNode(_ node: AccessibilityHierarchy) -> ElementNode {
+    static func convertNode(_ node: AccessibilityHierarchy) -> ElementNode {
         node.folded(
             onElement: { _, traversalIndex in
                 .element(order: traversalIndex)
@@ -99,7 +99,7 @@ extension TheBagman {
         )
     }
 
-    private func convertContainer(_ container: AccessibilityContainer) -> Group {
+    private static func convertContainer(_ container: AccessibilityContainer) -> Group {
         let (groupType, label, value, identifier): (GroupType, String?, String?, String?)
         switch container.type {
         case let .semanticGroup(l, v, id):
@@ -143,7 +143,7 @@ extension TheBagman {
     /// - screen_changed → full new interface
     /// - elements_changed → added/removed/updated diff
     /// - no_change → element count only
-    func computeDelta(
+    static func computeDelta(
         before: [ScreenElement],
         after: [ScreenElement],
         afterTree: [AccessibilityHierarchy]?,
@@ -195,7 +195,7 @@ extension TheBagman {
     /// For synthesized IDs, label changes produce different heistIds and appear as remove + add.
     ///
     /// Returns added/removed/updated categories. Updated elements carry per-property diffs.
-    private func computeElementDelta(
+    private static func computeElementDelta(
         beforeEls: [HeistElement],
         afterEls: [HeistElement]
     ) -> InterfaceDelta {
@@ -231,7 +231,7 @@ extension TheBagman {
     }
 
     /// Build an ElementUpdate if any mutable property differs.
-    private func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
+    private static func buildElementUpdate(old: HeistElement, new: HeistElement) -> ElementUpdate? {
         var changes: [PropertyChange] = []
 
         if old.label != new.label {
@@ -268,7 +268,7 @@ extension TheBagman {
         return ElementUpdate(heistId: new.heistId, changes: changes)
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

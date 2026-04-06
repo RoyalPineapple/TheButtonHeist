@@ -3,7 +3,7 @@
 import UIKit
 import AccessibilitySnapshotParser
 
-extension TheBagman {
+extension TheBrains {
 
     /// Complete element map for a screen, including off-screen content.
     struct ScreenManifest {
@@ -61,7 +61,7 @@ extension TheBagman {
         pendingContainers.formUnion(containers.filter { !exploredContainers.contains($0) })
     }
     }
-} // extension TheBagman
+} // extension TheBrains
 
 #endif // DEBUG
 #endif // canImport(UIKit)

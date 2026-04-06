@@ -48,6 +48,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case getPasteboard
     case scroll
     case scrollToVisible
+    case elementSearch
     case scrollToEdge
     case resignFirstResponder
     case requestScreen

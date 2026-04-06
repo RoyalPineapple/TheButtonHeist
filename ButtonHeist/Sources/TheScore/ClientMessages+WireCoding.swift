@@ -70,6 +70,7 @@ extension ClientMessage {
         case .getPasteboard: return .getPasteboard
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
         case .resignFirstResponder: return .resignFirstResponder
         case .waitForIdle: return .waitForIdle
@@ -167,6 +168,8 @@ extension ClientMessage {
             return .scroll(try ScrollTarget(from: decoder))
         case .scrollToVisible:
             return .scrollToVisible(try ScrollToVisibleTarget(from: decoder))
+        case .elementSearch:
+            return .elementSearch(try ElementSearchTarget(from: decoder))
         case .scrollToEdge:
             return .scrollToEdge(try ScrollToEdgeTarget(from: decoder))
         case .waitForIdle:
@@ -264,6 +267,8 @@ extension ClientMessage {
         case .scroll(let payload):
             try payload.encode(to: encoder)
         case .scrollToVisible(let payload):
+            try payload.encode(to: encoder)
+        case .elementSearch(let payload):
             try payload.encode(to: encoder)
         case .scrollToEdge(let payload):
             try payload.encode(to: encoder)

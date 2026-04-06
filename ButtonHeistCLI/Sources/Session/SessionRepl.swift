@@ -186,7 +186,8 @@ nonisolated extension ReplSession {
 
         Scrolling:
           scroll down <id>            Scroll direction on element
-          scroll_to_visible <id>      Scroll until element visible
+          scroll_to_visible <id>      Jump to known element position
+          element_search -l "text"    Search scroll content for element
           scroll_to_edge top <id>     Scroll to edge
 
         Actions:

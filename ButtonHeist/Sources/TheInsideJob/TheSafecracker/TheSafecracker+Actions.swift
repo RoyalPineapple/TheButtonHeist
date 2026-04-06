@@ -4,7 +4,7 @@ import UIKit
 import TheScore
 
 /// TheSafecracker action extensions — pure gesture execution only.
-/// No element resolution, no TheBagman reference. TheBagman resolves
+/// No element resolution, no TheStash reference. TheStash resolves
 /// elements and drives TheSafecracker for raw gesture synthesis.
 extension TheSafecracker {
 

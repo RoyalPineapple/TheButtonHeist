@@ -38,34 +38,34 @@ final class InteractivityTests: XCTestCase {
 
     func testRespondsToUserInteractionIsInteractive() {
         let element = makeElement(respondsToUserInteraction: true)
-        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
     }
 
     func testAdjustableTraitIsInteractive() {
         let element = makeElement(traits: .adjustable)
-        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
     }
 
     func testCustomActionsIsInteractive() {
         let element = makeElement(customActions: [.init(name: "Delete")])
-        XCTAssertTrue(TheBagman.Interactivity.isInteractive(element: element))
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
     }
 
     func testStaticTextNotInteractive() {
         let element = makeElement(label: "Hello", traits: .staticText)
-        XCTAssertFalse(TheBagman.Interactivity.isInteractive(element: element))
+        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element))
     }
 
     func testNoTraitsNoInteraction() {
         let element = makeElement(label: "Plain")
-        XCTAssertFalse(TheBagman.Interactivity.isInteractive(element: element))
+        XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element))
     }
 
     // MARK: - checkInteractivity
 
     func testDisabledElementIsBlocked() {
         let element = makeElement(traits: .notEnabled)
-        let result = TheBagman.Interactivity.checkInteractivity(element)
+        let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
         case .blocked(let reason):
             XCTAssertTrue(reason.contains("disabled"))
@@ -76,7 +76,7 @@ final class InteractivityTests: XCTestCase {
 
     func testEnabledButtonIsInteractive() {
         let element = makeElement(traits: .button)
-        let result = TheBagman.Interactivity.checkInteractivity(element)
+        let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive:
             break
@@ -87,7 +87,7 @@ final class InteractivityTests: XCTestCase {
 
     func testStaticOnlyElementStillReturnsInteractive() {
         let element = makeElement(traits: .staticText)
-        let result = TheBagman.Interactivity.checkInteractivity(element)
+        let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
         case .interactive:
             break
@@ -98,7 +98,7 @@ final class InteractivityTests: XCTestCase {
 
     func testNotEnabledTakesPrecedence() {
         let element = makeElement(traits: [.button, .notEnabled])
-        let result = TheBagman.Interactivity.checkInteractivity(element)
+        let result = TheStash.Interactivity.checkInteractivity(element)
         switch result {
         case .blocked:
             break

@@ -303,7 +303,7 @@ public struct Interface: Codable, Sendable {
 
 /// Slugify a string for use as a machine-readable identifier.
 /// Lowercase, replace non-alphanumeric runs with `_`, trim underscores, cap at 24 characters.
-/// Shared by heistId synthesis (TheBagman) and screenId derivation (Interface, ActionResult).
+/// Shared by heistId synthesis (TheStash) and screenId derivation (Interface, ActionResult).
 public func slugify(_ text: String?) -> String? {
     guard let text, !text.isEmpty else { return nil }
     let slug = text.lowercased()
@@ -504,7 +504,7 @@ extension HeistElement {
     /// Match this wire element against an ElementMatcher predicate.
     /// Used for client-side filtering of serialized interface data (get_interface).
     /// String fields use case-insensitive substring matching, consistent with
-    /// AccessibilityElement.matches in TheBagman+Matching.
+    /// AccessibilityElement.matches in TheStash+Matching.
     /// Unknown traits in required/excluded cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {

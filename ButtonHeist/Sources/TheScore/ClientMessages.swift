@@ -98,8 +98,13 @@ public enum ClientMessage: Codable, Sendable {
     /// Scroll via accessibility scroll action (bubbles up to nearest scroll view)
     case scroll(ScrollTarget)
 
-    /// Scroll the nearest scroll view ancestor until an element matching the predicate is visible
+    /// One-shot scroll: jump to a known element's position in its scroll view.
+    /// Fails if the element has no recorded content-space position.
     case scrollToVisible(ScrollToVisibleTarget)
+
+    /// Iterative search: page through scroll content looking for an element.
+    /// Used when the element has never been seen (not in the registry).
+    case elementSearch(ElementSearchTarget)
 
     /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)
     case scrollToEdge(ScrollToEdgeTarget)
@@ -144,6 +149,8 @@ public enum ClientMessage: Codable, Sendable {
         case .activate(let t), .increment(let t), .decrement(let t):
             return t
         case .scrollToVisible(let t):
+            return t.elementTarget
+        case .elementSearch(let t):
             return t.elementTarget
         case .performCustomAction(let t):
             return t.elementTarget
@@ -789,13 +796,25 @@ public struct ScrollTarget: Codable, Sendable {
     }
 }
 
-/// Direction for scroll-to-visible search
+/// Direction for scroll search
 public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
 }
 
-/// Target for scroll-to-visible search.
+/// Target for one-shot scroll-to-visible.
+/// The element must be known (in the registry with a content-space position).
+/// Jumps directly to the element's position — no iterative search.
 public struct ScrollToVisibleTarget: Sendable {
+    /// Element to scroll into view. Must be a known element with a recorded position.
+    public let elementTarget: ElementTarget?
+    public init(elementTarget: ElementTarget? = nil) {
+        self.elementTarget = elementTarget
+    }
+}
+
+/// Target for iterative element search.
+/// Pages through scroll content looking for an element that may not be in the registry.
+public struct ElementSearchTarget: Sendable {
     /// Element to search for while scrolling.
     public let elementTarget: ElementTarget?
     /// Starting scroll direction (default: .down)
@@ -812,6 +831,27 @@ public struct ScrollToVisibleTarget: Sendable {
 }
 
 extension ScrollToVisibleTarget: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId, label, identifier, value, traits, excludeTraits
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let hasTargetFields = container.contains(.heistId)
+            || container.contains(.label)
+            || container.contains(.identifier)
+            || container.contains(.value)
+            || container.contains(.traits)
+            || container.contains(.excludeTraits)
+        self.elementTarget = hasTargetFields ? try ElementTarget(from: decoder) : nil
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        if let elementTarget { try elementTarget.encode(to: encoder) }
+    }
+}
+
+extension ElementSearchTarget: Codable {
     private enum CodingKeys: String, CodingKey {
         case heistId, label, identifier, value, traits, excludeTraits
         case direction

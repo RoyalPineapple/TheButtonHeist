@@ -632,6 +632,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case waitForIdle
     case scroll
     case scrollToVisible
+    case elementSearch
     case scrollToEdge
     case waitFor
     case explore

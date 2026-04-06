@@ -4,13 +4,13 @@ import XCTest
 @testable import TheInsideJob
 
 @MainActor
-final class TheBagmanTopologyTests: XCTestCase {
+final class TheStashTopologyTests: XCTestCase {
 
-    private var bagman: TheBagman!
+    private var bagman: TheStash!
 
     override func setUp() {
         super.setUp()
-        bagman = TheBagman(tripwire: TheTripwire())
+        bagman = TheStash(tripwire: TheTripwire())
     }
 
     override func tearDown() {
@@ -26,13 +26,13 @@ final class TheBagmanTopologyTests: XCTestCase {
             makeElement(label: "Title", traits: .header),
             makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
         ]
-        XCTAssertTrue(bagman.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonDisappearedIsTopologyChange() {
         let before = [makeElement(label: "Back", traits: UIAccessibilityTraits.backButton)]
         let after = [makeElement(label: "Title", traits: .header)]
-        XCTAssertTrue(bagman.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonUnchangedIsNotTopologyChange() {
@@ -40,7 +40,7 @@ final class TheBagmanTopologyTests: XCTestCase {
             makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
             makeElement(label: "Title", traits: .header),
         ]
-        XCTAssertFalse(bagman.isTopologyChanged(before: elements, after: elements))
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
     }
 
     // MARK: - Header Structure
@@ -48,7 +48,7 @@ final class TheBagmanTopologyTests: XCTestCase {
     func testDisjointHeadersIsTopologyChange() {
         let before = [makeElement(label: "Settings", traits: .header)]
         let after = [makeElement(label: "Profile", traits: .header)]
-        XCTAssertTrue(bagman.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
     }
 
     func testOverlappingHeadersIsNotTopologyChange() {
@@ -60,18 +60,18 @@ final class TheBagmanTopologyTests: XCTestCase {
             makeElement(label: "Settings", traits: .header),
             makeElement(label: "Privacy", traits: .header),
         ]
-        XCTAssertFalse(bagman.isTopologyChanged(before: before, after: after))
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
     }
 
     func testEmptyHeadersBeforeIsNotTopologyChange() {
         let before = [makeElement(label: "OK", traits: .button)]
         let after = [makeElement(label: "Profile", traits: .header)]
-        XCTAssertFalse(bagman.isTopologyChanged(before: before, after: after))
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
     }
 
     func testNoElementChangesIsNotTopologyChange() {
         let elements = [makeElement(label: "OK", traits: .button)]
-        XCTAssertFalse(bagman.isTopologyChanged(before: elements, after: elements))
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
     }
 
     // MARK: - Helpers
