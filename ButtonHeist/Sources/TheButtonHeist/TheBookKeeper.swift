@@ -29,12 +29,13 @@ public struct ActiveSession: Sendable {
 }
 
 @ButtonHeistActor
-public struct HeistRecording: Sendable {
+public struct HeistRecording: @unchecked Sendable {
     public let app: String
     public let startTime: Date
     public var evidenceCount: Int
     /// Append-only file handle for durable evidence storage.
     /// Each HeistEvidence is written as a JSON line as it's recorded.
+    /// FileHandle is not Sendable, but access is isolated to @ButtonHeistActor.
     public let fileHandle: FileHandle
     public let filePath: URL
     /// Cached interface snapshot from the most recent get_interface response.
