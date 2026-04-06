@@ -91,7 +91,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
 
-          # CLI
+          # CLI (single binary — prompt is embedded at compile time via build plugin)
           cp ButtonHeistCLI/.build/buttonheist dist/
           tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist
           rm dist/buttonheist
@@ -184,16 +184,27 @@ jobs:
               sha256 "${MCP_SHA}"
             end
 
+            resource "integrate" do
+              url "${RELEASE_URL}/buttonheist-integrate"
+              sha256 "${INT_SHA}"
+            end
+
             depends_on :macos
             depends_on macos: :sonoma
 
             def install
               bin.install "buttonheist"
               resource("mcp").stage { bin.install "buttonheist-mcp" }
+              resource("integrate").stage { bin.install "buttonheist-integrate" }
             end
 
             def caveats
               <<~EOS
+                To integrate Button Heist into your iOS app:
+
+                  cd /path/to/your-ios-project
+                  buttonheist integrate
+
                 MCP server is installed at:
                   #{opt_bin}/buttonheist-mcp
 
