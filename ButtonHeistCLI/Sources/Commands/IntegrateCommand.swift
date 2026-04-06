@@ -106,8 +106,10 @@ struct IntegrateCommand: ParsableCommand {
 
     private func locateFrameworks() throws -> String {
         // 1. Check next to the buttonheist binary (Homebrew install ships them here)
-        let binaryPath = Bundle.main.executablePath ?? ""
-        let binaryDir = (binaryPath as NSString).deletingLastPathComponent
+        // Resolve symlinks so Homebrew's /opt/homebrew/bin/buttonheist -> Cellar/... works
+        let binaryURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+            .resolvingSymlinksInPath()
+        let binaryDir = binaryURL.deletingLastPathComponent().path
         let homebrewFrameworksDir = (binaryDir as NSString)
             .appendingPathComponent("ButtonHeistFrameworks")
         if hasAllFrameworks(in: homebrewFrameworksDir) {
