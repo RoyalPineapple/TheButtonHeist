@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class IdAssignerTests: XCTestCase {
 
-    private let assigner = TheBagman.IdAssignment()
+    private typealias IdAssignment = TheStash.IdAssignment
 
     // MARK: - Helpers
 
@@ -39,7 +39,7 @@ final class IdAssignerTests: XCTestCase {
     }
 
     private func assign(_ elements: [AccessibilityElement]) -> [String] {
-        assigner.assign(elements)
+        IdAssignment.assign(elements)
     }
 
     // MARK: - Developer Identifier Passthrough
@@ -169,42 +169,42 @@ final class IdAssignerTests: XCTestCase {
     // MARK: - Slug Synthesis
 
     func testSlugifyLowercases() {
-        XCTAssertEqual(assigner.slugify("HELLO"), "hello")
+        XCTAssertEqual(IdAssignment.slugify("HELLO"), "hello")
     }
 
     func testSlugifyReplacesNonAlphanumericWithUnderscore() {
-        XCTAssertEqual(assigner.slugify("Hello World!"), "hello_world")
+        XCTAssertEqual(IdAssignment.slugify("Hello World!"), "hello_world")
     }
 
     func testSlugifyCollapseConsecutiveSpecialChars() {
-        XCTAssertEqual(assigner.slugify("a---b___c   d"), "a_b_c_d")
+        XCTAssertEqual(IdAssignment.slugify("a---b___c   d"), "a_b_c_d")
     }
 
     func testSlugifyTrimsLeadingAndTrailingUnderscores() {
-        XCTAssertEqual(assigner.slugify("  hello  "), "hello")
+        XCTAssertEqual(IdAssignment.slugify("  hello  "), "hello")
     }
 
     func testSlugifyTruncatesTo24Characters() {
         let long = "abcdefghijklmnopqrstuvwxyz0123456789"
-        let result = assigner.slugify(long)
+        let result = IdAssignment.slugify(long)
         XCTAssertEqual(result?.count, 24)
         XCTAssertEqual(result, "abcdefghijklmnopqrstuvwx")
     }
 
     func testSlugifyReturnsNilForNilInput() {
-        XCTAssertNil(assigner.slugify(nil))
+        XCTAssertNil(IdAssignment.slugify(nil))
     }
 
     func testSlugifyReturnsNilForEmptyString() {
-        XCTAssertNil(assigner.slugify(""))
+        XCTAssertNil(IdAssignment.slugify(""))
     }
 
     func testSlugifyReturnsNilForAllPunctuation() {
-        XCTAssertNil(assigner.slugify("!!!???"))
+        XCTAssertNil(IdAssignment.slugify("!!!???"))
     }
 
     func testSlugifyPreservesDigits() {
-        XCTAssertEqual(assigner.slugify("Item 42"), "item_42")
+        XCTAssertEqual(IdAssignment.slugify("Item 42"), "item_42")
     }
 
     // MARK: - Duplicate Disambiguation

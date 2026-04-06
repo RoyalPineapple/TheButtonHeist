@@ -12,7 +12,7 @@ import TheScore
 //   UIScrollView → setContentOffset (fast, precise)
 //   Any scrollable → synthetic swipe gesture (universal fallback)
 
-extension TheBagman {
+extension TheBrains {
 
     /// A scrollable container discovered from the accessibility hierarchy.
     @MainActor enum ScrollableTarget {
@@ -77,7 +77,7 @@ extension TheBagman {
         direction: UIAccessibilityScrollDirection,
         animated: Bool = true
     ) async -> (moved: Bool, previousOnScreen: Set<String>) {
-        let before = registry.viewportIds
+        let before = stash.registry.viewportIds
 
         switch target {
         case .uiScrollView(let sv):
@@ -97,7 +97,7 @@ extension TheBagman {
             _ = await safecracker.scrollBySwipe(frame: frame, direction: direction)
             await tripwire.yieldFrames(3)
             refresh()
-            return (registry.viewportIds != before, before)
+            return (stash.registry.viewportIds != before, before)
         }
     }
 
@@ -107,7 +107,7 @@ extension TheBagman {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scroll, message: "Element target required for scroll")
         }
-        let resolution = resolveTarget(elementTarget)
+        let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
@@ -131,7 +131,7 @@ extension TheBagman {
         guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToEdge, message: "Element target required for scroll_to_edge")
         }
-        let resolution = resolveTarget(elementTarget)
+        let resolution = stash.resolveTarget(elementTarget)
         guard let resolved = resolution.resolved else {
             return .failure(.elementNotFound, message: resolution.diagnostics)
         }
@@ -155,7 +155,7 @@ extension TheBagman {
                 )
                 if !stepped { break }
                 didMove = true
-                if registry.viewportIds == before { break }
+                if stash.registry.viewportIds == before { break }
             }
             moved = didMove
         }
@@ -176,20 +176,69 @@ extension TheBagman {
         }
     }
 
+    // MARK: - Scroll To Visible (One-Shot)
+
+    /// One-shot scroll: jump directly to a known element's position.
+    /// If already visible, no-op. If the element has a recorded content-space
+    /// position, computes the target offset and scrolls there in one shot.
+    /// Fails if the element is not in the registry or has no scroll position.
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
-        guard let searchTarget = target.elementTarget else {
+        guard let elementTarget = target.elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
+        }
+
+        stash.refresh()
+
+        // Already visible — ensure it's in the comfort zone and return
+        if let found = stash.resolveFirstMatch(elementTarget) {
+            ensureOnScreenSync(found)
+            return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: "Already visible", value: nil)
+        }
+
+        // Known element with recorded position — one-shot jump
+        if case .heistId(let heistId) = elementTarget,
+           let entry = stash.registry.elements[heistId],
+           let origin = entry.contentSpaceOrigin,
+           let scrollView = entry.scrollView {
+            let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
+            scrollView.setContentOffset(targetOffset, animated: true)
+            await tripwire.yieldRealFrames(20)
+            refresh()
+            if let found = stash.resolveFirstMatch(elementTarget) {
+                ensureOnScreenSync(found)
+                await tripwire.yieldRealFrames(20)
+                refresh()
+                if stash.resolveFirstMatch(elementTarget) != nil {
+                    return TheSafecracker.InteractionResult(success: true, method: .scrollToVisible, message: nil, value: nil)
+                }
+            }
+            return .failure(.scrollToVisible, message: "Element not visible after scrolling to recorded position")
+        }
+
+        return .failure(.scrollToVisible, message: "Element not in registry or has no recorded scroll position. Use element_search to find unseen elements.")
+    }
+
+    // MARK: - Element Search (Iterative)
+
+    /// Iterative search: page through scroll content looking for an element.
+    /// Used when the element has never been seen (not in the registry).
+    func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
+        guard let searchTarget = target.elementTarget else {
+            return .failure(.elementSearch, message: "Element target required for element_search")
         }
         let searchDirection = target.resolvedDirection
 
-        refresh()
-        if let found = resolveFirstMatch(searchTarget) {
+        stash.refresh()
+
+        // Check if already visible before searching
+        if let found = stash.resolveFirstMatch(searchTarget) {
             ensureOnScreenSync(found)
-            return foundResult(found, scrollCount: 0)
+            return searchFoundResult(found, scrollCount: 0)
         }
 
+        // If we have a recorded position, try the one-shot path first
         if case .heistId(let heistId) = searchTarget,
-           let entry = registry.elements[heistId],
+           let entry = stash.registry.elements[heistId],
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let savedOffset = scrollView.contentOffset
@@ -197,8 +246,8 @@ extension TheBagman {
             scrollView.setContentOffset(targetOffset, animated: true)
             await tripwire.yieldRealFrames(20)
             refresh()
-            if let found = resolveFirstMatch(searchTarget),
-               let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
+            if let found = stash.resolveFirstMatch(searchTarget),
+               let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: 1) {
                 return result
             }
             scrollView.setContentOffset(savedOffset, animated: true)
@@ -206,6 +255,7 @@ extension TheBagman {
             refresh()
         }
 
+        // Iterative page-by-page search
         var exhausted = Set<AccessibilityContainer>()
         var scrollCount = 0
         let maxScrolls = 200
@@ -222,42 +272,42 @@ extension TheBagman {
 
             scrollCount += 1
 
-            if let found = resolveFirstMatch(searchTarget) {
-                if let result = await fineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
+            if let found = stash.resolveFirstMatch(searchTarget) {
+                if let result = await searchFineTuneAndResolve(found, searchTarget: searchTarget, scrollCount: scrollCount) {
                     return result
                 }
-                return foundResult(found, scrollCount: scrollCount)
+                return searchFoundResult(found, scrollCount: scrollCount)
             }
 
-            if registry.viewportIds == before { exhausted.insert(container) }
+            if stash.registry.viewportIds == before { exhausted.insert(container) }
         }
 
-        return notFoundResult(scrollCount: scrollCount)
+        return searchNotFoundResult(scrollCount: scrollCount)
     }
 
-    private func fineTuneAndResolve(
-        _ found: ResolvedTarget,
+    private func searchFineTuneAndResolve(
+        _ found: TheStash.ResolvedTarget,
         searchTarget: ElementTarget,
         scrollCount: Int
     ) async -> TheSafecracker.InteractionResult? {
         ensureOnScreenSync(found)
         await tripwire.yieldRealFrames(20)
-        refresh()
-        guard let fresh = resolveFirstMatch(searchTarget) else { return nil }
-        return foundResult(fresh, scrollCount: scrollCount)
+        stash.refresh()
+        guard let fresh = stash.resolveFirstMatch(searchTarget) else { return nil }
+        return searchFoundResult(fresh, scrollCount: scrollCount)
     }
 
     func findScrollTarget(
         axis: ScrollAxis? = nil,
         excluding exhausted: Set<AccessibilityContainer> = []
     ) -> (target: ScrollableTarget, container: AccessibilityContainer)? {
-        let candidates = currentHierarchy.scrollableContainers
+        let candidates = stash.currentHierarchy.scrollableContainers
             .filter { !exhausted.contains($0) }
 
         for container in candidates {
             guard case .scrollable(let contentSize) = container.type else { continue }
             let target: ScrollableTarget
-            if let view = scrollableContainerViews[container], view.window != nil {
+            if let view = stash.scrollableContainerViews[container], view.window != nil {
                 if let scrollView = view as? UIScrollView {
                     target = .uiScrollView(scrollView)
                 } else {
@@ -273,23 +323,23 @@ extension TheBagman {
         return nil
     }
 
-    private func notFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
+    private func searchNotFoundResult(scrollCount: Int) -> TheSafecracker.InteractionResult {
         TheSafecracker.InteractionResult(
-            success: false, method: .scrollToVisible,
+            success: false, method: .elementSearch,
             message: "Element not found after \(scrollCount) scrolls", value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elements.count,
                 totalItems: nil, exhaustive: true
             )
         )
     }
 
-    private func foundResult(_ found: ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
-        let wire = toWire(found.screenElement)
+    private func searchFoundResult(_ found: TheStash.ResolvedTarget, scrollCount: Int) -> TheSafecracker.InteractionResult {
+        let wire = TheStash.WireConversion.toWire(found.screenElement)
         return TheSafecracker.InteractionResult(
-            success: true, method: .scrollToVisible, message: nil, value: nil,
+            success: true, method: .elementSearch, message: nil, value: nil,
             scrollSearchResult: ScrollSearchResult(
-                scrollCount: scrollCount, uniqueElementsSeen: registry.elements.count,
+                scrollCount: scrollCount, uniqueElementsSeen: stash.registry.elements.count,
                 totalItems: nil, exhaustive: false, foundElement: wire
             )
         )
@@ -308,8 +358,8 @@ extension TheBagman {
 
     func ensureOnScreen(for target: ElementTarget) async {
         if case .heistId(let heistId) = target,
-           !registry.viewportIds.contains(heistId),
-           let entry = registry.elements[heistId],
+           !stash.registry.viewportIds.contains(heistId),
+           let entry = stash.registry.elements[heistId],
            let origin = entry.contentSpaceOrigin,
            let scrollView = entry.scrollView {
             let targetOffset = Self.scrollTargetOffset(for: origin, in: scrollView)
@@ -318,7 +368,7 @@ extension TheBagman {
             refresh()
         }
 
-        guard let resolved = resolveTarget(target).resolved,
+        guard let resolved = stash.resolveTarget(target).resolved,
               let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
@@ -335,14 +385,15 @@ extension TheBagman {
     }
 
     func ensureFirstResponderOnScreen() async {
-        guard let responder = tripwire.currentFirstResponder() else { return }
-        let frame = responder.accessibilityFrame
+        guard let heistId = stash.registry.firstResponderHeistId,
+              let entry = stash.registry.elements[heistId],
+              let object = entry.object else { return }
+        let frame = object.accessibilityFrame
         guard !frame.isNull, !frame.isEmpty else { return }
         guard !UIScreen.main.bounds.contains(frame) else { return }
-        let activationPoint = responder.accessibilityActivationPoint
+        let activationPoint = object.accessibilityActivationPoint
         guard !Self.interactionComfortZone.contains(activationPoint) else { return }
-        guard let scrollView = registry.elements.values
-            .first(where: { $0.object === responder })?.scrollView else { return }
+        guard let scrollView = entry.scrollView else { return }
         if safecracker.scrollToMakeVisible(
             frame, in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
@@ -352,7 +403,7 @@ extension TheBagman {
         }
     }
 
-    private func ensureOnScreenSync(_ resolved: ResolvedTarget, animated: Bool = true) {
+    private func ensureOnScreenSync(_ resolved: TheStash.ResolvedTarget, animated: Bool = true) {
         guard let object = resolved.screenElement.object else { return }
         let frame = object.accessibilityFrame
         let activationPoint = object.accessibilityActivationPoint
@@ -369,7 +420,7 @@ extension TheBagman {
     // MARK: - Scroll Target Resolution
 
     func resolveScrollTarget(
-        screenElement: ScreenElement,
+        screenElement: TheStash.ScreenElement,
         axis: ScrollAxis? = nil
     ) -> ScrollableTarget? {
         if let sv = screenElement.scrollView {

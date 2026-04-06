@@ -35,7 +35,7 @@ final class ElementRegistryTests: XCTestCase {
     // MARK: - apply
 
     func testApplyInsertsNewElements() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let elementA = makeElement(label: "A")
         let elementB = makeElement(label: "B")
 
@@ -51,7 +51,7 @@ final class ElementRegistryTests: XCTestCase {
     }
 
     func testApplyUpdatesExistingElement() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let elementV1 = makeElement(label: "Old")
         let elementV2 = makeElement(label: "New")
 
@@ -71,7 +71,7 @@ final class ElementRegistryTests: XCTestCase {
     }
 
     func testApplyRebuildsViewportIds() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let elementA = makeElement(label: "A")
         let elementB = makeElement(label: "B")
 
@@ -91,7 +91,7 @@ final class ElementRegistryTests: XCTestCase {
     }
 
     func testApplyBuildsReverseIndex() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let element = makeElement(label: "Submit")
 
         registry.apply(
@@ -104,7 +104,7 @@ final class ElementRegistryTests: XCTestCase {
     }
 
     func testApplyPreservesOffScreenElements() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let elementA = makeElement(label: "A")
         let elementB = makeElement(label: "B")
 
@@ -127,7 +127,7 @@ final class ElementRegistryTests: XCTestCase {
     // MARK: - clear
 
     func testClearRemovesEverything() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let element = makeElement(label: "X")
 
         registry.apply(
@@ -145,7 +145,7 @@ final class ElementRegistryTests: XCTestCase {
     // MARK: - clearScreen
 
     func testClearScreenRemovesElementsAndReverseIndex() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let element = makeElement(label: "X")
 
         registry.apply(
@@ -162,7 +162,7 @@ final class ElementRegistryTests: XCTestCase {
     // MARK: - prune
 
     func testPruneKeepsOnlySpecifiedIds() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let elementA = makeElement(label: "A")
         let elementB = makeElement(label: "B")
         let elementC = makeElement(label: "C")
@@ -181,7 +181,7 @@ final class ElementRegistryTests: XCTestCase {
     }
 
     func testPruneWithEmptySetRemovesAll() {
-        var registry = TheBagman.ElementRegistry()
+        var registry = TheStash.ElementRegistry()
         let element = makeElement(label: "A")
 
         registry.apply(

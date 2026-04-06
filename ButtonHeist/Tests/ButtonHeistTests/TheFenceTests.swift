@@ -46,7 +46,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Command Enum
 
     func testCommandCaseCount() {
-        XCTAssertEqual(TheFence.Command.allCases.count, 38)
+        XCTAssertEqual(TheFence.Command.allCases.count, 39)
     }
 
     func testCommandRawValuesMatchWireFormat() {
@@ -70,6 +70,7 @@ final class TheFenceTests: XCTestCase {
             .drawBezier: "draw_bezier",
             .scroll: "scroll",
             .scrollToVisible: "scroll_to_visible",
+            .elementSearch: "element_search",
             .scrollToEdge: "scroll_to_edge",
             .activate: "activate",
             .increment: "increment",

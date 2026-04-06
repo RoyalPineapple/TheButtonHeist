@@ -55,7 +55,7 @@ struct ButtonHeistMCPServer {
         all previous heistIds are invalid — use what the delta's new interface gave you.
 
         **Matcher** (label, identifier, value, traits): Use when you haven't seen the element yet, \
-        after a screen transition, or in `wait_for`/`scroll_to_visible`. Strings match as \
+        after a screen transition, or in `wait_for`/`element_search`. Strings match as \
         case-insensitive substrings. Traits match exactly. If zero elements match, you get a miss \
         with suggestions — never a fuzzy guess.
 
@@ -135,7 +135,7 @@ struct ButtonHeistMCPServer {
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
                  "wait_for_idle", "wait_for", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
-                 "scroll", "scroll_to_visible", "scroll_to_edge",
+                 "scroll", "scroll_to_visible", "element_search", "scroll_to_edge",
                  "edit_action", "dismiss_keyboard",
                  "run_batch", "get_session_state",
                  "connect", "list_targets",

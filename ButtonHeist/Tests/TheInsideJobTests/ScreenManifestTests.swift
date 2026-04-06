@@ -31,7 +31,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - Initial State
 
     func testEmptyManifest() {
-        let manifest = TheBagman.ScreenManifest()
+        let manifest = TheBrains.ScreenManifest()
         XCTAssertEqual(manifest.elementCount, 0)
         XCTAssertTrue(manifest.isComplete)
         XCTAssertEqual(manifest.scrollCount, 0)
@@ -41,7 +41,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - recordVisibleElements
 
     func testRecordVisibleElementsAddsNewIds() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         manifest.recordVisibleElements(["id-a", "id-b"])
 
         XCTAssertEqual(manifest.elementCount, 2)
@@ -50,7 +50,7 @@ final class ScreenManifestTests: XCTestCase {
     }
 
     func testRecordVisibleElementsSkipsDuplicates() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         manifest.recordVisibleElements(["id-a", "id-b"])
         manifest.recordVisibleElements(["id-b", "id-c"])
 
@@ -58,7 +58,7 @@ final class ScreenManifestTests: XCTestCase {
     }
 
     func testRecordVisibleElementsWithContainer() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.recordVisibleElements(["id-a"], container: container)
 
@@ -67,7 +67,7 @@ final class ScreenManifestTests: XCTestCase {
     }
 
     func testRecordVisibleElementsWithoutContainer() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         manifest.recordVisibleElements(["id-a"])
 
         XCTAssertTrue(manifest.contains("id-a"))
@@ -79,7 +79,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - markExplored
 
     func testMarkExploredRemovesFromPending() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.addPendingContainers([container])
 
@@ -95,7 +95,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - addPendingContainers
 
     func testAddPendingContainersSkipsExplored() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.markExplored(container)
         manifest.addPendingContainers([container])
@@ -104,7 +104,7 @@ final class ScreenManifestTests: XCTestCase {
     }
 
     func testAddPendingContainersAddsNewContainers() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         let containerA = makeScrollableContainer(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
         let containerB = makeScrollableContainer(frame: CGRect(x: 0, y: 100, width: 100, height: 100))
         manifest.addPendingContainers([containerA, containerB])
@@ -116,7 +116,7 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - isComplete
 
     func testIsCompleteWhenAllPendingExplored() {
-        var manifest = TheBagman.ScreenManifest()
+        var manifest = TheBrains.ScreenManifest()
         let container = makeScrollableContainer()
         manifest.addPendingContainers([container])
 
@@ -130,15 +130,15 @@ final class ScreenManifestTests: XCTestCase {
     // MARK: - contains
 
     func testContainsReturnsFalseForUnknownId() {
-        let manifest = TheBagman.ScreenManifest()
+        let manifest = TheBrains.ScreenManifest()
         XCTAssertFalse(manifest.contains("nonexistent"))
     }
 
     // MARK: - maxScrollsPerContainer
 
     func testMaxScrollsPerContainerIsReasonable() {
-        XCTAssertGreaterThan(TheBagman.ScreenManifest.maxScrollsPerContainer, 0)
-        XCTAssertEqual(TheBagman.ScreenManifest.maxScrollsPerContainer, 200)
+        XCTAssertGreaterThan(TheBrains.ScreenManifest.maxScrollsPerContainer, 0)
+        XCTAssertEqual(TheBrains.ScreenManifest.maxScrollsPerContainer, 200)
     }
 }
 

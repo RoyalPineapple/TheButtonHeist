@@ -1,6 +1,6 @@
 # Unified Targeting - Element Resolution
 
-> **Cross-cutting concern:** TheFence → TheScore (wire) → TheBagman → TheSafecracker
+> **Cross-cutting concern:** TheFence → TheScore (wire) → TheStash → TheSafecracker
 > **Role:** Routes every action command to a concrete element via a single resolution path
 
 ## Overview
@@ -12,7 +12,7 @@ There are exactly **two targeting strategies**, encoded as cases of the `Element
 1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, presumed stable while the element is on screen. O(1) lookup via `screenElements` dictionary.
 2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with case-insensitive substring matching. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
-A single method, `TheBagman.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
+A single method, `TheStash.resolveTarget(_:)`, implements this and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`). `ResolvedTarget` has a single field: `screenElement: ScreenElement`. Every action executor calls this method — there are no alternative resolution paths.
 
 ### What was removed/changed
 
@@ -31,7 +31,7 @@ sequenceDiagram
     participant TF as TheFence (macOS)
     participant Wire as ElementTarget (JSON)
     participant IJ as TheInsideJob (iOS)
-    participant TB as TheBagman
+    participant TB as TheStash
     participant TS as TheSafecracker
 
     Caller->>TF: {"command":"activate", "label":"Submit", "traits":["button"]}
@@ -104,9 +104,9 @@ All non-nil fields must match — **AND semantics**. This is intentional: caller
 
 Trait names are resolved to `UIAccessibilityTraits` bitmasks on the iOS side via `UIAccessibilityTraits.knownTraitNames`. Unknown trait names cause an automatic miss (no silent degradation).
 
-## Resolution: TheBagman.resolveTarget()
+## Resolution: TheStash.resolveTarget()
 
-`TheBagman.swift` — the single resolution method. Returns `TargetResolution` enum: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, or `.ambiguous(candidates:diagnostics:)`. `ResolvedTarget` has a single field (`screenElement: ScreenElement`) with a computed `element` property.
+`TheStash.swift` — the single resolution method. Returns `TargetResolution` enum: `.resolved(ResolvedTarget)`, `.notFound(diagnostics:)`, or `.ambiguous(candidates:diagnostics:)`. `ResolvedTarget` has a single field (`screenElement: ScreenElement`) with a computed `element` property.
 
 ```mermaid
 flowchart TD
@@ -172,7 +172,7 @@ No match for: label="LoginButton" traits=[button]
 
 The goal: every error message answers the obvious next question. "Why didn't it match?" → here's what actually diverged. "What's even on screen?" → here, you figure it out.
 
-## Matching Infrastructure (TheBagman+Matching.swift)
+## Matching Infrastructure (TheStash+Matching.swift)
 
 Matching operates on the **canonical `AccessibilityElement` tree**, not wire types. Two search surfaces exist:
 
@@ -195,25 +195,25 @@ All checks are AND — first failure short-circuits to false. String matching is
 
 ## Callers
 
-Every action executor in TheBagman calls `resolveTarget(target)`:
+Every action executor in TheStash calls `resolveTarget(target)`:
 
 | Method | File | What it needs |
 |--------|------|--------------|
-| `ensureOnScreen(for:)` | TheBagman+Scroll.swift | screenElement → object → scroll ancestor |
-| `executeScroll(_:)` | TheBagman+Scroll.swift | screenElement → object → scroll ancestor |
-| `executeScrollToEdge(_:)` | TheBagman+Scroll.swift | screenElement → object → scroll to edge |
-| `executeScrollToVisible(_:)` | TheBagman+Scroll.swift | resolveFirstMatch (first-match semantics) |
-| `executeActivate(_:)` | TheBagman+Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
-| `executeIncrement(_:)` | TheBagman+Actions.swift | screenElement (increment) + element (fingerprint point) |
-| `executeDecrement(_:)` | TheBagman+Actions.swift | screenElement (decrement) + element (fingerprint point) |
-| `executeCustomAction(_:)` | TheBagman+Actions.swift | screenElement (perform action) |
-| `executeTypeText(_:)` | TheBagman+Actions.swift | element (activation point for tap-to-focus) |
-| `executeTap(_:)` | TheBagman+Actions.swift | resolvePoint → element activation point |
-| `executeSwipe(_:)` | TheBagman+Actions.swift | resolvePoint or resolveFrame for unit-point swipe |
-| `resolvePoint(from:)` | TheBagman.swift | element (activation point for gesture origin) |
-| `actionResultWithDelta(...)` | TheBagman.swift | element (post-action label/value/traits readback) |
+| `ensureOnScreen(for:)` | TheStash+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScroll(_:)` | TheStash+Scroll.swift | screenElement → object → scroll ancestor |
+| `executeScrollToEdge(_:)` | TheStash+Scroll.swift | screenElement → object → scroll to edge |
+| `executeScrollToVisible(_:)` | TheStash+Scroll.swift | resolveFirstMatch (first-match semantics) |
+| `executeActivate(_:)` | TheStash+Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
+| `executeIncrement(_:)` | TheStash+Actions.swift | screenElement (increment) + element (fingerprint point) |
+| `executeDecrement(_:)` | TheStash+Actions.swift | screenElement (decrement) + element (fingerprint point) |
+| `executeCustomAction(_:)` | TheStash+Actions.swift | screenElement (perform action) |
+| `executeTypeText(_:)` | TheStash+Actions.swift | element (activation point for tap-to-focus) |
+| `executeTap(_:)` | TheStash+Actions.swift | resolvePoint → element activation point |
+| `executeSwipe(_:)` | TheStash+Actions.swift | resolvePoint or resolveFrame for unit-point swipe |
+| `resolvePoint(from:)` | TheStash.swift | element (activation point for gesture origin) |
+| `actionResultWithDelta(...)` | TheStash.swift | element (post-action label/value/traits readback) |
 
-Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally. TheSafecracker is called only for the raw gesture synthesis after TheBagman has resolved the target.
+Touch gestures (tap, swipe, long_press, drag, pinch, rotate, two_finger_tap) go through `resolvePoint` which calls `resolveTarget` internally. TheSafecracker is called only for the raw gesture synthesis after TheStash has resolved the target.
 
 ### Commands that bypass ElementTarget
 

@@ -23,6 +23,7 @@ extension TheFence {
         case drawBezier = "draw_bezier"
         case scroll
         case scrollToVisible = "scroll_to_visible"
+        case elementSearch = "element_search"
         case scrollToEdge = "scroll_to_edge"
         case activate
         case increment

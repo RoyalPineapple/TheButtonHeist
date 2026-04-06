@@ -6,11 +6,11 @@ import TheScore
 
 // MARK: - HeistId Assignment
 
-extension TheBagman {
+extension TheStash {
 
     /// Assigns deterministic heistIds to accessibility elements.
     /// Pure value-in, value-out — no mutable state.
-    struct IdAssignment {
+    enum IdAssignment {
 
     /// Trait priority for heistId prefix — most descriptive wins.
     /// Precomputed bitmasks from AccessibilitySnapshotParser's knownTraits.
@@ -32,7 +32,7 @@ extension TheBagman {
     /// Synthesized IDs use `{trait}_{slug}` with label for the slug (value excluded for stability).
     /// Duplicates get `_1`, `_2` suffixes in traversal order — all instances, not just the second.
     /// Returns the heistId array, parallel to the input elements array.
-    func assign(_ elements: [AccessibilityElement]) -> [String] {
+    static func assign(_ elements: [AccessibilityElement]) -> [String] {
         // Phase 1: generate base IDs
         var heistIds = elements.map { element -> String in
             if let identifier = element.identifier, !identifier.isEmpty {
@@ -57,7 +57,7 @@ extension TheBagman {
         return heistIds
     }
 
-    func synthesizeBaseId(_ element: AccessibilityElement) -> String {
+    static func synthesizeBaseId(_ element: AccessibilityElement) -> String {
         let traitPrefix = Self.traitPriority.first { element.traits.contains($0.mask) }?.name
             ?? (element.label != nil ? HeistTrait.staticText.rawValue : "element")
 
@@ -79,7 +79,7 @@ extension TheBagman {
     /// Strip leading words from text that duplicate the trait prefix.
     /// "Switch Button Off" with prefix "switchButton" → "Off"
     /// Returns nil if stripping would leave nothing (label IS the trait name).
-    func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
+    static func stripTraitPrefix(_ text: String?, traitPrefix: String) -> String? {
         guard let text else { return nil }
         let prefixWords = traitPrefix
             .replacing(/([a-z])([A-Z])/, with: { "\($0.output.1) \($0.output.2)" })
@@ -94,11 +94,11 @@ extension TheBagman {
         return remainder.isEmpty ? nil : remainder
     }
 
-    func slugify(_ text: String?) -> String? {
+    static func slugify(_ text: String?) -> String? {
         TheScore.slugify(text)
     }
     }
-} // extension TheBagman
+} // extension TheStash
 
 #endif // DEBUG
 #endif // canImport(UIKit)

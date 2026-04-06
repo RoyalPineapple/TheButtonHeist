@@ -7,12 +7,12 @@ import XCTest
 @MainActor
 final class DiagnosticsTests: XCTestCase {
 
-    private let diagnostics = TheBagman.Diagnostics()
+    private typealias Diagnostics = TheStash.Diagnostics
 
     // MARK: - heistIdNotFound
 
     func testHeistIdNotFoundNoSimilar() {
-        let message = diagnostics.heistIdNotFound(
+        let message = Diagnostics.heistIdNotFound(
             "missing-button",
             knownIds: ["header", "footer", "nav"],
             viewportCount: 3
@@ -22,7 +22,7 @@ final class DiagnosticsTests: XCTestCase {
     }
 
     func testHeistIdNotFoundWithSubstringMatch() {
-        let message = diagnostics.heistIdNotFound(
+        let message = Diagnostics.heistIdNotFound(
             "button",
             knownIds: ["submit-button", "cancel-button", "header"],
             viewportCount: 3
@@ -34,7 +34,7 @@ final class DiagnosticsTests: XCTestCase {
     }
 
     func testHeistIdNotFoundReverseSubstringMatch() {
-        let message = diagnostics.heistIdNotFound(
+        let message = Diagnostics.heistIdNotFound(
             "submit-button-primary",
             knownIds: ["submit-button", "cancel"],
             viewportCount: 2
@@ -47,7 +47,7 @@ final class DiagnosticsTests: XCTestCase {
 
     func testFormatMatcherLabelOnly() {
         let matcher = ElementMatcher(label: "Submit")
-        let formatted = diagnostics.formatMatcher(matcher)
+        let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertEqual(formatted, "label=\"Submit\"")
     }
 
@@ -58,7 +58,7 @@ final class DiagnosticsTests: XCTestCase {
             value: "enabled",
             traits: [.button]
         )
-        let formatted = diagnostics.formatMatcher(matcher)
+        let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertTrue(formatted.contains("label=\"Save\""))
         XCTAssertTrue(formatted.contains("identifier=\"save-btn\""))
         XCTAssertTrue(formatted.contains("value=\"enabled\""))
@@ -67,14 +67,14 @@ final class DiagnosticsTests: XCTestCase {
 
     func testFormatMatcherEmpty() {
         let matcher = ElementMatcher()
-        let formatted = diagnostics.formatMatcher(matcher)
+        let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertTrue(formatted.isEmpty)
     }
 
     // MARK: - compactElementSummary
 
     func testCompactSummaryEmptyScreen() {
-        let summary = diagnostics.compactElementSummary(
+        let summary = Diagnostics.compactElementSummary(
             screenElements: [:],
             viewportHeistIds: [],
             traversalOrder: [:]
@@ -84,7 +84,7 @@ final class DiagnosticsTests: XCTestCase {
 
     func testCompactSummaryShowsElementCount() {
         let element = makeElement(label: "Hello")
-        let screenElement = TheBagman.ScreenElement(
+        let screenElement = TheStash.ScreenElement(
             heistId: "hello",
             contentSpaceOrigin: nil,
             element: element,
@@ -92,7 +92,7 @@ final class DiagnosticsTests: XCTestCase {
             scrollView: nil
         )
 
-        let summary = diagnostics.compactElementSummary(
+        let summary = Diagnostics.compactElementSummary(
             screenElements: ["hello": screenElement],
             viewportHeistIds: ["hello"],
             traversalOrder: ["hello": 0]
