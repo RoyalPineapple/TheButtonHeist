@@ -1,5 +1,11 @@
 import Foundation
 
+// MARK: - Format Version
+
+public enum SessionFormatVersion {
+    public static let current = "0.1.0"
+}
+
 // MARK: - Artifact Types
 
 public enum ArtifactType: String, Codable, Sendable, CaseIterable {
@@ -73,6 +79,7 @@ public struct ArtifactEntry: Codable, Sendable, Equatable {
 // MARK: - Session Manifest
 
 public struct SessionManifest: Codable, Sendable, Equatable {
+    public let formatVersion: String
     public let sessionId: String
     public let startTime: Date
     public var endTime: Date?
@@ -88,6 +95,7 @@ public struct SessionManifest: Codable, Sendable, Equatable {
         commandCount: Int = 0,
         errorCount: Int = 0
     ) {
+        self.formatVersion = SessionFormatVersion.current
         self.sessionId = sessionId
         self.startTime = startTime
         self.endTime = endTime
