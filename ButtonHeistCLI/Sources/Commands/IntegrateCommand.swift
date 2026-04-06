@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import TheScore
 
 struct IntegrateCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -46,6 +47,7 @@ struct IntegrateCommand: ParsableCommand {
         // Load prompt template and inject the frameworks path
         var prompt = loadIntegrationPrompt()
         prompt = prompt.replacingOccurrences(of: "{{FRAMEWORKS_PATH}}", with: frameworksPath)
+        prompt = prompt.replacingOccurrences(of: "{{VERSION}}", with: buttonHeistVersion)
 
         if printPrompt {
             print(prompt)
