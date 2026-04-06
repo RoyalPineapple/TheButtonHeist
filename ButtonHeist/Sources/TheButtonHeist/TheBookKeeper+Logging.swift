@@ -11,7 +11,7 @@ extension TheBookKeeper {
         arguments: [String: Any]
     ) -> [String: Any] {
         var sanitizedArgs: [String: Any] = [:]
-        for (key, value) in arguments where key != "command" {
+        for (key, value) in arguments where key != "command" && !key.hasPrefix("_") {
             if Self.binaryKeys.contains(key) {
                 continue
             }

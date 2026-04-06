@@ -123,6 +123,13 @@ public final class TheBookKeeper {
         FileManager.default.createFile(atPath: logPath.path, contents: nil)
         let logHandle = try FileHandle(forWritingTo: logPath)
 
+        let headerEntry: [String: Any] = [
+            "type": "header",
+            "formatVersion": SessionFormatVersion.current,
+            "sessionId": sessionId,
+        ]
+        try appendLogLine(headerEntry, to: logHandle)
+
         let startTime = Date()
         let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
         phase = .active(ActiveSession(
