@@ -77,9 +77,10 @@ extension TheFence {
         }
         if case .active = bookKeeper.phase {
             let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
+            let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
             let fileURL = try bookKeeper.writeScreenshot(
                 base64Data: screen.pngData,
-                requestId: UUID().uuidString,
+                requestId: artifactRequestId,
                 command: .getScreen,
                 metadata: metadata
             )
@@ -581,9 +582,10 @@ extension TheFence {
                 fps: recording.fps,
                 frameCount: recording.frameCount
             )
+            let artifactRequestId = (args["_requestId"] as? String) ?? UUID().uuidString
             let fileURL = try bookKeeper.writeRecording(
                 base64Data: recording.videoData,
-                requestId: UUID().uuidString,
+                requestId: artifactRequestId,
                 command: .stopRecording,
                 metadata: metadata
             )

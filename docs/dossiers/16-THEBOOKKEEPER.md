@@ -260,7 +260,7 @@ Both implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
 ### Logging integration
 
-TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `try?` so logging failures never break command execution. When no session is active (`.idle` phase), both calls silently no-op.
+TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `do/catch` with `os.log` warnings so logging failures never break command execution. The `requestId` generated in `execute()` is threaded into handlers via `_requestId` in the args dict, ensuring session log entries and artifact writes share the same correlation ID. When no session is active (`.idle` phase), both calls silently no-op.
 
 ### File write delegation
 
