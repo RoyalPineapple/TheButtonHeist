@@ -22,9 +22,9 @@ extension AccessibilityElement {
     }
 
     private var hasSemanticIdentity: Bool {
-        (label != nil && label?.isEmpty == false)
-            || (identifier != nil && identifier?.isEmpty == false)
-            || (value != nil && value?.isEmpty == false)
+        label?.isEmpty == false
+            || identifier?.isEmpty == false
+            || value?.isEmpty == false
     }
 
     var stableKey: StableKey {
@@ -65,13 +65,6 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
 
-    /// All leaf elements in the tree that satisfy the property predicates.
-    func allMatches(_ matcher: ElementMatcher) -> [AccessibilityHierarchy.MatchResult] {
-        compactMap { element, _ in
-            element.matches(matcher) ? .init(element: element) : nil
-        }
-    }
-
     /// First leaf element in the tree that satisfies all property predicates.
     func firstMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
         matches(matcher, limit: 1).first
@@ -96,14 +89,6 @@ extension Array where Element == AccessibilityHierarchy {
     /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
         !matches(matcher, limit: 1).isEmpty
-    }
-
-    /// Returns the match only if exactly one leaf element satisfies the predicate.
-    /// Returns nil on zero matches or ambiguity (2+).
-    func uniqueMatch(_ matcher: ElementMatcher) -> AccessibilityHierarchy.MatchResult? {
-        let hits = matches(matcher, limit: 2)
-        guard hits.count == 1 else { return nil }
-        return hits[0]
     }
 }
 
@@ -172,18 +157,39 @@ extension AccessibilityElement {
     }
 }
 
-// MARK: - TheStash Convenience
+// MARK: - TheStash Match Pipeline
 
 extension TheStash {
 
-    /// Search the hierarchy tree for the first match.
-    func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {
-        currentHierarchy.firstMatch(matcher)?.element
+    /// Single entry point for matcher-based element lookup. Returns up to `limit`
+    /// matching ScreenElements. Checks the hierarchy first (preserves traversal
+    /// order for on-screen elements), falls back to the full registry (explored
+    /// off-screen elements) when the hierarchy has zero matches.
+    func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
+        guard limit > 0 else { return [] }
+        let hierarchyHits = currentHierarchy.matches(matcher, limit: limit)
+        if !hierarchyHits.isEmpty {
+            return hierarchyHits.compactMap { match in
+                guard let heistId = registry.reverseIndex[match.element] else { return nil }
+                return registry.elements[heistId]
+            }
+        }
+        var results: [ScreenElement] = []
+        for screenElement in registry.elements.values where screenElement.element.matches(matcher) {
+            results.append(screenElement)
+            if results.count >= limit { break }
+        }
+        return results
     }
 
-    /// Whether any element in the current hierarchy matches the predicate.
+    /// Search for the first matching element.
+    func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {
+        matchScreenElements(matcher, limit: 1).first?.element
+    }
+
+    /// Whether any element matches the predicate.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        currentHierarchy.hasMatch(matcher)
+        !matchScreenElements(matcher, limit: 1).isEmpty
     }
 }
 
