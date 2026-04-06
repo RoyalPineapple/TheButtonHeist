@@ -3,7 +3,7 @@
 #
 # Performs the full release pipeline from a clean main branch:
 #   1. Validate: must be on main, in sync with origin, clean worktree
-#   2. Bump version across 5 files
+#   2. Bump version across 5 files + regenerate Xcode projects
 #   3. Build all targets (TheScore, ButtonHeist, TheInsideJob, CLI, MCP)
 #   4. Run all tests (TheScoreTests, ButtonHeistTests, TheInsideJobTests)
 #   5. Commit, tag, push
@@ -118,7 +118,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "(dry run — stopping after validation)"
     echo ""
     echo "Would perform:"
-    echo "  1. Bump version in 5 files"
+    echo "  1. Bump version in 5 files + regenerate Xcode projects"
     echo "  2. Build TheScore, ButtonHeist, TheInsideJob, CLI, MCP"
     echo "  3. Run TheScoreTests, ButtonHeistTests, TheInsideJobTests"
     echo "  4. Commit 'Release $NEW_VERSION', tag v$NEW_VERSION, push"
@@ -164,6 +164,11 @@ echo "  ✓ DisclosureGroupingDemo.swift"
 # 5. Formula/buttonheist.rb (in-repo template — PLACEHOLDERs stay, CI fills them)
 sed -i '' "s/version \"$CURRENT_ESC\"/version \"$NEW_ESC\"/" Formula/buttonheist.rb
 echo "  ✓ Formula/buttonheist.rb"
+
+# 6. Regenerate Xcode projects so pbxproj files stay in sync
+echo "  Regenerating Xcode projects..."
+tuist generate --no-open
+echo "  ✓ Xcode projects"
 echo ""
 
 # --------------------------------------------------------------------------
@@ -248,7 +253,8 @@ git add \
     VERSION \
     docs/API.md \
     TestApp/Sources/DisclosureGroupingDemo.swift \
-    Formula/buttonheist.rb
+    Formula/buttonheist.rb \
+    -- '*.pbxproj' '*.xcworkspacedata'
 
 git commit -m "Release $NEW_VERSION"
 git tag "v$NEW_VERSION"
