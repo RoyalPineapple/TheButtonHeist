@@ -65,15 +65,25 @@ extension TheFence {
             try await self.waitForScreen(requestId: requestId, timeout: 30)
         }
         if let outputPath = stringArg(args, "output") {
-            guard !outputPath.split(separator: "/").contains("..") else {
-                return .error("Invalid output path: must not contain '..' components")
-            }
-            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
-            try pngData.write(to: resolvedURL)
-            return .screenshot(path: resolvedURL.path, width: screen.width, height: screen.height)
+            do {
+                let resolvedURL = try bookKeeper.writeToPath(pngData, outputPath: outputPath)
+                return .screenshot(path: resolvedURL.path, width: screen.width, height: screen.height)
+            } catch is BookKeeperError {
+                return .error("Invalid output path: must not contain '..' components")
+            }
+        }
+        if case .active = bookKeeper.phase {
+            let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
+            let fileURL = try bookKeeper.writeScreenshot(
+                base64Data: screen.pngData,
+                requestId: UUID().uuidString,
+                command: .getScreen,
+                metadata: metadata
+            )
+            return .screenshot(path: fileURL.path, width: screen.width, height: screen.height)
         }
         return .screenshotData(pngData: screen.pngData, width: screen.width, height: screen.height)
     }
@@ -553,15 +563,31 @@ extension TheFence {
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
         if let outputPath = stringArg(args, "output") {
-            guard !outputPath.split(separator: "/").contains("..") else {
-                return .error("Invalid output path: must not contain '..' components")
-            }
-            let resolvedURL = URL(fileURLWithPath: outputPath).standardized
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
-            try videoData.write(to: resolvedURL)
-            return .recording(path: resolvedURL.path, payload: recording)
+            do {
+                let resolvedURL = try bookKeeper.writeToPath(videoData, outputPath: outputPath)
+                return .recording(path: resolvedURL.path, payload: recording)
+            } catch is BookKeeperError {
+                return .error("Invalid output path: must not contain '..' components")
+            }
+        }
+        if case .active = bookKeeper.phase {
+            let metadata = RecordingMetadata(
+                width: recording.width,
+                height: recording.height,
+                duration: recording.duration,
+                fps: recording.fps,
+                frameCount: recording.frameCount
+            )
+            let fileURL = try bookKeeper.writeRecording(
+                base64Data: recording.videoData,
+                requestId: UUID().uuidString,
+                command: .stopRecording,
+                metadata: metadata
+            )
+            return .recording(path: fileURL.path, payload: recording)
         }
         return .recordingData(payload: recording)
     }

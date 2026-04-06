@@ -247,13 +247,16 @@ case archiveResult(path: String, manifest: SessionManifest)
 
 Both implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
 
-### Logging integration (planned)
+### Logging integration
 
-TheFence's `execute(request:)` is the hook point for wrapping dispatch with log calls. The API is ready — `logCommand` and `logResponse` silently no-op when the phase is `.idle`, so wiring them in has no effect until a session is begun.
+TheFence's `execute(request:)` wraps every dispatch with `logCommand` (before) and `logResponse` (after), including timing in milliseconds. Errors that throw from dispatch are also logged before re-throwing. Both calls use `try?` so logging failures never break command execution. When no session is active (`.idle` phase), both calls silently no-op.
 
-### File write delegation (planned)
+### File write delegation
 
-TheFence handlers `handleGetScreen` and `handleStopRecording` still write files inline via `Data.write(to:)` with duplicated path-traversal guards. The plan is to delegate these to `bookKeeper.writeToPath` and `bookKeeper.writeScreenshot`/`writeRecording`, removing the duplicated `..` checks from handlers.
+TheFence handlers `handleGetScreen` and `handleStopRecording` delegate file writes to TheBookKeeper:
+- **Explicit `--output` path**: delegates to `bookKeeper.writeToPath`, which validates path safety (rejects `..` components). `BookKeeperError.unsafePath` is caught and converted to `.error()` for the caller.
+- **Active session, no explicit path**: auto-persists to the session directory via `bookKeeper.writeScreenshot`/`writeRecording`, which tracks the artifact in the manifest with sequence-numbered filenames and metadata. Returns a `.screenshot`/`.recording` response with the file path.
+- **No session, no explicit path**: returns raw base64 data over the wire (unchanged behavior).
 
 ## CLI Commands
 
