@@ -142,26 +142,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Init required submodules
-        run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshot
-
-      - name: Install Tuist
-        uses: jdx/mise-action@v2
-
-      - name: Cache Tuist dependencies
-        uses: actions/cache@v4
-        with:
-          path: Tuist/.build
-          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-deps-
-
-      - name: Install Tuist dependencies
-        timeout-minutes: 5
-        run: tuist install
-
       - name: Boot simulator in background
         run: |
           set -eo pipefail
@@ -188,6 +168,26 @@ jobs:
           echo "Booting simulator $SIM_UDID (iOS $SIM_OS)"
           xcrun simctl boot "$SIM_UDID" || true
           # Boot continues asynchronously — don't wait for bootstatus here
+
+      - name: Init required submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive submodules/AccessibilitySnapshot
+
+      - name: Install Tuist
+        uses: jdx/mise-action@v2
+
+      - name: Cache Tuist dependencies
+        uses: actions/cache@v4
+        with:
+          path: Tuist/.build
+          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-deps-
+
+      - name: Install Tuist dependencies
+        timeout-minutes: 5
+        run: tuist install
 
       - name: Generate project
         timeout-minutes: 5
