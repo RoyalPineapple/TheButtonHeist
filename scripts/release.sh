@@ -259,6 +259,10 @@ echo ""
 
 echo "==> Phase 5: Committing and tagging"
 
+# Regenerate right before commit so the pre-commit hook's tuist generate
+# produces identical output (build artifacts can shift cache state)
+tuist generate --no-open
+
 git add \
     ButtonHeist/Sources/TheScore/Messages.swift \
     VERSION \
