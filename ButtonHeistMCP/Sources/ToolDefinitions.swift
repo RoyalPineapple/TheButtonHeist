@@ -114,46 +114,26 @@ enum ToolDefinitions {
     // MARK: - Getting Started
     //
     // Button Heist navigates iOS apps through the real accessibility interface — the same
-    // labels, values, traits, hints, and actions that VoiceOver users rely on. There are no
-    // accessibility identifiers involved. If the agent can't find an element, a blind user
-    // can't either, and the fix is better accessibility — not a test hook.
+    // labels, values, traits, hints, and actions that VoiceOver users rely on.
     //
-    // Start with these 5 tools:
+    // Core workflow:
     //   1. connect         — establish a session with the iOS app
-    //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
-    //   3. activate        — tap elements that have "activate" in their actions array
-    //   4. scroll_to_visible — navigate long lists to find off-screen elements
-    //   5. run_batch       — multi-step sequences with expectations
+    //   2. get_interface   — read the screen once (elements with heistId, label, traits)
+    //   3. Act and read deltas — every action returns what changed. Don't call
+    //      get_interface after every action — the delta is your feedback loop.
+    //   4. run_batch       — when you know your next 3-5 steps, send them in one call
     //
     // Finding elements:
-    //   Every element on screen has a heistId (deterministic, stable across refreshes)
-    //   plus natural accessibility properties: label, value, traits, actions, hints.
-    //
-    //   - heistId: copy from get_interface, paste into activate. Zero ambiguity, preferred
-    //     for targeting specific known elements.
-    //   - label: match by the text a VoiceOver user would hear ("Sign In", "Mountain Sunset").
-    //   - value: match by the element's current value ("Email", "50%", "3 items remaining").
-    //     Text fields expose placeholder text as their value when empty.
-    //   - traits: match by role — "button", "staticText", "header", "selected", "notEnabled",
-    //     "textEntry", "secureTextField", "image", etc. Add traits to disambiguate when labels
-    //     collide (e.g. label="Add" + traits=["button"] to skip the "Add Todo" header).
-    //   - actions: elements advertise custom actions like "Delete", "Add to Queue",
-    //     "Remove from Favorites". Use activate(action: "Delete") to invoke them.
-    //
-    //   All matcher fields are AND — every field you specify must match. Start with just
-    //   label, add traits or value only if you get ambiguous matches. If multiple elements
-    //   still match, the error tells you the valid ordinal range — pass ordinal (0-based)
-    //   to pick by position: 0 = first match, 1 = second, etc.
-    //
-    // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
-    // get_screen (screenshots).
+    //   Every element has a heistId (stable on the current screen) plus label, value,
+    //   traits, actions, hints. Use heistId for known elements, label/traits for discovery.
+    //   All matcher fields are AND. Start with just label, add traits if ambiguous.
     //
     // Speed through batching:
     //   run_batch replaces multiple tool calls with one. Attach 'expect' to each step
     //   so the batch is self-verifying — if step 3 fails, it stops there and tells you
-    //   exactly what diverged. This lets you confidently batch 5-10 steps at a time.
-    //   Match the expectation to the action: "screen_changed" for navigation taps,
-    //   "elements_changed" for add/delete, {"elementUpdated": {...}} for toggles and pickers.
+    //   exactly what diverged. Match the expectation to the action: "screen_changed" for
+    //   navigation, "elements_changed" for add/delete, {"elementUpdated": {...}} for
+    //   toggles and pickers.
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -171,17 +151,20 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy. By default, explores the entire screen \
-            including off-screen content in scroll views — every element the app exposes is \
-            returned. Pass full=false for only visible elements (faster, but may miss content \
-            below the fold). Use detail=full for geometry (frame, activation point). \
-            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
+            Read the full UI element hierarchy. Call once when you arrive on a new screen, \
+            then use deltas from subsequent actions to track changes — don't call again unless \
+            you need elements the delta didn't cover. \
             \
-            Every action response includes a delta — use that first: \
+            Every action (activate, type_text, scroll, etc.) returns a delta: \
             + heistId "label" [traits] = appeared, - heistId = disappeared, \
-            ~ heistId: property "old" > "new" = changed, screen changed = full navigation \
-            (new interface included, all old heistIds invalidated). \
-            Only call get_interface again when you need elements the delta didn't cover. \
+            ~ heistId: property "old" → "new" = changed, screen changed = new screen \
+            (full interface included, previous heistIds invalidated). \
+            The delta is your primary feedback loop — it tells you what happened without \
+            an extra round trip. \
+            \
+            By default explores the entire screen including off-screen content in scroll views. \
+            Pass full=false for only visible elements (faster). Use detail=full for geometry. \
+            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
             \
             Targeting: heistId is stable on the current screen — copy from a previous response, \
             use in the next action. After a screen change, all heistIds reset — use matchers \
@@ -218,16 +201,15 @@ enum ToolDefinitions {
     static let activate = Tool(
         name: "activate",
         description: """
-            Activate a UI element — the primary way to tap buttons, follow links, and toggle controls. \
-            Works like a VoiceOver double-tap: tries accessibility activation first, falls back to synthetic tap. \
-            Only elements with "activate" in their actions array can be activated — static text, headers, and \
-            images without actions will fail. Check the element's actions in get_interface before calling. \
-            Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
-            value (current state), traits (role like "button", "selected"). \
+            Activate a UI element — tap buttons, follow links, toggle controls. Returns a delta \
+            showing what changed, so you don't need to call get_interface after every action. \
+            Works like a VoiceOver double-tap: accessibility activation first, synthetic tap fallback. \
+            Only elements with "activate" in their actions array can be activated. \
+            Target by heistId (from get_interface) or by label, value, traits. \
             If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
             If multiple elements still match, the error shows the valid ordinal range — pass ordinal to select \
             by position (0 = first, 1 = second, etc.). \
-            Pass 'action' to invoke a custom action instead: "increment", "decrement", "Delete", or any action from the element's actions array.
+            Pass 'action' to invoke a custom action: "increment", "decrement", "Delete", or any action from the element's actions array.
             """,
         inputSchema: .object([
             "type": "object",
