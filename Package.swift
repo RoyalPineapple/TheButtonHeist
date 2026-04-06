@@ -43,7 +43,7 @@ let package = Package(
         // Objective-C loader that triggers auto-start via +load
         .target(
             name: "ThePlant",
-            dependencies: ["TheInsideJob"],
+            dependencies: [],
             path: "ButtonHeist/Sources/ThePlant",
             publicHeadersPath: "include"
         ),
