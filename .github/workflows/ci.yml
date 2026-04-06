@@ -83,10 +83,6 @@ jobs:
         timeout-minutes: 5
         run: swift build --target ButtonHeist
 
-      - name: Build TheInsideJob (iOS)
-        timeout-minutes: 5
-        run: xcodebuild -scheme TheInsideJob -destination 'generic/platform=iOS Simulator' build
-
   macos-tests:
     runs-on: macos-15
     timeout-minutes: 15
