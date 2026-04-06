@@ -78,8 +78,7 @@ jobs:
       - name: Build BH Demo for iOS Simulator
         run: |
           tuist install
-          tuist cache --external-only
-          tuist generate --no-open
+          tuist generate --no-binary-cache --no-open
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "generic/platform=iOS Simulator" \
             build | tail -5
@@ -87,14 +86,30 @@ jobs:
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           echo "Built: $APP_PATH"
 
+      - name: Collect TheInsideJob frameworks
+        run: |
+          PRODUCTS_DIR=$(dirname "$APP_PATH")
+          mkdir -p dist/ButtonHeistFrameworks
+          FRAMEWORKS=(
+            TheInsideJob TheScore
+            AccessibilitySnapshotParser AccessibilitySnapshotParser_ObjC
+            X509 Crypto SwiftASN1
+            CCryptoBoringSSL CCryptoBoringSSLShims CryptoBoringWrapper
+            _CertificateInternals _CryptoExtras
+          )
+          for fw in "${FRAMEWORKS[@]}"; do
+            cp -R "${PRODUCTS_DIR}/${fw}.framework" dist/ButtonHeistFrameworks/
+          done
+          echo "Collected $(ls dist/ButtonHeistFrameworks | wc -l | tr -d ' ') frameworks"
+
       - name: Package binaries and scripts
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
 
-          # CLI (single binary — prompt is embedded at compile time via build plugin)
+          # CLI + frameworks (integrate command expects ButtonHeistFrameworks/ next to binary)
           cp ButtonHeistCLI/.build/buttonheist dist/
-          tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist
+          tar -czf "dist/buttonheist-${VERSION}-macos.tar.gz" -C dist buttonheist ButtonHeistFrameworks
           rm dist/buttonheist
 
           # MCP
@@ -155,6 +170,7 @@ jobs:
 
             def install
               bin.install "buttonheist"
+              bin.install "ButtonHeistFrameworks" if (buildpath/"ButtonHeistFrameworks").exist?
               resource("mcp").stage { bin.install "buttonheist-mcp" }
             end
 
