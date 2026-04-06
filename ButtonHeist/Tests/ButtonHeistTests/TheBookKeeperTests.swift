@@ -216,8 +216,11 @@ final class TheBookKeeperTests: XCTestCase {
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
         let lines = content.split(separator: "\n")
-        XCTAssertEqual(lines.count, 1)
-        let json = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(lines.count, 2) // header + command
+        let header = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(header?["type"] as? String, "header")
+        XCTAssertEqual(header?["formatVersion"] as? String, SessionFormatVersion.current)
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         XCTAssertEqual(json?["type"] as? String, "command")
         XCTAssertEqual(json?["requestId"] as? String, "req-1")
         XCTAssertEqual(json?["command"] as? String, "activate")
@@ -239,8 +242,8 @@ final class TheBookKeeperTests: XCTestCase {
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
         let lines = content.split(separator: "\n")
-        XCTAssertEqual(lines.count, 1)
-        let json = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
+        XCTAssertEqual(lines.count, 2) // header + response
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         XCTAssertEqual(json?["type"] as? String, "response")
         XCTAssertEqual(json?["requestId"] as? String, "req-1")
         XCTAssertEqual(json?["status"] as? String, "ok")
@@ -300,6 +303,7 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test-manifest")
         let manifest = bookKeeper.manifest
         XCTAssertNotNil(manifest)
+        XCTAssertEqual(manifest?.formatVersion, SessionFormatVersion.current)
         XCTAssertEqual(manifest?.artifacts.count, 0)
         XCTAssertEqual(manifest?.commandCount, 0)
         XCTAssertEqual(manifest?.errorCount, 0)
@@ -501,10 +505,10 @@ final class TheBookKeeperTests: XCTestCase {
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
         let lines = content.split(separator: "\n")
-        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(lines.count, 3) // header + command + response
 
-        let commandEntry = try JSONSerialization.jsonObject(with: Data(lines[0].utf8)) as? [String: Any]
-        let responseEntry = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let commandEntry = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
+        let responseEntry = try JSONSerialization.jsonObject(with: Data(lines[2].utf8)) as? [String: Any]
 
         XCTAssertEqual(commandEntry?["requestId"] as? String, "req-42")
         XCTAssertEqual(commandEntry?["type"] as? String, "command")
@@ -529,7 +533,9 @@ final class TheBookKeeperTests: XCTestCase {
         }
         let logPath = session.directory.appendingPathComponent("session.jsonl")
         let content = try String(contentsOf: logPath, encoding: .utf8)
-        let json = try JSONSerialization.jsonObject(with: Data(content.utf8)) as? [String: Any]
+        let lines = content.split(separator: "\n")
+        XCTAssertEqual(lines.count, 2) // header + response
+        let json = try JSONSerialization.jsonObject(with: Data(lines[1].utf8)) as? [String: Any]
         XCTAssertEqual(json?["artifact"] as? String, "recordings/001-stop_recording.mp4")
     }
 

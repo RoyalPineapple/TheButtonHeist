@@ -358,6 +358,7 @@ public enum FenceResponse {
         let formatter = ISO8601DateFormatter()
         var dict: [String: Any] = [
             "status": "ok",
+            "formatVersion": manifest.formatVersion,
             "sessionId": manifest.sessionId,
             "startTime": formatter.string(from: manifest.startTime),
             "commandCount": manifest.commandCount,

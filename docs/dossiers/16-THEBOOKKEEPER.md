@@ -137,11 +137,19 @@ $XDG_DATA_HOME/buttonheist/sessions/
 
 The `init(baseDirectory:)` parameter overrides all env var resolution, used by tests to write into a temp directory.
 
+## Format Versioning
+
+Both the JSONL session log and the manifest use SemVer versioning via `SessionFormatVersion.current` (defined in `SessionManifest.swift`). The current version is **0.1.0**. Bump the version when:
+- **Patch** (0.1.x): adding optional fields, clarifying semantics without changing structure
+- **Minor** (0.x.0): adding required fields, new record types, new artifact types
+- **Major** (x.0.0): removing fields, changing field types, breaking the JSONL line structure
+
 ## Session Log Format
 
-Append-only JSONL. One JSON object per line. Two record types:
+Append-only JSONL. One JSON object per line. The first line is always a header; subsequent lines are command/response pairs:
 
 ```jsonl
+{"formatVersion":"0.1.0","sessionId":"accra-scroll-detection-2026-04-02-143022","type":"header"}
 {"command":"activate","requestId":"abc-123","t":"2026-04-02T14:30:22.451Z","type":"command","args":{"identifier":"loginButton"}}
 {"duration_ms":441,"requestId":"abc-123","status":"ok","t":"2026-04-02T14:30:22.892Z","type":"response"}
 {"command":"get_screen","requestId":"def-456","t":"2026-04-02T14:30:25.100Z","type":"command"}
@@ -149,8 +157,10 @@ Append-only JSONL. One JSON object per line. Two record types:
 ```
 
 Fields:
+- `type` — `"header"`, `"command"`, or `"response"`
+- `formatVersion` — SemVer string (header only)
+- `sessionId` — session identifier (header only)
 - `t` — ISO 8601 timestamp with fractional seconds
-- `type` — `"command"` or `"response"`
 - `requestId` — correlates command/response pairs
 - `command` — the `TheFence.Command` raw value (command records only)
 - `args` — the request arguments, minus binary data and the `"command"` key itself (command records only; omitted when empty)
@@ -165,6 +175,7 @@ Binary data exclusion: keys in the `binaryKeys` set (`pngData`, `videoData`) are
 
 ```json
 {
+    "formatVersion": "0.1.0",
     "sessionId": "accra-scroll-detection-2026-04-02-143022",
     "startTime": "2026-04-02T14:30:22Z",
     "endTime": "2026-04-02T14:31:45Z",
