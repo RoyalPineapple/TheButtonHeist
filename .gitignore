@@ -34,3 +34,4 @@ demos/
 WebDriverAgent/
 AccessibilitySnapshotBH
 heist-test/
+.claude/
