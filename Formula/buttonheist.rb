@@ -24,6 +24,7 @@ class Buttonheist < Formula
 
   def install
     bin.install "buttonheist"
+    bin.install "ButtonHeistFrameworks" if (buildpath/"ButtonHeistFrameworks").exist?
     resource("mcp").stage { bin.install "buttonheist-mcp" }
   end
 
