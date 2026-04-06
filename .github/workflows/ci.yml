@@ -129,6 +129,11 @@ jobs:
         run: |
           echo "=== Restored cache directories ==="
           ls ~/.cache/tuist/Binaries/ 2>/dev/null || echo "No Binaries directory"
+          echo "=== Contents of first hash dir ==="
+          FIRST=$(ls ~/.cache/tuist/Binaries/ 2>/dev/null | head -1)
+          if [ -n "$FIRST" ]; then
+            ls -laR ~/.cache/tuist/Binaries/$FIRST/ | head -30
+          fi
           echo "=== Tuist expected hashes ==="
           tuist cache --print-hashes --external-only 2>&1 || true
 
