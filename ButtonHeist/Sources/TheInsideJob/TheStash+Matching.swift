@@ -177,13 +177,31 @@ extension AccessibilityElement {
 extension TheStash {
 
     /// Search the hierarchy tree for the first match.
+    /// Falls back to the full registry (including explored off-screen elements)
+    /// when the hierarchy contains no match.
     func findMatch(_ matcher: ElementMatcher) -> AccessibilityElement? {
-        currentHierarchy.firstMatch(matcher)?.element
+        if let hierarchyMatch = currentHierarchy.firstMatch(matcher)?.element {
+            return hierarchyMatch
+        }
+        return registryMatches(matcher, limit: 1).first?.element
     }
 
-    /// Whether any element in the current hierarchy matches the predicate.
+    /// Whether any element in the current hierarchy or the full registry matches.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
-        currentHierarchy.hasMatch(matcher)
+        currentHierarchy.hasMatch(matcher) || !registryMatches(matcher, limit: 1).isEmpty
+    }
+
+    /// Search the full element registry (including explored off-screen elements)
+    /// for elements matching a predicate. Returns up to `limit` results.
+    /// This is the fallback path when currentHierarchy (on-screen only) has no matches.
+    func registryMatches(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
+        guard limit > 0 else { return [] }
+        var results: [ScreenElement] = []
+        for screenElement in registry.elements.values where screenElement.element.matches(matcher) {
+            results.append(screenElement)
+            if results.count >= limit { break }
+        }
+        return results
     }
 }
 

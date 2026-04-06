@@ -64,6 +64,20 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.registry.reverseIndex[element] = heistId
     }
 
+    /// Register an element in the registry ONLY (not in currentHierarchy).
+    /// Simulates an explored off-screen element that was discovered by full explore
+    /// but is not currently visible in the viewport.
+    private func registerOffScreen(_ element: AccessibilityElement, heistId: String) {
+        bagman.registry.elements[heistId] = TheStash.ScreenElement(
+            heistId: heistId,
+            contentSpaceOrigin: nil,
+            element: element,
+            object: nil,
+            scrollView: nil
+        )
+        bagman.registry.reverseIndex[element] = heistId
+    }
+
     // MARK: - heistId Resolution
 
     func testHeistIdResolvesPresented() {
@@ -358,6 +372,95 @@ final class TheStashResolutionTests: XCTestCase {
         let heistIds = all.map(\.heistId)
         XCTAssertTrue(heistIds.contains("button_visible"))
         XCTAssertTrue(heistIds.contains("button_offscreen"))
+    }
+
+    // MARK: - Off-Screen Matcher Fallback
+
+    func testMatcherFallsBackToRegistryForOffScreenElement() {
+        let onScreen = element(label: "Visible", traits: .button)
+        let offScreen = element(label: "Long List", traits: .button)
+        register(onScreen, heistId: "button_visible", index: 0)
+        registerOffScreen(offScreen, heistId: "long_list_button")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long List", traits: [.button])))
+        guard let resolved = result.resolved else {
+            XCTFail("Expected .resolved from registry fallback, got \(result)")
+            return
+        }
+        XCTAssertEqual(resolved.element.label, "Long List")
+    }
+
+    func testMatcherPrefersHierarchyOverRegistry() {
+        let onScreen = element(label: "Save", traits: .button)
+        let offScreen = element(label: "Save Offscreen", traits: .button)
+        register(onScreen, heistId: "button_save", index: 0)
+        registerOffScreen(offScreen, heistId: "button_save_offscreen")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        guard let resolved = result.resolved else {
+            XCTFail("Expected .resolved, got \(result)")
+            return
+        }
+        XCTAssertEqual(resolved.element.label, "Save", "Should prefer on-screen hierarchy match")
+    }
+
+    func testMatcherRegistryFallbackAmbiguous() {
+        let offScreen1 = element(label: "Item", value: "one", traits: .button)
+        let offScreen2 = element(label: "Item", value: "two", traits: .button)
+        registerOffScreen(offScreen1, heistId: "item_1")
+        registerOffScreen(offScreen2, heistId: "item_2")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item")))
+        guard case .ambiguous(let candidates, let diagnostics) = result else {
+            XCTFail("Expected .ambiguous from registry fallback, got \(result)")
+            return
+        }
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertTrue(diagnostics.contains("2 elements match"))
+    }
+
+    func testMatcherRegistryFallbackWithOrdinal() {
+        let offScreen1 = element(label: "Item", value: "first")
+        let offScreen2 = element(label: "Item", value: "second")
+        registerOffScreen(offScreen1, heistId: "item_1")
+        registerOffScreen(offScreen2, heistId: "item_2")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 0))
+        XCTAssertNotNil(result.resolved, "Should resolve off-screen element with ordinal 0")
+    }
+
+    func testMatcherRegistryFallbackOrdinalOutOfBounds() {
+        let offScreen = element(label: "Item", value: "only")
+        registerOffScreen(offScreen, heistId: "item_1")
+
+        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Item"), ordinal: 5))
+        guard case .notFound(let diagnostics) = result else {
+            XCTFail("Expected .notFound, got \(result)")
+            return
+        }
+        XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
+    }
+
+    func testHasMatchFindsOffScreenElement() {
+        let offScreen = element(label: "Hidden Button", traits: .button)
+        registerOffScreen(offScreen, heistId: "hidden_button")
+
+        XCTAssertTrue(bagman.hasMatch(ElementMatcher(label: "Hidden Button")))
+    }
+
+    func testFindMatchFindsOffScreenElement() {
+        let offScreen = element(label: "Hidden Button", traits: .button)
+        registerOffScreen(offScreen, heistId: "hidden_button")
+
+        let found = bagman.findMatch(ElementMatcher(label: "Hidden Button"))
+        XCTAssertEqual(found?.label, "Hidden Button")
+    }
+
+    func testHasTargetFindsOffScreenMatcher() {
+        let offScreen = element(label: "Below Fold", traits: .button)
+        registerOffScreen(offScreen, heistId: "below_fold_button")
+
+        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
     }
 
     func testRegisteredElementResolvesWithoutMarkPresented() {

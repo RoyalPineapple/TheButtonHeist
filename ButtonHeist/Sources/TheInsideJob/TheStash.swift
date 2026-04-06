@@ -176,6 +176,15 @@ final class TheStash {
                 }
                 // Ordinal selection: collect matches up to ordinal+1, return the Nth
                 let hits = source.matches(matcher, limit: ordinal + 1)
+                // Fall back to registry (explored off-screen elements) if hierarchy has no matches
+                if hits.isEmpty {
+                    let registryHits = registryMatches(matcher, limit: ordinal + 1)
+                    if ordinal < registryHits.count {
+                        return .resolved(ResolvedTarget(screenElement: registryHits[ordinal]))
+                    }
+                    let total = registryHits.count
+                    return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
+                }
                 guard ordinal < hits.count else {
                     let total = hits.count
                     return .notFound(diagnostics: "ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found")
@@ -217,8 +226,38 @@ final class TheStash {
                 }
                 return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
             }
-            return .notFound(diagnostics: matcherNotFoundMessage(matcher))
+            // Hierarchy had zero matches — fall back to registry (explored off-screen elements)
+            return resolveMatcherFromRegistry(matcher)
         }
+    }
+
+    /// Registry-only matcher resolution — used when the hierarchy has zero matches.
+    /// Searches explored off-screen elements with the same unique/ambiguous semantics.
+    private func resolveMatcherFromRegistry(_ matcher: ElementMatcher) -> TargetResolution {
+        let registryHits = registryMatches(matcher, limit: 2)
+        if registryHits.count == 1 {
+            return .resolved(ResolvedTarget(screenElement: registryHits[0]))
+        }
+        if registryHits.count > 1 {
+            let capped = registryMatches(matcher, limit: 11)
+            let candidates = capped.prefix(10).map { screenElement -> String in
+                var parts: [String] = []
+                if let label = screenElement.element.label, !label.isEmpty { parts.append("\"\(label)\"") }
+                if let identifier = screenElement.element.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
+                if let value = screenElement.element.value, !value.isEmpty { parts.append("value=\(value)") }
+                return parts.joined(separator: " ")
+            }
+            let query = formatMatcher(matcher)
+            let countLabel = capped.count > 10 ? "10+" : "\(capped.count)"
+            let rangeLabel = capped.count > 10 ? "0, 1, 2, ..." : "0–\(capped.count - 1)"
+            var lines = ["\(countLabel) elements match: \(query) — use ordinal \(rangeLabel) to select one"]
+            lines.append(contentsOf: candidates.map { "  \($0)" })
+            if capped.count > 10 {
+                lines.append("  ... and more")
+            }
+            return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
+        }
+        return .notFound(diagnostics: matcherNotFoundMessage(matcher))
     }
 
     /// Resolve a target using first-match semantics (no ambiguity check).
@@ -238,7 +277,7 @@ final class TheStash {
     /// Existence check — does any element match this target?
     /// Unlike resolveTarget, does NOT require uniqueness for matchers.
     /// For heistId: checks registry.elements.
-    /// For matcher: checks currentHierarchy.
+    /// For matcher: checks currentHierarchy, then falls back to registry.
     func hasTarget(_ target: ElementTarget) -> Bool {
         switch target {
         case .heistId(let heistId):
