@@ -214,8 +214,8 @@ final class IdAssignerTests: XCTestCase {
             makeElement(label: "OK", traits: [.button]),
             makeElement(label: "OK", traits: [.button]),
         ])
-        XCTAssertEqual(ids[0], "button_ok_1")
-        XCTAssertEqual(ids[1], "button_ok_2")
+        XCTAssertEqual(ids[0], "ok_button_1")
+        XCTAssertEqual(ids[1], "ok_button_2")
     }
 
     func testThreeDuplicatesGetSequentialSuffixes() {
@@ -253,8 +253,8 @@ final class IdAssignerTests: XCTestCase {
             makeElement(label: "OK", traits: [.button]),
             makeElement(label: "Cancel", traits: [.button]),
         ])
-        XCTAssertEqual(ids[0], "button_ok_1")
-        XCTAssertEqual(ids[1], "button_ok_2")
+        XCTAssertEqual(ids[0], "ok_button_1")
+        XCTAssertEqual(ids[1], "ok_button_2")
         XCTAssertEqual(ids[2], "cancel_button")
     }
 
