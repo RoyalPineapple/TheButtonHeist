@@ -113,12 +113,24 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
+      - name: Cache Tuist binary cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
+        with:
+          path: ~/.cache/tuist/Binaries
+          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved', 'submodules/AccessibilitySnapshot') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-binaries-
+
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
+
       - name: Verify generated project is up to date
         timeout-minutes: 3
         run: |
-          tuist generate --no-binary-cache
+          tuist generate --no-open
           git diff --exit-code -- '*.pbxproj' '*.xcworkspacedata' || {
-            echo "::error::Generated Xcode project is out of date. Run 'tuist generate' and commit the changes."
+            echo "::error::Generated Xcode project is out of date. Run 'tuist cache --external-only && tuist generate' and commit the changes."
             echo "::group::Diff"
             git diff -- '*.pbxproj' '*.xcworkspacedata'
             echo "::endgroup::"
@@ -189,9 +201,21 @@ jobs:
         timeout-minutes: 5
         run: tuist install
 
+      - name: Cache Tuist binary cache
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
+        with:
+          path: ~/.cache/tuist/Binaries
+          key: ${{ runner.os }}-tuist-binaries-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved', 'submodules/AccessibilitySnapshot') }}
+          restore-keys: |
+            ${{ runner.os }}-tuist-binaries-
+
+      - name: Warm binary cache for external dependencies
+        timeout-minutes: 10
+        run: tuist cache --external-only
+
       - name: Generate project
         timeout-minutes: 5
-        run: tuist generate --no-binary-cache --no-open
+        run: tuist generate --no-open
 
       - name: Build iOS app targets
         timeout-minutes: 10
