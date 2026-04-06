@@ -46,16 +46,18 @@ enum ToolDefinitions {
     // Shared expect property for action tools — matches the batch step schema
     static let expectProperty: Value = [
         "description": """
-            Outcome signal for this action. Delivery is always checked implicitly. \
-            String values: "screen_changed" (did the view controller change?), \
-            "elements_changed" (were elements added, removed, or updated?). \
-            Object values: \
+            Inline verification for this action — match the expectation to what the action does. \
+            Navigation (tap a link, back button): "screen_changed". \
+            Insertion or deletion (add item, delete row): "elements_changed". \
+            State change (toggle, picker, text input): \
             {"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}} — \
-            check property changes. All fields optional, omitted = wildcard. \
+            proves the specific property changed. All fields optional, omitted = wildcard. \
             {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
             {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
-            Matcher fields (label, identifier, value, traits, excludeTraits) use the same \
-            matching rules as element targeting.
+            Expectations are most valuable inside run_batch: each step declares what should happen, \
+            and a failed expectation stops the batch at the exact step that diverged. This lets you \
+            batch 5-10 steps confidently — without expectations, a silent failure at step 2 poisons \
+            every step after it and you won't know where things went wrong.
             """,
         "oneOf": .array([
             [
@@ -145,6 +147,13 @@ enum ToolDefinitions {
     //
     // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
     // get_screen (screenshots).
+    //
+    // Speed through batching:
+    //   run_batch replaces multiple tool calls with one. Attach 'expect' to each step
+    //   so the batch is self-verifying — if step 3 fails, it stops there and tells you
+    //   exactly what diverged. This lets you confidently batch 5-10 steps at a time.
+    //   Match the expectation to the action: "screen_changed" for navigation taps,
+    //   "elements_changed" for add/delete, {"elementUpdated": {...}} for toggles and pickers.
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -602,13 +611,18 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
-            plus that command's parameters. Use stop_on_error (default) for dependent sequences, \
-            continue_on_error for independent steps. Returns per-step results and a merged net delta. \
+            Execute multiple commands in a single call — the fastest way to drive the UI. \
+            Each step is a JSON object with 'command' plus that command's parameters. \
+            One batch of 5-10 steps replaces 5-10 individual tool calls, dramatically reducing \
+            round trips. Use stop_on_error (default) for dependent sequences, continue_on_error \
+            for independent steps. Returns per-step results and a merged net delta. \
             \
-            Attach 'expect' to each step to build a self-verifying script: every step declares \
-            its hypothesis, the system checks it, and the summary tells you which passed and which \
-            diverged — a complete pass/fail report in one round trip. \
+            Attach 'expect' to each step to make large batches reliable. Without expectations, \
+            a silent failure at step 2 poisons every step after it and you won't know where \
+            things went wrong. With expectations, the batch stops at the exact step that diverged. \
+            Match the expectation to the action: "screen_changed" for navigation, \
+            "elements_changed" for insertions/deletions, {"elementUpdated": {...}} for state \
+            changes like toggles, pickers, and text input. \
             \
             Valid commands: activate, increment, decrement, perform_custom_action, type_text, \
             scroll, scroll_to_visible, scroll_to_edge, swipe, one_finger_tap, long_press, drag, \
