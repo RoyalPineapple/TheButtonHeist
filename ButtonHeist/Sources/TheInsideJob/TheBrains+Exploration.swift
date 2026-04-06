@@ -95,6 +95,13 @@ extension TheBrains {
                 )
                 let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
 
+                let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
+                if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
+                    await tripwire.yieldFrames(2)
+                    refresh()
+                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+                }
+
                 var originByElement = buildOriginIndex()
 
                 let initialPage = visibleElementsInContainer(container)
