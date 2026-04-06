@@ -101,45 +101,12 @@ jobs:
           tar -czf "dist/buttonheist-mcp-${VERSION}-macos.tar.gz" -C dist buttonheist-mcp
           rm dist/buttonheist-mcp
 
-          # Bake prompt.md into install.sh so the distributed script is self-contained.
-          # In the repo, install.sh has a load_prompt() function that reads prompt.md
-          # from disk at runtime. For the standalone release artifact we replace that
-          # function with a hardcoded INTEGRATION_PROMPT='...' assignment and strip
-          # the load_prompt call site.
-          python3 << 'BAKE_SCRIPT'
-          import re, pathlib
-
-          installer = pathlib.Path('scripts/installation/install.sh').read_text()
-          prompt = pathlib.Path('scripts/installation/prompt.md').read_text()
-
-          # Shell-escape: close the single quote, add an escaped one, reopen
-          prompt = prompt.replace("'", "'\\''")
-          hardcoded_assignment = "INTEGRATION_PROMPT='" + prompt + "'"
-
-          # Swap the bake target region (between sentinel comments) with the
-          # hardcoded assignment. Lambda avoids Python interpreting backslashes
-          # in the prompt as regex escape sequences.
-          bake_target = r'^# --- BEGIN BAKE TARGET ---$.*?^# --- END BAKE TARGET ---$'
-          installer = re.sub(
-              bake_target,
-              lambda _: hardcoded_assignment,
-              installer, count=1, flags=re.DOTALL | re.MULTILINE)
-
-          # Strip the load_prompt call site — the variable is now set inline
-          installer = re.sub(
-              r'^load_prompt\n', '',
-              installer, count=1, flags=re.MULTILINE)
-
-          pathlib.Path('dist/buttonheist-integrate').write_text(installer)
-          BAKE_SCRIPT
-          chmod +x dist/buttonheist-integrate
-
           # Simulator app
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/bh-demo-${VERSION}-iphonesimulator.zip"
 
           # Checksums
           cd dist
-          shasum -a 256 *.tar.gz *.zip buttonheist-integrate > checksums.txt
+          shasum -a 256 *.tar.gz *.zip > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
@@ -153,7 +120,6 @@ jobs:
             dist/buttonheist-${VERSION}-macos.tar.gz \
             dist/buttonheist-mcp-${VERSION}-macos.tar.gz \
             dist/bh-demo-${VERSION}-iphonesimulator.zip \
-            dist/buttonheist-integrate \
             dist/checksums.txt
 
       - name: Update Homebrew tap
@@ -166,7 +132,6 @@ jobs:
           # Extract checksums
           CLI_SHA=$(grep "buttonheist-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
           MCP_SHA=$(grep "buttonheist-mcp-${VERSION}-macos.tar.gz" dist/checksums.txt | awk '{print $1}')
-          INT_SHA=$(grep "buttonheist-integrate" dist/checksums.txt | awk '{print $1}')
 
           # Generate formula with hardcoded version and SHA-256 values
           RELEASE_URL="https://github.com/RoyalPineapple/TheButtonHeist/releases/download/v${VERSION}"
@@ -184,18 +149,12 @@ jobs:
               sha256 "${MCP_SHA}"
             end
 
-            resource "integrate" do
-              url "${RELEASE_URL}/buttonheist-integrate"
-              sha256 "${INT_SHA}"
-            end
-
             depends_on :macos
             depends_on macos: :sonoma
 
             def install
               bin.install "buttonheist"
               resource("mcp").stage { bin.install "buttonheist-mcp" }
-              resource("integrate").stage { bin.install "buttonheist-integrate" }
             end
 
             def caveats

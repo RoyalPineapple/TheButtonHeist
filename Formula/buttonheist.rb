@@ -22,15 +22,9 @@ class Buttonheist < Formula
   depends_on :macos
   depends_on macos: :sonoma
 
-  resource "integrate" do
-    url "https://github.com/RoyalPineapple/ButtonHeist/releases/download/v#{version}/buttonheist-integrate"
-    sha256 "PLACEHOLDER"
-  end
-
   def install
     bin.install "buttonheist"
     resource("mcp").stage { bin.install "buttonheist-mcp" }
-    resource("integrate").stage { bin.install "buttonheist-integrate" }
   end
 
   def caveats
