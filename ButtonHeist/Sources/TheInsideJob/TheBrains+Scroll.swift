@@ -421,7 +421,7 @@ extension TheBrains {
     /// For `.heistId`, looks up the registry directly. For `.matcher`, searches all
     /// registry entries for the first off-viewport match. Returns nil if the element
     /// is already visible or not in the registry.
-    private func offViewportRegistryEntry(for target: ElementTarget) -> TheStash.ScreenElement? {
+    func offViewportRegistryEntry(for target: ElementTarget) -> TheStash.ScreenElement? {
         switch target {
         case .heistId(let heistId):
             guard !stash.registry.viewportIds.contains(heistId) else { return nil }
