@@ -113,7 +113,7 @@ extension TheSafecracker {
     }
 
     /// Scroll to an absolute edge.
-    func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge) -> Bool {
+    func scrollToEdge(_ scrollView: UIScrollView, edge: ScrollEdge, animated: Bool = true) -> Bool {
         let insets = scrollView.adjustedContentInset
         var newOffset = scrollView.contentOffset
 
@@ -131,7 +131,7 @@ extension TheSafecracker {
         if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y {
             return false
         }
-        scrollView.setContentOffset(newOffset, animated: true)
+        scrollView.setContentOffset(newOffset, animated: animated)
         return true
     }
 
