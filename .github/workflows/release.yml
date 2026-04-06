@@ -73,7 +73,7 @@ jobs:
           file .build/buttonheist-mcp
 
       - name: Install Tuist
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
       - name: Build BH Demo for iOS Simulator
         run: |
