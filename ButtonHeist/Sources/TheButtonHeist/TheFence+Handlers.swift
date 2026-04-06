@@ -71,7 +71,7 @@ extension TheFence {
             do {
                 let resolvedURL = try bookKeeper.writeToPath(pngData, outputPath: outputPath)
                 return .screenshot(path: resolvedURL.path, width: screen.width, height: screen.height)
-            } catch is BookKeeperError {
+            } catch BookKeeperError.unsafePath {
                 return .error("Invalid output path: must not contain '..' components")
             }
         }
@@ -570,7 +570,7 @@ extension TheFence {
             do {
                 let resolvedURL = try bookKeeper.writeToPath(videoData, outputPath: outputPath)
                 return .recording(path: resolvedURL.path, payload: recording)
-            } catch is BookKeeperError {
+            } catch BookKeeperError.unsafePath {
                 return .error("Invalid output path: must not contain '..' components")
             }
         }
