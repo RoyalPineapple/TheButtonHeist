@@ -44,7 +44,7 @@ struct IntegrateCommand: ParsableCommand {
         let frameworksPath = try locateFrameworks()
 
         // Load prompt template and inject the frameworks path
-        var prompt = try loadIntegrationPrompt()
+        var prompt = loadIntegrationPrompt()
         prompt = prompt.replacingOccurrences(of: "{{FRAMEWORKS_PATH}}", with: frameworksPath)
 
         if printPrompt {
@@ -171,11 +171,8 @@ struct IntegrateCommand: ParsableCommand {
 
     // MARK: - Helpers
 
-    private func loadIntegrationPrompt() throws -> String {
-        guard let url = Bundle.module.url(forResource: "integration-prompt", withExtension: "md") else {
-            throw CleanExit.message("Integration prompt not found in bundle.")
-        }
-        return try String(contentsOf: url, encoding: .utf8)
+    private func loadIntegrationPrompt() -> String {
+        IntegrationPrompt.text
     }
 
     private func resolveProjectDirectory() throws -> String {

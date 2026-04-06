@@ -1,1 +1,0 @@
-../../ButtonHeistCLI/Sources/Resources/integration-prompt.md

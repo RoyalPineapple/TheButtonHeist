@@ -22,15 +22,9 @@ class Buttonheist < Formula
   depends_on :macos
   depends_on macos: :sonoma
 
-  resource "integrate" do
-    url "https://github.com/RoyalPineapple/ButtonHeist/releases/download/v#{version}/buttonheist-integrate"
-    sha256 "PLACEHOLDER"
-  end
-
   def install
     bin.install "buttonheist"
     resource("mcp").stage { bin.install "buttonheist-mcp" }
-    resource("integrate").stage { bin.install "buttonheist-integrate" }
   end
 
   def caveats
@@ -38,11 +32,7 @@ class Buttonheist < Formula
       To integrate Button Heist into your iOS app:
 
         cd /path/to/your-ios-project
-        buttonheist-integrate
-
-      This launches Claude Code to automatically wire TheInsideJob into your
-      app, covering SPM, CocoaPods, Tuist, XcodeGen, Bazel, and bare Xcode
-      projects. Requires Claude Code (npm install -g @anthropic-ai/claude-code).
+        buttonheist integrate
 
       MCP server is installed at:
         #{opt_bin}/buttonheist-mcp

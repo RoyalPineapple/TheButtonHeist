@@ -21,9 +21,6 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources",
-            resources: [
-                .copy("Resources/integration-prompt.md")
-            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
                 .unsafeFlags(["-parse-as-library", "-warnings-as-errors"])
