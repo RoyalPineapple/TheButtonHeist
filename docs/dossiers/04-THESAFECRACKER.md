@@ -199,7 +199,7 @@ Gesture step interval is 10ms for all continuous gestures. `clampDuration` clamp
 
 > **Deep dive:** [04a-SCROLLING.md](04a-SCROLLING.md) — full design, requirements, limitations, and implementation notes
 
-TheStash owns all scroll orchestration (see [13-THEBAGMAN.md](13-THEBAGMAN.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
+TheBrains owns all scroll orchestration (see [13b-THEBRAINS.md](13b-THEBRAINS.md)). TheSafecracker provides the scroll primitives: `scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollToOppositeEdge`, and `scrollBySwipe`.
 
 | Primitive | Input | Mechanism |
 |-----------|-------|-----------|
@@ -230,7 +230,7 @@ All action executors resolve elements via `TheStash.resolveTarget(_:)` which che
 ```mermaid
 flowchart TD
     Target["ActionTarget - (heistId? / match?)"]
-    Target --> Resolve["bagman.resolveTarget(target)"]
+    Target --> Resolve["stash.resolveTarget(target)"]
     Resolve --> Found{resolved?}
     Found -->|yes| WeakRef["screenElement.object - → live NSObject via weak ref"]
     Found -->|no| Fail["elementNotFound + diagnostic message"]
