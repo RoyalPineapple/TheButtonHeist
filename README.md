@@ -66,7 +66,7 @@ Then add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-This exposes 22 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
+This exposes 28 tools to your agent: `get_interface`, `activate`, `type_text`, `run_batch`, `get_screen`, and more. The agent discovers your app via Bonjour automatically:
 
 ```
 Agent: "I need to log the user in"
@@ -115,7 +115,7 @@ The agent works the controls the way VoiceOver does, by meaning, not by pixel.
 
 Every element has a stable identity and every action has a structured receipt.
 
-- **Full accessibility tree.** Labels, values, 41 named traits, frames, activation points, custom content, available actions
+- **Full accessibility tree.** Labels, values, 43 named traits, frames, activation points, custom content, available actions
 - **Stable identifiers.** `heistId` derived from trait + label (`button_login`, `header_settings`), developer identifier takes priority
 - **Screenshots.** PNG capture, inline base64 or saved to file
 - **Animation idle detection.** Blocks until `CALayer` animations settle
@@ -135,7 +135,7 @@ Multiple paths in, one API out.
 
 - **WiFi.** Bonjour auto-discovery on `_buttonheist._tcp`
 - **USB.** CoreDevice IPv6 tunnel discovery. Same API as WiFi
-- **Security.** TLS 1.2+ with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
+- **Security.** TLS 1.3 with SHA-256 fingerprint pinning. Token auth with on-device Allow/Deny
 - **Multi-device.** Many instances, many simulators. Session locking (one driver at a time)
 
 ## How It Works
@@ -232,7 +232,7 @@ Every heist needs a team.
 
 | Name | Role |
 |------|------|
-| **TheFence** | Runs the show. 36 commands dispatched from CLI and MCP, request-response correlation, async waits |
+| **TheFence** | Runs the show. 38 commands dispatched from CLI and MCP, request-response correlation, async waits |
 | **TheHandoff** | Gets everyone in position. Bonjour + USB discovery, TLS connection, session state, injectable closures for testing |
 
 ### The Legitimate Front
@@ -240,7 +240,7 @@ Every heist needs a team.
 | Name | Role |
 |------|------|
 | **ButtonHeistCLI** | Your orders. `list`, `session`, `activate`, `touch`, `type`, `screenshot`, `record`, and more |
-| **ButtonHeistMCP** | Agent interface. 22 tools that call through TheFence so AI agents can run the job natively |
+| **ButtonHeistMCP** | Agent interface. 28 tools that call through TheFence so AI agents can run the job natively |
 
 ## Architecture
 
@@ -249,8 +249,8 @@ Every heist needs a team.
 graph TD
     AI["AI Agent<br/>(Claude, or any MCP client)"]
     HUMAN["A Human<br/>(You even)"]
-    MCP["buttonheist-mcp<br/>22 tools"]
-    CLI["buttonheist CLI<br/>18 subcommands"]
+    MCP["buttonheist-mcp<br/>28 tools"]
+    CLI["buttonheist CLI<br/>25 subcommands"]
     Client["TheFence / TheHandoff<br/>(ButtonHeist framework)"]
     IJ["TheInsideJob<br/>(embedded in your app)"]
     App["Your iOS App"]
@@ -286,7 +286,7 @@ graph TD
 | **TheScore** | iOS + macOS | Wire protocol: `HeistElement`, `InterfaceDelta`, `ElementMatcher`. The contract both sides speak |
 | **TheInsideJob** | iOS | In-app server: TCP + Bonjour, accessibility capture, touch injection, recording, auth. Auto-starts via ObjC `+load` (DEBUG only) |
 | **ButtonHeist** | macOS | Client framework: TheFence (command dispatch + request correlation), TheHandoff (discovery + connection + state) |
-| **ButtonHeistMCP** | macOS | MCP server: 22 tools dispatching through TheFence |
+| **ButtonHeistMCP** | macOS | MCP server: 28 tools dispatching through TheFence |
 | **buttonheist** | macOS | CLI: interactive session REPL with auto-reconnect and three output formats (human/json/compact) |
 
 ## Development
