@@ -78,7 +78,8 @@ jobs:
       - name: Build BH Demo for iOS Simulator
         run: |
           tuist install
-          tuist generate --no-binary-cache --no-open
+          tuist cache --external-only
+          tuist generate --no-open
           xcodebuild -workspace ButtonHeist.xcworkspace -scheme "BH Demo" \
             -destination "generic/platform=iOS Simulator" \
             build | tail -5
