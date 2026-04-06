@@ -185,9 +185,53 @@ public final class TheFence {
             try await start()
         }
 
+        let requestId = (request["requestId"] as? String) ?? UUID().uuidString
+        try? bookKeeper.logCommand(requestId: requestId, command: command, arguments: request)
+
         let start = CFAbsoluteTimeGetCurrent()
-        let response = try await dispatch(command: command, args: request)
+        let response: FenceResponse
+        do {
+            response = try await dispatch(command: command, args: request)
+        } catch {
+            let durationMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+            try? bookKeeper.logResponse(
+                requestId: requestId,
+                status: .error,
+                durationMilliseconds: durationMs,
+                error: error.localizedDescription
+            )
+            throw error
+        }
         lastLatencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
+
+        let responseStatus: ResponseStatus
+        let artifactPath: String?
+        let errorMessage: String?
+        switch response {
+        case .error(let message):
+            responseStatus = .error
+            artifactPath = nil
+            errorMessage = message
+        case .screenshot(let path, _, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        case .recording(let path, _):
+            responseStatus = .ok
+            artifactPath = path
+            errorMessage = nil
+        default:
+            responseStatus = .ok
+            artifactPath = nil
+            errorMessage = nil
+        }
+        try? bookKeeper.logResponse(
+            requestId: requestId,
+            status: responseStatus,
+            durationMilliseconds: lastLatencyMs,
+            artifact: artifactPath,
+            error: errorMessage
+        )
 
         // Every action gets implicit delivery validation; higher tiers are additive
         if let actionResult = response.actionResult {
