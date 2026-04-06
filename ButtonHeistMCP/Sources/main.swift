@@ -34,80 +34,79 @@ struct ButtonHeistMCPServer {
 
     static let instructions = """
         Button Heist drives iOS apps through the accessibility layer — the same interface \
-        VoiceOver uses. You interact with live UI elements by identity and traits, not \
-        screen coordinates. Every control knows what it is, what state it's in, and how \
-        to activate it. A coordinate that worked on one device is wrong on another; \
-        an element's label or traits work everywhere.
+        VoiceOver uses. You interact with live UI elements by their identity and traits, not \
+        screen coordinates. A coordinate that works on one device breaks on another; \
+        an element's label and traits work everywhere.
 
         ## Core Loop
 
-        1. See the screen: `get_interface` returns every visible element with a heistId, \
-        label, value, traits, and available actions.
-        2. Act on an element: `activate`, `type_text`, `scroll`, or `swipe` — target by heistId or matcher.
-        3. Read the delta: every action response reports what changed (+added, -removed, ~updated). \
-        If the screen navigated, the delta includes the complete new interface.
-        4. Repeat. Only call `get_interface` again when you need to discover elements not in the delta.
+        1. **See** — `get_interface` returns every visible element with a heistId, label, \
+        value, traits, and actions.
+        2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher.
+        3. **Read the delta** — every action response reports what changed. If the delta \
+        answers your question, skip the next `get_interface`.
+        4. **Repeat** — only re-fetch when you need elements you haven't seen.
 
-        ## Targeting Rules
+        ## Choosing Tools
 
-        **heistId**: Use it when you've seen the element in a `get_interface` response or action delta. \
-        Stable on the current screen, zero ambiguity. After a screen change (navigation, modal, tab switch), \
-        all previous heistIds are invalid — use what the delta's new interface gave you.
+        **Observing**: `get_interface` for element data, `get_screen` for visual context. \
+        Start with `get_interface` — reach for `get_screen` only when layout or visual \
+        state matters. Use `get_interface(full: true)` to discover off-screen content \
+        inside scroll views.
 
-        **Matcher** (label, identifier, value, traits): Use when you haven't seen the element yet, \
-        after a screen transition, or in `wait_for`/`element_search`. Strings match as \
-        case-insensitive substrings. Traits match exactly. If zero elements match, you get a miss \
-        with suggestions — never a fuzzy guess.
+        **Acting**: `activate` is your primary tool — it taps, toggles, follows links. \
+        `type_text` for keyboard input. `swipe` for directional gestures. `scroll` for \
+        paging through lists. Prefer `activate` over `gesture` — raw coordinates are \
+        fragile and don't record well.
 
-        Never construct or predict a heistId. Never carry one across screen transitions.
+        **Finding**: `scroll_to_visible` when you've seen an element before but it scrolled \
+        off-screen. `element_search` when you've never seen it — scrolls every container \
+        looking for a match. `wait_for` when the element will appear asynchronously.
 
-        ## Reading Deltas
-
-        Every action response includes a delta:
-        - `+ heistId "label" [traits]` — element appeared
-        - `- heistId` — element disappeared
-        - `~ heistId: property "old" → "new"` — property changed
-        - `screen changed` — full navigation; new interface included, all old heistIds are gone
-
-        If the delta answers your question, skip the `get_interface` call.
+        **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
+        `expect` to each step for a self-verifying script.
 
         ## Expectations
 
-        Attach `expect` to any action to declare what should happen. The action still executes regardless; \
-        the result tells you whether your expectation was met.
-        - `"elements_changed"` — something visible should change
-        - `"screen_changed"` — a navigation/modal should occur
-        - `{"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}}` — specific check \
-        (all fields optional, omitted = wildcard)
+        Attach `expect` to any action to state what should happen. The action executes \
+        regardless — expectations are hypotheses, not preconditions. Before you act, \
+        ask: what should change? A toggle flips a value. A nav button changes the screen. \
+        A delete removes an element. Form that hypothesis, attach it, and let the result \
+        confirm or correct you. Unmet expectations are information, not errors.
 
-        Unmet expectations are information, not errors — you decide what to do. \
-        Use expectations to investigate: if you're unsure what a control does, activate it with \
-        an expectation and let the result confirm or refute your hypothesis. The delta tells you \
-        what actually happened either way.
+        The more specific your expectation, the more a failure tells you. \
+        `"elements_changed"` proves something moved; \
+        `{"elementUpdated": {"heistId": "x", "newValue": "5"}}` proves the right thing \
+        moved to the right state.
 
-        ## Batching
+        ## Recording Heists
 
-        `run_batch` sends multiple commands in one call. Use `stop_on_error` (default) for dependent \
-        sequences, `continue_on_error` for independent steps. The response includes per-step results \
-        and a merged net delta across all steps.
+        `start_heist` / `stop_heist` capture your session as a replayable .heist file. \
+        The recording is automatic — every successful action becomes a step — but the \
+        quality depends entirely on how you approach it.
 
-        Combine batching with expectations to build a deterministic test suite on the fly. A batch \
-        with expectations on every step is a self-verifying script — each step declares its hypothesis, \
-        the system checks it against the real outcome, and the summary tells you exactly which steps \
-        passed and which diverged. You can construct these dynamically from what you learned in \
-        `get_interface`, run them, and have a complete pass/fail report in a single round trip.
+        **Prime the interface first.** Call `get_interface` before your first action. \
+        The recorder converts heistIds to portable matchers behind the scenes, but needs \
+        cached element data to do it well.
+
+        **Attach expectations to every meaningful action.** Expectations are recorded \
+        with the step. A heist without expectations is a sequence of taps; a heist with \
+        expectations is a self-verifying test suite that validates on every replay.
+
+        **One action, one purpose.** Each step should do exactly one thing and verify it. \
+        Don't chain five taps and check at the end — check after each one. This makes \
+        replay failures precise: step 7 failed means the 7th interaction broke.
+
+        **Read the delta before moving on.** If your expectation wasn't met, understand \
+        why before continuing. The recording only captures successful actions — continuing \
+        after a missed expectation means the heist may not replay the same way.
 
         ## Efficiency
 
-        - **Don't over-fetch**: read the delta first, call `get_interface` only when you need elements \
-        you haven't seen.
-        - **HeistIds on this screen, matchers across screens**: after navigation, switch to matchers \
-        or read from the delta's new interface.
-        - **Batch predictable sequences**: form fills, navigation flows — fewer round trips, cleaner signal.
-        - **Progressive disclosure**: `get_interface` (visible) → filtered by traits/label → `full: true` \
-        (scroll-discovered). Escalate only when the cheaper option isn't enough.
-        - **Expectations as guard rails**: attach them to actions with a clear hypothesis. They cost \
-        nothing when met and surface problems immediately when not.
+        Read the delta first — skip `get_interface` when the delta already told you what \
+        changed. Use heistIds on the current screen, matchers after navigation. Batch \
+        predictable sequences. Escalate progressively: `get_interface` → filtered → \
+        `full: true`.
         """
 
     @ButtonHeistActor

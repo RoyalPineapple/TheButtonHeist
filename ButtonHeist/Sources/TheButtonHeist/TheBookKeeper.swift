@@ -539,10 +539,12 @@ public final class TheBookKeeper {
     public func updateInterfaceCache(_ elements: [HeistElement]) {
         guard case .active(var session) = phase,
               var recording = session.heistRecording else { return }
-        recording.interfaceCache = Dictionary(
-            elements.map { ($0.heistId, $0) },
-            uniquingKeysWith: { _, latest in latest }
-        )
+        // Merge rather than replace — after a screen change, the activated element
+        // from the old screen must remain in the cache for the recording step that
+        // triggered the transition. New elements take priority on heistId collision.
+        for element in elements {
+            recording.interfaceCache[element.heistId] = element
+        }
         session.heistRecording = recording
         phase = .active(session)
     }
