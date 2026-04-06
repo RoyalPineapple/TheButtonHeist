@@ -1,4 +1,4 @@
-[submodule "submodules/AccessibilitySnapshot"]
-	path = submodules/AccessibilitySnapshot
-	url = https://github.com/RoyalPineapple/AccessibilitySnapshot.git
-	branch = buttonheist
+[submodule "submodules/AccessibilitySnapshotBH"]
+	path = submodules/AccessibilitySnapshotBH
+	url = https://github.com/RoyalPineapple/AccessibilitySnapshotBH.git
+	branch = main

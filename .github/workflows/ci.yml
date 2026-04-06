@@ -39,11 +39,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify AccessibilitySnapshot pin is tip of buttonheist branch
+      - name: Verify AccessibilitySnapshotBH pin is tip of main branch
         run: |
           set -eo pipefail
-          SUBMODULE_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshot | awk '{print $3}')
-          BRANCH_TIP=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshot refs/heads/buttonheist | awk '{print $1}')
+          SUBMODULE_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshotBH | awk '{print $3}')
+          BRANCH_TIP=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH refs/heads/main | awk '{print $1}')
           PACKAGE_SHA=$(grep -oE 'revision: "[0-9a-f]+"' Package.swift | grep -oE '[0-9a-f]{40}')
 
           echo "Submodule pin:  $SUBMODULE_SHA"
@@ -52,7 +52,7 @@ jobs:
 
           FAILED=0
           if [ "$SUBMODULE_SHA" != "$BRANCH_TIP" ]; then
-            echo "::error::Submodule ($SUBMODULE_SHA) is behind buttonheist branch tip ($BRANCH_TIP). Run: git submodule update --remote submodules/AccessibilitySnapshot"
+            echo "::error::Submodule ($SUBMODULE_SHA) is behind main branch tip ($BRANCH_TIP). Run: git submodule update --remote submodules/AccessibilitySnapshotBH"
             FAILED=1
           fi
           if [ "$PACKAGE_SHA" != "$SUBMODULE_SHA" ]; then
@@ -96,7 +96,7 @@ jobs:
       - name: Init required submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshot
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
@@ -172,7 +172,7 @@ jobs:
       - name: Init required submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive submodules/AccessibilitySnapshot
+          git submodule update --init --recursive submodules/AccessibilitySnapshotBH
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4

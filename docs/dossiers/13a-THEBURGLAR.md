@@ -41,6 +41,6 @@ flowchart TD
 ## Dependencies
 
 - **TheTripwire** (injected via `init(tripwire:)`) — provides `getTraversableWindows()` for the parse root
-- **AccessibilityHierarchyParser** (from AccessibilitySnapshot submodule) — traverses the accessibility tree
+- **AccessibilityHierarchyParser** (from AccessibilitySnapshotBH submodule) — traverses the accessibility tree
 - **TheStash.IdAssignment** — assigns heistIds to parsed elements
 - **TheStash.ElementRegistry** — the target of `apply()`
