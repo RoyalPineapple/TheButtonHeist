@@ -88,7 +88,7 @@ final class TheBrains {
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
-        let afterResult = stash.burglar.parse()
+        var afterResult = stash.burglar.parse()
 
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
@@ -97,6 +97,24 @@ final class TheBrains {
             stash.registry.clearScreen()
             containerExploreStates.removeAll()
         }
+
+        // After a screen change (e.g. popup dismiss), the accessibility tree
+        // may be transiently empty — the old VC's elements are gone but the
+        // newly-exposed VC hasn't re-registered its elements yet. Wait for
+        // the tree to repopulate using the tripwire settle loop, then re-parse.
+        if isScreenChange && (afterResult?.elements ?? []).isEmpty {
+            let repopStart = CFAbsoluteTimeGetCurrent()
+            for attempt in 1...10 {
+                _ = await tripwire.waitForAllClear(timeout: 0.2)
+                afterResult = stash.burglar.parse()
+                if let elements = afterResult?.elements, !elements.isEmpty {
+                    let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
+                    insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
+                    break
+                }
+            }
+        }
+
         if let afterResult {
             let heistIds = stash.burglar.apply(afterResult, to: stash)
             exploreCycleIds?.formUnion(heistIds)
