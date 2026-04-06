@@ -86,7 +86,7 @@ TheInsideJob (singleton, @MainActor) — coordinator split across extension file
 ├── ServerTransport (TLS listener + Bonjour advertisement)
 │   └── Client connections (file descriptors)
 ├── NetService (Bonjour advertisement)
-├── AccessibilityHierarchyParser (from AccessibilitySnapshot submodule)
+├── AccessibilityHierarchyParser (from AccessibilitySnapshotBH submodule)
 │   └── elementVisitor closure (captures live NSObject references during parse)
 ├── TheTripwire (persistent ~10 Hz UI pulse and transition observer)
 │   ├── CADisplayLink pulse — one shared clock for settle checks and UI signal sampling
