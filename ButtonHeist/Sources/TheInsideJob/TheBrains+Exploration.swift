@@ -282,7 +282,7 @@ extension TheBrains {
         }
 
         guard let viewVC = view.nearestViewController else {
-            return true
+            return false
         }
         return !viewVC.isDescendant(of: topPresented)
     }
