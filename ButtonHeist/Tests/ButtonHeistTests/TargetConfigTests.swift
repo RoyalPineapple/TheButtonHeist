@@ -177,7 +177,7 @@ final class TargetConfigTests: XCTestCase {
     // MARK: - TheFence.configTargetsAsDevices
 
     @ButtonHeistActor
-    func testConfigTargetsAsDevices() {
+    func testConfigTargetsAsDevices() async {
         let config = ButtonHeistFileConfig(
             targets: [
                 "sim1": TargetConfig(device: "127.0.0.1:1455"),
@@ -197,7 +197,7 @@ final class TargetConfigTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testConfigTargetsWithInvalidDeviceSkipped() {
+    func testConfigTargetsWithInvalidDeviceSkipped() async {
         let config = ButtonHeistFileConfig(
             targets: [
                 "good": TargetConfig(device: "127.0.0.1:1455"),

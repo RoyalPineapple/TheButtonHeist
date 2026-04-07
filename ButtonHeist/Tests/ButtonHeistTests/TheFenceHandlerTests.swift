@@ -126,7 +126,7 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Argument Parsing Helpers
 
     @ButtonHeistActor
-    func testStringArg() {
+    func testStringArg() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["key": "hello", "number": 42]
         XCTAssertEqual(fence.stringArg(dict, "key"), "hello")
@@ -135,61 +135,61 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testIntArgFromInt() {
+    func testIntArgFromInt() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["count": 5]
         XCTAssertEqual(fence.intArg(dict, "count"), 5)
     }
 
     @ButtonHeistActor
-    func testIntArgFromDouble() {
+    func testIntArgFromDouble() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["count": 5.7]
         XCTAssertEqual(fence.intArg(dict, "count"), 5)
     }
 
     @ButtonHeistActor
-    func testIntArgFromString() {
+    func testIntArgFromString() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["count": "42"]
         XCTAssertEqual(fence.intArg(dict, "count"), 42)
     }
 
     @ButtonHeistActor
-    func testIntArgMissing() {
+    func testIntArgMissing() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertNil(fence.intArg([:], "count"))
     }
 
     @ButtonHeistActor
-    func testDoubleArgFromDouble() {
+    func testDoubleArgFromDouble() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["x": 3.14]
         XCTAssertEqual(fence.doubleArg(dict, "x"), 3.14)
     }
 
     @ButtonHeistActor
-    func testDoubleArgFromInt() {
+    func testDoubleArgFromInt() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["x": 7]
         XCTAssertEqual(fence.doubleArg(dict, "x"), 7.0)
     }
 
     @ButtonHeistActor
-    func testDoubleArgFromString() {
+    func testDoubleArgFromString() async {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["x": "2.5"]
         XCTAssertEqual(fence.doubleArg(dict, "x"), 2.5)
     }
 
     @ButtonHeistActor
-    func testDoubleArgMissing() {
+    func testDoubleArgMissing() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertNil(fence.doubleArg([:], "x"))
     }
 
     @ButtonHeistActor
-    func testNumberArgVariousTypes() {
+    func testNumberArgVariousTypes() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertEqual(fence.numberArg(1.5), 1.5)
         XCTAssertEqual(fence.numberArg(3), 3.0)
@@ -199,7 +199,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithIdentifier() throws {
+    func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["identifier": "myButton"]
         guard let target = try fence.elementTarget(dict),
@@ -210,7 +210,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithHeistId() throws {
+    func testElementTargetWithHeistId() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["heistId": "button_save"]
         guard let target = try fence.elementTarget(dict),
@@ -221,7 +221,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithMatcherFields() throws {
+    func testElementTargetWithMatcherFields() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save", "traits": ["button"]]
         guard let target = try fence.elementTarget(dict),
@@ -233,7 +233,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithHeistIdAndMatcher() throws {
+    func testElementTargetWithHeistIdAndMatcher() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["heistId": "button_save", "label": "Save"]
         // heistId wins when both are present
@@ -245,7 +245,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithOrdinal() throws {
+    func testElementTargetWithOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save", "ordinal": 2]
         guard let target = try fence.elementTarget(dict),
@@ -257,7 +257,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithoutOrdinal() throws {
+    func testElementTargetWithoutOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
         let dict: [String: Any] = ["label": "Save"]
         guard let target = try fence.elementTarget(dict),
@@ -268,7 +268,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetMissing() throws {
+    func testElementTargetMissing() async throws {
         let (fence, _) = makeConnectedFence()
         XCTAssertNil(try fence.elementTarget([:]))
     }
@@ -853,21 +853,21 @@ final class TheFenceHandlerTests: XCTestCase {
     // MARK: - Expectation Parsing
 
     @ButtonHeistActor
-    func testParseExpectationNilWhenAbsent() throws {
+    func testParseExpectationNilWhenAbsent() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation(["command": "activate"])
         XCTAssertNil(result)
     }
 
     @ButtonHeistActor
-    func testParseExpectationScreenChangedSnakeCase() throws {
+    func testParseExpectationScreenChangedSnakeCase() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation(["expect": "screen_changed"])
         XCTAssertEqual(result, .screenChanged)
     }
 
     @ButtonHeistActor
-    func testParseExpectationScreenChangedCamelCaseThrows() {
+    func testParseExpectationScreenChangedCamelCaseThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": "screenChanged"])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -879,7 +879,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationLayoutChangedSnakeCaseThrows() {
+    func testParseExpectationLayoutChangedSnakeCaseThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": "layout_changed"])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -891,7 +891,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationLayoutChangedCamelCaseThrows() {
+    func testParseExpectationLayoutChangedCamelCaseThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": "layoutChanged"])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -903,7 +903,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationUnknownStringThrows() {
+    func testParseExpectationUnknownStringThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": "bogus"])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -915,7 +915,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementUpdatedWithSubObject() throws {
+    func testParseExpectationElementUpdatedWithSubObject() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation([
             "expect": ["elementUpdated": ["heistId": "counter", "newValue": "5"]]
@@ -924,7 +924,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementUpdatedAllFields() throws {
+    func testParseExpectationElementUpdatedAllFields() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation([
             "expect": ["elementUpdated": ["heistId": "slider", "property": "value", "oldValue": "0", "newValue": "50"]]
@@ -933,14 +933,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementUpdatedBareKey() throws {
+    func testParseExpectationElementUpdatedBareKey() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation(["expect": ["elementUpdated": true]])
         XCTAssertEqual(result, .elementUpdated())
     }
 
     @ButtonHeistActor
-    func testParseExpectationElementUpdatedEmptyObject() throws {
+    func testParseExpectationElementUpdatedEmptyObject() async throws {
         let (fence, _) = makeConnectedFence()
         let result = try fence.parseExpectation([
             "expect": ["elementUpdated": [String: Any]()]
@@ -950,7 +950,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationLegacyValueChangedThrows() {
+    func testParseExpectationLegacyValueChangedThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation([
             "expect": ["valueChanged": ["heistId": "counter", "newValue": "5"]]
@@ -964,7 +964,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationInvalidObjectThrows() {
+    func testParseExpectationInvalidObjectThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": ["wrong": "key"]])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
@@ -976,7 +976,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationInvalidTypeThrows() {
+    func testParseExpectationInvalidTypeThrows() async {
         let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(try fence.parseExpectation(["expect": 42])) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
