@@ -164,6 +164,7 @@ extension TheBrains {
                 elements: exploreElements,
                 scrollCount: manifest.scrollCount,
                 containersExplored: manifest.exploredContainers.count,
+                containersSkippedObscured: manifest.skippedObscuredContainers,
                 explorationTime: manifest.explorationTime
             )
         )

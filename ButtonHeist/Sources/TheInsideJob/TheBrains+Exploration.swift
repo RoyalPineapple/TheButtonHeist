@@ -68,6 +68,12 @@ extension TheBrains {
                     continue
                 }
 
+                if Self.isObscuredByPresentation(view: view) {
+                    manifest.markExplored(container)
+                    manifest.skippedObscuredContainers += 1
+                    continue
+                }
+
                 let currentFingerprint = containerFingerprints[container] ?? 0
                 if let cached = containerExploreStates[container],
                    cached.visibleSubtreeFingerprint == currentFingerprint,
@@ -89,71 +95,94 @@ extension TheBrains {
                     continue
                 }
 
-                let savedVisualOrigin = CGPoint(
-                    x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-                    y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+                let found = await exploreContainer(
+                    container: container, scrollView: scrollView,
+                    hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
+                    target: target, manifest: &manifest,
+                    containerFingerprints: &containerFingerprints
                 )
-                let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
-
-                let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
-                if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
-                    await tripwire.yieldFrames(2)
-                    refresh()
-                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+                if found {
+                    manifest.explorationTime = CACurrentMediaTime() - startTime
+                    return manifest
                 }
-
-                var originByElement = buildOriginIndex()
-
-                let initialPage = visibleElementsInContainer(container)
-                var accumulated = initialPage.elements
-                var accumulatedOrigins = initialPage.origins
-
-                for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-                    let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
-                    guard moved else { break }
-                    manifest.scrollCount += 1
-                    await tripwire.yieldFrames(2)
-                    refresh()
-                    originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
-
-                    let page = visibleElementsInContainer(container)
-                    let result = stitchPage(
-                        accumulated: accumulated,
-                        accumulatedOrigins: accumulatedOrigins,
-                        page: page.elements,
-                        pageOrigins: page.origins
-                    )
-                    accumulated = result.elements
-                    accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
-
-                    if result.inserted.isEmpty { break }
-
-                    if let target, stash.resolveFirstMatch(target) != nil {
-                        await restoreAndCache(
-                            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-                            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
-                            manifest: &manifest, containerFingerprints: &containerFingerprints
-                        )
-                        manifest.explorationTime = CACurrentMediaTime() - startTime
-                        return manifest
-                    }
-                }
-
-                await restoreAndCache(
-                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
-                    manifest: &manifest, containerFingerprints: &containerFingerprints
-                )
-
-                let newContainers = stash.currentHierarchy.scrollableContainers
-                    .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
-                manifest.addPendingContainers(newContainers)
             }
         }
 
         manifest.explorationTime = CACurrentMediaTime() - startTime
         return manifest
+    }
+
+    /// Scroll a single container to discover all elements. Returns true if the
+    /// target was found during exploration (caller should return early).
+    private func exploreContainer(
+        container: AccessibilityContainer,
+        scrollView: UIScrollView,
+        hasHOverflow: Bool,
+        hasVOverflow: Bool,
+        target: ElementTarget?,
+        manifest: inout ScreenManifest,
+        containerFingerprints: inout [AccessibilityContainer: Int]
+    ) async -> Bool {
+        let savedVisualOrigin = CGPoint(
+            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        )
+        let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
+
+        let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
+        if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
+            await tripwire.yieldFrames(2)
+            refresh()
+            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+        }
+
+        var originByElement = buildOriginIndex()
+
+        let initialPage = visibleElementsInContainer(container)
+        var accumulated = initialPage.elements
+        var accumulatedOrigins = initialPage.origins
+
+        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+            let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
+            guard moved else { break }
+            manifest.scrollCount += 1
+            await tripwire.yieldFrames(2)
+            refresh()
+            originByElement = buildOriginIndex()
+            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+
+            let page = visibleElementsInContainer(container)
+            let result = stitchPage(
+                accumulated: accumulated,
+                accumulatedOrigins: accumulatedOrigins,
+                page: page.elements,
+                pageOrigins: page.origins
+            )
+            accumulated = result.elements
+            accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
+
+            if result.inserted.isEmpty { break }
+
+            if let target, stash.resolveFirstMatch(target) != nil {
+                await restoreAndCache(
+                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+                    manifest: &manifest, containerFingerprints: &containerFingerprints
+                )
+                return true
+            }
+        }
+
+        await restoreAndCache(
+            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+            manifest: &manifest, containerFingerprints: &containerFingerprints
+        )
+
+        let newContainers = stash.currentHierarchy.scrollableContainers
+            .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
+        manifest.addPendingContainers(newContainers)
+        return false
     }
 
     // MARK: - Exploration Helpers
@@ -230,6 +259,98 @@ extension TheBrains {
             accumulatedFingerprint: accFingerprint,
             discoveredHeistIds: heistIds
         )
+    }
+
+    // MARK: - Presentation Obscuring
+
+    /// Returns true if the view is behind a presented view controller.
+    ///
+    /// Walks the entire VC hierarchy (not just rootVC) to find any presentation.
+    /// If a VC anywhere in the tree has a `presentedViewController`, and the view's
+    /// owning VC is not a descendant of the topmost presented VC, the view is obscured.
+    ///
+    /// This handles both root-level presentations (Square Register: root presents
+    /// receipt sheet) and nested presentations (nav child presents a modal).
+    static func isObscuredByPresentation(view: UIView) -> Bool {
+        guard let window = view.window,
+              let rootVC = window.rootViewController else {
+            return false
+        }
+
+        guard let topPresented = Self.topmostPresentedViewController(from: rootVC) else {
+            return false
+        }
+
+        guard let viewVC = view.nearestViewController else {
+            return false
+        }
+        return !viewVC.isDescendant(of: topPresented)
+    }
+
+    /// Walks the full VC tree (children + presentations) to find the topmost
+    /// presented view controller. Returns nil if no presentation exists.
+    ///
+    /// Assumes a single active presentation chain per window (UIKit's default behavior).
+    /// If multiple VCs independently present modals, the last one visited wins —
+    /// acceptable because UIKit enforces a single presentation chain from the root.
+    private static func topmostPresentedViewController(
+        from root: UIViewController
+    ) -> UIViewController? {
+        var topPresented: UIViewController?
+
+        var queue: [UIViewController] = [root]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+
+            if let presented = current.presentedViewController {
+                // Walk the presentation chain to the top.
+                var top = presented
+                while let next = top.presentedViewController {
+                    top = next
+                }
+                topPresented = top
+            }
+
+            queue.append(contentsOf: current.children)
+        }
+
+        return topPresented
+    }
+}
+
+// MARK: - UIView Responder Chain
+
+extension UIView {
+
+    /// Walks the responder chain to find the nearest UIViewController that owns this view.
+    var nearestViewController: UIViewController? {
+        var responder: UIResponder? = self
+        while let next = responder?.next {
+            if let viewController = next as? UIViewController { return viewController }
+            responder = next
+        }
+        return nil
+    }
+}
+
+// MARK: - UIViewController Hierarchy
+
+extension UIViewController {
+
+    /// Returns true if this view controller is a descendant of the given ancestor —
+    /// checking parent, presenting, navigation, and tab controller chains, as well
+    /// as child view controllers of container types.
+    func isDescendant(of ancestor: UIViewController) -> Bool {
+        if self === ancestor { return true }
+
+        // Check if we're a child of the ancestor's child hierarchy (nav, tab, children)
+        var queue: [UIViewController] = [ancestor]
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            if current === self { return true }
+            queue.append(contentsOf: current.children)
+        }
+        return false
     }
 }
 
