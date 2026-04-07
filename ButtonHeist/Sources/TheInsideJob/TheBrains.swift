@@ -78,9 +78,10 @@ final class TheBrains {
             let kind = errorKind
                 ?? ((method == .elementNotFound || method == .elementDeallocated)
                     ? .elementNotFound : .actionFailed)
-            return ActionResult(success: false, method: method, message: message, errorKind: kind,
-                                value: value, screenName: before.snapshot.screenName,
-                                screenId: before.snapshot.screenId)
+            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+            builder.message = message
+            builder.value = value
+            return builder.failure(errorKind: kind)
         }
 
         let start = CFAbsoluteTimeGetCurrent()
@@ -138,6 +139,11 @@ final class TheBrains {
 
         stash.captureActionFrame()
 
+        var builder = ActionResultBuilder(method: method, snapshot: afterSnapshot)
+        builder.message = message
+        builder.value = value
+        builder.interfaceDelta = delta
+
         var elementLabel: String?
         var elementValue: String?
         var elementTraits: [HeistTrait]?
@@ -150,17 +156,10 @@ final class TheBrains {
             }
         }
 
-        return ActionResult(
-            success: true,
-            method: method,
-            message: message,
-            value: value,
-            interfaceDelta: delta,
+        return builder.success(
             elementLabel: elementLabel,
             elementValue: elementValue,
             elementTraits: elementTraits,
-            screenName: afterSnapshot.screenName,
-            screenId: afterSnapshot.screenId,
             exploreResult: exploreResult
         )
     }
