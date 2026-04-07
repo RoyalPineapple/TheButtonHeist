@@ -241,7 +241,6 @@ public final class TheFence {
                 return .action(result: syntheticResult, expectation: validation)
             }
             // Expectation not met by the background delta — continue with the action.
-            // The background delta will still be surfaced via the envelope on the server side.
         }
 
         let start = CFAbsoluteTimeGetCurrent()
