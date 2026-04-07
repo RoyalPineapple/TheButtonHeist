@@ -120,17 +120,19 @@ enum ToolDefinitions {
     //   2. get_interface   — read the screen once (elements with heistId, label, traits)
     //   3. Act and read deltas — every action returns what changed. Don't call
     //      get_interface after every action — the delta is your feedback loop.
-    //   4. run_batch       — when you know your next 3-5 steps, send them in one call
+    //   4. run_batch       — before each action, plan ahead as far as you can see.
+    //      If you have 3+ steps planned, batch them in one call with expectations.
     //
     // Finding elements:
     //   Every element has a heistId (stable on the current screen) plus label, value,
     //   traits, actions, hints. Use heistId for known elements, label/traits for discovery.
     //   All matcher fields are AND. Start with just label, add traits if ambiguous.
     //
-    // Speed through batching:
-    //   run_batch replaces multiple tool calls with one. Attach 'expect' to each step
-    //   so the batch is self-verifying — if step 3 fails, it stops there and tells you
-    //   exactly what diverged. Match the expectation to the action: "screen_changed" for
+    // Batching:
+    //   Before each action, look ahead: how many steps can you plan from what you
+    //   already know? If it's 3 or more, send them as one run_batch. Attach 'expect'
+    //   to each step so the batch is self-verifying — if any step diverges, the batch
+    //   stops there. Match the expectation to the action: "screen_changed" for
     //   navigation, "elements_changed" for add/delete, {"elementUpdated": {...}} for
     //   toggles and pickers.
 
@@ -592,7 +594,9 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
+            Execute multiple commands in a single call. Before each action, plan ahead — \
+            if you can see 3 or more steps from what you already know, batch them here \
+            instead of making individual calls. Each step is a JSON object with 'command' \
             plus that command's parameters. Returns per-step results and a merged net delta. \
             Use stop_on_error (default) for dependent sequences, continue_on_error for \
             independent steps. \
