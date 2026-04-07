@@ -207,6 +207,50 @@ Two actions, two assertions, one round trip. If the email field doesn't update, 
 
 Deltas, expectations, and batching, each one enabling the next. That's the compound advantage.
 
+## Benchmarks
+
+Tested against a coordinate-based MCP server using the same model, same app, same tasks. 90 trials across 15 UI automation tasks.
+
+|  | Button Heist | Coordinate-based |
+|---|---|---|
+| **Wall time** | 40 min | 89 min |
+| **Tokens** | 9.2M | 22.9M |
+| **Cost** | $6.01 | $21.56 |
+| **Tasks completed** | 15/15 | 14/15 |
+
+**2.2x faster, 2.5x fewer tokens, 3.6x cheaper.** The gap scales with complexity:
+
+| Task type | Advantage | Why |
+|---|---|---|
+| Controls (steppers, pickers) | **5–8x** | Custom actions skip visual menus entirely |
+| Scroll + select | **5–6x** | Semantic find vs read-tree-compute-tap loops |
+| Multi-screen workflows | **2–3x** | Deltas eliminate redundant tree reads |
+| Simple taps | ~1x | Both approaches handle simple buttons well |
+
+The difference is in what the agent gets back. A coordinate-based tap:
+
+```
+→ tap(x: 201, y: 456)
+← "Tapped successfully"
+```
+
+The same action through Button Heist:
+
+```
+→ activate(heistId: "large_button")
+← elements changed
+  + text_size_large_staticText "Text Size, Large"
+  - text_size_medium_staticText
+  ~ large_button: traits "button" → "button, selected"
+  ~ medium_button: traits "button, selected" → "button"
+```
+
+"Tapped successfully" tells the agent nothing — it has to re-read the entire screen to find out what happened. The delta reveals it all: which properties changed, which elements appeared and disappeared, the entirety of the new state. No follow-up needed.
+
+That difference compounds. Every action without a delta costs a full tree read. Over a 50-action workflow, that's 50 extra round trips filling the context window. On our longest benchmark — an 8-screen workflow touching settings, todos, calculator, notes, search, and more — Button Heist finished in 7 minutes. The coordinate-based tool timed out at 20.
+
+Full methodology and per-task data: [docs/BENCHMARKS.md](docs/BENCHMARKS.md)
+
 ## Meet the Crew
 
 Every heist needs a team.
