@@ -9,7 +9,7 @@ final class TheFenceTests: XCTestCase {
     // MARK: - Element Matcher Validation
 
     @ButtonHeistActor
-    func testElementMatcherRejectsUnknownTrait() {
+    func testElementMatcherRejectsUnknownTrait() async {
         let fence = TheFence()
         let args: [String: Any] = ["traits": ["madeUpTrait"]]
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
@@ -22,7 +22,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementMatcherRejectsUnknownExcludeTrait() {
+    func testElementMatcherRejectsUnknownExcludeTrait() async {
         let fence = TheFence()
         let args: [String: Any] = ["excludeTraits": ["bogus"]]
         XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
@@ -35,7 +35,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementMatcherAcceptsKnownTraits() throws {
+    func testElementMatcherAcceptsKnownTraits() async throws {
         let fence = TheFence()
         let args: [String: Any] = ["traits": ["button", "header"], "excludeTraits": ["selected"]]
         let matcher = try fence.elementMatcher(args)

@@ -20,7 +20,7 @@ final class SessionLockTests: XCTestCase {
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testSessionLockedDisconnectsClient() throws {
+    func testSessionLockedDisconnectsClient() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
         conn.simulateConnected()
 
@@ -43,7 +43,7 @@ final class SessionLockTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSessionLockedCallbackFires() throws {
+    func testSessionLockedCallbackFires() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
         conn.simulateConnected()
 
@@ -63,7 +63,7 @@ final class SessionLockTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthRequiredSendsDriverId() {
+    func testAuthRequiredSendsDriverId() async {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token", driverId: "test-driver-id")
         conn.simulateConnected()
 
@@ -74,7 +74,7 @@ final class SessionLockTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testNilDriverIdIsNil() {
+    func testNilDriverIdIsNil() async {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
         conn.simulateConnected()
 

@@ -8,20 +8,18 @@ final class TheSafecrackerTests: XCTestCase {
     private var tripwire: TheTripwire!
     private var safecracker: TheSafecracker!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         tripwire = TheTripwire()
         safecracker = TheSafecracker()
         safecracker.tripwire = tripwire
         safecracker.startKeyboardObservation()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         safecracker.stopKeyboardObservation()
         tripwire.stopPulse()
         tripwire = nil
         safecracker = nil
-        super.tearDown()
     }
 
     // MARK: - Keyboard Visibility

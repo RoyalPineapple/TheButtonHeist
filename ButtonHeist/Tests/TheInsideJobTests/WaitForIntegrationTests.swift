@@ -12,19 +12,17 @@ final class WaitForIntegrationTests: XCTestCase {
     private var insideJob: TheInsideJob!
     private var window: UIWindow!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         insideJob = TheInsideJob(token: "wait-for-test-token")
         let windows = insideJob.tripwire.getTraversableWindows()
         window = windows.first?.window
         XCTAssertNotNil(window, "Test host must provide a window")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         insideJob.tripwire.stopPulse()
         insideJob = nil
         window = nil
-        super.tearDown()
     }
 
     // MARK: - Helpers
