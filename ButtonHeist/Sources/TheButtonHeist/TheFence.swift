@@ -149,6 +149,21 @@ public final class TheFence {
             guard let self, let requestId else { return }
             self.screenTracker.resolve(requestId: requestId, result: .success(payload))
         }
+
+        handoff.onBackgroundDelta = { [weak self] delta in
+            self?.lastBackgroundDelta = delta
+        }
+    }
+
+    /// The most recent background delta received from the server.
+    /// Drained (read and cleared) by `drainBackgroundDelta()`.
+    private var lastBackgroundDelta: InterfaceDelta?
+
+    /// Return and clear the last background delta, if any.
+    public func drainBackgroundDelta() -> InterfaceDelta? {
+        let delta = lastBackgroundDelta
+        lastBackgroundDelta = nil
+        return delta
     }
 
     /// Connect to a device and optionally enable auto-reconnect.
@@ -348,8 +363,8 @@ public final class TheFence {
             return try await handleGetInterface(args)
         case .getScreen:
             return try await handleGetScreen(args)
-        case .waitForIdle:
-            return try await sendAction(.waitForIdle(WaitForIdleTarget(timeout: doubleArg(args, "timeout"))))
+        case .waitForChange:
+            return try await handleWaitForChange(args)
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
             return try await handleGesture(command: command, args: args)

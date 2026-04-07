@@ -11,7 +11,7 @@ extension TheFence {
         case listDevices = "list_devices"
         case getInterface = "get_interface"
         case getScreen = "get_screen"
-        case waitForIdle = "wait_for_idle"
+        case waitForChange = "wait_for_change"
         case oneFingerTap = "one_finger_tap"
         case longPress = "long_press"
         case swipe
