@@ -22,28 +22,28 @@ Three properties make this work:
 
 ## The Numbers
 
-Tested against ios-simulator-mcp (idb), the standard coordinate-based MCP server for iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), the standard coordinate-based MCP server for iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Standard tasks (14 UI automation tasks)
 
-|  | Button Heist | idb |
+|  | Button Heist | ios-simulator-mcp |
 |---|---|---|
 | Wall time | 17 minutes | 36 minutes |
 | Tokens | 9.2M | 22.9M |
 | Tasks completed | 14/14 | 12/14 |
 
-**2x faster, 2.5x fewer tokens, completes tasks idb can't finish.**
+**2x faster, 2.5x fewer tokens, completes tasks ios-simulator-mcp can't finish.**
 
 ### At scale (T14: 50-action, 8-screen workflow)
 
-|  | Button Heist | idb |
+|  | Button Heist | ios-simulator-mcp |
 |---|---|---|
 | Wall time | 7 minutes | Timed out at 20 minutes |
 | Turns | 50 | 293 (incomplete) |
 | Tokens | 2.5M | — (didn't finish) |
 | Parts completed | 8/8 | 4/8 |
 
-idb burned 293 turns — 70 taps and 60 full-screen reads — and still couldn't finish. It was mid-task when the timeout killed it. Button Heist finished the same workflow in 50 turns and 2.5M tokens.
+ios-simulator-mcp burned 293 turns — 70 taps and 60 full-screen reads — and still couldn't finish. It was mid-task when the timeout killed it. Button Heist finished the same workflow in 50 turns and 2.5M tokens.
 
 This isn't a benchmark artifact. The gap is structural. Coordinate-based tools pay a constant per-action tax: read the full screen, find the element, compute coordinates, tap, read the full screen again. That tax is tolerable at 5 actions. At 50 actions, it's 100 full-screen reads filling the context window. At 100 actions, the model can't keep up.
 
@@ -56,7 +56,7 @@ Button Heist's per-action cost is near-zero: pass a name, read a delta. Turn 50 
 | Simple (toggle, tap) | 1.5–2x | Less overhead per action |
 | Multi-step (forms, CRUD) | 3–4x | Fewer turns to verify state |
 | Complex (multi-screen) | 5–10x | Deltas eliminate redundant reads |
-| Scale (50+ actions) | **Cannot compare** | idb can't finish |
+| Scale (50+ actions) | **Cannot compare** | ios-simulator-mcp can't finish |
 
 ## Why It Matters
 
