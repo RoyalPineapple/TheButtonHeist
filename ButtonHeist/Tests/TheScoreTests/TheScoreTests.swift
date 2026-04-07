@@ -87,7 +87,10 @@ final class MessageIntegrationTests: XCTestCase {
 
         for msg in clientMessages {
             let data = try JSONEncoder().encode(msg)
-            _ = try JSONDecoder().decode(ClientMessage.self, from: data)
+            let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+            // Verify the decoded value can be re-encoded without error (structural round-trip)
+            let reEncoded = try JSONEncoder().encode(decoded)
+            XCTAssertFalse(reEncoded.isEmpty, "Re-encoded client message should not be empty")
         }
 
         let serverMessages: [ServerMessage] = [
@@ -119,7 +122,10 @@ final class MessageIntegrationTests: XCTestCase {
 
         for msg in serverMessages {
             let data = try encoder.encode(msg)
-            _ = try decoder.decode(ServerMessage.self, from: data)
+            let decoded = try decoder.decode(ServerMessage.self, from: data)
+            // Verify the decoded value can be re-encoded without error (structural round-trip)
+            let reEncoded = try encoder.encode(decoded)
+            XCTAssertFalse(reEncoded.isEmpty, "Re-encoded server message should not be empty")
         }
     }
 

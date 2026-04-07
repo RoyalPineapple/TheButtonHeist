@@ -23,10 +23,13 @@ final class BezierSamplerTests: XCTestCase {
             p2: CGPoint(x: 200, y: 300), p3: p3,
             sampleCount: 50
         )
-        XCTAssertEqual(samples.first!.x, p0.x, accuracy: 0.001)
-        XCTAssertEqual(samples.first!.y, p0.y, accuracy: 0.001)
-        XCTAssertEqual(samples.last!.x, p3.x, accuracy: 0.001)
-        XCTAssertEqual(samples.last!.y, p3.y, accuracy: 0.001)
+        guard let first = samples.first, let last = samples.last else {
+            return XCTFail("Expected non-empty samples")
+        }
+        XCTAssertEqual(first.x, p0.x, accuracy: 0.001)
+        XCTAssertEqual(first.y, p0.y, accuracy: 0.001)
+        XCTAssertEqual(last.x, p3.x, accuracy: 0.001)
+        XCTAssertEqual(last.y, p3.y, accuracy: 0.001)
     }
 
     func testMinimumSampleCount() {
@@ -66,12 +69,15 @@ final class BezierSamplerTests: XCTestCase {
         )
         // First segment: 10 points. Second segment: 9 points (first dropped to avoid duplicate).
         XCTAssertEqual(samples.count, 19)
+        guard let first = samples.first, let last = samples.last else {
+            return XCTFail("Expected non-empty samples")
+        }
         // First point is start
-        XCTAssertEqual(samples.first!.x, 0, accuracy: 0.001)
-        XCTAssertEqual(samples.first!.y, 0, accuracy: 0.001)
+        XCTAssertEqual(first.x, 0, accuracy: 0.001)
+        XCTAssertEqual(first.y, 0, accuracy: 0.001)
         // Last point is end
-        XCTAssertEqual(samples.last!.x, 100, accuracy: 0.001)
-        XCTAssertEqual(samples.last!.y, 100, accuracy: 0.001)
+        XCTAssertEqual(last.x, 100, accuracy: 0.001)
+        XCTAssertEqual(last.y, 100, accuracy: 0.001)
     }
 
     func testEmptySegments() {
