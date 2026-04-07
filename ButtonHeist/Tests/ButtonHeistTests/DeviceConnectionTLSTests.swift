@@ -31,7 +31,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     // MARK: - DeviceConnection Init (actor-isolated)
 
     @ButtonHeistActor
-    func testDeviceConnectionStoresFingerprintFromDevice() {
+    func testDeviceConnectionStoresFingerprintFromDevice() async {
         let fingerprint = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
         let device = DiscoveredDevice(
             id: "test",
@@ -45,7 +45,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDeviceConnectionWithoutFingerprint() {
+    func testDeviceConnectionWithoutFingerprint() async {
         let device = DiscoveredDevice(
             id: "test",
             name: "TestApp#abc",
@@ -57,7 +57,7 @@ final class DeviceConnectionTLSTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDeviceConnectionWithToken() {
+    func testDeviceConnectionWithToken() async {
         let fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         let device = DiscoveredDevice(
             id: "test",

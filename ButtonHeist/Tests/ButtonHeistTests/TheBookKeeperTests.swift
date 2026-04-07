@@ -20,7 +20,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Session Phase Transitions
 
     @ButtonHeistActor
-    func testInitialPhaseIsIdle() {
+    func testInitialPhaseIsIdle() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         if case .idle = bookKeeper.phase {
             // expected
@@ -30,13 +30,13 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testManifestIsNilWhenIdle() {
+    func testManifestIsNilWhenIdle() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertNil(bookKeeper.manifest)
     }
 
     @ButtonHeistActor
-    func testBeginSessionTransitionsToActive() throws {
+    func testBeginSessionTransitionsToActive() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-session")
         if case .active(let session) = bookKeeper.phase {
@@ -47,7 +47,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBeginSessionCreatesDirectory() throws {
+    func testBeginSessionCreatesDirectory() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-dir")
         guard case .active(let session) = bookKeeper.phase else {
@@ -57,7 +57,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBeginSessionCreatesLogFile() throws {
+    func testBeginSessionCreatesLogFile() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log")
         guard case .active(let session) = bookKeeper.phase else {
@@ -149,7 +149,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBeginSessionRejectsPathTraversalIdentifier() {
+    func testBeginSessionRejectsPathTraversalIdentifier() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "../../tmp/evil")) { error in
             guard case BookKeeperError.unsafePath = error else {
@@ -160,7 +160,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBeginSessionRejectsSlashInIdentifier() {
+    func testBeginSessionRejectsSlashInIdentifier() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "foo/bar")) { error in
             guard case BookKeeperError.unsafePath = error else {
@@ -171,7 +171,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBeginSessionFromActiveThrows() throws {
+    func testBeginSessionFromActiveThrows() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "first")
         do {
@@ -202,7 +202,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Session Log
 
     @ButtonHeistActor
-    func testLogCommandWritesJSONLLine() throws {
+    func testLogCommandWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log")
         try bookKeeper.logCommand(
@@ -228,7 +228,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogResponseWritesJSONLLine() throws {
+    func testLogResponseWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log-resp")
         try bookKeeper.logResponse(
@@ -251,7 +251,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogResponseWithErrorIncrementsErrorCount() throws {
+    func testLogResponseWithErrorIncrementsErrorCount() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-errors")
         try bookKeeper.logResponse(requestId: "r1", status: .error, durationMilliseconds: 10, error: "boom")
@@ -261,7 +261,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogCommandIncrementsCommandCount() throws {
+    func testLogCommandIncrementsCommandCount() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
         try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
@@ -271,7 +271,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBinaryDataExcludedFromLog() throws {
+    func testBinaryDataExcludedFromLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-binary")
         let fakePngData = String(repeating: "A", count: 5000)
@@ -289,7 +289,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogCommandSilentWhenIdle() throws {
+    func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing
         try bookKeeper.logCommand(requestId: "r1", command: .status, arguments: [:])
@@ -298,7 +298,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Manifest
 
     @ButtonHeistActor
-    func testManifestStartsEmpty() throws {
+    func testManifestStartsEmpty() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-manifest")
         let manifest = bookKeeper.manifest
@@ -310,7 +310,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testManifestRoundTripsAsJSON() throws {
+    func testManifestRoundTripsAsJSON() async throws {
         let manifest = SessionManifest(
             sessionId: "test-roundtrip",
             startTime: Date(timeIntervalSince1970: 1_000_000),
@@ -341,26 +341,26 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Path Validation
 
     @ButtonHeistActor
-    func testRejectsDoubleDotComponents() {
+    func testRejectsDoubleDotComponents() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertNil(bookKeeper.validateOutputPath("../etc/passwd"))
     }
 
     @ButtonHeistActor
-    func testRejectsEmbeddedDoubleDot() {
+    func testRejectsEmbeddedDoubleDot() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertNil(bookKeeper.validateOutputPath("foo/../../../etc/passwd"))
     }
 
     @ButtonHeistActor
-    func testAcceptsSimpleRelativePath() {
+    func testAcceptsSimpleRelativePath() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let result = bookKeeper.validateOutputPath("screenshot.png")
         XCTAssertNotNil(result)
     }
 
     @ButtonHeistActor
-    func testAcceptsAbsolutePath() {
+    func testAcceptsAbsolutePath() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let result = bookKeeper.validateOutputPath("/tmp/shot.png")
         XCTAssertNotNil(result)
@@ -368,7 +368,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRejectsEmptyPath() {
+    func testRejectsEmptyPath() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         XCTAssertNil(bookKeeper.validateOutputPath(""))
     }
@@ -376,7 +376,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Artifact Storage
 
     @ButtonHeistActor
-    func testWriteScreenshotCreatesFile() throws {
+    func testWriteScreenshotCreatesFile() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-screenshot")
         let testData = Data([0x89, 0x50, 0x4E, 0x47]) // PNG magic bytes
@@ -393,7 +393,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteScreenshotUpdatesManifest() throws {
+    func testWriteScreenshotUpdatesManifest() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-manifest-update")
         let testData = Data([0x89, 0x50, 0x4E, 0x47])
@@ -410,7 +410,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteRecordingCreatesFile() throws {
+    func testWriteRecordingCreatesFile() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-recording")
         let testData = Data([0x00, 0x00, 0x00, 0x1C]) // MP4 header bytes
@@ -427,7 +427,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSequenceNumberIncrements() throws {
+    func testSequenceNumberIncrements() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-sequence")
         let testData = Data([0x89, 0x50, 0x4E, 0x47])
@@ -445,7 +445,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteToPathValidatesTraversal() {
+    func testWriteToPathValidatesTraversal() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let data = Data("test".utf8)
         XCTAssertThrowsError(try bookKeeper.writeToPath(data, outputPath: "../evil.txt")) { error in
@@ -457,7 +457,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteToPathSucceeds() throws {
+    func testWriteToPathSucceeds() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         let data = Data("hello".utf8)
         let outputPath = tempDirectory.appendingPathComponent("output.txt").path
@@ -468,7 +468,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBase64DecodingFailureThrows() throws {
+    func testBase64DecodingFailureThrows() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-bad-b64")
         XCTAssertThrowsError(
@@ -489,7 +489,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Session Log Integration
 
     @ButtonHeistActor
-    func testLogCommandAndResponseProduceCorrelatedEntries() throws {
+    func testLogCommandAndResponseProduceCorrelatedEntries() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-correlation")
         try bookKeeper.logCommand(requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
@@ -519,7 +519,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogResponseWithArtifactTracksPath() throws {
+    func testLogResponseWithArtifactTracksPath() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-artifact-log")
         try bookKeeper.logResponse(
@@ -540,7 +540,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteRecordingUpdatesManifestWithMetadata() throws {
+    func testWriteRecordingUpdatesManifestWithMetadata() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-rec-manifest")
         let testData = Data([0x00, 0x00, 0x00, 0x1C])
@@ -562,7 +562,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMixedArtifactsShareSequenceCounter() throws {
+    func testMixedArtifactsShareSequenceCounter() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-mixed-seq")
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()

@@ -20,14 +20,14 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Heist Recording Lifecycle
 
     @ButtonHeistActor
-    func testNotRecordingByDefault() throws {
+    func testNotRecordingByDefault() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
-    func testStartHeistRecording() throws {
+    func testStartHeistRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -35,7 +35,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testStartHeistWhileAlreadyRecordingThrows() throws {
+    func testStartHeistWhileAlreadyRecordingThrows() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -43,20 +43,20 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testStartHeistWithoutSessionThrows() {
+    func testStartHeistWithoutSessionThrows() async {
         let bookKeeper = makeBookKeeper()
         XCTAssertThrowsError(try bookKeeper.startHeistRecording(app: "com.example.app"))
     }
 
     @ButtonHeistActor
-    func testStopHeistWithoutRecordingThrows() throws {
+    func testStopHeistWithoutRecordingThrows() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         XCTAssertThrowsError(try bookKeeper.stopHeistRecording())
     }
 
     @ButtonHeistActor
-    func testStopHeistWithNoStepsThrows() throws {
+    func testStopHeistWithNoStepsThrows() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -64,7 +64,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordAndStopProducesHeist() throws {
+    func testRecordAndStopProducesHeist() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -80,7 +80,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCanStartNewHeistAfterStop() throws {
+    func testCanStartNewHeistAfterStop() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -93,7 +93,7 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Recording Behavior
 
     @ButtonHeistActor
-    func testExcludedCommandsAreNotRecorded() throws {
+    func testExcludedCommandsAreNotRecorded() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -114,7 +114,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordingIgnoredWhenNotRecording() throws {
+    func testRecordingIgnoredWhenNotRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         bookKeeper.recordHeistEvidence(command: .activate, args: ["command": "activate", "label": "Go"])
@@ -122,7 +122,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordsMatcherFromArgs() throws {
+    func testRecordsMatcherFromArgs() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -138,7 +138,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordsCommandArguments() throws {
+    func testRecordsCommandArguments() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -155,7 +155,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testHeistIdResolvedToMatcher() throws {
+    func testHeistIdResolvedToMatcher() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -175,7 +175,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCoordinateOnlyFlagged() throws {
+    func testCoordinateOnlyFlagged() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -191,7 +191,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBinaryDataStripped() throws {
+    func testBinaryDataStripped() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -211,7 +211,7 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Error Skipping
 
     @ButtonHeistActor
-    func testErrorResponseSkipsRecording() throws {
+    func testErrorResponseSkipsRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -233,7 +233,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testFailedActionResultSkipsRecording() throws {
+    func testFailedActionResultSkipsRecording() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -263,7 +263,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSuccessfulActionResultIsRecorded() throws {
+    func testSuccessfulActionResultIsRecorded() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -282,7 +282,7 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Minimal Matcher
 
     @ButtonHeistActor
-    func testMinimalMatcherPrefersIdentifier() {
+    func testMinimalMatcherPrefersIdentifier() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el", label: "Save", identifier: "saveButton", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
@@ -296,7 +296,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherFallsToLabelTraits() {
+    func testMinimalMatcherFallsToLabelTraits() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el", label: "Save", traits: [.button])
         let other = makeElement(heistId: "other", label: "Cancel", traits: [.button])
@@ -310,7 +310,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherUsesIdentifierWhenUnique() {
+    func testMinimalMatcherUsesIdentifierWhenUnique() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Item", identifier: "item_1", traits: [.staticText])
         let duplicate = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
@@ -324,7 +324,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherNeverUsesValue() {
+    func testMinimalMatcherNeverUsesValue() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Slider", value: "50%", traits: [.adjustable])
         let duplicate = makeElement(heistId: "el2", label: "Slider", value: "75%", traits: [.adjustable])
@@ -338,7 +338,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testMinimalMatcherFiltersStateTraits() {
+    func testMinimalMatcherFiltersStateTraits() async {
         let bookKeeper = makeBookKeeper()
         let target = makeElement(heistId: "el1", label: "Toggle", traits: [.button, .selected])
         let other = makeElement(heistId: "el2", label: "Cancel", traits: [.button])
@@ -351,7 +351,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAmbiguousElementsGetOrdinals() {
+    func testAmbiguousElementsGetOrdinals() async {
         let bookKeeper = makeBookKeeper()
         let first = makeElement(heistId: "el1", label: "Item", traits: [.staticText])
         let second = makeElement(heistId: "el2", label: "Item", traits: [.staticText])
@@ -376,7 +376,7 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Heist File I/O
 
     @ButtonHeistActor
-    func testWriteAndReadHeist() throws {
+    func testWriteAndReadHeist() async throws {
         let script = HeistPlayback(
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
@@ -401,7 +401,7 @@ final class BookKeeperHeistTests: XCTestCase {
     // MARK: - Recovery
 
     @ButtonHeistActor
-    func testRecoverAbandonedSessionCompressesLog() throws {
+    func testRecoverAbandonedSessionCompressesLog() async throws {
         let sessionDir = tempDirectory.appendingPathComponent("abandoned-2026-04-03-120000")
         try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
@@ -429,7 +429,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecoverSkipsCleanSessions() throws {
+    func testRecoverSkipsCleanSessions() async throws {
         let sessionDir = tempDirectory.appendingPathComponent("clean-2026-04-03-120000")
         try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
         try Data().write(to: sessionDir.appendingPathComponent("session.jsonl.gz"))
@@ -441,7 +441,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecoverPreservesHeistEvidence() throws {
+    func testRecoverPreservesHeistEvidence() async throws {
         let sessionDir = tempDirectory.appendingPathComponent("heist-abandoned-2026-04-03-120000")
         try FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: sessionDir.appendingPathComponent("session.jsonl"))
@@ -461,7 +461,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecoverEmptyBaseDirectory() {
+    func testRecoverEmptyBaseDirectory() async {
         let bookKeeper = makeBookKeeper()
         let recovered = bookKeeper.recoverAbandonedSessions()
         XCTAssertTrue(recovered.isEmpty)
