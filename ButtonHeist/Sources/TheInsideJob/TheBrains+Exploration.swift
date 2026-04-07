@@ -95,71 +95,94 @@ extension TheBrains {
                     continue
                 }
 
-                let savedVisualOrigin = CGPoint(
-                    x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
-                    y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+                let found = await exploreContainer(
+                    container: container, scrollView: scrollView,
+                    hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
+                    target: target, manifest: &manifest,
+                    containerFingerprints: &containerFingerprints
                 )
-                let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
-
-                let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
-                if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
-                    await tripwire.yieldFrames(2)
-                    refresh()
-                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+                if found {
+                    manifest.explorationTime = CACurrentMediaTime() - startTime
+                    return manifest
                 }
-
-                var originByElement = buildOriginIndex()
-
-                let initialPage = visibleElementsInContainer(container)
-                var accumulated = initialPage.elements
-                var accumulatedOrigins = initialPage.origins
-
-                for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-                    let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
-                    guard moved else { break }
-                    manifest.scrollCount += 1
-                    await tripwire.yieldFrames(2)
-                    refresh()
-                    originByElement = buildOriginIndex()
-                    manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
-
-                    let page = visibleElementsInContainer(container)
-                    let result = stitchPage(
-                        accumulated: accumulated,
-                        accumulatedOrigins: accumulatedOrigins,
-                        page: page.elements,
-                        pageOrigins: page.origins
-                    )
-                    accumulated = result.elements
-                    accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
-
-                    if result.inserted.isEmpty { break }
-
-                    if let target, stash.resolveFirstMatch(target) != nil {
-                        await restoreAndCache(
-                            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-                            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
-                            manifest: &manifest, containerFingerprints: &containerFingerprints
-                        )
-                        manifest.explorationTime = CACurrentMediaTime() - startTime
-                        return manifest
-                    }
-                }
-
-                await restoreAndCache(
-                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
-                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
-                    manifest: &manifest, containerFingerprints: &containerFingerprints
-                )
-
-                let newContainers = stash.currentHierarchy.scrollableContainers
-                    .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
-                manifest.addPendingContainers(newContainers)
             }
         }
 
         manifest.explorationTime = CACurrentMediaTime() - startTime
         return manifest
+    }
+
+    /// Scroll a single container to discover all elements. Returns true if the
+    /// target was found during exploration (caller should return early).
+    private func exploreContainer(
+        container: AccessibilityContainer,
+        scrollView: UIScrollView,
+        hasHOverflow: Bool,
+        hasVOverflow: Bool,
+        target: ElementTarget?,
+        manifest: inout ScreenManifest,
+        containerFingerprints: inout [AccessibilityContainer: Int]
+    ) async -> Bool {
+        let savedVisualOrigin = CGPoint(
+            x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
+            y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        )
+        let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
+
+        let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
+        if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
+            await tripwire.yieldFrames(2)
+            refresh()
+            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+        }
+
+        var originByElement = buildOriginIndex()
+
+        let initialPage = visibleElementsInContainer(container)
+        var accumulated = initialPage.elements
+        var accumulatedOrigins = initialPage.origins
+
+        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+            let moved = safecracker.scrollByPage(scrollView, direction: direction, animated: false)
+            guard moved else { break }
+            manifest.scrollCount += 1
+            await tripwire.yieldFrames(2)
+            refresh()
+            originByElement = buildOriginIndex()
+            manifest.recordVisibleElements(stash.registry.viewportIds, container: container)
+
+            let page = visibleElementsInContainer(container)
+            let result = stitchPage(
+                accumulated: accumulated,
+                accumulatedOrigins: accumulatedOrigins,
+                page: page.elements,
+                pageOrigins: page.origins
+            )
+            accumulated = result.elements
+            accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
+
+            if result.inserted.isEmpty { break }
+
+            if let target, stash.resolveFirstMatch(target) != nil {
+                await restoreAndCache(
+                    scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+                    container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+                    manifest: &manifest, containerFingerprints: &containerFingerprints
+                )
+                return true
+            }
+        }
+
+        await restoreAndCache(
+            scrollView: scrollView, savedVisualOrigin: savedVisualOrigin,
+            container: container, accumulated: accumulated, accumulatedOrigins: accumulatedOrigins,
+            manifest: &manifest, containerFingerprints: &containerFingerprints
+        )
+
+        let newContainers = stash.currentHierarchy.scrollableContainers
+            .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
+        manifest.addPendingContainers(newContainers)
+        return false
     }
 
     // MARK: - Exploration Helpers
