@@ -22,7 +22,7 @@ Three properties make this work:
 
 ## The Numbers
 
-Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), the standard coordinate-based MCP server for iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Apple's accessibility and simulator APIs. It uses the same coordinate-based approach as XCUITest — well-understood tooling that's been the standard for iOS UI testing for a decade. It's a good, clean implementation of that paradigm. The question isn't whether it works — it does — but whether the paradigm itself scales to agent workflows. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Standard tasks (14 UI automation tasks)
 
