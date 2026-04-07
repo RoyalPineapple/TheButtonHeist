@@ -320,6 +320,21 @@ public struct ExploreResult: Codable, Sendable {
         self.containersSkippedObscured = containersSkippedObscured
         self.explorationTime = explorationTime
     }
+
+    // MARK: Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case elements, scrollCount, containersExplored, containersSkippedObscured, explorationTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elements = try container.decode([HeistElement].self, forKey: .elements)
+        scrollCount = try container.decode(Int.self, forKey: .scrollCount)
+        containersExplored = try container.decode(Int.self, forKey: .containersExplored)
+        containersSkippedObscured = try container.decodeIfPresent(Int.self, forKey: .containersSkippedObscured) ?? 0
+        explorationTime = try container.decode(Double.self, forKey: .explorationTime)
+    }
 }
 
 // MARK: - Interface Delta
