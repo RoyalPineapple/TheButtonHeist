@@ -1,6 +1,7 @@
 import Foundation
 import MCP
 import ButtonHeist
+import TheScore
 
 @main
 struct ButtonHeistMCPServer {
@@ -42,10 +43,16 @@ struct ButtonHeistMCPServer {
 
         1. **See** — `get_interface` returns every visible element with a heistId, label, \
         value, traits, and actions.
-        2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher.
-        3. **Read the delta** — every action response reports what changed. If the delta \
-        answers your question, skip the next `get_interface`.
-        4. **Repeat** — only re-fetch when you need elements you haven't seen.
+        2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher. \
+        Always attach `expect` when you know what should change.
+        3. **Read the response** — every response tells you two things: what your action did \
+        (`interfaceDelta`) and what changed while you were thinking (`[background: ...]`). \
+        If either answers your question, skip `get_interface`.
+        4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) \
+        and your expectation wasn't met, call `wait_for_change` with the same expectation. \
+        The server rides through intermediate states and returns when the real change lands. \
+        If the change already happened in the background, `wait_for_change` returns instantly.
+        5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
         ## Choosing Tools
 
@@ -61,10 +68,42 @@ struct ButtonHeistMCPServer {
 
         **Finding**: `scroll_to_visible` when you've seen an element before but it scrolled \
         off-screen. `element_search` when you've never seen it — scrolls every container \
-        looking for a match. `wait_for` when the element will appear asynchronously.
+        looking for a match. `wait_for` when you know a specific element will appear.
+
+        **Waiting**: `wait_for_change` when the UI is updating asynchronously — network \
+        requests, timers, animations completing. Pass an expectation to wait for the specific \
+        outcome: `expect="screen_changed"` rides through loading spinners until the real \
+        navigation happens. With no expectation, returns on any tree change. This is the \
+        correct response when your action produced a transient state (spinner appeared, \
+        interactive elements disappeared) and you need the final result.
 
         **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
         `expect` to each step for a self-verifying script.
+
+        ## The Server Is Always Watching
+
+        Every response includes what changed since your last call. You never poll. Three \
+        things can happen between your tool calls:
+
+        **Nothing changed** — no `[background]` line, your heistIds are still valid, proceed.
+
+        **Elements changed** — `[background: elements changed +2 -1 (15 total)]` with the \
+        added/removed elements listed. Your heistIds are still valid. The delta shows what's new.
+
+        **Screen changed** — `[background: screen changed (7 elements)]` with the full new \
+        element list. Your heistIds are stale. Don't try to use them — read the new elements \
+        from the background block. If you had an `expect` on your action and it matches the \
+        background change, the action is skipped entirely and you get "expectation already met."  \
+        If you didn't have an expect, the action is skipped with "Screen changed while you were \
+        thinking" and the response carries the new interface. Either way, you're never left \
+        pointing at a screen that doesn't exist.
+
+        **Async pattern** — for operations that take time (payments, network requests):
+        1. `activate pay_button expect="screen_changed"` — tap and declare intent
+        2. Delta shows spinner, expectation not met → `wait_for_change expect="screen_changed"` \
+        — server waits until the real screen arrives
+        3. Or: you were slow to act, payment already completed → your next call gets the \
+        confirmation instantly via background awareness. No wait needed.
 
         ## Expectations
 
@@ -139,7 +178,7 @@ struct ButtonHeistMCPServer {
             switch params.name {
             // Direct 1:1 tools — tool name IS the command
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
-                 "wait_for_idle", "wait_for", "start_recording", "stop_recording", "list_devices",
+                 "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
                  "scroll", "scroll_to_visible", "element_search", "scroll_to_edge",
                  "edit_action", "dismiss_keyboard",
@@ -162,7 +201,8 @@ struct ButtonHeistMCPServer {
 
             let response = try await fence.execute(request: request)
             idleMonitor.resetTimer()
-            return try renderResponse(response)
+            let backgroundDelta = fence.drainBackgroundDelta()
+            return try renderResponse(response, backgroundDelta: backgroundDelta)
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
@@ -207,8 +247,39 @@ struct ButtonHeistMCPServer {
     // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
-    private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
+    private static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
         var content: [Tool.Content] = []
+
+        // Background changes: what happened while the agent was thinking
+        if let backgroundDelta, backgroundDelta.kind != .noChange {
+            var lines: [String] = []
+            switch backgroundDelta.kind {
+            case .screenChanged:
+                lines.append("[background: screen changed (\(backgroundDelta.elementCount) elements)]")
+                if let elements = backgroundDelta.newInterface?.elements {
+                    for (index, element) in elements.enumerated() {
+                        lines.append("  [\(index)] \(Self.compactBackgroundElement(element))")
+                    }
+                }
+            case .elementsChanged:
+                var parts: [String] = []
+                if let added = backgroundDelta.added { parts.append("+\(added.count)") }
+                if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
+                if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                lines.append("[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]")
+                if let added = backgroundDelta.added {
+                    for element in added { lines.append("  + \(element.heistId) \"\(element.label ?? "")\"") }
+                }
+                if let removed = backgroundDelta.removed {
+                    for heistId in removed { lines.append("  - \(heistId)") }
+                }
+            case .noChange:
+                break
+            }
+            if !lines.isEmpty {
+                content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))
+            }
+        }
 
         // Screenshots: embed as image content
         if case .screenshotData(let pngData, _, _) = response {
@@ -228,5 +299,15 @@ struct ButtonHeistMCPServer {
 
         content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: isError)
+    }
+
+    private static func compactBackgroundElement(_ element: HeistElement) -> String {
+        var parts = [element.heistId]
+        if let label = element.label { parts.append("\"\(label)\"") }
+        if !element.traits.isEmpty {
+            let traitNames = element.traits.map(\.rawValue)
+            parts.append("[\(traitNames.joined(separator: ", "))]")
+        }
+        return parts.joined(separator: " ")
     }
 }

@@ -462,6 +462,19 @@ extension TheFence {
         return .action(result: result)
     }
 
+    // MARK: - Handler: Wait For Change
+
+    func handleWaitForChange(_ args: [String: Any]) async throws -> FenceResponse {
+        let expectation = try parseExpectation(args)
+        let timeout = doubleArg(args, "timeout")
+        let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
+        let result: ActionResult = try await sendAndAwait(.waitForChange(target)) { requestId in
+            try await self.waitForActionResult(requestId: requestId, timeout: target.resolvedTimeout + 5)
+        }
+        lastActionResult = result
+        return .action(result: result)
+    }
+
     // MARK: - Handler: Recording
 
     func handleStartRecording(_ args: [String: Any]) async throws -> FenceResponse {

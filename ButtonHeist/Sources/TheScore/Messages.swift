@@ -4,7 +4,7 @@ import Foundation
 public let buttonHeistServiceType = "_buttonheist._tcp"
 
 /// Protocol version for compatibility checking
-public let protocolVersion = "6.7"
+public let protocolVersion = "6.8"
 
 /// Canonical product version shared by CLI, MCP, and the iOS server.
 /// Update this constant when cutting a new release. See VERSIONING.md in bh-infra.
@@ -63,6 +63,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case recording
     case recordingError
     case waitFor
+    case waitForChange
     case interaction
     case watch
 }

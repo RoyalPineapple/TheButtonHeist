@@ -564,7 +564,7 @@ cd ButtonHeistMCP && swift build -c release
 | `type_text` | Type text / delete characters | `text`, `deleteCount`, `clearFirst`, `heistId`, `label`, `identifier`, `value`, `traits`, `excludeTraits`, `expect` |
 | `swipe` | Swipe on element or between coordinates | `heistId` + `direction`, `start`/`end` (unit points), or `startX`/`startY`/`endX`/`endY`, `expect` |
 | `get_screen` | Capture PNG screenshot | `output` (file path, optional) |
-| `wait_for_idle` | Wait for animations to settle | `timeout` |
+| `wait_for_change` | Wait for UI to change, optionally matching an expectation | `expect`, `timeout` |
 | `wait_for` | Wait for element to appear/disappear | `label`, `identifier`, `value`, `traits`, `excludeTraits`, `absent`, `timeout` |
 | `start_recording` | Start H.264/MP4 screen recording | `fps`, `scale`, `maxDuration`, `inactivityTimeout` |
 | `stop_recording` | Stop recording (returns metadata) | `output` (file path, optional) |
@@ -773,7 +773,8 @@ Messages sent from client to server.
 - `scrollToVisible(ScrollToVisibleTarget)` - Hierarchy-driven scroll search with swipe fallback for nested layouts
 - `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
 - `resignFirstResponder` - Dismiss keyboard
-- `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle
+- `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
+- `waitForChange(WaitForChangeTarget)` - Wait for UI to change, optionally matching an expectation
 - `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
 - `requestScreen` - Request PNG screenshot
 - `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
@@ -1258,7 +1259,8 @@ public enum ActionMethod: String, Codable, Sendable
 - `setPasteboard` - Text written to general pasteboard
 - `getPasteboard` - Text read from general pasteboard
 - `resignFirstResponder` - Keyboard dismissed
-- `waitForIdle` - Wait-for-idle completed
+- `waitForIdle` - Wait-for-idle completed (internal)
+- `waitForChange` - Wait-for-change completed
 - `waitFor` - Wait-for element completed
 - `scroll` - Scroll view scrolled by one page
 - `scrollToVisible` - Bidirectional scroll search found (or failed to find) element matching predicate
@@ -1614,7 +1616,8 @@ The `--session-timeout` flag exits the session if no commands are received withi
 | `type "text"` | `type_text` |
 | `press <id>` | `long_press` |
 | `devices` | `list_devices` |
-| `idle` | `wait_for_idle` |
+| `idle` | `wait_for_change` |
+| `change` | `wait_for_change` |
 | `wait` | `wait_for` |
 | `record` | `start_recording` |
 
@@ -1636,7 +1639,7 @@ echo '{"command":"get_interface"}' | buttonheist session --format json
 echo '{"command":"get_session_state"}' | buttonheist session --format json
 
 # Execute multiple commands in one request
-echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_idle","timeout":2}]}' | buttonheist session --format json
+echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
 
 # Start a session with a 5-minute idle timeout (for agent use)
 buttonheist session --format json --session-timeout 300

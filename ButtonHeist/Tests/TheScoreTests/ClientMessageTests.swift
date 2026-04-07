@@ -267,6 +267,73 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - WaitForChange Tests
+
+    func testWaitForChangeNoExpectationRoundTrip() throws {
+        let message = ClientMessage.waitForChange(WaitForChangeTarget())
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        guard case .waitForChange(let target) = decoded else {
+            return XCTFail("Expected waitForChange, got \(decoded)")
+        }
+        XCTAssertNil(target.expect)
+        XCTAssertNil(target.timeout)
+        XCTAssertEqual(target.resolvedTimeout, 10.0)
+    }
+
+    func testWaitForChangeWithExpectationRoundTrip() throws {
+        let message = ClientMessage.waitForChange(
+            WaitForChangeTarget(expect: .screenChanged, timeout: 15.0)
+        )
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        guard case .waitForChange(let target) = decoded else {
+            return XCTFail("Expected waitForChange, got \(decoded)")
+        }
+        XCTAssertEqual(target.expect, .screenChanged)
+        XCTAssertEqual(target.timeout, 15.0)
+    }
+
+    func testWaitForChangeElementExpectationRoundTrip() throws {
+        let message = ClientMessage.waitForChange(
+            WaitForChangeTarget(
+                expect: .elementDisappeared(ElementMatcher(label: "Loading")),
+                timeout: 5.0
+            )
+        )
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        guard case .waitForChange(let target) = decoded else {
+            return XCTFail("Expected waitForChange, got \(decoded)")
+        }
+        XCTAssertEqual(target.expect, .elementDisappeared(ElementMatcher(label: "Loading")))
+        XCTAssertEqual(target.timeout, 5.0)
+    }
+
+    func testWaitForChangeTimeoutClamping() {
+        let target = WaitForChangeTarget(timeout: 999)
+        XCTAssertEqual(target.resolvedTimeout, 30.0)
+    }
+
+    func testWaitForChangeEnvelopeRoundTrip() throws {
+        let envelope = RequestEnvelope(
+            requestId: "wfc-1",
+            message: .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 8.0))
+        )
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "wfc-1")
+        guard case .waitForChange(let target) = decoded.message else {
+            return XCTFail("Expected waitForChange, got \(decoded.message)")
+        }
+        XCTAssertEqual(target.expect, .elementsChanged)
+        XCTAssertEqual(target.timeout, 8.0)
+    }
+
     // MARK: - Explore
 
     func testExploreEncodeDecode() throws {

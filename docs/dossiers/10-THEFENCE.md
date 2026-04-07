@@ -22,6 +22,7 @@ TheFence is the brain of the outside operation:
 12. **Batch early stop** - with `stop_on_error` (default), halts the batch at the first mismet expectation so `failedIndex` points at the action that broke, not a downstream symptom
 13. **Interface cache** - caches `lastInterfaceElements` from the most recent `get_interface` response, used by TheBookKeeper to resolve heistIds to element properties for heist recording
 14. **Heist recording integration** - after each command, calls `bookKeeper.recordHeistEvidence` (skipped during playback); updates interface cache on `get_interface` responses
+15. **Wait for change** - `handleWaitForChange` sends `waitForChange` to the server with an optional `ActionExpectation`; the server polls until the expectation is met or timeout expires
 
 ## Architecture Diagram
 

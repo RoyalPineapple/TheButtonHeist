@@ -252,7 +252,7 @@ public final class DeviceConnection: DeviceConnecting {
                 logger.error("Failed to decode: \(str.prefix(200))")
             }
             let detail = String(data: data.prefix(200), encoding: .utf8) ?? "<binary data>"
-            onEvent?(.message(.error("Failed to decode server message: \(detail)"), requestId: nil))
+            onEvent?(.message(.error("Failed to decode server message: \(detail)"), requestId: nil, backgroundDelta: nil))
             return
         }
 
@@ -262,7 +262,7 @@ public final class DeviceConnection: DeviceConnecting {
             onEvent?(.message(.protocolMismatch(ProtocolMismatchPayload(
                 expectedProtocolVersion: protocolVersion,
                 receivedProtocolVersion: envelope.protocolVersion
-            )), requestId: envelope.requestId))
+            )), requestId: envelope.requestId, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
             return
@@ -275,39 +275,39 @@ public final class DeviceConnection: DeviceConnecting {
         case .protocolMismatch(let payload):
             let message = "expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)"
             logger.error("Protocol mismatch: \(message)")
-            onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId))
+            onEvent?(.message(.protocolMismatch(payload), requestId: envelope.requestId, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
             if autoRespondToAuthRequired {
                 handleAuthRequired()
             } else {
-                onEvent?(.message(.authRequired, requestId: nil))
+                onEvent?(.message(.authRequired, requestId: nil, backgroundDelta: nil))
             }
         case .authFailed(let reason):
             logger.error("Auth failed: \(reason)")
-            onEvent?(.message(.authFailed(reason), requestId: nil))
+            onEvent?(.message(.authFailed(reason), requestId: nil, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.authFailed(reason)))
         case .authApproved(let payload):
             logger.info("Auth approved via UI, received token")
             token = payload.token
-            onEvent?(.message(.authApproved(payload), requestId: nil))
+            onEvent?(.message(.authApproved(payload), requestId: nil, backgroundDelta: nil))
         case .sessionLocked(let payload):
             logger.warning("Session locked: \(payload.message)")
-            onEvent?(.message(.sessionLocked(payload), requestId: nil))
+            onEvent?(.message(.sessionLocked(payload), requestId: nil, backgroundDelta: nil))
             disconnect()
             onEvent?(.disconnected(.sessionLocked(payload.message)))
         case .info(let info):
             logger.info("Received server info: \(info.appName)")
             onEvent?(.connected)
-            onEvent?(.message(.info(info), requestId: envelope.requestId))
+            onEvent?(.message(.info(info), requestId: envelope.requestId, backgroundDelta: nil))
         case .recordingStopped:
             logger.debug("Recording stop acknowledged")
         case .pong:
             logger.debug("Received pong")
         default:
-            onEvent?(.message(envelope.message, requestId: envelope.requestId))
+            onEvent?(.message(envelope.message, requestId: envelope.requestId, backgroundDelta: envelope.backgroundDelta))
         }
     }
 
