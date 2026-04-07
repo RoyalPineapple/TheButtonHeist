@@ -53,7 +53,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
 
         var approvedToken: String?
         conn.onEvent = { event in
-            if case .message(.authApproved(let payload), _) = event {
+            if case .message(.authApproved(let payload), _, _) = event {
                 approvedToken = payload.token
             }
         }
@@ -76,7 +76,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
             switch event {
             case .connected:
                 connectedFired = true
-            case .message(.info(let info), _):
+            case .message(.info(let info), _, _):
                 receivedInfo = info
             default:
                 break
@@ -110,7 +110,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         var disconnectReason: DisconnectReason?
         conn.onEvent = { event in
             switch event {
-            case .message(.authFailed(let reason), _):
+            case .message(.authFailed(let reason), _, _):
                 authFailedReason = reason
             case .disconnected(let reason):
                 disconnectReason = reason
@@ -152,7 +152,7 @@ final class AuthFlowIntegrationTests: XCTestCase {
         var receivedAuthRequired = false
         var sentMessages: [ClientMessage] = []
         conn.onEvent = { event in
-            if case .message(.authRequired, _) = event {
+            if case .message(.authRequired, _, _) = event {
                 receivedAuthRequired = true
             }
         }

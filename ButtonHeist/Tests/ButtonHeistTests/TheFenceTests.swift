@@ -58,7 +58,7 @@ final class TheFenceTests: XCTestCase {
             .listDevices: "list_devices",
             .getInterface: "get_interface",
             .getScreen: "get_screen",
-            .waitForIdle: "wait_for_idle",
+            .waitForChange: "wait_for_change",
             .oneFingerTap: "one_finger_tap",
             .longPress: "long_press",
             .swipe: "swipe",
@@ -708,5 +708,103 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(mockDiscovery.startCount, 1)
         XCTAssertEqual(mockDiscovery.stopCount, 1)
         XCTAssertEqual(mockConnection.connectCount, 0)
+    }
+
+    // MARK: - Background Delta
+
+    @ButtonHeistActor
+    func testDrainBackgroundDeltaReturnsNilWhenEmpty() async {
+        let fence = TheFence()
+        XCTAssertNil(fence.drainBackgroundDelta())
+    }
+
+    @ButtonHeistActor
+    func testDrainBackgroundDeltaClearsAfterRead() async {
+        let fence = TheFence()
+        // Simulate a background delta arriving via the handoff callback
+        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 7)
+        fence.handoff.onBackgroundDelta?(delta)
+
+        let first = fence.drainBackgroundDelta()
+        XCTAssertNotNil(first)
+        XCTAssertEqual(first?.kind, .screenChanged)
+        XCTAssertEqual(first?.elementCount, 7)
+
+        let second = fence.drainBackgroundDelta()
+        XCTAssertNil(second)
+    }
+
+    @ButtonHeistActor
+    func testExpectationShortCircuitOnBackgroundDelta() async throws {
+        let device = DiscoveredDevice(
+            id: "mock-device",
+            name: "MockApp#test",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = ServerInfo(
+            protocolVersion: protocolVersion,
+            appName: "MockApp", bundleIdentifier: "com.test",
+            deviceName: "Sim", systemVersion: "18.0",
+            screenWidth: 390, screenHeight: 844
+        )
+
+        let fence = TheFence()
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        // Connect first so we have a live session
+        try await fence.start()
+
+        // Simulate a screen-changed background delta
+        let element = HeistElement(
+            description: "Button", label: "New Order", value: nil, identifier: nil,
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
+        )
+        let fullInterface = Interface(timestamp: Date(), elements: [element])
+        let delta = InterfaceDelta(
+            kind: .screenChanged, elementCount: 1, newInterface: fullInterface
+        )
+        fence.handoff.onBackgroundDelta?(delta)
+
+        // Execute an action with expect=screen_changed — should short-circuit
+        let response = try await fence.execute(request: [
+            "command": "activate",
+            "heistId": "stale_button",
+            "expect": "screen_changed",
+        ])
+
+        // Should return success with "already met" rather than elementNotFound
+        if case .action(let result, let expectation) = response {
+            XCTAssertTrue(result.success)
+            XCTAssertEqual(result.message, "expectation already met by background change")
+            XCTAssertNotNil(expectation)
+            XCTAssertEqual(expectation?.met, true)
+        } else {
+            XCTFail("Expected action response, got \(response)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testNoShortCircuitWithoutExpectation() async throws {
+        let fence = TheFence()
+
+        // Background delta present but no expectation on the action
+        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 3)
+        fence.handoff.onBackgroundDelta?(delta)
+
+        // Action without expect — should NOT short-circuit, should try to connect
+        do {
+            _ = try await fence.execute(request: [
+                "command": "activate",
+                "heistId": "some_button",
+            ])
+            XCTFail("Expected connection error")
+        } catch {
+            // Expected — no connection, but the point is it didn't short-circuit
+        }
     }
 }

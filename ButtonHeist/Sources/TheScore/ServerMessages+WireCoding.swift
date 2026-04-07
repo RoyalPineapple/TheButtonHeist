@@ -12,6 +12,7 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case requestId
     case type
     case payload
+    case backgroundDelta
 }
 
 // MARK: - ResponseEnvelope Codable
@@ -21,6 +22,7 @@ extension ResponseEnvelope {
         let container = try decoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         protocolVersion = try container.decode(String.self, forKey: .protocolVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
+        backgroundDelta = try container.decodeIfPresent(InterfaceDelta.self, forKey: .backgroundDelta)
         let type = try container.decode(WireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
@@ -32,6 +34,7 @@ extension ResponseEnvelope {
         var container = encoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         try container.encode(protocolVersion, forKey: .protocolVersion)
         try container.encodeIfPresent(requestId, forKey: .requestId)
+        try container.encodeIfPresent(backgroundDelta, forKey: .backgroundDelta)
         try container.encode(message.wireMessageType, forKey: .type)
         if message.hasPayload {
             try message.encodePayload(to: container.superEncoder(forKey: .payload))

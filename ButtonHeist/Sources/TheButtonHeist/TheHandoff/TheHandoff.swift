@@ -135,6 +135,7 @@ public final class TheHandoff {
     public var onSessionLocked: ((SessionLockedPayload) -> Void)?
     public var onAuthFailed: ((String) -> Void)?
     public var onInteraction: ((InteractionEvent) -> Void)?
+    public var onBackgroundDelta: ((InterfaceDelta) -> Void)?
 
     // MARK: - Configuration
 
@@ -339,15 +340,18 @@ public final class TheHandoff {
                     }
                     self.reconnectPolicy = .enabled(filter: filter, reconnectTask: reconnectTask)
                 }
-            case .message(let message, let requestId):
-                self.handleServerMessage(message, requestId: requestId)
+            case .message(let message, let requestId, let backgroundDelta):
+                self.handleServerMessage(message, requestId: requestId, backgroundDelta: backgroundDelta)
             }
         }
 
         connection?.connect()
     }
 
-    func handleServerMessage(_ message: ServerMessage, requestId: String?) {
+    func handleServerMessage(_ message: ServerMessage, requestId: String?, backgroundDelta: InterfaceDelta? = nil) {
+        if let backgroundDelta {
+            onBackgroundDelta?(backgroundDelta)
+        }
         switch message {
         case .info(let info):
             serverInfo = info

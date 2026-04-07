@@ -117,6 +117,21 @@ public final class TheInsideJob {
     // Hierarchy invalidation (pulse-driven, replaces debounce timer)
     var hierarchyInvalidated = false
 
+    /// Hash of the wire elements included in the last response sent to the driver.
+    /// Used by wait_for_change to detect changes that happened between tool calls
+    /// (while the agent was thinking). Updated after every action response and
+    /// get_interface response.
+    var lastSentTreeHash: Int = 0
+
+    /// Snapshot of the screen elements at the time of the last response.
+    /// Used by computeBackgroundDelta to produce proper element-level diffs
+    /// instead of always reporting screenChanged.
+    var lastSentBeforeState: TheBrains.BeforeState?
+
+    /// Screen ID from the last response sent to the driver. When this differs
+    /// from the current screen, all heistIds the agent holds are stale.
+    var lastSentScreenId: String?
+
     // MARK: - Initialization
 
     public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
@@ -372,6 +387,8 @@ public final class TheInsideJob {
             handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
             await handleWaitForIdle(target, requestId: requestId, respond: respond)
+        case .waitForChange(let target):
+            await handleWaitForChange(target, requestId: requestId, respond: respond)
 
         // Recording & interactions — blocked for observers
         default:
@@ -394,8 +411,32 @@ public final class TheInsideJob {
                 handleStopRecording(requestId: requestId, respond: respond)
             default:
                 stakeout?.noteActivity()
+                let backgroundDelta = computeBackgroundDelta()
+
+                // Fast redirect: if the screen changed in the background and the
+                // action targets a heistId, all heistIds are stale. Rather than
+                // searching for an element that can't exist, return the new state
+                // immediately. Reported as success (the UI moved forward) with the
+                // background delta carrying the full new interface.
+                if let backgroundDelta, backgroundDelta.kind == .screenChanged,
+                   let lastScreen = lastSentScreenId, lastScreen != stash.lastScreenId,
+                   message.actionTarget != nil {
+                    let actionResult = ActionResult(
+                        success: true,
+                        method: .waitForChange,
+                        message: "Screen changed while you were thinking"
+                            + " (\(lastScreen) → \(stash.lastScreenId ?? "unknown"))"
+                            + " — action skipped, here is the current state",
+                        interfaceDelta: backgroundDelta,
+                        screenName: stash.lastScreenName,
+                        screenId: stash.lastScreenId
+                    )
+                    recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
+                    return
+                }
+
                 let actionResult = await brains.executeCommand(message)
-                recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
+                recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
             }
         }
     }
@@ -429,11 +470,44 @@ public final class TheInsideJob {
         return StatusPayload(identity: identity, session: session)
     }
 
+    /// Check if the accessibility tree changed since the last response was sent.
+    /// Returns a delta with the current interface if it did, nil if unchanged.
+    /// Uses stored before-state for proper element-level diffs when available.
+    func computeBackgroundDelta() -> InterfaceDelta? {
+        guard lastSentTreeHash != 0 else { return nil }
+        brains.refresh()
+        let snapshot = stash.selectElements()
+        let wireElements = TheStash.WireConversion.toWire(snapshot)
+        let currentHash = wireElements.hashValue
+        guard currentHash != lastSentTreeHash else { return nil }
+
+        guard let beforeState = lastSentBeforeState else {
+            let tree = stash.currentHierarchy.isEmpty
+                ? nil
+                : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
+            return InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: wireElements.count,
+                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
+            )
+        }
+
+        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let afterElements = stash.currentHierarchy.sortedElements
+        let isScreenChange = tripwire.isScreenChange(before: beforeState.viewController, after: afterVC)
+            || stash.burglar.isTopologyChanged(before: beforeState.elements, after: afterElements)
+        return TheStash.WireConversion.computeDelta(
+            before: beforeState.snapshot, after: snapshot,
+            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
+        )
+    }
+
     /// Record to stakeout, send response, and broadcast to subscribers.
     private func recordAndBroadcast(
         command: ClientMessage,
         actionResult: ActionResult,
         requestId: String?,
+        backgroundDelta: InterfaceDelta? = nil,
         respond: @escaping (Data) -> Void
     ) {
         if let stakeout, stakeout.isRecording {
@@ -445,7 +519,10 @@ public final class TheInsideJob {
             stakeout.recordInteraction(event: event)
         }
 
-        sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
+        sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+        lastSentTreeHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        lastSentBeforeState = brains.captureBeforeState()
+        lastSentScreenId = stash.lastScreenId
 
         if muscle.hasSubscribers {
             let event = InteractionEvent(
@@ -479,8 +556,8 @@ public final class TheInsideJob {
 
     /// Encode a response envelope, logging the actual error on failure.
     /// Returns nil only when encoding fails — callers decide how to handle that.
-    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil) -> Data? {
-        let envelope = ResponseEnvelope(requestId: requestId, message: message)
+    func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil, backgroundDelta: InterfaceDelta? = nil) -> Data? {
+        let envelope = ResponseEnvelope(requestId: requestId, message: message, backgroundDelta: backgroundDelta)
         do {
             return try JSONEncoder().encode(envelope)
         } catch {
@@ -499,8 +576,8 @@ public final class TheInsideJob {
         }
     }
 
-    func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping (Data) -> Void) {
-        if let data = encodeEnvelope(message, requestId: requestId) {
+    func sendMessage(_ message: ServerMessage, requestId: String? = nil, backgroundDelta: InterfaceDelta? = nil, respond: @escaping (Data) -> Void) {
+        if let data = encodeEnvelope(message, requestId: requestId, backgroundDelta: backgroundDelta) {
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
         } else if let errorData = encodeEnvelope(.error("Encoding failed"), requestId: requestId) {

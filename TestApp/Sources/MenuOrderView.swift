@@ -77,8 +77,16 @@ struct MenuCategory: Identifiable {
 // MARK: - Menu Order View
 
 struct MenuOrderView: View {
+    enum CheckoutPhase {
+        case browsing
+        case reviewing
+        case processing
+        case confirmed(orderNumber: String)
+    }
+
     @State private var categories = MenuCategory.defaultMenu
     @State private var expandedItemId: String?
+    @State private var checkoutPhase: CheckoutPhase = .browsing
 
     private var allItems: [MenuItem] {
         categories.flatMap(\.items)
@@ -105,6 +113,33 @@ struct MenuOrderView: View {
     }
 
     var body: some View {
+        Group {
+            switch checkoutPhase {
+            case .browsing:
+                menuList
+            case .reviewing:
+                checkoutReview
+            case .processing:
+                processingView
+            case .confirmed(let orderNumber):
+                confirmationView(orderNumber: orderNumber)
+            }
+        }
+        .navigationTitle(checkoutTitle)
+    }
+
+    private var checkoutTitle: String {
+        switch checkoutPhase {
+        case .browsing: "Menu"
+        case .reviewing: "Checkout"
+        case .processing: "Processing"
+        case .confirmed: "Order Confirmed"
+        }
+    }
+
+    // MARK: - Menu List (browsing phase)
+
+    private var menuList: some View {
         List {
             summarySection
 
@@ -133,7 +168,138 @@ struct MenuOrderView: View {
             orderActions
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Menu")
+    }
+
+    // MARK: - Checkout Review
+
+    private var checkoutReview: some View {
+        List {
+            Section("Your Order") {
+                ForEach(orderedItems) { item in
+                    HStack {
+                        Text("\(item.emoji) \(item.name)")
+                        if item.selectedSize != .regular {
+                            Text("(\(item.selectedSize.label))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("\u{00D7}\(item.quantity)")
+                            .foregroundStyle(.secondary)
+                        Text(formatPrice(item.lineTotal))
+                            .monospacedDigit()
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+
+            Section {
+                HStack {
+                    Text("Subtotal")
+                    Spacer()
+                    Text(formatPrice(subtotal))
+                }
+                HStack {
+                    Text("Tax (8%)")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatPrice(tax))
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Total")
+                        .fontWeight(.bold)
+                    Spacer()
+                    Text(formatPrice(total))
+                        .fontWeight(.bold)
+                        .font(.title3)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(spokenPrice(total))
+            }
+
+            Section {
+                Button {
+                    checkoutPhase = .processing
+                    NSLog("[Menu] Payment processing for %@", formatPrice(total))
+                    Task {
+                        let roll = Int.random(in: 1...100)
+                        let delay: Double = switch roll {
+                        case 1...80:  2.5
+                        case 81...90: 5.0
+                        case 91...95: 7.0
+                        default:      10.0
+                        }
+                        NSLog("[Menu] Payment delay: %.1fs (roll: %d)", delay, roll)
+                        try? await Task.sleep(for: .seconds(delay))
+                        let orderNumber = "ORD-\(Int.random(in: 1000...9999))"
+                        checkoutPhase = .confirmed(orderNumber: orderNumber)
+                        NSLog("[Menu] Payment confirmed: %@ (%.1fs)", orderNumber, delay)
+                    }
+                } label: {
+                    HStack {
+                        Spacer()
+                        Label("Confirm Payment — \(formatPrice(total))", systemImage: "creditcard")
+                            .fontWeight(.semibold)
+                        Spacer()
+                    }
+                }
+
+                Button("Back to Menu") {
+                    checkoutPhase = .browsing
+                    NSLog("[Menu] Returned to menu from checkout")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Processing
+
+    private var processingView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            ProgressView()
+                .scaleEffect(1.5)
+                .accessibilityLabel("Processing payment")
+            Text("Processing payment…")
+                .font(.headline)
+            Text(formatPrice(total))
+                .font(.title2)
+                .fontWeight(.bold)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Confirmation
+
+    private func confirmationView(orderNumber: String) -> some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(.green)
+                .accessibilityHidden(true)
+            Text("Payment Successful")
+                .font(.title2)
+                .fontWeight(.bold)
+            Text("Order \(orderNumber)")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text(formatPrice(total))
+                .font(.title3)
+            Text("\(totalQuantity) item\(totalQuantity == 1 ? "" : "s")")
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("New Order") {
+                resetOrder()
+                NSLog("[Menu] Starting new order")
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.bottom, 40)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Order Summary
@@ -188,7 +354,8 @@ struct MenuOrderView: View {
     private var orderActions: some View {
         Section {
             Button {
-                NSLog("[Menu] Order placed: %d items, %@", totalQuantity, formatPrice(total))
+                checkoutPhase = .reviewing
+                NSLog("[Menu] Proceeding to checkout: %d items, %@", totalQuantity, formatPrice(total))
             } label: {
                 HStack {
                     Spacer()
@@ -201,20 +368,23 @@ struct MenuOrderView: View {
 
             if totalQuantity > 0 {
                 Button("Clear Order", role: .destructive) {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        for categoryIndex in categories.indices {
-                            for itemIndex in categories[categoryIndex].items.indices {
-                                categories[categoryIndex].items[itemIndex].quantity = 0
-                                categories[categoryIndex].items[itemIndex].activeOptions = []
-                                categories[categoryIndex].items[itemIndex].selectedSize = .regular
-                            }
-                        }
-                        expandedItemId = nil
-                    }
+                    resetOrder()
                     NSLog("[Menu] Order cleared")
                 }
             }
         }
+    }
+
+    private func resetOrder() {
+        for categoryIndex in categories.indices {
+            for itemIndex in categories[categoryIndex].items.indices {
+                categories[categoryIndex].items[itemIndex].quantity = 0
+                categories[categoryIndex].items[itemIndex].activeOptions = []
+                categories[categoryIndex].items[itemIndex].selectedSize = .regular
+            }
+        }
+        expandedItemId = nil
+        checkoutPhase = .browsing
     }
 
     // MARK: - Formatting

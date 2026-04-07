@@ -240,7 +240,7 @@ private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterv
             connection.send(.status)
         case .connected:
             break
-        case .message(let message, _):
+        case .message(let message, _, _):
             if case .status = message {
                 reachabilityLogger.debug("Status reachable: \(device.name, privacy: .public)")
                 reachable = true

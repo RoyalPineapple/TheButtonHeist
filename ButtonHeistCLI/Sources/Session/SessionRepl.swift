@@ -168,8 +168,9 @@ nonisolated extension ReplSession {
           ui                          Get accessibility interface
           screen                      Capture screenshot
           screen output=photo.png     Save screenshot to file
-          idle                        Wait for animations to settle
-          idle timeout=5              Wait with custom timeout
+          change                      Wait for any UI change
+          change expect=screen_changed  Wait for specific change
+          change timeout=10           Wait with custom timeout
           wait label="Loading" absent=true  Wait for element to disappear
 
         Gestures:
@@ -219,7 +220,8 @@ nonisolated extension ReplSession {
         "ui": TheFence.Command.getInterface.rawValue,
         "screen": TheFence.Command.getScreen.rawValue,
         "screenshot": TheFence.Command.getScreen.rawValue,
-        "idle": TheFence.Command.waitForIdle.rawValue,
+        "idle": TheFence.Command.waitForChange.rawValue,
+        "change": TheFence.Command.waitForChange.rawValue,
         "wait": TheFence.Command.waitFor.rawValue,
         "devices": TheFence.Command.listDevices.rawValue,
         "list": TheFence.Command.listDevices.rawValue,
