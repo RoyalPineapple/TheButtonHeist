@@ -348,8 +348,8 @@ public final class TheFence {
             return try await handleGetInterface(args)
         case .getScreen:
             return try await handleGetScreen(args)
-        case .waitForIdle:
-            return try await sendAction(.waitForIdle(WaitForIdleTarget(timeout: doubleArg(args, "timeout"))))
+        case .waitForChange:
+            return try await handleWaitForChange(args)
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
              .drawPath, .drawBezier:
             return try await handleGesture(command: command, args: args)

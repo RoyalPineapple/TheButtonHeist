@@ -63,6 +63,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case recording
     case recordingError
     case waitFor
+    case waitForChange
     case interaction
     case watch
 }

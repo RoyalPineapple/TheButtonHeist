@@ -124,6 +124,11 @@ public enum ClientMessage: Codable, Sendable {
     /// Wait for an element matching a predicate to appear (or disappear)
     case waitFor(WaitForTarget)
 
+    /// Wait for the UI to change in a way that matches an expectation.
+    /// With no expectation: returns on any tree change.
+    /// With expect: rides through intermediate states until the expectation is met.
+    case waitForChange(WaitForChangeTarget)
+
     /// Request a capture of the current screen
     case requestScreen
 
@@ -620,6 +625,22 @@ public struct WaitForIdleTarget: Codable, Sendable {
     public init(timeout: Double? = nil) {
         self.timeout = timeout
     }
+}
+
+/// Target for wait_for_change command — wait for the UI to change in a way
+/// that matches an expectation. With no expectation, returns on any tree change.
+public struct WaitForChangeTarget: Codable, Sendable {
+    /// The change to wait for. When nil, any tree change satisfies the wait.
+    public let expect: ActionExpectation?
+    /// Maximum time to wait in seconds (default: 10, max: 30)
+    public let timeout: Double?
+
+    public init(expect: ActionExpectation? = nil, timeout: Double? = nil) {
+        self.expect = expect
+        self.timeout = timeout
+    }
+
+    public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
 }
 
 /// Target for wait_for command — wait for an element to appear or disappear.

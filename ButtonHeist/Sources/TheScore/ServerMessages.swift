@@ -727,6 +727,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case waitForIdle
+    case waitForChange
     case scroll
     case scrollToVisible
     case elementSearch

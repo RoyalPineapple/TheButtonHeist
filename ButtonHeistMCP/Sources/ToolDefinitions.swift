@@ -148,7 +148,7 @@ enum ToolDefinitions {
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
-        waitForIdle, waitFor, startRecording, stopRecording, listDevices,
+        waitForChange, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
         scroll, scrollToVisible, elementSearch, scrollToEdge,
         runBatch, getSessionState,
@@ -325,13 +325,25 @@ enum ToolDefinitions {
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
-    static let waitForIdle = Tool(
-        name: "wait_for_idle",
-        description: "Wait for UI animations to settle before reading state or performing actions.",
+    static let waitForChange = Tool(
+        name: "wait_for_change",
+        description: """
+            Wait for the UI to change in a way that matches an expectation. With no expectation, \
+            returns on any tree change. With expect, rides through intermediate states (spinners, \
+            loading overlays) until the expectation is met or timeout fires. \
+            \
+            Use after triggering an async operation: tap "Pay Now" → spinner appears → call \
+            wait_for_change expect="screen_changed" → receipt screen arrives. The server evaluates \
+            the expectation on every settle cycle and only returns when it's met. \
+            \
+            Also replaces wait_for_idle — call with no arguments to wait for the UI to settle \
+            and change.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "timeout": ["type": "number", "description": "Maximum wait time in seconds"],
+                "expect": expectProperty,
+                "timeout": ["type": "number", "description": "Maximum wait time in seconds (default: 10, max: 30)"],
             ],
             "additionalProperties": false,
         ],

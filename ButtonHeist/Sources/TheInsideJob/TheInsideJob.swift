@@ -372,6 +372,8 @@ public final class TheInsideJob {
             handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
             await handleWaitForIdle(target, requestId: requestId, respond: respond)
+        case .waitForChange(let target):
+            await handleWaitForChange(target, requestId: requestId, respond: respond)
 
         // Recording & interactions — blocked for observers
         default:
