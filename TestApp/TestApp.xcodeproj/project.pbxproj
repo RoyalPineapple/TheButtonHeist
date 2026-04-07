@@ -87,6 +87,7 @@
 		D122BA938231536CCC720CE4 /* AccessibilitySnapshotParser_ObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D1742415CD5A8F993DA46D4D /* TheInsideJob.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		D1C477DEFDC607033FC9545E /* swift-crypto_CCryptoBoringSSL.bundle in Resources */ = {isa = PBXBuildFile; fileRef = D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */; };
+		D37A65C7ED7505D66E88E54D /* PresentationObscuringHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AEE58CFB3DAAE9D3D921A3F /* PresentationObscuringHarnessView.swift */; };
 		D484A7DDDB21F0DCA5FBC12B /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		D7C4ADD7D3E28BC128DE4982 /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
@@ -218,6 +219,7 @@
 		6EF972032CB124C82F21FE17 /* TheScore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheScore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		79538EA411CEC1C55C14AE0E /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesView.swift; sourceTree = "<group>"; };
+		7AEE58CFB3DAAE9D3D921A3F /* PresentationObscuringHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresentationObscuringHarnessView.swift; sourceTree = "<group>"; };
 		7DFE4E9F0AE03F58228E92AD /* DisclosureGroupingDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisclosureGroupingDemo.swift; sourceTree = "<group>"; };
 		7EB069D6039881E065A92F23 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		817198E55C3FA789E150CDEE /* CartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CartView.swift; sourceTree = "<group>"; };
@@ -411,6 +413,7 @@
 		A886AF7EC60FE9C25CA6B504 /* ResearchSources */ = {
 			isa = PBXGroup;
 			children = (
+				7AEE58CFB3DAAE9D3D921A3F /* PresentationObscuringHarnessView.swift */,
 				1000E4B43B35612CE0CCDBAA /* ResearchApp.swift */,
 				AA71465EF21792B3AD3C61DC /* ScrollSPIHarnessView.swift */,
 				B9F126DA06C22255C1B97C32 /* TraitProbeView.swift */,
@@ -687,6 +690,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D37A65C7ED7505D66E88E54D /* PresentationObscuringHarnessView.swift in Sources */,
 				CB46A575A1481EFD8B99228F /* ResearchApp.swift in Sources */,
 				A6B366DCE561F588CCCC99D6 /* ScrollSPIHarnessView.swift in Sources */,
 				A6DC8B1D132DD6D66B150811 /* TraitProbeView.swift in Sources */,
