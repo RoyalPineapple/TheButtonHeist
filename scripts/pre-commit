@@ -17,7 +17,7 @@ fi
 if command -v tuist >/dev/null 2>&1; then
     # Ensure external dependencies are fetched before generating
     tuist install >/dev/null 2>&1 || true
-    if tuist generate --no-open >/dev/null 2>&1; then
+    if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         dirty=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata' '*.xcscheme')
         if [[ -n "$dirty" ]]; then
             echo "error: tuist generate produced uncommitted project changes:"
@@ -55,7 +55,7 @@ tuist_files=$(git diff --cached --name-only --diff-filter=ACM -- 'Project.swift'
 if [[ -n "$tuist_files" ]]; then
     echo "Tuist config changed — regenerating to check for drift..."
     tuist install >/dev/null 2>&1 || true
-    if tuist generate --no-open >/dev/null 2>&1; then
+    if tuist generate --no-open --no-binary-cache >/dev/null 2>&1; then
         drift=$(git diff --name-only -- '*.pbxproj' '*.xcworkspacedata')
         if [[ -n "$drift" ]]; then
             echo "error: tuist generate produced unstaged changes:"

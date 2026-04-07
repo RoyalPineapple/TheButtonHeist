@@ -46,16 +46,17 @@ enum ToolDefinitions {
     // Shared expect property for action tools — matches the batch step schema
     static let expectProperty: Value = [
         "description": """
-            Outcome signal for this action. Delivery is always checked implicitly. \
-            String values: "screen_changed" (did the view controller change?), \
-            "elements_changed" (were elements added, removed, or updated?). \
-            Object values: \
+            Inline verification for this action — match the expectation to what the action does. \
+            Navigation (tap a link, back button): "screen_changed". \
+            Insertion or deletion (add item, delete row): "elements_changed". \
+            State change (toggle, picker, text input): \
             {"elementUpdated": {"heistId": "x", "property": "value", "newValue": "5"}} — \
-            check property changes. All fields optional, omitted = wildcard. \
+            proves the specific property changed. All fields optional, omitted = wildcard. \
             {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
             {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
-            Matcher fields (label, identifier, value, traits, excludeTraits) use the same \
-            matching rules as element targeting.
+            Expectations are most valuable inside run_batch: each step declares what should happen, \
+            and a failed expectation stops the batch at the exact step that diverged — the agent \
+            knows immediately what went wrong instead of discovering it turns later.
             """,
         "oneOf": .array([
             [
@@ -112,39 +113,28 @@ enum ToolDefinitions {
     // MARK: - Getting Started
     //
     // Button Heist navigates iOS apps through the real accessibility interface — the same
-    // labels, values, traits, hints, and actions that VoiceOver users rely on. There are no
-    // accessibility identifiers involved. If the agent can't find an element, a blind user
-    // can't either, and the fix is better accessibility — not a test hook.
+    // labels, values, traits, hints, and actions that VoiceOver users rely on.
     //
-    // Start with these 5 tools:
+    // Core workflow:
     //   1. connect         — establish a session with the iOS app
-    //   2. get_interface   — see what's on screen (elements with heistId, label, traits)
-    //   3. activate        — tap elements that have "activate" in their actions array
-    //   4. scroll_to_visible — navigate long lists to find off-screen elements
-    //   5. run_batch       — multi-step sequences with expectations
+    //   2. get_interface   — read the screen once (elements with heistId, label, traits)
+    //   3. Act and read deltas — every action returns what changed. Don't call
+    //      get_interface after every action — the delta is your feedback loop.
+    //   4. run_batch       — before each action, plan ahead as far as you can see.
+    //      If you have 3+ steps planned, batch them in one call with expectations.
     //
     // Finding elements:
-    //   Every element on screen has a heistId (deterministic, stable across refreshes)
-    //   plus natural accessibility properties: label, value, traits, actions, hints.
+    //   Every element has a heistId (stable on the current screen) plus label, value,
+    //   traits, actions, hints. Use heistId for known elements, label/traits for discovery.
+    //   All matcher fields are AND. Start with just label, add traits if ambiguous.
     //
-    //   - heistId: copy from get_interface, paste into activate. Zero ambiguity, preferred
-    //     for targeting specific known elements.
-    //   - label: match by the text a VoiceOver user would hear ("Sign In", "Mountain Sunset").
-    //   - value: match by the element's current value ("Email", "50%", "3 items remaining").
-    //     Text fields expose placeholder text as their value when empty.
-    //   - traits: match by role — "button", "staticText", "header", "selected", "notEnabled",
-    //     "textEntry", "secureTextField", "image", etc. Add traits to disambiguate when labels
-    //     collide (e.g. label="Add" + traits=["button"] to skip the "Add Todo" header).
-    //   - actions: elements advertise custom actions like "Delete", "Add to Queue",
-    //     "Remove from Favorites". Use activate(action: "Delete") to invoke them.
-    //
-    //   All matcher fields are AND — every field you specify must match. Start with just
-    //   label, add traits or value only if you get ambiguous matches. If multiple elements
-    //   still match, the error tells you the valid ordinal range — pass ordinal (0-based)
-    //   to pick by position: 0 = first match, 1 = second, etc.
-    //
-    // Then layer in: type_text (keyboard), swipe (gestures), wait_for (async),
-    // get_screen (screenshots).
+    // Batching:
+    //   Before each action, look ahead: how many steps can you plan from what you
+    //   already know? If it's 3 or more, send them as one run_batch. Attach 'expect'
+    //   to each step so the batch is self-verifying — if any step diverges, the batch
+    //   stops there. Match the expectation to the action: "screen_changed" for
+    //   navigation, "elements_changed" for add/delete, {"elementUpdated": {...}} for
+    //   toggles and pickers.
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -162,17 +152,20 @@ enum ToolDefinitions {
     static let getInterface = Tool(
         name: "get_interface",
         description: """
-            Get the current UI element hierarchy. By default, explores the entire screen \
-            including off-screen content in scroll views — every element the app exposes is \
-            returned. Pass full=false for only visible elements (faster, but may miss content \
-            below the fold). Use detail=full for geometry (frame, activation point). \
-            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
+            Read the full UI element hierarchy. Call once when you arrive on a new screen, \
+            then use deltas from subsequent actions to track changes — don't call again unless \
+            you need elements the delta didn't cover. \
             \
-            Every action response includes a delta — use that first: \
+            Every action (activate, type_text, scroll, etc.) returns a delta: \
             + heistId "label" [traits] = appeared, - heistId = disappeared, \
-            ~ heistId: property "old" > "new" = changed, screen changed = full navigation \
-            (new interface included, all old heistIds invalidated). \
-            Only call get_interface again when you need elements the delta didn't cover. \
+            ~ heistId: property "old" → "new" = changed, screen changed = new screen \
+            (full interface included, previous heistIds invalidated). \
+            The delta is your primary feedback loop — it tells you what happened without \
+            an extra round trip. \
+            \
+            By default explores the entire screen including off-screen content in scroll views. \
+            Pass full=false for only visible elements (faster). Use detail=full for geometry. \
+            Filter with matcher fields (label, traits, excludeTraits) or a heistId list. \
             \
             Targeting: heistId is stable on the current screen — copy from a previous response, \
             use in the next action. After a screen change, all heistIds reset — use matchers \
@@ -209,16 +202,15 @@ enum ToolDefinitions {
     static let activate = Tool(
         name: "activate",
         description: """
-            Activate a UI element — the primary way to tap buttons, follow links, and toggle controls. \
-            Works like a VoiceOver double-tap: tries accessibility activation first, falls back to synthetic tap. \
-            Only elements with "activate" in their actions array can be activated — static text, headers, and \
-            images without actions will fail. Check the element's actions in get_interface before calling. \
-            Target by heistId (from get_interface) or by natural properties: label (what VoiceOver reads), \
-            value (current state), traits (role like "button", "selected"). \
+            Activate a UI element — tap buttons, follow links, toggle controls. Returns a delta \
+            showing what changed, so you don't need to call get_interface after every action. \
+            Works like a VoiceOver double-tap: accessibility activation first, synthetic tap fallback. \
+            Only elements with "activate" in their actions array can be activated. \
+            Target by heistId (from get_interface) or by label, value, traits. \
             If a label matches multiple elements, add traits to disambiguate (e.g. label="Add", traits=["button"]). \
             If multiple elements still match, the error shows the valid ordinal range — pass ordinal to select \
             by position (0 = first, 1 = second, etc.). \
-            Pass 'action' to invoke a custom action instead: "increment", "decrement", "Delete", or any action from the element's actions array.
+            Pass 'action' to invoke a custom action: "increment", "decrement", "Delete", or any action from the element's actions array.
             """,
         inputSchema: .object([
             "type": "object",
@@ -602,13 +594,19 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
-            plus that command's parameters. Use stop_on_error (default) for dependent sequences, \
-            continue_on_error for independent steps. Returns per-step results and a merged net delta. \
+            Execute multiple commands in a single call. Before each action, plan ahead — \
+            if you can see 3 or more steps from what you already know, batch them here \
+            instead of making individual calls. Each step is a JSON object with 'command' \
+            plus that command's parameters. Returns per-step results and a merged net delta. \
+            Use stop_on_error (default) for dependent sequences, continue_on_error for \
+            independent steps. \
             \
-            Attach 'expect' to each step to build a self-verifying script: every step declares \
-            its hypothesis, the system checks it, and the summary tells you which passed and which \
-            diverged — a complete pass/fail report in one round trip. \
+            Attach 'expect' to each step for inline verification. Without expectations, \
+            a silent failure at step 2 goes unnoticed until the agent re-reads the interface \
+            turns later. With expectations, the batch stops at the exact step that diverged. \
+            Match the expectation to the action: "screen_changed" for navigation, \
+            "elements_changed" for insertions/deletions, {"elementUpdated": {...}} for state \
+            changes like toggles, pickers, and text input. \
             \
             Valid commands: activate, increment, decrement, perform_custom_action, type_text, \
             scroll, scroll_to_visible, scroll_to_edge, swipe, one_finger_tap, long_press, drag, \
