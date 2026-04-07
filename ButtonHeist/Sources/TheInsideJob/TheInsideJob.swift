@@ -413,21 +413,25 @@ public final class TheInsideJob {
                 stakeout?.noteActivity()
                 let backgroundDelta = computeBackgroundDelta()
 
-                // Fast reject: if the screen changed in the background and the
-                // action targets a heistId, all heistIds are stale — fail fast
-                // with the background delta so the agent gets the new state.
+                // Fast redirect: if the screen changed in the background and the
+                // action targets a heistId, all heistIds are stale. Rather than
+                // searching for an element that can't exist, return the new state
+                // immediately. Reported as success (the UI moved forward) with the
+                // background delta carrying the full new interface.
                 if let backgroundDelta, backgroundDelta.kind == .screenChanged,
                    let lastScreen = lastSentScreenId, lastScreen != stash.lastScreenId,
                    message.actionTarget != nil {
                     let actionResult = ActionResult(
-                        success: false,
-                        method: .activate,
-                        message: "Screen changed in background (\(lastScreen) → \(stash.lastScreenId ?? "unknown")) — heistIds are stale",
-                        errorKind: .elementNotFound,
+                        success: true,
+                        method: .waitForChange,
+                        message: "Screen changed while you were thinking"
+                            + " (\(lastScreen) → \(stash.lastScreenId ?? "unknown"))"
+                            + " — action skipped, here is the current state",
+                        interfaceDelta: backgroundDelta,
                         screenName: stash.lastScreenName,
                         screenId: stash.lastScreenId
                     )
-                    recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+                    recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }
 

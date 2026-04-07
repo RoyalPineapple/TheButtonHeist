@@ -736,7 +736,28 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testExpectationShortCircuitOnBackgroundDelta() async throws {
+        let device = DiscoveredDevice(
+            id: "mock-device",
+            name: "MockApp#test",
+            endpoint: .hostPort(host: .ipv6(.loopback), port: 1),
+            certFingerprint: "sha256:mock"
+        )
+        let mockDiscovery = MockDiscovery()
+        mockDiscovery.discoveredDevices = [device]
+        let mockConnection = MockConnection()
+        mockConnection.serverInfo = ServerInfo(
+            protocolVersion: protocolVersion,
+            appName: "MockApp", bundleIdentifier: "com.test",
+            deviceName: "Sim", systemVersion: "18.0",
+            screenWidth: 390, screenHeight: 844
+        )
+
         let fence = TheFence()
+        fence.handoff.makeDiscovery = { mockDiscovery }
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+
+        // Connect first so we have a live session
+        try await fence.start()
 
         // Simulate a screen-changed background delta
         let element = HeistElement(

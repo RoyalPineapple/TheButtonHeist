@@ -48,7 +48,7 @@ extension TheInsideJob {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             lastSentTreeHash = currentHash
             lastSentBeforeState = brains.captureBeforeState()
-                lastSentScreenId = stash.lastScreenId
+            lastSentScreenId = stash.lastScreenId
             return
         }
 
