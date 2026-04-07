@@ -328,6 +328,17 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.containersExplored, 1)
     }
 
+    func testExploreResultDecodesWithoutObscuredField() throws {
+        let json = """
+        {"elements":[],"scrollCount":4,"containersExplored":2,"explorationTime":0.8}
+        """
+        let decoded = try JSONDecoder().decode(ExploreResult.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.containersSkippedObscured, 0)
+        XCTAssertEqual(decoded.scrollCount, 4)
+        XCTAssertEqual(decoded.containersExplored, 2)
+        XCTAssertEqual(decoded.explorationTime, 0.8)
+    }
+
     func testActionResultWithExploreResult() throws {
         let elements = (0..<100).map { i in
             HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")

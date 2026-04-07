@@ -289,6 +289,10 @@ extension TheBrains {
 
     /// Walks the full VC tree (children + presentations) to find the topmost
     /// presented view controller. Returns nil if no presentation exists.
+    ///
+    /// Assumes a single active presentation chain per window (UIKit's default behavior).
+    /// If multiple VCs independently present modals, the last one visited wins —
+    /// acceptable because UIKit enforces a single presentation chain from the root.
     private static func topmostPresentedViewController(
         from root: UIViewController
     ) -> UIViewController? {
