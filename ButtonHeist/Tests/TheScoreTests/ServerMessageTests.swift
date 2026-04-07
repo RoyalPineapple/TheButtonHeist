@@ -201,6 +201,49 @@ final class ServerMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - ResponseEnvelope backgroundDelta
+
+    func testResponseEnvelopeWithoutBackgroundDelta() throws {
+        let envelope = ResponseEnvelope(requestId: "r-1", message: .pong)
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "r-1")
+        XCTAssertNil(decoded.backgroundDelta)
+        if case .pong = decoded.message {
+            // Success
+        } else {
+            XCTFail("Expected pong, got \(decoded.message)")
+        }
+    }
+
+    func testResponseEnvelopeWithBackgroundDelta() throws {
+        let delta = InterfaceDelta(kind: .screenChanged, elementCount: 5)
+        let envelope = ResponseEnvelope(requestId: "r-2", message: .pong, backgroundDelta: delta)
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "r-2")
+        XCTAssertNotNil(decoded.backgroundDelta)
+        XCTAssertEqual(decoded.backgroundDelta?.kind, .screenChanged)
+        XCTAssertEqual(decoded.backgroundDelta?.elementCount, 5)
+    }
+
+    func testResponseEnvelopeBackgroundDeltaBackwardCompatible() throws {
+        // Envelopes from older servers (no backgroundDelta field) should decode cleanly
+        let envelope = ResponseEnvelope(requestId: "compat-1", message: .pong)
+        let data = try JSONEncoder().encode(envelope)
+
+        // Re-encode without backgroundDelta by stripping it from the JSON
+        var json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        json.removeValue(forKey: "backgroundDelta")
+        let strippedData = try JSONSerialization.data(withJSONObject: json)
+
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: strippedData)
+        XCTAssertNil(decoded.backgroundDelta)
+        XCTAssertEqual(decoded.requestId, "compat-1")
+    }
+
     func testScreenEncodeDecode() throws {
         let payload = ScreenPayload(
             pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",

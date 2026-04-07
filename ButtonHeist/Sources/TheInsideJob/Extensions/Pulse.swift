@@ -84,6 +84,8 @@ extension TheInsideJob {
         let payload = Interface(timestamp: Date(), elements: TheStash.WireConversion.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
         lastSentTreeHash = payload.elements.hashValue
+        lastSentBeforeState = brains.captureBeforeState()
+        lastSentScreenId = stash.lastScreenId
     }
 }
 

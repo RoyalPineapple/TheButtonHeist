@@ -21,6 +21,8 @@ extension TheInsideJob {
         )
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
         lastSentTreeHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        lastSentBeforeState = brains.captureBeforeState()
+        lastSentScreenId = stash.lastScreenId
     }
 
     // MARK: - Wait For Change Handler
@@ -30,18 +32,27 @@ extension TheInsideJob {
         let start = CFAbsoluteTimeGetCurrent()
         let expectation = target.expect
 
+        // Capture baseline BEFORE refresh — this corresponds to the tree state
+        // at the time of the last response, giving us a proper before-state for
+        // element-level diffs on both the fast and slow paths.
+        let before = brains.captureBeforeState()
+
         brains.refresh()
-        let currentHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        let currentSnapshot = stash.selectElements()
+        let currentHash = TheStash.WireConversion.toWire(currentSnapshot).hashValue
 
         // Fast path: tree already changed since the last response
-        if let result = checkAlreadyChanged(currentHash: currentHash, expectation: expectation) {
+        if let result = checkAlreadyChanged(
+            before: before, currentSnapshot: currentSnapshot, currentHash: currentHash, expectation: expectation
+        ) {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             lastSentTreeHash = currentHash
+            lastSentBeforeState = brains.captureBeforeState()
+                lastSentScreenId = stash.lastScreenId
             return
         }
 
         // Slow path: poll until a change lands or we time out
-        let before = brains.captureBeforeState()
         let deadline = CFAbsoluteTimeGetCurrent() + timeout
         var beforeWireHash = currentHash
         var round = 0
@@ -67,6 +78,7 @@ extension TheInsideJob {
             ) {
                 sendMessage(.actionResult(result), requestId: requestId, respond: respond)
                 lastSentTreeHash = afterHash
+                lastSentBeforeState = brains.captureBeforeState()
                 return
             }
 
@@ -88,20 +100,21 @@ extension TheInsideJob {
         )
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
         lastSentTreeHash = TheStash.WireConversion.toWire(afterSnapshot).hashValue
+        lastSentBeforeState = brains.captureBeforeState()
+        lastSentScreenId = stash.lastScreenId
     }
 
     // MARK: - Wait For Change Helpers
 
-    private func checkAlreadyChanged(currentHash: Int, expectation: ActionExpectation?) -> ActionResult? {
+    private func checkAlreadyChanged(
+        before: TheBrains.BeforeState,
+        currentSnapshot: [TheStash.ScreenElement],
+        currentHash: Int,
+        expectation: ActionExpectation?
+    ) -> ActionResult? {
         guard lastSentTreeHash != 0, currentHash != lastSentTreeHash else { return nil }
 
-        let currentSnapshot = stash.selectElements()
-        let tree = stash.currentHierarchy.isEmpty
-            ? nil : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
-        let fullInterface = Interface(
-            timestamp: Date(), elements: TheStash.WireConversion.toWire(currentSnapshot), tree: tree
-        )
-        let delta = InterfaceDelta(kind: .screenChanged, elementCount: currentSnapshot.count, newInterface: fullInterface)
+        let delta = computeDelta(before: before, afterSnapshot: currentSnapshot)
 
         if let expectation {
             let checkResult = ActionResult(

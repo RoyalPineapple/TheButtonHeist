@@ -77,6 +77,26 @@ struct ButtonHeistMCPServer {
         **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
         `expect` to each step for a self-verifying script.
 
+        ## Background Awareness
+
+        The server tracks every change between your tool calls. If the UI changed while you \
+        were thinking — a network request completed, a timer fired, a push notification \
+        arrived — the next response includes a `[background: ...]` line telling you what \
+        happened. You never need to poll to stay current.
+
+        This also means expectations can be satisfied before an action runs. If you call \
+        `activate some_button expect="screen_changed"` and the screen already changed in \
+        the background, the action is skipped entirely — you get "expectation already met \
+        by background change" with the delta. No wasted round-trip, no stale-element error. \
+        Your intent was fulfilled before you asked.
+
+        The practical pattern for async operations:
+        1. `activate pay_button expect="screen_changed"` — tap and declare intent
+        2. If the delta shows a spinner and the expectation wasn't met, call \
+        `wait_for_change expect="screen_changed"` — the server waits for you
+        3. If the expectation *was* already met (payment was fast, or you were slow to \
+        call the next tool), you already have the result — no wait needed
+
         ## Expectations
 
         Every action is an opportunity to validate. Attaching `expect` costs nothing — \
