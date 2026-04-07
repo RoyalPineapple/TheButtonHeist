@@ -20,6 +20,49 @@ Three properties make this work:
 
 **Composable actions.** Because addressing is stable and deterministic, actions can be batched. Five steps in one call, each with an inline expectation that verifies the outcome. If step 3 fails, the batch stops there. Coordinate-based tools can't batch — each tap depends on reading the screen after the previous one.
 
+## Side by Side
+
+The difference is visible in a single action. Here's what it looks like to tap "Settings" in both tools — actual calls from the benchmark traces.
+
+**Button Heist** — one call, semantic target, structured delta back:
+
+```
+→ activate(label: "Settings", traits: ["button"])
+
+← appearance | activate: screen changed
+  23 elements
+  [0] appearance_header "Appearance" [header]
+  [1] system_button "System" [button, selected]
+  [2] dark_button "Dark" [button]
+  [3] purple_button "Purple" [button]
+  ...
+```
+
+The agent asked for "Settings" by name. The response tells it the screen changed and lists every element on the new screen with stable IDs, ready to target.
+
+**ios-simulator-mcp** — read the full tree, compute coordinates, tap blind:
+
+```
+→ ui_describe_all(udid: "2159E2B8-...")
+
+← [{"AXFrame":"{{0, 0}, {402, 874}}","AXLabel":"BH Demo",
+    "type":"Application","role":"AXApplication",
+    "children":[{"AXFrame":"{{16, 120.66}, {282, 39.66}}",
+    ...hundreds of nested elements with frame geometry...
+```
+
+The agent gets a raw JSON tree with pixel coordinates for every element. It has to parse the tree, find the "Settings" button by label, extract its frame, compute the center point, then:
+
+```
+→ ui_tap(udid: "2159E2B8-...", x: 201, y: 856)
+
+← "Tapped successfully"
+```
+
+"Tapped successfully" — but what happened? The agent doesn't know. It has to call `ui_describe_all` again to see the new screen. That's two tool calls and two full tree reads for one tap. Button Heist did it in one call with a complete delta.
+
+Multiply that by 50 actions and the context window difference is enormous.
+
 ## The Numbers
 
 Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
