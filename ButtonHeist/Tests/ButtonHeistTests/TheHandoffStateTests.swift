@@ -2,9 +2,9 @@ import XCTest
 @testable import ButtonHeist
 import TheScore
 
-@ButtonHeistActor
 final class TheHandoffStateTests: XCTestCase {
 
+    @ButtonHeistActor
     func testInitialState() async {
         let handoff = TheHandoff()
 
@@ -19,6 +19,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
+    @ButtonHeistActor
     func testDisconnectClearsState() async {
         let handoff = TheHandoff()
 
@@ -31,6 +32,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
+    @ButtonHeistActor
     func testStopDiscoveryClearsFlag() async {
         let handoff = TheHandoff()
 
@@ -40,6 +42,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
     }
 
+    @ButtonHeistActor
     func testServerErrorSetsConnectionPhaseFailed() async {
         let handoff = TheHandoff()
         var receivedError: String?
@@ -51,6 +54,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
+    @ButtonHeistActor
     func testMultipleDisconnectsSafe() async {
         let handoff = TheHandoff()
 
@@ -63,6 +67,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - ReconnectPolicy
 
+    @ButtonHeistActor
     func testSetupAutoReconnectSetsPolicy() async {
         let handoff = TheHandoff()
 
@@ -71,6 +76,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp", reconnectTask: nil))
     }
 
+    @ButtonHeistActor
     func testSetupAutoReconnectWithNilFilter() async {
         let handoff = TheHandoff()
 
@@ -79,6 +85,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
+    @ButtonHeistActor
     func testSetupAutoReconnectIsIdempotent() async {
         let handoff = TheHandoff()
 
@@ -88,6 +95,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter", reconnectTask: nil))
     }
 
+    @ButtonHeistActor
     func testReconnectPolicyRemainsEnabledAfterDisconnect() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
@@ -123,6 +131,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
+    @ButtonHeistActor
     func testReconnectPolicyStartsDisabled() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
@@ -147,6 +156,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - ReconnectPolicy Trigger
 
+    @ButtonHeistActor
     func testDisconnectEventWithEnabledPolicyTriggersReconnect() async throws {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0.01
@@ -192,6 +202,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(connectionCount, 2)
     }
 
+    @ButtonHeistActor
     func testDisconnectEventWithDisabledPolicyDoesNotReconnect() async throws {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0.01
@@ -226,6 +237,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - RecordingPhase
 
+    @ButtonHeistActor
     func testRecordingStartedSetsPhaseToRecording() async {
         let handoff = TheHandoff()
 
@@ -235,6 +247,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(handoff.isRecording)
     }
 
+    @ButtonHeistActor
     func testRecordingCompletedResetsPhaseToIdle() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
@@ -256,6 +269,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
+    @ButtonHeistActor
     func testRecordingErrorResetsPhaseToIdle() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
@@ -266,6 +280,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
+    @ButtonHeistActor
     func testDisconnectResetsRecordingPhase() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
@@ -278,6 +293,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - Discovery (existing)
 
+    @ButtonHeistActor
     func testDiscoverReachableDevicesPreservesExistingDiscoverySession() async {
         let reachableDevice = DiscoveredDevice(
             id: "reachable-device",
@@ -332,6 +348,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(mockDiscovery.stopCount, 0)
     }
 
+    @ButtonHeistActor
     func testConnectWithDiscoveryIgnoresStaleDevicesWithoutFilter() async throws {
         let staleDevice = DiscoveredDevice(
             id: "stale-device",
@@ -403,6 +420,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(handoff.isConnected)
     }
 
+    @ButtonHeistActor
     func testConnectWithDiscoveryReprobesDeviceThatBecomesReachableWithoutRediscovery() async throws {
         let delayedDevice = DiscoveredDevice(
             id: "delayed-device",
@@ -477,6 +495,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 4.5)
     }
 
+    @ButtonHeistActor
     func testConnectWithDiscoveryWithoutFilterThrowsWhenMultipleReachableDevicesExist() async throws {
         let firstDevice = DiscoveredDevice(
             id: "first-device",

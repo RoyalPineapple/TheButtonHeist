@@ -10,11 +10,13 @@ final class TheBurglarApplyTests: XCTestCase {
     private var stash: TheStash!
 
     override func setUp() async throws {
+        try await super.setUp()
         stash = TheStash(tripwire: TheTripwire())
     }
 
     override func tearDown() async throws {
         stash = nil
+        try await super.tearDown()
     }
 
     // MARK: - apply() populates registry
