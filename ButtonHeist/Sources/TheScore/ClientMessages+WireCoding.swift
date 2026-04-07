@@ -75,6 +75,7 @@ extension ClientMessage {
         case .resignFirstResponder: return .resignFirstResponder
         case .waitForIdle: return .waitForIdle
         case .waitFor: return .waitFor
+        case .waitForChange: return .waitForChange
         case .requestScreen: return .requestScreen
         case .explore: return .explore
         case .startRecording: return .startRecording
@@ -176,6 +177,8 @@ extension ClientMessage {
             return .waitForIdle(try WaitForIdleTarget(from: decoder))
         case .waitFor:
             return .waitFor(try WaitForTarget(from: decoder))
+        case .waitForChange:
+            return .waitForChange(try WaitForChangeTarget(from: decoder))
         case .startRecording:
             return .startRecording(try RecordingConfig(from: decoder))
         default:
@@ -275,6 +278,8 @@ extension ClientMessage {
         case .waitForIdle(let payload):
             try payload.encode(to: encoder)
         case .waitFor(let payload):
+            try payload.encode(to: encoder)
+        case .waitForChange(let payload):
             try payload.encode(to: encoder)
         case .startRecording(let payload):
             try payload.encode(to: encoder)

@@ -148,7 +148,7 @@ enum ToolDefinitions {
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
-        waitForIdle, waitFor, startRecording, stopRecording, listDevices,
+        waitForChange, waitFor, startRecording, stopRecording, listDevices,
         gesture, editAction, dismissKeyboard, setPasteboard, getPasteboard,
         scroll, scrollToVisible, elementSearch, scrollToEdge,
         runBatch, getSessionState,
@@ -325,13 +325,30 @@ enum ToolDefinitions {
         annotations: .init(readOnlyHint: true, idempotentHint: true)
     )
 
-    static let waitForIdle = Tool(
-        name: "wait_for_idle",
-        description: "Wait for UI animations to settle before reading state or performing actions.",
+    static let waitForChange = Tool(
+        name: "wait_for_change",
+        description: """
+            Wait for the UI to change in a way that matches an expectation. Uses the same \
+            expect vocabulary as action commands — "screen_changed", "elements_changed", \
+            elementAppeared, elementDisappeared, elementUpdated. \
+            \
+            With no expectation, returns on any tree change. With expect, rides through \
+            intermediate states until the expectation is met: spinner appears → keep waiting → \
+            receipt screen loads → return. The server re-evaluates on every settle cycle. \
+            \
+            When to use: after an action whose delta shows a transient state (loading indicator \
+            appeared, interactive elements vanished) and your expectation wasn't met. Pass the \
+            same expectation you used on the action — the server picks up where the action left off. \
+            \
+            Example flow: activate pay_now_button expect="screen_changed" → delta shows spinner, \
+            expectation not met → wait_for_change expect="screen_changed" timeout=10 → receipt \
+            screen arrives, expectation met.
+            """,
         inputSchema: [
             "type": "object",
             "properties": [
-                "timeout": ["type": "number", "description": "Maximum wait time in seconds"],
+                "expect": expectProperty,
+                "timeout": ["type": "number", "description": "Maximum wait time in seconds (default: 10, max: 30)"],
             ],
             "additionalProperties": false,
         ],
