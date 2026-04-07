@@ -1,6 +1,7 @@
 import Foundation
 import MCP
 import ButtonHeist
+import TheScore
 
 @main
 struct ButtonHeistMCPServer {
@@ -45,7 +46,10 @@ struct ButtonHeistMCPServer {
         2. **Act** — `activate`, `type_text`, `scroll`, `swipe` — target by heistId or matcher.
         3. **Read the delta** — every action response reports what changed. If the delta \
         answers your question, skip the next `get_interface`.
-        4. **Repeat** — only re-fetch when you need elements you haven't seen.
+        4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) \
+        and your expectation wasn't met, call `wait_for_change` with the same expectation. \
+        The server rides through intermediate states and returns when the real change lands.
+        5. **Repeat** — only re-fetch when you need elements you haven't seen.
 
         ## Choosing Tools
 
@@ -61,7 +65,14 @@ struct ButtonHeistMCPServer {
 
         **Finding**: `scroll_to_visible` when you've seen an element before but it scrolled \
         off-screen. `element_search` when you've never seen it — scrolls every container \
-        looking for a match. `wait_for` when the element will appear asynchronously.
+        looking for a match. `wait_for` when you know a specific element will appear.
+
+        **Waiting**: `wait_for_change` when the UI is updating asynchronously — network \
+        requests, timers, animations completing. Pass an expectation to wait for the specific \
+        outcome: `expect="screen_changed"` rides through loading spinners until the real \
+        navigation happens. With no expectation, returns on any tree change. This is the \
+        correct response when your action produced a transient state (spinner appeared, \
+        interactive elements disappeared) and you need the final result.
 
         **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
         `expect` to each step for a self-verifying script.
@@ -139,7 +150,7 @@ struct ButtonHeistMCPServer {
             switch params.name {
             // Direct 1:1 tools — tool name IS the command
             case "get_interface", "activate", "type_text", "swipe", "get_screen",
-                 "wait_for_idle", "wait_for", "start_recording", "stop_recording", "list_devices",
+                 "wait_for_change", "wait_for", "start_recording", "stop_recording", "list_devices",
                  "set_pasteboard", "get_pasteboard",
                  "scroll", "scroll_to_visible", "element_search", "scroll_to_edge",
                  "edit_action", "dismiss_keyboard",
@@ -162,7 +173,8 @@ struct ButtonHeistMCPServer {
 
             let response = try await fence.execute(request: request)
             idleMonitor.resetTimer()
-            return try renderResponse(response)
+            let backgroundDelta = fence.drainBackgroundDelta()
+            return try renderResponse(response, backgroundDelta: backgroundDelta)
         } catch {
             idleMonitor.resetTimer()
             return .init(content: [.text(text: error.displayMessage, annotations: nil, _meta: nil)], isError: true)
@@ -207,8 +219,28 @@ struct ButtonHeistMCPServer {
     // Raw base64 video payloads can be tens of megabytes, which would overwhelm the MCP
     // context window. Agents that need the actual file should pass "output" to stop_recording,
     // or use the CLI directly: `buttonheist session` → `stop_recording --output /path/to/file.mp4`
-    private static func renderResponse(_ response: FenceResponse) throws -> CallTool.Result {
+    private static func renderResponse(_ response: FenceResponse, backgroundDelta: InterfaceDelta? = nil) throws -> CallTool.Result {
         var content: [Tool.Content] = []
+
+        // Background changes: what happened while the agent was thinking
+        if let backgroundDelta, backgroundDelta.kind != .noChange {
+            let line: String
+            switch backgroundDelta.kind {
+            case .screenChanged:
+                line = "[background: screen changed (\(backgroundDelta.elementCount) elements)]"
+            case .elementsChanged:
+                var parts: [String] = []
+                if let added = backgroundDelta.added { parts.append("+\(added.count)") }
+                if let removed = backgroundDelta.removed { parts.append("-\(removed.count)") }
+                if let updated = backgroundDelta.updated { parts.append("~\(updated.count)") }
+                line = "[background: elements changed \(parts.joined(separator: " ")) (\(backgroundDelta.elementCount) total)]"
+            case .noChange:
+                line = ""
+            }
+            if !line.isEmpty {
+                content.append(.text(text: line, annotations: nil, _meta: nil))
+            }
+        }
 
         // Screenshots: embed as image content
         if case .screenshotData(let pngData, _, _) = response {

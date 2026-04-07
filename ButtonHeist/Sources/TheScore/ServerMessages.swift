@@ -10,14 +10,25 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let requestId: String?
     public let message: ServerMessage
 
-    public init(requestId: String? = nil, message: ServerMessage) {
-        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId, message: message)
+    /// Changes that occurred between the previous response and this one — while
+    /// the agent was thinking. nil means nothing changed in the background.
+    /// Lives on the envelope (not the message) because it's a session-level
+    /// concern: any response type can carry it.
+    public let backgroundDelta: InterfaceDelta?
+
+    public init(requestId: String? = nil, message: ServerMessage, backgroundDelta: InterfaceDelta? = nil) {
+        self.init(wireProtocolVersion: TheScore.protocolVersion, requestId: requestId,
+                  message: message, backgroundDelta: backgroundDelta)
     }
 
-    public init(wireProtocolVersion: String, requestId: String? = nil, message: ServerMessage) {
+    public init(
+        wireProtocolVersion: String, requestId: String? = nil,
+        message: ServerMessage, backgroundDelta: InterfaceDelta? = nil
+    ) {
         self.protocolVersion = wireProtocolVersion
         self.requestId = requestId
         self.message = message
+        self.backgroundDelta = backgroundDelta
     }
 }
 
@@ -727,6 +738,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case waitForIdle
+    case waitForChange
     case scroll
     case scrollToVisible
     case elementSearch

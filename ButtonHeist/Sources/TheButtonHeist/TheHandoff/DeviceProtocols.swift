@@ -7,7 +7,7 @@ public enum ConnectionEvent {
     case transportReady
     case connected
     case disconnected(DisconnectReason)
-    case message(ServerMessage, requestId: String?)
+    case message(ServerMessage, requestId: String?, backgroundDelta: InterfaceDelta?)
 }
 
 /// Events emitted by a device discovery session as services appear and disappear.

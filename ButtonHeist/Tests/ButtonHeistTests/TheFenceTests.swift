@@ -58,7 +58,7 @@ final class TheFenceTests: XCTestCase {
             .listDevices: "list_devices",
             .getInterface: "get_interface",
             .getScreen: "get_screen",
-            .waitForIdle: "wait_for_idle",
+            .waitForChange: "wait_for_change",
             .oneFingerTap: "one_finger_tap",
             .longPress: "long_press",
             .swipe: "swipe",

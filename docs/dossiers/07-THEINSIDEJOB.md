@@ -13,7 +13,9 @@ TheInsideJob is the central hub running inside the target iOS app. It:
 3. **Provides server transport** (`ServerTransport`) — protocol abstraction for server-side networking
 4. **Broadcasts presence** via Bonjour mDNS (`_buttonheist._tcp`)
 5. **Drives hierarchy updates** via TheTripwire's pulse-based settle detection (no debounce timer)
-6. **Polls for UI changes** at configurable intervals (default 2.0s, min 0.5s) as a supplementary mechanism
+6. **Detects background changes** — `computeBackgroundDelta()` compares `lastSentTreeHash` against the live tree to detect changes that occurred while the agent was thinking; the delta is attached to the next `ResponseEnvelope`
+7. **Wait for change** — `handleWaitForChange` polls the settle gate in a loop, checking each settled state against an optional `ActionExpectation`, returning when the expectation is met or timeout expires
+8. **Polls for UI changes** at configurable intervals (default 2.0s, min 0.5s) as a supplementary mechanism
 7. **Dispatches all commands** to crew members via a two-level dispatch structure
 8. **Manages client subscriptions** and broadcasts hierarchy/screen updates
 9. **Filters connections by scope** (`ConnectionScope`) — classifies incoming connections at `.ready` using typed `NWEndpoint.Host` and interface detection

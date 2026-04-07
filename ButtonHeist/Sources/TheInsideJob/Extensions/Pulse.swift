@@ -83,6 +83,7 @@ extension TheInsideJob {
         let tree = stash.currentHierarchy.isEmpty ? nil : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
         let payload = Interface(timestamp: Date(), elements: TheStash.WireConversion.toWire(snapshot), tree: tree)
         sendMessage(.interface(payload), requestId: requestId, respond: respond)
+        lastSentTreeHash = payload.elements.hashValue
     }
 }
 
