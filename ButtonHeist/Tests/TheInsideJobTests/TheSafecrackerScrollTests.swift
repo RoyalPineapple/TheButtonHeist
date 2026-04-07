@@ -8,14 +8,12 @@ final class TheSafecrackerScrollTests: XCTestCase {
 
     private var safecracker: TheSafecracker!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         safecracker = TheSafecracker()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         safecracker = nil
-        super.tearDown()
     }
 
     // MARK: - Helpers
