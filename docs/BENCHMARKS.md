@@ -22,7 +22,7 @@ Three properties make this work:
 
 ## The Numbers
 
-Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). It's a clean, minimal implementation of coordinate-based iOS automation — read the accessibility tree, compute tap coordinates, interact. The approach is well-understood and the implementation is solid. The question isn't whether it works — it does — but whether coordinate-based interaction scales to agent workflows. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Standard tasks (14 UI automation tasks)
 
@@ -62,6 +62,6 @@ Button Heist's per-action cost is near-zero: pass a name, read a delta. Turn 50 
 
 Agent workflows are getting longer. Today's agents fill forms and check settings. Tomorrow's will run end-to-end test suites, perform accessibility audits, and navigate unfamiliar apps exploratorily. The number of actions per session will grow from dozens to hundreds.
 
-A tool that's 2x slower at 10 actions is 5x slower at 50 and can't finish at 100. The question stops being "which is faster?" and becomes "which can finish the job?"
+A tool that's 2x slower at 10 actions is 5x slower at 50 and hits a wall at 100. At some point the question shifts from "which is faster?" to "which can finish the job?"
 
-Button Heist can. Coordinate-based tools, structurally, cannot — not at the scale where agents become genuinely useful.
+We built Button Heist because we think the accessibility layer is the right abstraction for agent-driven UI. The benchmarks suggest that bet is paying off — especially as workflows get longer.
