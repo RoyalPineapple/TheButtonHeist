@@ -9,15 +9,13 @@ final class TripwireIntegrationTests: XCTestCase {
 
     private var tripwire: TheTripwire!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         tripwire = TheTripwire()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         tripwire.stopPulse()
         tripwire = nil
-        super.tearDown()
     }
 
     // MARK: - waitForAllClear (delegates to waitForSettle)
@@ -131,6 +129,7 @@ final class TripwireIntegrationTests: XCTestCase {
 
     func testMultipleConcurrentSettleWaiters() async {
         // Two waiters should both resolve when the UI is idle
+        let tripwire = self.tripwire!
         async let settle1 = tripwire.waitForSettle(timeout: 2.0)
         async let settle2 = tripwire.waitForSettle(timeout: 2.0)
 

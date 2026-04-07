@@ -9,14 +9,12 @@ final class TheBrainsActionTests: XCTestCase {
 
     private var brains: TheBrains!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         brains = TheBrains(tripwire: TheTripwire())
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         brains = nil
-        super.tearDown()
     }
 
     // MARK: - clampDuration

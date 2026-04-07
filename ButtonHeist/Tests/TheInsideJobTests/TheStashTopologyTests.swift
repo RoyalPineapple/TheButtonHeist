@@ -8,14 +8,12 @@ final class TheStashTopologyTests: XCTestCase {
 
     private var bagman: TheStash!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         bagman = TheStash(tripwire: TheTripwire())
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         bagman = nil
-        super.tearDown()
     }
 
     // MARK: - Back Button Trait

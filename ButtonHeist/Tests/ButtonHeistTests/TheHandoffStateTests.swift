@@ -5,7 +5,7 @@ import TheScore
 @ButtonHeistActor
 final class TheHandoffStateTests: XCTestCase {
 
-    func testInitialState() {
+    func testInitialState() async {
         let handoff = TheHandoff()
 
         XCTAssertTrue(handoff.discoveredDevices.isEmpty)
@@ -19,7 +19,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
-    func testDisconnectClearsState() {
+    func testDisconnectClearsState() async {
         let handoff = TheHandoff()
 
         handoff.disconnect()
@@ -31,7 +31,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.recordingPhase, .idle)
     }
 
-    func testStopDiscoveryClearsFlag() {
+    func testStopDiscoveryClearsFlag() async {
         let handoff = TheHandoff()
 
         handoff.startDiscovery()
@@ -40,7 +40,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isDiscovering)
     }
 
-    func testServerErrorSetsConnectionPhaseFailed() {
+    func testServerErrorSetsConnectionPhaseFailed() async {
         let handoff = TheHandoff()
         var receivedError: String?
         handoff.onError = { receivedError = $0 }
@@ -51,7 +51,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(receivedError, "something went wrong")
     }
 
-    func testMultipleDisconnectsSafe() {
+    func testMultipleDisconnectsSafe() async {
         let handoff = TheHandoff()
 
         handoff.disconnect()
@@ -63,7 +63,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - ReconnectPolicy
 
-    func testSetupAutoReconnectSetsPolicy() {
+    func testSetupAutoReconnectSetsPolicy() async {
         let handoff = TheHandoff()
 
         handoff.setupAutoReconnect(filter: "MyApp")
@@ -71,7 +71,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp", reconnectTask: nil))
     }
 
-    func testSetupAutoReconnectWithNilFilter() {
+    func testSetupAutoReconnectWithNilFilter() async {
         let handoff = TheHandoff()
 
         handoff.setupAutoReconnect(filter: nil)
@@ -79,7 +79,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
-    func testSetupAutoReconnectIsIdempotent() {
+    func testSetupAutoReconnectIsIdempotent() async {
         let handoff = TheHandoff()
 
         handoff.setupAutoReconnect(filter: "FirstFilter")
@@ -88,7 +88,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "FirstFilter", reconnectTask: nil))
     }
 
-    func testReconnectPolicyRemainsEnabledAfterDisconnect() {
+    func testReconnectPolicyRemainsEnabledAfterDisconnect() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
@@ -123,7 +123,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, reconnectTask: nil))
     }
 
-    func testReconnectPolicyStartsDisabled() {
+    func testReconnectPolicyStartsDisabled() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
@@ -226,7 +226,7 @@ final class TheHandoffStateTests: XCTestCase {
 
     // MARK: - RecordingPhase
 
-    func testRecordingStartedSetsPhaseToRecording() {
+    func testRecordingStartedSetsPhaseToRecording() async {
         let handoff = TheHandoff()
 
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
@@ -235,7 +235,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertTrue(handoff.isRecording)
     }
 
-    func testRecordingCompletedResetsPhaseToIdle() {
+    func testRecordingCompletedResetsPhaseToIdle() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
@@ -256,7 +256,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
-    func testRecordingErrorResetsPhaseToIdle() {
+    func testRecordingErrorResetsPhaseToIdle() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
 
@@ -266,7 +266,7 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertFalse(handoff.isRecording)
     }
 
-    func testDisconnectResetsRecordingPhase() {
+    func testDisconnectResetsRecordingPhase() async {
         let handoff = TheHandoff()
         handoff.handleServerMessage(.recordingStarted, requestId: nil)
         XCTAssertEqual(handoff.recordingPhase, .recording)
