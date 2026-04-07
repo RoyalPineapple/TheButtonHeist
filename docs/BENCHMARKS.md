@@ -22,28 +22,28 @@ Three properties make this work:
 
 ## The Numbers
 
-Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against ios-simulator-mcp (idb), the standard coordinate-based MCP server for iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Standard tasks (14 UI automation tasks)
 
-|  | Button Heist | ios-simulator-mcp |
+|  | Button Heist | idb |
 |---|---|---|
 | Wall time | 17 minutes | 36 minutes |
 | Tokens | 9.2M | 22.9M |
 | Tasks completed | 14/14 | 12/14 |
 
-**2x faster, 2.5x fewer tokens, completes tasks ios-simulator-mcp can't finish.**
+**2x faster, 2.5x fewer tokens, completes tasks idb can't finish.**
 
 ### At scale (T14: 50-action, 8-screen workflow)
 
-|  | Button Heist | ios-simulator-mcp |
+|  | Button Heist | idb |
 |---|---|---|
 | Wall time | 7 minutes | Timed out at 20 minutes |
 | Turns | 50 | 293 (incomplete) |
 | Tokens | 2.5M | — (didn't finish) |
 | Parts completed | 8/8 | 4/8 |
 
-ios-simulator-mcp burned 293 turns — 70 taps and 60 full-screen reads — and still couldn't finish. It was mid-task when the timeout killed it. Button Heist finished the same workflow in 50 turns and 2.5M tokens.
+idb burned 293 turns — 70 taps and 60 full-screen reads — and still couldn't finish. It was mid-task when the timeout killed it. Button Heist finished the same workflow in 50 turns and 2.5M tokens.
 
 This isn't a benchmark artifact. The gap is structural. Coordinate-based tools pay a constant per-action tax: read the full screen, find the element, compute coordinates, tap, read the full screen again. That tax is tolerable at 5 actions. At 50 actions, it's 100 full-screen reads filling the context window. At 100 actions, the model can't keep up.
 
@@ -56,12 +56,12 @@ Button Heist's per-action cost is near-zero: pass a name, read a delta. Turn 50 
 | Simple (toggle, tap) | 1.5–2x | Less overhead per action |
 | Multi-step (forms, CRUD) | 3–4x | Fewer turns to verify state |
 | Complex (multi-screen) | 5–10x | Deltas eliminate redundant reads |
-| Scale (50+ actions) | **Cannot compare** | ios-simulator-mcp can't finish |
+| Scale (50+ actions) | **Cannot compare** | idb can't finish |
 
 ## Why It Matters
 
 Agent workflows are getting longer. Today's agents fill forms and check settings. Tomorrow's will run end-to-end test suites, perform accessibility audits, and navigate unfamiliar apps exploratorily. The number of actions per session will grow from dozens to hundreds.
 
-A tool that's 2x slower at 10 actions is 5x slower at 50 and hits a wall at 100. At some point the question shifts from "which is faster?" to "which can finish the job?"
+A tool that's 2x slower at 10 actions is 5x slower at 50 and can't finish at 100. The question stops being "which is faster?" and becomes "which can finish the job?"
 
-We built Button Heist because we think the accessibility layer is the right abstraction for agent-driven UI. The benchmarks suggest that bet is paying off — especially as workflows get longer.
+Button Heist can. Coordinate-based tools, structurally, cannot — not at the scale where agents become genuinely useful.
