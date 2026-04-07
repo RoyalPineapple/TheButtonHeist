@@ -4,17 +4,17 @@ import XCTest
 final class HeistElementTests: XCTestCase {
 
     func testEquality() {
-        let element1 = makeElement(label: "Button1", index: 0)
-        let element2 = makeElement(label: "Button1", index: 0)
-        let element3 = makeElement(label: "Button2", index: 1)
+        let element1 = makeElement(label: "Button1")
+        let element2 = makeElement(label: "Button1")
+        let element3 = makeElement(label: "Button2")
 
         XCTAssertEqual(element1, element2)
         XCTAssertNotEqual(element1, element3)
     }
 
     func testHashable() {
-        let element1 = makeElement(label: "Button1", index: 0)
-        let element2 = makeElement(label: "Button1", index: 0)
+        let element1 = makeElement(label: "Button1")
+        let element2 = makeElement(label: "Button1")
 
         var set = Set<HeistElement>()
         set.insert(element1)
@@ -24,7 +24,7 @@ final class HeistElementTests: XCTestCase {
     }
 
     func testFrameComputed() {
-        let element = makeElement(label: "Test", index: 0)
+        let element = makeElement(label: "Test")
         let frame = element.frame
 
         XCTAssertEqual(frame.origin.x, 10)
@@ -34,7 +34,7 @@ final class HeistElementTests: XCTestCase {
     }
 
     func testEncodingRoundTrip() throws {
-        let element = makeElement(label: "RoundTrip", index: 5)
+        let element = makeElement(label: "RoundTrip")
 
         let data = try JSONEncoder().encode(element)
         let decoded = try JSONDecoder().decode(HeistElement.self, from: data)
@@ -83,7 +83,7 @@ final class HeistElementTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeElement(label: String, index: Int = 0) -> HeistElement {
+    private func makeElement(label: String) -> HeistElement {
         HeistElement(
             description: label,
             label: label,
