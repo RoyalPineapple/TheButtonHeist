@@ -15,6 +15,7 @@ final class TheMuscleTests: XCTestCase {
     private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
 
     override func setUp() async throws {
+        try await super.setUp()
         muscle = TheMuscle(explicitToken: "test-token")
         sentMessages = []
         markedAuthenticated = []
@@ -39,6 +40,7 @@ final class TheMuscleTests: XCTestCase {
     override func tearDown() async throws {
         muscle.tearDown()
         muscle = nil
+        try await super.tearDown()
     }
 
     // MARK: - Encoding helpers
