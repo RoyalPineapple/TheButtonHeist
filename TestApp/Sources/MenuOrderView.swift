@@ -223,10 +223,18 @@ struct MenuOrderView: View {
                     checkoutPhase = .processing
                     NSLog("[Menu] Payment processing for %@", formatPrice(total))
                     Task {
-                        try? await Task.sleep(for: .seconds(2.5))
+                        let roll = Int.random(in: 1...100)
+                        let delay: Double = switch roll {
+                        case 1...80:  2.5
+                        case 81...90: 5.0
+                        case 91...95: 7.0
+                        default:      10.0
+                        }
+                        NSLog("[Menu] Payment delay: %.1fs (roll: %d)", delay, roll)
+                        try? await Task.sleep(for: .seconds(delay))
                         let orderNumber = "ORD-\(Int.random(in: 1000...9999))"
                         checkoutPhase = .confirmed(orderNumber: orderNumber)
-                        NSLog("[Menu] Payment confirmed: %@", orderNumber)
+                        NSLog("[Menu] Payment confirmed: %@ (%.1fs)", orderNumber, delay)
                     }
                 } label: {
                     HStack {

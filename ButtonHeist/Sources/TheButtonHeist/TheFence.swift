@@ -224,6 +224,26 @@ public final class TheFence {
         var dispatchArgs = request
         dispatchArgs["_requestId"] = requestId
 
+        // Fast path: if an expectation is attached and a background delta already
+        // satisfies it, skip the action entirely. The screen changed while the agent
+        // was thinking — the intent is already fulfilled.
+        if let expectation = try parseExpectation(request),
+           let backgroundDelta = drainBackgroundDelta() {
+            let syntheticResult = ActionResult(
+                success: true,
+                method: .waitForChange,
+                message: "expectation already met by background change",
+                interfaceDelta: backgroundDelta
+            )
+            let validation = expectation.validate(against: syntheticResult)
+            if validation.met {
+                logResponse(requestId: requestId, response: .action(result: syntheticResult, expectation: validation), durationMs: 0)
+                return .action(result: syntheticResult, expectation: validation)
+            }
+            // Expectation not met by the background delta — continue with the action.
+            // The background delta will still be surfaced via the envelope on the server side.
+        }
+
         let start = CFAbsoluteTimeGetCurrent()
         let response: FenceResponse
         do {

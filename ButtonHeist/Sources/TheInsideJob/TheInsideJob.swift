@@ -123,6 +123,15 @@ public final class TheInsideJob {
     /// get_interface response.
     var lastSentTreeHash: Int = 0
 
+    /// Snapshot of the screen elements at the time of the last response.
+    /// Used by computeBackgroundDelta to produce proper element-level diffs
+    /// instead of always reporting screenChanged.
+    var lastSentBeforeState: TheBrains.BeforeState?
+
+    /// Screen ID from the last response sent to the driver. When this differs
+    /// from the current screen, all heistIds the agent holds are stale.
+    var lastSentScreenId: String?
+
     // MARK: - Initialization
 
     public init(token: String? = nil, instanceId: String? = nil, allowedScopes: Set<ConnectionScope>? = nil, port: UInt16 = 0) {
@@ -403,6 +412,25 @@ public final class TheInsideJob {
             default:
                 stakeout?.noteActivity()
                 let backgroundDelta = computeBackgroundDelta()
+
+                // Fast reject: if the screen changed in the background and the
+                // action targets a heistId, all heistIds are stale — fail fast
+                // with the background delta so the agent gets the new state.
+                if let backgroundDelta, backgroundDelta.kind == .screenChanged,
+                   let lastScreen = lastSentScreenId, lastScreen != stash.lastScreenId,
+                   message.actionTarget != nil {
+                    let actionResult = ActionResult(
+                        success: false,
+                        method: .activate,
+                        message: "Screen changed in background (\(lastScreen) → \(stash.lastScreenId ?? "unknown")) — heistIds are stale",
+                        errorKind: .elementNotFound,
+                        screenName: stash.lastScreenName,
+                        screenId: stash.lastScreenId
+                    )
+                    recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
+                    return
+                }
+
                 let actionResult = await brains.executeCommand(message)
                 recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
             }
@@ -439,9 +467,8 @@ public final class TheInsideJob {
     }
 
     /// Check if the accessibility tree changed since the last response was sent.
-    /// Returns a screen-changed delta with the full current interface if it did,
-    /// nil if the tree is the same. This captures changes that happened while the
-    /// agent was thinking between tool calls.
+    /// Returns a delta with the current interface if it did, nil if unchanged.
+    /// Uses stored before-state for proper element-level diffs when available.
     func computeBackgroundDelta() -> InterfaceDelta? {
         guard lastSentTreeHash != 0 else { return nil }
         brains.refresh()
@@ -450,13 +477,24 @@ public final class TheInsideJob {
         let currentHash = wireElements.hashValue
         guard currentHash != lastSentTreeHash else { return nil }
 
-        let tree = stash.currentHierarchy.isEmpty
-            ? nil
-            : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
-        return InterfaceDelta(
-            kind: .screenChanged,
-            elementCount: wireElements.count,
-            newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
+        guard let beforeState = lastSentBeforeState else {
+            let tree = stash.currentHierarchy.isEmpty
+                ? nil
+                : stash.currentHierarchy.map { TheStash.WireConversion.convertNode($0) }
+            return InterfaceDelta(
+                kind: .screenChanged,
+                elementCount: wireElements.count,
+                newInterface: Interface(timestamp: Date(), elements: wireElements, tree: tree)
+            )
+        }
+
+        let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
+        let afterElements = stash.currentHierarchy.sortedElements
+        let isScreenChange = tripwire.isScreenChange(before: beforeState.viewController, after: afterVC)
+            || stash.burglar.isTopologyChanged(before: beforeState.elements, after: afterElements)
+        return TheStash.WireConversion.computeDelta(
+            before: beforeState.snapshot, after: snapshot,
+            afterTree: stash.currentHierarchy, isScreenChange: isScreenChange
         )
     }
 
@@ -479,6 +517,8 @@ public final class TheInsideJob {
 
         sendMessage(.actionResult(actionResult), requestId: requestId, backgroundDelta: backgroundDelta, respond: respond)
         lastSentTreeHash = TheStash.WireConversion.toWire(stash.selectElements()).hashValue
+        lastSentBeforeState = brains.captureBeforeState()
+        lastSentScreenId = stash.lastScreenId
 
         if muscle.hasSubscribers {
             let event = InteractionEvent(

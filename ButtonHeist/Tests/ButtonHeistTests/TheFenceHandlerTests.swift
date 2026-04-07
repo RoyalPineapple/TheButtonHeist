@@ -850,6 +850,57 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
+    // MARK: - Wait For Change Validation
+
+    @ButtonHeistActor
+    func testWaitForChangePassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for_change"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForChangeWithExpectPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for_change", "expect": "screen_changed"]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForChangeWithTimeoutPassesValidation() async {
+        await assertPassesValidation(
+            ["command": "wait_for_change", "expect": "elements_changed", "timeout": 5.0]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitForChangeSendsCorrectMessage() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "wait_for_change", "expect": "screen_changed", "timeout": 8.0
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .waitForChange(let target) = message else {
+            return XCTFail("Expected waitForChange message")
+        }
+        XCTAssertEqual(target.expect, .screenChanged)
+        XCTAssertEqual(target.timeout, 8.0)
+    }
+
+    @ButtonHeistActor
+    func testWaitForChangeNoArgsSendsNilExpect() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(request: [
+            "command": "wait_for_change"
+        ])
+        guard let (message, _) = mockConn.sent.last,
+              case .waitForChange(let target) = message else {
+            return XCTFail("Expected waitForChange message")
+        }
+        XCTAssertNil(target.expect)
+        XCTAssertNil(target.timeout)
+    }
+
     // MARK: - Expectation Parsing
 
     @ButtonHeistActor
