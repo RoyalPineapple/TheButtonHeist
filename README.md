@@ -140,7 +140,9 @@ Multiple paths in, one API out.
 
 ## How It Works
 
-Button Heist runs **inside your app**, not across a process boundary. The agent gets the real accessibility interface, the same one VoiceOver uses, not a lossy translation through XPC. When a control is a stepper, the agent calls `increment`. When a row has a "Delete" custom action, the agent calls it by name.
+Most iOS automation tools work from the outside: read the accessibility tree across a process boundary, extract element frames, compute tap coordinates, inject touch events at those coordinates. The agent never touches the real interface — it works with a coordinate-level approximation of it. Every action requires re-reading the full tree to know what happened.
+
+Button Heist works from the inside. The framework lives in the app process, with direct access to the live accessibility hierarchy. When a control is a stepper, the agent calls `increment` — the same API path VoiceOver uses. When a row has a "Delete" custom action, the agent calls it by name. No coordinate math, no frame extraction, no re-reading the tree after every tap. This produces measurable gains — see [Benchmarks](docs/BENCHMARKS.md) for competitive data.
 
 Three things follow from this:
 
