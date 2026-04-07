@@ -44,20 +44,24 @@ jobs:
           set -eo pipefail
           SUBMODULE_SHA=$(git ls-tree HEAD submodules/AccessibilitySnapshotBH | awk '{print $3}')
           BRANCH_TIP=$(git ls-remote https://github.com/RoyalPineapple/AccessibilitySnapshotBH refs/heads/main | awk '{print $1}')
-          PACKAGE_SHA=$(grep -oE 'revision: "[0-9a-f]+"' Package.swift | grep -oE '[0-9a-f]{40}')
 
           echo "Submodule pin:  $SUBMODULE_SHA"
           echo "Branch tip:     $BRANCH_TIP"
-          echo "Package.swift:  $PACKAGE_SHA"
 
           FAILED=0
           if [ "$SUBMODULE_SHA" != "$BRANCH_TIP" ]; then
             echo "::error::Submodule ($SUBMODULE_SHA) is behind main branch tip ($BRANCH_TIP). Run: git submodule update --remote submodules/AccessibilitySnapshotBH"
             FAILED=1
           fi
-          if [ "$PACKAGE_SHA" != "$SUBMODULE_SHA" ]; then
-            echo "::error::Package.swift revision ($PACKAGE_SHA) does not match submodule ($SUBMODULE_SHA). Update the revision pin in Package.swift."
-            FAILED=1
+
+          # If Package.swift uses a revision pin, verify it matches the submodule
+          PACKAGE_SHA=$(grep -oE 'revision: "[0-9a-f]+"' Package.swift | grep -oE '[0-9a-f]{40}' || true)
+          if [ -n "$PACKAGE_SHA" ]; then
+            echo "Package.swift:  $PACKAGE_SHA"
+            if [ "$PACKAGE_SHA" != "$SUBMODULE_SHA" ]; then
+              echo "::error::Package.swift revision ($PACKAGE_SHA) does not match submodule ($SUBMODULE_SHA). Update the revision pin in Package.swift."
+              FAILED=1
+            fi
           fi
           exit $FAILED
 
@@ -93,6 +97,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
       - name: Init required submodules
         run: |
           git config --global url."https://github.com/".insteadOf "git@github.com:"
@@ -125,12 +132,16 @@ jobs:
             exit 1
           }
 
-      - name: Run macOS tests
-        timeout-minutes: 10
+      - name: Run TheScoreTests
+        timeout-minutes: 5
+        run: tuist test TheScoreTests --no-selective-testing
+
+      - name: Run ButtonHeistTests
+        timeout-minutes: 5
         run: |
           set -eo pipefail
-          tuist test TheScoreTests --no-selective-testing
-          tuist test ButtonHeistTests --no-selective-testing
+          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
+            -destination 'platform=macOS'
 
   ios-tests:
     runs-on: macos-15
@@ -141,6 +152,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.3
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
       - name: Boot simulator in background
         run: |
@@ -154,13 +168,11 @@ jobs:
           for rt in sorted(runtimes, key=lambda r: r["version"], reverse=True):
               if rt["platform"] != "iOS" or not rt["isAvailable"]:
                   continue
-              if not rt["version"].startswith("18."):
-                  continue
               for dev in devices.get(rt["identifier"], []):
                   if dev["name"] == "iPhone 16 Pro" and dev["isAvailable"]:
                       print(dev["udid"], rt["version"])
                       raise SystemExit(0)
-          raise SystemExit("No iPhone 16 Pro found on iOS 18.x")
+          raise SystemExit("No available iPhone 16 Pro simulator found")
           PYEOF
           )
           echo "SIM_UDID=$SIM_UDID" >> "$GITHUB_ENV"

@@ -35,7 +35,7 @@ final class AuthFailureTests: XCTestCase {
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testAuthFailedCallbackFires() throws {
+    func testAuthFailedCallbackFires() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
         conn.simulateConnected()
 
@@ -53,7 +53,7 @@ final class AuthFailureTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthFailedFiresBeforeDisconnected() throws {
+    func testAuthFailedFiresBeforeDisconnected() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
         conn.simulateConnected()
 
