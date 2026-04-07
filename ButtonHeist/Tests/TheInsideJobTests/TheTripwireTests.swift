@@ -7,15 +7,13 @@ final class TheTripwireTests: XCTestCase {
 
     private var tripwire: TheTripwire!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         tripwire = TheTripwire()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         tripwire.stopPulse()
         tripwire = nil
-        super.tearDown()
     }
 
     // MARK: - PulseReading.isSettled
