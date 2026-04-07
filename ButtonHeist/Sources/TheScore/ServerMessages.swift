@@ -247,6 +247,7 @@ extension ActionResult {
             elements: exploreElements,
             scrollCount: explore.scrollCount,
             containersExplored: explore.containersExplored,
+            containersSkippedObscured: explore.containersSkippedObscured,
             explorationTime: explore.explorationTime
         )
         return ActionResult(
@@ -298,6 +299,8 @@ public struct ExploreResult: Codable, Sendable {
     public let scrollCount: Int
     /// Number of scrollable containers explored
     public let containersExplored: Int
+    /// Containers skipped because they were behind a presented view controller
+    public let containersSkippedObscured: Int
     /// Wall-clock time spent exploring, in seconds
     public let explorationTime: Double
 
@@ -308,12 +311,29 @@ public struct ExploreResult: Codable, Sendable {
         elements: [HeistElement],
         scrollCount: Int,
         containersExplored: Int,
+        containersSkippedObscured: Int = 0,
         explorationTime: Double
     ) {
         self.elements = elements
         self.scrollCount = scrollCount
         self.containersExplored = containersExplored
+        self.containersSkippedObscured = containersSkippedObscured
         self.explorationTime = explorationTime
+    }
+
+    // MARK: Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case elements, scrollCount, containersExplored, containersSkippedObscured, explorationTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        elements = try container.decode([HeistElement].self, forKey: .elements)
+        scrollCount = try container.decode(Int.self, forKey: .scrollCount)
+        containersExplored = try container.decode(Int.self, forKey: .containersExplored)
+        containersSkippedObscured = try container.decodeIfPresent(Int.self, forKey: .containersSkippedObscured) ?? 0
+        explorationTime = try container.decode(Double.self, forKey: .explorationTime)
     }
 }
 

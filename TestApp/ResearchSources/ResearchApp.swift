@@ -15,6 +15,12 @@ struct ResearchApp: App {
                         }
                     }
 
+                    Section("Exploration") {
+                        NavigationLink("Obscuring Harness") {
+                            PresentationObscuringHarnessView()
+                        }
+                    }
+
                     Section("Traits") {
                         NavigationLink("Trait Probe") {
                             TraitProbeView()
