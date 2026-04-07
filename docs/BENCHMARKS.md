@@ -22,7 +22,7 @@ Three properties make this work:
 
 ## The Numbers
 
-Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Apple's accessibility and simulator APIs. It uses the same coordinate-based approach as XCUITest — well-understood tooling that's been the standard for iOS UI testing for a decade. It's a good, clean implementation of that paradigm. The question isn't whether it works — it does — but whether the paradigm itself scales to agent workflows. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
+Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's idb (iOS Development Bridge). It's a clean, minimal implementation of coordinate-based iOS automation — read the accessibility tree, compute tap coordinates, interact. The approach is well-understood and the implementation is solid. The question isn't whether it works — it does — but whether coordinate-based interaction scales to agent workflows. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
 ### Standard tasks (14 UI automation tasks)
 
