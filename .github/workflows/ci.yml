@@ -138,7 +138,10 @@ jobs:
 
       - name: Run ButtonHeistTests
         timeout-minutes: 5
-        run: tuist test ButtonHeistTests --no-selective-testing
+        run: |
+          set -eo pipefail
+          xcodebuild test -workspace ButtonHeist.xcworkspace -scheme ButtonHeistTests \
+            -destination 'platform=macOS'
 
   ios-tests:
     runs-on: macos-15
