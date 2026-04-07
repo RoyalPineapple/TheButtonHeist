@@ -55,9 +55,8 @@ enum ToolDefinitions {
             {"elementAppeared": {"label": "Success"}} — check that a matching element was added. \
             {"elementDisappeared": {"label": "Loading"}} — check that a matching element was removed. \
             Expectations are most valuable inside run_batch: each step declares what should happen, \
-            and a failed expectation stops the batch at the exact step that diverged. This lets you \
-            batch 5-10 steps confidently — without expectations, a silent failure at step 2 poisons \
-            every step after it and you won't know where things went wrong.
+            and a failed expectation stops the batch at the exact step that diverged — the agent \
+            knows immediately what went wrong instead of discovering it turns later.
             """,
         "oneOf": .array([
             [
@@ -593,15 +592,14 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call — the fastest way to drive the UI. \
-            Each step is a JSON object with 'command' plus that command's parameters. \
-            One batch of 5-10 steps replaces 5-10 individual tool calls, dramatically reducing \
-            round trips. Use stop_on_error (default) for dependent sequences, continue_on_error \
-            for independent steps. Returns per-step results and a merged net delta. \
+            Execute multiple commands in a single call. Each step is a JSON object with 'command' \
+            plus that command's parameters. Returns per-step results and a merged net delta. \
+            Use stop_on_error (default) for dependent sequences, continue_on_error for \
+            independent steps. \
             \
-            Attach 'expect' to each step to make large batches reliable. Without expectations, \
-            a silent failure at step 2 poisons every step after it and you won't know where \
-            things went wrong. With expectations, the batch stops at the exact step that diverged. \
+            Attach 'expect' to each step for inline verification. Without expectations, \
+            a silent failure at step 2 goes unnoticed until the agent re-reads the interface \
+            turns later. With expectations, the batch stops at the exact step that diverged. \
             Match the expectation to the action: "screen_changed" for navigation, \
             "elements_changed" for insertions/deletions, {"elementUpdated": {...}} for state \
             changes like toggles, pickers, and text input. \
