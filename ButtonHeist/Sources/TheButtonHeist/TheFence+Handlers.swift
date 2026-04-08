@@ -561,8 +561,7 @@ extension TheFence {
             return .error("Connect failed, restored previous connection: \(error.displayMessage)")
         }
 
-        let deviceName = handoff.connectedDevice.map { handoff.displayName(for: $0) } ?? resolvedDevice
-        return .ok(message: "Connected to \(deviceName)")
+        return try await handleGetInterface()
     }
 
     func handleListTargets() -> FenceResponse {
