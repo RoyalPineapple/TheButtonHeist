@@ -139,8 +139,8 @@ extension ObscuringHarnessViewController: UITableViewDataSource {
 
 /// Minimal UIKit view controller presented as a modal.
 /// Uses `.overCurrentContext` so the presenting VC's views (including table
-/// views) remain in the accessibility tree — matching the Square Register
-/// scenario where a receipt sheet sits over a checkout view with scroll containers.
+/// views) remain in the accessibility tree — matching the scenario where a
+/// sheet sits over a view with scroll containers.
 private final class ModalContentViewController: UIViewController {
 
     override func viewDidLoad() {
