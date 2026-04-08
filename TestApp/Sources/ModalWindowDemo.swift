@@ -2,11 +2,11 @@ import SwiftUI
 import UIKit
 
 /// Demonstrates a modal popup presented in a separate UIWindow — the same
-/// pattern used by Square Register's "Create item" popup. The popup sets
-/// `accessibilityViewIsModal` on its container, which should cause
-/// `get_interface` to return only the popup's elements (not the background
-/// catalog list). Screenshots should show the popup composited on top of
-/// the dimmed background.
+/// pattern used by apps that present action sheets or popups in their own
+/// window. The popup sets `accessibilityViewIsModal` on its container,
+/// which should cause `get_interface` to return only the popup's elements
+/// (not the background catalog list). Screenshots should show the popup
+/// composited on top of the dimmed background.
 struct ModalWindowDemo: View {
     @State private var lastAction = "None"
     @State private var popupController = ModalPopupController()
@@ -74,9 +74,9 @@ struct ModalWindowDemo: View {
 // MARK: - UIWindow-Based Popup
 
 /// Presents a popup in a separate UIWindow with `accessibilityViewIsModal`,
-/// replicating how system action sheets and third-party popups (e.g. Square
-/// Register) work. The modal flag on the popup's container should tell
-/// accessibility consumers to ignore all background windows.
+/// replicating how system action sheets and third-party popups work. The
+/// modal flag on the popup's container should tell accessibility consumers
+/// to ignore all background windows.
 @MainActor
 final class ModalPopupController {
     private var overlayWindow: UIWindow?
