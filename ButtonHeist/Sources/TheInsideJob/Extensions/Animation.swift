@@ -90,14 +90,12 @@ extension TheInsideJob {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let afterSnapshot = stash.selectElements()
         let delta = computeDelta(before: before, afterSnapshot: afterSnapshot)
-        let message = expectation != nil
+        var timeoutBuilder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        timeoutBuilder.message = expectation != nil
             ? "timed out after \(elapsed)s — expectation not met"
             : "timed out after \(elapsed)s — no change detected"
-        let actionResult = ActionResult(
-            success: false, method: .waitForChange, message: message,
-            errorKind: .timeout, interfaceDelta: delta,
-            screenName: afterSnapshot.screenName, screenId: afterSnapshot.screenId
-        )
+        timeoutBuilder.interfaceDelta = delta
+        let actionResult = timeoutBuilder.failure(errorKind: .timeout)
         sendMessage(.actionResult(actionResult), requestId: requestId, respond: respond)
         lastSentTreeHash = TheStash.WireConversion.toWire(afterSnapshot).hashValue
         lastSentBeforeState = brains.captureBeforeState()
@@ -115,19 +113,15 @@ extension TheInsideJob {
         guard lastSentTreeHash != 0, currentHash != lastSentTreeHash else { return nil }
 
         let delta = computeDelta(before: before, afterSnapshot: currentSnapshot)
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: currentSnapshot)
+        builder.interfaceDelta = delta
 
         if let expectation {
-            let checkResult = ActionResult(
-                success: true, method: .waitForChange, interfaceDelta: delta,
-                screenName: currentSnapshot.screenName, screenId: currentSnapshot.screenId
-            )
-            guard expectation.validate(against: checkResult).met else { return nil }
+            guard expectation.validate(against: builder.success()).met else { return nil }
         }
 
-        return ActionResult(
-            success: true, method: .waitForChange, message: "already changed (0.0s)",
-            interfaceDelta: delta, screenName: currentSnapshot.screenName, screenId: currentSnapshot.screenId
-        )
+        builder.message = "already changed (0.0s)"
+        return builder.success()
     }
 
     private func computeDelta(before: TheBrains.BeforeState, afterSnapshot: [TheStash.ScreenElement]) -> InterfaceDelta {
@@ -146,28 +140,18 @@ extension TheInsideJob {
         expectation: ActionExpectation?, start: CFAbsoluteTime, round: Int
     ) -> ActionResult? {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.interfaceDelta = delta
 
         guard let expectation else {
-            return ActionResult(
-                success: true, method: .waitForChange,
-                message: "changed after \(elapsed)s (\(round) rounds)",
-                interfaceDelta: delta,
-                screenName: afterSnapshot.screenName, screenId: afterSnapshot.screenId
-            )
+            builder.message = "changed after \(elapsed)s (\(round) rounds)"
+            return builder.success()
         }
 
-        let checkResult = ActionResult(
-            success: true, method: .waitForChange, interfaceDelta: delta,
-            screenName: afterSnapshot.screenName, screenId: afterSnapshot.screenId
-        )
-        guard expectation.validate(against: checkResult).met else { return nil }
+        guard expectation.validate(against: builder.success()).met else { return nil }
 
-        return ActionResult(
-            success: true, method: .waitForChange,
-            message: "expectation met after \(elapsed)s (\(round) rounds)",
-            interfaceDelta: delta,
-            screenName: afterSnapshot.screenName, screenId: afterSnapshot.screenId
-        )
+        builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
+        return builder.success()
     }
 }
 

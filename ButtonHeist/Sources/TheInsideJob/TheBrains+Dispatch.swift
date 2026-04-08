@@ -36,14 +36,9 @@ extension TheBrains {
 
         default:
             insideJobLogger.error("Unhandled message type in executeCommand")
-            return ActionResult(
-                success: false,
-                method: .activate,
-                message: "Unhandled command",
-                errorKind: .unsupported,
-                screenName: stash.lastScreenName,
-                screenId: stash.lastScreenId
-            )
+            var builder = ActionResultBuilder(method: .activate, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+            builder.message = "Unhandled command"
+            return builder.failure(errorKind: .unsupported)
         }
     }
 
@@ -154,12 +149,9 @@ extension TheBrains {
 
         let exploreElements = afterSnapshot.map { TheStash.WireConversion.toWire($0) }
 
-        return ActionResult(
-            success: true,
-            method: .explore,
-            interfaceDelta: delta,
-            screenName: afterSnapshot.screenName,
-            screenId: afterSnapshot.screenId,
+        var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
+        builder.interfaceDelta = delta
+        return builder.success(
             exploreResult: ExploreResult(
                 elements: exploreElements,
                 scrollCount: manifest.scrollCount,
@@ -191,7 +183,9 @@ extension TheBrains {
         case .resignFirstResponder:
             return await performInteraction(command: message) { await self.executeResignFirstResponder() }
         default:
-            return ActionResult(success: false, method: .activate, message: "Unhandled", errorKind: .unsupported)
+            var builder = ActionResultBuilder(method: .activate, screenName: nil, screenId: nil)
+            builder.message = "Unhandled"
+            return builder.failure(errorKind: .unsupported)
         }
     }
 
@@ -216,7 +210,9 @@ extension TheBrains {
         case .touchDrawBezier(let target):
             return await performInteraction(command: message) { await self.executeDrawBezier(target) }
         default:
-            return ActionResult(success: false, method: .activate, message: "Unhandled", errorKind: .unsupported)
+            var builder = ActionResultBuilder(method: .activate, screenName: nil, screenId: nil)
+            builder.message = "Unhandled"
+            return builder.failure(errorKind: .unsupported)
         }
     }
 }
