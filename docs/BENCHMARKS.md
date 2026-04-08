@@ -75,7 +75,68 @@ The delta tells the agent exactly what happened: "Large" gained the `selected` t
 
 ios-simulator-mcp has to call `ui_describe_all` again to learn what Button Heist already told it inline. That's two tool calls and two full tree reads for one tap. Multiply that by 50 actions and the context window difference is enormous.
 
-Multiply that by 50 actions and the context window difference is enormous.
+## How Agents Think
+
+The numbers tell you the tools are different. The agent reasoning tells you *why*. These are actual agent thoughts from the benchmark traces — same model (Claude Sonnet 4.6), same task, same app.
+
+### Tapping "Dark" in Settings
+
+Both agents need to change three settings: Color Scheme to Dark, Accent Color to Purple, Text Size to Large.
+
+**Button Heist agent** thinks about the task:
+
+> *"I need to activate 'Dark' button, 'Purple' button, 'Large' button, then read the current values."*
+
+```
+→ run_batch([
+    activate(heistId: "dark_button"),
+    activate(heistId: "purple_button"),
+    activate(heistId: "large_button")
+  ])
+```
+
+**ios-simulator-mcp agent** thinks about coordinates:
+
+> *"Color Scheme: y=222.33, height=31, center y = 237.8. The row spans x=32 to x=370 (width=338). Dark is the 3rd segment at approximately x=314."*
+
+```
+→ ui_tap(x: 314, y: 237)
+```
+
+The BH agent names what it wants. The idb agent does division to figure out which third of a segmented control to tap. Both get the job done — one spends its reasoning tokens on the task, the other on arithmetic.
+
+### Calculator: entering (344 × 289) ÷ 99
+
+Both agents need to press 13 buttons in sequence.
+
+**Button Heist agent** plans the sequence and sends it:
+
+> *"Clear the display, enter 344, press multiply, enter 289, press equals, press divide, enter 99, press equals. Let me batch all these steps together."*
+
+```
+→ run_batch (13 steps)
+    activate(all_clear_button)
+    activate(3_button), activate(4_button), activate(4_button)
+    activate(multiply_button)
+    activate(2_button), activate(8_button), activate(9_button)
+    activate(equals_button)
+    activate(divide_button)
+    activate(9_button), activate(9_button)
+    activate(equals_button)
+```
+
+**ios-simulator-mcp agent** maps out a coordinate grid first:
+
+> *"'all clear': x=39, y=420, size 72x72 → center (75, 456). '×': x=291, y=504, size 72x72 → center (327, 540). '÷': x=291, y=420 → center (327, 456). 'equals': x=318, y=756 → center (354, 792)."*
+
+```
+→ ui_tap(x: 75, y: 456)    # all clear
+→ ui_tap(x: 159, y: 540)   # 3
+→ ui_tap(x: 159, y: 588)   # 4
+  ...one call per button
+```
+
+Same 13 buttons. BH sends them in one call by name. The idb agent computes center coordinates for each button from its frame geometry, then taps them one at a time — 13 tool calls instead of 1.
 
 ## The Numbers
 
