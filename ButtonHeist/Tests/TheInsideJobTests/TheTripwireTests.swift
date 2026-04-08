@@ -388,6 +388,122 @@ final class TheTripwireTests: XCTestCase {
         }
     }
 
+    // MARK: - getAccessibleWindows (modal filtering)
+
+    func testGetAccessibleWindowsMatchesTraversableWhenNoModal() {
+        let traversable = tripwire.getTraversableWindows()
+        let accessible = tripwire.getAccessibleWindows()
+        XCTAssertEqual(
+            traversable.map { ObjectIdentifier($0.window) },
+            accessible.map { ObjectIdentifier($0.window) },
+            "Without a modal, accessible windows should equal traversable windows"
+        )
+    }
+
+    func testGetAccessibleWindowsFiltersToModalWindow() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        // Create a modal overlay window above the main window
+        let modalWindow = UIWindow(windowScene: windowScene)
+        modalWindow.windowLevel = .alert
+        modalWindow.frame = UIScreen.main.bounds
+
+        let modalView = UIView()
+        modalView.accessibilityViewIsModal = true
+        modalWindow.addSubview(modalView)
+        modalWindow.isHidden = false
+
+        defer {
+            modalWindow.isHidden = true
+            modalView.removeFromSuperview()
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1, "Only the modal window should be returned")
+        XCTAssertTrue(
+            accessible.first?.window === modalWindow,
+            "The returned window should be the modal window"
+        )
+    }
+
+    func testGetAccessibleWindowsDetectsModalOnGrandchild() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        let modalWindow = UIWindow(windowScene: windowScene)
+        modalWindow.windowLevel = .alert
+        modalWindow.frame = UIScreen.main.bounds
+
+        let container = UIView()
+        let modalChild = UIView()
+        modalChild.accessibilityViewIsModal = true
+        container.addSubview(modalChild)
+        modalWindow.addSubview(container)
+        modalWindow.isHidden = false
+
+        defer {
+            modalWindow.isHidden = true
+            modalChild.removeFromSuperview()
+            container.removeFromSuperview()
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1)
+        XCTAssertTrue(accessible.first?.window === modalWindow)
+    }
+
+    func testGetAccessibleWindowsPicksFrontmostModal() {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        // Two windows with modal views — frontmost (higher level) should win
+        let lowerModal = UIWindow(windowScene: windowScene)
+        lowerModal.windowLevel = .normal + 1
+        lowerModal.frame = UIScreen.main.bounds
+        let lowerModalView = UIView()
+        lowerModalView.accessibilityViewIsModal = true
+        lowerModal.addSubview(lowerModalView)
+        lowerModal.isHidden = false
+
+        let upperModal = UIWindow(windowScene: windowScene)
+        upperModal.windowLevel = .alert
+        upperModal.frame = UIScreen.main.bounds
+        let upperModalView = UIView()
+        upperModalView.accessibilityViewIsModal = true
+        upperModal.addSubview(upperModalView)
+        upperModal.isHidden = false
+
+        defer {
+            lowerModal.isHidden = true
+            upperModal.isHidden = true
+            lowerModalView.removeFromSuperview()
+            upperModalView.removeFromSuperview()
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1, "Only the frontmost modal window should be returned")
+        XCTAssertTrue(
+            accessible.first?.window === upperModal,
+            "The frontmost (highest level) modal should win"
+        )
+    }
+
     // MARK: - topmostViewController (hosted test)
 
     func testTopmostViewControllerReturnsNonNil() {
