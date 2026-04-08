@@ -393,14 +393,9 @@ public final class TheInsideJob {
         // Recording & interactions — blocked for observers
         default:
             if isObserver {
-                sendMessage(.actionResult(ActionResult(
-                    success: false,
-                    method: .activate,
-                    message: "Watch mode is read-only",
-                    errorKind: .unsupported,
-                    screenName: stash.lastScreenName,
-                    screenId: stash.lastScreenId
-                )), requestId: requestId, respond: respond)
+                var builder = ActionResultBuilder(method: .activate, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+                builder.message = "Watch mode is read-only"
+                sendMessage(.actionResult(builder.failure(errorKind: .unsupported)), requestId: requestId, respond: respond)
                 return
             }
 
@@ -421,16 +416,12 @@ public final class TheInsideJob {
                 if let backgroundDelta, backgroundDelta.kind == .screenChanged,
                    let lastScreen = lastSentScreenId, lastScreen != stash.lastScreenId,
                    message.actionTarget != nil {
-                    let actionResult = ActionResult(
-                        success: true,
-                        method: .waitForChange,
-                        message: "Screen changed while you were thinking"
-                            + " (\(lastScreen) → \(stash.lastScreenId ?? "unknown"))"
-                            + " — action skipped, here is the current state",
-                        interfaceDelta: backgroundDelta,
-                        screenName: stash.lastScreenName,
-                        screenId: stash.lastScreenId
-                    )
+                    var builder = ActionResultBuilder(method: .waitForChange, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+                    builder.message = "Screen changed while you were thinking"
+                        + " (\(lastScreen) → \(stash.lastScreenId ?? "unknown"))"
+                        + " — action skipped, here is the current state"
+                    builder.interfaceDelta = backgroundDelta
+                    let actionResult = builder.success()
                     recordAndBroadcast(command: message, actionResult: actionResult, requestId: requestId, respond: respond)
                     return
                 }

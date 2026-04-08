@@ -25,6 +25,19 @@ let package = Package(
                 .swiftLanguageMode(.v6),
                 .unsafeFlags(["-parse-as-library", "-warnings-as-errors"])
             ]
+        ),
+        .testTarget(
+            name: "ButtonHeistMCPTests",
+            dependencies: [
+                "ButtonHeistMCP",
+                .product(name: "ButtonHeist", package: "ButtonHeist"),
+                .product(name: "MCP", package: "swift-sdk")
+            ],
+            path: "Tests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .unsafeFlags(["-warnings-as-errors"])
+            ]
         )
     ]
 )
