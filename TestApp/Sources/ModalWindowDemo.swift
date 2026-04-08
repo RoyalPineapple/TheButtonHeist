@@ -179,7 +179,7 @@ private final class ModalPopupViewController: UIViewController {
     }
 
     @objc private func buttonTapped(_ sender: UIButton) {
-        guard let title = sender.title(for: .normal) else { return }
+        guard let title = sender.configuration?.title else { return }
         NSLog("[ModalWindowDemo] Button tapped: %@", title)
         onAction?(title)
     }

@@ -364,18 +364,16 @@ final class TheTripwire {
     }
 
     /// Check whether a window contains a view with `accessibilityViewIsModal`.
-    /// Checks the window itself, then walks two levels deep (window subviews
-    /// and their immediate children) — modal containers are typically placed
-    /// as direct children of the window or its root VC's view.
+    /// Walks up to 4 levels deep to account for UIKit's internal wrapper views
+    /// (e.g. `UITransitionView`, `UIDropShadowView`) inserted between the window
+    /// and the view controller's content.
     private func containsModalView(_ window: UIWindow) -> Bool {
-        if window.accessibilityViewIsModal { return true }
-        for subview in window.subviews {
-            if subview.accessibilityViewIsModal { return true }
-            for grandchild in subview.subviews {
-                if grandchild.accessibilityViewIsModal { return true }
-            }
+        func check(_ view: UIView, depth: Int) -> Bool {
+            if view.accessibilityViewIsModal { return true }
+            guard depth > 0 else { return false }
+            return view.subviews.contains { check($0, depth: depth - 1) }
         }
-        return false
+        return check(window, depth: 4)
     }
 
     // MARK: - View Controller Identity
