@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
+import TheScore
 
 // MARK: - Element Interactivity
 
@@ -17,10 +18,13 @@ extension TheStash {
 
     @MainActor enum Interactivity {
 
-    private static let interactiveTraits: UIAccessibilityTraits = [
+    private static let interactiveHeistTraits: [HeistTrait] = [
         .button, .link, .adjustable, .searchField, .keyboardKey,
-        .toggleButton, .backButton, .switchButton
+        .backButton, .switchButton
     ]
+
+    private static let interactiveTraits: UIAccessibilityTraits =
+        UIAccessibilityTraits.fromNames(interactiveHeistTraits.map(\.rawValue))
 
     private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
         !element.traits.isDisjoint(with: interactiveTraits)
