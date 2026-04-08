@@ -77,8 +77,9 @@ struct ButtonHeistMCPServer {
         correct response when your action produced a transient state (spinner appeared, \
         interactive elements disappeared) and you need the final result.
 
-        **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
-        `expect` to each step for a self-verifying script.
+        **Composing**: `run_batch` for mechanical sequences where every step is already \
+        known (form fills, switch toggles, fixed navigation). Don't batch exploratory \
+        actions or steps that depend on intermediate results. Attach `expect` to each step.
 
         ## The Server Is Always Watching
 
@@ -150,9 +151,8 @@ struct ButtonHeistMCPServer {
         ## Efficiency
 
         Read the delta first — skip `get_interface` when the delta already told you what \
-        changed. Use heistIds on the current screen, matchers after navigation. Batch \
-        predictable sequences. Filter with matcher fields or heistId lists when you only \
-        need a subset of elements.
+        changed. Use heistIds on the current screen, matchers after navigation. Filter \
+        with matcher fields or heistId lists when you only need a subset of elements.
         """
 
     @ButtonHeistActor
