@@ -282,6 +282,14 @@ final class TargetConfigTests: XCTestCase {
             switch message {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), elements: []))
+            case .explore:
+                return .actionResult(ActionResult(
+                    success: true, method: .explore,
+                    exploreResult: ExploreResult(
+                        elements: [], scrollCount: 0,
+                        containersExplored: 0, explorationTime: 0
+                    )
+                ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }
@@ -328,10 +336,9 @@ final class TargetConfigTests: XCTestCase {
         let fence = makeMockFence(fileConfig: config)
 
         let response = try await fence.execute(request: ["command": "connect", "target": "sim2"])
-        if case .ok(let message) = response {
-            XCTAssertTrue(message.contains("Connected"))
-        } else {
-            XCTFail("Expected ok response, got \(response)")
+        guard case .interface = response else {
+            XCTFail("Expected interface response, got \(response)")
+            return
         }
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
         XCTAssertEqual(fence.config.token, "tok2")
@@ -346,10 +353,9 @@ final class TargetConfigTests: XCTestCase {
             "device": "127.0.0.1:9999",
             "token": "direct-tok",
         ])
-        if case .ok(let message) = response {
-            XCTAssertTrue(message.contains("Connected"))
-        } else {
-            XCTFail("Expected ok response, got \(response)")
+        guard case .interface = response else {
+            XCTFail("Expected interface response, got \(response)")
+            return
         }
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "direct-tok")
