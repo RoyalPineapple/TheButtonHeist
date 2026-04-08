@@ -328,16 +328,14 @@ final class TheTripwire {
 
     // MARK: - Window Access
 
-    /// The traversable windows in the active scene, sorted by window level (front to back).
-    /// Shared with TheStash — both need the same window set.
+    /// All visible, non-fingerprint windows across every connected scene, sorted
+    /// by window level (front to back). Collects from all `UIWindowScene`s — not
+    /// just the foreground-active one — so system-managed windows (popup menus,
+    /// action sheets, alerts presented in their own UIWindow) are included.
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
-        else {
-            return []
-        }
-
-        return windowScene.windows
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
             .filter { window in
                 !(window is TheFingerprints.FingerprintWindow)
                     && !window.isHidden
@@ -345,6 +343,37 @@ final class TheTripwire {
             }
             .sorted { $0.windowLevel > $1.windowLevel }
             .map { ($0, $0 as UIView) }
+    }
+
+    /// Windows filtered for accessibility tree parsing. When any window contains
+    /// a view with `accessibilityViewIsModal`, only that window (the frontmost
+    /// modal) is returned — background windows are excluded from the tree, matching
+    /// the behavior of the macOS accessibility server (AXServer).
+    ///
+    /// For screenshots, use `getTraversableWindows()` — visual compositing should
+    /// include all windows so the dimmed background remains visible.
+    func getAccessibleWindows() -> [(window: UIWindow, rootView: UIView)] {
+        let windows = getTraversableWindows()
+
+        // Front-to-back: first window with a modal view wins.
+        for entry in windows where containsModalView(entry.window) {
+            return [entry]
+        }
+
+        return windows
+    }
+
+    /// Check whether a window contains a view with `accessibilityViewIsModal`.
+    /// Walks up to 4 levels deep to account for UIKit's internal wrapper views
+    /// (e.g. `UITransitionView`, `UIDropShadowView`) inserted between the window
+    /// and the view controller's content.
+    private func containsModalView(_ window: UIWindow) -> Bool {
+        func check(_ view: UIView, depth: Int) -> Bool {
+            if view.accessibilityViewIsModal { return true }
+            guard depth > 0 else { return false }
+            return view.subviews.contains { check($0, depth: depth - 1) }
+        }
+        return check(window, depth: 4)
     }
 
     // MARK: - View Controller Identity

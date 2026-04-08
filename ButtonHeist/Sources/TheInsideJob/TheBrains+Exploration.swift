@@ -269,8 +269,8 @@ extension TheBrains {
     /// If a VC anywhere in the tree has a `presentedViewController`, and the view's
     /// owning VC is not a descendant of the topmost presented VC, the view is obscured.
     ///
-    /// This handles both root-level presentations (Square Register: root presents
-    /// receipt sheet) and nested presentations (nav child presents a modal).
+    /// This handles both root-level presentations (root presents a sheet)
+    /// and nested presentations (nav child presents a modal).
     static func isObscuredByPresentation(view: UIView) -> Bool {
         guard let window = view.window,
               let rootVC = window.rootViewController else {

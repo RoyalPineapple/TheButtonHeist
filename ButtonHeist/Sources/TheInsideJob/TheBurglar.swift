@@ -37,7 +37,7 @@ final class TheBurglar {
     /// Returns a ParseResult value that can be inspected (e.g., for topology comparison)
     /// before deciding whether to apply it.
     func parse() -> ParseResult? {
-        let windows = tripwire.getTraversableWindows()
+        let windows = tripwire.getAccessibleWindows()
         guard !windows.isEmpty else { return nil }
 
         let revealedSearchBars = Self.revealHiddenSearchBars()

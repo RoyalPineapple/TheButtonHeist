@@ -48,6 +48,9 @@ struct RootView: View {
                 NavigationLink("Settings") {
                     SettingsView()
                 }
+                NavigationLink("Modal Window") {
+                    ModalWindowDemo()
+                }
 
                 Section("Scroll Tests") {
                     NavigationLink("Long List") {
