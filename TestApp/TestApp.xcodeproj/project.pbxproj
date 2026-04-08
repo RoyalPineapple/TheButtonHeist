@@ -90,6 +90,7 @@
 		D37A65C7ED7505D66E88E54D /* PresentationObscuringHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AEE58CFB3DAAE9D3D921A3F /* PresentationObscuringHarnessView.swift */; };
 		D484A7DDDB21F0DCA5FBC12B /* swift-crypto_CryptoBoringWrapper.bundle in Resources */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		D7C4ADD7D3E28BC128DE4982 /* Crypto.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3043BA82964C737BBCED996A /* Crypto.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D85E49685498BCB9218A7EBC /* ModalWindowDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */; };
 		E04E26AEB7F31D3A11A437EC /* TuistAssets+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD906130128B1A2B55BA304D /* TuistAssets+UIKitTestApp.swift */; };
 		E0DCB73A416C21A0F5ED1624 /* swift-crypto__CryptoExtras.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */; };
 		E17121A1BE40039162AE871D /* AlbumFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E8C9D791343980F9040B17 /* AlbumFlowView.swift */; };
@@ -244,6 +245,7 @@
 		BAC177FAE479E8AC2634A214 /* TouchCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchCanvasView.swift; sourceTree = "<group>"; };
 		C7BFD903B5A7DB547CD6A4C7 /* AccessibilitySnapshotParser_ObjC.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AccessibilitySnapshotParser_ObjC.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC4BA1501628F80409378E6F /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalWindowDemo.swift; sourceTree = "<group>"; };
 		CFCD3B58CA2D09B4D2C1508F /* DemoCollectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoCollectionViewController.swift; sourceTree = "<group>"; };
 		D0DE24F8E60593CB79278BED /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TuistBundle+UIKitTestApp.swift"; sourceTree = "<group>"; };
@@ -314,6 +316,7 @@
 				98461A7DEEBAF0FBE167CDC0 /* LongListView.swift */,
 				14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */,
 				2D66B5DB457CE2C21836BE34 /* MessagesView.swift */,
+				CF6D57530170B53655EA07A4 /* ModalWindowDemo.swift */,
 				79538EA411CEC1C55C14AE0E /* NotesView.swift */,
 				ADE0A205FE071CCD5616DC41 /* PhotosView.swift */,
 				E9FD1D18D60C8DEA685D4A45 /* PlaylistView.swift */,
@@ -660,6 +663,7 @@
 				8772E72EB5A4058DAD26A05B /* LongListView.swift in Sources */,
 				2034653578CB8A03158380D3 /* MenuOrderView.swift in Sources */,
 				2A639C23AC4A8DFE2E0AAFE9 /* MessagesView.swift in Sources */,
+				D85E49685498BCB9218A7EBC /* ModalWindowDemo.swift in Sources */,
 				7530B8E094B8A238664AAD79 /* NotesView.swift in Sources */,
 				03DC1ECC739B51DBDBC0F202 /* PhotosView.swift in Sources */,
 				BB9B7222E9F9FE151DC019D7 /* PlaylistView.swift in Sources */,
