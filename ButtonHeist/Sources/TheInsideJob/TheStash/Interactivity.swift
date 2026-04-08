@@ -2,6 +2,7 @@
 #if DEBUG
 import UIKit
 import AccessibilitySnapshotParser
+import TheScore
 
 // MARK: - Element Interactivity
 
@@ -17,10 +18,22 @@ extension TheStash {
 
     @MainActor enum Interactivity {
 
+    private static let interactiveHeistTraits: [HeistTrait] = [
+        .button, .link, .adjustable, .searchField, .keyboardKey,
+        .backButton, .switchButton
+    ]
+
+    private static let interactiveTraits: UIAccessibilityTraits =
+        UIAccessibilityTraits.fromNames(interactiveHeistTraits.map(\.rawValue))
+
+    private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
+        !element.traits.isDisjoint(with: interactiveTraits)
+    }
+
     /// Check if an element is interactive based on its parsed accessibility data.
     static func isInteractive(element: AccessibilityElement) -> Bool {
         element.respondsToUserInteraction
-            || element.traits.contains(.adjustable)
+            || hasInteractiveTraits(element)
             || !element.customActions.isEmpty
     }
 
@@ -31,13 +44,8 @@ extension TheStash {
         }
 
         let staticTraitsOnly = element.traits.isSubset(of: [.staticText, .image, .header])
-        let hasInteractiveTraits = element.traits.contains(.button) ||
-                                   element.traits.contains(.link) ||
-                                   element.traits.contains(.adjustable) ||
-                                   element.traits.contains(.searchField) ||
-                                   element.traits.contains(.keyboardKey)
 
-        if staticTraitsOnly && !hasInteractiveTraits && element.customActions.isEmpty {
+        if staticTraitsOnly && !hasInteractiveTraits(element) && element.customActions.isEmpty {
             insideJobLogger.warning("Element '\(element.description)' has only static traits, tap may not work")
         }
 
