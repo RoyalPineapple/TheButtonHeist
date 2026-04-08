@@ -59,7 +59,21 @@ The agent gets a raw JSON tree with pixel coordinates for every element. It has 
 ← "Tapped successfully"
 ```
 
-"Tapped successfully" — but what happened? The agent doesn't know. It has to call `ui_describe_all` again to see the new screen. That's two tool calls and two full tree reads for one tap. Button Heist did it in one call with a complete delta.
+"Tapped successfully" — but what happened? Did the setting actually change? The agent doesn't know. Compare that to what Button Heist returns for the same kind of action — tapping "Large" in the text size picker:
+
+```
+→ activate(heistId: "large_button")
+
+← appearance | activate: elements changed
+  + text_size_large_staticText "Text Size, Large"
+  - text_size_medium_staticText
+  ~ large_button: traits "button" → "button, selected"
+  ~ medium_button: traits "button, selected" → "button"
+```
+
+The delta tells the agent exactly what happened: "Large" gained the `selected` trait, "Medium" lost it, the summary label updated from "Medium" to "Large". No ambiguity, no follow-up read needed.
+
+ios-simulator-mcp has to call `ui_describe_all` again to learn what Button Heist already told it inline. That's two tool calls and two full tree reads for one tap. Multiply that by 50 actions and the context window difference is enormous.
 
 Multiply that by 50 actions and the context window difference is enormous.
 
