@@ -463,6 +463,43 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertTrue(accessible.first?.window === modalWindow)
     }
 
+    func testGetAccessibleWindowsDetectsModalBehindTransitionView() {
+        // UIKit inserts UITransitionView between window and the VC's view,
+        // so the modal container is 3+ levels deep: window → transition → vc.view → modal
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+        else {
+            XCTFail("No active window scene")
+            return
+        }
+
+        let modalWindow = UIWindow(windowScene: windowScene)
+        modalWindow.windowLevel = .alert
+        modalWindow.frame = UIScreen.main.bounds
+
+        // Simulate: window → transitionView → vcView → modalContainer
+        let transitionView = UIView()
+        let vcView = UIView()
+        let modalContainer = UIView()
+        modalContainer.accessibilityViewIsModal = true
+        vcView.addSubview(modalContainer)
+        transitionView.addSubview(vcView)
+        modalWindow.addSubview(transitionView)
+        modalWindow.isHidden = false
+
+        defer {
+            modalWindow.isHidden = true
+            modalContainer.removeFromSuperview()
+            vcView.removeFromSuperview()
+            transitionView.removeFromSuperview()
+        }
+
+        let accessible = tripwire.getAccessibleWindows()
+
+        XCTAssertEqual(accessible.count, 1, "Should detect modal 3 levels deep")
+        XCTAssertTrue(accessible.first?.window === modalWindow)
+    }
+
     func testGetAccessibleWindowsPicksFrontmostModal() {
         guard let windowScene = UIApplication.shared.connectedScenes
             .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
