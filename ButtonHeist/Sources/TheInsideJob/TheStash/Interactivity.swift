@@ -18,11 +18,12 @@ extension TheStash {
     @MainActor enum Interactivity {
 
     private static let interactiveTraits: UIAccessibilityTraits = [
-        .button, .link, .adjustable, .searchField, .keyboardKey
+        .button, .link, .adjustable, .searchField, .keyboardKey,
+        .toggleButton, .backButton, .switchButton
     ]
 
     private static func hasInteractiveTraits(_ element: AccessibilityElement) -> Bool {
-        !element.traits.intersection(interactiveTraits).isEmpty
+        !element.traits.isDisjoint(with: interactiveTraits)
     }
 
     /// Check if an element is interactive based on its parsed accessibility data.

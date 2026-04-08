@@ -71,6 +71,21 @@ final class InteractivityTests: XCTestCase {
         XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
     }
 
+    func testToggleButtonTraitIsInteractive() {
+        let element = makeElement(traits: .toggleButton)
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+    }
+
+    func testBackButtonTraitIsInteractive() {
+        let element = makeElement(traits: .backButton)
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+    }
+
+    func testSwitchButtonTraitIsInteractive() {
+        let element = makeElement(traits: .switchButton)
+        XCTAssertTrue(TheStash.Interactivity.isInteractive(element: element))
+    }
+
     func testStaticTextNotInteractive() {
         let element = makeElement(label: "Hello", traits: .staticText)
         XCTAssertFalse(TheStash.Interactivity.isInteractive(element: element))
