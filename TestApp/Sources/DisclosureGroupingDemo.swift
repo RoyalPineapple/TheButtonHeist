@@ -14,7 +14,7 @@ struct DisclosureGroupingDemo: View {
                     Toggle("Dark mode", isOn: $darkModeEnabled)
                 }
 
-                LabeledContent("Version", value: "0.2.5")
+                LabeledContent("Version", value: "0.2.6")
 
                 LabeledContent("Build", value: "42")
             }
