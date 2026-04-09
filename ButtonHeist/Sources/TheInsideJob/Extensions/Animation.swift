@@ -128,7 +128,10 @@ extension TheInsideJob {
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let afterElements = stash.currentHierarchy.sortedElements
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || stash.burglar.isTopologyChanged(before: before.elements, after: afterElements)
+            || stash.burglar.isTopologyChanged(
+                before: before.elements, after: afterElements,
+                beforeHierarchy: before.hierarchy, afterHierarchy: stash.currentHierarchy
+            )
         return TheStash.WireConversion.computeDelta(
             before: before.snapshot, after: afterSnapshot,
             afterTree: stash.currentHierarchy, isScreenChange: isScreenChange

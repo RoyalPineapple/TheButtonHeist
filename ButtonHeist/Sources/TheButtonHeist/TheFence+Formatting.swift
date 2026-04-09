@@ -948,6 +948,28 @@ public enum FenceResponse {
         }
         payload["screenDescription"] = interface.screenDescription
         if let screenId = interface.screenId { payload["screenId"] = screenId }
+        payload["navigation"] = navigationDictionary(interface.navigation)
+        return payload
+    }
+
+    private func navigationDictionary(_ navigation: NavigationContext) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        if let screenTitle = navigation.screenTitle { payload["screenTitle"] = screenTitle }
+        if let backButton = navigation.backButton {
+            var entry: [String: Any] = ["heistId": backButton.heistId]
+            if let label = backButton.label { entry["label"] = label }
+            if let value = backButton.value { entry["value"] = value }
+            payload["backButton"] = entry
+        }
+        if let tabBarItems = navigation.tabBarItems {
+            payload["tabBarItems"] = tabBarItems.map { tab in
+                var entry: [String: Any] = ["heistId": tab.heistId]
+                if let label = tab.label { entry["label"] = label }
+                if let value = tab.value { entry["value"] = value }
+                if tab.selected { entry["selected"] = true }
+                return entry
+            }
+        }
         return payload
     }
 
