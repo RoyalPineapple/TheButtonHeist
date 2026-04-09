@@ -21,7 +21,7 @@ extension AccessibilityHierarchy {
     ///
     /// This is the general-purpose tree destructor — `convertHierarchyNode` and `containers`
     /// are both built on it. Use it when the output type differs from `AccessibilityHierarchy`.
-    public func folded<Result>(
+    func folded<Result>(
         onElement: (AccessibilityElement, Int) -> Result,
         onContainer: (AccessibilityContainer, [Result]) -> Result
     ) -> Result {
@@ -48,7 +48,7 @@ extension AccessibilityHierarchy {
     ///
     /// Use this for side-effectful traversal where parent containers establish context
     /// that child elements need — e.g., propagating a scroll view reference.
-    public func forEach<Context>(
+    func forEach<Context>(
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Void
@@ -72,7 +72,7 @@ extension AccessibilityHierarchy {
     ///
     /// Combines `compactMap` with top-down context propagation — filter, transform, and
     /// inherit container context in a single pass.
-    public func compactMap<Context, Result>(
+    func compactMap<Context, Result>(
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Result?
@@ -92,7 +92,7 @@ extension AccessibilityHierarchy {
     }
 
     /// Transforms leaf elements, collecting non-nil results. No context propagation.
-    public func compactMap<Result>(
+    func compactMap<Result>(
         _ transform: (AccessibilityElement, Int) -> Result?
     ) -> [Result] {
         compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
@@ -104,7 +104,7 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
     /// Walks all roots top-down with inherited context.
-    public func forEach<Context>(
+    func forEach<Context>(
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Void
@@ -115,7 +115,7 @@ extension Array where Element == AccessibilityHierarchy {
     }
 
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
-    public func compactMap<Context, Result>(
+    func compactMap<Context, Result>(
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Result?
@@ -124,7 +124,7 @@ extension Array where Element == AccessibilityHierarchy {
     }
 
     /// Transforms leaf elements across all roots, collecting non-nil results. No context propagation.
-    public func compactMap<Result>(
+    func compactMap<Result>(
         _ transform: (AccessibilityElement, Int) -> Result?
     ) -> [Result] {
         flatMap { $0.compactMap(transform) }
@@ -146,7 +146,7 @@ extension AccessibilityHierarchy {
     /// - `onContainer`: receives the container, already-folded child results, and the
     ///   accumulator. Produces the container result and may write into the accumulator.
     @discardableResult
-    public func folded<Accumulator, Result>(
+    func folded<Accumulator, Result>(
         into accumulator: inout Accumulator,
         onElement: (AccessibilityElement, Int, inout Accumulator) -> Result,
         onContainer: (AccessibilityContainer, [Result], inout Accumulator) -> Result
@@ -196,7 +196,7 @@ extension AccessibilityHierarchy {
     }
 
     /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
-    public func prefix<Result>(
+    func prefix<Result>(
         _ maxCount: Int,
         transform: (AccessibilityElement, Int) -> Result?
     ) -> [Result] {
@@ -208,7 +208,7 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
     /// Collects up to `maxCount` transformed leaf elements across all roots, with early exit.
-    public func prefix<Result>(
+    func prefix<Result>(
         _ maxCount: Int,
         transform: (AccessibilityElement, Int) -> Result?
     ) -> [Result] {
@@ -228,12 +228,12 @@ extension AccessibilityHierarchy {
     /// The accessibility elements in this subtree, preserving traversal index.
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
-    public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+    var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         compactMap { element, traversalIndex in (element, traversalIndex) }
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).
-    public var containers: [AccessibilityContainer] {
+    var containers: [AccessibilityContainer] {
         folded(
             onElement: { _, _ in [] },
             onContainer: { container, childContainers in [container] + childContainers.flatMap { $0 } }
@@ -272,18 +272,18 @@ extension AccessibilityHierarchy {
 
 extension Array where Element == AccessibilityHierarchy {
     /// The accessibility elements across all roots, sorted by traversal index.
-    public var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
+    var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
         flatMap(\.elements).sorted { $0.traversalIndex < $1.traversalIndex }
     }
 
     /// The accessibility elements across all roots, sorted by traversal index, without the index tuple.
     /// Convenience for `.elements.map(\.element)` when you only need the elements in traversal order.
-    public var sortedElements: [AccessibilityElement] {
+    var sortedElements: [AccessibilityElement] {
         elements.map(\.element)
     }
 
     /// All container nodes across all roots, depth-first (outermost first).
-    public var containers: [AccessibilityContainer] {
+    var containers: [AccessibilityContainer] {
         flatMap(\.containers)
     }
 
