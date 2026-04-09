@@ -60,9 +60,12 @@ public actor SimpleSocketServer {
 
     // MARK: - Actor-isolated mutable state
 
+    private static let authDeadlineSeconds: UInt64 = 10
+
     private var serverPhase: ServerPhase = .stopped
     private var clients: [Int: ClientPhase] = [:]
     private var clientCounter = 0
+    private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
     private let _syncListeningPort = OSAllocatedUnfairLock<UInt16>(initialState: 0)
 
@@ -186,6 +189,8 @@ public actor SimpleSocketServer {
 
         let allClients = clients
         clients.removeAll()
+        for task in authDeadlineTasks.values { task.cancel() }
+        authDeadlineTasks.removeAll()
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
@@ -221,6 +226,8 @@ public actor SimpleSocketServer {
     private func _markAuthenticated(_ clientId: Int) {
         guard case .unauthenticated(let connection, let timestamps) = clients[clientId] else { return }
         clients[clientId] = .authenticated(connection: connection, timestamps: timestamps)
+        authDeadlineTasks[clientId]?.cancel()
+        authDeadlineTasks[clientId] = nil
     }
 
     /// Check if a client is authenticated (actor-isolated).
@@ -352,6 +359,22 @@ public actor SimpleSocketServer {
 
         connection.start(queue: queue)
         startReceiving(clientId: clientId, connection: connection)
+        scheduleAuthDeadline(for: clientId)
+    }
+
+    private func scheduleAuthDeadline(for clientId: Int) {
+        authDeadlineTasks[clientId] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(Self.authDeadlineSeconds))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            if let phase = await self.clients[clientId], !phase.isAuthenticated {
+                logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
+                await self.removeClient(clientId)
+            }
+        }
     }
 
     private func notifyClientConnected(_ clientId: Int, address: String?) {
@@ -364,6 +387,8 @@ public actor SimpleSocketServer {
 
     private func removeClient(_ clientId: Int) {
         guard let phase = clients.removeValue(forKey: clientId) else { return }
+        authDeadlineTasks[clientId]?.cancel()
+        authDeadlineTasks[clientId] = nil
         phase.connection.cancel()
         notifyClientDisconnected(clientId)
     }

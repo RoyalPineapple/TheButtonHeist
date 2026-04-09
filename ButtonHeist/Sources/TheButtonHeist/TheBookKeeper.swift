@@ -149,17 +149,28 @@ public final class TheBookKeeper {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: baseDirectory.path) else { return [] }
 
-        guard let contents = try? fileManager.contentsOfDirectory(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        let contents: [URL]
+        do {
+            contents = try fileManager.contentsOfDirectory(
+                at: baseDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            logger.warning("Failed to list session directories: \(error.localizedDescription)")
+            return []
+        }
 
         var recovered: [RecoveredSession] = []
         for directoryURL in contents {
-            guard (try? directoryURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
+            let isDirectory: Bool
+            do {
+                isDirectory = try directoryURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
+            } catch {
+                logger.warning("Failed to read resource values for \(directoryURL.lastPathComponent): \(error.localizedDescription)")
                 continue
             }
+            guard isDirectory else { continue }
             let rawLog = directoryURL.appendingPathComponent("session.jsonl")
             let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
 
@@ -191,10 +202,11 @@ public final class TheBookKeeper {
         var manifest: SessionManifest
         let jsonDecoder = JSONDecoder()
         jsonDecoder.dateDecodingStrategy = .iso8601
-        if let manifestData = try? Data(contentsOf: manifestPath),
-           let decoded = try? jsonDecoder.decode(SessionManifest.self, from: manifestData) {
-            manifest = decoded
-        } else {
+        do {
+            let manifestData = try Data(contentsOf: manifestPath)
+            manifest = try jsonDecoder.decode(SessionManifest.self, from: manifestData)
+        } catch {
+            logger.warning("Could not read manifest for \(sessionId): \(error.localizedDescription)")
             manifest = SessionManifest(sessionId: sessionId, startTime: Date())
         }
 
@@ -207,8 +219,11 @@ public final class TheBookKeeper {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let manifestData = try? encoder.encode(manifest) {
-            try? manifestData.write(to: manifestPath, options: .atomic)
+        do {
+            let manifestData = try encoder.encode(manifest)
+            try manifestData.write(to: manifestPath, options: .atomic)
+        } catch {
+            logger.warning("Failed to write manifest for \(sessionId): \(error.localizedDescription)")
         }
 
         // Compress the raw log
@@ -218,22 +233,31 @@ public final class TheBookKeeper {
         gzipProcess.arguments = [rawLog.path]
         gzipProcess.standardOutput = FileHandle.nullDevice
         gzipProcess.standardError = FileHandle.nullDevice
-        try? gzipProcess.run()
+        do {
+            try gzipProcess.run()
+        } catch {
+            logger.warning("Failed to compress session log for \(sessionId): \(error.localizedDescription)")
+        }
         gzipProcess.waitUntilExit()
 
         // Check for abandoned heist evidence
         let heistLog = directory.appendingPathComponent("heist.jsonl")
         var heistEvidenceCount: Int?
         var heistFilePath: URL?
-        if fileManager.fileExists(atPath: heistLog.path),
-           let heistData = try? Data(contentsOf: heistLog),
-           !heistData.isEmpty {
-            let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
-            heistEvidenceCount = lineCount
-            heistFilePath = heistLog
-            logger.warning(
-                "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
-            )
+        if fileManager.fileExists(atPath: heistLog.path) {
+            do {
+                let heistData = try Data(contentsOf: heistLog)
+                if !heistData.isEmpty {
+                    let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
+                    heistEvidenceCount = lineCount
+                    heistFilePath = heistLog
+                    logger.warning(
+                        "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
+                    )
+                }
+            } catch {
+                logger.warning("Failed to read heist log for \(sessionId): \(error.localizedDescription)")
+            }
         }
 
         logger.info("Recovered abandoned session: \(sessionId)")
@@ -537,6 +561,15 @@ public final class TheBookKeeper {
         return try lines.map { lineData in
             try decoder.decode(HeistEvidence.self, from: Data(lineData))
         }
+    }
+
+    /// Clear the cached interface snapshot (called on screen changes to prevent unbounded growth).
+    public func clearInterfaceCache() {
+        guard case .active(var session) = phase,
+              var recording = session.heistRecording else { return }
+        recording.interfaceCache.removeAll()
+        session.heistRecording = recording
+        phase = .active(session)
     }
 
     /// Update the cached interface snapshot for heist recording.

@@ -9,7 +9,6 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 ///
 /// Combines `SimpleSocketServer` (TCP) with Bonjour `NetService` advertisement
 /// into a single type that TheInsideJob can delegate to for all networking concerns.
-/// This is the API that TheInsideJob will consume in Batch 3.
 ///
 /// Usage:
 /// ```
@@ -19,7 +18,8 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 /// let port = try transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
 /// ```
-public final class ServerTransport: NSObject, @unchecked Sendable {
+@MainActor
+public final class ServerTransport: NSObject {
 
     /// The underlying TCP server (actor-isolated).
     public let server: SimpleSocketServer
@@ -53,12 +53,9 @@ public final class ServerTransport: NSObject, @unchecked Sendable {
         super.init()
     }
 
-    // Fire-and-forget: the Task may not complete before deallocation.
-    // Acceptable because NWListener and NWConnection clean up on their own
-    // when all references are released.
-    deinit {
-        stop()
-    }
+    // No deinit needed: ServerTransport is owned by the TheInsideJob singleton
+    // (which never deallocates). All cleanup runs through stop(). NWListener and
+    // NWConnection self-clean when references are released.
 
     // MARK: - Lifecycle
 
@@ -200,11 +197,11 @@ public final class ServerTransport: NSObject, @unchecked Sendable {
 
 extension ServerTransport: NetServiceDelegate {
 
-    public func netServiceDidPublish(_ sender: NetService) {
+    nonisolated public func netServiceDidPublish(_ sender: NetService) {
         logger.info("Bonjour service published: '\(sender.name)' on port \(sender.port)")
     }
 
-    public func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
+    nonisolated public func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
         let code = errorDict[NetService.errorCode]?.intValue ?? -1
         let domain = errorDict[NetService.errorDomain]?.intValue ?? -1
         logger.error("Bonjour publish failed for '\(sender.name)': error \(code) domain \(domain)")

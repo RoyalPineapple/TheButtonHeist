@@ -75,9 +75,13 @@ final class TheStash {
     func buildTraversalOrderIndex() -> [String: Int] {
         let reverseIndex = registry.reverseIndex
         return Dictionary(
-            currentHierarchy.compactMap { element, traversalIndex in
-                reverseIndex[element].map { ($0, traversalIndex) }
-            },
+            currentHierarchy.compactMap(
+                context: (),
+                container: { _, _ in () },
+                element: { element, traversalIndex, _ in
+                    reverseIndex[element].map { ($0, traversalIndex) }
+                }
+            ),
             uniquingKeysWith: { _, latest in latest }
         )
     }
