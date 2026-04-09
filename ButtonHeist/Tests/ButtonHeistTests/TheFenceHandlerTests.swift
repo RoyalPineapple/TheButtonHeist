@@ -1216,7 +1216,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 0)
@@ -1239,7 +1239,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 3)
@@ -1271,7 +1271,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 1)
@@ -1293,7 +1293,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertEqual(completedSteps, 0)
@@ -1322,7 +1322,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": outerURL.path
         ])
 
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = response else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         // The nested play_heist should fail (re-entrant guard), stopping playback at step 0
@@ -1343,7 +1343,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "command": "play_heist", "input": heistURL.path
         ])
 
-        guard case .heistPlayback(_, _, let totalTimingMs) = response else {
+        guard case .heistPlayback(_, _, let totalTimingMs, _) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertGreaterThanOrEqual(totalTimingMs, 0)
@@ -1370,7 +1370,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let secondResponse = try await fence.execute(request: [
             "command": "play_heist", "input": heistURL.path
         ])
-        guard case .heistPlayback(let completedSteps, let failedIndex, _) = secondResponse else {
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, _) = secondResponse else {
             return XCTFail("Expected heistPlayback response")
         }
         XCTAssertEqual(completedSteps, 1)

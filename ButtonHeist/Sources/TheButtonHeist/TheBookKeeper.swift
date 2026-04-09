@@ -557,6 +557,7 @@ public final class TheBookKeeper {
     private static let excludedHeistCommands: Set<TheFence.Command> = [
         .help, .status, .quit, .exit,
         .listDevices, .getInterface, .getScreen,
+        .getPasteboard,
         .getSessionState, .connect, .listTargets,
         .getSessionLog, .archiveSession,
         .startRecording, .stopRecording,

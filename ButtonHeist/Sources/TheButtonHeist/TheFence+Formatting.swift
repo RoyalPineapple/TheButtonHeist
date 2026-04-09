@@ -11,6 +11,23 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 }
 
 /// Summary of a single step within a batch execution.
+/// Diagnostic context captured when a heist playback step fails.
+public struct PlaybackFailure: Sendable {
+    /// The command that failed (e.g. "activate", "type_text").
+    public let command: String
+    /// The element matcher from the failed step, if any.
+    public let target: ElementMatcher?
+    /// Human-readable error message from the failed response.
+    public let error: String
+    /// The full action result from the failed step, if one was produced.
+    /// Contains errorKind, scrollSearchResult, expectation details, etc.
+    public let actionResult: ActionResult?
+    /// The expectation result from the failed step, if expectations were checked.
+    public let expectationResult: ExpectationResult?
+    /// Full interface snapshot at the time of failure — every element on screen.
+    public let interface: Interface?
+}
+
 public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?
@@ -156,7 +173,7 @@ public enum FenceResponse {
     case archiveResult(path: String, manifest: SessionManifest)
     case heistStarted
     case heistStopped(path: String, stepCount: Int)
-    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int)
+    case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil)
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     public var actionResult: ActionResult? {
@@ -228,9 +245,16 @@ public enum FenceResponse {
             return "Heist recording started"
         case .heistStopped(let path, let stepCount):
             return "Heist saved: \(path) (\(stepCount) steps)"
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
             var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at step \(index))" }
+            if let failure {
+                text += "\n  command: \(failure.command)"
+                if let target = failure.target {
+                    text += "\n  target: \(target)"
+                }
+                text += "\n  error: \(failure.error)"
+            }
             return text
         default:
             return ""
@@ -373,13 +397,37 @@ public enum FenceResponse {
             return ["status": "ok", "recording": true]
         case .heistStopped(let path, let stepCount):
             return ["status": "ok", "path": path, "stepCount": stepCount]
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
             var dict: [String: Any] = [
                 "status": failedIndex == nil ? "ok" : "error",
                 "completedSteps": completedSteps,
                 "totalTimingMs": totalTimingMs,
             ]
             if let failedIndex { dict["failedIndex"] = failedIndex }
+            if let failure {
+                var failureDict: [String: Any] = [
+                    "command": failure.command,
+                    "error": failure.error,
+                ]
+                if let target = failure.target {
+                    var targetDict: [String: Any] = [:]
+                    if let label = target.label { targetDict["label"] = label }
+                    if let identifier = target.identifier { targetDict["identifier"] = identifier }
+                    if let value = target.value { targetDict["value"] = value }
+                    if let traits = target.traits { targetDict["traits"] = traits.map(\.rawValue) }
+                    failureDict["target"] = targetDict
+                }
+                if let actionResult = failure.actionResult {
+                    failureDict["actionResult"] = actionJsonDict(actionResult)
+                }
+                if let expectation = failure.expectationResult, !expectation.met {
+                    failureDict["expectation"] = Self.expectationResultDict(expectation)
+                }
+                if let interface = failure.interface {
+                    failureDict["interface"] = interfaceDictionary(interface, detail: .summary)
+                }
+                dict["failure"] = failureDict
+            }
             return dict
         case .ok, .error, .help, .status, .devices, .interface, .action,
              .screenshot, .screenshotData, .recording, .recordingData, .batch,
@@ -752,9 +800,10 @@ public enum FenceResponse {
             return "heist recording started"
         case .heistStopped(let path, let stepCount):
             return "saved: \(path) (\(stepCount) steps)"
-        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs):
+        case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
             var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at \(index))" }
+            if let failure { text += " [\(failure.command): \(failure.error)]" }
             return text
         default:
             return ""

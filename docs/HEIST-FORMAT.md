@@ -84,6 +84,23 @@ Each step is a flat JSON object compatible with `TheFence.execute(request:)` —
 
 **Note**: `value` is intentionally absent from targeting fields. Value is mutable state (slider position, toggle state, text content) — using it in matchers breaks playback when the element's state differs. State validation belongs in expectations, not matchers.
 
+## Recording Guidance
+
+When recording a heist, **always target elements by matcher fields** (label, value, traits) — never by heistId. HeistIds are ephemeral screen-local identifiers that are meaningless on replay. Matcher fields describe the element's real accessibility identity, which is portable across sessions and devices.
+
+**Workflow**: Call `get_interface` to inspect an element's full accessibility properties by heistId, then use those properties (label, traits) to target it in the action call. `get_interface` calls are filtered out of the recording — they exist only to help you build good matchers.
+
+**Example**: You see `button_sign_in` in the interface. Instead of `activate(heistId: "button_sign_in")`, call `get_interface(elements: ["button_sign_in"])` to confirm it has label "Sign In" and traits ["button"], then call `activate(label: "Sign In", traits: ["button"])`.
+
+### Async operations
+
+`wait_for` and `wait_for_change` are recorded as playback steps. They act as timing gates — without them, playback fires the next action before async UI transitions complete. Waiting for a visible element to disappear (`absent: true`) is generally more reliable than waiting for an unknown element to appear — you already know what's on screen.
+
+Examples:
+- `wait_for(label: "Loading", absent: true)` — waits for a loading indicator to disappear
+- `wait_for(label: "Confirmation", traits: ["staticText"])` — waits for an element to appear
+- `wait_for_change(expect: "screen_changed")` — waits for a screen transition to finish
+
 ## Element Targeting
 
 Matchers describe elements by **identity**, not state:
@@ -208,7 +225,22 @@ buttonheist play-heist --input recording.heist
 - `expect` is validated by the existing `ActionExpectation.validate(against:)` machinery
 - Playback stops on the first failed action (element not found, timeout, etc.)
 - The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
-- No `get_interface` calls are injected — the script is replayed exactly as recorded
+- `get_interface` calls are filtered during recording and not injected during playback — the script contains only actions
+
+### Failure diagnostics
+
+On failure, the response includes a `failure` object with everything needed to diagnose the problem without re-running:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `command` | `String` | The command that failed (e.g. `activate`, `type_text`) |
+| `target` | `ElementMatcher?` | The element matcher from the failed step |
+| `error` | `String` | Human-readable error message |
+| `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, `scrollSearchResult`, delta, etc. |
+| `expectation` | `ExpectationResult?` | Expectation check result (when `expect` was attached to the step) |
+| `interface` | `Interface?` | Complete interface snapshot at time of failure — every element on screen |
+
+The interface snapshot lets you see exactly what was on screen when the step failed, so you can compare the expected target against the actual elements available.
 
 ## Playback Performance
 
