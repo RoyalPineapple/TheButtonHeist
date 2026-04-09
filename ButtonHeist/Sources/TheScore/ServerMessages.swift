@@ -547,34 +547,71 @@ extension ActionExpectation {
             )
 
         case .elementAppeared(let matcher):
-            guard let added = result.interfaceDelta?.added, !added.isEmpty else {
-                return ExpectationResult(met: false, expectation: self, actual: "no elements added")
+            let delta = result.interfaceDelta
+
+            // Normal path: check the added list from element-level diffs.
+            if let added = delta?.added, !added.isEmpty {
+                if added.contains(where: { $0.matches(matcher) }) {
+                    return ExpectationResult(met: true, expectation: self, actual: nil)
+                }
+                let labels = added.compactMap(\.label).prefix(5).joined(separator: ", ")
+                return ExpectationResult(
+                    met: false, expectation: self,
+                    actual: "added: [\(labels)]"
+                )
             }
-            if added.contains(where: { $0.matches(matcher) }) {
+
+            // Screen-change path: the entire interface is new, so every element
+            // on the new screen effectively "appeared". Check newInterface.
+            if delta?.kind == .screenChanged,
+               let elements = delta?.newInterface?.elements,
+               elements.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: self, actual: nil)
             }
-            let labels = added.compactMap(\.label).prefix(5).joined(separator: ", ")
+
             return ExpectationResult(
                 met: false, expectation: self,
-                actual: "added: [\(labels)]"
+                actual: delta?.kind == .screenChanged
+                    ? "screen changed but element not found in new interface"
+                    : "no elements added"
             )
 
         case .elementDisappeared(let matcher):
-            guard let removed = result.interfaceDelta?.removed, !removed.isEmpty else {
-                return ExpectationResult(met: false, expectation: self, actual: "no elements removed")
+            let delta = result.interfaceDelta
+
+            // Normal path: check the removed list from element-level diffs.
+            if let removed = delta?.removed, !removed.isEmpty {
+                let matched = removed.contains { heistId in
+                    guard let element = preActionElements[heistId] else { return false }
+                    return element.matches(matcher)
+                }
+                if matched {
+                    return ExpectationResult(met: true, expectation: self, actual: nil)
+                }
+                let removedIds = removed.prefix(5).joined(separator: ", ")
+                return ExpectationResult(
+                    met: false, expectation: self,
+                    actual: "removed: [\(removedIds)]"
+                )
             }
-            let matched = removed.contains { heistId in
-                guard let element = preActionElements[heistId] else { return false }
-                return element.matches(matcher)
+
+            // Screen-change path: the entire old screen is gone. Check if a
+            // matching element existed before and is absent from the new interface.
+            if delta?.kind == .screenChanged {
+                let matchedBefore = preActionElements.values.contains { $0.matches(matcher) }
+                let stillPresent = delta?.newInterface?.elements.contains { $0.matches(matcher) } ?? false
+                if matchedBefore, !stillPresent {
+                    return ExpectationResult(met: true, expectation: self, actual: nil)
+                }
+                return ExpectationResult(
+                    met: false, expectation: self,
+                    actual: matchedBefore
+                        ? "screen changed but element still present in new interface"
+                        : "screen changed but element was not in pre-action state"
+                )
             }
-            if matched {
-                return ExpectationResult(met: true, expectation: self, actual: nil)
-            }
-            let removedIds = removed.prefix(5).joined(separator: ", ")
-            return ExpectationResult(
-                met: false, expectation: self,
-                actual: "removed: [\(removedIds)]"
-            )
+
+            return ExpectationResult(met: false, expectation: self, actual: "no elements removed")
 
         case .compound(let expectations):
             var failures: [String] = []
