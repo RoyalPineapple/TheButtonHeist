@@ -243,8 +243,5 @@ extension ServerMessage {
 // MARK: - Helpers
 
 private func missingServerPayload(_ type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
-    DecodingError.keyNotFound(
-        ServerMessageCodingKeys.payload,
-        .init(codingPath: codingPath, debugDescription: "Missing payload for server message type \(type.rawValue)")
-    )
+    .missingPayload(key: ServerMessageCodingKeys.payload, type: type, codingPath: codingPath)
 }

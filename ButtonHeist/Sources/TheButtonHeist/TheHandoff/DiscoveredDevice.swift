@@ -214,12 +214,6 @@ extension Array where Element == DiscoveredDevice {
     }
 }
 
-extension DiscoveredDevice {
-    func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
-        await probeReachability(for: self, timeout: timeout)
-    }
-}
-
 @ButtonHeistActor
 var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { device in
     let connection = DeviceConnection(device: device, token: nil, driverId: nil)
@@ -227,44 +221,45 @@ var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { d
     return connection
 }
 
-@ButtonHeistActor
-private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterval) async -> Bool {
-    let connection = makeReachabilityConnection(device)
-    var reachable = false
-    var finished = false
+extension DiscoveredDevice {
+    @ButtonHeistActor
+    func isReachable(timeout: TimeInterval = 1.5) async -> Bool {
+        let connection = makeReachabilityConnection(self)
+        var reachable = false
+        var finished = false
 
-    connection.onEvent = { event in
-        switch event {
-        case .transportReady:
-            // Once TCP/TLS is up, send a lightweight status probe.
-            connection.send(.status)
-        case .connected:
-            break
-        case .message(let message, _, _):
-            if case .status = message {
-                reachabilityLogger.debug("Status reachable: \(device.name, privacy: .public)")
-                reachable = true
-                finished = true
-                connection.disconnect()
-            }
-        case .disconnected:
-            if !finished {
-                finished = true
+        connection.onEvent = { [name] event in
+            switch event {
+            case .transportReady:
+                connection.send(.status)
+            case .connected:
+                break
+            case .message(let message, _, _):
+                if case .status = message {
+                    reachabilityLogger.debug("Status reachable: \(name, privacy: .public)")
+                    reachable = true
+                    finished = true
+                    connection.disconnect()
+                }
+            case .disconnected:
+                if !finished {
+                    finished = true
+                }
             }
         }
+
+        connection.connect()
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while !finished && Date() < deadline {
+            guard await Task.cancellableSleep(nanoseconds: 100_000_000) else { break }
+        }
+
+        if !finished {
+            reachabilityLogger.debug("Status probe timeout: \(name, privacy: .public)")
+            connection.disconnect()
+        }
+
+        return reachable
     }
-
-    connection.connect()
-
-    let deadline = Date().addingTimeInterval(timeout)
-    while !finished && Date() < deadline {
-        guard await cancellableSleep(nanoseconds: 100_000_000) else { break }
-    }
-
-    if !finished {
-        reachabilityLogger.debug("Status probe timeout: \(device.name, privacy: .public)")
-        connection.disconnect()
-    }
-
-    return reachable
 }
