@@ -25,21 +25,13 @@ private struct CheckoutTabView: View {
         List {
             Section {
                 Text("Espresso")
-                    .accessibilityLabel("Espresso")
                 Text("Latte")
-                    .accessibilityLabel("Latte")
                 Text("Cappuccino")
-                    .accessibilityLabel("Cappuccino")
                 Text("Mocha")
-                    .accessibilityLabel("Mocha")
                 Text("Americano")
-                    .accessibilityLabel("Americano")
                 Text("Cold Brew")
-                    .accessibilityLabel("Cold Brew")
                 Text("Matcha")
-                    .accessibilityLabel("Matcha")
                 Text("Chai")
-                    .accessibilityLabel("Chai")
             } header: {
                 Text("Checkout")
             }
@@ -53,7 +45,6 @@ private struct CheckoutTabView: View {
             }
 
             Button("Pay Now") {}
-                .accessibilityLabel("Pay Now")
         }
     }
 }

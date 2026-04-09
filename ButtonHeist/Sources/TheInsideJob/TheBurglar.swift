@@ -204,25 +204,24 @@ final class TheBurglar {
         var hasTabBar = false
         var contentLabels: [String] = []
 
-        func walk(_ nodes: [AccessibilityHierarchy], insideTabBar: Bool) {
-            for node in nodes {
-                switch node {
-                case let .element(element, _):
+        for node in hierarchy {
+            node.forEach(
+                context: false,
+                container: { insideTabBar, container in
+                    if case .tabBar = container.type {
+                        hasTabBar = true
+                        return true
+                    }
+                    return insideTabBar
+                },
+                element: { element, _, insideTabBar in
                     if !insideTabBar, let label = element.label {
                         contentLabels.append(label)
                     }
-                case let .container(container, children):
-                    if case .tabBar = container.type {
-                        hasTabBar = true
-                        walk(children, insideTabBar: true)
-                    } else {
-                        walk(children, insideTabBar: insideTabBar)
-                    }
                 }
-            }
+            )
         }
 
-        walk(hierarchy, insideTabBar: false)
         return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
     }
 

@@ -76,7 +76,7 @@ final class TheStashTopologyTests: XCTestCase {
 
     func testTabSwitchContentReplacedIsTopologyChange() {
         // Tab bar container with 3 tabs; content area fully replaced.
-        let tabElements = ["Checkout", "Transactions", "Account"].enumerated().map { index, label in
+        let tabElements = ["Checkout", "Transactions", "Account"].map { label in
             makeElement(label: label, traits: .button)
         }
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
@@ -92,8 +92,8 @@ final class TheStashTopologyTests: XCTestCase {
             .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
         ] + transactionsContent.enumerated().map { .element($1, traversalIndex: 100 + $0) }
 
-        let beforeElements = beforeHierarchy.flattenToElements()
-        let afterElements = afterHierarchy.flattenToElements()
+        let beforeElements = beforeHierarchy.sortedElements
+        let afterElements = afterHierarchy.sortedElements
 
         XCTAssertTrue(bagman.burglar.isTopologyChanged(
             before: beforeElements, after: afterElements,
@@ -110,7 +110,7 @@ final class TheStashTopologyTests: XCTestCase {
             .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
         ] + content.enumerated().map { .element($1, traversalIndex: 100 + $0) }
 
-        let elements = hierarchy.flattenToElements()
+        let elements = hierarchy.sortedElements
 
         XCTAssertFalse(bagman.burglar.isTopologyChanged(
             before: elements, after: elements,
@@ -155,7 +155,7 @@ final class TheStashTopologyTests: XCTestCase {
         }
 
         XCTAssertFalse(bagman.burglar.isTopologyChanged(
-            before: beforeHierarchy.flattenToElements(), after: afterHierarchy.flattenToElements(),
+            before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
             beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
         ))
     }
