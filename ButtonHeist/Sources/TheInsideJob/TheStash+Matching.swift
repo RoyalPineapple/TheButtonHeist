@@ -77,45 +77,14 @@ extension Array where Element == AccessibilityHierarchy {
         _ matcher: ElementMatcher,
         limit: Int
     ) -> [AccessibilityHierarchy.MatchResult] {
-        guard limit > 0 else { return [] }
-        var results: [AccessibilityHierarchy.MatchResult] = []
-        for root in self {
-            let limitReached = root.collectMatches(matcher, limit: limit, into: &results)
-            if limitReached { break }
+        prefix(limit) { element, _ in
+            element.matches(matcher) ? AccessibilityHierarchy.MatchResult(element: element) : nil
         }
-        return results
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
     func hasMatch(_ matcher: ElementMatcher) -> Bool {
         !matches(matcher, limit: 1).isEmpty
-    }
-}
-
-// MARK: - Early-Exit Collection
-
-extension AccessibilityHierarchy {
-    /// Collects matching leaf elements into `results`, stopping when `limit` is reached.
-    /// Returns true when the limit has been hit (early exit signal for callers).
-    func collectMatches(
-        _ matcher: ElementMatcher,
-        limit: Int,
-        into results: inout [MatchResult]
-    ) -> Bool {
-        switch self {
-        case .element(let element, _):
-            if element.matches(matcher) {
-                results.append(MatchResult(element: element))
-                if results.count >= limit { return true }
-            }
-            return false
-        case .container(_, let children):
-            for child in children {
-                let limitReached = child.collectMatches(matcher, limit: limit, into: &results)
-                if limitReached { return true }
-            }
-            return false
-        }
     }
 }
 

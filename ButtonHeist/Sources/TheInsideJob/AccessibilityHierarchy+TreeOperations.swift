@@ -132,6 +132,96 @@ extension Array where Element == AccessibilityHierarchy {
 
 }
 
+// MARK: - Bottom-Up Fold with Shared Accumulator
+
+extension AccessibilityHierarchy {
+    /// Bottom-up fold that threads a shared mutable accumulator through the recursion.
+    ///
+    /// Like `folded(onElement:onContainer:)` but with an `inout Accumulator` parameter
+    /// so container nodes can record side-channel data (fingerprints, counts, etc.)
+    /// without allocating intermediate collections at every leaf.
+    ///
+    /// - `accumulator`: shared mutable state threaded through all nodes.
+    /// - `onElement`: produces the leaf result, may write into the accumulator.
+    /// - `onContainer`: receives the container, already-folded child results, and the
+    ///   accumulator. Produces the container result and may write into the accumulator.
+    @discardableResult
+    public func folded<Accumulator, Result>(
+        into accumulator: inout Accumulator,
+        onElement: (AccessibilityElement, Int, inout Accumulator) -> Result,
+        onContainer: (AccessibilityContainer, [Result], inout Accumulator) -> Result
+    ) -> Result {
+        switch self {
+        case let .element(element, traversalIndex):
+            return onElement(element, traversalIndex, &accumulator)
+        case let .container(container, children):
+            let foldedChildren = children.map {
+                $0.folded(into: &accumulator, onElement: onElement, onContainer: onContainer)
+            }
+            return onContainer(container, foldedChildren, &accumulator)
+        }
+    }
+}
+
+// MARK: - Early-Exit Traversal
+
+extension AccessibilityHierarchy {
+    /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
+    ///
+    /// Like `compactMap(_:)` but with early termination — once `maxCount` results have been
+    /// collected, no further nodes are visited. Use this for first-match, unique-match, or
+    /// ordinal resolution where walking the full tree is wasteful.
+    ///
+    /// Returns `true` when the limit was reached (early exit signal for internal recursion).
+    @discardableResult
+    func prefix<Result>(
+        _ maxCount: Int,
+        into results: inout [Result],
+        transform: (AccessibilityElement, Int) -> Result?
+    ) -> Bool {
+        switch self {
+        case let .element(element, traversalIndex):
+            if let result = transform(element, traversalIndex) {
+                results.append(result)
+                if results.count >= maxCount { return true }
+            }
+            return false
+        case .container(_, let children):
+            for child in children {
+                let limitReached = child.prefix(maxCount, into: &results, transform: transform)
+                if limitReached { return true }
+            }
+            return false
+        }
+    }
+
+    /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
+    public func prefix<Result>(
+        _ maxCount: Int,
+        transform: (AccessibilityElement, Int) -> Result?
+    ) -> [Result] {
+        var results: [Result] = []
+        prefix(maxCount, into: &results, transform: transform)
+        return results
+    }
+}
+
+extension Array where Element == AccessibilityHierarchy {
+    /// Collects up to `maxCount` transformed leaf elements across all roots, with early exit.
+    public func prefix<Result>(
+        _ maxCount: Int,
+        transform: (AccessibilityElement, Int) -> Result?
+    ) -> [Result] {
+        guard maxCount > 0 else { return [] }
+        var results: [Result] = []
+        for root in self {
+            let limitReached = root.prefix(maxCount, into: &results, transform: transform)
+            if limitReached { break }
+        }
+        return results
+    }
+}
+
 // MARK: - Leaf Extraction
 
 extension AccessibilityHierarchy {
@@ -155,23 +245,26 @@ extension AccessibilityHierarchy {
     /// Records each container's fingerprint into the shared dictionary.
     @discardableResult
     func computeFingerprint(into result: inout [AccessibilityContainer: Int]) -> Int {
-        switch self {
-        case .element(let element, _):
-            var hasher = Hasher()
-            hasher.combine(0)
-            hasher.combine(element.contentFingerprint)
-            return hasher.finalize()
-        case .container(let container, let children):
-            var hasher = Hasher()
-            hasher.combine(1)
-            hasher.combine(container)
-            for child in children {
-                hasher.combine(child.computeFingerprint(into: &result))
+        folded(
+            into: &result,
+            onElement: { element, _, _ in
+                var hasher = Hasher()
+                hasher.combine(0)
+                hasher.combine(element.contentFingerprint)
+                return hasher.finalize()
+            },
+            onContainer: { container, childFingerprints, accumulator in
+                var hasher = Hasher()
+                hasher.combine(1)
+                hasher.combine(container)
+                for childFingerprint in childFingerprints {
+                    hasher.combine(childFingerprint)
+                }
+                let fingerprint = hasher.finalize()
+                accumulator[container] = fingerprint
+                return fingerprint
             }
-            let fingerprint = hasher.finalize()
-            result[container] = fingerprint
-            return fingerprint
-        }
+        )
     }
 }
 
