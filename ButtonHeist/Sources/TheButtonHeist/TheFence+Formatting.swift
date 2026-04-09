@@ -11,44 +11,6 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 }
 
 /// Summary of a single step within a batch execution.
-/// Diagnostic context captured when a heist playback step fails.
-/// Each case carries exactly the data produced by that failure mode.
-public enum PlaybackFailure: Sendable {
-    /// TheFence returned a .error response (unknown command, invalid request, etc.)
-    case fenceError(step: FailedStep, message: String, interface: Interface?)
-    /// The action executed but returned a non-success ActionResult
-    case actionFailed(step: FailedStep, result: ActionResult, expectation: ExpectationResult?, interface: Interface?)
-    /// The execute call threw an exception
-    case thrown(step: FailedStep, error: String, interface: Interface?)
-
-    /// The step that failed — command name and element target.
-    public struct FailedStep: Sendable {
-        public let command: String
-        public let target: ElementMatcher?
-
-        public init(command: String, target: ElementMatcher?) {
-            self.command = command
-            self.target = target
-        }
-    }
-
-    public var step: FailedStep {
-        switch self {
-        case .fenceError(let step, _, _): return step
-        case .actionFailed(let step, _, _, _): return step
-        case .thrown(let step, _, _): return step
-        }
-    }
-
-    public var errorMessage: String {
-        switch self {
-        case .fenceError(_, let message, _): return message
-        case .actionFailed(_, let result, _, _): return result.message ?? "action failed"
-        case .thrown(_, let error, _): return error
-        }
-    }
-}
-
 public struct BatchStepSummary: Sendable {
     public let command: String
     public let deltaKind: String?

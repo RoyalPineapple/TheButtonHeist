@@ -722,6 +722,8 @@ extension TheFence {
                         continue
                     }
                     failedIndex = index
+                    // Report the original action failure, not the scroll failure —
+                    // the root cause is the element not being found, not the scroll attempt.
                     failure = playbackFailure(step: step, response: response)
                     break
                 }
@@ -741,9 +743,9 @@ extension TheFence {
         }
 
         // Capture the live interface at time of failure for diagnostics
-        if failure != nil {
+        if let currentFailure = failure {
             let interface = await captureInterfaceSnapshot()
-            failure = failure.map { withInterface($0, interface) }
+            failure = currentFailure.withInterface(interface)
         }
 
         let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
@@ -781,15 +783,4 @@ extension TheFence {
         return nil
     }
 
-    /// Return a copy of the failure with the interface snapshot attached.
-    private func withInterface(_ failure: PlaybackFailure, _ interface: Interface?) -> PlaybackFailure {
-        switch failure {
-        case .fenceError(let step, let message, _):
-            return .fenceError(step: step, message: message, interface: interface)
-        case .actionFailed(let step, let result, let expectation, _):
-            return .actionFailed(step: step, result: result, expectation: expectation, interface: interface)
-        case .thrown(let step, let error, _):
-            return .thrown(step: step, error: error, interface: interface)
-        }
-    }
 }
