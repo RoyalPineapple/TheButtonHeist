@@ -40,14 +40,6 @@ extension AccessibilityHierarchy {
 // MARK: - Top-Down Context Propagation
 
 extension AccessibilityHierarchy {
-    /// Walks the tree top-down, threading a context value from parent to child.
-    ///
-    /// - `context`: the initial value at the root.
-    /// - `container`: transforms the context at each container boundary.
-    /// - `element`: visits each leaf element with the inherited context.
-    ///
-    /// Use this for side-effectful traversal where parent containers establish context
-    /// that child elements need — e.g., propagating a scroll view reference.
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
     /// - `context`: the initial value at the root.
@@ -75,15 +67,6 @@ extension AccessibilityHierarchy {
         }
     }
 
-    /// Transforms leaf elements, collecting non-nil results. No context propagation.
-    func compactMap<Result>(
-        _ transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
-            transform(element, traversalIndex)
-        })
-    }
-
 }
 
 extension Array where Element == AccessibilityHierarchy {
@@ -94,13 +77,6 @@ extension Array where Element == AccessibilityHierarchy {
         element: (AccessibilityElement, Int, Context) -> Result?
     ) -> [Result] {
         flatMap { $0.compactMap(context: context, container: container, element: element) }
-    }
-
-    /// Transforms leaf elements across all roots, collecting non-nil results. No context propagation.
-    func compactMap<Result>(
-        _ transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        flatMap { $0.compactMap(transform) }
     }
 
 }
@@ -141,7 +117,7 @@ extension AccessibilityHierarchy {
 extension AccessibilityHierarchy {
     /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
     ///
-    /// Like `compactMap(_:)` but with early termination — once `maxCount` results have been
+    /// Like `compactMap(context:container:element:)` but with early termination — once `maxCount` results have been
     /// collected, no further nodes are visited. Use this for first-match, unique-match, or
     /// ordinal resolution where walking the full tree is wasteful.
     ///
@@ -202,7 +178,9 @@ extension AccessibilityHierarchy {
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
     var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        compactMap { element, traversalIndex in (element, traversalIndex) }
+        compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
+            (element, traversalIndex)
+        })
     }
 
     /// The container nodes in this subtree, depth-first (outermost first).

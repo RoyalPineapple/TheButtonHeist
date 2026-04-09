@@ -151,9 +151,13 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "OK", traits: .button),
         ])
 
-        let buttons: [String] = tree.compactMap { element, _ in
-            element.traits.contains(.button) ? element.label : nil
-        }
+        let buttons: [String] = tree.compactMap(
+            context: (),
+            container: { _, _ in () },
+            element: { element, _, _ in
+                element.traits.contains(.button) ? element.label : nil
+            }
+        )
         XCTAssertEqual(buttons, ["OK"])
     }
 
