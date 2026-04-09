@@ -172,7 +172,10 @@ struct IntegrateCommand: ParsableCommand {
 
     private func latestDerivedData(in derivedDataRoot: String) -> String? {
         let fileManager = FileManager.default
-        guard let contents = try? fileManager.contentsOfDirectory(atPath: derivedDataRoot) else {
+        let contents: [String]
+        do {
+            contents = try fileManager.contentsOfDirectory(atPath: derivedDataRoot)
+        } catch {
             return nil
         }
 
@@ -187,7 +190,7 @@ struct IntegrateCommand: ParsableCommand {
                       isDir.boolValue else {
                     return nil
                 }
-                guard let attrs = try? fileManager.attributesOfItem(atPath: productsDir),
+                guard let attrs = (try? fileManager.attributesOfItem(atPath: productsDir)), // best-effort scan
                       let modified = attrs[.modificationDate] as? Date else {
                     return nil
                 }

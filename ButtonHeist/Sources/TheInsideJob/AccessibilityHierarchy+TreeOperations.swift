@@ -48,22 +48,6 @@ extension AccessibilityHierarchy {
     ///
     /// Use this for side-effectful traversal where parent containers establish context
     /// that child elements need — e.g., propagating a scroll view reference.
-    func forEach<Context>(
-        context: Context,
-        container: (Context, AccessibilityContainer) -> Context,
-        element: (AccessibilityElement, Int, Context) -> Void
-    ) {
-        switch self {
-        case let .element(accessibilityElement, traversalIndex):
-            element(accessibilityElement, traversalIndex, context)
-        case let .container(accessibilityContainer, children):
-            let childContext = container(context, accessibilityContainer)
-            for child in children {
-                child.forEach(context: childContext, container: container, element: element)
-            }
-        }
-    }
-
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
     /// - `context`: the initial value at the root.
@@ -103,17 +87,6 @@ extension AccessibilityHierarchy {
 }
 
 extension Array where Element == AccessibilityHierarchy {
-    /// Walks all roots top-down with inherited context.
-    func forEach<Context>(
-        context: Context,
-        container: (Context, AccessibilityContainer) -> Context,
-        element: (AccessibilityElement, Int, Context) -> Void
-    ) {
-        for root in self {
-            root.forEach(context: context, container: container, element: element)
-        }
-    }
-
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
     func compactMap<Context, Result>(
         context: Context,
@@ -146,7 +119,7 @@ extension AccessibilityHierarchy {
     /// - `onContainer`: receives the container, already-folded child results, and the
     ///   accumulator. Produces the container result and may write into the accumulator.
     @discardableResult
-    func folded<Accumulator, Result>(
+    private func folded<Accumulator, Result>(
         into accumulator: inout Accumulator,
         onElement: (AccessibilityElement, Int, inout Accumulator) -> Result,
         onContainer: (AccessibilityContainer, [Result], inout Accumulator) -> Result
@@ -174,7 +147,7 @@ extension AccessibilityHierarchy {
     ///
     /// Returns `true` when the limit was reached (early exit signal for internal recursion).
     @discardableResult
-    func prefix<Result>(
+    fileprivate func prefix<Result>(
         _ maxCount: Int,
         into results: inout [Result],
         transform: (AccessibilityElement, Int) -> Result?
@@ -196,7 +169,7 @@ extension AccessibilityHierarchy {
     }
 
     /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
-    func prefix<Result>(
+    private func prefix<Result>(
         _ maxCount: Int,
         transform: (AccessibilityElement, Int) -> Result?
     ) -> [Result] {
@@ -244,7 +217,7 @@ extension AccessibilityHierarchy {
     /// Combines element content fingerprints and container identity into a Merkle hash.
     /// Records each container's fingerprint into the shared dictionary.
     @discardableResult
-    func computeFingerprint(into result: inout [AccessibilityContainer: Int]) -> Int {
+    fileprivate func computeFingerprint(into result: inout [AccessibilityContainer: Int]) -> Int {
         folded(
             into: &result,
             onElement: { element, _, _ in

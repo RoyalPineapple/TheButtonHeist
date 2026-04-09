@@ -120,7 +120,7 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard touchDown(at: point) else { return false }
-        try? await Task.sleep(for: Self.gestureYieldDelay)
+        do { try await Task.sleep(for: Self.gestureYieldDelay) } catch { return false }
         return touchUp()
     }
 
@@ -138,7 +138,7 @@ final class TheSafecracker {
         let stepDelay: TimeInterval = 0.01
         var elapsed: TimeInterval = 0
         while elapsed < duration && !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
             elapsed += stepDelay
             sendStationary()
         }
@@ -175,7 +175,7 @@ final class TheSafecracker {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
         }
 
         fingerprints.endTrackingFingerprints()
@@ -209,7 +209,7 @@ final class TheSafecracker {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
         }
 
         fingerprints.endTrackingFingerprints()
@@ -275,7 +275,7 @@ final class TheSafecracker {
             moveTo(point)
             fingerprints.updateTrackingFingerprints(to: [point])
             onGestureMove?([point])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
         }
 
         fingerprints.endTrackingFingerprints()
@@ -299,7 +299,7 @@ final class TheSafecracker {
         guard let keyboard = KeyboardBridge.shared() else { return false }
         for char in text {
             keyboard.type(char)
-            try? await Task.sleep(nanoseconds: interKeyDelay)
+            do { try await Task.sleep(nanoseconds: interKeyDelay) } catch { break }
         }
         return true
     }
@@ -311,7 +311,7 @@ final class TheSafecracker {
         guard let keyboard = KeyboardBridge.shared() else { return false }
         for _ in 0..<count {
             keyboard.deleteBackward()
-            try? await Task.sleep(nanoseconds: interKeyDelay)
+            do { try await Task.sleep(nanoseconds: interKeyDelay) } catch { break }
         }
         return true
     }
@@ -321,7 +321,7 @@ final class TheSafecracker {
     func clearText() async -> Bool {
         // Select all via responder chain
         UIApplication.shared.sendAction(#selector(UIResponderStandardEditActions.selectAll), to: nil, from: nil, for: nil)
-        try? await Task.sleep(for: Self.selectionSettleDelay)
+        do { try await Task.sleep(for: Self.selectionSettleDelay) } catch { return false }
 
         // Delete via keyboard bridge (preferred) or responder chain
         if let keyboard = KeyboardBridge.shared() {

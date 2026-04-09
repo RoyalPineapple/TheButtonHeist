@@ -271,11 +271,16 @@ public final class TheFence {
 
         // Update interface cache for heist recording from any response that carries elements:
         // get_interface returns them directly; actions with screen-change deltas carry newInterface.
-        // The cache merges (not replaces) so the activated element survives screen transitions.
+        // On screen changes, clear the cache first so it doesn't grow without bound across screens.
+        // The activated element from the old screen is already captured in preActionCache above.
         if case .interface(let iface, _, _, _) = response {
             updateInterfaceCache(iface.elements)
         } else if let actionResult = response.actionResult,
                   let newInterface = actionResult.interfaceDelta?.newInterface {
+            if actionResult.interfaceDelta?.kind == .screenChanged {
+                lastInterfaceCache.removeAll()
+                bookKeeper.clearInterfaceCache()
+            }
             updateInterfaceCache(newInterface.elements)
         }
 
