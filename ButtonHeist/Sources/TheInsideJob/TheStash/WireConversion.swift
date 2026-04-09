@@ -50,9 +50,12 @@ extension TheStash {
             activationPointX: element.activationPoint.x.sanitizedForJSON,
             activationPointY: element.activationPoint.y.sanitizedForJSON,
             respondsToUserInteraction: element.respondsToUserInteraction,
-            customContent: element.customContent.isEmpty ? nil : element.customContent.map {
-                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
-            },
+            customContent: {
+                let valid = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
+                return valid.isEmpty ? nil : valid.map {
+                    HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+                }
+            }(),
             actions: buildActions(for: element)
         )
     }
@@ -255,7 +258,14 @@ extension TheStash {
         }
         if old.customContent != new.customContent {
             let formatContent: ([HeistCustomContent]?) -> String? = { content in
-                content?.map { "\($0.label): \($0.value)" }.joined(separator: "; ")
+                content?.map { item in
+                    switch (item.label.isEmpty, item.value.isEmpty) {
+                    case (false, false): return "\(item.label): \(item.value)"
+                    case (false, true): return item.label
+                    case (true, false): return item.value
+                    case (true, true): return item.label
+                    }
+                }.joined(separator: "; ")
             }
             changes.append(PropertyChange(
                 property: .customContent,

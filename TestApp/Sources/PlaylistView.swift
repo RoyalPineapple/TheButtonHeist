@@ -223,6 +223,7 @@ private struct SongRow: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityCustomContent(Text("Duration"), Text(song.duration))
     }
 }
 
@@ -256,6 +257,7 @@ private struct NowPlayingRow: View {
             }
         }
         .padding(.vertical, 4)
+        .accessibilityCustomContent(Text("Duration"), Text(song.duration))
     }
 }
 

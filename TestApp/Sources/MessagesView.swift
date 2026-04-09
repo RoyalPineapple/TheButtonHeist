@@ -150,6 +150,7 @@ private struct MessageBubble: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
+        .accessibilityCustomContent(Text("Time"), Text(timestamp, style: .time))
     }
 
     private var accessibilityDescription: String {

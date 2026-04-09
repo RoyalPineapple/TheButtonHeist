@@ -966,13 +966,16 @@ public enum FenceResponse {
         if let identifier = element.identifier { payload["identifier"] = identifier }
 
         if let customContent = element.customContent {
-            payload["customContent"] = customContent.map {
-                [
-                    "label": $0.label,
-                    "value": $0.value,
-                    "isImportant": $0.isImportant
-                ]
+            let important = customContent.filter(\.isImportant)
+            let defaultContent = customContent.filter { !$0.isImportant }
+            var content: [String: Any] = [:]
+            if !important.isEmpty {
+                content["important"] = important.map(Self.customContentEntry)
             }
+            if !defaultContent.isEmpty {
+                content["default"] = defaultContent.map(Self.customContentEntry)
+            }
+            payload["customContent"] = content
         }
 
         // Geometry and extended fields only in full detail
@@ -986,6 +989,13 @@ public enum FenceResponse {
             if let hint = element.hint { payload["hint"] = hint }
         }
         return payload
+    }
+
+    private static func customContentEntry(_ item: HeistCustomContent) -> [String: String] {
+        var entry: [String: String] = [:]
+        if !item.label.isEmpty { entry["label"] = item.label }
+        if !item.value.isEmpty { entry["value"] = item.value }
+        return entry
     }
 
     /// Actions that aren't implied by the element's traits.
