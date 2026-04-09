@@ -241,7 +241,7 @@ classDiagram
 
     class ElementProperty {
         <<enum>>
-        label / value / traits / hint / actions / frame / activationPoint
+        label / value / traits / hint / actions / frame / activationPoint / customContent
         +isGeometry: Bool (computed)
     }
 

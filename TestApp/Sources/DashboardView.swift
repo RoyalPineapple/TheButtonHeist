@@ -77,7 +77,9 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(stat.label), \(stat.value)")
+                    .accessibilityCustomContent(Text("Trend"), Text(stat.trendText))
                 }
             }
             .padding()
