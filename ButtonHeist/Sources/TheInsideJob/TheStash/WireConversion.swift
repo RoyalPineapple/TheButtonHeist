@@ -253,6 +253,16 @@ extension TheStash {
             let newActions = new.actions.map(\.description).joined(separator: ", ")
             changes.append(PropertyChange(property: .actions, old: oldActions, new: newActions))
         }
+        if old.customContent != new.customContent {
+            let formatContent: ([HeistCustomContent]?) -> String? = { content in
+                content?.map { "\($0.label): \($0.value)" }.joined(separator: "; ")
+            }
+            changes.append(PropertyChange(
+                property: .customContent,
+                old: formatContent(old.customContent),
+                new: formatContent(new.customContent)
+            ))
+        }
         let oldFrame = "\(Int(old.frameX)),\(Int(old.frameY)),\(Int(old.frameWidth)),\(Int(old.frameHeight))"
         let newFrame = "\(Int(new.frameX)),\(Int(new.frameY)),\(Int(new.frameWidth)),\(Int(new.frameHeight))"
         if oldFrame != newFrame {

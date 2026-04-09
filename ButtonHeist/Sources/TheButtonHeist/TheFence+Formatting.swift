@@ -965,6 +965,16 @@ public enum FenceResponse {
         if let value = element.value { payload["value"] = value }
         if let identifier = element.identifier { payload["identifier"] = identifier }
 
+        if let customContent = element.customContent {
+            payload["customContent"] = customContent.map {
+                [
+                    "label": $0.label,
+                    "value": $0.value,
+                    "isImportant": $0.isImportant
+                ]
+            }
+        }
+
         // Geometry and extended fields only in full detail
         if detail == .full {
             payload["frameX"] = element.frameX
@@ -974,15 +984,6 @@ public enum FenceResponse {
             payload["activationPointX"] = element.activationPointX
             payload["activationPointY"] = element.activationPointY
             if let hint = element.hint { payload["hint"] = hint }
-            if let customContent = element.customContent {
-                payload["customContent"] = customContent.map {
-                    [
-                        "label": $0.label,
-                        "value": $0.value,
-                        "isImportant": $0.isImportant
-                    ]
-                }
-            }
         }
         return payload
     }

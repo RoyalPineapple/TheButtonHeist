@@ -22,7 +22,8 @@ final class WireConverterTests: XCTestCase {
         frameWidth: Double = 0,
         frameHeight: Double = 0,
         activationPointX: Double = 0,
-        activationPointY: Double = 0
+        activationPointY: Double = 0,
+        customContent: [AccessibilityElement.CustomContent] = []
     ) -> AccessibilityElement {
         let uiTraits = UIAccessibilityTraits.fromNames(traits.map(\.rawValue))
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
@@ -39,7 +40,7 @@ final class WireConverterTests: XCTestCase {
             activationPoint: activationPoint,
             usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
             customActions: [],
-            customContent: [],
+            customContent: customContent,
             customRotors: [],
             accessibilityLanguage: nil,
             respondsToUserInteraction: true
@@ -58,7 +59,8 @@ final class WireConverterTests: XCTestCase {
         frameWidth: Double = 0,
         frameHeight: Double = 0,
         activationPointX: Double = 0,
-        activationPointY: Double = 0
+        activationPointY: Double = 0,
+        customContent: [AccessibilityElement.CustomContent] = []
     ) -> TheStash.ScreenElement {
         TheStash.ScreenElement(
             heistId: heistId,
@@ -67,7 +69,8 @@ final class WireConverterTests: XCTestCase {
                 label: label, value: value, identifier: identifier, hint: hint,
                 traits: traits, frameX: frameX, frameY: frameY,
                 frameWidth: frameWidth, frameHeight: frameHeight,
-                activationPointX: activationPointX, activationPointY: activationPointY
+                activationPointX: activationPointX, activationPointY: activationPointY,
+                customContent: customContent
             ),
             object: nil,
             scrollView: nil
@@ -376,6 +379,109 @@ final class WireConverterTests: XCTestCase {
     func testSnapshotScreenNameNilWhenNoHeader() {
         let elements = [makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])]
         XCTAssertNil(elements.screenName)
+    }
+
+    // MARK: - Custom Content Conversion
+
+    func testCustomContentConvertedToWire() {
+        let content: [AccessibilityElement.CustomContent] = [
+            .init(label: "Size", value: "2.4 MB", isImportant: false),
+            .init(label: "Type", value: "PDF", isImportant: true),
+        ]
+        let element = makeElement(label: "Report", customContent: content)
+        let wire = WireConversion.convert(element)
+
+        XCTAssertEqual(wire.customContent?.count, 2)
+        XCTAssertEqual(wire.customContent?[0].label, "Size")
+        XCTAssertEqual(wire.customContent?[0].value, "2.4 MB")
+        XCTAssertFalse(wire.customContent?[0].isImportant ?? true)
+        XCTAssertEqual(wire.customContent?[1].label, "Type")
+        XCTAssertEqual(wire.customContent?[1].value, "PDF")
+        XCTAssertTrue(wire.customContent?[1].isImportant ?? false)
+    }
+
+    func testEmptyCustomContentConvertedToNil() {
+        let element = makeElement(label: "Button", customContent: [])
+        let wire = WireConversion.convert(element)
+        XCTAssertNil(wire.customContent)
+    }
+
+    // MARK: - Delta: Custom Content Changes
+
+    func testCustomContentChangeProducesUpdate() {
+        let before = [makeScreenElement(
+            heistId: "file_report",
+            label: "Report",
+            customContent: [.init(label: "Size", value: "2.4 MB", isImportant: false)]
+        )]
+        let after = [makeScreenElement(
+            heistId: "file_report",
+            label: "Report",
+            customContent: [.init(label: "Size", value: "3.1 MB", isImportant: false)]
+        )]
+
+        let delta = WireConversion.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .customContent)
+        XCTAssertEqual(change?.old, "Size: 2.4 MB")
+        XCTAssertEqual(change?.new, "Size: 3.1 MB")
+    }
+
+    func testCustomContentAddedProducesUpdate() {
+        let before = [makeScreenElement(heistId: "card", label: "Item")]
+        let after = [makeScreenElement(
+            heistId: "card",
+            label: "Item",
+            customContent: [.init(label: "Price", value: "$9.99", isImportant: true)]
+        )]
+
+        let delta = WireConversion.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .customContent)
+        XCTAssertNil(change?.old)
+        XCTAssertEqual(change?.new, "Price: $9.99")
+    }
+
+    func testCustomContentRemovedProducesUpdate() {
+        let before = [makeScreenElement(
+            heistId: "card",
+            label: "Item",
+            customContent: [.init(label: "Price", value: "$9.99", isImportant: true)]
+        )]
+        let after = [makeScreenElement(heistId: "card", label: "Item")]
+
+        let delta = WireConversion.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        XCTAssertEqual(delta.kind, .elementsChanged)
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.property, .customContent)
+        XCTAssertEqual(change?.old, "Price: $9.99")
+        XCTAssertNil(change?.new)
+    }
+
+    func testMultipleCustomContentItemsFormattedCorrectly() {
+        let before = [makeScreenElement(heistId: "weather", label: "Portland")]
+        let after = [makeScreenElement(
+            heistId: "weather",
+            label: "Portland",
+            customContent: [
+                .init(label: "Temperature", value: "58°F", isImportant: true),
+                .init(label: "Humidity", value: "82%", isImportant: false),
+            ]
+        )]
+
+        let delta = WireConversion.computeDelta(
+            before: before, after: after, afterTree: nil, isScreenChange: false
+        )
+        let change = delta.updated?.first?.changes.first
+        XCTAssertEqual(change?.new, "Temperature: 58°F; Humidity: 82%")
     }
 }
 
