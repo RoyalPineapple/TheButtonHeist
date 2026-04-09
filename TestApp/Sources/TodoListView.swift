@@ -35,6 +35,7 @@ struct TodoListView: View {
     @State private var filter: TodoFilter = .all
     @State private var editingItem: TodoItem?
     @State private var showingEditSheet = false
+    @FocusState private var isNewItemFieldFocused: Bool
 
     enum TodoFilter: String, CaseIterable {
         case all = "All"
@@ -98,6 +99,7 @@ struct TodoListView: View {
                 }
             }
         }
+        .scrollDismissesKeyboard(.immediately)
         .navigationTitle("Todo List")
         .sheet(isPresented: $showingEditSheet) {
             if let editingItem {
@@ -114,6 +116,7 @@ struct TodoListView: View {
         Section("Add Todo") {
             HStack {
                 TextField("What needs to be done?", text: $newItemText)
+                    .focused($isNewItemFieldFocused)
                     .onSubmit(addItem)
 
                 Button("Add") {
@@ -157,6 +160,7 @@ struct TodoListView: View {
         )
         items.append(item)
         newItemText = ""
+        isNewItemFieldFocused = false
     }
 
     private func toggleItem(_ item: TodoItem) {
