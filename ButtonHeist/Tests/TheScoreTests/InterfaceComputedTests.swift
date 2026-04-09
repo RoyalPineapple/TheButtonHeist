@@ -184,12 +184,98 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertEqual(expectation.summaryDescription, "compound(2 expectations)")
     }
 
+    // MARK: - Interface.navigation
+
+    func testNavigationScreenTitleFromHeader() {
+        let elements = [
+            makeElement(label: "Checkout", traits: [.header]),
+            makeElement(label: "Pay Now", traits: [.button]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.screenTitle, "Checkout")
+        XCTAssertNil(navigation.backButton)
+        XCTAssertNil(navigation.tabBarItems)
+    }
+
+    func testNavigationBackButton() {
+        let elements = [
+            makeElement(heistId: "back_button", label: "Settings", traits: [.button, .backButton]),
+            makeElement(label: "Profile", traits: [.header]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.screenTitle, "Profile")
+        XCTAssertEqual(navigation.backButton?.heistId, "back_button")
+        XCTAssertEqual(navigation.backButton?.label, "Settings")
+    }
+
+    func testNavigationTabBarItems() {
+        let elements = [
+            makeElement(label: "Checkout", traits: [.header]),
+            makeElement(heistId: "cart", label: "Checkout", traits: [.button, .tabBarItem, .selected]),
+            makeElement(heistId: "list", label: "Transactions", traits: [.button, .tabBarItem]),
+            makeElement(heistId: "person", label: "Account", traits: [.button, .tabBarItem]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.tabBarItems?.count, 3)
+        XCTAssertEqual(navigation.tabBarItems?[0].heistId, "cart")
+        XCTAssertEqual(navigation.tabBarItems?[0].label, "Checkout")
+        XCTAssertEqual(navigation.tabBarItems?[0].selected, true)
+        XCTAssertEqual(navigation.tabBarItems?[1].selected, false)
+        XCTAssertEqual(navigation.tabBarItems?[2].heistId, "person")
+    }
+
+    func testNavigationTabBarItemWithValue() {
+        let elements = [
+            makeElement(heistId: "inbox", label: "Inbox", value: "3", traits: [.button, .tabBarItem, .selected]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.tabBarItems?[0].value, "3")
+    }
+
+    func testNavigationBackButtonAndTabs() {
+        let elements = [
+            makeElement(heistId: "back", label: "Home", traits: [.button, .backButton]),
+            makeElement(label: "Settings", traits: [.header]),
+            makeElement(heistId: "tab_general", label: "General", traits: [.button, .tabBarItem, .selected]),
+            makeElement(heistId: "tab_privacy", label: "Privacy", traits: [.button, .tabBarItem]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertEqual(navigation.screenTitle, "Settings")
+        XCTAssertEqual(navigation.backButton?.heistId, "back")
+        XCTAssertEqual(navigation.backButton?.label, "Home")
+        XCTAssertEqual(navigation.tabBarItems?.count, 2)
+    }
+
+    func testNavigationEmptyElements() {
+        let navigation = Interface.buildNavigation(from: [])
+        XCTAssertNil(navigation.screenTitle)
+        XCTAssertNil(navigation.backButton)
+        XCTAssertNil(navigation.tabBarItems)
+    }
+
+    func testNavigationNoNavChrome() {
+        let elements = [
+            makeElement(label: "Hello", traits: [.staticText]),
+            makeElement(label: "Save", traits: [.button]),
+        ]
+        let navigation = Interface.buildNavigation(from: elements)
+        XCTAssertNil(navigation.screenTitle)
+        XCTAssertNil(navigation.backButton)
+        XCTAssertNil(navigation.tabBarItems)
+    }
+
     // MARK: - Helpers
 
-    private func makeElement(label: String?, traits: [HeistTrait]) -> HeistElement {
+    private func makeElement(
+        heistId: String = "",
+        label: String?,
+        value: String? = nil,
+        traits: [HeistTrait]
+    ) -> HeistElement {
         HeistElement(
+            heistId: heistId,
             description: label ?? "",
-            label: label, value: nil, identifier: nil,
+            label: label, value: value, identifier: nil,
             traits: traits,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
             actions: []
