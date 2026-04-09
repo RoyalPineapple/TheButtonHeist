@@ -307,7 +307,7 @@ public final class TheHandoff {
                 }
             }
 
-            guard await cancellableSleep(for: .milliseconds(100)) else { break }
+            guard await Task.cancellableSleep(for: .milliseconds(100)) else { break }
         }
 
         return discoveredDevices.filter { reachableIDs.contains($0.id) }
@@ -446,7 +446,7 @@ public final class TheHandoff {
     private func makeKeepaliveTask() -> Task<Void, Never> {
         Task { [weak self] in
             while !Task.isCancelled {
-                guard await cancellableSleep(for: .seconds(3)) else { break }
+                guard await Task.cancellableSleep(for: .seconds(3)) else { break }
                 guard !Task.isCancelled else { break }
                 self?.connection?.send(.ping)
                 self?.missedPongCount += 1
@@ -535,7 +535,7 @@ public final class TheHandoff {
             // Backoff grows while no device is visible; resets after each connection attempt
             let delay = min(reconnectInterval * pow(2.0, Double(min(consecutiveMisses, 5))), 30.0)
             let jitter = Double.random(in: 0...(delay * 0.2))
-            guard await cancellableSleep(for: .seconds(delay + jitter)) else { return }
+            guard await Task.cancellableSleep(for: .seconds(delay + jitter)) else { return }
             guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 consecutiveMisses = 0
@@ -544,7 +544,7 @@ public final class TheHandoff {
                 let deadline = Date().addingTimeInterval(10)
                 while !isConnected {
                     if Task.isCancelled || Date() > deadline { break }
-                    guard await cancellableSleep(for: .milliseconds(100)) else { return }
+                    guard await Task.cancellableSleep(for: .milliseconds(100)) else { return }
                 }
                 if Task.isCancelled { return }
                 if isConnected {

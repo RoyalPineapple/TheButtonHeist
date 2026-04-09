@@ -4,40 +4,32 @@ import TheScore
 
 final class TheFenceBoolArgTests: XCTestCase {
 
-    @ButtonHeistActor
-    func testBoolArgFromBool() async {
-        let fence = TheFence()
-        XCTAssertEqual(fence.boolArg(["key": true], "key"), true)
-        XCTAssertEqual(fence.boolArg(["key": false], "key"), false)
+    func testBooleanFromBool() {
+        let args: [String: Any] = ["key": true]
+        XCTAssertEqual(args.boolean("key"), true)
+        XCTAssertEqual(["key": false].boolean("key"), false)
     }
 
-    @ButtonHeistActor
-    func testBoolArgFromInt() async {
-        let fence = TheFence()
-        XCTAssertEqual(fence.boolArg(["key": 1], "key"), true)
-        XCTAssertEqual(fence.boolArg(["key": 0], "key"), false)
-        XCTAssertEqual(fence.boolArg(["key": 42], "key"), true)
+    func testBooleanFromInt() {
+        XCTAssertEqual((["key": 1] as [String: Any]).boolean("key"), true)
+        XCTAssertEqual((["key": 0] as [String: Any]).boolean("key"), false)
+        XCTAssertEqual((["key": 42] as [String: Any]).boolean("key"), true)
     }
 
-    @ButtonHeistActor
-    func testBoolArgFromString() async {
-        let fence = TheFence()
-        XCTAssertEqual(fence.boolArg(["key": "true"], "key"), true)
-        XCTAssertEqual(fence.boolArg(["key": "1"], "key"), true)
-        XCTAssertEqual(fence.boolArg(["key": "false"], "key"), false)
-        XCTAssertEqual(fence.boolArg(["key": "0"], "key"), false)
-        XCTAssertEqual(fence.boolArg(["key": "yes"], "key"), false)
+    func testBooleanFromString() {
+        XCTAssertEqual((["key": "true"] as [String: Any]).boolean("key"), true)
+        XCTAssertEqual((["key": "1"] as [String: Any]).boolean("key"), true)
+        XCTAssertEqual((["key": "false"] as [String: Any]).boolean("key"), false)
+        XCTAssertEqual((["key": "0"] as [String: Any]).boolean("key"), false)
+        XCTAssertEqual((["key": "yes"] as [String: Any]).boolean("key"), false)
     }
 
-    @ButtonHeistActor
-    func testBoolArgMissing() async {
-        let fence = TheFence()
-        XCTAssertNil(fence.boolArg([:], "key"))
+    func testBooleanMissing() {
+        let args: [String: Any] = [:]
+        XCTAssertNil(args.boolean("key"))
     }
 
-    @ButtonHeistActor
-    func testBoolArgWrongType() async {
-        let fence = TheFence()
-        XCTAssertNil(fence.boolArg(["key": 3.14], "key"))
+    func testBooleanWrongType() {
+        XCTAssertNil((["key": 3.14] as [String: Any]).boolean("key"))
     }
 }

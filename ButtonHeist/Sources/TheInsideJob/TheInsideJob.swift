@@ -551,9 +551,8 @@ public final class TheInsideJob {
     /// Encode a response envelope, logging the actual error on failure.
     /// Returns nil only when encoding fails — callers decide how to handle that.
     func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil, backgroundDelta: InterfaceDelta? = nil) -> Data? {
-        let envelope = ResponseEnvelope(requestId: requestId, message: message, backgroundDelta: backgroundDelta)
         do {
-            return try JSONEncoder().encode(envelope)
+            return try ResponseEnvelope(requestId: requestId, message: message, backgroundDelta: backgroundDelta).encoded()
         } catch {
             insideJobLogger.error("Failed to encode message: \(error)")
             return nil
@@ -563,7 +562,7 @@ public final class TheInsideJob {
     /// Decode a client request, logging the actual error on failure.
     func decodeRequest(_ data: Data) -> RequestEnvelope? {
         do {
-            return try JSONDecoder().decode(RequestEnvelope.self, from: data)
+            return try RequestEnvelope.decoded(from: data)
         } catch {
             insideJobLogger.error("Failed to decode client message: \(error)")
             return nil

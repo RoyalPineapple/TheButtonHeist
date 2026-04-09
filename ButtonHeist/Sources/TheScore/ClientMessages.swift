@@ -20,6 +20,11 @@ public struct RequestEnvelope: Codable, Sendable {
         self.requestId = requestId
         self.message = message
     }
+
+    /// Decode a request envelope from JSON data. Returns nil on decode failure.
+    public static func decoded(from data: Data) throws -> RequestEnvelope {
+        try JSONDecoder().decode(RequestEnvelope.self, from: data)
+    }
 }
 
 // MARK: - Client -> Server Messages
