@@ -258,14 +258,16 @@ extension TheStash {
         }
         if old.customContent != new.customContent {
             let formatContent: ([HeistCustomContent]?) -> String? = { content in
-                content?.map { item in
+                let formatted = content?.compactMap { item -> String? in
                     switch (item.label.isEmpty, item.value.isEmpty) {
                     case (false, false): return "\(item.label): \(item.value)"
                     case (false, true): return item.label
                     case (true, false): return item.value
-                    case (true, true): return item.label
+                    case (true, true): return nil
                     }
-                }.joined(separator: "; ")
+                }
+                guard let formatted, !formatted.isEmpty else { return nil }
+                return formatted.joined(separator: "; ")
             }
             changes.append(PropertyChange(
                 property: .customContent,
