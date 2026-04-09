@@ -72,10 +72,60 @@ final class TheStashTopologyTests: XCTestCase {
         XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
     }
 
+    // MARK: - Tab Bar Selection Change
+
+    func testTabSelectionChangedIsTopologyChange() {
+        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let before = [
+            makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
+            makeElement(label: "Transactions", traits: tabBarItemTrait),
+            makeElement(label: "Account", traits: tabBarItemTrait),
+        ]
+        let after = [
+            makeElement(label: "Checkout", traits: tabBarItemTrait),
+            makeElement(label: "Transactions", traits: [tabBarItemTrait, .selected]),
+            makeElement(label: "Account", traits: tabBarItemTrait),
+        ]
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
+    }
+
+    func testSameTabReselectedIsNotTopologyChange() {
+        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let elements = [
+            makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
+            makeElement(label: "Transactions", traits: tabBarItemTrait),
+        ]
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+    }
+
+    func testNoTabBarItemsIsNotTopologyChange() {
+        // Regular buttons with .selected toggling — no tabBarItem trait, not a tab switch.
+        let before = [
+            makeElement(label: "Option A", traits: [.button, .selected]),
+            makeElement(label: "Option B", traits: .button),
+        ]
+        let after = [
+            makeElement(label: "Option A", traits: .button),
+            makeElement(label: "Option B", traits: [.button, .selected]),
+        ]
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
+    }
+
+    func testTabBarWithNoSelectionIsNotTopologyChange() {
+        // Edge case: tab bar items present but none selected in either snapshot.
+        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let elements = [
+            makeElement(label: "Home", traits: tabBarItemTrait),
+            makeElement(label: "Search", traits: tabBarItemTrait),
+        ]
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+    }
+
     // MARK: - Helpers
 
     private func makeElement(
         label: String? = nil,
+        identifier: String? = nil,
         traits: UIAccessibilityTraits = .none
     ) -> AccessibilityElement {
         AccessibilityElement(
@@ -83,7 +133,7 @@ final class TheStashTopologyTests: XCTestCase {
             label: label,
             value: nil,
             traits: traits,
-            identifier: nil,
+            identifier: identifier,
             hint: nil,
             userInputLabels: nil,
             shape: .frame(.zero),

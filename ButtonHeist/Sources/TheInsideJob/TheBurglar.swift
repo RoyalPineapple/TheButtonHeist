@@ -151,7 +151,30 @@ final class TheBurglar {
             return true
         }
 
+        // Tab bar selection change: if a different tab bar item became selected,
+        // the user navigated to a different tab — that's a screen change.
+        if isTabSelectionChanged(before: before, after: after) {
+            return true
+        }
+
         return false
+    }
+
+    /// Returns true when the selected tab bar item changed between snapshots.
+    ///
+    /// Tab bar items carry the `.tabBarItem` trait (bit 28). The currently selected tab
+    /// additionally has `.selected`. If the selected tab label changed, a tab switch occurred.
+    private func isTabSelectionChanged(
+        before: [AccessibilityElement],
+        after: [AccessibilityElement]
+    ) -> Bool {
+        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let beforeSelected = before.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
+        let afterSelected = after.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
+        guard let beforeLabel = beforeSelected?.label, let afterLabel = afterSelected?.label else {
+            return false
+        }
+        return beforeLabel != afterLabel
     }
 
     // MARK: - Element Context Building
