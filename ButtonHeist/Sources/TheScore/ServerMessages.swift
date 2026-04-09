@@ -30,6 +30,11 @@ public struct ResponseEnvelope: Codable, Sendable {
         self.message = message
         self.backgroundDelta = backgroundDelta
     }
+
+    /// Encode this envelope to JSON data. Returns nil on encode failure.
+    public func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
 }
 
 // MARK: - Server -> Client Messages

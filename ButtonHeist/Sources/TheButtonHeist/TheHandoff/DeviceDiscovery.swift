@@ -253,7 +253,7 @@ public final class DeviceDiscovery: DeviceDiscovering {
         let task = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                guard await cancellableSleep(for: .seconds(self.reachabilityValidationInterval)) else { return }
+                guard await Task.cancellableSleep(for: .seconds(self.reachabilityValidationInterval)) else { return }
                 guard !Task.isCancelled else { return }
                 await self.validateVisibleDevicesReachability()
             }
