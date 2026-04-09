@@ -18,7 +18,7 @@ public final class IdleMonitor {
         timeoutTask?.cancel()
         guard timeout > 0 else { return }
         timeoutTask = Task { [weak self, timeout] in
-            try? await Task.sleep(for: .seconds(timeout))
+            guard await cancellableSleep(for: .seconds(timeout)) else { return }
             guard !Task.isCancelled, let self else { return }
             self.onTimeout()
         }
