@@ -136,6 +136,36 @@ final class TheStashTopologyTests: XCTestCase {
         ))
     }
 
+    func testNestedTabBarContentReplacedIsTopologyChange() {
+        // UIKit-style: .tabBar container nested inside a semantic group (window container).
+        let tabElements = ["Home", "Settings"].map { makeElement(label: $0, traits: .button) }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+        let windowContainer = AccessibilityContainer(
+            type: .semanticGroup(label: nil, value: nil, identifier: nil), frame: .zero
+        )
+
+        let homeContent = (1...6).map { makeElement(label: "Home item \($0)") }
+        let settingsContent = (1...6).map { makeElement(label: "Setting \($0)") }
+
+        let tabBarNode: AccessibilityHierarchy = .container(
+            tabBarContainer,
+            children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }
+        )
+        let beforeHierarchy: [AccessibilityHierarchy] = [
+            .container(windowContainer, children: [tabBarNode]
+                + homeContent.enumerated().map { .element($1, traversalIndex: 10 + $0) }),
+        ]
+        let afterHierarchy: [AccessibilityHierarchy] = [
+            .container(windowContainer, children: [tabBarNode]
+                + settingsContent.enumerated().map { .element($1, traversalIndex: 10 + $0) }),
+        ]
+
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(
+            before: beforeHierarchy.sortedElements, after: afterHierarchy.sortedElements,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
+    }
+
     func testScrollWithTabBarIsNotTopologyChange() {
         // Tab bar present, but only a few content elements replaced (scroll).
         let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
