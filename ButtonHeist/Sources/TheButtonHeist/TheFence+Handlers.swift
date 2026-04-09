@@ -689,6 +689,7 @@ extension TheFence {
         let playbackStart = CFAbsoluteTimeGetCurrent()
         var completedSteps = 0
         var failedIndex: Int?
+        var failure: PlaybackFailure?
 
         playbackPhase = .playing(inputPath: resolvedURL.path)
         defer { playbackPhase = .idle }
@@ -712,41 +713,74 @@ extension TheFence {
                     let scrollResponse = try await execute(request: scrollRequest)
                     if let scrollResult = scrollResponse.actionResult, scrollResult.success {
                         let retryResponse = try await execute(request: request)
-                        if case .error = retryResponse {
+                        if let retryFailure = playbackFailure(step: step, response: retryResponse) {
                             failedIndex = index
-                            break
-                        }
-                        if let retryResult = retryResponse.actionResult, !retryResult.success {
-                            failedIndex = index
+                            failure = retryFailure
                             break
                         }
                         completedSteps += 1
                         continue
                     }
                     failedIndex = index
+                    // Report the original action failure, not the scroll failure —
+                    // the root cause is the element not being found, not the scroll attempt.
+                    failure = playbackFailure(step: step, response: response)
                     break
                 }
 
-                if case .error = response {
+                if let stepFailure = playbackFailure(step: step, response: response) {
                     failedIndex = index
-                    break
-                }
-                if let actionResult = response.actionResult, !actionResult.success {
-                    failedIndex = index
+                    failure = stepFailure
                     break
                 }
                 completedSteps += 1
             } catch {
                 failedIndex = index
+                let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
+                failure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
                 break
             }
+        }
+
+        // Capture the live interface at time of failure for diagnostics
+        if let currentFailure = failure {
+            let interface = await captureInterfaceSnapshot()
+            failure = currentFailure.withInterface(interface)
         }
 
         let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
         return .heistPlayback(
             completedSteps: completedSteps,
             failedIndex: failedIndex,
-            totalTimingMs: totalTimingMs
+            totalTimingMs: totalTimingMs,
+            failure: failure
         )
     }
+
+    /// Extract a PlaybackFailure from a response, or nil if the step succeeded.
+    private func playbackFailure(step: HeistEvidence, response: FenceResponse) -> PlaybackFailure? {
+        let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
+        switch response {
+        case .error(let message):
+            return .fenceError(step: failedStep, message: message, interface: nil)
+        case .action(let result, let expectation) where !result.success:
+            return .actionFailed(step: failedStep, result: result, expectation: expectation, interface: nil)
+        default:
+            return nil
+        }
+    }
+
+    /// Capture a live interface snapshot for failure diagnostics.
+    private func captureInterfaceSnapshot() async -> Interface? {
+        do {
+            let response = try await execute(request: ["command": "get_interface"])
+            if case .interface(let snapshot, _, _, _) = response {
+                return snapshot
+            }
+        } catch {
+            logger.error("Failed to capture interface for playback diagnostics: \(error.localizedDescription)")
+        }
+        return nil
+    }
+
 }
