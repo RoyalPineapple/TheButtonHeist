@@ -53,12 +53,9 @@ public final class ServerTransport: NSObject {
         super.init()
     }
 
-    // Fire-and-forget: the Task may not complete before deallocation.
-    // Acceptable because NWListener and NWConnection clean up on their own
-    // when all references are released.
-    nonisolated deinit {
-        Task { [server] in await server.stop() }
-    }
+    // No deinit needed: ServerTransport is owned by the TheInsideJob singleton
+    // (which never deallocates). All cleanup runs through stop(). NWListener and
+    // NWConnection self-clean when references are released.
 
     // MARK: - Lifecycle
 

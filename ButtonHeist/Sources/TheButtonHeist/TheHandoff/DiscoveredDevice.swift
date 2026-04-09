@@ -258,7 +258,7 @@ private func probeReachability(for device: DiscoveredDevice, timeout: TimeInterv
 
     let deadline = Date().addingTimeInterval(timeout)
     while !finished && Date() < deadline {
-        do { try await Task.sleep(nanoseconds: 100_000_000) } catch { break }
+        guard await cancellableSleep(nanoseconds: 100_000_000) else { break }
     }
 
     if !finished {
