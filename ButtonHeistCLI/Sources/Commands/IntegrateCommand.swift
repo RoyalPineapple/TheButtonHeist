@@ -190,8 +190,13 @@ struct IntegrateCommand: ParsableCommand {
                       isDir.boolValue else {
                     return nil
                 }
-                guard let attrs = (try? fileManager.attributesOfItem(atPath: productsDir)), // best-effort scan
-                      let modified = attrs[.modificationDate] as? Date else {
+                let attrs: [FileAttributeKey: Any]
+                do {
+                    attrs = try fileManager.attributesOfItem(atPath: productsDir)
+                } catch {
+                    return nil
+                }
+                guard let modified = attrs[.modificationDate] as? Date else {
                     return nil
                 }
                 return (productsDir, modified)

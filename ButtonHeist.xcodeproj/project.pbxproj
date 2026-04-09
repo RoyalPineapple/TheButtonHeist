@@ -40,6 +40,7 @@
 		35733F90076016629B0E685B /* ElementMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3B78F18645E27C9BD85F0B /* ElementMatcherTests.swift */; };
 		35EBC59194F55574BEF113CB /* TheFence+CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */; };
 		37A3E33799F2C13AF5F9D355 /* TheBurglarApplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */; };
+		3A90525C60D78E6105E13A2E /* CancellableSleep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BEFC76851C44EA7C52388F1 /* CancellableSleep.swift */; };
 		3CA92319C3F0C158E06E578A /* TheSafecracker+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD416A7997E2F29556BAC914 /* TheSafecracker+Actions.swift */; };
 		3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */; };
 		3E0DF1F21AED8674F1FBE844 /* BookKeeperHeistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71B881BAC0E71A88ED33B2A /* BookKeeperHeistTests.swift */; };
@@ -59,6 +60,7 @@
 		4B234DFCC7AB1DEBE9742EB2 /* TheStash+Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F24A6EDEDA934D0ACE7C39 /* TheStash+Matching.swift */; };
 		4D3FAF8D7AAA5F9F98997531 /* TLSIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD647E6B8282C97B896CBBB8 /* TLSIdentity.swift */; };
 		4E025AADAFC3705425334617 /* Interactivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D4AA78D802F6F18119E5F4 /* Interactivity.swift */; };
+		4E4727DB7AE7F34A010C9A5B /* CancellableSleep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8631B80DFA7239C00ACD9E8B /* CancellableSleep.swift */; };
 		4E6ACA44E7873AB5F7F3379B /* ClientMessages+WireCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3E63876D513CED21786EC3 /* ClientMessages+WireCoding.swift */; };
 		500C86B095B0F024D2F4B97C /* ServerMessages+WireCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */; };
 		5016FC7A53548764BBC63C6A /* ConnectionScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */; };
@@ -314,6 +316,7 @@
 		1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLockTests.swift; sourceTree = "<group>"; };
 		1B264A91FB8B3A90E1686912 /* ServerInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerInfoTests.swift; sourceTree = "<group>"; };
 		1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarApplyTests.swift; sourceTree = "<group>"; };
+		1BEFC76851C44EA7C52388F1 /* CancellableSleep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableSleep.swift; sourceTree = "<group>"; };
 		1D6FCAB01DA8EBABEF0F5E94 /* DeviceConnectionTLSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionTLSTests.swift; sourceTree = "<group>"; };
 		1DE42B79AEEE4C94665D0B86 /* TheFence+CommandCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandCatalog.swift"; sourceTree = "<group>"; };
 		1E836566E11E4B5CB5815D28 /* ServerTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransport.swift; sourceTree = "<group>"; };
@@ -387,6 +390,7 @@
 		83137EE544169770435091EA /* TheFence+Handlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Handlers.swift"; sourceTree = "<group>"; };
 		85F00EF7237962DD4F94F135 /* WireConversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireConversion.swift; sourceTree = "<group>"; };
 		860776BF1EE136AC17FF1CAC /* ActionResultBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionResultBuilder.swift; sourceTree = "<group>"; };
+		8631B80DFA7239C00ACD9E8B /* CancellableSleep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableSleep.swift; sourceTree = "<group>"; };
 		8704DBF79498D0AAA0EDF20B /* TheInsideJobStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJobStateTests.swift; sourceTree = "<group>"; };
 		886C395B67A91072CBF2A507 /* TheScoreTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "TheScoreTests-Info.plist"; sourceTree = "<group>"; };
 		88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Elements.swift; sourceTree = "<group>"; };
@@ -547,6 +551,7 @@
 			children = (
 				73FBFF062EEE0B5B5B516EA2 /* TheHandoff */,
 				48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */,
+				8631B80DFA7239C00ACD9E8B /* CancellableSleep.swift */,
 				6205334704A8DE8880261680 /* EnvironmentConfig.swift */,
 				432AF00C964E3E4F110C9179 /* Error+Message.swift */,
 				286300664EC22C2386C8F58E /* Exports.swift */,
@@ -612,6 +617,7 @@
 				90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
 				860776BF1EE136AC17FF1CAC /* ActionResultBuilder.swift */,
+				1BEFC76851C44EA7C52388F1 /* CancellableSleep.swift */,
 				FF0B64ED99D6B9AA58F971E4 /* ConnectionScope+Classify.swift */,
 				1E836566E11E4B5CB5815D28 /* ServerTransport.swift */,
 				A74F5E0C5B7E7C511F140992 /* SimpleSocketServer.swift */,
@@ -1108,6 +1114,7 @@
 				3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */,
 				276E01C107AB4FDE2E7A141D /* AccessibilityHierarchy+TreeOperations.swift in Sources */,
 				E5977B58887647CB847F7829 /* ActionResultBuilder.swift in Sources */,
+				3A90525C60D78E6105E13A2E /* CancellableSleep.swift in Sources */,
 				965256E7EA7770B2591AEF8D /* ConnectionScope+Classify.swift in Sources */,
 				23F27EF90EA64C363A84E6B2 /* Animation.swift in Sources */,
 				6037C9C5116D05143A407D11 /* AutoStart.swift in Sources */,
@@ -1155,6 +1162,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				71D803CC09A6B351F9EE95F4 /* ButtonHeistActor.swift in Sources */,
+				4E4727DB7AE7F34A010C9A5B /* CancellableSleep.swift in Sources */,
 				9A4DD57383704CA3FFFD7677 /* EnvironmentConfig.swift in Sources */,
 				30D4AE32FFFB72096B637561 /* Error+Message.swift in Sources */,
 				A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */,

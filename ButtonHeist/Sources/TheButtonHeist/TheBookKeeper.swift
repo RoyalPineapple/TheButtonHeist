@@ -163,10 +163,14 @@ public final class TheBookKeeper {
 
         var recovered: [RecoveredSession] = []
         for directoryURL in contents {
-            guard (try? directoryURL.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
-
+            let isDirectory: Bool
+            do {
+                isDirectory = try directoryURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
+            } catch {
+                logger.warning("Failed to read resource values for \(directoryURL.lastPathComponent): \(error.localizedDescription)")
                 continue
             }
+            guard isDirectory else { continue }
             let rawLog = directoryURL.appendingPathComponent("session.jsonl")
             let compressedLog = directoryURL.appendingPathComponent("session.jsonl.gz")
 
@@ -240,15 +244,20 @@ public final class TheBookKeeper {
         let heistLog = directory.appendingPathComponent("heist.jsonl")
         var heistEvidenceCount: Int?
         var heistFilePath: URL?
-        if fileManager.fileExists(atPath: heistLog.path),
-           let heistData = try? Data(contentsOf: heistLog), // best-effort recovery: if read fails, skip
-           !heistData.isEmpty {
-            let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
-            heistEvidenceCount = lineCount
-            heistFilePath = heistLog
-            logger.warning(
-                "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
-            )
+        if fileManager.fileExists(atPath: heistLog.path) {
+            do {
+                let heistData = try Data(contentsOf: heistLog)
+                if !heistData.isEmpty {
+                    let lineCount = heistData.reduce(0) { count, byte in byte == 0x0A ? count + 1 : count }
+                    heistEvidenceCount = lineCount
+                    heistFilePath = heistLog
+                    logger.warning(
+                        "Abandoned heist in session \(sessionId) — \(lineCount) evidence entries preserved at \(heistLog.path)"
+                    )
+                }
+            } catch {
+                logger.warning("Failed to read heist log for \(sessionId): \(error.localizedDescription)")
+            }
         }
 
         logger.info("Recovered abandoned session: \(sessionId)")

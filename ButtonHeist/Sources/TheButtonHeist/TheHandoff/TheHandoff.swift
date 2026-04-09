@@ -307,7 +307,7 @@ public final class TheHandoff {
                 }
             }
 
-            do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
+            guard await cancellableSleep(for: .milliseconds(100)) else { break }
         }
 
         return discoveredDevices.filter { reachableIDs.contains($0.id) }
@@ -446,14 +446,10 @@ public final class TheHandoff {
     private func makeKeepaliveTask() -> Task<Void, Never> {
         Task { [weak self] in
             while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(3))
-                } catch {
-                    break
-                }
+                guard await cancellableSleep(for: .seconds(3)) else { break }
                 guard !Task.isCancelled else { break }
-                self?.missedPongCount += 1
                 self?.connection?.send(.ping)
+                self?.missedPongCount += 1
                 if let count = self?.missedPongCount, count >= 3 {
                     logger.warning("No pong received for \(count) consecutive pings — forcing disconnect")
                     self?.forceDisconnect()
@@ -533,33 +529,30 @@ public final class TheHandoff {
 
     private func runAutoReconnect(filter: String?) async {
         onStatus?("Device disconnected — watching for reconnection...")
-        for attempt in 0..<60 {
+        var consecutiveMisses = 0
+        for _ in 0..<60 {
             guard !Task.isCancelled else { return }
-            let delay = min(reconnectInterval * pow(2.0, Double(attempt)), 30.0)
+            // Backoff grows while no device is visible; resets after each connection attempt
+            let delay = min(reconnectInterval * pow(2.0, Double(min(consecutiveMisses, 5))), 30.0)
             let jitter = Double.random(in: 0...(delay * 0.2))
-            do {
-                try await Task.sleep(for: .seconds(delay + jitter))
-            } catch {
-                return
-            }
+            guard await cancellableSleep(for: .seconds(delay + jitter)) else { return }
             guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
+                consecutiveMisses = 0
                 onStatus?("Reconnecting to \(device.name)...")
                 connect(to: device)
                 let deadline = Date().addingTimeInterval(10)
                 while !isConnected {
                     if Task.isCancelled || Date() > deadline { break }
-                    do {
-                        try await Task.sleep(for: .milliseconds(100))
-                    } catch {
-                        return
-                    }
+                    guard await cancellableSleep(for: .milliseconds(100)) else { return }
                 }
                 if Task.isCancelled { return }
                 if isConnected {
                     onStatus?("Reconnected to \(device.name)")
                     return
                 }
+            } else {
+                consecutiveMisses += 1
             }
         }
         onStatus?("Auto-reconnect gave up after 60 attempts")
