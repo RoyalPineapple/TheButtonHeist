@@ -48,6 +48,9 @@ struct RootView: View {
                 NavigationLink("Settings") {
                     SettingsView()
                 }
+                NavigationLink("Custom Content") {
+                    CustomContentDemo()
+                }
                 NavigationLink("Modal Window") {
                     ModalWindowDemo()
                 }

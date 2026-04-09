@@ -402,6 +402,7 @@ public enum ElementProperty: String, Codable, Sendable, CaseIterable {
     case actions
     case frame
     case activationPoint
+    case customContent
 
     /// Geometry properties: frame position/size and activation point coordinates.
     public var isGeometry: Bool {
