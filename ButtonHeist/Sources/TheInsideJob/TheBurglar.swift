@@ -202,26 +202,22 @@ final class TheBurglar {
     /// Walk the hierarchy tree, separating elements inside `.tabBar` containers from content.
     private func partitionByTabBar(_ hierarchy: [AccessibilityHierarchy]) -> TabBarPartition {
         var hasTabBar = false
-        var contentLabels: [String] = []
-
-        for node in hierarchy {
-            node.forEach(
-                context: false,
-                container: { insideTabBar, container in
-                    if case .tabBar = container.type {
-                        hasTabBar = true
-                        return true
-                    }
-                    return insideTabBar
-                },
-                element: { element, _, insideTabBar in
-                    if !insideTabBar, let label = element.label {
-                        contentLabels.append(label)
-                    }
+        let contentLabels: [String] = hierarchy.compactMap(
+            context: false,
+            container: { insideTabBar, container in
+                if case .tabBar = container.type {
+                    hasTabBar = true
+                    return true
                 }
-            )
-        }
-
+                return insideTabBar
+            },
+            element: { element, _, insideTabBar in
+                if !insideTabBar, let label = element.label {
+                    return label
+                }
+                return nil
+            }
+        )
         return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
     }
 
