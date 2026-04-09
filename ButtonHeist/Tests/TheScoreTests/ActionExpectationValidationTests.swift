@@ -277,6 +277,124 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertFalse(outcome.met)
     }
 
+    // MARK: - elementAppeared (screen change)
+
+    func testElementAppearedMetOnScreenChange() {
+        let newElement = HeistElement(
+            heistId: "no_receipt", description: "No receipt",
+            label: "No receipt", value: nil, identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.activate]
+        )
+        let newInterface = Interface(
+            timestamp: Date(), elements: [newElement], tree: nil
+        )
+        let result = ActionResult(
+            success: true, method: .waitForChange,
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged, elementCount: 1,
+                newInterface: newInterface
+            )
+        )
+        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "No receipt"))
+        let outcome = expectation.validate(against: result)
+        XCTAssertTrue(outcome.met)
+    }
+
+    func testElementAppearedNotMetOnScreenChangeWhenAbsent() {
+        let otherElement = HeistElement(
+            heistId: "new_sale", description: "New sale",
+            label: "New sale", value: nil, identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.activate]
+        )
+        let newInterface = Interface(
+            timestamp: Date(), elements: [otherElement], tree: nil
+        )
+        let result = ActionResult(
+            success: true, method: .waitForChange,
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged, elementCount: 1,
+                newInterface: newInterface
+            )
+        )
+        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "No receipt"))
+        let outcome = expectation.validate(against: result)
+        XCTAssertFalse(outcome.met)
+        XCTAssertEqual(outcome.actual, "screen changed but element not found in new interface")
+    }
+
+    // MARK: - elementDisappeared (screen change)
+
+    func testElementDisappearedMetOnScreenChange() {
+        let preActionElements: [String: HeistElement] = [
+            "loading": HeistElement(
+                heistId: "loading", description: "Recording payment",
+                label: "Recording payment", value: nil, identifier: nil,
+                traits: [.staticText],
+                frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 44,
+                actions: []
+            ),
+        ]
+        let newElement = HeistElement(
+            heistId: "done", description: "Done",
+            label: "Done", value: nil, identifier: nil,
+            traits: [.button],
+            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+            actions: [.activate]
+        )
+        let newInterface = Interface(
+            timestamp: Date(), elements: [newElement], tree: nil
+        )
+        let result = ActionResult(
+            success: true, method: .waitForChange,
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged, elementCount: 1,
+                newInterface: newInterface
+            )
+        )
+        let expectation = ActionExpectation.elementDisappeared(
+            ElementMatcher(label: "Recording payment")
+        )
+        let outcome = expectation.validate(against: result, preActionElements: preActionElements)
+        XCTAssertTrue(outcome.met)
+    }
+
+    func testElementDisappearedNotMetOnScreenChangeWhenStillPresent() {
+        let preActionElements: [String: HeistElement] = [
+            "persist": HeistElement(
+                heistId: "persist", description: "Header",
+                label: "Header", value: nil, identifier: nil,
+                traits: [.header],
+                frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 44,
+                actions: []
+            ),
+        ]
+        let sameElement = HeistElement(
+            heistId: "persist", description: "Header",
+            label: "Header", value: nil, identifier: nil,
+            traits: [.header],
+            frameX: 0, frameY: 0, frameWidth: 200, frameHeight: 44,
+            actions: []
+        )
+        let newInterface = Interface(
+            timestamp: Date(), elements: [sameElement], tree: nil
+        )
+        let result = ActionResult(
+            success: true, method: .waitForChange,
+            interfaceDelta: InterfaceDelta(
+                kind: .screenChanged, elementCount: 1,
+                newInterface: newInterface
+            )
+        )
+        let expectation = ActionExpectation.elementDisappeared(ElementMatcher(label: "Header"))
+        let outcome = expectation.validate(against: result, preActionElements: preActionElements)
+        XCTAssertFalse(outcome.met)
+        XCTAssertEqual(outcome.actual, "screen changed but element still present in new interface")
+    }
+
     // MARK: - compound
 
     func testCompoundAllMet() {
