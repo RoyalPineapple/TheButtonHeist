@@ -734,22 +734,16 @@ extension TheFence {
                 completedSteps += 1
             } catch {
                 failedIndex = index
-                failure = PlaybackFailure(
-                    command: step.command,
-                    target: step.target,
-                    error: error.localizedDescription,
-                    actionResult: nil,
-                    expectationResult: nil,
-                    interface: nil
-                )
+                let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
+                failure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
                 break
             }
         }
 
         // Capture the live interface at time of failure for diagnostics
-        var enrichedFailure = failure
-        if let failure {
-            enrichedFailure = await captureInterface(for: failure)
+        if failure != nil {
+            let interface = await captureInterfaceSnapshot()
+            failure = failure.map { withInterface($0, interface) }
         }
 
         let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
@@ -757,47 +751,45 @@ extension TheFence {
             completedSteps: completedSteps,
             failedIndex: failedIndex,
             totalTimingMs: totalTimingMs,
-            failure: enrichedFailure
+            failure: failure
         )
     }
 
     /// Extract a PlaybackFailure from a response, or nil if the step succeeded.
-    /// Does not capture the interface — call `captureInterface(for:)` for the full snapshot.
     private func playbackFailure(step: HeistEvidence, response: FenceResponse) -> PlaybackFailure? {
-        if case .error(let message) = response {
-            return PlaybackFailure(
-                command: step.command, target: step.target, error: message,
-                actionResult: nil, expectationResult: nil, interface: nil
-            )
+        let failedStep = PlaybackFailure.FailedStep(command: step.command, target: step.target)
+        switch response {
+        case .error(let message):
+            return .fenceError(step: failedStep, message: message, interface: nil)
+        case .action(let result, let expectation) where !result.success:
+            return .actionFailed(step: failedStep, result: result, expectation: expectation, interface: nil)
+        default:
+            return nil
         }
-        if case .action(let result, let expectation) = response, !result.success {
-            let message = result.message ?? "action failed"
-            return PlaybackFailure(
-                command: step.command, target: step.target, error: message,
-                actionResult: result, expectationResult: expectation, interface: nil
-            )
+    }
+
+    /// Capture a live interface snapshot for failure diagnostics.
+    private func captureInterfaceSnapshot() async -> Interface? {
+        do {
+            let response = try await execute(request: ["command": "get_interface"])
+            if case .interface(let snapshot, _, _, _) = response {
+                return snapshot
+            }
+        } catch {
+            logger.error("Failed to capture interface for playback diagnostics: \(error.localizedDescription)")
         }
         return nil
     }
 
-    /// Enrich a PlaybackFailure with a live interface snapshot for diagnostics.
-    private func captureInterface(for failure: PlaybackFailure) async -> PlaybackFailure {
-        let interface: Interface?
-        do {
-            let response = try await execute(request: ["command": "get_interface"])
-            if case .interface(let snapshot, _, _, _) = response {
-                interface = snapshot
-            } else {
-                interface = nil
-            }
-        } catch {
-            logger.error("Failed to capture interface for playback diagnostics: \(error)")
-            interface = nil
+    /// Return a copy of the failure with the interface snapshot attached.
+    private func withInterface(_ failure: PlaybackFailure, _ interface: Interface?) -> PlaybackFailure {
+        switch failure {
+        case .fenceError(let step, let message, _):
+            return .fenceError(step: step, message: message, interface: interface)
+        case .actionFailed(let step, let result, let expectation, _):
+            return .actionFailed(step: step, result: result, expectation: expectation, interface: interface)
+        case .thrown(let step, let error, _):
+            return .thrown(step: step, error: error, interface: interface)
         }
-        return PlaybackFailure(
-            command: failure.command, target: failure.target, error: failure.error,
-            actionResult: failure.actionResult, expectationResult: failure.expectationResult,
-            interface: interface
-        )
     }
 }

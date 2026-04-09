@@ -12,20 +12,41 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
 
 /// Summary of a single step within a batch execution.
 /// Diagnostic context captured when a heist playback step fails.
-public struct PlaybackFailure: Sendable {
-    /// The command that failed (e.g. "activate", "type_text").
-    public let command: String
-    /// The element matcher from the failed step, if any.
-    public let target: ElementMatcher?
-    /// Human-readable error message from the failed response.
-    public let error: String
-    /// The full action result from the failed step, if one was produced.
-    /// Contains errorKind, scrollSearchResult, expectation details, etc.
-    public let actionResult: ActionResult?
-    /// The expectation result from the failed step, if expectations were checked.
-    public let expectationResult: ExpectationResult?
-    /// Full interface snapshot at the time of failure — every element on screen.
-    public let interface: Interface?
+/// Each case carries exactly the data produced by that failure mode.
+public enum PlaybackFailure: Sendable {
+    /// TheFence returned a .error response (unknown command, invalid request, etc.)
+    case fenceError(step: FailedStep, message: String, interface: Interface?)
+    /// The action executed but returned a non-success ActionResult
+    case actionFailed(step: FailedStep, result: ActionResult, expectation: ExpectationResult?, interface: Interface?)
+    /// The execute call threw an exception
+    case thrown(step: FailedStep, error: String, interface: Interface?)
+
+    /// The step that failed — command name and element target.
+    public struct FailedStep: Sendable {
+        public let command: String
+        public let target: ElementMatcher?
+
+        public init(command: String, target: ElementMatcher?) {
+            self.command = command
+            self.target = target
+        }
+    }
+
+    public var step: FailedStep {
+        switch self {
+        case .fenceError(let step, _, _): return step
+        case .actionFailed(let step, _, _, _): return step
+        case .thrown(let step, _, _): return step
+        }
+    }
+
+    public var errorMessage: String {
+        switch self {
+        case .fenceError(_, let message, _): return message
+        case .actionFailed(_, let result, _, _): return result.message ?? "action failed"
+        case .thrown(_, let error, _): return error
+        }
+    }
 }
 
 public struct BatchStepSummary: Sendable {
@@ -249,11 +270,11 @@ public enum FenceResponse {
             var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at step \(index))" }
             if let failure {
-                text += "\n  command: \(failure.command)"
-                if let target = failure.target {
+                text += "\n  command: \(failure.step.command)"
+                if let target = failure.step.target {
                     text += "\n  target: \(target)"
                 }
-                text += "\n  error: \(failure.error)"
+                text += "\n  error: \(failure.errorMessage)"
             }
             return text
         default:
@@ -405,28 +426,7 @@ public enum FenceResponse {
             ]
             if let failedIndex { dict["failedIndex"] = failedIndex }
             if let failure {
-                var failureDict: [String: Any] = [
-                    "command": failure.command,
-                    "error": failure.error,
-                ]
-                if let target = failure.target {
-                    var targetDict: [String: Any] = [:]
-                    if let label = target.label { targetDict["label"] = label }
-                    if let identifier = target.identifier { targetDict["identifier"] = identifier }
-                    if let value = target.value { targetDict["value"] = value }
-                    if let traits = target.traits { targetDict["traits"] = traits.map(\.rawValue) }
-                    failureDict["target"] = targetDict
-                }
-                if let actionResult = failure.actionResult {
-                    failureDict["actionResult"] = actionJsonDict(actionResult)
-                }
-                if let expectation = failure.expectationResult, !expectation.met {
-                    failureDict["expectation"] = Self.expectationResultDict(expectation)
-                }
-                if let interface = failure.interface {
-                    failureDict["interface"] = interfaceDictionary(interface, detail: .summary)
-                }
-                dict["failure"] = failureDict
+                dict["failure"] = playbackFailureDict(failure)
             }
             return dict
         case .ok, .error, .help, .status, .devices, .interface, .action,
@@ -434,6 +434,36 @@ public enum FenceResponse {
              .sessionState, .targets:
             return ["status": "ok"]
         }
+    }
+
+    private func playbackFailureDict(_ failure: PlaybackFailure) -> [String: Any] {
+        var dict: [String: Any] = [
+            "command": failure.step.command,
+            "error": failure.errorMessage,
+        ]
+        if let target = failure.step.target {
+            var targetDict: [String: Any] = [:]
+            if let label = target.label { targetDict["label"] = label }
+            if let identifier = target.identifier { targetDict["identifier"] = identifier }
+            if let value = target.value { targetDict["value"] = value }
+            if let traits = target.traits { targetDict["traits"] = traits.map(\.rawValue) }
+            dict["target"] = targetDict
+        }
+        switch failure {
+        case .actionFailed(_, let result, let expectation, let interface):
+            dict["actionResult"] = actionJsonDict(result)
+            if let expectation, !expectation.met {
+                dict["expectation"] = Self.expectationResultDict(expectation)
+            }
+            if let interface {
+                dict["interface"] = interfaceDictionary(interface, detail: .summary)
+            }
+        case .fenceError(_, _, let interface), .thrown(_, _, let interface):
+            if let interface {
+                dict["interface"] = interfaceDictionary(interface, detail: .summary)
+            }
+        }
+        return dict
     }
 
     private func sessionLogJsonDict(_ manifest: SessionManifest) -> [String: Any] {
@@ -803,7 +833,7 @@ public enum FenceResponse {
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure):
             var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at \(index))" }
-            if let failure { text += " [\(failure.command): \(failure.error)]" }
+            if let failure { text += " [\(failure.step.command): \(failure.errorMessage)]" }
             return text
         default:
             return ""
