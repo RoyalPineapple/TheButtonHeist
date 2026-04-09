@@ -48,7 +48,7 @@ public final class USBDeviceDiscovery: DeviceDiscovering {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.poll()
-                guard await Task.cancellableSleep(nanoseconds: 3_000_000_000) else { break }
+                guard await Task<Never, Never>.cancellableSleep(nanoseconds: 3_000_000_000) else { break }
             }
         }
     }
