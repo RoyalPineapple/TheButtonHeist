@@ -24,13 +24,13 @@ final class TheStashTopologyTests: XCTestCase {
             makeElement(label: "Title", traits: .header),
             makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
         ]
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonDisappearedIsTopologyChange() {
         let before = [makeElement(label: "Back", traits: UIAccessibilityTraits.backButton)]
         let after = [makeElement(label: "Title", traits: .header)]
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(isTopologyChanged(before: before, after: after))
     }
 
     func testBackButtonUnchangedIsNotTopologyChange() {
@@ -38,7 +38,7 @@ final class TheStashTopologyTests: XCTestCase {
             makeElement(label: "Back", traits: UIAccessibilityTraits.backButton),
             makeElement(label: "Title", traits: .header),
         ]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+        XCTAssertFalse(isTopologyChanged(before: elements, after: elements))
     }
 
     // MARK: - Header Structure
@@ -46,7 +46,7 @@ final class TheStashTopologyTests: XCTestCase {
     func testDisjointHeadersIsTopologyChange() {
         let before = [makeElement(label: "Settings", traits: .header)]
         let after = [makeElement(label: "Profile", traits: .header)]
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(isTopologyChanged(before: before, after: after))
     }
 
     func testOverlappingHeadersIsNotTopologyChange() {
@@ -58,70 +58,120 @@ final class TheStashTopologyTests: XCTestCase {
             makeElement(label: "Settings", traits: .header),
             makeElement(label: "Privacy", traits: .header),
         ]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertFalse(isTopologyChanged(before: before, after: after))
     }
 
     func testEmptyHeadersBeforeIsNotTopologyChange() {
         let before = [makeElement(label: "OK", traits: .button)]
         let after = [makeElement(label: "Profile", traits: .header)]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertFalse(isTopologyChanged(before: before, after: after))
     }
 
     func testNoElementChangesIsNotTopologyChange() {
         let elements = [makeElement(label: "OK", traits: .button)]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+        XCTAssertFalse(isTopologyChanged(before: elements, after: elements))
     }
 
-    // MARK: - Tab Bar Selection Change
+    // MARK: - Tab Bar Content Change
 
-    func testTabSelectionChangedIsTopologyChange() {
-        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
-        let before = [
-            makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
-            makeElement(label: "Transactions", traits: tabBarItemTrait),
-            makeElement(label: "Account", traits: tabBarItemTrait),
-        ]
-        let after = [
-            makeElement(label: "Checkout", traits: tabBarItemTrait),
-            makeElement(label: "Transactions", traits: [tabBarItemTrait, .selected]),
-            makeElement(label: "Account", traits: tabBarItemTrait),
-        ]
-        XCTAssertTrue(bagman.burglar.isTopologyChanged(before: before, after: after))
+    func testTabSwitchContentReplacedIsTopologyChange() {
+        // Tab bar container with 3 tabs; content area fully replaced.
+        let tabElements = ["Checkout", "Transactions", "Account"].enumerated().map { index, label in
+            makeElement(label: label, traits: .button)
+        }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+
+        let checkoutContent = (1...8).map { makeElement(label: "Item \($0)") }
+        let transactionsContent = (1...10).map { makeElement(label: "Transaction \($0)") }
+
+        let beforeHierarchy: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
+        ] + checkoutContent.enumerated().map { .element($1, traversalIndex: 100 + $0) }
+
+        let afterHierarchy: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
+        ] + transactionsContent.enumerated().map { .element($1, traversalIndex: 100 + $0) }
+
+        let beforeElements = beforeHierarchy.flattenToElements()
+        let afterElements = afterHierarchy.flattenToElements()
+
+        XCTAssertTrue(bagman.burglar.isTopologyChanged(
+            before: beforeElements, after: afterElements,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
     }
 
-    func testSameTabReselectedIsNotTopologyChange() {
-        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
-        let elements = [
-            makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
-            makeElement(label: "Transactions", traits: tabBarItemTrait),
-        ]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+    func testSameTabContentUnchangedIsNotTopologyChange() {
+        let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+        let content = (1...6).map { makeElement(label: "Row \($0)") }
+
+        let hierarchy: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
+        ] + content.enumerated().map { .element($1, traversalIndex: 100 + $0) }
+
+        let elements = hierarchy.flattenToElements()
+
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+            before: elements, after: elements,
+            beforeHierarchy: hierarchy, afterHierarchy: hierarchy
+        ))
     }
 
-    func testNoTabBarItemsIsNotTopologyChange() {
-        // Regular buttons with .selected toggling — no tabBarItem trait, not a tab switch.
-        let before = [
-            makeElement(label: "Option A", traits: [.button, .selected]),
-            makeElement(label: "Option B", traits: .button),
-        ]
-        let after = [
-            makeElement(label: "Option A", traits: .button),
-            makeElement(label: "Option B", traits: [.button, .selected]),
-        ]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: before, after: after))
+    func testNoTabBarContainerIsNotTopologyChange() {
+        // Content fully replaced but no .tabBar container — not a tab switch.
+        let beforeContent = (1...8).map { makeElement(label: "Old \($0)") }
+        let afterContent = (1...8).map { makeElement(label: "New \($0)") }
+
+        let beforeHierarchy = beforeContent.enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: $0)
+        }
+        let afterHierarchy = afterContent.enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: $0)
+        }
+
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+            before: beforeContent, after: afterContent,
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
     }
 
-    func testTabBarWithNoSelectionIsNotTopologyChange() {
-        // Edge case: tab bar items present but none selected in either snapshot.
-        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
-        let elements = [
-            makeElement(label: "Home", traits: tabBarItemTrait),
-            makeElement(label: "Search", traits: tabBarItemTrait),
+    func testScrollWithTabBarIsNotTopologyChange() {
+        // Tab bar present, but only a few content elements replaced (scroll).
+        let tabElements = ["Home", "Search"].map { makeElement(label: $0, traits: .button) }
+        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: .zero)
+        let persistent = (1...8).map { makeElement(label: "Row \($0)") }
+        let scrolledOff = [makeElement(label: "Row 9"), makeElement(label: "Row 10")]
+        let scrolledIn = [makeElement(label: "Row 11"), makeElement(label: "Row 12")]
+
+        let tabNodes: [AccessibilityHierarchy] = [
+            .container(tabBarContainer, children: tabElements.enumerated().map { .element($1, traversalIndex: $0) }),
         ]
-        XCTAssertFalse(bagman.burglar.isTopologyChanged(before: elements, after: elements))
+        let beforeHierarchy = tabNodes + (persistent + scrolledOff).enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
+        }
+        let afterHierarchy = tabNodes + (persistent + scrolledIn).enumerated().map {
+            AccessibilityHierarchy.element($1, traversalIndex: 100 + $0)
+        }
+
+        XCTAssertFalse(bagman.burglar.isTopologyChanged(
+            before: beforeHierarchy.flattenToElements(), after: afterHierarchy.flattenToElements(),
+            beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy
+        ))
     }
 
     // MARK: - Helpers
+
+    /// Convenience for tests that don't need hierarchy (back button, header checks).
+    private func isTopologyChanged(
+        before: [AccessibilityElement],
+        after: [AccessibilityElement]
+    ) -> Bool {
+        bagman.burglar.isTopologyChanged(
+            before: before, after: after,
+            beforeHierarchy: [], afterHierarchy: []
+        )
+    }
 
     private func makeElement(
         label: String? = nil,
