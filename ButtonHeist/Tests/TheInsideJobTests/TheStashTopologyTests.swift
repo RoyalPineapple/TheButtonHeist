@@ -75,7 +75,7 @@ final class TheStashTopologyTests: XCTestCase {
     // MARK: - Tab Bar Selection Change
 
     func testTabSelectionChangedIsTopologyChange() {
-        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
         let before = [
             makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
             makeElement(label: "Transactions", traits: tabBarItemTrait),
@@ -90,7 +90,7 @@ final class TheStashTopologyTests: XCTestCase {
     }
 
     func testSameTabReselectedIsNotTopologyChange() {
-        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
         let elements = [
             makeElement(label: "Checkout", traits: [tabBarItemTrait, .selected]),
             makeElement(label: "Transactions", traits: tabBarItemTrait),
@@ -113,7 +113,7 @@ final class TheStashTopologyTests: XCTestCase {
 
     func testTabBarWithNoSelectionIsNotTopologyChange() {
         // Edge case: tab bar items present but none selected in either snapshot.
-        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
         let elements = [
             makeElement(label: "Home", traits: tabBarItemTrait),
             makeElement(label: "Search", traits: tabBarItemTrait),

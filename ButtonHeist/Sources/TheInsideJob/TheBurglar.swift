@@ -140,7 +140,7 @@ final class TheBurglar {
         before: [AccessibilityElement],
         after: [AccessibilityElement]
     ) -> Bool {
-        let backButtonTrait = UIAccessibilityTraits(rawValue: 1 << 27)
+        let backButtonTrait = UIAccessibilityTraits.fromNames(["backButton"])
         let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
         let hasBackButton = after.contains { $0.traits.contains(backButtonTrait) }
         if hadBackButton != hasBackButton { return true }
@@ -168,7 +168,7 @@ final class TheBurglar {
         before: [AccessibilityElement],
         after: [AccessibilityElement]
     ) -> Bool {
-        let tabBarItemTrait = UIAccessibilityTraits(rawValue: 1 << 28)
+        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
         let beforeSelected = before.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
         let afterSelected = after.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
         guard let beforeLabel = beforeSelected?.label, let afterLabel = afterSelected?.label else {
