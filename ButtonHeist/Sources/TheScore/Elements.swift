@@ -568,8 +568,9 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     }
 
     /// Whether any property predicate is set (label, identifier, value, traits, or excludeTraits).
+    /// Empty strings are treated as unset — they match nothing rather than everything.
     public var hasPredicates: Bool {
-        label != nil || identifier != nil || value != nil || hasTraitPredicates
+        label?.isEmpty == false || identifier?.isEmpty == false || value?.isEmpty == false || hasTraitPredicates
     }
 
     public var nonEmpty: Self? { hasPredicates ? self : nil }
@@ -598,12 +599,15 @@ extension HeistElement {
     /// Unknown traits in required/excluded cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {
+            if matchLabel.isEmpty { return false }
             guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
         }
         if let matchId = matcher.identifier {
+            if matchId.isEmpty { return false }
             guard let identifier, identifier.localizedCaseInsensitiveContains(matchId) else { return false }
         }
         if let matchVal = matcher.value {
+            if matchVal.isEmpty { return false }
             guard let value, value.localizedCaseInsensitiveContains(matchVal) else { return false }
         }
         let traitSet = matcher.hasTraitPredicates ? Set(traits) : []

@@ -245,7 +245,7 @@ final class TheTripwire {
     func yieldRealFrames(_ count: Int, intervalMs: UInt64 = 16) async {
         for _ in 0..<count {
             CATransaction.flush()
-            try? await Task.sleep(for: .milliseconds(intervalMs))
+            guard await cancellableSleep(for: .milliseconds(intervalMs)) else { break }
         }
     }
 

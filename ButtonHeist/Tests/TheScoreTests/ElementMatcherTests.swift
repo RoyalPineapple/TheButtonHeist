@@ -91,4 +91,34 @@ final class ElementMatcherTests: XCTestCase {
         let b = ElementMatcher(label: "Cancel")
         XCTAssertNotEqual(a, b)
     }
+
+    // MARK: - Empty String Handling
+
+    func testEmptyStringLabelHasNoPredicates() {
+        let matcher = ElementMatcher(label: "")
+        XCTAssertFalse(matcher.hasPredicates)
+        XCTAssertNil(matcher.nonEmpty)
+    }
+
+    func testEmptyStringIdentifierHasNoPredicates() {
+        let matcher = ElementMatcher(identifier: "")
+        XCTAssertFalse(matcher.hasPredicates)
+    }
+
+    func testEmptyStringValueHasNoPredicates() {
+        let matcher = ElementMatcher(value: "")
+        XCTAssertFalse(matcher.hasPredicates)
+    }
+
+    func testEmptyStringLabelMatchesNothing() {
+        let element = HeistElement.stub(label: "Save")
+        let matcher = ElementMatcher(label: "")
+        XCTAssertFalse(element.matches(matcher), "Empty-string label should match nothing")
+    }
+
+    func testEmptyStringMatcherTreatedAsNoPredicate() {
+        let matcher = ElementMatcher(label: "", identifier: "", value: "")
+        XCTAssertFalse(matcher.hasPredicates, "All-empty-string matcher should have no predicates")
+        XCTAssertNil(matcher.nonEmpty, "All-empty-string matcher should be nonEmpty == nil")
+    }
 }
