@@ -77,7 +77,8 @@ extension Array where Element == AccessibilityHierarchy {
         _ matcher: ElementMatcher,
         limit: Int
     ) -> [AccessibilityHierarchy.MatchResult] {
-        compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
+        guard limit > 0 else { return [] }
+        return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
             element.matches(matcher) ? AccessibilityHierarchy.MatchResult(element: element) : nil
         })
     }
