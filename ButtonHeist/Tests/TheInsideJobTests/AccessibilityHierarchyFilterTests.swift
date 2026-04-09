@@ -151,7 +151,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "OK", traits: .button),
         ])
 
-        let buttons: [String] = tree.compactMap(
+        let buttons: [String] = [tree].compactMap(
             context: (),
             container: { _, _ in () },
             element: { element, _, _ in
@@ -217,7 +217,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "C", index: 2),
         ])
 
-        let result: [String] = tree.compactMap(
+        let result: [String] = [tree].compactMap(
             context: (),
             container: { _, _ in () },
             element: { element, _, _ in element.label }
@@ -233,7 +233,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "Also Keep", traits: .button, index: 2),
         ])
 
-        let result: [String] = tree.compactMap(
+        let result: [String] = [tree].compactMap(
             context: (),
             container: { _, _ in () },
             element: { element, _, _ in
@@ -249,7 +249,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             element(label: "Row", index: 0),
         ])
 
-        let result: [(String, Bool)] = tree.compactMap(
+        let result: [(String, Bool)] = [tree].compactMap(
             context: false,
             container: { _, container in container.isScrollable },
             element: { element, _, isScrollable in
@@ -269,7 +269,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        let result: [String] = tree.compactMap(
+        let result: [String] = [tree].compactMap(
             context: "",
             container: { context, container in
                 if case let .semanticGroup(label, _, _) = container.type {
@@ -288,7 +288,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     func testCompactMapOnSingleElement() {
         let node = element(label: "Solo", index: 5)
 
-        let result: [String] = node.compactMap(
+        let result: [String] = [node].compactMap(
             context: "ctx",
             container: { context, _ in context },
             element: { element, traversalIndex, context in
@@ -302,7 +302,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     func testCompactMapOnSingleElementReturningNil() {
         let node = element(label: "Solo", index: 0)
 
-        let result: [String] = node.compactMap(
+        let result: [String] = [node].compactMap(
             context: (),
             container: { _, _ in () },
             element: { _, _, _ in nil }
@@ -314,7 +314,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
     func testCompactMapOnEmptyContainer() {
         let tree = group(label: "Empty", children: [])
 
-        let result: [String] = tree.compactMap(
+        let result: [String] = [tree].compactMap(
             context: (),
             container: { _, _ in () },
             element: { element, _, _ in element.label }
@@ -361,7 +361,7 @@ final class AccessibilityHierarchyFilterTests: XCTestCase {
             ]),
         ])
 
-        let result: [(String, Bool)] = tree.compactMap(
+        let result: [(String, Bool)] = [tree].compactMap(
             context: false,
             container: { _, container in container.isScrollable },
             element: { element, _, isScrollable in

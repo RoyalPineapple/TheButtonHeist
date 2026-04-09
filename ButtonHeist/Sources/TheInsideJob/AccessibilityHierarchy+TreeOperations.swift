@@ -42,43 +42,65 @@ extension AccessibilityHierarchy {
 extension AccessibilityHierarchy {
     /// Transforms the tree's elements top-down with inherited context, collecting non-nil results.
     ///
+    /// - `first`: maximum number of results to collect. 0 (default) means no limit — walk the
+    ///   entire tree. Use `first: 1` for first-match, `first: 2` for unique-match, etc.
     /// - `context`: the initial value at the root.
     /// - `container`: transforms the context at each container boundary.
     /// - `element`: transforms each leaf element into an optional result. Nil values are dropped.
     ///
-    /// Combines `compactMap` with top-down context propagation — filter, transform, and
-    /// inherit container context in a single pass.
-    func compactMap<Context, Result>(
+    /// Returns `true` when the limit was reached (early exit signal for internal recursion).
+    @discardableResult
+    fileprivate func compactMap<Context, Result>(
+        first maxCount: Int = 0,
         context: Context,
+        into results: inout [Result],
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Result?
-    ) -> [Result] {
+    ) -> Bool {
         switch self {
         case let .element(accessibilityElement, traversalIndex):
             if let result = element(accessibilityElement, traversalIndex, context) {
-                return [result]
+                results.append(result)
+                if maxCount > 0, results.count >= maxCount { return true }
             }
-            return []
+            return false
         case let .container(accessibilityContainer, children):
             let childContext = container(context, accessibilityContainer)
-            return children.flatMap {
-                $0.compactMap(context: childContext, container: container, element: element)
+            for child in children {
+                let limitReached = child.compactMap(
+                    first: maxCount, context: childContext, into: &results,
+                    container: container, element: element
+                )
+                if limitReached { return true }
             }
+            return false
         }
     }
-
 }
 
 extension Array where Element == AccessibilityHierarchy {
     /// Transforms elements across all roots top-down with inherited context, collecting non-nil results.
+    ///
+    /// - `first`: maximum number of results to collect. 0 (default) means no limit.
+    /// - `context`: the initial value at the root.
+    /// - `container`: transforms the context at each container boundary.
+    /// - `element`: transforms each leaf element into an optional result. Nil values are dropped.
     func compactMap<Context, Result>(
+        first maxCount: Int = 0,
         context: Context,
         container: (Context, AccessibilityContainer) -> Context,
         element: (AccessibilityElement, Int, Context) -> Result?
     ) -> [Result] {
-        flatMap { $0.compactMap(context: context, container: container, element: element) }
+        var results: [Result] = []
+        for root in self {
+            let limitReached = root.compactMap(
+                first: maxCount, context: context, into: &results,
+                container: container, element: element
+            )
+            if limitReached { break }
+        }
+        return results
     }
-
 }
 
 // MARK: - Bottom-Up Fold with Shared Accumulator
@@ -112,65 +134,6 @@ extension AccessibilityHierarchy {
     }
 }
 
-// MARK: - Early-Exit Traversal
-
-extension AccessibilityHierarchy {
-    /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
-    ///
-    /// Like `compactMap(context:container:element:)` but with early termination — once `maxCount` results have been
-    /// collected, no further nodes are visited. Use this for first-match, unique-match, or
-    /// ordinal resolution where walking the full tree is wasteful.
-    ///
-    /// Returns `true` when the limit was reached (early exit signal for internal recursion).
-    @discardableResult
-    fileprivate func prefix<Result>(
-        _ maxCount: Int,
-        into results: inout [Result],
-        transform: (AccessibilityElement, Int) -> Result?
-    ) -> Bool {
-        switch self {
-        case let .element(element, traversalIndex):
-            if let result = transform(element, traversalIndex) {
-                results.append(result)
-                if results.count >= maxCount { return true }
-            }
-            return false
-        case .container(_, let children):
-            for child in children {
-                let limitReached = child.prefix(maxCount, into: &results, transform: transform)
-                if limitReached { return true }
-            }
-            return false
-        }
-    }
-
-    /// Collects up to `maxCount` transformed leaf elements, stopping as soon as the limit is reached.
-    private func prefix<Result>(
-        _ maxCount: Int,
-        transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        var results: [Result] = []
-        prefix(maxCount, into: &results, transform: transform)
-        return results
-    }
-}
-
-extension Array where Element == AccessibilityHierarchy {
-    /// Collects up to `maxCount` transformed leaf elements across all roots, with early exit.
-    func prefix<Result>(
-        _ maxCount: Int,
-        transform: (AccessibilityElement, Int) -> Result?
-    ) -> [Result] {
-        guard maxCount > 0 else { return [] }
-        var results: [Result] = []
-        for root in self {
-            let limitReached = root.prefix(maxCount, into: &results, transform: transform)
-            if limitReached { break }
-        }
-        return results
-    }
-}
-
 // MARK: - Leaf Extraction
 
 extension AccessibilityHierarchy {
@@ -178,7 +141,7 @@ extension AccessibilityHierarchy {
     /// Order follows the tree's depth-first traversal (children visited left-to-right).
     /// The array-level `elements` property handles cross-root sorting.
     var elements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
+        [self].compactMap(context: (), container: { _, _ in () }, element: { element, traversalIndex, _ in
             (element, traversalIndex)
         })
     }

@@ -77,9 +77,9 @@ extension Array where Element == AccessibilityHierarchy {
         _ matcher: ElementMatcher,
         limit: Int
     ) -> [AccessibilityHierarchy.MatchResult] {
-        prefix(limit) { element, _ in
+        compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
             element.matches(matcher) ? AccessibilityHierarchy.MatchResult(element: element) : nil
-        }
+        })
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
