@@ -49,6 +49,7 @@ final class TheBrains {
     struct BeforeState {
         let snapshot: [TheStash.ScreenElement]
         let elements: [AccessibilityElement]
+        let hierarchy: [AccessibilityHierarchy]
         let viewController: ObjectIdentifier?
     }
 
@@ -58,6 +59,7 @@ final class TheBrains {
         BeforeState(
             snapshot: stash.selectElements(),
             elements: stash.currentHierarchy.sortedElements,
+            hierarchy: stash.currentHierarchy,
             viewController: tripwire.topmostViewController().map(ObjectIdentifier.init)
         )
     }
@@ -93,7 +95,10 @@ final class TheBrains {
 
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || stash.burglar.isTopologyChanged(before: before.elements, after: afterResult?.elements ?? [])
+            || stash.burglar.isTopologyChanged(
+                before: before.elements, after: afterResult?.elements ?? [],
+                beforeHierarchy: before.hierarchy, afterHierarchy: afterResult?.hierarchy ?? []
+            )
         if isScreenChange {
             stash.registry.clearScreen()
             containerExploreStates.removeAll()

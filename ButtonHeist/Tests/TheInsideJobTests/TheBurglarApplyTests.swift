@@ -327,12 +327,16 @@ final class TheBurglarApplyTests: XCTestCase {
             makeElement(label: "Home", traits: .header),
             makeElement(label: "Back", traits: backButtonTrait),
         ]
-        XCTAssertTrue(stash.burglar.isTopologyChanged(before: before, after: after))
+        XCTAssertTrue(stash.burglar.isTopologyChanged(
+            before: before, after: after, beforeHierarchy: [], afterHierarchy: []
+        ))
     }
 
     func testTopologyUnchangedWhenSameHeaders() {
         let elements = [makeElement(label: "Settings", traits: .header)]
-        XCTAssertFalse(stash.burglar.isTopologyChanged(before: elements, after: elements))
+        XCTAssertFalse(stash.burglar.isTopologyChanged(
+            before: elements, after: elements, beforeHierarchy: [], afterHierarchy: []
+        ))
     }
 
     // MARK: - Helpers
