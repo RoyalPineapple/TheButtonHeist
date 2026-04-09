@@ -325,7 +325,7 @@ extension TheBrains {
 
             var inputReady = false
             for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {
-                guard await cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { break }
+                guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { break }
                 if safecracker.hasActiveTextInput() {
                     inputReady = true
                     break
@@ -362,7 +362,7 @@ extension TheBrains {
             }
         }
 
-        guard await cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }
+        guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }
         stash.refresh()
 
         var fieldValue: String?

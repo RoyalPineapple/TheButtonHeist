@@ -225,18 +225,14 @@ final class TheFenceSecurityTests: XCTestCase {
 
     // MARK: - Edge Cases: Arg Parsing with Mixed Types
 
-    @ButtonHeistActor
-    func testIntArgFromInvalidString() async {
-        let (fence, _) = makeConnectedFence()
+    func testIntegerFromInvalidString() {
         let dict: [String: Any] = ["count": "not_a_number"]
-        XCTAssertNil(fence.intArg(dict, "count"))
+        XCTAssertNil(dict.integer("count"))
     }
 
-    @ButtonHeistActor
-    func testDoubleArgFromInvalidString() async {
-        let (fence, _) = makeConnectedFence()
+    func testNumberFromInvalidString() {
         let dict: [String: Any] = ["x": "not_a_number"]
-        XCTAssertNil(fence.doubleArg(dict, "x"))
+        XCTAssertNil(dict.number("x"))
     }
 
 }

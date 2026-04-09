@@ -258,7 +258,7 @@ final class TheStakeout {
         session.captureTimer = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 self?.captureAndAppendFrame()
-                guard await cancellableSleep(for: interval) else { break }
+                guard await Task.cancellableSleep(for: interval) else { break }
             }
         }
         stakeoutPhase = .recording(session)
@@ -350,7 +350,7 @@ final class TheStakeout {
         guard case .recording(var session) = stakeoutPhase else { return }
         session.inactivityCheckTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                guard await cancellableSleep(for: .seconds(1)) else { break } // Check every second
+                guard await Task.cancellableSleep(for: .seconds(1)) else { break } // Check every second
                 guard let self, case .recording(let currentSession) = self.stakeoutPhase else { continue }
 
                 let elapsed = Date().timeIntervalSince(currentSession.lastActivityTime)
