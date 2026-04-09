@@ -138,7 +138,9 @@ final class TheBurglar {
     /// Did the accessibility topology change between two element snapshots?
     func isTopologyChanged(
         before: [AccessibilityElement],
-        after: [AccessibilityElement]
+        after: [AccessibilityElement],
+        beforeHierarchy: [AccessibilityHierarchy],
+        afterHierarchy: [AccessibilityHierarchy]
     ) -> Bool {
         let backButtonTrait = UIAccessibilityTraits.fromNames(["backButton"])
         let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
@@ -151,30 +153,77 @@ final class TheBurglar {
             return true
         }
 
-        // Tab bar selection change: if a different tab bar item became selected,
-        // the user navigated to a different tab — that's a screen change.
-        if isTabSelectionChanged(before: before, after: after) {
+        // Tab bar content change: if the hierarchy contains a .tabBar container and the
+        // elements outside that container were largely replaced, a tab switch occurred.
+        if isTabBarContentChanged(beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy) {
             return true
         }
 
         return false
     }
 
-    /// Returns true when the selected tab bar item changed between snapshots.
+    /// Returns true when the content outside a tab bar container changed between snapshots.
     ///
-    /// Tab bar items carry the `.tabBarItem` trait (bit 28). The currently selected tab
-    /// additionally has `.selected`. If the selected tab label changed, a tab switch occurred.
-    private func isTabSelectionChanged(
-        before: [AccessibilityElement],
-        after: [AccessibilityElement]
+    /// Partitions each hierarchy into tab bar elements (inside `.tabBar` containers) and
+    /// content elements (everything else). If both snapshots have a tab bar and the content
+    /// elements are mostly different, the user switched tabs.
+    private func isTabBarContentChanged(
+        beforeHierarchy: [AccessibilityHierarchy],
+        afterHierarchy: [AccessibilityHierarchy]
     ) -> Bool {
-        let tabBarItemTrait = UIAccessibilityTraits.fromNames(["tabBarItem"])
-        let beforeSelected = before.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
-        let afterSelected = after.first { $0.traits.contains(tabBarItemTrait) && $0.traits.contains(.selected) }
-        guard let beforeLabel = beforeSelected?.label, let afterLabel = afterSelected?.label else {
-            return false
+        let beforePartition = partitionByTabBar(beforeHierarchy)
+        let afterPartition = partitionByTabBar(afterHierarchy)
+        guard beforePartition.hasTabBar, afterPartition.hasTabBar else { return false }
+
+        let beforeContent = beforePartition.contentLabels
+        let afterContent = afterPartition.contentLabels
+        guard !beforeContent.isEmpty, !afterContent.isEmpty else { return false }
+
+        // Count how many before-content labels can be matched in the after-content.
+        var afterBag = afterContent
+        var matchedCount = 0
+        for label in beforeContent {
+            if let index = afterBag.firstIndex(of: label) {
+                afterBag.remove(at: index)
+                matchedCount += 1
+            }
         }
-        return beforeLabel != afterLabel
+
+        let maxCount = max(beforeContent.count, afterContent.count)
+        let persistRatio = Double(matchedCount) / Double(maxCount)
+        return persistRatio < 0.4
+    }
+
+    private struct TabBarPartition {
+        let hasTabBar: Bool
+        let contentLabels: [String]
+    }
+
+    /// Walk the hierarchy tree, separating elements inside `.tabBar` containers from content.
+    private func partitionByTabBar(_ hierarchy: [AccessibilityHierarchy]) -> TabBarPartition {
+        var hasTabBar = false
+        var contentLabels: [String] = []
+
+        func walk(_ nodes: [AccessibilityHierarchy], insideTabBar: Bool) {
+            for node in nodes {
+                switch node {
+                case let .element(element, _):
+                    if !insideTabBar, let label = element.label {
+                        contentLabels.append(label)
+                    }
+                case let .container(container, children):
+                    if case .tabBar = container.type {
+                        hasTabBar = true
+                        walk(children, insideTabBar: true)
+                    } else {
+                        walk(children, insideTabBar: insideTabBar)
+                    }
+                }
+            }
+        }
+
+        walk(hierarchy, insideTabBar: false)
+        return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
     }
 
     // MARK: - Element Context Building
