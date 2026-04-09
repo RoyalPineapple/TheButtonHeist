@@ -52,6 +52,7 @@
 		5DAE78C8EAB2E5B2A3FF393C /* TuistBundle+UIKitTestApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6C417C981D5AF3F0C4C728D /* TuistBundle+UIKitTestApp.swift */; };
 		5EAD805C423FC2611F26DD74 /* swift-crypto__CryptoExtras.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */; };
 		618FBCE43D1B4DC031C348F2 /* TuistAssets+BHDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3A036AB963C2084573C0E0F /* TuistAssets+BHDemo.swift */; };
+		6231BD68150CAA4B90800A9E /* TabBarDemoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133B3C55419B175F5FC5F332 /* TabBarDemoView.swift */; };
 		703E27E25E57DEB7DA6BDA44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6FDBEAD6327B00BD22AA6539 /* Assets.xcassets */; };
 		718DCEAFFDCDD59A7E416BDF /* swift-crypto_CryptoBoringWrapper.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = DB8715B7F0184816A69C6D1A /* swift-crypto_CryptoBoringWrapper.bundle */; };
 		73119075DE7B80CB7247E9F4 /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10CDD5E500E477B98B606858 /* TheInsideJob.framework */; };
@@ -206,6 +207,7 @@
 		08C502CD65C96FA553FDE94E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1000E4B43B35612CE0CCDBAA /* ResearchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResearchApp.swift; sourceTree = "<group>"; };
 		10CDD5E500E477B98B606858 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		133B3C55419B175F5FC5F332 /* TabBarDemoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarDemoView.swift; sourceTree = "<group>"; };
 		14DB0C2E88AF1BD3F22236E6 /* MenuOrderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuOrderView.swift; sourceTree = "<group>"; };
 		1607B6B404E9A862D18A0758 /* DemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoApp.swift; sourceTree = "<group>"; };
 		1B609F468C0E57C4984AAD7D /* swift-crypto__CryptoExtras.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto__CryptoExtras.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -325,6 +327,7 @@
 				E9FD1D18D60C8DEA685D4A45 /* PlaylistView.swift */,
 				7EB069D6039881E065A92F23 /* RootView.swift */,
 				ED3E93AE1108866F17601CB8 /* SettingsView.swift */,
+				133B3C55419B175F5FC5F332 /* TabBarDemoView.swift */,
 				B8538EB0BF8721DFA4F81560 /* TextInputDemo.swift */,
 				F7D07E273A0048DA7FE282A3 /* TodoListView.swift */,
 				FDDC28751BB57CA789B63ADC /* TogglePickerDemo.swift */,
@@ -673,6 +676,7 @@
 				BB9B7222E9F9FE151DC019D7 /* PlaylistView.swift in Sources */,
 				43C8041B72E140B0603988EC /* RootView.swift in Sources */,
 				9EB69E3AB846255A7933F3D4 /* SettingsView.swift in Sources */,
+				6231BD68150CAA4B90800A9E /* TabBarDemoView.swift in Sources */,
 				1D7013159A0E8C97AB2B8B67 /* TextInputDemo.swift in Sources */,
 				373DF0BC2F86E6A5E0B60910 /* TodoListView.swift in Sources */,
 				C76B14B2C35AD5658395C2F7 /* TogglePickerDemo.swift in Sources */,

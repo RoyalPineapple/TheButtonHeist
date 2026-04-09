@@ -138,9 +138,11 @@ final class TheBurglar {
     /// Did the accessibility topology change between two element snapshots?
     func isTopologyChanged(
         before: [AccessibilityElement],
-        after: [AccessibilityElement]
+        after: [AccessibilityElement],
+        beforeHierarchy: [AccessibilityHierarchy],
+        afterHierarchy: [AccessibilityHierarchy]
     ) -> Bool {
-        let backButtonTrait = UIAccessibilityTraits(rawValue: 1 << 27)
+        let backButtonTrait = UIAccessibilityTraits.fromNames(["backButton"])
         let hadBackButton = before.contains { $0.traits.contains(backButtonTrait) }
         let hasBackButton = after.contains { $0.traits.contains(backButtonTrait) }
         if hadBackButton != hasBackButton { return true }
@@ -151,7 +153,76 @@ final class TheBurglar {
             return true
         }
 
+        // Tab bar content change: if the hierarchy contains a .tabBar container and the
+        // elements outside that container were largely replaced, a tab switch occurred.
+        if isTabBarContentChanged(beforeHierarchy: beforeHierarchy, afterHierarchy: afterHierarchy) {
+            return true
+        }
+
         return false
+    }
+
+    /// Returns true when the content outside a tab bar container changed between snapshots.
+    ///
+    /// Partitions each hierarchy into tab bar elements (inside `.tabBar` containers) and
+    /// content elements (everything else). If both snapshots have a tab bar and the content
+    /// elements are mostly different, the user switched tabs.
+    private func isTabBarContentChanged(
+        beforeHierarchy: [AccessibilityHierarchy],
+        afterHierarchy: [AccessibilityHierarchy]
+    ) -> Bool {
+        let beforePartition = partitionByTabBar(beforeHierarchy)
+        let afterPartition = partitionByTabBar(afterHierarchy)
+        guard beforePartition.hasTabBar, afterPartition.hasTabBar else { return false }
+
+        let beforeContent = beforePartition.contentLabels
+        let afterContent = afterPartition.contentLabels
+        guard !beforeContent.isEmpty, !afterContent.isEmpty else { return false }
+
+        // Count how many before-content labels can be matched in the after-content.
+        var afterBag = afterContent
+        var matchedCount = 0
+        for label in beforeContent {
+            if let index = afterBag.firstIndex(of: label) {
+                afterBag.remove(at: index)
+                matchedCount += 1
+            }
+        }
+
+        let maxCount = max(beforeContent.count, afterContent.count)
+        let persistRatio = Double(matchedCount) / Double(maxCount)
+        return persistRatio < 0.4
+    }
+
+    private struct TabBarPartition {
+        let hasTabBar: Bool
+        let contentLabels: [String]
+    }
+
+    /// Walk the hierarchy tree, separating elements inside `.tabBar` containers from content.
+    private func partitionByTabBar(_ hierarchy: [AccessibilityHierarchy]) -> TabBarPartition {
+        var hasTabBar = false
+        var contentLabels: [String] = []
+
+        for node in hierarchy {
+            node.forEach(
+                context: false,
+                container: { insideTabBar, container in
+                    if case .tabBar = container.type {
+                        hasTabBar = true
+                        return true
+                    }
+                    return insideTabBar
+                },
+                element: { element, _, insideTabBar in
+                    if !insideTabBar, let label = element.label {
+                        contentLabels.append(label)
+                    }
+                }
+            )
+        }
+
+        return TabBarPartition(hasTabBar: hasTabBar, contentLabels: contentLabels)
     }
 
     // MARK: - Element Context Building
