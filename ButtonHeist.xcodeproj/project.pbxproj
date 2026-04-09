@@ -65,6 +65,7 @@
 		500C86B095B0F024D2F4B97C /* ServerMessages+WireCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */; };
 		5016FC7A53548764BBC63C6A /* ConnectionScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD96D09CD68F61CCD6902F18 /* ConnectionScopeTests.swift */; };
 		5283417AB9EDA1F0444CECFA /* WireConversion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F00EF7237962DD4F94F135 /* WireConversion.swift */; };
+		5311A914933238621B11953C /* PlaybackFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 735BF02CB4162EA1DB567EB1 /* PlaybackFailure.swift */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
 		5928E6678313CF856F5D707F /* TheBookKeeper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367EDF78039EDCBEF3C3C006 /* TheBookKeeper.swift */; };
 		5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */; };
@@ -382,6 +383,7 @@
 		6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleMonitorTests.swift; sourceTree = "<group>"; };
 		6F9E5BD783CB31E3A568EE70 /* TheBookKeeperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBookKeeperTests.swift; sourceTree = "<group>"; };
 		71E06AB2C57CE2C760F6BF8F /* TheStashResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashResolutionTests.swift; sourceTree = "<group>"; };
+		735BF02CB4162EA1DB567EB1 /* PlaybackFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackFailure.swift; sourceTree = "<group>"; };
 		778707D9F768E26886B4DF9D /* TheBrains+Scroll.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Scroll.swift"; sourceTree = "<group>"; };
 		78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Bezier.swift"; sourceTree = "<group>"; };
 		797239827C8461DA6F51C8DB /* DiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsTests.swift; sourceTree = "<group>"; };
@@ -562,6 +564,7 @@
 				286300664EC22C2386C8F58E /* Exports.swift */,
 				4365DA4EF346D4C2292043F4 /* IdleMonitor.swift */,
 				B563AA9D07BE62B11AAD681D /* PendingRequestTracker.swift */,
+				735BF02CB4162EA1DB567EB1 /* PlaybackFailure.swift */,
 				245FE5132DA35AF04D368CD0 /* SessionManifest.swift */,
 				8EADD9A5C8AF9D5A8E41CF30 /* String+PathValidation.swift */,
 				F8E8A9D0EA46B264B74D2CF1 /* TargetConfig.swift */,
@@ -1175,6 +1178,7 @@
 				A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */,
 				F33B9D3BDCB1D582E2B014F8 /* IdleMonitor.swift in Sources */,
 				78C4C37260D52BD11B794E74 /* PendingRequestTracker.swift in Sources */,
+				5311A914933238621B11953C /* PlaybackFailure.swift in Sources */,
 				48D0A6095708687146CB4A37 /* SessionManifest.swift in Sources */,
 				CC2593482D7D7D1EE15D5AF9 /* String+PathValidation.swift in Sources */,
 				BAC8814FDCD457FBE6817A32 /* TargetConfig.swift in Sources */,
@@ -1513,6 +1517,10 @@
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
 					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 				);
 				INFOPLIST_FILE = "Derived/InfoPlists/TheInsideJobTests-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -1560,6 +1568,10 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1614,6 +1626,10 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
@@ -1793,6 +1809,7 @@
 				LastSwiftMigration = 2620;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = /Users/aodawa/conductor/workspaces/accra/lima;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 				VALIDATE_PRODUCT = YES;
@@ -1856,6 +1873,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SRCROOT = /Users/aodawa/conductor/workspaces/accra/lima;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;
 				SWIFT_VERSION = 6;
 			};
@@ -1887,6 +1905,10 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(inherited)",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
+					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
+					"$(SRCROOT)/submodules/AccessibilitySnapshotBH/Sources/AccessibilitySnapshot/Parser/ObjC/include",
 					"$(inherited)",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSL/include",
 					"$(SRCROOT)/Tuist/.build/checkouts/swift-crypto/Sources/CCryptoBoringSSLShims/include",
