@@ -753,8 +753,8 @@ enum ToolDefinitions {
             \
             wait_for and wait_for_change are recorded as playback steps. They act as \
             timing gates during replay — without them, playback fires the next action \
-            before async UI transitions complete. wait_for supports absent=true to wait \
-            for an element to disappear (loading indicators, spinners). \
+            before async UI transitions complete. wait_for waits for an element to appear \
+            or disappear (absent=true). \
             \
             During recording: attach 'expect' to actions — expectations are recorded with each \
             step and validated on every replay. Use specific expectations over generic ones: \

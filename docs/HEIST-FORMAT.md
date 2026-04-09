@@ -97,7 +97,7 @@ When recording a heist, **always target elements by matcher fields** (label, val
 `wait_for` and `wait_for_change` are recorded as playback steps. They act as timing gates — without them, playback fires the next action before async UI transitions complete. Waiting for a visible element to disappear (`absent: true`) is generally more reliable than waiting for an unknown element to appear — you already know what's on screen.
 
 Examples:
-- `wait_for(label: "Loading", absent: true)` — waits for a loading indicator to disappear
+- `wait_for(label: "Loading", absent: true)` — waits for an element to disappear (loading indicator gone)
 - `wait_for(label: "Confirmation", traits: ["staticText"])` — waits for an element to appear
 - `wait_for_change(expect: "screen_changed")` — waits for a screen transition to finish
 
