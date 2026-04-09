@@ -235,10 +235,46 @@ public struct Interface: Codable, Sendable {
         return slugify(screenName)
     }
 
+    /// Structured navigation context extracted from element traits.
+    /// Provides screen title, back button, and tab bar items with heistIds
+    /// so agents can orient and navigate without scanning the element list.
+    public var navigation: NavigationContext {
+        Self.buildNavigation(from: elements)
+    }
+
     public init(timestamp: Date, elements: [HeistElement], tree: [ElementNode]? = nil) {
         self.timestamp = timestamp
         self.elements = elements
         self.tree = tree
+    }
+
+    // MARK: - Navigation Context
+
+    static func buildNavigation(from elements: [HeistElement]) -> NavigationContext {
+        let screenTitle = elements
+            .first(where: { $0.traits.contains(.header) })
+            .flatMap(\.label)
+
+        let backButton = elements
+            .first(where: { $0.traits.contains(.backButton) })
+            .map { NavigationContext.NavigationItem(heistId: $0.heistId, label: $0.label, value: $0.value) }
+
+        let tabBarItems = elements
+            .filter { $0.traits.contains(.tabBarItem) }
+            .map { element in
+                NavigationContext.TabBarItem(
+                    heistId: element.heistId,
+                    label: element.label,
+                    value: element.value,
+                    selected: element.traits.contains(.selected)
+                )
+            }
+
+        return NavigationContext(
+            screenTitle: screenTitle,
+            backButton: backButton,
+            tabBarItems: tabBarItems.isEmpty ? nil : tabBarItems
+        )
     }
 
     // MARK: - Deterministic Screen Description
@@ -296,6 +332,49 @@ public struct Interface: Codable, Sendable {
         } else {
             return "\(elements.count) elements"
         }
+    }
+}
+
+// MARK: - Navigation Context
+
+/// Structured navigation context derived from element traits.
+/// Gives agents immediate orientation — screen title, back button, and tab bar —
+/// with heistIds for direct activation.
+public struct NavigationContext: Codable, Equatable, Sendable {
+    public struct NavigationItem: Codable, Equatable, Sendable {
+        public let heistId: String
+        public let label: String?
+        public let value: String?
+
+        public init(heistId: String, label: String?, value: String?) {
+            self.heistId = heistId
+            self.label = label
+            self.value = value
+        }
+    }
+
+    public struct TabBarItem: Codable, Equatable, Sendable {
+        public let heistId: String
+        public let label: String?
+        public let value: String?
+        public let selected: Bool
+
+        public init(heistId: String, label: String?, value: String?, selected: Bool) {
+            self.heistId = heistId
+            self.label = label
+            self.value = value
+            self.selected = selected
+        }
+    }
+
+    public let screenTitle: String?
+    public let backButton: NavigationItem?
+    public let tabBarItems: [TabBarItem]?
+
+    public init(screenTitle: String?, backButton: NavigationItem?, tabBarItems: [TabBarItem]?) {
+        self.screenTitle = screenTitle
+        self.backButton = backButton
+        self.tabBarItems = tabBarItems
     }
 }
 
