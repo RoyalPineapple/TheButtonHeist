@@ -783,10 +783,15 @@ extension TheFence {
     /// Enrich a PlaybackFailure with a live interface snapshot for diagnostics.
     private func captureInterface(for failure: PlaybackFailure) async -> PlaybackFailure {
         let interface: Interface?
-        if let response = try? await execute(request: ["command": "get_interface"]),
-           case .interface(let snapshot, _, _, _) = response {
-            interface = snapshot
-        } else {
+        do {
+            let response = try await execute(request: ["command": "get_interface"])
+            if case .interface(let snapshot, _, _, _) = response {
+                interface = snapshot
+            } else {
+                interface = nil
+            }
+        } catch {
+            logger.error("Failed to capture interface for playback diagnostics: \(error)")
             interface = nil
         }
         return PlaybackFailure(
