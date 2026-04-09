@@ -457,47 +457,11 @@ public final class TheFence {
         return .actionFailed(error.localizedDescription)
     }
 
-    func stringArg(_ dictionary: [String: Any], _ key: String) -> String? {
-        dictionary[key] as? String
-    }
-
-    func intArg(_ dictionary: [String: Any], _ key: String) -> Int? {
-        if let value = dictionary[key] as? Int { return value }
-        if let value = dictionary[key] as? Double { return Int(value) }
-        if let value = dictionary[key] as? String { return Int(value) }
-        return nil
-    }
-
-    func boolArg(_ dictionary: [String: Any], _ key: String) -> Bool? {
-        if let value = dictionary[key] as? Bool { return value }
-        if let value = dictionary[key] as? Int { return value != 0 }
-        if let value = dictionary[key] as? String { return value == "true" || value == "1" }
-        return nil
-    }
-
-    func doubleArg(_ dictionary: [String: Any], _ key: String) -> Double? {
-        numberArg(dictionary[key])
-    }
-
-    func numberArg(_ value: Any?) -> Double? {
-        if let value = value as? Double { return value }
-        if let value = value as? Int { return Double(value) }
-        if let value = value as? String { return Double(value) }
-        return nil
-    }
-
-    func unitPointArg(_ dictionary: [String: Any], _ key: String) -> UnitPoint? {
-        guard let dict = dictionary[key] as? [String: Any],
-              let x = numberArg(dict["x"]),
-              let y = numberArg(dict["y"]) else { return nil }
-        return UnitPoint(x: x, y: y)
-    }
-
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
         ElementTarget(
-            heistId: stringArg(dictionary, "heistId"),
+            heistId: dictionary.string("heistId"),
             matcher: try elementMatcher(dictionary),
-            ordinal: intArg(dictionary, "ordinal")
+            ordinal: dictionary.integer("ordinal")
         )
     }
 
@@ -519,9 +483,9 @@ public final class TheFence {
             return trait
         }
         return ElementMatcher(
-            label: stringArg(dictionary, "label"),
-            identifier: stringArg(dictionary, "identifier"),
-            value: stringArg(dictionary, "value"),
+            label: dictionary.string("label"),
+            identifier: dictionary.string("identifier"),
+            value: dictionary.string("value"),
             traits: traits,
             excludeTraits: excludeTraits
         )

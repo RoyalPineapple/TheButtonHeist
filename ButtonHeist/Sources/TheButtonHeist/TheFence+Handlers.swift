@@ -10,7 +10,7 @@ extension TheFence {
     // MARK: - Handler: Interface
 
     func handleGetInterface(_ args: [String: Any] = [:]) async throws -> FenceResponse {
-        let full = boolArg(args, "full") ?? true
+        let full = args.boolean("full") ?? true
 
         // Full mode (default): explore the screen, return all discovered elements
         if full {
@@ -67,7 +67,7 @@ extension TheFence {
         let screen: ScreenPayload = try await sendAndAwait(.requestScreen) { requestId in
             try await self.waitForScreen(requestId: requestId, timeout: 30)
         }
-        if let outputPath = stringArg(args, "output") {
+        if let outputPath = args.string("output") {
             guard let pngData = Data(base64Encoded: screen.pngData) else {
                 return .error("Failed to decode screenshot data")
             }
@@ -121,8 +121,8 @@ extension TheFence {
 
     private func handleOneFingerTap(_ args: [String: Any]) async throws -> FenceResponse {
         let target = try elementTarget(args)
-        let x = doubleArg(args, "x")
-        let y = doubleArg(args, "y")
+        let x = args.number("x")
+        let y = args.number("y")
         if let target {
             return try await sendAction(.touchTap(TouchTapTarget(elementTarget: target)))
         } else if let x, let y {
@@ -133,9 +133,9 @@ extension TheFence {
 
     private func handleLongPress(_ args: [String: Any]) async throws -> FenceResponse {
         let target = try elementTarget(args)
-        let x = doubleArg(args, "x")
-        let y = doubleArg(args, "y")
-        let duration = doubleArg(args, "duration") ?? 0.5
+        let x = args.number("x")
+        let y = args.number("y")
+        let duration = args.number("duration") ?? 0.5
         if let target {
             return try await sendAction(.touchLongPress(LongPressTarget(elementTarget: target, duration: duration)))
         } else if let x, let y {
@@ -145,7 +145,7 @@ extension TheFence {
     }
 
     private func handleSwipe(_ args: [String: Any]) async throws -> FenceResponse {
-        let directionValue = stringArg(args, "direction")
+        let directionValue = args.string("direction")
         var direction: SwipeDirection?
         if let directionValue {
             direction = SwipeDirection(rawValue: directionValue.lowercased())
@@ -154,8 +154,8 @@ extension TheFence {
             }
         }
 
-        let start = unitPointArg(args, "start")
-        let end = unitPointArg(args, "end")
+        let start = args.unitPoint("start")
+        let end = args.unitPoint("end")
 
         if (start != nil) != (end != nil) {
             return .error("Unit-point swipe requires both start and end")
@@ -164,55 +164,55 @@ extension TheFence {
         return try await sendAction(
             .touchSwipe(SwipeTarget(
                 elementTarget: try elementTarget(args),
-                startX: doubleArg(args, "startX"), startY: doubleArg(args, "startY"),
-                endX: doubleArg(args, "endX"), endY: doubleArg(args, "endY"),
+                startX: args.number("startX"), startY: args.number("startY"),
+                endX: args.number("endX"), endY: args.number("endY"),
                 direction: direction,
-                duration: doubleArg(args, "duration"),
+                duration: args.number("duration"),
                 start: start, end: end
             ))
         )
     }
 
     private func handleDrag(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let endX = doubleArg(args, "endX"), let endY = doubleArg(args, "endY") else {
+        guard let endX = args.number("endX"), let endY = args.number("endY") else {
             return .error("endX and endY are required for drag")
         }
         return try await sendAction(
             .touchDrag(DragTarget(
                 elementTarget: try elementTarget(args),
-                startX: doubleArg(args, "startX") ?? doubleArg(args, "x"),
-                startY: doubleArg(args, "startY") ?? doubleArg(args, "y"),
-                endX: endX, endY: endY, duration: doubleArg(args, "duration")
+                startX: args.number("startX") ?? args.number("x"),
+                startY: args.number("startY") ?? args.number("y"),
+                endX: endX, endY: endY, duration: args.number("duration")
             ))
         )
     }
 
     private func handlePinch(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let scale = doubleArg(args, "scale") else {
+        guard let scale = args.number("scale") else {
             return .error("scale is required for pinch")
         }
         return try await sendAction(
             .touchPinch(PinchTarget(
                 elementTarget: try elementTarget(args),
-                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
-                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
-                scale: scale, spread: doubleArg(args, "spread"),
-                duration: doubleArg(args, "duration")
+                centerX: args.number("centerX") ?? args.number("x"),
+                centerY: args.number("centerY") ?? args.number("y"),
+                scale: scale, spread: args.number("spread"),
+                duration: args.number("duration")
             ))
         )
     }
 
     private func handleRotate(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let angle = doubleArg(args, "angle") else {
+        guard let angle = args.number("angle") else {
             return .error("angle is required for rotate")
         }
         return try await sendAction(
             .touchRotate(RotateTarget(
                 elementTarget: try elementTarget(args),
-                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
-                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
-                angle: angle, radius: doubleArg(args, "radius"),
-                duration: doubleArg(args, "duration")
+                centerX: args.number("centerX") ?? args.number("x"),
+                centerY: args.number("centerY") ?? args.number("y"),
+                angle: angle, radius: args.number("radius"),
+                duration: args.number("duration")
             ))
         )
     }
@@ -221,9 +221,9 @@ extension TheFence {
         return try await sendAction(
             .touchTwoFingerTap(TwoFingerTapTarget(
                 elementTarget: try elementTarget(args),
-                centerX: doubleArg(args, "centerX") ?? doubleArg(args, "x"),
-                centerY: doubleArg(args, "centerY") ?? doubleArg(args, "y"),
-                spread: doubleArg(args, "spread")
+                centerX: args.number("centerX") ?? args.number("x"),
+                centerY: args.number("centerY") ?? args.number("y"),
+                spread: args.number("spread")
             ))
         )
     }
@@ -234,7 +234,7 @@ extension TheFence {
         }
         var pathPoints: [PathPoint] = []
         for point in pointsArray {
-            guard let x = numberArg(point["x"]), let y = numberArg(point["y"]) else {
+            guard let x = point.number("x"), let y = point.number("y") else {
                 return .error("Each point must have numeric x and y fields")
             }
             pathPoints.append(PathPoint(x: x, y: y))
@@ -245,14 +245,14 @@ extension TheFence {
         return try await sendAction(
             .touchDrawPath(DrawPathTarget(
                 points: pathPoints,
-                duration: doubleArg(args, "duration"),
-                velocity: doubleArg(args, "velocity")
+                duration: args.number("duration"),
+                velocity: args.number("velocity")
             ))
         )
     }
 
     private func handleDrawBezier(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let startX = doubleArg(args, "startX"), let startY = doubleArg(args, "startY") else {
+        guard let startX = args.number("startX"), let startY = args.number("startY") else {
             return .error("startX and startY are required")
         }
         guard let segmentsArray = args["segments"] as? [[String: Any]] else {
@@ -261,9 +261,9 @@ extension TheFence {
         var segments: [BezierSegment] = []
         for segment in segmentsArray {
             guard
-                let cp1X = numberArg(segment["cp1X"]), let cp1Y = numberArg(segment["cp1Y"]),
-                let cp2X = numberArg(segment["cp2X"]), let cp2Y = numberArg(segment["cp2Y"]),
-                let endX = numberArg(segment["endX"]), let endY = numberArg(segment["endY"])
+                let cp1X = segment.number("cp1X"), let cp1Y = segment.number("cp1Y"),
+                let cp2X = segment.number("cp2X"), let cp2Y = segment.number("cp2Y"),
+                let endX = segment.number("endX"), let endY = segment.number("endY")
             else {
                 return .error("Each segment needs cp1X, cp1Y, cp2X, cp2Y, endX, endY")
             }
@@ -275,8 +275,8 @@ extension TheFence {
         return try await sendAction(
             .touchDrawBezier(DrawBezierTarget(
                 startX: startX, startY: startY, segments: segments,
-                samplesPerSegment: intArg(args, "samplesPerSegment"),
-                duration: doubleArg(args, "duration"), velocity: doubleArg(args, "velocity")
+                samplesPerSegment: args.integer("samplesPerSegment"),
+                duration: args.number("duration"), velocity: args.number("velocity")
             ))
         )
     }
@@ -286,7 +286,7 @@ extension TheFence {
     func handleScrollAction(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
         case .scroll:
-            guard let directionValue = stringArg(args, "direction") else {
+            guard let directionValue = args.string("direction") else {
                 return .error("direction is required for scroll. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let direction = ScrollDirection(rawValue: directionValue.lowercased()) else {
@@ -312,7 +312,7 @@ extension TheFence {
             guard let target = try elementTarget(args) else {
                 return .error("Must specify heistId or at least one match field (identifier, label, value, traits, or excludeTraits) for element_search")
             }
-            let directionStr = stringArg(args, "direction")
+            let directionStr = args.string("direction")
             var direction: ScrollSearchDirection?
             if let directionStr {
                 direction = ScrollSearchDirection(rawValue: directionStr.lowercased())
@@ -330,7 +330,7 @@ extension TheFence {
             lastActionResult = result
             return .action(result: result)
         case .scrollToEdge:
-            guard let edgeValue = stringArg(args, "edge") else {
+            guard let edgeValue = args.string("edge") else {
                 return .error("edge is required for scroll_to_edge. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
             }
             guard let edge = ScrollEdge(rawValue: edgeValue.lowercased()) else {
@@ -354,10 +354,10 @@ extension TheFence {
 
         // Resolve the action name: activate uses "action" param, standalone commands use the command itself
         let actionName: String? = switch command {
-        case .activate: stringArg(args, "action")
+        case .activate: args.string("action")
         case .increment: "increment"
         case .decrement: "decrement"
-        case .performCustomAction: stringArg(args, "action")
+        case .performCustomAction: args.string("action")
         default: nil
         }
 
@@ -395,9 +395,9 @@ extension TheFence {
     // MARK: - Handler: Text Input
 
     func handleTypeText(_ args: [String: Any]) async throws -> FenceResponse {
-        let text = stringArg(args, "text")
-        let deleteCount = intArg(args, "deleteCount")
-        let clearFirst = boolArg(args, "clearFirst")
+        let text = args.string("text")
+        let deleteCount = args.integer("deleteCount")
+        let clearFirst = args.boolean("clearFirst")
         guard text != nil || deleteCount != nil || clearFirst == true else {
             return .error("Must specify text, deleteCount, clearFirst, or a combination")
         }
@@ -411,7 +411,7 @@ extension TheFence {
     }
 
     func handleEditAction(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let actionString = stringArg(args, "action") else {
+        guard let actionString = args.string("action") else {
             return .error("action is required (\(EditAction.allCases.map(\.rawValue).joined(separator: ", ")))")
         }
         guard let action = EditAction(rawValue: actionString) else {
@@ -434,7 +434,7 @@ extension TheFence {
     }
 
     func handleSetPasteboard(_ args: [String: Any]) async throws -> FenceResponse {
-        guard let text = stringArg(args, "text") else {
+        guard let text = args.string("text") else {
             return .error("text is required for set_pasteboard")
         }
         return try await sendAction(.setPasteboard(SetPasteboardTarget(text: text)))
@@ -452,8 +452,8 @@ extension TheFence {
         }
         let waitForTarget = WaitForTarget(
             elementTarget: target,
-            absent: boolArg(args, "absent"),
-            timeout: doubleArg(args, "timeout")
+            absent: args.boolean("absent"),
+            timeout: args.number("timeout")
         )
         let result: ActionResult = try await sendAndAwait(.waitFor(waitForTarget)) { requestId in
             try await self.waitForActionResult(requestId: requestId, timeout: waitForTarget.resolvedTimeout + 5)
@@ -466,7 +466,7 @@ extension TheFence {
 
     func handleWaitForChange(_ args: [String: Any]) async throws -> FenceResponse {
         let expectation = try parseExpectation(args)
-        let timeout = doubleArg(args, "timeout")
+        let timeout = args.number("timeout")
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
         let result: ActionResult = try await sendAndAwait(.waitForChange(target)) { requestId in
             try await self.waitForActionResult(requestId: requestId, timeout: target.resolvedTimeout + 5)
@@ -483,10 +483,10 @@ extension TheFence {
             return .error("Recording already in progress — use stop_recording first")
         }
         let config = RecordingConfig(
-            fps: intArg(args, "fps"),
-            scale: doubleArg(args, "scale"),
-            inactivityTimeout: doubleArg(args, "inactivity_timeout"),
-            maxDuration: doubleArg(args, "max_duration")
+            fps: args.integer("fps"),
+            scale: args.number("scale"),
+            inactivityTimeout: args.number("inactivity_timeout"),
+            maxDuration: args.number("max_duration")
         )
         handoff.send(.startRecording(config))
         return .ok(message: "Recording start requested — use stop_recording to retrieve the video")
@@ -509,9 +509,9 @@ extension TheFence {
     // MARK: - Handler: Connect (runtime target switching)
 
     func handleConnect(_ args: [String: Any]) async throws -> FenceResponse {
-        let targetName = stringArg(args, "target")
-        let device = stringArg(args, "device")
-        let token = stringArg(args, "token")
+        let targetName = args.string("target")
+        let device = args.string("device")
+        let token = args.string("token")
 
         let resolvedDevice: String
         let resolvedToken: String?
@@ -578,7 +578,7 @@ extension TheFence {
         let recording: RecordingPayload = try await sendAndAwait(.stopRecording) { _ in
             try await self.waitForRecording(timeout: Timeouts.longActionSeconds)
         }
-        if let outputPath = stringArg(args, "output") {
+        if let outputPath = args.string("output") {
             guard let videoData = Data(base64Encoded: recording.videoData) else {
                 return .error("Failed to decode video data")
             }
@@ -619,7 +619,7 @@ extension TheFence {
             }
             return .sessionLog(manifest: manifest)
         case .archiveSession:
-            let deleteSource = boolArg(args, "delete_source") ?? false
+            let deleteSource = args.boolean("delete_source") ?? false
             let (archiveURL, manifest) = try await bookKeeper.archiveSession(deleteSource: deleteSource)
             return .archiveResult(path: archiveURL.path, manifest: manifest)
         case .startHeist, .stopHeist, .playHeist:
@@ -634,17 +634,17 @@ extension TheFence {
     func handleHeistCommand(command: Command, args: [String: Any]) async throws -> FenceResponse {
         switch command {
         case .startHeist:
-            let app = stringArg(args, "app") ?? "com.buttonheist.testapp"
+            let app = args.string("app") ?? "com.buttonheist.testapp"
             // Ensure a BookKeeper session is active — heist recording is a session artifact
             if bookKeeper.manifest == nil {
-                let identifier = stringArg(args, "identifier") ?? "heist"
+                let identifier = args.string("identifier") ?? "heist"
                 try bookKeeper.beginSession(identifier: identifier)
             }
             try bookKeeper.startHeistRecording(app: app)
             return .heistStarted
         case .stopHeist:
             let heist = try bookKeeper.stopHeistRecording()
-            guard let outputPath = stringArg(args, "output") else {
+            guard let outputPath = args.string("output") else {
                 throw FenceError.invalidRequest("stop_heist requires an 'output' path")
             }
             guard let resolvedURL = bookKeeper.validateOutputPath(outputPath) else {
@@ -663,7 +663,7 @@ extension TheFence {
         guard case .idle = playbackPhase else {
             throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
         }
-        guard let inputPath = stringArg(args, "input") else {
+        guard let inputPath = args.string("input") else {
             throw FenceError.invalidRequest("play_heist requires an 'input' path")
         }
         guard let resolvedURL = bookKeeper.validateOutputPath(inputPath) else {

@@ -826,10 +826,7 @@ public final class TheBookKeeper {
     // MARK: - Path Safety
 
     public func validateOutputPath(_ path: String) -> URL? {
-        guard !path.isEmpty else { return nil }
-        let components = path.split(separator: "/")
-        guard !components.contains("..") else { return nil }
-        return URL(fileURLWithPath: path).standardized
+        path.validatedOutputURL()
     }
 
     // MARK: - Private Helpers

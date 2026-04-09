@@ -109,3 +109,12 @@ extension EnvironmentKey {
         return v == "true" || v == "1" || v == "yes"
     }
 }
+
+// MARK: - DecodingError Helpers
+
+extension DecodingError {
+    /// Construct a `.keyNotFound` error for a missing wire message payload.
+    static func missingPayload(key: CodingKey, type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
+        .keyNotFound(key, .init(codingPath: codingPath, debugDescription: "Missing payload for message type \(type.rawValue)"))
+    }
+}

@@ -125,77 +125,60 @@ final class TheFenceHandlerTests: XCTestCase {
 
     // MARK: - Argument Parsing Helpers
 
-    @ButtonHeistActor
-    func testStringArg() async {
-        let (fence, _) = makeConnectedFence()
+    func testStringArg() {
         let dict: [String: Any] = ["key": "hello", "number": 42]
-        XCTAssertEqual(fence.stringArg(dict, "key"), "hello")
-        XCTAssertNil(fence.stringArg(dict, "number"))
-        XCTAssertNil(fence.stringArg(dict, "missing"))
+        XCTAssertEqual(dict.string("key"), "hello")
+        XCTAssertNil(dict.string("number"))
+        XCTAssertNil(dict.string("missing"))
     }
 
-    @ButtonHeistActor
-    func testIntArgFromInt() async {
-        let (fence, _) = makeConnectedFence()
+    func testIntegerFromInt() {
         let dict: [String: Any] = ["count": 5]
-        XCTAssertEqual(fence.intArg(dict, "count"), 5)
+        XCTAssertEqual(dict.integer("count"), 5)
     }
 
-    @ButtonHeistActor
-    func testIntArgFromDouble() async {
-        let (fence, _) = makeConnectedFence()
+    func testIntegerFromDouble() {
         let dict: [String: Any] = ["count": 5.7]
-        XCTAssertEqual(fence.intArg(dict, "count"), 5)
+        XCTAssertEqual(dict.integer("count"), 5)
     }
 
-    @ButtonHeistActor
-    func testIntArgFromString() async {
-        let (fence, _) = makeConnectedFence()
+    func testIntegerFromString() {
         let dict: [String: Any] = ["count": "42"]
-        XCTAssertEqual(fence.intArg(dict, "count"), 42)
+        XCTAssertEqual(dict.integer("count"), 42)
     }
 
-    @ButtonHeistActor
-    func testIntArgMissing() async {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertNil(fence.intArg([:], "count"))
+    func testIntegerMissing() {
+        let dict: [String: Any] = [:]
+        XCTAssertNil(dict.integer("count"))
     }
 
-    @ButtonHeistActor
-    func testDoubleArgFromDouble() async {
-        let (fence, _) = makeConnectedFence()
+    func testNumberFromDouble() {
         let dict: [String: Any] = ["x": 3.14]
-        XCTAssertEqual(fence.doubleArg(dict, "x"), 3.14)
+        XCTAssertEqual(dict.number("x"), 3.14)
     }
 
-    @ButtonHeistActor
-    func testDoubleArgFromInt() async {
-        let (fence, _) = makeConnectedFence()
+    func testNumberFromInt() {
         let dict: [String: Any] = ["x": 7]
-        XCTAssertEqual(fence.doubleArg(dict, "x"), 7.0)
+        XCTAssertEqual(dict.number("x"), 7.0)
     }
 
-    @ButtonHeistActor
-    func testDoubleArgFromString() async {
-        let (fence, _) = makeConnectedFence()
+    func testNumberFromString() {
         let dict: [String: Any] = ["x": "2.5"]
-        XCTAssertEqual(fence.doubleArg(dict, "x"), 2.5)
+        XCTAssertEqual(dict.number("x"), 2.5)
     }
 
-    @ButtonHeistActor
-    func testDoubleArgMissing() async {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertNil(fence.doubleArg([:], "x"))
+    func testNumberMissing() {
+        let dict: [String: Any] = [:]
+        XCTAssertNil(dict.number("x"))
     }
 
-    @ButtonHeistActor
-    func testNumberArgVariousTypes() async {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertEqual(fence.numberArg(1.5), 1.5)
-        XCTAssertEqual(fence.numberArg(3), 3.0)
-        XCTAssertEqual(fence.numberArg("4.2"), 4.2)
-        XCTAssertNil(fence.numberArg(nil))
-        XCTAssertNil(fence.numberArg("notANumber"))
+    func testNumberVariousTypes() {
+        let dict: [String: Any] = ["d": 1.5, "i": 3, "s": "4.2", "bad": "notANumber"]
+        XCTAssertEqual(dict.number("d"), 1.5)
+        XCTAssertEqual(dict.number("i"), 3.0)
+        XCTAssertEqual(dict.number("s"), 4.2)
+        XCTAssertNil(dict.number("missing"))
+        XCTAssertNil(dict.number("bad"))
     }
 
     @ButtonHeistActor

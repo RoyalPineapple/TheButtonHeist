@@ -318,8 +318,5 @@ extension ClientMessage {
 // MARK: - Helpers
 
 private func missingClientPayload(_ type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
-    DecodingError.keyNotFound(
-        ClientMessageCodingKeys.payload,
-        .init(codingPath: codingPath, debugDescription: "Missing payload for client message type \(type.rawValue)")
-    )
+    .missingPayload(key: ClientMessageCodingKeys.payload, type: type, codingPath: codingPath)
 }
