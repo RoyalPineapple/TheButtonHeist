@@ -66,6 +66,7 @@ public final class TheHandoff {
     public private(set) var currentScreen: ScreenPayload?
     public private(set) var recordingPhase: RecordingPhase = .idle
     public private(set) var reconnectPolicy: ReconnectPolicy = .disabled
+    private var missedPongCount: Int = 0
 
     // MARK: - State Transitions
 
@@ -178,8 +179,13 @@ public final class TheHandoff {
 
     private static let persistentDriverId: String = {
         let fileURL = driverIdFile
-        if let existing = (try? String(contentsOf: fileURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !existing.isEmpty {
+        let existingValue: String?
+        do {
+            existingValue = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            existingValue = nil
+        }
+        if let existing = existingValue, !existing.isEmpty {
             return existing
         }
         let generated = UUID().uuidString.lowercased()
@@ -301,7 +307,7 @@ public final class TheHandoff {
                 }
             }
 
-            try? await Task.sleep(for: .milliseconds(100))
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
         }
 
         return discoveredDevices.filter { reachableIDs.contains($0.id) }
@@ -322,16 +328,11 @@ public final class TheHandoff {
             case .transportReady:
                 break
             case .connected:
+                self.missedPongCount = 0
                 let keepaliveTask = self.makeKeepaliveTask()
                 self.transitionToConnected(device: device, keepaliveTask: keepaliveTask)
             case .disconnected(let reason):
-                // .failed phase already cancelled keepalive; clean up remaining state
-                // via transitionToDisconnected rather than manual field clearing
-                if case .failed = self.connectionPhase {
-                    self.transitionToDisconnected()
-                } else {
-                    self.transitionToDisconnected()
-                }
+                self.transitionToDisconnected()
                 self.onDisconnected?(reason)
                 if case .enabled(let filter, let existingReconnectTask) = self.reconnectPolicy {
                     existingReconnectTask?.cancel()
@@ -400,7 +401,9 @@ public final class TheHandoff {
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
             onError?("Protocol mismatch: expected \(payload.expectedProtocolVersion), got \(payload.receivedProtocolVersion)")
-        case .serverHello, .authRequired, .pong, .recordingStopped:
+        case .pong:
+            missedPongCount = 0
+        case .serverHello, .authRequired, .recordingStopped:
             break
         }
     }
@@ -443,9 +446,19 @@ public final class TheHandoff {
     private func makeKeepaliveTask() -> Task<Void, Never> {
         Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                do {
+                    try await Task.sleep(for: .seconds(3))
+                } catch {
+                    break
+                }
                 guard !Task.isCancelled else { break }
+                self?.missedPongCount += 1
                 self?.connection?.send(.ping)
+                if let count = self?.missedPongCount, count >= 3 {
+                    logger.warning("No pong received for \(count) consecutive pings — forcing disconnect")
+                    self?.forceDisconnect()
+                    break
+                }
             }
         }
     }
@@ -520,9 +533,15 @@ public final class TheHandoff {
 
     private func runAutoReconnect(filter: String?) async {
         onStatus?("Device disconnected — watching for reconnection...")
-        for _ in 0..<60 {
+        for attempt in 0..<60 {
             guard !Task.isCancelled else { return }
-            try? await Task.sleep(for: .seconds(reconnectInterval))
+            let delay = min(reconnectInterval * pow(2.0, Double(attempt)), 30.0)
+            let jitter = Double.random(in: 0...(delay * 0.2))
+            do {
+                try await Task.sleep(for: .seconds(delay + jitter))
+            } catch {
+                return
+            }
             guard !Task.isCancelled else { return }
             if let device = discoveredDevices.first(matching: filter) {
                 onStatus?("Reconnecting to \(device.name)...")
@@ -530,7 +549,11 @@ public final class TheHandoff {
                 let deadline = Date().addingTimeInterval(10)
                 while !isConnected {
                     if Task.isCancelled || Date() > deadline { break }
-                    try? await Task.sleep(for: .milliseconds(100))
+                    do {
+                        try await Task.sleep(for: .milliseconds(100))
+                    } catch {
+                        return
+                    }
                 }
                 if Task.isCancelled { return }
                 if isConnected {

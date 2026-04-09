@@ -100,12 +100,15 @@ extension AccessibilityElement {
     /// Trait name strings are resolved to bitmasks via the parser's `fromNames`.
     func matches(_ matcher: ElementMatcher) -> Bool {
         if let matchLabel = matcher.label {
+            if matchLabel.isEmpty { return false }
             guard let label, label.localizedCaseInsensitiveContains(matchLabel) else { return false }
         }
         if let matchIdentifier = matcher.identifier {
+            if matchIdentifier.isEmpty { return false }
             guard let identifier, identifier.localizedCaseInsensitiveContains(matchIdentifier) else { return false }
         }
         if let matchValue = matcher.value {
+            if matchValue.isEmpty { return false }
             guard let value, value.localizedCaseInsensitiveContains(matchValue) else { return false }
         }
         if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {

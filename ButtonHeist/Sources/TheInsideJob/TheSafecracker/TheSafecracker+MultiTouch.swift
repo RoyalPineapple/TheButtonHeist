@@ -49,7 +49,7 @@ extension TheSafecracker {
             moveTouches(to: [p1, p2])
             fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
         }
 
         fingerprints.endTrackingFingerprints()
@@ -97,7 +97,7 @@ extension TheSafecracker {
             moveTouches(to: [p1, p2])
             fingerprints.updateTrackingFingerprints(to: [p1, p2])
             onGestureMove?([p1, p2])
-            try? await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) } catch { break }
         }
 
         fingerprints.endTrackingFingerprints()
@@ -114,7 +114,7 @@ extension TheSafecracker {
         let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
         let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
         guard touchesDown(at: [p1, p2]) else { return false }
-        try? await Task.sleep(for: TheSafecracker.gestureYieldDelay)
+        do { try await Task.sleep(for: TheSafecracker.gestureYieldDelay) } catch { return false }
         return touchesUp()
     }
 
