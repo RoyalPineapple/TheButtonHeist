@@ -689,6 +689,7 @@ extension TheFence {
         let playbackStart = CFAbsoluteTimeGetCurrent()
         var completedSteps = 0
         var failedIndex: Int?
+        var failure: PlaybackFailure?
 
         playbackPhase = .playing(inputPath: resolvedURL.path)
         defer { playbackPhase = .idle }
@@ -712,41 +713,86 @@ extension TheFence {
                     let scrollResponse = try await execute(request: scrollRequest)
                     if let scrollResult = scrollResponse.actionResult, scrollResult.success {
                         let retryResponse = try await execute(request: request)
-                        if case .error = retryResponse {
+                        if let retryFailure = playbackFailure(step: step, response: retryResponse) {
                             failedIndex = index
-                            break
-                        }
-                        if let retryResult = retryResponse.actionResult, !retryResult.success {
-                            failedIndex = index
+                            failure = retryFailure
                             break
                         }
                         completedSteps += 1
                         continue
                     }
                     failedIndex = index
+                    failure = playbackFailure(step: step, response: response)
                     break
                 }
 
-                if case .error = response {
+                if let stepFailure = playbackFailure(step: step, response: response) {
                     failedIndex = index
-                    break
-                }
-                if let actionResult = response.actionResult, !actionResult.success {
-                    failedIndex = index
+                    failure = stepFailure
                     break
                 }
                 completedSteps += 1
             } catch {
                 failedIndex = index
+                failure = PlaybackFailure(
+                    command: step.command,
+                    target: step.target,
+                    error: error.localizedDescription,
+                    actionResult: nil,
+                    expectationResult: nil,
+                    interface: nil
+                )
                 break
             }
+        }
+
+        // Capture the live interface at time of failure for diagnostics
+        var enrichedFailure = failure
+        if let failure {
+            enrichedFailure = await captureInterface(for: failure)
         }
 
         let totalTimingMs = Int((CFAbsoluteTimeGetCurrent() - playbackStart) * 1000)
         return .heistPlayback(
             completedSteps: completedSteps,
             failedIndex: failedIndex,
-            totalTimingMs: totalTimingMs
+            totalTimingMs: totalTimingMs,
+            failure: enrichedFailure
+        )
+    }
+
+    /// Extract a PlaybackFailure from a response, or nil if the step succeeded.
+    /// Does not capture the interface — call `captureInterface(for:)` for the full snapshot.
+    private func playbackFailure(step: HeistEvidence, response: FenceResponse) -> PlaybackFailure? {
+        if case .error(let message) = response {
+            return PlaybackFailure(
+                command: step.command, target: step.target, error: message,
+                actionResult: nil, expectationResult: nil, interface: nil
+            )
+        }
+        if case .action(let result, let expectation) = response, !result.success {
+            let message = result.message ?? "action failed"
+            return PlaybackFailure(
+                command: step.command, target: step.target, error: message,
+                actionResult: result, expectationResult: expectation, interface: nil
+            )
+        }
+        return nil
+    }
+
+    /// Enrich a PlaybackFailure with a live interface snapshot for diagnostics.
+    private func captureInterface(for failure: PlaybackFailure) async -> PlaybackFailure {
+        let interface: Interface?
+        if let response = try? await execute(request: ["command": "get_interface"]),
+           case .interface(let snapshot, _, _, _) = response {
+            interface = snapshot
+        } else {
+            interface = nil
+        }
+        return PlaybackFailure(
+            command: failure.command, target: failure.target, error: failure.error,
+            actionResult: failure.actionResult, expectationResult: failure.expectationResult,
+            interface: interface
         )
     }
 }

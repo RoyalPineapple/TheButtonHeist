@@ -744,10 +744,17 @@ enum ToolDefinitions {
             Start recording a heist. All subsequent successful commands are captured as \
             steps in a .heist file. Failed actions are silently skipped. \
             \
-            Before recording: call get_interface to populate the element cache. The recorder \
-            converts heistIds to portable matchers (label, traits, identifier) automatically, \
-            but can only build good matchers when it has cached element data. Without a primed \
-            cache, steps degrade to coordinate-only evidence that breaks across devices. \
+            Targeting during recording: ALWAYS target elements by matcher fields (label, \
+            value, traits) — never by heistId. Matchers are portable across sessions; \
+            heistIds are ephemeral and meaningless on replay. You can call get_interface \
+            to look up an element's full accessibility info (label, traits, value) by \
+            heistId, then use those properties to target it — but the action itself must \
+            use matcher fields. get_interface calls are filtered out of the recording. \
+            \
+            wait_for and wait_for_change are recorded as playback steps. They act as \
+            timing gates during replay — without them, playback fires the next action \
+            before async UI transitions complete. wait_for supports absent=true to wait \
+            for an element to disappear (loading indicators, spinners). \
             \
             During recording: attach 'expect' to actions — expectations are recorded with each \
             step and validated on every replay. Use specific expectations over generic ones: \
@@ -800,6 +807,13 @@ enum ToolDefinitions {
             Play back a .heist file. Steps execute sequentially against the connected app. \
             Playback stops on the first failed step (action error or unsuccessful result). \
             Returns completed step count, failed step index (if any), and total timing in ms. \
+            \
+            On failure, the response includes a `failure` object with full diagnostics: \
+            the failed command, its element target, error message, the full action result \
+            (errorKind, scroll search diagnostics), any expectation result, and a complete \
+            interface snapshot at the time of failure — every element on screen. This gives \
+            enough context to diagnose the failure without re-running. \
+            \
             If the heist was recorded against a different app, a warning is logged but \
             playback proceeds — the matchers may still resolve correctly.
             """,
