@@ -142,39 +142,55 @@ Same 13 buttons. BH sends them in one call by name. The idb agent computes cente
 
 Tested against [ios-simulator-mcp](https://github.com/nichochar/ios-simulator-mcp), a lightweight MCP wrapper around Meta's [idb (iOS Development Bridge)](https://github.com/facebook/idb). ios-simulator-mcp represents the coordinate-based approach that most iOS automation tools use today — read the accessibility tree for element positions, then tap by coordinate. It's well-built, minimal, and easy to set up. We chose it as the baseline because it's the most accessible entry point for agents that need to drive iOS. Same model (Claude Sonnet 4.6), same app, same tasks, same hardware.
 
-### Standard tasks (14 UI automation tasks)
+### Full suite (16 tasks, N=3, fair prompts)
+
+Task prompts describe *what* the agent should achieve, not *how* to use the tools. Neither agent gets mechanism-specific hints — both discover how to interact from their tool surface alone. 96 trials total.
 
 |  | Button Heist | ios-simulator-mcp |
 |---|---|---|
-| Wall time | 17 minutes | 36 minutes |
-| Tokens | 9.2M | 22.9M |
-| Tasks completed | 14/14 | 12/14 |
+| Avg wall time | 134s | 235s |
+| Avg turns | 14 | 43 |
+| Avg cost | $0.46 | $1.42 |
+| Tasks completed | 16/16 | 14/16 |
 
-**2x faster, 2.5x fewer tokens, completes tasks ios-simulator-mcp can't finish.**
+**2.4x faster, 3.1x fewer turns, 3.1x cheaper.**
 
-### At scale (T14: 50-action, 8-screen workflow)
+### Per-task breakdown (averages over 3 trials)
 
-|  | Button Heist | ios-simulator-mcp |
-|---|---|---|
-| Wall time | 7 minutes | Timed out at 20 minutes |
-| Turns | 50 | 293 (incomplete) |
-| Tokens | 2.5M | — (didn't finish) |
-| Parts completed | 8/8 | 4/8 |
+| Task | BH | ios-simulator-mcp | Speedup |
+|---|---|---|---|
+| T9-swipe-order | 29s / 5t | 179s / 26t | **6.1x** |
+| T15-todo-deep | 221s / 16t | 734s / 88t | **3.3x** |
+| T10-scroll-find | 25s / 4t | 113s / 24t | **4.5x** |
+| T7-bug-verify | 66s / 9t | 213s / 34t | **3.2x** |
+| T12-search-filter | 26s / 5t | 79s / 16t | **3.0x** |
+| T6-scroll-hunt | 69s / 10t | 201s / 41t | **2.9x** |
+| T2-todo-crud | 76s / 7t | 213s / 38t | **2.8x** |
+| T8-marathon | 227s / 29t | 609s / 107t | **2.7x** |
+| T14-mega-workflow | 466s / 48t | 1192s / 196t | **2.6x** |
+| T5-controls-gauntlet | 134s / 9t | 251s / 42t | **1.9x** |
+| T0-full-workflow | 144s / 11t | 259s / 49t | **1.8x** |
+| T13-menu-order | 435s / 38t | 743s / 92t | **1.7x** |
+| T4-notes-workflow | 66s / 11t | 101s / 23t | **1.5x** |
+| T3-settings-roundtrip | 46s / 7t | 64s / 13t | **1.4x** |
+| T1-calculator | 50s / 6t | 49s / 16t | 1.0x |
+| T11-increment | 55s / 5t | 40s / 12t | 0.7x |
 
-ios-simulator-mcp burned 293 turns — 70 taps and 60 full-screen reads — and still couldn't finish. It was mid-task when the timeout killed it. Button Heist finished the same workflow in 50 turns and 2.5M tokens.
+### Less instruction, better results
 
-This isn't a benchmark artifact. The gap is structural. Coordinate-based tools pay a constant per-action tax: read the full screen, find the element, compute coordinates, tap, read the full screen again. That tax is tolerable at 5 actions. At 50 actions, it's 100 full-screen reads filling the context window. At 100 actions, the model can't keep up.
+An earlier benchmark round used prescriptive prompts — "increment the stepper 5 times", "use the Add to Order action." These happened to map directly to BH's tool vocabulary. We rewrote every task to describe outcomes only: "raise the stepper to 5", "add the first 3 items to the order." Neither agent gets told how to do it.
 
-Button Heist's per-action cost is near-zero: pass a name, read a delta. Turn 50 costs the same as turn 5.
+The fair prompts *widened* the gap (2.2x → 2.4x). The prescriptive instructions were actually helping the coordinate-based agent more than BH — they told both agents what to do, but the coordinate agent needed that hand-holding more because its tool surface doesn't reveal what controls can do. BH agents discover `increment`, `Mark complete`, and `Add to Order` from the accessibility interface itself.
 
 ### Where the gap comes from
 
 | Task type | BH advantage | Why |
 |---|---|---|
-| Simple (toggle, tap) | 1.5–2x | Less overhead per action |
-| Multi-step (forms, CRUD) | 3–4x | Fewer turns to verify state |
-| Complex (multi-screen) | 5–10x | Deltas eliminate redundant reads |
-| Scale (50+ actions) | **Cannot compare** | ios-simulator-mcp can't finish |
+| Scroll + select | **4–6x** | Semantic find vs read-tree-compute-tap loops |
+| Custom actions (order, complete, delete) | **3–5x** | Direct invocation vs visual menu navigation |
+| Multi-screen workflows | **2–3x** | Deltas eliminate redundant tree reads |
+| Simple taps | ~1x | Both approaches handle simple buttons well |
+| Scale (50+ actions) | **2.6x** | Per-action overhead compounds with task length |
 
 ## Why It Matters
 
