@@ -151,7 +151,7 @@ Task prompts describe *what* the agent should achieve, not *how* to use the tool
 | Avg wall time | 134s | 235s |
 | Avg turns | 14 | 43 |
 | Avg cost | $0.46 | $1.42 |
-| Tasks completed | 16/16 | 14/16 |
+| Tasks completed | 16/16 | 16/16 |
 
 **2.4x faster, 3.1x fewer turns, 3.1x cheaper.**
 
