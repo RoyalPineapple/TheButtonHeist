@@ -77,9 +77,8 @@ struct ButtonHeistMCPServer {
         correct response when your action produced a transient state (spinner appeared, \
         interactive elements disappeared) and you need the final result.
 
-        **Composing**: `run_batch` for mechanical sequences where every step is already \
-        known (form fills, switch toggles, fixed navigation). Don't batch exploratory \
-        actions or steps that depend on intermediate results. Attach `expect` to each step.
+        **Composing**: `run_batch` for multi-step sequences in a single call. Attach \
+        `expect` to each step for inline verification.
 
         ## The Server Is Always Watching
 

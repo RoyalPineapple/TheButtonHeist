@@ -117,25 +117,14 @@ enum ToolDefinitions {
     //
     // Core workflow:
     //   1. connect         — establish a session with the iOS app
-    //   2. get_interface   — read the screen once (elements with heistId, label, traits)
-    //   3. Act and read deltas — every action returns what changed. Don't call
-    //      get_interface after every action — the delta is your feedback loop.
-    //   4. run_batch       — for mechanical sequences where every step is predictable
-    //      from what you already know (e.g. filling a form, toggling a series of switches).
-    //      Don't batch exploratory actions or anything that depends on reading the result.
+    //   2. get_interface   — read the screen (elements with heistId, label, traits)
+    //   3. Act and read deltas — every action returns what changed
+    //   4. run_batch       — multiple actions in one call, with optional expectations
     //
     // Finding elements:
     //   Every element has a heistId (stable on the current screen) plus label, value,
     //   traits, actions, hints. Use heistId for known elements, label/traits for discovery.
     //   All matcher fields are AND. Start with just label, add traits if ambiguous.
-    //
-    // Batching:
-    //   Most actions should be individual calls — read the delta, decide the next step.
-    //   Use run_batch only for mechanical sequences where you already know every step
-    //   and none depend on intermediate results (filling form fields, toggling a known
-    //   list of switches, navigating a fixed path). Attach 'expect' to each step so the
-    //   batch is self-verifying. Don't batch just because you have multiple steps planned —
-    //   batch because the steps are truly independent of each other's results.
 
     static let all: [Tool] = [
         getInterface, activate, typeText, swipe, getScreen,
@@ -595,16 +584,10 @@ enum ToolDefinitions {
     static let runBatch = Tool(
         name: "run_batch",
         description: """
-            Execute multiple commands in a single call — but only for mechanical sequences \
-            where every step is predictable from what you already know. Good uses: filling \
-            form fields, toggling a known list of switches, navigating a fixed menu path. \
-            Bad uses: exploring unfamiliar UI, acting on elements you haven't verified exist, \
-            or sequences where step N depends on step N-1's result. When in doubt, use \
-            individual calls and read the delta between each. \
-            \
-            Each step is a JSON object with 'command' plus that command's parameters. Returns \
-            per-step results and a merged net delta. Use stop_on_error (default) for dependent \
-            sequences, continue_on_error for independent steps. \
+            Execute multiple commands in a single call. Each step is a JSON object with \
+            'command' plus that command's parameters. Returns per-step results and a merged \
+            net delta. Use stop_on_error (default) for dependent sequences, continue_on_error \
+            for independent steps. \
             \
             Attach 'expect' to each step for inline verification. Without expectations, \
             a silent failure at step 2 goes unnoticed until the agent re-reads the interface \
