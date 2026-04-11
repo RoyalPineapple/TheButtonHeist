@@ -35,7 +35,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        let heistIds = stash.burglar.apply(result, to: stash)
+        let heistIds = stash.apply(result)
 
         XCTAssertEqual(heistIds.count, 2)
         XCTAssertEqual(stash.registry.elements.count, 2,
@@ -58,7 +58,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        let heistIds = stash.burglar.apply(result, to: stash)
+        let heistIds = stash.apply(result)
 
         XCTAssertEqual(stash.registry.viewportIds, Set(heistIds),
                        "viewportIds should be the set of all heistIds from the apply")
@@ -76,7 +76,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         let heistId = stash.registry.reverseIndex[element]
         XCTAssertNotNil(heistId, "reverseIndex should map element → heistId")
@@ -98,7 +98,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertEqual(stash.currentHierarchy.count, 1,
                        "apply should set currentHierarchy from the parse result")
@@ -120,7 +120,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertEqual(stash.lastScreenName, "Settings",
                        "Screen name should be the first header's label")
@@ -138,7 +138,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertNotNil(stash.lastScreenId)
         XCTAssertEqual(stash.lastScreenId, TheStash.IdAssignment.slugify("My Profile"),
@@ -157,7 +157,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertNil(stash.lastScreenName,
                      "Screen name should be nil when no header elements exist")
@@ -178,7 +178,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertNil(stash.lastScreenName,
                      "Header with nil label should not set screen name")
@@ -204,7 +204,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertNotNil(stash.registry.firstResponderHeistId,
                         "Should detect the text field as first responder")
@@ -226,7 +226,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(result, to: stash)
+        stash.apply(result)
 
         XCTAssertNil(stash.registry.firstResponderHeistId,
                      "Should be nil when no element is first responder")
@@ -248,7 +248,7 @@ final class TheBurglarApplyTests: XCTestCase {
             objects: [:],
             scrollViews: [:]
         )
-        let heistIdsV1 = stash.burglar.apply(resultV1, to: stash)
+        let heistIdsV1 = stash.apply(resultV1)
         let heistId = heistIdsV1.first
         guard let heistId else {
             XCTFail("First apply should produce a heistId")
@@ -267,7 +267,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        stash.burglar.apply(resultV2, to: stash)
+        stash.apply(resultV2)
 
         let entry = stash.registry.elements[heistId]
         XCTAssertNotNil(entry, "Entry should still exist under the same heistId")
@@ -289,9 +289,9 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        let heistIds1 = stash.burglar.apply(result, to: stash)
+        let heistIds1 = stash.apply(result)
         stash.registry = TheStash.ElementRegistry()
-        let heistIds2 = stash.burglar.apply(result, to: stash)
+        let heistIds2 = stash.apply(result)
 
         XCTAssertEqual(heistIds1, heistIds2,
                        "Same elements should produce same heistIds")
@@ -311,7 +311,7 @@ final class TheBurglarApplyTests: XCTestCase {
             scrollViews: [:]
         )
 
-        let heistIds = stash.burglar.apply(result, to: stash)
+        let heistIds = stash.apply(result)
 
         XCTAssertEqual(heistIds.count, 2)
         XCTAssertNotEqual(heistIds[0], heistIds[1],
@@ -327,14 +327,14 @@ final class TheBurglarApplyTests: XCTestCase {
             makeElement(label: "Home", traits: .header),
             makeElement(label: "Back", traits: backButtonTrait),
         ]
-        XCTAssertTrue(stash.burglar.isTopologyChanged(
+        XCTAssertTrue(stash.isTopologyChanged(
             before: before, after: after, beforeHierarchy: [], afterHierarchy: []
         ))
     }
 
     func testTopologyUnchangedWhenSameHeaders() {
         let elements = [makeElement(label: "Settings", traits: .header)]
-        XCTAssertFalse(stash.burglar.isTopologyChanged(
+        XCTAssertFalse(stash.isTopologyChanged(
             before: elements, after: elements, beforeHierarchy: [], afterHierarchy: []
         ))
     }

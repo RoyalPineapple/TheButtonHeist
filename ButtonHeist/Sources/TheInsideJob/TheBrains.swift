@@ -30,7 +30,6 @@ final class TheBrains {
         self.tripwire = tripwire
         self.stash = TheStash(tripwire: tripwire)
         self.safecracker = TheSafecracker()
-        self.safecracker.tripwire = tripwire
     }
 
     // MARK: - Refresh Convenience
@@ -38,7 +37,7 @@ final class TheBrains {
     /// Refresh the accessibility tree into the stash.
     @discardableResult
     func refresh() -> TheBurglar.ParseResult? {
-        guard let result = stash.burglar.refresh(into: stash) else { return nil }
+        guard let result = stash.refresh() else { return nil }
         exploreCycleIds?.formUnion(stash.registry.viewportIds)
         return result
     }
@@ -91,11 +90,11 @@ final class TheBrains {
         let settleMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
         insideJobLogger.info("Post-action settle: \(settled ? "all clear" : "timed out") in \(settleMs)ms")
 
-        var afterResult = stash.burglar.parse()
+        var afterResult = stash.parse()
 
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let isScreenChange = tripwire.isScreenChange(before: before.viewController, after: afterVC)
-            || stash.burglar.isTopologyChanged(
+            || stash.isTopologyChanged(
                 before: before.elements, after: afterResult?.elements ?? [],
                 beforeHierarchy: before.hierarchy, afterHierarchy: afterResult?.hierarchy ?? []
             )
@@ -112,7 +111,7 @@ final class TheBrains {
             let repopStart = CFAbsoluteTimeGetCurrent()
             for attempt in 1...10 {
                 _ = await tripwire.waitForAllClear(timeout: 0.2)
-                afterResult = stash.burglar.parse()
+                afterResult = stash.parse()
                 if let elements = afterResult?.elements, !elements.isEmpty {
                     let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
                     insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
@@ -122,7 +121,7 @@ final class TheBrains {
         }
 
         if let afterResult {
-            let heistIds = stash.burglar.apply(afterResult, to: stash)
+            let heistIds = stash.apply(afterResult)
             exploreCycleIds?.formUnion(heistIds)
         }
 
@@ -167,6 +166,16 @@ final class TheBrains {
             elementTraits: elementTraits,
             exploreResult: exploreResult
         )
+    }
+
+    // MARK: - Keyboard Observation
+
+    func startKeyboardObservation() {
+        safecracker.startKeyboardObservation()
+    }
+
+    func stopKeyboardObservation() {
+        safecracker.stopKeyboardObservation()
     }
 
     // MARK: - Clear

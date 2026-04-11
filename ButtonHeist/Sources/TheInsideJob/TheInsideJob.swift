@@ -194,7 +194,7 @@ public final class TheInsideJob {
             self?.handlePulseTransition(transition)
         }
         tripwire.startPulse()
-        brains.safecracker.startKeyboardObservation()
+        brains.startKeyboardObservation()
 
         insideJobLogger.info("Server started successfully")
     }
@@ -218,7 +218,7 @@ public final class TheInsideJob {
 
         tripwire.stopPulse()
         tripwire.onTransition = nil
-        brains.safecracker.stopKeyboardObservation()
+        brains.stopKeyboardObservation()
 
         muscle.tearDown()
 
@@ -486,7 +486,7 @@ public final class TheInsideJob {
         let afterVC = tripwire.topmostViewController().map(ObjectIdentifier.init)
         let afterElements = stash.currentHierarchy.sortedElements
         let isScreenChange = tripwire.isScreenChange(before: beforeState.viewController, after: afterVC)
-            || stash.burglar.isTopologyChanged(
+            || stash.isTopologyChanged(
                 before: beforeState.elements, after: afterElements,
                 beforeHierarchy: beforeState.hierarchy, afterHierarchy: stash.currentHierarchy
             )
@@ -710,7 +710,7 @@ public final class TheInsideJob {
         hierarchyInvalidated = false
 
         tripwire.stopPulse()
-        brains.safecracker.stopKeyboardObservation()
+        brains.stopKeyboardObservation()
 
         muscle.tearDown()
 
@@ -766,7 +766,7 @@ public final class TheInsideJob {
                     self?.handlePulseTransition(transition)
                 }
                 self.tripwire.startPulse()
-                self.brains.safecracker.startKeyboardObservation()
+                self.brains.startKeyboardObservation()
 
                 // Resume polling if it was active before suspend
                 if case .paused(let interval) = self.pollingPhase {

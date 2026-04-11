@@ -55,7 +55,7 @@ extension TheBrains {
             return result
         case .success(let point):
             let success = await action(point)
-            if success { safecracker.fingerprints.showFingerprint(at: point) }
+            if success { safecracker.showFingerprint(at: point) }
             return TheSafecracker.InteractionResult(success: success, method: method, message: nil, value: nil)
         }
     }
@@ -66,11 +66,11 @@ extension TheBrains {
         await performElementAction(target: target, method: .activate) { resolved in
             let point = resolved.element.activationPoint
             if stash.activate(resolved.screenElement) {
-                self.safecracker.fingerprints.showFingerprint(at: point)
+                self.safecracker.showFingerprint(at: point)
                 return TheSafecracker.InteractionResult(success: true, method: .activate, message: nil, value: nil)
             }
             if await self.safecracker.tap(at: point) {
-                self.safecracker.fingerprints.showFingerprint(at: point)
+                self.safecracker.showFingerprint(at: point)
                 return TheSafecracker.InteractionResult(success: true, method: .syntheticTap, message: nil, value: nil)
             }
             return nil
@@ -80,7 +80,7 @@ extension TheBrains {
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .increment) { resolved in
             stash.increment(resolved.screenElement)
-            self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+            self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .increment, message: nil, value: nil)
         }
     }
@@ -88,7 +88,7 @@ extension TheBrains {
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         await performElementAction(target: target, method: .decrement) { resolved in
             stash.decrement(resolved.screenElement)
-            self.safecracker.fingerprints.showFingerprint(at: resolved.element.activationPoint)
+            self.safecracker.showFingerprint(at: resolved.element.activationPoint)
             return TheSafecracker.InteractionResult(success: true, method: .decrement, message: nil, value: nil)
         }
     }
@@ -321,7 +321,7 @@ extension TheBrains {
             guard await safecracker.tap(at: point) else {
                 return .failure(.typeText, message: "Failed to tap target element to bring up keyboard")
             }
-            safecracker.fingerprints.showFingerprint(at: point)
+            safecracker.showFingerprint(at: point)
 
             var inputReady = false
             for _ in 0..<TheSafecracker.keyboardPollMaxAttempts {

@@ -3,6 +3,12 @@
 import UIKit
 import TheScore
 
+/// Marker protocol for internal overlay windows that should be excluded
+/// from accessibility traversal and touch hit-testing. Allows TheTripwire
+/// and TheSafecracker to filter overlays without knowing the concrete type.
+@MainActor
+protocol ButtonHeistOverlayWindow: AnyObject {}
+
 /// Visual interaction indicators for tap and gesture tracking.
 ///
 /// Extracted from a TheSafecracker extension so it can be used as a
@@ -11,7 +17,7 @@ import TheScore
 final class TheFingerprints {
 
     /// Passthrough window for fingerprint overlay (filtered from accessibility traversal).
-    class FingerprintWindow: UIWindow {
+    class FingerprintWindow: UIWindow, ButtonHeistOverlayWindow {
         override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
     }
 
